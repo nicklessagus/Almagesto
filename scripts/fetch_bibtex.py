@@ -48,6 +48,7 @@ ADS_EXPORT = "https://api.adsabs.harvard.edu/v1/export/bibtex"
 DOI_RESOLVER = "https://doi.org/{doi}"
 DOI_RA = "https://doi.org/ra/{doi}"
 ARXIV_BIBTEX = "https://arxiv.org/bibtex/{arxiv_id}"
+CROSSREF_SEARCH = "https://api.crossref.org/works"
 
 #: Lo que el resolver tiene que devolver para que la respuesta sea una entrada y no una página de
 #: error. `doi.org` sirve su 404 como `text/html` con status 404, pero el chequeo va por los dos
@@ -145,6 +146,61 @@ def arxiv_bibtex(arxiv_id: str) -> str:
     return entrada + "\n" if entrada.startswith("@") else ""
 
 
+def _family(nombre: str) -> str:
+    """The family name out of whatever `first_author` holds: `Mayor, Michel` or `Michel Mayor`."""
+    nombre = str(nombre or "").strip()
+    if "," in nombre:
+        return nombre.split(",", 1)[0].strip()
+    return nombre.split()[-1] if nombre.split() else ""
+
+
+def doi_candidate(title: str, first_author: str, year=None) -> tuple:
+    """`(doi, motivo)` — PROPOSES a DOI for a note that has none. It never stamps one (#397).
+
+    The off-ADS rail declared the hole without ever asking whether the DOI exists: measured on a
+    real vault, `2011Naik` is not case 4 of the cascade (no official source) but case 2 — Crossref
+    has `10.5772/52324` and the note simply does not carry it.
+
+    ⛔ The match is EXACT on the normalised title **and** on the first author's family name, and
+    that severity is the point: this repo's own doctrine forbids resolving by title —`discover`
+    measured it at 18 of 25 resolved with **2 pointing at another work**— so anything short of an
+    exact hit returns the reason and no candidate. Verified against the live service: an exact title
+    resolves (Mayor 1995 → `10.1038/378355a0`), while a remembered one returns three plausible
+    papers, none of them the target — which is the failure this strictness exists to refuse.
+
+    `year` is a tie-breaker with ±1 slack, because the deposit and the publication disagree by a
+    year often enough (`2011Naik` declares 2012 in its own frontmatter)."""
+    titulo, familia = str(title or "").strip(), _family(first_author)
+    if not titulo or not familia:
+        return "", "sin `title` o sin `first_author`: no hay con qué preguntar"
+    params = {"query.bibliographic": titulo, "query.author": familia, "rows": 5,
+              "select": "DOI,title,author,issued"}
+    if (correo := cfg.get_mailto()):
+        params["mailto"] = correo              # polite pool, opt-in (#: nunca sale de git config)
+    try:
+        r = requests.get(CROSSREF_SEARCH, params=params,
+                         headers={"User-Agent": "Almagesto (https://github.com/nicklessagus/Almagesto)"},
+                         timeout=30)
+        r.raise_for_status()
+        items = (r.json().get("message") or {}).get("items") or []
+    except (requests.RequestException, ValueError, AttributeError) as exc:
+        return "", f"Crossref no contestó ({exc.__class__.__name__}): no consta"
+    for it in items:
+        cand = ((it.get("title") or [""])[0] or "").strip()
+        if cfg.method_key(cand) != cfg.method_key(titulo):
+            continue                           # ⛔ título EXACTO normalizado, nunca parecido
+        autores = it.get("author") or [{}]
+        if cfg.method_key(str(autores[0].get("family") or "")) != cfg.method_key(familia):
+            continue
+        if year:
+            partes = ((it.get("issued") or {}).get("date-parts") or [[None]])[0]
+            if partes and partes[0] and abs(int(partes[0]) - int(year)) > 1:
+                continue
+        return str(it.get("DOI") or ""), f"título exacto + autor «{familia}» en Crossref"
+    return "", (f"Crossref devolvió {len(items)} resultado(s) y ninguno con el título EXACTO: "
+                f"resolvelo a mano — acá no se propone por parecido (#397)")
+
+
 def bibtex_for(fm: dict, stem: str, ads_cache: dict) -> tuple:
     """`(entrada, fuente, motivo)` para una nota, recorriendo la cascada declarada.
 
@@ -228,12 +284,25 @@ def main() -> int:
         errores.append(f"sin token ADS, el carril `ads` NO corrió: {exc}")
 
     hoy = _dt.date.today().isoformat()
-    n_ok, huecos = 0, []
+    n_ok, huecos, propuestas = 0, [], []
     por_fuente: dict = {}
     for f in pendientes:
         fm, text = fms[f]
         entrada, fuente, motivo = bibtex_for(fm, f.stem, ads_cache)
         if not entrada:
+            # #397 (cola) — antes de declarar el hueco, preguntar si el DOI EXISTE. El carril
+            # off-ADS declaraba metadata a mano y nadie chequeaba: medido, `2011Naik` no era un
+            # paper sin fuente oficial sino uno cuyo DOI Crossref tiene y la nota no lleva.
+            # ⛔ PROPONE y no escribe: poblar `doi:` es curación, y el matcheo por título es lo que
+            # este repo prohíbe (`discover`: 18 de 25 resueltos, 2 apuntando a OTRO trabajo).
+            if not str(fm.get("doi") or "").strip():
+                doi_prop, por_que = doi_candidate(fm.get("title"), fm.get("first_author"),
+                                                  fm.get("year"))
+                if doi_prop:
+                    propuestas.append(f"{f.stem}: Crossref tiene `{doi_prop}` ({por_que}) — poblá "
+                                      f"`doi:` en la nota y re-corré; NO se estampa solo")
+                    continue
+                motivo += f" · {por_que}"
             huecos.append(f"{f.stem}: {motivo}")
             continue
         stamp_bibtex(f, fm, text.split("\n---\n", 1)[-1], entrada, fuente, hoy)
@@ -243,6 +312,8 @@ def main() -> int:
     detalle = ", ".join(f"{k}: {v}" for k, v in sorted(por_fuente.items())) or "ninguna"
     cfg.print_seguro(f"bibtex: {n_ok} de {len(pendientes)} nota(s) con exportación oficial "
                      f"({detalle}) — sobre {len(notas)} nota(s) de paper miradas")
+    for pr in propuestas:
+        cfg.print_seguro(f"  ⚑ el hueco NO es tal — hay DOI y la nota no lo lleva: {pr}")
     for h in huecos:
         cfg.print_seguro(f"  · sin BibTeX (campo VACÍO, que es el hueco correcto): {h}")
     for e in errores:

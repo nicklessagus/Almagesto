@@ -163,6 +163,12 @@ Deben quedar en **0**:
   --paper <bibcode> --force`) o borrando el campo: el hueco es un estado correcto, la cita inventada
   no. ⚠ `bibtex_source` es **vocabulario cerrado** (`ads|crossref|datacite|doi|arxiv`) y cae en la
   misma categoría que `pdf_source`/`fulltext_source` fuera de vocabulario (#296).
+  ⚠ Antes de declarar el hueco, `fetch_bibtex` pregunta si el **DOI existe**: con `title` y
+  `first_author` consulta Crossref y, **sólo con título exacto normalizado + apellido del primer
+  autor**, PROPONE el DOI para que alguien lo popule (nunca lo estampa — el matcheo por título es lo
+  que este repo prohíbe resolver solo: `discover` lo midió en 18 de 25 resueltos, **2 apuntando a
+  otro trabajo**). Medido: `2011Naik` no era un paper sin fuente oficial sino uno cuyo DOI
+  (`10.5772/52324`) Crossref tiene y la nota no lleva.
 - **`pdf_source` de editor (`publisher|ads|web`) con `eprint_version`** (#383): contradicción
   interna del frontmatter —el PDF es del editor y la nota dice que leyó un preprint—, y manda a
   re-verificar contra el documento equivocado. Nace del REEMPLAZO de un PDF por otro de distinta

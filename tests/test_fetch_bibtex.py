@@ -286,3 +286,119 @@ def test_el_hermano_de_verificacion_NO_cuenta_como_nota_de_paper(tmp_path, monke
     salida = capsys.readouterr().out
     assert "1 nota(s) de paper miradas" in salida, salida
     assert ".verif" not in salida, "el hermano no entra ni al denominador ni a la lista de huecos"
+
+
+# ── #397 (cola) · el hueco que NO es tal: el DOI existe y la nota no lo lleva ────────────────────
+
+def _cr(items):
+    return Resp(200, payload={"message": {"items": items}})
+
+
+def test_doi_candidate_exige_el_titulo_EXACTO(monkeypatch):
+    """⛔ La doctrina del propio repo prohíbe resolver por título: `discover` lo midió en **18 de 25
+    resueltos, 2 apuntando a OTRO trabajo**. Así que acá el match es exacto sobre el título
+    normalizado Y sobre el apellido del primer autor, y todo lo demás devuelve el motivo sin
+    candidato.
+
+    Verificado contra el servicio real: un título exacto resuelve (Mayor 1995 → `10.1038/378355a0`)
+    y uno recordado devuelve tres papers plausibles, **ninguno el buscado** — que es exactamente el
+    fallo que esta severidad existe para rehusar."""
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch, get=lambda *a, **k: _cr([
+        {"DOI": "10.1/otro", "title": ["Otro paper parecido del mismo autor"],
+         "author": [{"family": "Mayor"}]},
+        {"DOI": "10.1038/378355a0", "title": ["A Jupiter-mass companion to a solar-type star"],
+         "author": [{"family": "Mayor"}], "issued": {"date-parts": [[1995]]}}]))
+    doi, por_que = fb.doi_candidate("A Jupiter-mass companion to a solar-type star", "Mayor, Michel", 1995)
+    assert doi == "10.1038/378355a0" and "título exacto" in por_que
+
+
+def test_doi_candidate_NO_propone_por_parecido(monkeypatch):
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch, get=lambda *a, **k: _cr([
+        {"DOI": "10.1/parecido", "title": ["Applications of higher order statistics in sEMG"],
+         "author": [{"family": "Naik"}]}]))
+    doi, por_que = fb.doi_candidate("Applications of Higher Order Statistics", "Naik", 2011)
+    assert doi == "" and "ninguno con el título EXACTO" in por_que
+
+
+def test_doi_candidate_descarta_el_autor_que_no_es(monkeypatch):
+    """El título puede repetirse entre un paper y su comentario; el apellido del primer autor es lo
+    que separa a los dos, y sin él el carril propondría el trabajo de otro."""
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch, get=lambda *a, **k: _cr([
+        {"DOI": "10.1/deotro", "title": ["Un titulo identico"], "author": [{"family": "Otro"}]}]))
+    assert fb.doi_candidate("Un titulo identico", "Naik", 2011)[0] == ""
+
+
+def test_doi_candidate_tolera_un_ano_de_diferencia_y_no_mas(monkeypatch):
+    """El depósito y la publicación discrepan un año seguido —`2011Naik` declara 2012 en su propio
+    frontmatter—, así que ±1 pasa; más que eso ya es otro trabajo con el mismo título."""
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    item = {"DOI": "10.5772/52324", "title": ["Un titulo"], "author": [{"family": "Naik"}],
+            "issued": {"date-parts": [[2012]]}}
+    fake_net(monkeypatch, get=lambda *a, **k: _cr([item]))
+    assert fb.doi_candidate("Un titulo", "Naik", 2011)[0] == "10.5772/52324"
+    assert fb.doi_candidate("Un titulo", "Naik", 2005)[0] == ""
+    # Y el registro SIN año utilizable no se descarta ni revienta: Crossref devuelve `issued`
+    # vacío o `date-parts: [[]]` a menudo, y un año que no consta no puede desempatar nada —
+    # descartarlo sería inventar la discrepancia, y `int(None)` sería tirar la corrida entera.
+    for roto in ({}, {"date-parts": [[]]}, {"date-parts": [[None]]}):
+        fake_net(monkeypatch, get=lambda *a, _r=roto, **k: _cr([{**item, "issued": _r}]))
+        assert fb.doi_candidate("Un titulo", "Naik", 2011)[0] == "10.5772/52324", roto
+
+
+def test_doi_candidate_sin_datos_o_sin_red_lo_DICE(monkeypatch):
+    """D-43 — «no se pudo preguntar» no es «no existe»: las dos ramas devuelven su motivo, que es lo
+    que después viaja al reporte pegado al hueco."""
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    assert "no hay con qué preguntar" in fb.doi_candidate("", "Naik")[1]
+    assert "no hay con qué preguntar" in fb.doi_candidate("Un titulo", "")[1]
+
+    def cae(*a, **k):
+        raise real_requests.RequestException("boom")
+    fake_net(monkeypatch, get=cae)
+    assert "no consta" in fb.doi_candidate("Un titulo", "Naik")[1]
+
+
+def test_main_PROPONE_el_doi_y_no_lo_estampa(tmp_path, monkeypatch, capsys):
+    """⛔ Propone y no escribe: poblar `doi:` es curación —la decisión de que ese registro ES este
+    paper— y el matcheo por título es lo que el framework prohíbe resolver solo. La nota queda
+    intacta y el reporte trae el DOI para pegar."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch,
+             post=lambda *a, **k: Resp(200, payload={"export": ""}),
+             get=lambda *a, **k: _cr([{"DOI": "10.5772/52324", "title": ["Un titulo"],
+                                       "author": [{"family": "Naik"}]}]))
+    f = _nota(tmp_path, {"bibcode": "2011Naik", "tags": ["paper"], "title": "Un titulo",
+                         "first_author": "Naik, Ganesh"})
+    antes = f.read_text(encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 0
+    salida = capsys.readouterr().out
+    assert "el hueco NO es tal" in salida and "10.5772/52324" in salida, salida
+    assert f.read_text(encoding="utf-8") == antes, "la nota NO se toca"
+
+
+def test_el_mailto_del_polite_pool_es_OPT_IN_y_no_sale_si_no_se_declaro(monkeypatch):
+    """El `mailto` es opt-in declarado (`vault/config/mailto` o `ALMAGESTO_MAILTO`) y **no** sale de
+    `git config user.email`: hasta 1.73.0 se tomaba de ahí —dato personal entregado para autoría, no
+    para egress a un tercero— y viajaba embebido en la URL, o sea en cualquier `raise_for_status` y
+    en cualquier log de proxy. Este carril es una consulta más a Crossref, así que hereda la regla:
+    sin declararlo **no se manda nada**, y con él declarado se manda para entrar al pool rápido."""
+    vistos = {}
+
+    def get(url, params=None, headers=None, timeout=None):
+        vistos.update(params or {})
+        return _cr([])
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch, get=get)
+    fb.doi_candidate("Un titulo", "Naik")
+    assert "mailto" not in vistos, "sin opt-in no sale ninguna dirección"
+
+    vistos.clear()
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "yo@ejemplo.org")
+    fb.doi_candidate("Un titulo", "Naik")
+    assert vistos.get("mailto") == "yo@ejemplo.org"
