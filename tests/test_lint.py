@@ -5680,19 +5680,39 @@ def test_la_cita_fabricada_del_log_se_reporta(toy_vault, capsys):
     _, rep = run_lint_reporte(capsys)
     assert "la bitácora entrecomilla" in rep, rep
     motivo = lint.collect().por_clave("cita_log").items[0][1]
-    assert "NO se edita" in motivo and lint.LOG_SUPERSEDED_MARK in motivo, \
-        "la salida es marcar y appendear, no reescribir la entrada"
+    assert "no afirma citas textuales" in motivo and "blockquote" in motivo, \
+        "la salida es sacar la cita del log (#391), no marcarla"
 
 
-def test_la_entrada_YA_MARCADA_no_es_deuda(toy_vault, capsys):
-    """#238, el simétrico: marcada, la entrada es visible y no destruida — que es la doctrina de las
-    otras marcas en línea. Seguir reportándola volvería ruido una deuda ya resuelta."""
+def test_la_marca_del_log_YA_NO_exime_la_cita(toy_vault, capsys):
+    """⛔ #391 — la marca `⚠ corregido` era una convención en TEXTO LIBRE que decidía un chequeo, así
+    que cada consumidor nuevo tenía que aprenderla o la entrada volvía a salir como defecto. Y
+    existía por un motivo más de fondo: el `log` llevaba una CITA TEXTUAL, que es una afirmación
+    chequeable por máquina en el único lugar de `vault/wiki/` que ninguna capa de verificación
+    audita — `verify-citations` va nota por nota y no lee la bitácora.
+
+    La salida no es una marca mejor: es que la cita no viva ahí. Con la marca puesta, la cita
+    alterada **sigue siendo un hallazgo**."""
     _paper_con_txt("2023A&A...675A.187O",
                    "real-world systematics that are not orthogonal might become entangled\n")
     (cfg.WIKI / "log.md").write_text(
         "# log\n\n## 2026-08-29 — ingest\n\n- dice «real-world systematics do not become orthogonal "
         "and might become entangled» ([[2023A&A...675A.187O]], p. 10) ⚠ corregido 2026-08-30 → "
         "entrada del 2026-08-30\n", encoding="utf-8")
+    _, rep = run_lint_reporte(capsys)
+    assert "la bitácora entrecomilla" in rep, rep
+
+
+def test_la_cita_como_MENCION_en_un_blockquote_no_es_deuda(toy_vault, capsys):
+    """#387/#391 — la única exención que queda, y es ESTRUCTURAL: sale de `Block.kind`, no de
+    olfatear un string. Cubre el caso reflexivo —una entrada que documenta una cita defectuosa tiene
+    que citarla para explicarla— sin ninguna convención que aprender."""
+    _paper_con_txt("2023A&A...675A.187O",
+                   "real-world systematics that are not orthogonal might become entangled\n")
+    (cfg.WIKI / "log.md").write_text(
+        "# log\n\n## 2026-08-30 — corrección\n\n> la entrada del 2026-08-29 decía «real-world "
+        "systematics do not become orthogonal and might become entangled» "
+        "([[2023A&A...675A.187O]], p. 10), que invierte el sentido\n", encoding="utf-8")
     _, rep = run_lint_reporte(capsys)
     assert "la bitácora entrecomilla" not in rep, rep
 

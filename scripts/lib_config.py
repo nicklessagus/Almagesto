@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.215.0"
+ALMAGESTO_VERSION = "1.216.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1718,6 +1718,14 @@ def fm_bounds(text: str) -> tuple[int, int] | None:
 #: exportación oficial o un bloque que escribió alguien, y un valor fuera de la lista cae por el
 #: `else` de cualquier chequeo **en silencio**. `doi` es el tercer estado honesto del carril del
 #: resolver: se bajó de `doi.org` y la agencia de registro no se pudo determinar (D-43).
+#: #238/#391 · la nota en prosa con la que una entrada del `log` declara que otra la corrige. Vive
+#: acá y no en `lib_quotes` desde #391: dejó de ser una exención del chequeo de citas —era una
+#: convención en TEXTO LIBRE que decidía un chequeo, y por eso cada consumidor nuevo tenía que
+#: aprenderla— y volvió a ser lo que parece, una línea que dice «esto quedó corregido por aquello».
+#: Su usuario vivo es `make_notes --fix-key`, que la imprime lista para pegar (#355).
+LOG_SUPERSEDED_MARK = "⚠ corregido"
+
+
 BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv")
 
 
@@ -3897,7 +3905,6 @@ from lib_quotes import (  # noqa: E402,F401
     CITA_COLA_MIN,
     CITA_PREFIJO,
     GUTTER,
-    LOG_SUPERSEDED_MARK,
     QUOTE_FRAG_MIN,
     QUOTE_MIN,
     VERIFICAR_PDF_MARK,

@@ -440,13 +440,6 @@ def extraction_identity(data: dict) -> str:
     return str(data.get("bibcode") or "").strip()
 
 
-#: #238 · the fifth in-line mark, and the ONE place its wording lives (#386). `log.md` is
-#: append-only by contract —and rightly so—, which left it with no way to correct itself: an entry
-#: that turns out to be refuted is MARKED, never edited. Until 1.172.0 only `lint.py` knew the
-#: string, so `contrast --validar` —a mandatory closing gate since #323— kept blocking on an entry
-#: corrected exactly as the framework prescribes, and the only way to green it was to edit the log,
-#: which is what #238 forbids. There was no way out inside the rules.
-LOG_SUPERSEDED_MARK = "⚠ corregido"
 
 
 def log_quote_exempt(stem: str, texto: str, kind: str = "") -> str | None:
@@ -458,13 +451,13 @@ def log_quote_exempt(stem: str, texto: str, kind: str = "") -> str | None:
     the third one to be written would not know it either. Same failure mode as regla de método 2,
     applied to a convention instead of to a test double.
 
-    Two exemptions, both scoped to `log.md`:
-
-    · **the mark** (#238): the entry is refuted and says so, pointing at the entry that corrects it.
-      Declared and resolved — «visible, not debt» (AUD-207) — so it does not move the rc. ⚠ It must
-      be **adjacent** to the claim (same block), which is how the vault actually writes it: a
-      continuation line of the bullet carrying the quote. A mark on the entry's heading exempts the
-      heading, not a claim four bullets down.
+    ⛔ **ONE exemption, scoped to `log.md`** (#391). Until 1.215.0 there were two, and the other one
+    —the `⚠ corregido` mark— is what this issue took out: a **free-text** convention that gated a
+    check, so every new consumer had to learn it or the entry came back as a defect. It existed
+    because the log carried a verbatim QUOTE, which is a machine-checkable claim in the one place no
+    verification layer audits: `verify-citations` goes note by note and never reads the bitácora.
+    Taking the quote out of the log —it belongs in a note, or in a blockquote as a mention— removes
+    the reason for the mark instead of the mark alone.
 
     · **the blockquote** (#387): the REFLEXIVE case, which had no way out inside the rule. An entry
       that documents a malformed quote **has to quote it in order to explain it**, and the moment it
@@ -480,15 +473,12 @@ def log_quote_exempt(stem: str, texto: str, kind: str = "") -> str | None:
 
     @inv INV-141
 
-    ⚠ **Scoped to `log.md` on purpose.** The mark is the way out of an *append-only* artefact; in a
-    note or a concept the correction is made by editing, so neither exemption applies there and a
-    quote inside a blockquote of a ficha is still a claim. Widening this to a general
-    assert/mention distinction is the open half of #387, and it touches `verify-citations` and the
-    leak detector too — it is not decided here."""
+    ⚠ **Scoped to `log.md` on purpose.** In a note or a concept a correction is made by editing, so
+    the exemption does not apply there and a quote inside a blockquote of a ficha is still a claim.
+    Widening this into a general assert/mention distinction touches `verify-citations` and the leak
+    detector too — it is not decided here."""
     if stem != "log":
         return None
-    if LOG_SUPERSEDED_MARK in texto:
-        return f"entrada marcada `{LOG_SUPERSEDED_MARK}` (#238)"
     if kind == "blockquote":
         return "cita dentro de un blockquote del `log`: es mención, no afirmación (#387)"
     return None

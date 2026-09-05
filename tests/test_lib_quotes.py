@@ -78,3 +78,19 @@ def test_with_own_bibcode_SUMA_y_nunca_reemplaza_ni_duplica():
     original = ["2014Artoni"]
     lq.with_own_bibcode(original, "2012embc")
     assert original == ["2014Artoni"], "no muta la lista del llamador"
+
+
+def test_log_quote_exempt_deja_UNA_exencion_y_es_estructural():
+    """#391 — la marca `⚠ corregido` dejó de eximir. Era una convención en TEXTO LIBRE que decidía
+    un chequeo, así que cada consumidor nuevo tenía que aprenderla; y existía porque el `log`
+    llevaba una CITA TEXTUAL, que es una afirmación chequeable por máquina en el único lugar de
+    `vault/wiki/` que ninguna capa de verificación audita. La salida fue sacarle el motivo, no la
+    marca: la cita va a su nota, o al blockquote como mención.
+
+    ⚠ La que queda se reconoce por `Block.kind`, no olfateando un `>`: `split_blocks` **borra** el
+    marcador al construir `text`, así que un chequeo a nivel texto no dispararía nunca (#168/#276).
+    Y sigue acotada al `log`: en una nota la corrección se hace editando."""
+    assert lq.log_quote_exempt("log", "algo ⚠ corregido 2026-09-01 → otra entrada", "") is None
+    assert lq.log_quote_exempt("log", "algo", "blockquote")
+    assert lq.log_quote_exempt("log", "algo", "parrafo") is None
+    assert lq.log_quote_exempt("tau_cet", "algo", "blockquote") is None, "sólo en `log.md`"

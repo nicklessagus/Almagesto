@@ -514,18 +514,6 @@ STATUS_MAX_LINEAS = 300
 #: que el string que este detector busca y el que esa herramienta ofrece no pueden divergir.
 VERIFICAR_PDF_MARK = cfg.VERIFICAR_PDF_MARK
 
-#: #238 · la quinta marca: una entrada de `log.md` que quedó REFUTADA. La bitácora es append-only
-#: por contrato —y está bien—, pero eso la dejaba sin forma de corregirse: medido, una entrada
-#: publica como cita textual con página una frase que invierte el sentido de lo que dice el paper,
-#: y el propio log lo reconoce 268 líneas después, en la entrada de la verificación. La cita
-#: fabricada sigue ahí, sin marca y sin puntero a su corrección. Misma doctrina que las otras:
-#: hacer visible, no borrar.
-#: ⛔ UNA definición (#386): hasta 1.172.0 el string vivía sólo acá, así que `contrast --validar`
-#: —gate obligatorio desde #323— no conocía la marca y bloqueaba para siempre una entrada corregida
-#: como el framework manda. Una convención en prosa que cada chequeo aprende por su cuenta NO
-#: COMPONE: eran dos y ya divergían.
-LOG_SUPERSEDED_MARK = cfg.LOG_SUPERSEDED_MARK
-
 #: #235 · «… el radio `slug` …» — un radio nombrado como código en vez de linkeado.
 _RADIO_RE = re.compile(r"radio[s]?\s+(?:[^`\n]{0,40}?)`([a-z0-9][a-z0-9-]{2,})`", re.I)
 
@@ -919,7 +907,7 @@ PROT_NEG = re.compile(r"(?i)no se conoce|no se sabe|sin medir|desconocid|no hay 
 # la marca, y ahí el aviso es barato de resolver.
 # #276 — el `[`*_~]*` NO es cosmético: sin él el bloqueante es ciego al énfasis markdown, y
 # `CLAUDE.md` **induce** la forma que no ve (escribe `(inferencia de [[b1]])` en la sección de
-# las cinco marcas y ``marcado **`inferencia`**`` en la cascada de ingest y en el espejo #70).
+# las marcas en línea y ``marcado **`inferencia`**`` en la cascada de ingest y en el espejo #70).
 # Medido sobre una ficha real: de sus 5 marcas de prosa, 3 llevan backticks y el detector veía
 # **2 de 5** — un ⛔ que existe para que ninguna afirmación sin respaldo se disfrace de
 # inferencia, sin mirar el 60 % de su población. Es #168 otra vez: `lib_blocks._ADORNO` existe
@@ -1936,9 +1924,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # (el OCR erra símbolos y el preprint no dice lo mismo que el publicado), en vez de contarse
         # en contra. ⛔ La PÁGINA no se puede chequear así —el `.txt` no tiene páginas— y eso se
         # dice: media red declarada vale más que ninguna.
-        # #238 — la bitácora también entrecomilla, y ahí la cita fabricada es PERMANENTE (append-only).
-        # El chequeo es el mismo de #220 y la salida es distinta: no se edita la entrada vieja, se la
-        # MARCA (`⚠ corregido <fecha> → <entrada nueva>`) y se appendea la corrección.
+        # #238 — la bitácora también entrecomilla, y ahí la cita fabricada es PERMANENTE (el `log`
+        # es append-only). ⛔ #391 — la salida ya NO es marcarla: una cita textual es una afirmación
+        # chequeable por máquina y el `log` es el único lugar de `vault/wiki/` que ninguna capa de
+        # verificación audita (`verify-citations` va nota por nota y no lo lee). Así que la cita
+        # **no va en el log**: va a su nota, o se muestra como MENCIÓN dentro de un blockquote. Eso
+        # saca el motivo de la marca en vez de sacar la marca sola, y con él la convención en texto
+        # libre que cada consumidor nuevo tenía que aprender.
         if stem == "log":
             for _b in lb.split_blocks(body_full):
                 # #386/#387 — la MISMA función que usa `contrast.validar`, no un `in` propio: la
@@ -1963,10 +1955,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                     cita_log.append(
                         (stem, f"L{_b.first_line}: la bitácora entrecomilla «"
                                f"{_c[:70]}{'…' if len(_c) > 70 else ''}» y esa cadena no "
-                               f"está en el `.txt` de {', '.join(sorted(_fuentes_log))} — la "
-                               f"entrada NO se edita (append-only): se marca "
-                               f"`{LOG_SUPERSEDED_MARK} <fecha> → <entrada nueva>` y se appendea "
-                               f"la corrección"))
+                               f"está en el `.txt` de {', '.join(sorted(_fuentes_log))} — el `log` "
+                               f"no afirma citas textuales (#391): llevala a su nota, donde "
+                               f"`verify-citations` la cubre, o dejala como MENCIÓN dentro de un "
+                               f"blockquote `>` si la entrada necesita mostrarla para explicarla"))
 
         if stem not in NON_ORPHAN:
             _por_bloque: dict = {}

@@ -516,9 +516,18 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   real. Población: el **par** (bloque citante, bibcode), no la nota — con 8 de denominador, 398
   hallazgos no se pueden leer (INV-40 cumplido en la letra y no en el espíritu).
 - **Cita textual de `log.md` que su fuente no dice** (#238, `cita_log`): la bitácora es
-  append-only y no podía corregirse; la entrada refutada se marca `⚠ corregido <fecha> → <entrada
-  nueva>`, no se edita (la exención la decide `lib_quotes.log_quote_exempt`, compartida con
-  `contrast --validar`, #386).
+  append-only, así que una cita fabricada ahí es **permanente** — medido, una entrada publicaba
+  como cita textual **con página** una frase que invierte el sentido de lo que dice el paper.
+  ⛔ **La salida es sacar la cita del `log`, no marcarla** (#391): una cita es una afirmación
+  chequeable por máquina y el `log` es el único lugar de `vault/wiki/` que ninguna capa de
+  verificación audita (`verify-citations` va nota por nota y no lo lee). Va **a su nota**, donde el
+  fan-out y las anclas la cubren; si la entrada necesita mostrarla para explicarla, va dentro de un
+  **blockquote**, que es **mención y no afirmación** (#387). Esa exención es la única que queda y es
+  **estructural** —sale de `Block.kind`, no de olfatear un string—; la decide
+  `lib_quotes.log_quote_exempt`, compartida con `contrast --validar` (#386, INV-141).
+  ⚠ Hasta 1.215.0 la salida era la marca `⚠ corregido …`, retirada por dos motivos: era una
+  convención en **texto libre que decidía un chequeo** (cada consumidor nuevo tenía que aprenderla)
+  y escribirla en la entrada vieja **es editarla**, o sea que rompía el append-only que protegía.
 - **Operación sin entrada en `log.md`** (#118/INV-131, `log_sin_entrada`, backlog): el registro
   del sujeto tiene pasos de `cadena` con fecha y `log.md` no tiene un encabezado `## <fecha> — …`
   de esa fecha que **nombre** al sujeto (slug, nombre canónico, `concept` o alias, por palabra —

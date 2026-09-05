@@ -1481,21 +1481,26 @@ una marca de más cuesta abrir un PDF; una de menos deja a la bóveda afirmando 
 verificado. ⚠ No es excusa para no verificar: si
 la fuente está en disco, se abre.
 
-**Una entrada de `log.md` que quedó REFUTADA se MARCA, no se edita (#238): `⚠ corregido <fecha> →
-<entrada nueva>`.** La bitácora es append-only por contrato y eso la dejaba sin forma de corregirse:
-medido, una entrada publica como cita textual **con página** una frase que **invierte el sentido**
-de lo que dice el paper. Misma doctrina que las otras marcas —hacer visible, no borrar—: el lint
-chequea las citas textuales del `log.md` contra el `.txt` de su bibcode, salvo que lleven la marca.
-⛔ **La exención la decide UNA función (`lib_quotes.log_quote_exempt`) y la llaman los dos chequeos
-(#386):** una convención en prosa **no compone**, y ya divergía —el lint la honraba, `contrast
---validar` no la conocía—, así que la entrada marcada bloqueaba el gate de #323 para siempre. ⛔ **Y
-la entrada que CITA una cita defectuosa para explicarla la pone en un blockquote (#387): ahí es
-mención, no afirmación** — sin eso el caso reflexivo no tiene salida. Las dos valen **sólo en
+⛔ **El `log.md` NO afirma citas textuales (#391).** Una cita es una afirmación **chequeable por
+máquina**, y la bitácora es el único lugar de `vault/wiki/` que ninguna capa de verificación audita
+—`verify-citations` va nota por nota y no la lee—: medido, una entrada publicaba como cita textual
+**con página** una frase que **invierte el sentido** de lo que dice el paper. La cita va **a su
+nota**, donde el fan-out y las anclas la cubren; si una entrada necesita mostrarla para explicarla,
+va dentro de un **blockquote**, donde es **mención y no afirmación** (#387, el caso reflexivo). Esa
+exención es **estructural** —sale de `Block.kind`, no de olfatear un string— y la decide UNA función
+(`lib_quotes.log_quote_exempt`) que llaman los dos chequeos (#386, INV-141). Vale **sólo en
 `log.md`**: en una nota la corrección se hace editando.
 
-Éstas son las **cinco únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
-`[[bibcode]] ⛔retractada`, `<valor> ⚠desactualizado`, `<afirmación> ⚠verificar en el PDF` y
-`⚠ corregido <fecha> → <entrada nueva>` (sólo en `log.md`).
+⚠ Hasta 1.215.0 la salida era **marcar** la entrada (`⚠ corregido …`), y eso tenía dos problemas: la
+marca era una convención en **texto libre que decidía un chequeo** —cada consumidor nuevo tenía que
+aprenderla—, y escribirla *en la entrada vieja* **es editarla**, o sea que la escotilla rompía el
+append-only que decía proteger. La marca sobrevive sólo como nota en prosa de que otra entrada
+corrige a ésta (`make_notes --fix-key` la imprime lista para pegar, #355); ya no exime nada.
+
+Éstas son las **cuatro únicas marcas en línea** del sistema: `(inferencia de [[bibcode]])`,
+`[[bibcode]] ⛔retractada`, `<valor> ⚠desactualizado` y `<afirmación> ⚠verificar en el PDF`. ⚠ La
+quinta, `⚠ corregido` en el `log`, **dejó de ser una marca** en #391: no exime ningún chequeo, es
+prosa.
 
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:

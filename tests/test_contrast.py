@@ -538,11 +538,14 @@ def _log(cuerpo: str):
     return cfg.LOG
 
 
-def test_una_entrada_del_log_MARCADA_no_mueve_el_rc(toy_vault, capsys):
-    """#386 — #238 manda MARCAR la entrada refutada (`⚠ corregido …`), no editarla, y `contrast`
-    no conocía la marca: una entrada corregida exactamente como el framework manda seguía
-    bloqueando el gate obligatorio de #323 **para siempre**, y la única salida era editar el `log`
-    — justo lo que #238 prohíbe. No había salida dentro de las reglas.  @inv INV-141"""
+def test_la_marca_del_log_YA_NO_exime_en_contrast(toy_vault, capsys):
+    """⛔ #391 — la marca `⚠ corregido` dejó de eximir, acá y en el lint, y por el mismo motivo: era
+    una convención en TEXTO LIBRE que decidía un chequeo. Existía porque el `log` llevaba una cita
+    textual —una afirmación chequeable por máquina en el único lugar que ninguna capa de
+    verificación audita—, así que la salida fue sacar la cita del log, no mejorar la marca.
+
+    La paridad con el lint sigue siendo el punto (INV-141): las dos salidas se mueven juntas porque
+    la regla vive en UNA función.  @inv INV-141"""
     _extraccion("ica_ruido", "2013Voss")
     _extraccion("ica_ruido", "2004Davies", ground_truth=[
         {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
@@ -551,9 +554,7 @@ def test_una_entrada_del_log_MARCADA_no_mueve_el_rc(toy_vault, capsys):
          f"- Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].\n"
          f"  ⚠ corregido 2026-09-01 → entrada «corrección» del 2026-09-01: la atribución va al "
          f"otro bibcode.")
-    assert ct.main(["--validar-todo"]) == 0
-    out = capsys.readouterr().out
-    assert "declarada(s) y resuelta(s)" in out, out
+    assert ct.main(["--validar-todo"]) != 0, "con la marca puesta, la cita alterada SIGUE siendo un hallazgo"
 
 
 def test_la_entrada_del_log_que_CITA_una_cita_defectuosa_es_MENCION(toy_vault, capsys):
@@ -585,19 +586,20 @@ def test_la_marca_del_log_NO_exime_a_una_nota_normal(toy_vault, capsys):
     assert ct.main(["--validar-todo"]) == 1
 
 
-def test_PARIDAD_lint_contrast_sobre_la_marca_del_log(toy_vault, capsys):
+def test_PARIDAD_lint_contrast_sobre_la_MENCION_del_log(toy_vault, capsys):
     """#387 nombra el problema de fondo: una convención en PROSA **no compone** — cada chequeo la
-    tiene que aprender por separado, hoy son dos y ya divergían. La regla vive en UNA función
-    (`cfg.log_quote_exempt`) y los dos consumidores la llaman; lo que se compara son las dos
-    salidas sobre el mismo insumo, no las dos constantes.  @inv INV-141"""
+    tiene que aprender por separado, hoy son dos y ya divergían. #391 lo cerró sacando la única
+    convención en prosa que quedaba; lo que sobrevive es ESTRUCTURAL (el blockquote sale de
+    `Block.kind`). La regla vive en UNA función y los dos consumidores la llaman: lo que se compara
+    son las dos salidas sobre el mismo insumo.  @inv INV-141"""
     import lint as lt
     _extraccion("ica_ruido", "2013Voss")
     _extraccion("ica_ruido", "2004Davies", ground_truth=[
         {"que": "otro", "valor": "algo completamente distinto", "linea": "p. 9"}])
     _txt("ica_ruido", "2004Davies")
-    _log(f"## 2026-08-31 — vieja\n\n"
-         f"- Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].\n"
-         f"  ⚠ corregido 2026-09-01 → entrada «corrección» del 2026-09-01.")
+    _log(f"## 2026-09-01 — corrección\n\n"
+         f"> la entrada del 2026-08-31 decía «{LARGA}» [[2004Davies]], y la atribución va al otro "
+         f"bibcode.")
     lt.main([])
     reporte = capsys.readouterr().out
     assert LARGA[:40] not in reporte, "el lint tampoco la reporta"
