@@ -54,7 +54,8 @@ almagesto_version: "1.202.0"
 
 techos:
   sin_marca: 4    # medido: 2026-09-04 — 05, 95, 130 y 133 (INV-132 salió: AUD-347 le puso sus marcas).
-  sin_test: 5     # medido: 2026-09-04 — 05, 95, 130, 133 y el nuevo INV-150 (`lente_rota`, sin test propio).
+  sin_test: 4     # medido: 2026-09-05 (5 → 4, #396) — 05, 95, 130 y 133. INV-150 salió: al extraer
+                  # `lente_rota` a `check_lens_broken` el chequeo pasó a tener test directo.
   # ⚠ INV-132 estuvo acá con el motivo «`discover.seed_terms` no es alcanzable desde el CLI» hasta el
   #   2026-09-04, y ese motivo había caducado el 2026-08-28 (#210, 1.77.0): el contrato lo daba
   #   «garantizado y medido» con seis tests y nadie puso las marcas. La lista de abajo lo cuenta como
@@ -70,7 +71,10 @@ techos:
   # imprimía dentro del artefacto y no tenía techo, así que podía crecer sin que nada lo dijera.
   # ⚠ Clasificar los 26 uno por uno es trabajo abierto: quien conozca la fila declara
   # `implementación: pendiente` en su estado cuando de verdad no hay código, y el techo baja.
-  sin_marcar: 22  # medido: 2026-09-04 (27 → 22: se marcaron los bloques de `lint.collect` de INV-03, 45, 65,
+  # 2026-09-05 · #396 — 22 → 21: sacar los chequeos de `collect` a funciones de módulo mueve la
+  # marca `@inv` del orquestador a la función que de verdad cumple el invariante, y con eso una
+  # implementación que estaba marcada-pero-adjudicada-a-`collect` pasó a contar.
+  sin_marcar: 21  # medido: 2026-09-04 (27 → 22: se marcaron los bloques de `lint.collect` de INV-03, 45, 65,
                   #   108, 109, 129 y 132; entró INV-114, que perdió una marca de implementación FALSA —vivía
                   #   sobre la llamada de red de `ingest_offads`, AUD-248— y cuya única implementación posible es
                   #   la fixture de `tests/conftest.py`, igual que INV-126).

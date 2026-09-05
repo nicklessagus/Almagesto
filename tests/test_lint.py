@@ -8049,3 +8049,160 @@ def test_check_index_stale_reporta_lo_que_falta_Y_lo_que_sobra(toy_vault):
     (cfg.WIKI / "index.md").write_text(f"# Índice\n{cuerpo}\n[[fantasma]]\n", encoding="utf-8")
     sobran = lint.check_index_stale(todos)
     assert sobran and any("sobran" in m and "fantasma" in m for _s, m in sobran), sobran
+
+
+# ── #396 · la lente, las áreas, el triage viejo, las capas colgadas y `sources:` ─────────────────
+
+def test_check_lens_broken_distingue_sus_tres_estados(toy_vault):
+    """#396/AUD-56 — el falso limpio exacto que el lint existe para no producir: el objetivo parsea,
+    tiene nombre propio, y NADA puede ser core. Los tres estados que ningún test separaba antes de
+    la extracción: el objetivo ilegible (no se evalúa, lo reporta `not_evaluated`), la lente sin
+    facetas, y el `require` que exige una faceta que no existe.  @inv INV-150"""
+    assert lint.check_lens_broken(None) == [], "la lente sana del fixture no es hallazgo"
+    assert lint.check_lens_broken("el YAML no parsea") == [], \
+        "con el objetivo ilegible NO se opina: eso lo dice `not_evaluated` (D-43)"
+
+    obj = cfg.load_objective()
+    write_yaml(cfg.OBJECTIVE_YAML, {**obj, "relevance": {"topics": {"rv": "radial"}}})
+    filas = lint.check_lens_broken(None)
+    assert len(filas) == 1 and "`facets:`" in filas[0][1] and "topics:" in filas[0][1]
+
+    write_yaml(cfg.OBJECTIVE_YAML, {**obj, "relevance": {
+        "facets": {"rv": "radial velocit"}, "require": ["rv", "fantasma"]}})
+    filas = lint.check_lens_broken(None)
+    assert len(filas) == 1 and "fantasma" in filas[0][1] and "no hay papers" in filas[0][1]
+
+
+def test_check_undeclared_areas_es_blando_y_se_apaga_sin_declaracion(toy_vault):
+    """#396/INV-47 — un `area` mal tipeado crea carpeta en silencio. WARN blando: un typo y un área
+    nueva legítima se ven igual. Las dos guardas que sobrevivían: el área DECLARADA no se reporta
+    (si no, la categoría sería ruido permanente) y un archivo suelto en `concepts/` no es un
+    área.  @inv INV-47"""
+    obj = cfg.load_objective()
+    write_yaml(cfg.OBJECTIVE_YAML, {k: v for k, v in obj.items() if k != "concept_areas"})
+    filas = lint.check_undeclared_areas()
+    assert len(filas) == 1 and "APAGADO" in filas[0][1]
+
+    write_yaml(cfg.OBJECTIVE_YAML, {**obj, "concept_areas": ["methods", "hypotheses"]})
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "suelto.md").write_text("x", encoding="utf-8")
+    assert lint.check_undeclared_areas() == [], \
+        "un área declarada y un archivo suelto no son hallazgos"
+    (cfg.CONCEPTS / "indicatorz").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "indicatorz" / "bis.md").write_text("x", encoding="utf-8")
+    filas = lint.check_undeclared_areas()
+    assert len(filas) == 1 and "indicatorz" in filas[0][0] and "1 nota(s)" in filas[0][1]
+
+
+def test_check_legacy_triage_nombra_el_slug_y_cuenta_lo_que_puede(toy_vault):
+    """#396 — el juicio de triage en `build/<slug>/triage.json` (pre-1.9.0) es el que el lector ya
+    no mira: sin migrarlo, el triage vuelve a proponer lo descartado, sin el motivo. El conteo sale
+    `?` cuando el JSON no se deja contar, que es distinto de cero."""
+    assert lint.check_legacy_triage() == []
+    d = cfg.ROOT / "build" / "ica"
+    d.mkdir(parents=True)
+    (d / "triage.json").write_text(json.dumps({"decisiones": {"a": 1, "b": 2}}), encoding="utf-8")
+    filas = lint.check_legacy_triage()
+    assert len(filas) == 1 and filas[0][0] == "ica" and "2 decisión(es)" in filas[0][1]
+    (d / "triage.json").write_text('{"decisiones": 3}', encoding="utf-8")
+    assert "? decisión(es)" in lint.check_legacy_triage()[0][1], "forma inválida ⇒ `?`, no 0"
+    (d / "triage.json").write_text("no es json", encoding="utf-8")
+    assert "? decisión(es)" in lint.check_legacy_triage()[0][1]
+
+
+def test_check_dangling_layers_saltea_lo_que_no_es_capa_de_entidad(toy_vault):
+    """#396/INV-19 — las cuatro capas de una entidad que ya no existe. Tres guardas que separan una
+    capa colgada de algo que no lo es: `build/auditoria/` (scratch del tooling, no capa), `_red.yaml`
+    (de la bóveda entera, D-46), y un archivo suelto donde se esperan directorios de slug.
+
+    ⚠ Declarado: el `if not base.exists()` sobrevive a `mutar --guardas` y va a seguir
+    sobreviviendo. Medido: `Path(<inexistente>).glob("*")` devuelve vacío y no levanta, así que
+    sacarlo da el mismo resultado — familia de la red 8 sobre código anterior a #396.  @inv INV-19"""
+    assert lint.check_dangling_layers() == []
+    (cfg.ROOT / "build" / "auditoria").mkdir(parents=True)
+    write_yaml(cfg.REGISTRO / "_red.yaml", {"ultima_pasada_red": {"fecha": "2026-03-01"}})
+    (cfg.PDFS / "suelto.pdf").write_bytes(b"%PDF-1.4\n")
+    assert lint.check_dangling_layers() == [], \
+        "scratch de auditoría, `_red.yaml` y un archivo suelto no son capas de entidad"
+
+    (cfg.PDFS / "muerta").mkdir(parents=True)
+    write_yaml(cfg.REGISTRO / "muerta.yaml", {"slug": "muerta"})
+    filas = dict(lint.check_dangling_layers())
+    assert set(filas) == {"raw/pdfs/muerta", "registro/muerta"}, filas
+    assert "no regenerable" in filas["registro/muerta"], "el registro dice por qué es el peor"
+
+
+def test_check_source_key_collision_mira_los_punteros_no_los_usos(toy_vault):
+    """#396/INV-27 — dos trabajos con la misma clave sintética comparten nota y `.txt`: la segunda
+    se queda con el documento de la primera. Lo que define la colisión es que los PUNTEROS
+    difieran; la misma fuente declarada en dos temas es reuso legítimo.  @inv INV-27"""
+    def _temas(items):
+        write_yaml(cfg.THEMES_YAML, {s: {"title": s, "area": "methods", "source": "local-pdfs",
+                                         "sources": it} for s, it in items.items()})
+    _temas({"a": [{"key": "2001X", "url": "http://u/1"}],
+            "b": [{"key": "2001X", "url": "http://u/1"}]})
+    assert lint.check_source_key_collision() == [], "el mismo puntero en dos temas es reuso"
+    _temas({"a": [{"key": "2001X", "url": "http://u/1"}],
+            "b": [{"key": "2001X", "pdf": "otro.pdf"}]})
+    filas = lint.check_source_key_collision()
+    assert len(filas) == 1 and filas[0][0] == "2001X" and "2 fuentes distintas" in filas[0][1]
+    _temas({"a": [{"url": "http://u/1"}, "no soy un mapa"]})
+    assert lint.check_source_key_collision() == [], "sin `key` no hay clave que colisionar"
+
+
+def test_check_sources_provenance_cubre_la_forma_y_el_vocabulario(toy_vault):
+    """#396/#111/#206/INV-129 — en off-ADS TODO entra por decisión de alguien, así que `via` y
+    `motivo` son obligatorios. Y la forma inválida no puede salir limpia: un `sources:` escalar o
+    una entrada que no es mapa evaden los chequeos por elemento (el modo de falla de AUD-179).
+    @inv INV-129"""
+    def _tema(src):
+        write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods",
+                                             "source": "local-pdfs", "sources": src}})
+    _tema([{"key": "2001X", "pdf": "x.pdf", "via": "usuario", "motivo": "canon"}])
+    assert lint.check_sources_provenance() == []
+    _tema("no soy una lista")
+    assert "no es una lista" in lint.check_sources_provenance()[0][1]
+    _tema(["no soy un mapa"])
+    assert "no es un mapa" in lint.check_sources_provenance()[0][1]
+    _tema([{"key": "2001X", "pdf": "x.pdf"}])
+    assert "sin `via` ni `motivo`" in lint.check_sources_provenance()[0][1]
+    _tema([{"key": "2001X", "pdf": "x.pdf", "via": "reporte", "motivo": "m"}])
+    assert "RETIRADO" in lint.check_sources_provenance()[0][1]
+    _tema([{"key": "2001X", "pdf": "x.pdf", "via": "inventado", "motivo": "m"}])
+    assert "fuera del vocabulario cerrado" in lint.check_sources_provenance()[0][1]
+
+
+def test_check_sources_metadata_separa_lo_que_bloquea_de_lo_que_es_backlog(toy_vault):
+    """#396/#353 — el cruce lo hace `check_sources` (red) y esto lo lee del registro, offline. Sólo
+    bloquea autor por Crossref y año por Crossref con diferencia ≥ 2; lo demás es backlog con su
+    motivo. Y lo que nunca se cruzó no es verde: es dudoso con su comando (D-43)."""
+    decl = {"key": "2001X", "pdf": "x.pdf", "via": "usuario", "motivo": "m",
+            "author": "Comon", "year": 1994, "title": "ICA"}
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods",
+                                         "source": "local-pdfs", "sources": [decl]}})
+    falsa, dudosa = lint.check_sources_metadata()
+    assert falsa == [] and "nunca se cruzó" in dudosa[0][1]
+
+    def _cruce(**rec):
+        write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "fuentes_chequeadas": {"2001X": {
+            "fecha": "2026-03-01",
+            "declarado": {"author": "Comon", "year": 1994, "title": "ICA"}, **rec}}})
+    _cruce(veredicto="ok", via="crossref")
+    assert lint.check_sources_metadata() == ([], [])
+    _cruce(veredicto="autor", via="crossref", detalle="declarado «Comon», Crossref dice «Vrabie»")
+    falsa, dudosa = lint.check_sources_metadata()
+    assert len(falsa) == 1 and dudosa == [] and "Vrabie" in falsa[0][1]
+    _cruce(veredicto="anio", via="crossref", detalle="1994 vs 1995",
+           encontrado={"year": 1995})
+    falsa, dudosa = lint.check_sources_metadata()
+    assert falsa == [] and len(dudosa) == 1, "±1 es online-first, no una atribución falsa"
+    _cruce(veredicto="anio", via="crossref", detalle="1994 vs 1999", encontrado={"year": 1999})
+    assert len(lint.check_sources_metadata()[0]) == 1, "≥2 sí bloquea"
+    _cruce(veredicto="autor", via="pdf", detalle="la primera página no trae el apellido")
+    falsa, dudosa = lint.check_sources_metadata()
+    assert falsa == [] and len(dudosa) == 1, "el PDF no bloquea: no trae el apellido en 14 de 52"
+    # y lo declarado que cambió desde el cruce vuelve a ser dudoso, no un veredicto viejo
+    _cruce(veredicto="ok", via="crossref")
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "local-pdfs",
+                                         "sources": [{**decl, "author": "Otro"}]}})
+    assert "lo declarado cambió" in lint.check_sources_metadata()[1][0][1]

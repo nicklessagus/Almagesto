@@ -2061,6 +2061,332 @@ def check_index_stale(todos_fm: dict) -> list:
     return indice_viejo
 
 
+def check_lens_broken(obj_err) -> list:
+    """`lente_rota` — the objective parses, has a real name, and classifies NOTHING (AUD-56).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. It is the
+    exact false-clean this tool exists not to produce: `objective_error` says the YAML is healthy,
+    the placeholder WARN does not fire, and the lint used to close on exit 0 over a vault where no
+    paper could be core.
+
+    @inv INV-150
+    """
+    lente_rota: list = []
+    # ── LENTE VACÍA: el objetivo parsea, tiene nombre propio, y no clasifica NADA (AUD-56) ────────
+    # Medido en un clon limpio con el `objective.yaml` de una instancia en 1.11.0: `relevance` usa
+    # `topics:` (schema pre-R-5, hoy `facets:`), así que `lens_current()` da `facets: {}` mientras
+    # `require: [rv]` exige una faceta que no existe — ninguna cosa podría ser core. `objective_error`
+    # dice `None` (el YAML está sano), el WARN del placeholder no dispara (el nombre es real), el
+    # detector de `topics:` mira NOTAS DE PAPER y no el objetivo, y el lint cerraba en **exit 0**.
+    # O sea: el falso limpio exacto que esta herramienta existe para no producir, en el archivo del
+    # que depende la definición de "core". Lo agarra `query_ads` recién al correr, pero para entonces
+    # ya migraste la bóveda. Bloqueante: sin lente no hay corpus, y con `require` colgando de una
+    # faceta inexistente el corte no es "todo core" sino "nada core", que se ve igual que "no hay
+    # papers".
+    # @inv INV-150
+    lente_rota = []
+    if not obj_err:
+        _rel = cfg.as_map(cfg.load_objective().get("relevance"))
+        _lente = cfg.lens_current()
+        if not _lente.get("facets"):
+            _viejo = " (usa `topics:`, el schema pre-R-5 — el campo vigente es `facets:`)" if _rel.get("topics") else ""
+            lente_rota.append(
+                ("vault/config/objective.yaml",
+                 f"`relevance.facets` está vacío{_viejo}: ningún paper puede clasificar como core. "
+                 f"Migrá `topics:` → `facets:` o corré el skill `setup`"))
+        elif (_faltan := [f for f in (_lente.get("require") or []) if f not in _lente["facets"]]):
+            lente_rota.append(
+                ("vault/config/objective.yaml",
+                 f"`relevance.require` exige faceta(s) que no existen en `facets`: {_faltan} — "
+                 f"nada puede ser core, y eso se ve igual que «no hay papers»"))
+    return lente_rota
+
+
+def check_undeclared_areas() -> list:
+    """`undeclared_areas` — a `concepts/<area>/` that `concept_areas` does not declare (WARN).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Soft on
+    purpose: a typo and a legitimate new area look the same, so it marks and does not block. With
+    nothing declared the typo-check is OFF and THAT is what gets reported, once — inferring the
+    areas from the folders on disk would turn a typo already committed into a declared area.
+
+    @inv INV-47
+    """
+    undeclared_areas: list = []
+    # áreas de concepts/ no declaradas en concept_areas (objective.yaml) → posible typo / carpeta
+    # fantasma: un `area` mal tipeado en themes.yaml crea carpeta en silencio (ver make_notes). WARN
+    # blando (un typo y un área nueva legítima se ven igual → no se bloquea, se marca para revisar).
+    # Sin `concept_areas` declarado el typo-check está APAGADO (no se infiere de las carpetas que
+    # hay en disco: eso convertiría un typo ya cometido en "área declarada"). Se reporta la ausencia
+    # una vez, en vez de marcar todas las carpetas como no declaradas.
+    declared_areas = set(cfg.load_concept_areas())
+    # @inv INV-47
+    undeclared_areas = []
+    if not declared_areas:
+        undeclared_areas.append(
+            ("vault/config/objective.yaml",
+             "no declara `concept_areas` → el typo-check de áreas de concepts/ está APAGADO; "
+             "declarala (aunque sea con las que ya usás) para que un `indicatorz` no pase mudo"))
+    elif cfg.CONCEPTS.exists():
+        for d in sorted(cfg.CONCEPTS.iterdir()):
+            if d.is_dir() and d.name not in declared_areas:
+                n = len(list(d.glob("*.md")))
+                undeclared_areas.append(
+                    (f"concepts/{d.name}/",
+                     f"área fuera de concept_areas; {n} nota(s) — ¿typo o área nueva sin declarar?"))
+    return undeclared_areas
+
+
+def check_legacy_triage() -> list:
+    """`legacy_triage` — curation judgement still in `build/<slug>/triage.json` (pre-1.9.0).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Its own
+    sweep, not hung off the `ads.json` one: a half-cleaned `build/` would still have the
+    `triage.json` and hanging it off the other loop made it undetectable in the very case this
+    check exists to cover.
+    """
+    legacy_triage: list = []
+    # Juicio de triage en el lugar pre-1.9.0 (bloqueante): barrido PROPIO, no colgado del de
+    # ads.json — un `build/` limpiado a medias (o una bóveda vieja sin ads.json) tendría el
+    # triage.json igual, y colgarlo del otro loop lo volvía indetectable justo en el caso que este
+    # chequeo existe para cubrir.
+    for lt in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "triage.json"))):
+        slug = Path(lt).parent.name
+        try:
+            data_lt = json.loads(open(lt, encoding="utf-8").read())
+            # El guard `isinstance(data_lt, dict)` sólo cubría data_lt mismo: un
+            # `{"decisiones": 3}` (JSON válido, forma inválida un nivel más abajo) lo pasaba igual
+            # y `len(3)` volteaba el reporte ENTERO — el modo de falla equivocado para el chequeo
+            # que existe para no quedar mudo. `as_map` + el `isinstance` sobre `dec` mueven el
+            # guard al nivel donde de verdad se usa (#h03).
+            dec = cfg.as_map(data_lt).get("decisiones")
+            n_viejas = len(dec) if isinstance(dec, (dict, list)) else -1
+        except (ValueError, OSError):
+            n_viejas = -1
+        legacy_triage.append(
+            (slug, f"{'?' if n_viejas < 0 else n_viejas} decisión(es) en "
+                   f"build/{slug}/triage.json, el lugar pre-1.9.0 que el lector ya no mira → "
+                   f"`python scripts/triage.py {slug} --migrate` (si no, el triage vuelve a "
+                   f"proponer lo que ya descartaste, sin el motivo)"))
+    return legacy_triage
+
+
+def check_dangling_layers() -> list:
+    """`artefactos_colgados` — layers of an entity that no longer exists (INV-19).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. The other
+    half of the invariant («no orphan file under `raw/` either») had no net: `wiki/` and the
+    ground-truth were covered and the registro, `raw/{pdfs,fulltext}/` and `build/` were not — and
+    the dangling `registro/<slug>.yaml` is the worst of the four, being the only artifact that
+    cannot be regenerated.
+
+    @inv INV-19
+    """
+    artefactos_colgados: list = []
+    # INV-19 — capas COLGADAS de una entidad que ya no existe. La otra mitad del invariante ("ni
+    # archivo huérfano en `raw/`") no tenía red: había chequeo para `wiki/` (wikilinks rotos,
+    # huérfanas) y para el ground-truth, y **ninguno** para el registro, `raw/{pdfs,fulltext}/` ni
+    # `build/`. Borrar una entidad a mano —que hasta hoy era el único modo: nueve pasos en prosa—
+    # dejaba esos directorios ahí, y el `registro/<slug>.yaml` colgado es el peor de los cuatro: es
+    # el único artefacto no regenerable y su juicio de curación queda mudo, apuntando a un sujeto
+    # que no existe. Backlog: no invalida nada de lo que hay, pero nadie lo diría.
+    if not (cfg.stars_error() or cfg.themes_error()):
+        vivos = {m.get("slug") for m in cfg.load_stars().values()
+                 if isinstance(m, dict) and m.get("slug")} | set(cfg.load_themes())
+        for etiqueta, base, patron in (("registro", cfg.REGISTRO, "*.yaml"),
+                                       ("raw/pdfs", cfg.PDFS, "*"),
+                                       ("raw/fulltext", cfg.FULLTEXT, "*"),
+                                       ("build", cfg.ROOT / "build", "*")):
+            if not base.exists():
+                continue
+            for p_ in sorted(base.glob(patron)):
+                # #230 — `build/` es, por `.gitignore`, «scratch del tooling», así que tratar TODO
+                # subdirectorio suyo como capa de entidad garantiza el falso positivo: el
+                # directorio de trabajo de una auditoría (`build/auditoria/`) se reportaba como
+                # defecto de la bóveda. Capa de entidad es la que trae lo que la cadena escribe.
+                if etiqueta == "build" and not (
+                        (p_ / "ads.json").exists() or (p_ / "extraccion").exists()):
+                    continue
+                slug_ = p_.stem if patron == "*.yaml" else p_.name
+                # `_red.yaml` es de la bóveda entera, no de un sujeto (pasada de red, D-46).
+                if slug_.startswith("_") or slug_ in vivos:
+                    continue
+                if patron == "*" and not p_.is_dir():
+                    continue
+                extra = (" — es el ÚNICO artefacto no regenerable: su juicio de curación queda "
+                         "mudo, apuntando a un sujeto que no existe"
+                         if etiqueta == "registro" else "")
+                artefactos_colgados.append(
+                    (f"{etiqueta}/{slug_}", f"no hay ninguna entidad con slug `{slug_}` en "
+                                            f"stars.yaml/themes.yaml{extra} → "
+                                            f"`python scripts/entity.py plan {slug_}` no lo va a "
+                                            f"encontrar: borralo a mano, o recreá la entidad"))
+    return artefactos_colgados
+
+
+def check_source_key_collision() -> list:
+    """`bad_sources` rows for the synthetic key DECLARED twice (INV-27).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. A person
+    picks the `AAAA+Autor` key and two works by the same author and year share it without effort;
+    the whole chain resolves the clash by «the file is already there, I do not overwrite», so the
+    second source keeps the first one's note and the citation points at a document nobody opened.
+
+    @inv INV-27
+    """
+    bad_sources: list = []
+    # INV-27 — COLISIÓN de clave. Una clave sintética (`AAAA+Autor`) la elige una persona, y dos
+    # trabajos del mismo autor y año la comparten sin esfuerzo. Toda la cadena resuelve el choque
+    # por «el archivo ya existe, no lo piso», así que la segunda fuente se queda con el `.txt` y la
+    # nota de la PRIMERA: la cita apunta a un documento que nadie abrió. `fetch_web` ya lo frena al
+    # capturar (compara la url del snapshot en disco), pero eso sólo ve las que llegaron a bajarse y
+    # sólo dentro de un slug — acá se ve la colisión **declarada**, incluso entre temas distintos y
+    # antes de gastar red. La forma de la clave ya la valida `BIBCODE_RE`; lo que faltaba es la
+    # unicidad, que es la otra mitad del invariante.
+    # @inv INV-27
+    _por_clave: dict = {}
+    for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
+        for _it in cfg.as_list(cfg.as_map(_meta).get("sources")):
+            if not isinstance(_it, dict) or not (_k := str(_it.get("key") or "").strip()):
+                continue
+            _punt = str(_it.get("url") or _it.get("pdf") or "").strip()
+            _por_clave.setdefault(_k, []).append((_slug, _punt))
+    for _k, _usos in sorted(_por_clave.items()):
+        _punteros = {p for _s, p in _usos if p}
+        if len(_punteros) > 1:
+            bad_sources.append(
+                (_k, f"la MISMA clave declara {len(_punteros)} fuentes distintas "
+                     f"({'; '.join(f'{s}: {p}' for s, p in sorted(_usos))}) → las dos escriben "
+                     f"`papers/{_k}.md` y comparten `.txt`: la segunda se queda con el documento de "
+                     f"la primera y la cita apunta a algo que nadie abrió. Desambiguá con un sufijo "
+                     f"(`{_k}b`)"))
+    return bad_sources
+
+
+def check_sources_provenance() -> list:
+    """`bad_sources` — `sources:` entries with no provenance, or with a shape that evades it (#111).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. This was
+    the only one of the four curation quadrants with no record, and the one that needs it most: in
+    off-ADS EVERYTHING enters because someone decided it. Blocking, like the hard shape of
+    `extra_core` — an optional field does not get filled in.
+
+    @inv INV-129
+    """
+    bad_sources: list = []
+    # `sources:` sin procedencia (#111). Era el ÚNICO de los cuatro cuadrantes de curación sin
+    # registro: `extra_core` dice quién y por qué desde D-58, el descarte de un candidato desde #51
+    # y el de una fuente declarada desde #81 — pero una fuente off-ADS ACEPTADA no decía nada. Y es
+    # el cuadrante que más lo necesita: en off-ADS **todo** entra por decisión de alguien (no hay
+    # query que descubra), así que sin el campo la pregunta «¿qué entró porque lo pediste vos, qué
+    # lo propuso el descubrimiento y qué salió de un reporte externo?» no tiene respuesta. Medido
+    # sobre una bóveda real: los 40 papers que tenía y la nueva no entraron los 40 a mano, y no hay
+    # forma de saber cuáles pidió el usuario. BLOQUEANTE, como la forma dura de `extra_core`: un
+    # campo opcional no se llena. El snippet lo arma `triage.py --accept-source`.
+    # `themes_error()` primero: con el YAML roto, `load_themes` levanta y tumbaría el lint entero —
+    # el chequeo no puede volverse él mismo un falso rojo (misma doctrina que INV-80).
+    for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
+        # AUD-179 / INV-129 — `as_list` devuelve `[]` para un escalar Y para un mapa, así que un
+        # `sources:` con forma inválida daba **cero hallazgos**: el bucle no entraba y el tema salía
+        # limpio. Es el mismo modo de falla que `normalize_lists` cierra para el frontmatter (un
+        # campo que el schema declara lista y llega escalar evade los chequeos por elemento), acá en
+        # la config — y encima en el cuadrante donde TODO entra por decisión de alguien.
+        _src = cfg.as_map(_meta).get("sources")
+        if _src not in (None, [], "") and not isinstance(_src, list):
+            bad_sources.append(
+                (_slug, f"`sources:` no es una lista (es {type(_src).__name__}) → ninguna de sus "
+                        f"entradas se chequea: tiene que ser una lista de mapas "
+                        f"`- {{key, url|pdf, via, motivo}}`"))
+            continue
+        for _it in cfg.as_list(_src):
+            if not isinstance(_it, dict):
+                bad_sources.append(
+                    (_slug, f"entrada de `sources:` que no es un mapa ({_it!r}) → evade los "
+                            f"chequeos de procedencia; escribila como `- {{key: …, url: …, "
+                            f"via: …, motivo: …}}`"))
+                continue
+            _falta = [k for k in ("via", "motivo") if not _it.get(k)]
+            if _falta:
+                bad_sources.append(
+                    (f"{_slug}/{_it.get('key') or '?'}",
+                     f"entrada de `sources:` sin {' ni '.join('`%s`' % k for k in _falta)} → no "
+                     f"consta quién la declaró ni por qué (en off-ADS TODO entra por decisión de "
+                     f"alguien). Armá la entrada con `python scripts/triage.py {_slug} "
+                     f"--accept-source <doi> --via usuario --reason \"<motivo>\"`"))
+            elif (_v := _it.get("via")) in VIA_FUENTE_RETIRADO:
+                # #206: valor retirado, no typo. `reporte` y `usuario` eran la misma decisión —el
+                # usuario trajo el paper— y partirla hacía que `via` dejara de contestar su propia
+                # pregunta: había que sumar dos casilleros para saber cuántos entraron por decisión
+                # humana. El documento de origen lo lleva `motivo`, que es obligatorio y dice CUÁL.
+                bad_sources.append(
+                    (f"{_slug}/{_it.get('key') or '?'}",
+                     f"`via: {_v}` es vocabulario RETIRADO (#206) — usá {VIA_FUENTE_RETIRADO[_v]}"))
+            elif _v not in VIA_FUENTE_OK:
+                bad_sources.append(
+                    (f"{_slug}/{_it.get('key') or '?'}",
+                     f"`via: {_v}` fuera del vocabulario cerrado "
+                     f"({' | '.join(sorted(VIA_FUENTE_OK))}) — un typo deja el campo mudo para la "
+                     f"única pregunta que existe para consumirlo"))
+    return bad_sources
+
+
+def check_sources_metadata() -> tuple:
+    """`(fuente_metadata_falsa, fuente_metadata_dudosa)` — what `sources:` DECLARES against what its
+    `doi` or its PDF say (#353).
+
+    Extracted from `lint.collect` by #396; the blocks compute and the caller accumulates. The cross
+    itself is `check_sources` (network); this reads its verdict from the versioned registro,
+    offline. Only author-by-Crossref and a year off by two or more block; everything else is
+    backlog with its reason (D-43: what could not be evaluated is said, not painted green).
+    """
+    fuente_metadata_falsa: list = []
+    fuente_metadata_dudosa: list = []
+    # #353 — lo que un item de `sources:` DECLARA contra lo que su `doi` o su PDF dicen. El cruce
+    # lo hace `check_sources` (red; corre al declarar y a pedido) y deja el veredicto en el
+    # registro versionado con un snapshot de lo declarado: acá se lee, offline. Medido en una bóveda
+    # real (52 fuentes): 1 autor falso por Crossref (la atribución que #353 cazó, derivada del
+    # nombre del archivo), 1 año a ±1 (online-first: NO es falso), 3 títulos con variantes, y la
+    # primera página del PDF sin el apellido o el año en 14 —capítulos, preprints, `Hyv¨arinen`—:
+    # por eso SÓLO bloquea autor por Crossref y año por Crossref con diferencia ≥ 2; lo demás es
+    # backlog con su motivo (D-43: el no evaluable se dice, no es verde).
+    for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
+        _chequeadas = cfg.as_map(cfg.load_registro(_slug).get("fuentes_chequeadas"))
+        for _it in cfg.as_list(cfg.as_map(_meta).get("sources")):
+            if not isinstance(_it, dict) or not (_k := str(_it.get("key") or "").strip()):
+                continue
+            _rec = cfg.as_map(_chequeadas.get(_k))
+            _cmd = f"`python scripts/check_sources.py {_slug}`"
+            if not _rec:
+                fuente_metadata_dudosa.append(
+                    (_k, f"lo declarado en `sources:` de `{_slug}` nunca se cruzó contra su `doi`/PDF "
+                         f"(#353) → {_cmd}"))
+                continue
+            _decl_hoy = {"author": str(_it.get("author") or "").strip(),
+                         "year": _year_of(_it.get("year")),
+                         "title": str(_it.get("title") or "").strip()}
+            _decl_reg = cfg.as_map(_rec.get("declarado"))
+            if {k: _decl_reg.get(k) for k in _decl_hoy} != _decl_hoy:
+                fuente_metadata_dudosa.append(
+                    (_k, f"lo declarado cambió desde el cruce del {_rec.get('fecha')} → {_cmd}"))
+                continue
+            _v, _via, _det = str(_rec.get("veredicto") or ""), str(_rec.get("via") or ""), str(_rec.get("detalle") or "")
+            if _v == "ok":
+                continue
+            _bloquea = _via in ("crossref", "bib") and (
+                _v == "autor" or (_v == "anio" and abs(int(_decl_hoy["year"] or 0)
+                                                    - int(cfg.as_map(_rec.get("encontrado")).get("year") or 0)) >= 2))
+            if _bloquea:
+                fuente_metadata_falsa.append(
+                    (_k, f"{_det} (tema `{_slug}`, cruce del {_rec.get('fecha')}) → corregí la entrada de "
+                         f"`sources:` (o migrala a `extra_core` si tiene bibcode ADS) y re-corré {_cmd}; "
+                         f"si el DOI es el equivocado, corregí el DOI"))
+            else:
+                fuente_metadata_dudosa.append(
+                    (_k, f"[{_via}] {_v}: {_det} (tema `{_slug}`, {_rec.get('fecha')}) → abrí la fuente y "
+                         f"decidí; re-corré {_cmd} tras corregir"))
+    return fuente_metadata_falsa, fuente_metadata_dudosa
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -4409,55 +4735,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
              "objective.name sigue siendo el placeholder del template — corré el skill `setup` "
              "(o editá el YAML) para definir el objetivo de TU bóveda"))
 
-    # ── LENTE VACÍA: el objetivo parsea, tiene nombre propio, y no clasifica NADA (AUD-56) ────────
-    # Medido en un clon limpio con el `objective.yaml` de una instancia en 1.11.0: `relevance` usa
-    # `topics:` (schema pre-R-5, hoy `facets:`), así que `lens_current()` da `facets: {}` mientras
-    # `require: [rv]` exige una faceta que no existe — ninguna cosa podría ser core. `objective_error`
-    # dice `None` (el YAML está sano), el WARN del placeholder no dispara (el nombre es real), el
-    # detector de `topics:` mira NOTAS DE PAPER y no el objetivo, y el lint cerraba en **exit 0**.
-    # O sea: el falso limpio exacto que esta herramienta existe para no producir, en el archivo del
-    # que depende la definición de "core". Lo agarra `query_ads` recién al correr, pero para entonces
-    # ya migraste la bóveda. Bloqueante: sin lente no hay corpus, y con `require` colgando de una
-    # faceta inexistente el corte no es "todo core" sino "nada core", que se ve igual que "no hay
-    # papers".
-    # @inv INV-150
-    lente_rota = []
-    if not obj_err:
-        _rel = cfg.as_map(cfg.load_objective().get("relevance"))
-        _lente = cfg.lens_current()
-        if not _lente.get("facets"):
-            _viejo = " (usa `topics:`, el schema pre-R-5 — el campo vigente es `facets:`)" if _rel.get("topics") else ""
-            lente_rota.append(
-                ("vault/config/objective.yaml",
-                 f"`relevance.facets` está vacío{_viejo}: ningún paper puede clasificar como core. "
-                 f"Migrá `topics:` → `facets:` o corré el skill `setup`"))
-        elif (_faltan := [f for f in (_lente.get("require") or []) if f not in _lente["facets"]]):
-            lente_rota.append(
-                ("vault/config/objective.yaml",
-                 f"`relevance.require` exige faceta(s) que no existen en `facets`: {_faltan} — "
-                 f"nada puede ser core, y eso se ve igual que «no hay papers»"))
+    # ── LENTE VACÍA (AUD-56): el bloque vive en `check_lens_broken` (#396).
+    lente_rota = check_lens_broken(obj_err)
 
-    # áreas de concepts/ no declaradas en concept_areas (objective.yaml) → posible typo / carpeta
-    # fantasma: un `area` mal tipeado en themes.yaml crea carpeta en silencio (ver make_notes). WARN
-    # blando (un typo y un área nueva legítima se ven igual → no se bloquea, se marca para revisar).
-    # Sin `concept_areas` declarado el typo-check está APAGADO (no se infiere de las carpetas que
-    # hay en disco: eso convertiría un typo ya cometido en "área declarada"). Se reporta la ausencia
-    # una vez, en vez de marcar todas las carpetas como no declaradas.
-    declared_areas = set(cfg.load_concept_areas())
-    # @inv INV-47
-    undeclared_areas = []
-    if not declared_areas:
-        undeclared_areas.append(
-            ("vault/config/objective.yaml",
-             "no declara `concept_areas` → el typo-check de áreas de concepts/ está APAGADO; "
-             "declarala (aunque sea con las que ya usás) para que un `indicatorz` no pase mudo"))
-    elif cfg.CONCEPTS.exists():
-        for d in sorted(cfg.CONCEPTS.iterdir()):
-            if d.is_dir() and d.name not in declared_areas:
-                n = len(list(d.glob("*.md")))
-                undeclared_areas.append(
-                    (f"concepts/{d.name}/",
-                     f"área fuera de concept_areas; {n} nota(s) — ¿typo o área nueva sin declarar?"))
+    # Las áreas de `concepts/` no declaradas viven en `check_undeclared_areas` (#396).
+    undeclared_areas = check_undeclared_areas()
 
     # Obsidian en la raíz del repo: el bloque vive en `check_root_obsidian` (#396).
     root_obsidian = check_root_obsidian()
@@ -4539,28 +4821,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                        f"{tg.get('num_found')} y se escanearon {tg.get('rows')} (top por citas, "
                        f"antes del filtro) → re-ingestá con --rows mayor"))
 
-    # Juicio de triage en el lugar pre-1.9.0 (bloqueante): barrido PROPIO, no colgado del de
-    # ads.json — un `build/` limpiado a medias (o una bóveda vieja sin ads.json) tendría el
-    # triage.json igual, y colgarlo del otro loop lo volvía indetectable justo en el caso que este
-    # chequeo existe para cubrir.
-    for lt in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "triage.json"))):
-        slug = Path(lt).parent.name
-        try:
-            data_lt = json.loads(open(lt, encoding="utf-8").read())
-            # El guard `isinstance(data_lt, dict)` sólo cubría data_lt mismo: un
-            # `{"decisiones": 3}` (JSON válido, forma inválida un nivel más abajo) lo pasaba igual
-            # y `len(3)` volteaba el reporte ENTERO — el modo de falla equivocado para el chequeo
-            # que existe para no quedar mudo. `as_map` + el `isinstance` sobre `dec` mueven el
-            # guard al nivel donde de verdad se usa (#h03).
-            dec = cfg.as_map(data_lt).get("decisiones")
-            n_viejas = len(dec) if isinstance(dec, (dict, list)) else -1
-        except (ValueError, OSError):
-            n_viejas = -1
-        legacy_triage.append(
-            (slug, f"{'?' if n_viejas < 0 else n_viejas} decisión(es) en "
-                   f"build/{slug}/triage.json, el lugar pre-1.9.0 que el lector ya no mira → "
-                   f"`python scripts/triage.py {slug} --migrate` (si no, el triage vuelve a "
-                   f"proponer lo que ya descartaste, sin el motivo)"))
+    # El triage en el lugar pre-1.9.0 vive en `check_legacy_triage` (#396).
+    legacy_triage += check_legacy_triage()
 
     # Fallback al registro VERSIONADO (#51/#64) para los sujetos SIN build/ local: post-clone, otra
     # máquina, o después de limpiar el scratch, los dos chequeos de arriba reportaban 0 sin haber
@@ -4722,44 +4984,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                        f"registro del {fecha} (sin build/{slug}/ local: es el snapshot de esa "
                        f"corrida) → re-ingestá con --rows mayor; pueden faltar papers con lookalike"))
 
-    # INV-19 — capas COLGADAS de una entidad que ya no existe. La otra mitad del invariante ("ni
-    # archivo huérfano en `raw/`") no tenía red: había chequeo para `wiki/` (wikilinks rotos,
-    # huérfanas) y para el ground-truth, y **ninguno** para el registro, `raw/{pdfs,fulltext}/` ni
-    # `build/`. Borrar una entidad a mano —que hasta hoy era el único modo: nueve pasos en prosa—
-    # dejaba esos directorios ahí, y el `registro/<slug>.yaml` colgado es el peor de los cuatro: es
-    # el único artefacto no regenerable y su juicio de curación queda mudo, apuntando a un sujeto
-    # que no existe. Backlog: no invalida nada de lo que hay, pero nadie lo diría.
-    if not (cfg.stars_error() or cfg.themes_error()):
-        vivos = {m.get("slug") for m in cfg.load_stars().values()
-                 if isinstance(m, dict) and m.get("slug")} | set(cfg.load_themes())
-        for etiqueta, base, patron in (("registro", cfg.REGISTRO, "*.yaml"),
-                                       ("raw/pdfs", cfg.PDFS, "*"),
-                                       ("raw/fulltext", cfg.FULLTEXT, "*"),
-                                       ("build", cfg.ROOT / "build", "*")):
-            if not base.exists():
-                continue
-            for p_ in sorted(base.glob(patron)):
-                # #230 — `build/` es, por `.gitignore`, «scratch del tooling», así que tratar TODO
-                # subdirectorio suyo como capa de entidad garantiza el falso positivo: el
-                # directorio de trabajo de una auditoría (`build/auditoria/`) se reportaba como
-                # defecto de la bóveda. Capa de entidad es la que trae lo que la cadena escribe.
-                if etiqueta == "build" and not (
-                        (p_ / "ads.json").exists() or (p_ / "extraccion").exists()):
-                    continue
-                slug_ = p_.stem if patron == "*.yaml" else p_.name
-                # `_red.yaml` es de la bóveda entera, no de un sujeto (pasada de red, D-46).
-                if slug_.startswith("_") or slug_ in vivos:
-                    continue
-                if patron == "*" and not p_.is_dir():
-                    continue
-                extra = (" — es el ÚNICO artefacto no regenerable: su juicio de curación queda "
-                         "mudo, apuntando a un sujeto que no existe"
-                         if etiqueta == "registro" else "")
-                artefactos_colgados.append(
-                    (f"{etiqueta}/{slug_}", f"no hay ninguna entidad con slug `{slug_}` en "
-                                            f"stars.yaml/themes.yaml{extra} → "
-                                            f"`python scripts/entity.py plan {slug_}` no lo va a "
-                                            f"encontrar: borralo a mano, o recreá la entidad"))
+    # Las capas colgadas de una entidad muerta viven en `check_dangling_layers` (#396).
+    artefactos_colgados += check_dangling_layers()
 
     # El hermano `.verif.md` huérfano vive en `check_verif_orphan_sidecar` (#396).
     verif_huerfano = check_verif_orphan_sidecar()
@@ -4785,129 +5011,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # El índice desactualizado vive en `check_index_stale` (#396).
     indice_viejo += check_index_stale(todos_fm)
 
-    # `sources:` sin procedencia (#111). Era el ÚNICO de los cuatro cuadrantes de curación sin
-    # registro: `extra_core` dice quién y por qué desde D-58, el descarte de un candidato desde #51
-    # y el de una fuente declarada desde #81 — pero una fuente off-ADS ACEPTADA no decía nada. Y es
-    # el cuadrante que más lo necesita: en off-ADS **todo** entra por decisión de alguien (no hay
-    # query que descubra), así que sin el campo la pregunta «¿qué entró porque lo pediste vos, qué
-    # lo propuso el descubrimiento y qué salió de un reporte externo?» no tiene respuesta. Medido
-    # sobre una bóveda real: los 40 papers que tenía y la nueva no entraron los 40 a mano, y no hay
-    # forma de saber cuáles pidió el usuario. BLOQUEANTE, como la forma dura de `extra_core`: un
-    # campo opcional no se llena. El snippet lo arma `triage.py --accept-source`.
-    # `themes_error()` primero: con el YAML roto, `load_themes` levanta y tumbaría el lint entero —
-    # el chequeo no puede volverse él mismo un falso rojo (misma doctrina que INV-80).
-    # INV-27 — COLISIÓN de clave. Una clave sintética (`AAAA+Autor`) la elige una persona, y dos
-    # trabajos del mismo autor y año la comparten sin esfuerzo. Toda la cadena resuelve el choque
-    # por «el archivo ya existe, no lo piso», así que la segunda fuente se queda con el `.txt` y la
-    # nota de la PRIMERA: la cita apunta a un documento que nadie abrió. `fetch_web` ya lo frena al
-    # capturar (compara la url del snapshot en disco), pero eso sólo ve las que llegaron a bajarse y
-    # sólo dentro de un slug — acá se ve la colisión **declarada**, incluso entre temas distintos y
-    # antes de gastar red. La forma de la clave ya la valida `BIBCODE_RE`; lo que faltaba es la
-    # unicidad, que es la otra mitad del invariante.
-    # @inv INV-27
-    _por_clave: dict = {}
-    for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
-        for _it in cfg.as_list(cfg.as_map(_meta).get("sources")):
-            if not isinstance(_it, dict) or not (_k := str(_it.get("key") or "").strip()):
-                continue
-            _punt = str(_it.get("url") or _it.get("pdf") or "").strip()
-            _por_clave.setdefault(_k, []).append((_slug, _punt))
-    for _k, _usos in sorted(_por_clave.items()):
-        _punteros = {p for _s, p in _usos if p}
-        if len(_punteros) > 1:
-            bad_sources.append(
-                (_k, f"la MISMA clave declara {len(_punteros)} fuentes distintas "
-                     f"({'; '.join(f'{s}: {p}' for s, p in sorted(_usos))}) → las dos escriben "
-                     f"`papers/{_k}.md` y comparten `.txt`: la segunda se queda con el documento de "
-                     f"la primera y la cita apunta a algo que nadie abrió. Desambiguá con un sufijo "
-                     f"(`{_k}b`)"))
+    # La colisión de clave sintética vive en `check_source_key_collision` (#396) y la
+    # procedencia de `sources:`, en `check_sources_provenance`.
+    bad_sources += check_source_key_collision()
 
-    for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
-        # AUD-179 / INV-129 — `as_list` devuelve `[]` para un escalar Y para un mapa, así que un
-        # `sources:` con forma inválida daba **cero hallazgos**: el bucle no entraba y el tema salía
-        # limpio. Es el mismo modo de falla que `normalize_lists` cierra para el frontmatter (un
-        # campo que el schema declara lista y llega escalar evade los chequeos por elemento), acá en
-        # la config — y encima en el cuadrante donde TODO entra por decisión de alguien.
-        _src = cfg.as_map(_meta).get("sources")
-        if _src not in (None, [], "") and not isinstance(_src, list):
-            bad_sources.append(
-                (_slug, f"`sources:` no es una lista (es {type(_src).__name__}) → ninguna de sus "
-                        f"entradas se chequea: tiene que ser una lista de mapas "
-                        f"`- {{key, url|pdf, via, motivo}}`"))
-            continue
-        for _it in cfg.as_list(_src):
-            if not isinstance(_it, dict):
-                bad_sources.append(
-                    (_slug, f"entrada de `sources:` que no es un mapa ({_it!r}) → evade los "
-                            f"chequeos de procedencia; escribila como `- {{key: …, url: …, "
-                            f"via: …, motivo: …}}`"))
-                continue
-            _falta = [k for k in ("via", "motivo") if not _it.get(k)]
-            if _falta:
-                bad_sources.append(
-                    (f"{_slug}/{_it.get('key') or '?'}",
-                     f"entrada de `sources:` sin {' ni '.join('`%s`' % k for k in _falta)} → no "
-                     f"consta quién la declaró ni por qué (en off-ADS TODO entra por decisión de "
-                     f"alguien). Armá la entrada con `python scripts/triage.py {_slug} "
-                     f"--accept-source <doi> --via usuario --reason \"<motivo>\"`"))
-            elif (_v := _it.get("via")) in VIA_FUENTE_RETIRADO:
-                # #206: valor retirado, no typo. `reporte` y `usuario` eran la misma decisión —el
-                # usuario trajo el paper— y partirla hacía que `via` dejara de contestar su propia
-                # pregunta: había que sumar dos casilleros para saber cuántos entraron por decisión
-                # humana. El documento de origen lo lleva `motivo`, que es obligatorio y dice CUÁL.
-                bad_sources.append(
-                    (f"{_slug}/{_it.get('key') or '?'}",
-                     f"`via: {_v}` es vocabulario RETIRADO (#206) — usá {VIA_FUENTE_RETIRADO[_v]}"))
-            elif _v not in VIA_FUENTE_OK:
-                bad_sources.append(
-                    (f"{_slug}/{_it.get('key') or '?'}",
-                     f"`via: {_v}` fuera del vocabulario cerrado "
-                     f"({' | '.join(sorted(VIA_FUENTE_OK))}) — un typo deja el campo mudo para la "
-                     f"única pregunta que existe para consumirlo"))
+    bad_sources += check_sources_provenance()
 
-    # #353 — lo que un item de `sources:` DECLARA contra lo que su `doi` o su PDF dicen. El cruce
-    # lo hace `check_sources` (red; corre al declarar y a pedido) y deja el veredicto en el
-    # registro versionado con un snapshot de lo declarado: acá se lee, offline. Medido en una bóveda
-    # real (52 fuentes): 1 autor falso por Crossref (la atribución que #353 cazó, derivada del
-    # nombre del archivo), 1 año a ±1 (online-first: NO es falso), 3 títulos con variantes, y la
-    # primera página del PDF sin el apellido o el año en 14 —capítulos, preprints, `Hyv¨arinen`—:
-    # por eso SÓLO bloquea autor por Crossref y año por Crossref con diferencia ≥ 2; lo demás es
-    # backlog con su motivo (D-43: el no evaluable se dice, no es verde).
-    for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
-        _chequeadas = cfg.as_map(cfg.load_registro(_slug).get("fuentes_chequeadas"))
-        for _it in cfg.as_list(cfg.as_map(_meta).get("sources")):
-            if not isinstance(_it, dict) or not (_k := str(_it.get("key") or "").strip()):
-                continue
-            _rec = cfg.as_map(_chequeadas.get(_k))
-            _cmd = f"`python scripts/check_sources.py {_slug}`"
-            if not _rec:
-                fuente_metadata_dudosa.append(
-                    (_k, f"lo declarado en `sources:` de `{_slug}` nunca se cruzó contra su `doi`/PDF "
-                         f"(#353) → {_cmd}"))
-                continue
-            _decl_hoy = {"author": str(_it.get("author") or "").strip(),
-                         "year": _year_of(_it.get("year")),
-                         "title": str(_it.get("title") or "").strip()}
-            _decl_reg = cfg.as_map(_rec.get("declarado"))
-            if {k: _decl_reg.get(k) for k in _decl_hoy} != _decl_hoy:
-                fuente_metadata_dudosa.append(
-                    (_k, f"lo declarado cambió desde el cruce del {_rec.get('fecha')} → {_cmd}"))
-                continue
-            _v, _via, _det = str(_rec.get("veredicto") or ""), str(_rec.get("via") or ""), str(_rec.get("detalle") or "")
-            if _v == "ok":
-                continue
-            _bloquea = _via in ("crossref", "bib") and (
-                _v == "autor" or (_v == "anio" and abs(int(_decl_hoy["year"] or 0)
-                                                    - int(cfg.as_map(_rec.get("encontrado")).get("year") or 0)) >= 2))
-            if _bloquea:
-                fuente_metadata_falsa.append(
-                    (_k, f"{_det} (tema `{_slug}`, cruce del {_rec.get('fecha')}) → corregí la entrada de "
-                         f"`sources:` (o migrala a `extra_core` si tiene bibcode ADS) y re-corré {_cmd}; "
-                         f"si el DOI es el equivocado, corregí el DOI"))
-            else:
-                fuente_metadata_dudosa.append(
-                    (_k, f"[{_via}] {_v}: {_det} (tema `{_slug}`, {_rec.get('fecha')}) → abrí la fuente y "
-                         f"decidí; re-corré {_cmd} tras corregir"))
+    # El cruce de #353, leído offline del registro, vive en `check_sources_metadata` (#396).
+    _fmf, _fmd = check_sources_metadata()
+    fuente_metadata_falsa += _fmf
+    fuente_metadata_dudosa += _fmd
 
     # categorías que NO se pudieron evaluar: se omiten del reporte en vez de mostrar un "(0)" que
     # se leería como veredicto (el adversario que D-43 nombra: el cero inventado).
