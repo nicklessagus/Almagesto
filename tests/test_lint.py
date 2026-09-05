@@ -7709,3 +7709,29 @@ def test_check_ground_truth_movido_pide_la_marca_y_con_la_marca_baja(toy_vault):
     (cfg.GROUND_TRUTH / "sin_ficha.json").write_text(json.dumps(
         {"_cambios": [{"campo": "P_rot", "viejo": 34, "nuevo": 41}]}), encoding="utf-8")
     assert lint.check_ground_truth_movido() == ([], []), "sin ficha no es hallazgo de esta categoría"
+
+
+def test_check_duplicate_without_id_agrupa_por_abstract_y_no_por_titulo(toy_vault):
+    """#216/#396 — la clase de fuentes donde el duplicado es MÁS probable es justo la que no tiene
+    `doi` ni `arxiv_id`: resúmenes de congreso, tesis, material pre-DOI. La señal es el `## Abstract`
+    verbatim, nunca el título —comparar títulos está medido en `openalex` y es peor que el problema
+    (18 de 25 resueltos, **2 apuntando a otro trabajo**)—.
+
+    Tercer bloque extraído de `collect` (#396): sus cuatro insumos son de sólo lectura, así que
+    salen como parámetros y no queda nada capturado."""
+    # `2020C` y `2020E` cubren los DOS identificadores: con cualquiera de los dos el par ya lo
+    # mira el detector bloqueante de D-19, y esta categoría existe para los que no tienen NINGUNO.
+    fms = {"2020A": {}, "2020B": {}, "2020C": {"doi": "10.1/x"},
+           "2020D": {}, "2020E": {"arxiv_id": "2301.00001"}}
+    largo = "un abstract lo bastante largo como para que el detector lo mire " * 6
+    assert len(largo) > lint.ABSTRACT_MIN
+    abst = {"2020A": largo, "2020B": largo, "2020C": largo, "2020D": "corto",
+            "2020E": largo}
+    dup = lint.check_duplicate_without_id(fms, abst, set(), set())
+    assert len(dup) == 1 and "2020A, 2020B" in dup[0][0], dup
+    assert "2020C" not in dup[0][0] and "2020E" not in dup[0][0], \
+        "con `doi` o con `arxiv_id` lo mira el detector bloqueante"
+    assert "2020D" not in dup[0][0], "un abstract corto no es evidencia de nada"
+    assert lint.check_duplicate_without_id(fms, abst, {"2020A"}, set()) == [], \
+        "lo ya reportado por identidad no se re-reporta acá"
+    assert lint.check_duplicate_without_id(fms, abst, set(), {"2020B"}) == []

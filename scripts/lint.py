@@ -1262,6 +1262,54 @@ def evidence_hash_lookup(pdf_on_disk: dict, ft_hash: dict):
     return evidencia_hash_de
 
 
+def check_duplicate_without_id(paper_fms: dict, paper_abstracts: dict,
+                               alias: set, ya_reportados: set) -> list:
+    """Notes that are probably the SAME work and carry no `doi`/`arxiv_id` (#216).
+
+    Third block out of `lint.collect` (#396). Its four inputs are read-only —two indexes
+    built by the note sweep and the two sets of stems the blocking identity check already
+    reported— so they come out as parameters and nothing is captured.
+    """
+    # D-19 identifica un trabajo por `doi`/`arxiv_id`, y la clase de fuentes donde el duplicado es
+    # MÁS probable es justamente la que no tiene ninguno de los dos: resúmenes de congreso (el mismo
+    # trabajo presentado en EAS, COSPAR y SPIE), tesis, material pre-DOI. Medido en `ica`: de 52
+    # core, 6 sin ningún identificador —el 12 % del corpus invisible para el chequeo— y ahí apareció
+    # un duplicado real, con el mismo texto palabra por palabra. Y a diferencia del par
+    # preprint↔publicado, éste NO tiene señal alternativa: el bibcode no comparte prefijo, los años
+    # difieren y los autores se abrevian distinto.
+    # ⛔ REPORTA, no fusiona, y por eso es BACKLOG: la distinción «mismo trabajo en dos congresos»
+    # vs «dos etapas del mismo programa con resultados distintos» es real y estuvo presente en el
+    # mismo corpus (un registro de 2022 reporta NO-detección y el de 2023 detección tentativa: no
+    # son duplicados y se conservaron los dos). Sólo quien conoce el trabajo puede decidirlo, y un
+    # dedup automático que fusiona dos trabajos distintos destruye más de lo que arregla.
+    # ⛔ Y NO se compara por TÍTULO: está medido en `openalex.py` y es peor que el problema (18 de
+    # 25 resueltos, **2 apuntando a otro trabajo**). El `## Abstract` verbatim está garantizado en
+    # toda nota desde #124, así que el dato está y es mucho más específico.
+    abstract_dup: list = []
+    por_abstract: dict = {}
+    for stem_p in sorted(paper_fms):
+        fm_p = paper_fms[stem_p]
+        if stem_p in alias or stem_p in ya_reportados:
+            continue
+        if fm_p.get("doi") or fm_p.get("arxiv_id"):
+            continue                    # con identificador ya lo mira el detector bloqueante
+        ab = paper_abstracts.get(stem_p) or ""
+        if len(ab) < ABSTRACT_MIN:
+            continue
+        por_abstract.setdefault(ab[:ABSTRACT_CLAVE], []).append(stem_p)
+    for _clave, stems in sorted(por_abstract.items()):
+        if len(stems) > 1:
+            abstract_dup.append(
+                (", ".join(stems), "ninguna tiene `doi` ni `arxiv_id` y su `## Abstract` coincide "
+                                   "palabra por palabra → ¿el MISMO trabajo en dos congresos, o dos "
+                                   "etapas del mismo programa con resultados distintos? Decidilo "
+                                   f"vos: si es lo primero, consolidá (`--rename-paper {stems[0]} "
+                                   f"{stems[1]}` + `versions[]`) o sacá el registro sobrante "
+                                   "(`triage.py <slug> --drop-core … --reason`); si es lo segundo, "
+                                   "no hay nada que hacer"))
+    return abstract_dup
+
+
 def check_ground_truth_movido() -> tuple:
     """`(gt_cambiado, gt_cambiado_marcado)` — prose written against values NEA has since changed.
 
@@ -3513,45 +3561,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                    f"consolidá: `python scripts/make_notes.py --rename-paper "
                                    f"{stems[0]} {stems[1]}`"))
 
-    # ── #216 · duplicado SIN doi ni arxiv_id (backlog, REPORTA y no fusiona) ─────────────────────
-    # D-19 identifica un trabajo por `doi`/`arxiv_id`, y la clase de fuentes donde el duplicado es
-    # MÁS probable es justamente la que no tiene ninguno de los dos: resúmenes de congreso (el mismo
-    # trabajo presentado en EAS, COSPAR y SPIE), tesis, material pre-DOI. Medido en `ica`: de 52
-    # core, 6 sin ningún identificador —el 12 % del corpus invisible para el chequeo— y ahí apareció
-    # un duplicado real, con el mismo texto palabra por palabra. Y a diferencia del par
-    # preprint↔publicado, éste NO tiene señal alternativa: el bibcode no comparte prefijo, los años
-    # difieren y los autores se abrevian distinto.
-    # ⛔ REPORTA, no fusiona, y por eso es BACKLOG: la distinción «mismo trabajo en dos congresos»
-    # vs «dos etapas del mismo programa con resultados distintos» es real y estuvo presente en el
-    # mismo corpus (un registro de 2022 reporta NO-detección y el de 2023 detección tentativa: no
-    # son duplicados y se conservaron los dos). Sólo quien conoce el trabajo puede decidirlo, y un
-    # dedup automático que fusiona dos trabajos distintos destruye más de lo que arregla.
-    # ⛔ Y NO se compara por TÍTULO: está medido en `openalex.py` y es peor que el problema (18 de
-    # 25 resueltos, **2 apuntando a otro trabajo**). El `## Abstract` verbatim está garantizado en
-    # toda nota desde #124, así que el dato está y es mucho más específico.
-    abstract_dup: list = []
-    por_abstract: dict = {}
-    for stem_p in sorted(paper_fms):
-        fm_p = paper_fms[stem_p]
-        if stem_p in alias or stem_p in ya_reportados:
-            continue
-        if fm_p.get("doi") or fm_p.get("arxiv_id"):
-            continue                    # con identificador ya lo mira el detector bloqueante
-        ab = paper_abstracts.get(stem_p) or ""
-        if len(ab) < ABSTRACT_MIN:
-            continue
-        por_abstract.setdefault(ab[:ABSTRACT_CLAVE], []).append(stem_p)
-    for _clave, stems in sorted(por_abstract.items()):
-        if len(stems) > 1:
-            abstract_dup.append(
-                (", ".join(stems), "ninguna tiene `doi` ni `arxiv_id` y su `## Abstract` coincide "
-                                   "palabra por palabra → ¿el MISMO trabajo en dos congresos, o dos "
-                                   "etapas del mismo programa con resultados distintos? Decidilo "
-                                   f"vos: si es lo primero, consolidá (`--rename-paper {stems[0]} "
-                                   f"{stems[1]}` + `versions[]`) o sacá el registro sobrante "
-                                   "(`triage.py <slug> --drop-core … --reason`); si es lo segundo, "
-                                   "no hay nada que hacer"))
-
+    # ── #216 · duplicado SIN doi ni arxiv_id (backlog, REPORTA y no fusiona) ─────────────────
+    # El bloque vive en `check_duplicate_without_id` (#396).
+    abstract_dup = check_duplicate_without_id(paper_fms, paper_abstracts,
+                                                     alias, ya_reportados)
     # ── lista de papers desactualizada (D-10) ────────────────────────────────────────────────────
     # La tabla materializada de `## Papers` es un snapshot, y un snapshot que nadie re-estampa
     # miente igual que el roll-up Dataview que reemplazó (medido: 155 prometidos, 8 discutidos).
