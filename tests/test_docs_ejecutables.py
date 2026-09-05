@@ -568,7 +568,12 @@ def test_el_grafo_no_dibuja_como_estructura_lo_que_el_lint_no_cuenta():
     # remedio en vez de morir con un `KeyError` que no nombra la causa.
     graph = json.loads((RAIZ / "vault" / ".obsidian" / "graph.json").read_text(encoding="utf-8"))
     search = str(graph.get("search") or "")
-    for excluido in ("wiki/log.md", "wiki/index.md"):
+    # #397b — el hermano de verificación (#344) entra por el MISMO argumento y no estaba:
+    # `cfg.note_paths` lo saca de todo enumerador («un hermano no es una nota») y el grafo lo
+    # dibujaba igual, con una arista por cada `[[bibcode]]` de su tabla — hasta 131 en una
+    # ficha real, todas hacia el mismo paper que la nota ya linkea. Es la distorsión de #301
+    # multiplicada: el índice aportaba 50 aristas en TODA la bóveda; un hermano, 131 él solo.
+    for excluido in ("wiki/log.md", "wiki/index.md", ".verif.md"):
         assert f"-path:{excluido}" in search, (
             f"el grafo dibuja {excluido} como estructura; #249 ya declaró que esas aristas no lo son. "
             f"Si Obsidian reescribió `vault/.obsidian/graph.json` al tocar los filtros, restauralo "

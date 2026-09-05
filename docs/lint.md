@@ -62,6 +62,12 @@ Deben quedar en **0**:
   medido, el 7 % de las aristas de una bóveda salía de esos dos archivos, y las 50 del índice
   significan «está en el top 50 por citas». Es un **default**, visible en el panel del grafo y
   reversible en dos clics; en una instancia ya creada entra por el próximo merge del template.
+  ⛔ **Y el hermano `<nota>.verif.md` entra por el mismo argumento** (#344): `cfg.note_paths` lo saca
+  de todo enumerador —«un hermano no es una nota»— y el grafo lo dibujaba igual, con una arista por
+  cada `[[bibcode]]` de su tabla, todas hacia papers que la nota ya linkea. Es la distorsión de #301
+  multiplicada: el índice aportaba 50 aristas en TODA la bóveda; **un** hermano de una ficha real
+  tiene 131. El filtro es `-path:.verif.md`, y lo vigila
+  `tests/test_docs_ejecutables.py::test_el_grafo_no_dibuja_como_estructura_lo_que_el_lint_no_cuenta`.
 - **Contradicciones ground-truth↔ficha** — **qué planetas (no cuántos) y campo por campo**: planeta
   que la ficha lista y NEA no (típicamente una señal no confirmada escrita en `planets[]` en vez de
   `disputes` como `<letra>.existence`), planeta que NEA confirma y la ficha no lista, letra
