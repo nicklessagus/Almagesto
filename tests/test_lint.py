@@ -7633,3 +7633,59 @@ def test_la_vista_con_la_linea_de_estado_no_dispara(toy_vault, capsys):
     link_from_log(toy_vault, "2020aaa...1..1A")
     _rc, rep = run_lint_reporte(capsys)
     assert "2020aaa" not in _seccion(rep, "PLANTILLA del stub"), rep
+
+
+# ── #396 · los bloques que salieron de `collect` ─────────────────────────────────────────────────
+
+def test_evidence_hash_lookup_declara_lo_que_necesita(tmp_path):
+    """#396 — era una closure sobre dos locales del barrido; sale como factory con esos dos
+    DECLARADOS. Lo que se gana es lo que el issue mide: aislable por la mutación dirigida y con test
+    propio, en vez de una función que ES todo el lint.
+
+    Las tres ramas: el `.txt` sale del índice ya calculado, el PDF se hashea **a demanda** (hashear
+    todos costaría más que el resto del lint junto) y `None` significa «el archivo no está», nunca
+    «no cambió»."""
+    pdf = tmp_path / "p.pdf"
+    pdf.write_bytes(b"contenido")
+    lookup = lint.evidence_hash_lookup({"2020A": str(pdf)}, {"2020A": "hash-del-txt"})
+    assert lookup("2020A", "txt") == "hash-del-txt"
+    assert lookup("2020A", "pdf") == lb.bytes_hash(pdf)
+    assert lookup("2020A", "pdf") == lb.bytes_hash(pdf), "memoizado: la segunda no re-hashea"
+    assert lookup("2020SinPdf", "pdf") is None and lookup("2020SinTxt", "txt") is None
+
+
+def test_check_ground_truth_movido_pide_la_marca_y_con_la_marca_baja(toy_vault):
+    """#396 — el primer bloque extraído, ahora con test propio y directo (antes sólo lo alcanzaba
+    el barrido entero). Sigue siendo INV-128: la prosa escrita contra un valor que NEA cambió se
+    marca, no se borra, y la marca se evalúa POR CAMPO."""
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps(
+        {"_cambios": [{"campo": "P_rot", "viejo": 34, "nuevo": 41, "fecha": "2026-09-01"},
+                      {"campo": "teff", "viejo": 5200, "nuevo": 5300, "fecha": "2026-09-01"}]}),
+        encoding="utf-8")
+    cfg.STARS.mkdir(parents=True, exist_ok=True)
+    (cfg.STARS / "test_star.md").write_text(
+        f"---\nname: Estrella Test\n---\n\n# x\n\nEl P_rot es 34 d {lint.GT_STALE_MARK}\n",
+        encoding="utf-8")
+    sin_marca, con_marca = lint.check_ground_truth_movido()
+    assert [s for s, _ in con_marca] == ["test_star"] and "P_rot" in con_marca[0][1]
+    assert [s for s, _ in sin_marca] == ["test_star"] and "teff" in sin_marca[0][1]
+
+    # Y el `_cambios` con una entrada que no es un mapa se saltea sin tirar la corrida: el JSON lo
+    # escribe `sweep_external` pero es un archivo editable a mano, y una entrada rota no puede dejar
+    # al lint sin reportar las que sí están bien.
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps(
+        {"_cambios": ["basura", {"campo": "P_rot", "viejo": 34, "nuevo": 41}]}), encoding="utf-8")
+    sin_marca, con_marca = lint.check_ground_truth_movido()
+    assert len(sin_marca) + len(con_marca) == 1
+
+    # Los tres silencios legítimos, que antes de #396 no tenían cómo probarse por separado: el
+    # ground-truth sin `_cambios` (nadie aplicó un diff), el que lo trae VACÍO (se aplicó y no
+    # cambió nada) y el que no tiene ficha (lo reporta el hermano simétrico, no esta categoría).
+    for datos in ({"nombre": "x"}, {"_cambios": []}, {"_cambios": "no es una lista"},
+                  {"_cambios": 5}):        # ⛔ un escalar haría reventar el `for` y tiraría el lint
+        (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps(datos), encoding="utf-8")
+        assert lint.check_ground_truth_movido() == ([], []), datos
+    (cfg.GROUND_TRUTH / "sin_ficha.json").write_text(json.dumps(
+        {"_cambios": [{"campo": "P_rot", "viejo": 34, "nuevo": 41}]}), encoding="utf-8")
+    assert lint.check_ground_truth_movido() == ([], []), "sin ficha no es hallazgo de esta categoría"

@@ -1250,6 +1250,84 @@ def diverged_copies(copies: dict) -> list:
     return out
 
 
+def evidence_hash_lookup(pdf_on_disk: dict, ft_hash: dict):
+    """The «current hash of the file this row says it read» lookup, memoised per PDF (#117/#396).
+
+    Second block out of `lint.collect` (#396). It was a closure over two of the sweep's locals, so
+    it comes out as a **factory with those two as explicit parameters**: what it needs is now
+    declared instead of captured, which is what makes it reachable by the directed mutation and by
+    a test of its own.
+
+    The PDF hash is computed **on demand**: hashing every PDF in the vault just in case would cost
+    more than the rest of the lint together. `None` means the file is not there — never «it did not
+    change»."""
+    cache: dict = {}
+
+    def evidencia_hash_de(bib: str, kind: str) -> str | None:
+        if kind == "pdf":
+            if bib not in cache:
+                p = pdf_on_disk.get(bib)
+                cache[bib] = lb.bytes_hash(Path(p)) if p else None
+            return cache[bib]
+        return ft_hash.get(bib)
+
+    return evidencia_hash_de
+
+
+def check_ground_truth_movido() -> tuple:
+    """`(gt_cambiado, gt_cambiado_marcado)` — prose written against values NEA has since changed.
+
+    The first block extracted from `lint.collect` (#396), chosen for being SELF-CONTAINED: it reads
+    no local of the note sweep —only `cfg`, the disk and `_field_is_marked`— so the extraction is a
+    move of text and not a change of semantics, which is the condition the issue sets for touching
+    the gate. Measured on the way in: the golden comes back **byte-identical** and the directed
+    mutation now kills this check on its own, which was consequence (1) of the issue — until now
+    mutating it meant mutating all of `collect`.
+
+    @inv INV-128
+    """
+    # `_cambios` lo estampa `sweep_external.aplicar_ground_truth` al aplicar un diff de NEA. Mientras
+    # exista, la prosa de esa ficha se escribió contra valores que ya no son los publicados. No
+    # bloquea —la frase puede seguir siendo correcta, y borrarla destruiría trabajo—: se pide la
+    # marca, igual que con una fuente retractada (D-47). Con la marca puesta baja a informativo.
+    gt_cambiado: list = []
+    gt_cambiado_marcado: list = []
+    for gt in sorted(glob.glob(str(cfg.GROUND_TRUTH / "*.json"))):
+        slug_gt = basename(gt)[:-5]
+        try:
+            datos_gt = json.loads(open(gt, encoding="utf-8").read())
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue                      # el JSON ilegible ya tiene su propia categoría bloqueante
+        cambios_gt = datos_gt.get("_cambios") if isinstance(datos_gt, dict) else None
+        # `isinstance` y no truthiness: `_cambios: 5` haría reventar el `for` de abajo y tiraría el
+        # lint entero. La lista VACÍA no necesita cláusula propia —el `for` no itera— y agregarla
+        # sería una guarda que no decide nada (red 8).
+        if not isinstance(cambios_gt, list):
+            continue
+        nota_gt = cfg.STARS / f"{slug_gt}.md"
+        if not nota_gt.exists():
+            continue                      # ficha faltante: ya la reporta el hermano simétrico
+        # ⛔ #131: acá había `GT_STALE_MARK in nota_gt.read_text(...)`, o sea a nivel ARCHIVO — una
+        # sola marca en cualquier parte de la ficha silenciaba TODOS los `_cambios` de la estrella.
+        # `CLAUDE.md` dice la marca **pegada al valor**, y su gemelo `⛔retractada` sí se evalúa por
+        # ocurrencia. Se decide por campo, sobre las líneas que llevan la marca.
+        marcadas = [ln for ln in nota_gt.read_text(encoding="utf-8").splitlines()
+                    if GT_STALE_MARK in ln]
+        for c in cambios_gt:
+            if not isinstance(c, dict):
+                continue
+            campo = c.get("campo", "?")
+            marcada = _field_is_marked(marcadas, campo, c.get("viejo"))
+            detalle = f"NEA cambió {campo} ({c.get('viejo')!r} → {c.get('nuevo')!r}) el {c.get('fecha', 's/f')}"
+            (gt_cambiado_marcado if marcada else gt_cambiado).append(
+                (slug_gt, detalle + ("; la prosa está marcada: revisá si ya la actualizaste y sacá "
+                                     "la marca cuando lo hagas"
+                                     if marcada else
+                                     f"; la prosa que lo citaba NO se actualizó sola — actualizala "
+                                     f"o marcala con `{GT_STALE_MARK}`")))
+    return gt_cambiado, gt_cambiado_marcado
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -2992,16 +3070,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # pares «vencidos por fuente» sobre fuentes que nadie tocó). El hash del PDF se calcula **a
     # demanda**: hashear todos los PDFs de la bóveda por si acaso costaría más que el resto del lint
     # junto.
-    _pdf_hash_cache: dict = {}
-
-    def evidencia_hash_de(bib: str, kind: str) -> str | None:
-        """Hash VIGENTE del archivo que la fila dice haber leído. `None` si ese archivo no está."""
-        if kind == "pdf":
-            if bib not in _pdf_hash_cache:
-                _p = pdf_on_disk.get(bib)
-                _pdf_hash_cache[bib] = lb.bytes_hash(Path(_p)) if _p else None
-            return _pdf_hash_cache[bib]
-        return ft_hash.get(bib)
+    evidencia_hash_de = evidence_hash_lookup(pdf_on_disk, ft_hash)
 
     # ── #118 · la bitácora no tiene red ──────────────────────────────────────────────────────────
     # Lo que escribe un SCRIPT se registra solo (`cadena` del registro versionado: qué corrió y
@@ -3361,45 +3430,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                 f"afirmación a lo que otra fuente sostenga. No la borres: puede ser "
                                 f"cierta por otra vía")))
 
-    # ── ground-truth que se movió bajo la prosa (AUD-42) ─────────────────────────────────────────
-    # `_cambios` lo estampa `sweep_external.aplicar_ground_truth` al aplicar un diff de NEA. Mientras
-    # exista, la prosa de esa ficha se escribió contra valores que ya no son los publicados. No
-    # bloquea —la frase puede seguir siendo correcta, y borrarla destruiría trabajo—: se pide la
-    # marca, igual que con una fuente retractada (D-47). Con la marca puesta baja a informativo.
-    # @inv INV-128
-    gt_cambiado: list = []
-    gt_cambiado_marcado: list = []
-    for gt in sorted(glob.glob(str(cfg.GROUND_TRUTH / "*.json"))):
-        slug_gt = basename(gt)[:-5]
-        try:
-            datos_gt = json.loads(open(gt, encoding="utf-8").read())
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-            continue                      # el JSON ilegible ya tiene su propia categoría bloqueante
-        cambios_gt = datos_gt.get("_cambios") if isinstance(datos_gt, dict) else None
-        if not isinstance(cambios_gt, list) or not cambios_gt:
-            continue
-        nota_gt = cfg.STARS / f"{slug_gt}.md"
-        if not nota_gt.exists():
-            continue                      # ficha faltante: ya la reporta el hermano simétrico
-        # ⛔ #131: acá había `GT_STALE_MARK in nota_gt.read_text(...)`, o sea a nivel ARCHIVO — una
-        # sola marca en cualquier parte de la ficha silenciaba TODOS los `_cambios` de la estrella.
-        # `CLAUDE.md` dice la marca **pegada al valor**, y su gemelo `⛔retractada` sí se evalúa por
-        # ocurrencia. Se decide por campo, sobre las líneas que llevan la marca.
-        marcadas = [ln for ln in nota_gt.read_text(encoding="utf-8").splitlines()
-                    if GT_STALE_MARK in ln]
-        for c in cambios_gt:
-            if not isinstance(c, dict):
-                continue
-            campo = c.get("campo", "?")
-            marcada = _field_is_marked(marcadas, campo, c.get("viejo"))
-            detalle = f"NEA cambió {campo} ({c.get('viejo')!r} → {c.get('nuevo')!r}) el {c.get('fecha', 's/f')}"
-            (gt_cambiado_marcado if marcada else gt_cambiado).append(
-                (slug_gt, detalle + ("; la prosa está marcada: revisá si ya la actualizaste y sacá "
-                                     "la marca cuando lo hagas"
-                                     if marcada else
-                                     f"; la prosa que lo citaba NO se actualizó sola — actualizala "
-                                     f"o marcala con `{GT_STALE_MARK}`")))
-
+    # ── ground-truth que se movió bajo la prosa (AUD-42) ─────────────────────────────────────
+    # El bloque vive en `check_ground_truth_movido` (#396): una función por bloque, para que
+    # la mutación dirigida pueda aislarlo y el mapa `@inv` no se lo adjudique a `collect`.
+    gt_cambiado, gt_cambiado_marcado = check_ground_truth_movido()
     # ── identidad duplicada (D-19 / INV-84) ──────────────────────────────────────────────────────
     # La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el preprint y el publicado
     # son bibcodes distintos del MISMO paper. Medido en la instancia real: 2 trabajos con dos notas.
