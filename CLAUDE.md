@@ -1055,7 +1055,10 @@ re-extraer el `.txt`.
    deja **lista para pegar** y no aplica (#341): cuál lectura gana lo decide quien abra la página, y
    corregir solo iría en la dirección equivocada.
    ⛔ **Y alcanza `## Vista` sumando el bibcode de la NOTA a los adyacentes (#373):** ahí el bibcode es
-la nota y no un link, así que 3838 transcripciones del PDF no las miraba nadie.
+la nota y no un link, así que 3838 transcripciones del PDF no las miraba nadie. ⛔ **El LINT usa esa
+regla y esa función (#394), y el bibcode propio SUMA, nunca reemplaza** (`cfg.with_own_bibcode`):
+con el vecino de único candidato, 5 de 19 hallazgos de #220 eran del propio paper; con «el adyacente
+cede», el falso positivo cambia de dirección.
 ⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
    `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
    población y no evaluables). Un `grep` de segundos contra N subagentes leyendo PDFs: verificar con

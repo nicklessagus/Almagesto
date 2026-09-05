@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.208.0"
+ALMAGESTO_VERSION = "1.209.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3784,6 +3784,7 @@ from lib_quotes import (  # noqa: E402,F401
     log_quote_exempt,
     normalize_quote,
     normalize_source_text,
+    note_own_bibcode,
     quote_found,
     quote_found_degraded,
     quote_fragments,
@@ -3793,4 +3794,5 @@ from lib_quotes import (  # noqa: E402,F401
     source_texts,
     txt_accuses,
     verificar_pdf_mark,
+    with_own_bibcode,
 )

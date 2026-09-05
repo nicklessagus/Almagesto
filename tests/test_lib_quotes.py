@@ -45,3 +45,36 @@ def test_normalize_quote_y_fragments_directos():
     a, b = "una primera mitad con largo suficiente", "y una segunda mitad también larga"
     assert lq.quote_fragments(f"{a} […] {b}") == [a, b]        # por debajo de QUOTE_FRAG_MIN se descarta
     assert lq.quote_fragments("corta […] corta") == []
+
+
+def test_note_own_bibcode_solo_en_papers_y_el_frontmatter_gana(tmp_path, monkeypatch):
+    """#394 — el bibcode que una nota de paper ES. Fuera de `papers/` no hay tal cosa: `""`, y con
+    eso `with_own_bibcode` no toca los candidatos.
+
+    El frontmatter gana sobre el stem porque `--rename-paper` mueve el archivo y la identidad de una
+    extracción es el `bibcode` de adentro (#228/#374); el stem es el fallback de la nota que el
+    migrador todavía no tocó — y también el de un frontmatter que no parseó (`None`).
+
+    ⚠ Toma el frontmatter YA PARSEADO: parsearlo acá subía el lint de ~2.0 a >2.3 `yaml.safe_load`
+    por nota y lo cazó `tests/poblada/test_escala.py::test_lint_una_pasada_de_yaml` (tier 0 verde)."""
+    papers = tmp_path / "papers"
+    papers.mkdir()
+    monkeypatch.setattr(cfg, "PAPERS", papers)
+    fm = {"bibcode": "2020NUEVO..1..1X", "tags": ["paper"]}
+    assert lq.note_own_bibcode(papers / "2019VIEJO..1..1X.md", fm) == "2020NUEVO..1..1X"
+    assert lq.note_own_bibcode(papers / "2019VIEJO..1..1X.md", {"tags": ["paper"]}) == \
+        "2019VIEJO..1..1X"                                    # sin `bibcode:`, el stem
+    assert lq.note_own_bibcode(papers / "2019VIEJO..1..1X.md", None) == "2019VIEJO..1..1X"
+    assert lq.note_own_bibcode(tmp_path / "stars" / "tau_cet.md", fm) == ""
+
+
+def test_with_own_bibcode_SUMA_y_nunca_reemplaza_ni_duplica():
+    """#373/#394 — la regla es *sumar*. Si reemplazara, la cita legítima del vecino quedaría juzgada
+    contra el `.txt` propio y el falso positivo cambiaría de dirección en vez de desaparecer
+    (medido: 5 hallazgos, los 5 falsos)."""
+    assert lq.with_own_bibcode(["2014Artoni"], "2012embc") == ["2014Artoni", "2012embc"]
+    assert lq.with_own_bibcode(["2012embc"], "2012embc") == ["2012embc"]      # no duplica
+    assert lq.with_own_bibcode(["2014Artoni"], "") == ["2014Artoni"]          # sin propio, intacto
+    original = ["2014Artoni"]
+    lq.with_own_bibcode(original, "2012embc")
+    assert original == ["2014Artoni"], "no muta la lista del llamador"

@@ -299,14 +299,11 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     out = {"alteradas": [], "no_evaluables": [], "discrepan": [], "resueltas": [],
            "citas": 0, "solo_extraccion": 0}
     bibs_nota = set(lb._bibcodes(texto))
-    # #373 — en una nota de PAPER el bibcode es la nota, no un link: las citas de su `## Vista` son
-    # transcripciones directas del PDF y no las miraba ninguna capa. Medido en una bóveda real: 3838
-    # citas de ≥40 caracteres en 159 notas, de las que el fan-out de verify veía 11 (no hay par sin
-    # `[[bibcode]]`) y este gate ninguna (sin candidato, todo caía en el silencio de #318). Es la
-    # herencia de #49 aplicada al ámbito más grande que existe: la nota entera.
-    propio = ""
-    if nota.parent == cfg.PAPERS:
-        propio = str(cfg.split_fm(texto).get("bibcode") or "").strip() or nota.stem
+    # #373/#394 — en una nota de PAPER el bibcode es la nota, no un link, y desde #394 la regla
+    # (y su medición) vive en `cfg.note_own_bibcode`/`cfg.with_own_bibcode`, compartida con el lint:
+    # dos gates que juzgan la misma cita no pueden tener dos implementaciones (#324).
+    propio = cfg.note_own_bibcode(nota, cfg.split_fm(texto))
+    if propio:
         bibs_nota.add(propio)
     for b in lb.split_blocks(texto):
         # #386/#387 — el `log` es append-only por contrato, así que su corrección es una MARCA y no
@@ -319,16 +316,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                 out["citas"] += 1
                 out["resueltas"].append((b.first_line, f"{exento}: visible, no es deuda"))
             continue
-        # ⚠ El bibcode de la nota se SUMA a los adyacentes, no los reemplaza ni les cede. Medido en
-        # una bóveda real: una fila de la vista cita a su propio paper y menciona OTRO en una celda
-        # vecina («sobre esto se construye [[X]]»), y con «el adyacente gana» esa mención le robaba
-        # la atribución — 5 hallazgos, los 5 falsos, y el mensaje nombraba la fuente correcta. Es el
-        # modo de falla de #325 dentro de una tabla. Con la unión no hay acusación falsa en ninguna
-        # dirección: la cita de otra fuente la respalda su propia extracción, y la alterada respecto
-        # de la propia sigue divergiendo contra la del sujeto de la nota.
-        bibs = lb._bibcodes(b.text) or lb._bibcodes(b.intro or "")
-        if propio and propio not in bibs:
-            bibs = [*bibs, propio]
+        bibs = cfg.with_own_bibcode(lb._bibcodes(b.text) or lb._bibcodes(b.intro or ""), propio)
         for cita in cfg.quotes_in(b.text):
             out["citas"] += 1
             duenio = lb.quote_owner(b.text, cita, bibs)          # #316

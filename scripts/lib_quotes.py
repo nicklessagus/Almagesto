@@ -610,6 +610,44 @@ def fulltext_readings(bibcode: str) -> list:
     return out
 
 
+def note_own_bibcode(note: Path, fm) -> str:
+    """The bibcode a PAPER note IS, for quote attribution — `""` for any other note (#373/#394).
+
+    In a paper note the bibcode is the note itself, not a `[[wikilink]]`, so the transcriptions in
+    its `## Vista` have no adjacent source and no layer was looking at them: measured on a real
+    vault, 3838 quotes of >=40 chars over 159 notes, of which the verify fan-out saw 11 (there is no
+    pair without a `[[bibcode]]`).
+
+    The frontmatter wins over the stem because `--rename-paper` moves the file and the identity of
+    an extraction is the `bibcode` INSIDE it (#228/#374); the stem is the fallback for the note the
+    migrator has not reached yet.
+
+    ⚠ Takes the ALREADY PARSED frontmatter, never the text: the lint parses each note once and
+    `tests/poblada/test_escala.py::test_lint_una_pasada_de_yaml` ratchets that (a re-parse in here
+    took the corpus from ~2.0 to over 2.3 `yaml.safe_load` per note — caught by the poblada tier,
+    green in tier 0)."""
+    if note.parent != cfg.PAPERS:
+        return ""
+    return str((fm or {}).get("bibcode") or "").strip() or note.stem
+
+
+def with_own_bibcode(bibs, own: str) -> list:
+    """Adds the note's own bibcode to the adjacent candidates. ⛔ ADDS — never replaces (#373/#394).
+
+    Measured on a real vault: a row of the view quotes its own paper and mentions ANOTHER one in a
+    neighbouring cell («sobre esto se construye [[X]]»); with *"the adjacent one wins"* that mention
+    stole the attribution — 5 findings, 5 of them false, and the message named the right source
+    (the failure mode of #325 inside a table). With the union there is no false accusation in either
+    direction: a quote from another source is backed by its own extraction, and one altered with
+    respect to the note's own subject still diverges against the subject's.
+
+    ONE implementation for the two gates that judge the same quote (#324): the lint reported these
+    five as backlog while `contrast --validar-todo` cleared them, and two verdicts on one quote is
+    the divergence #324 declared forbidden."""
+    bibs = list(bibs)
+    return bibs if not own or own in bibs else [*bibs, own]
+
+
 def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: bool = False) -> tuple:
     """Is this quote altered, or is the artefact the problem? ONE implementation (#324).
 

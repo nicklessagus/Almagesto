@@ -298,6 +298,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   categoría de #288), mientras que una que no está en ninguno de los dos la **inventó el
   sintetizador**. Con el `.txt` como único juez la señal era **2 de 17** en un concepto y **0 de
   35** en otro — un detector que delega 54 confirmaciones manuales al PDF se deja de leer.
+  ⛔ **En una nota de PAPER el bibcode de la NOTA se suma a los candidatos** (#394, el simétrico de
+  #373 que `contrast` ya tenía): ahí el bibcode **es la nota**, no un `[[wikilink]]`, así que la
+  transcripción de su `## Vista` se juzgaba contra el `.txt` del vecino —que en esa frase es una
+  **mención**—. Medido: **5 de 19** hallazgos de esta categoría eran palabras del propio paper, 3
+  verbatim en su propio `.txt`, y la misma cita salía limpia en `contrast --validar-todo`: dos
+  veredictos sobre una cita es la divergencia que #324 declaró prohibida, por eso la regla es **una
+  función** (`cfg.note_own_bibcode`/`cfg.with_own_bibcode`) y no una copia. **Suma, nunca
+  reemplaza**: con «el adyacente cede», la cita legítima del vecino queda juzgada contra el `.txt`
+  propio y el falso positivo cambia de dirección en vez de desaparecer.
   ⛔ **Y la cita se prueba contra SU fuente, no contra todas las del bloque** (#316): el dueño es el
   `[[bibcode]]` adyacente (la convención `«…» [[bib]]`), y una **lista** de fuentes pegada a la cita
   (`[[A]], [[B]]`) no tiene dueño — ahí se prueba contra todas y **el mensaje declara que el

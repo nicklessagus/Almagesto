@@ -1894,7 +1894,18 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # #321 — los bibcodes de TODA la nota: el error de atribución medido es la frase de un
             # paper puesta bajo otro de la misma nota (6 de 32 hits), y ésa es evidencia POSITIVA.
             _bibs_nota = {b for _bs in _por_bloque.values() for b in _bs}
+            # #394 — el simétrico de #373, que `contrast` ya tenía y este gate no: en una nota de
+            # PAPER el bibcode es la nota y no un link, así que una transcripción de su `## Vista`
+            # se juzgaba contra el `.txt` del `[[wikilink]]` vecino —que en esa frase es una
+            # MENCIÓN—. Medido en una bóveda real: 5 de 19 hallazgos de esta categoría eran
+            # palabras del propio paper, 3 de ellas verbatim en su propio `.txt`. Misma cita, dos
+            # veredictos: limpia en `contrast --validar-todo` y backlog acá, que es la divergencia
+            # que #324 declaró prohibida — por eso la regla es UNA función, no una copia.
+            _propio = cfg.note_own_bibcode(Path(f), fm)   # el fm YA parseado: una sola pasada de YAML
+            if _propio:
+                _bibs_nota.add(_propio)
             for (_ln, _btxt), _bibs in _por_bloque.items():
+                _bibs = cfg.with_own_bibcode(_bibs, _propio)
                 _citas = cfg.quotes_in(_btxt)
                 if not _citas:
                     continue

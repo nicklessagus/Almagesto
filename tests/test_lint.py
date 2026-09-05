@@ -5423,6 +5423,51 @@ def test_una_de_las_dos_fuentes_alcanza(toy_vault, capsys):
     assert "nota" not in _seccion(rep, "no está en su fuente"), rep
 
 
+def test_la_cita_de_la_PROPIA_nota_no_se_juzga_contra_el_vecino(toy_vault, capsys):
+    """#394 — el simétrico de #373, que `contrast` ya tenía y este gate no.
+
+    En una nota de PAPER el bibcode **es la nota**, no un `[[wikilink]]`, así que la transcripción
+    de su `## Vista` se juzgaba contra el `.txt` del vecino —que en esa frase es una MENCIÓN—.
+    Medido en una bóveda real: 5 de 19 hallazgos de esta categoría eran palabras del propio paper,
+    3 verbatim en su propio `.txt`, y la misma cita salía limpia en `contrast --validar-todo`: dos
+    veredictos sobre una cita es la divergencia que #324 declaró prohibida.
+
+    ⚠ El bibcode propio se SUMA, no reemplaza: el test hermano de abajo cubre esa mitad."""
+    _paper_con_txt("2012embc.conf..101A",
+                   "the artefact subspace is estimated from a clean calibration segment\n")
+    _paper_con_txt("2014Artoni", "nada que ver con la frase que transcribe la vista de al lado\n")
+    mk_note(cfg.PAPERS, "2012embc.conf..101A",
+            {"bibcode": "2012embc.conf..101A", "tags": ["paper"], "stars": ["tau Cet"]},
+            "# p\n\n## Vista — ica\n\nDice «the artefact subspace is estimated from a clean "
+            "calibration segment», sobre lo que después construye [[2014Artoni]].\n")
+    link_from_log(toy_vault, "nota", "2012embc.conf..101A", "2014Artoni")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2012embc" not in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_el_bibcode_propio_se_SUMA_a_los_adyacentes_y_no_los_reemplaza(toy_vault, capsys):
+    """#394, la otra mitad — y la que decide entre arreglar y romper.
+
+    Si el bibcode propio *reemplazara* a los adyacentes en vez de sumarse, una nota de paper que
+    entrecomilla legítimamente al vecino («sobre esto se construye…») quedaría juzgada contra su
+    propio `.txt`, donde esa frase no está: el falso positivo cambiaría de dirección en vez de
+    desaparecer. Es el modo de falla de #325 dentro de una nota de paper, y lo que la docstring de
+    `with_own_bibcode` llama «suma, nunca reemplaza».
+
+    Mutación que lo mata: `_bibs = [_propio]` en lugar de `cfg.with_own_bibcode(_bibs, _propio)`."""
+    _paper_con_txt("2012embc.conf..101A",
+                   "nada de lo que la vista entrecomilla vive en el txt de esta nota\n")
+    _paper_con_txt("2014Artoni",
+                   "the calibration segment must be free of ocular and muscular artefacts\n")
+    mk_note(cfg.PAPERS, "2012embc.conf..101A",
+            {"bibcode": "2012embc.conf..101A", "tags": ["paper"], "stars": ["tau Cet"]},
+            "# p\n\n## Vista — ica\n\nSobre esto se construye [[2014Artoni]], que pide que "
+            "«the calibration segment must be free of ocular and muscular artefacts».\n")
+    link_from_log(toy_vault, "nota", "2012embc.conf..101A", "2014Artoni")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2012embc" not in _seccion(rep, "no está en su fuente"), rep
+
+
 def test_ocr_se_declara_no_evaluable(toy_vault, capsys):
     """#220, el tercer estado — con `fulltext_source: ocr` el fallo es esperable (el OCR erra
     símbolos). Se DECLARA, en su propia categoría, en vez de contarse en contra: es la doctrina D-43
