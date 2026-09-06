@@ -9436,3 +9436,68 @@ def test_check_paper_views_no_pide_lo_que_no_se_puede_evaluar(toy_vault):
     assert _v({"thesis_links": ["ica"], "vistas": []})[9], \
         "declarar la lista vacía no borra el reclamo"
     assert _v({"thesis_links": ["ica"]})[9] == [], "sin `vistas[]` la nota no llegó a ese paso"
+
+
+# ── #396 · los cinco chequeos chicos que quedaban en el barrido ──────────────────────────────────
+
+def test_check_impl_leaks_no_mira_lo_que_escribe_la_MAQUINA(toy_vault):
+    """#396/regla #0/#214 — la fuga de implementación es WARN de alta señal, y el recorte que la
+    mantiene así: no se miran las `SECCIONES_ESTAMPADAS`, porque un detector que mide lo que la
+    máquina misma escribe siempre da el resultado que su propia existencia produce. ⛔ La exención
+    NO alcanza a `## Vista — <sujeto>`: eso lo escribe el extractor, así que ahí la fuga es real."""
+    import re as _re
+    pat = [(_re.compile(r"(?i)pipeline"), "habla del pipeline de otro repo")]
+    assert lint.check_impl_leaks("n", "prosa limpia\n", 0, pat, False) == [], \
+        "con el scan apagado no se opina"
+    filas = lint.check_impl_leaks("n", "esto va al pipeline del repo X\n", 0, pat, True)
+    assert len(filas) == 1 and "L1" in filas[0][1]
+    estampada = f"{next(iter(lint.SECCIONES_ESTAMPADAS))}\nesto va al pipeline\n"
+    assert lint.check_impl_leaks("n", estampada, 0, pat, True) == [], \
+        "lo que escribe la máquina no cuenta como fuga (#214)"
+    vista = "## Vista — tau Cet\nesto va al pipeline\n"
+    assert lint.check_impl_leaks("n", vista, 0, pat, True), \
+        "en una `## Vista` sí: la escribe el extractor, no la máquina"
+
+
+def test_check_headerless_solo_pide_cabecera_a_fichas_y_conceptos(toy_vault):
+    """#396 — los estampadores de cabecera se enganchan de la línea `_Generado con Almagesto v…_`,
+    así que sin ella ninguno pudo actuar. La guarda que sobrevivía acota la población: se le pide a
+    `stars/` y `concepts/`, no a una nota de paper ni al `log`."""
+    assert lint.check_headerless("2020X", str(cfg.PAPERS / "2020X.md"), "sin línea") == [], \
+        "a una nota de paper no se le pide esta cabecera"
+    filas = lint.check_headerless("test_star", str(cfg.STARS / "test_star.md"), "sin línea")
+    assert len(filas) == 1 and "--restamp-headers" in filas[0][1]
+    assert lint.check_headerless("test_star", str(cfg.STARS / "test_star.md"),
+                                 f"{lint.GENERATOR_LINE}\n") == []
+
+
+def test_check_legacy_disputes_y_facets_bloquean_el_schema_sin_lector(toy_vault):
+    """#396/#71/INV-13/R-5 — los dos son la misma doctrina: schema viejo, detector bloqueante, nunca
+    lector tolerante. `planets[].disputes[]` tenía el polo de verdad hardcodeado en su FORMA (servía
+    para paper↔NEA y no podía expresar paper↔paper); `topics:` quedó SIN LECTOR, o sea que la nota
+    conserva el dato y el sistema no lo ve.  @inv INV-13"""
+    assert lint.check_legacy_disputes("s", {}) == []
+    filas = lint.check_legacy_disputes("s", {"planets": [{"letter": "b", "disputes": [
+        {"field": "K", "ref": "2020X", "alt": 1}]}]})
+    assert filas and any("--migrate-disputes" in m for _s, m in filas)
+
+    pap = str(cfg.PAPERS / "2020X.md")
+    assert lint.check_legacy_facets("2020X", pap, {"facets": ["rv"]}, None) == []
+    assert lint.check_legacy_facets("2020X", pap, {"topics": ["rv"]}, "fm rota") == [], \
+        "con el YAML roto ya se reportó: no se duplica el hallazgo"
+    assert lint.check_legacy_facets("s", str(cfg.STARS / "s.md"), {"topics": ["rv"]}, None) == [], \
+        "`topics:` es schema de una nota de PAPER"
+    filas = lint.check_legacy_facets("2020X", pap, {"topics": ["rv"]}, None)
+    assert len(filas) == 1 and "--migrate-facets" in filas[0][1]
+
+
+def test_check_inferences_without_premises_exige_al_menos_un_bibcode(toy_vault):
+    """#396/D-42/INV-86 — una `inferencia` es una afirmación que la bóveda sostiene y que NINGUNA
+    fuente dice: sale de combinar dos o más que sí. Se escribe NOMBRANDO sus premisas, para que el
+    consumidor la pese distinto; sin al menos un `[[bibcode]]` es una afirmación sin respaldo.
+    @inv INV-86"""
+    assert lint.check_inferences_without_premises("n", "---\nfm: 1\n---\nprosa.\n") == []
+    assert lint.check_inferences_without_premises(
+        "n", "---\nfm: 1\n---\nX (inferencia de [[2020A]], [[2019B]]).\n") == []
+    filas = lint.check_inferences_without_premises("n", "---\nfm: 1\n---\nX (inferencia).\n")
+    assert len(filas) == 1 and "sin premisas" in filas[0][1]

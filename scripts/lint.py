@@ -4917,6 +4917,108 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
     return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado
 
 
+def check_impl_leaks(stem: str, body_full: str, offset: int, leak_patterns, scan: bool) -> list:
+    """`impl_leaks` — implementation prose that broke the hard boundary (regla #0, WARN).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. It does NOT look at `SECCIONES_ESTAMPADAS` (#214) — a detector that measures what
+    the machine itself writes always gives the answer its own existence produces — but the exemption
+    does NOT reach `## Vista — <sujeto>`: the extractor writes that one, so a leak there is real.
+    """
+    impl_leaks: list = []
+    _en_estampada = False
+    for i, line in enumerate(body_full.split("\n"), 1 + offset) if scan else []:
+        if line.startswith("## "):
+            _en_estampada = cfg.is_stamped_section(line)
+        if _en_estampada:
+            continue
+        if line.lstrip().startswith(">"):
+            continue                       # blockquote meta (frontera/alcance)
+        for rx, label in leak_patterns:
+            if rx.search(line):
+                impl_leaks.append((stem, f"L{i} [{label}]: {line.strip()[:80]}"))
+                break
+    return impl_leaks
+
+
+def check_headerless(stem: str, f, text: str) -> list:
+    """`headerless` — a note with no `_Generado con Almagesto v…_` line (backlog).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. The stampers key off that line, so without it none of them can have run.
+    """
+    headerless: list = []
+    if f.startswith((str(cfg.STARS), str(cfg.CONCEPTS))) and GENERATOR_LINE not in text:
+        headerless.append((stem, "sin la línea `_Generado con Almagesto v…_`: los estampadores "
+                                 "de cabecera no pueden actuar → `python scripts/make_notes.py "
+                                 "--restamp-headers`"))
+    return headerless
+
+
+def check_legacy_disputes(stem: str, fm: dict) -> list:
+    """`old_disputes` — `planets[].disputes[]`, the pre-1.19.0 schema (BLOQUEANTE, #71).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. The old schema had the truth pole hard-coded in its SHAPE: it worked for paper↔NEA
+    and could not express paper↔paper, which is the normal case when NEA is silent. They are not
+    read — they are detected and they block, because a dispute the reader ignores in silence is
+    worse than an error.
+
+    @inv INV-13
+    """
+    old_disputes: list = []
+    # Disputas (#71): a nivel NOTA y con posiciones explícitas — vale para estrellas y para
+    # conceptos, donde la disputa es simétrica por definición (no hay valor de frontmatter
+    # contra el cual poner un `alt`). Las del schema viejo NO se leen: se detectan y bloquean.
+    n_viejas, motivos_viejas = legacy_disputes(fm)
+    if n_viejas:
+        old_disputes.append((stem, f"{n_viejas} disputa(s) en `planets[].disputes[]`, el schema "
+                                   f"pre-1.19.0 que el lint ya no lee → migralas con "
+                                   f"`python scripts/make_notes.py --migrate-disputes` (#71)"))
+    for motivo in motivos_viejas:
+        old_disputes.append((stem, motivo))
+    return old_disputes
+
+
+def check_legacy_facets(stem: str, f, fm: dict, err) -> list:
+    """`old_facets` — a paper note still carrying `topics:` (pre-R-5, BLOQUEANTE).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. `topics:` was BOTH the lens facet and the theme-subject; the rename split it into
+    `facets:` and `themes.yaml`, and the old field was left WITH NO READER — the note keeps the
+    datum and the system does not see it.
+    """
+    old_facets: list = []
+    # R-5: `topics:` era a la vez la faceta de la lente y el tema-sujeto. El renombre lo
+    # partió en `facets:` y `themes.yaml`, y el campo viejo quedó SIN LECTOR: la nota
+    # conserva el dato y el sistema no lo ve. Mismo trato que `busqueda:` pre-D-28 —
+    # detector bloqueante, nunca lector tolerante.
+    if in_dir(f, "papers") and "topics" in fm and not err:
+        old_facets.append((stem, "usa `topics:` (schema pre-R-5) — el campo vigente es "
+                                 "`facets:` y el lector ya no mira `topics` → "
+                                 "`python scripts/make_notes.py --migrate-facets`"))
+    return old_facets
+
+
+def check_inferences_without_premises(stem: str, text: str) -> list:
+    """`infer_sin_premisas` — an `inferencia` mark that names no `[[bibcode]]` (BLOQUEANTE, D-42).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. An inference is a claim the vault holds that NO source states: it comes from
+    combining two or more that do, and it is written NAMING its premises so the consumer can weigh
+    it differently. Without them it is a claim with no backing at all.
+
+    @inv INV-86
+    """
+    infer_sin_premisas: list = []
+    cuerpo_nota = text.split("---", 2)[-1] if text.startswith("---") else text
+    for marca in inferencias_sin_premisas(cuerpo_nota):
+        infer_sin_premisas.append(
+            (stem, f"`{marca}` sin premisas — una inferencia nombra al menos un `[[bibcode]]`: "
+                   "`(inferencia de [[bibcode]])`. Sin eso es una afirmación sin respaldo"))
+    return infer_sin_premisas
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -5448,18 +5550,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # categoría se vuelve ruido y se deja de mirar.
         # ⛔ El recorte: `## Vista — <sujeto>` NO es estampada (no está en `SECCIONES_ESTAMPADAS`),
         # y ahí una fuga sí sería una fuga real — la escribe el extractor, no la máquina.
-        _en_estampada = False
-        for i, line in enumerate(body_full.split("\n"), 1 + _offset) if scan_leaks else []:
-            if line.startswith("## "):
-                _en_estampada = cfg.is_stamped_section(line)
-            if _en_estampada:
-                continue
-            if line.lstrip().startswith(">"):
-                continue                       # blockquote meta (frontera/alcance)
-            for rx, label in leak_patterns:
-                if rx.search(line):
-                    impl_leaks.append((stem, f"L{i} [{label}]: {line.strip()[:80]}"))
-                    break
+        # La fuga de implementación vive en `check_impl_leaks` (#396).
+        impl_leaks += check_impl_leaks(stem, body_full, _offset, leak_patterns, scan_leaks)
         # #234 — las salvedades de una nota de paper. #213 le dio a la afirmación decidible una
         # forma estructurada y un `grep`; lo que no le dio es nada que haga que el extractor la
         # USE. Medido sobre una bóveda real: 0 de 43 extracciones emitieron una salvedad
@@ -5548,21 +5640,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # La cabecera `> _Estado — …_` vive en `check_state_header` (#396).
         estado_desfasado += check_state_header(stem, f, text, _slug_ent)
 
-        if f.startswith((str(cfg.STARS), str(cfg.CONCEPTS))) and GENERATOR_LINE not in text:
-            headerless.append((stem, "sin la línea `_Generado con Almagesto v…_`: los estampadores "
-                                     "de cabecera no pueden actuar → `python scripts/make_notes.py "
-                                     "--restamp-headers`"))
+        # La nota sin línea de generador vive en `check_headerless` (#396).
+        headerless += check_headerless(stem, f, text)
 
-        # Disputas (#71): a nivel NOTA y con posiciones explícitas — vale para estrellas y para
-        # conceptos, donde la disputa es simétrica por definición (no hay valor de frontmatter
-        # contra el cual poner un `alt`). Las del schema viejo NO se leen: se detectan y bloquean.
-        n_viejas, motivos_viejas = legacy_disputes(fm)
-        if n_viejas:
-            old_disputes.append((stem, f"{n_viejas} disputa(s) en `planets[].disputes[]`, el schema "
-                                       f"pre-1.19.0 que el lint ya no lee → migralas con "
-                                       f"`python scripts/make_notes.py --migrate-disputes` (#71)"))
-        for motivo in motivos_viejas:
-            old_disputes.append((stem, motivo))
+        # El schema viejo de disputas vive en `check_legacy_disputes` (#396).
+        old_disputes += check_legacy_disputes(stem, fm)
         # #267 — las citas textuales de `disputes[]` quedaban fuera de TODO: `pairs_of` opera sobre
         # el cuerpo y el frontmatter no es prosa, así que ni el fan-out ni #220 las miraban. Medido
         # en una ficha real: 23 posiciones con `ref:` y 6 citas «…», cero chequeadas — y una
@@ -5584,14 +5666,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         if in_dir(f, "papers") and "paper" not in tags and not err:   # con YAML roto ya se reportó
             fm_broken.append((stem, "nota en `papers/` sin `tags: [paper]` → evade TODOS los "
                                     "chequeos de su tipo (retracción, PDF, role, citas)"))
-        # R-5: `topics:` era a la vez la faceta de la lente y el tema-sujeto. El renombre lo
-        # partió en `facets:` y `themes.yaml`, y el campo viejo quedó SIN LECTOR: la nota
-        # conserva el dato y el sistema no lo ve. Mismo trato que `busqueda:` pre-D-28 —
-        # detector bloqueante, nunca lector tolerante.
-        if in_dir(f, "papers") and "topics" in fm and not err:
-            old_facets.append((stem, "usa `topics:` (schema pre-R-5) — el campo vigente es "
-                                     "`facets:` y el lector ya no mira `topics` → "
-                                     "`python scripts/make_notes.py --migrate-facets`"))
+        # El `topics:` pre-R-5 vive en `check_legacy_facets` (#396).
+        old_facets += check_legacy_facets(stem, f, fm, err)
         # El paper sin destino vive en `check_paper_destination` (#396).
         _pd1, _pd2 = check_paper_destination(stem, f, fm, err)
         sin_destino += _pd1
@@ -5617,11 +5693,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         _g1, _g2 = check_gaps_scope(stem, f, text, _n_huecos)
         huecos_sin_alcance += _g1
         alcance_wikilink += _g2
-        cuerpo_nota = text.split("---", 2)[-1] if text.startswith("---") else text
-        for marca in inferencias_sin_premisas(cuerpo_nota):
-            infer_sin_premisas.append(
-                (stem, f"`{marca}` sin premisas — una inferencia nombra al menos un `[[bibcode]]`: "
-                       "`(inferencia de [[bibcode]])`. Sin eso es una afirmación sin respaldo"))
+        # La `inferencia` sin premisas vive en `check_inferences_without_premises` (#396).
+        infer_sin_premisas += check_inferences_without_premises(stem, text)
         # Lo propio de una ficha de estrella vive en `check_star_note` (#396).
         _s1, _s2 = check_star_note(stem, fm, text, tags, names, _alias_idx_cached)
         incomplete += _s1
