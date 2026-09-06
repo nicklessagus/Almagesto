@@ -3338,3 +3338,23 @@ def test_norm_simbad_id_saca_el_PREFIJO_DE_TIPO_y_es_una_sola_implementacion():
     assert cfg.norm_simbad_id("NAMELESS") == "nameless"
     assert cfg.norm_simbad_id("Vega") == "vega" and cfg.norm_simbad_id("GJ 581") == "gj581"
     assert cfg.norm_simbad_id(None) == "" and cfg.norm_simbad_id("") == ""
+
+
+def test_arxiv_stamp_id_sale_del_MISMO_match_que_la_version():
+    """#426 — el regex capturaba dos grupos y el lector devolvía sólo el segundo, así que la misma
+    lectura de disco que estampa `pdf_source: eprint` + `eprint_version` tenía el `arxiv_id` en la
+    mano y lo tiraba. Medido: de 176 notas `eprint`, 14 sin `arxiv_id` y 13 recuperables de su
+    propio `.txt`, sin bajar nada.
+
+    Lo que hace al id tan confiable como la versión es que salen del MISMO match: el alcance de dos
+    páginas (AUD-164 / INV-29) existe justamente para no levantar los `arXiv:` de la bibliografía,
+    que son de otros trabajos."""
+    t = "arXiv:2306.11263v2 [astro-ph.EP] 5 Jan 2023\n\nTítulo\n"
+    assert cfg.arxiv_stamp(t) == "v2" and cfg.arxiv_stamp_id(t) == "2306.11263"
+    viejo = "arXiv:astro-ph/0201234 blah"
+    assert cfg.arxiv_stamp(viejo) == "" and cfg.arxiv_stamp_id(viejo) == "astro-ph/0201234", \
+        "el id viejo con slash, y sin versión: `''` no es `None` y esa distinción decide pdf_source"
+    assert cfg.arxiv_stamp("sin sello") is None and cfg.arxiv_stamp_id("sin sello") is None
+    # ⛔ el mismo alcance acotado: un `arXiv:` de la bibliografía, tres páginas más abajo, NO cuenta
+    lejos = "portada\n" + "x" * 5000 + "\f" + "p2\n" + "y" * 5000 + "\f" + "arXiv:9999.99999v1\n"
+    assert cfg.arxiv_stamp_id(lejos) is None and cfg.arxiv_stamp(lejos) is None

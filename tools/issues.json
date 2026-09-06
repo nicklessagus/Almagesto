@@ -2110,6 +2110,16 @@
    "number": 424,
    "title": "Propuesta: que la ficha registre canónicamente DÓNDE están los datos públicos de cada paper (VizieR/CDS) — hoy no hay campo ni sección, y `data_local` es machine-local",
    "state": "OPEN"
+  },
+  {
+   "number": 425,
+   "title": "`## Datos públicos` (#424) no está en `SECCIONES_ESTAMPADAS`: su `[[bibcode]]` estampado hace que `_estado_paper` reporte `sintetizado` sin una línea de prosa, y `make_notes` deja de converger en una pasada",
+   "state": "OPEN"
+  },
+  {
+   "number": 426,
+   "title": "`arxiv_stamp` captura el id de arXiv y devuelve SÓLO la versión: la lectura que puebla `pdf_source: eprint` tira el `arxiv_id` que tiene en la mano (14 de 176 notas)",
+   "state": "OPEN"
   }
  ]
 }

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.249.0"
+ALMAGESTO_VERSION = "1.249.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -153,6 +153,31 @@ def arxiv_stamp(text: str) -> str | None:
     return (m.group(2) or "") if m else None
 
 
+def arxiv_stamp_id(text: str) -> str | None:
+    """The arXiv ID of the stamp (`2306.11263`), from the SAME match as `arxiv_stamp` (#426).
+
+    ⛔ The regex captured two groups and the reader returned only the second, so the very disk read
+    that stamps `pdf_source: eprint` + `eprint_version` had the `arxiv_id` in hand and threw it
+    away. Measured on a real vault: of 176 notes with `pdf_source: eprint`, **14 had no
+    `arxiv_id`** and **13 were recoverable from their own `.txt`** — no network, nothing to
+    download.
+
+    What makes the id as trustworthy as the version is that they come from the same match: the
+    two-page scope (AUD-164 / INV-29) exists precisely so the `arXiv:` ids of the bibliography —
+    which belong to OTHER works — are never read. If that guarantee is enough for
+    `eprint_version`, it is enough for the id.
+
+    ⚠ Kept as a separate reader on purpose: `arxiv_stamp` returns `""` for a stamp with no version
+    and `None` for no stamp, and that distinction decides `pdf_source`. Folding both into one
+    return would make every caller re-derive it."""
+    paginas = text.split("\f")[:ARXIV_STAMP_SCAN_PAGES]
+    alcance = "\f".join(paginas)
+    if len(alcance) < ARXIV_STAMP_SCAN_CHARS:
+        alcance = text[:ARXIV_STAMP_SCAN_CHARS]
+    m = ARXIV_STAMP_RE.search(alcance)
+    return m.group(1) if m else None
+
+
 def snapshot_url(path) -> str | None:
     """`source_url` del header de un snapshot web, o `None`. Gemelo de `snapshot_retrieved`: el
     header lo escribe `fetch_web` y el parser vive acá, un solo lugar de verdad. Lo necesita el
@@ -205,6 +230,15 @@ SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a est
                         "## Indicadores de actividad esperados",
                         "## Papers que tocan este tema (auto)", "## Excluidos por el filtro",
                         "## Verificación de citas",
+                        # #425 — el roll-up de datos públicos (#424). La elección es EXPLÍCITA y es
+                        # la que su propio contrato ya declaraba: el hecho se afirma —y se
+                        # verifica— en la nota del PAPER, contra su PDF; acá sólo se agrega. Fuera
+                        # de la tupla, el `[[bibcode]]` que el propio estampado escribe hacía que
+                        # `_estado_paper` reportara `sintetizado` sin una línea de prosa (medido: 1
+                        # de 4 hoy, los 4 al cosecharlos) y **silenciaba la red de #75** en esa
+                        # población; además cada fila pedía verificación propia en la ficha, con un
+                        # ancla que se vence en cada re-estampado.
+                        "## Datos públicos",
                         # #124 · las ayudas de lectura de una nota de paper: el original de la
                         # fuente y su traducción. Ninguna es una afirmación de la bóveda, así que el
                         # fan-out no tiene qué contrastar. ⛔ La regla que las acompaña: **son ayuda

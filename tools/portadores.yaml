@@ -530,3 +530,47 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: Declara la clave en el schema de `papers/`; no la lee.
+
+  - issue: 425
+    regla: >-
+      Toda sección que `make_notes` ESTAMPA se declara en `lib_config.SECCIONES_ESTAMPADAS`. Fuera
+      de la tupla queda dentro de la prosa, y de ahí cuelgan tres consecuencias que ninguna otra
+      capa ve: `_estado_paper` deriva `sintetizado` del `[[bibcode]]` que el propio estampado
+      escribió —silenciando la red de #75—, `lib_blocks` convierte cada fila en un par a verificar
+      con un ancla que se vence en cada re-estampado, y el scan de fuga deja de eximirla (#214).
+      La red que lo cierra enumera por AST los headers de `_reemplazar_seccion`, así que una
+      sección nueva entra sola al chequeo.
+    funcion: lib_config._es_estampada
+    patron: 'SECCIONES_ESTAMPADAS'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Usa la TUPLA para recortar la prosa antes de armar los pares; no decide si un encabezado
+          es estampado (el sufijo de puntuación lo resuelve `_es_estampada`).
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: Re-exporta la tupla y la nombra en la doctrina del scan de fuga (#214); no matchea.
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: La menciona en el docstring de las ayudas de lectura; no la consulta.
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: La nombra al justificar la exención del blockquote del `log` (#387); no la consulta.
+
+  - issue: 426
+    regla: >-
+      El sello de arXiv se lee UNA vez y da las dos cosas que trae: la versión (`eprint_version`) y
+      el ID (`arxiv_id`). El regex capturaba los dos grupos y el lector devolvía sólo el segundo,
+      así que la misma lectura de disco que estampa `pdf_source: eprint` tiraba el id que tenía en
+      la mano — 14 de 176 notas sin `arxiv_id`, 13 recuperables de su propio `.txt`. Lo que hace al
+      id tan confiable como la versión es que salen del MISMO match, con el alcance de dos páginas
+      que existe para no levantar los `arXiv:` de la bibliografía.
+    funcion: lib_config.arxiv_stamp_id
+    patron: 'ARXIV_STAMP_RE|arxiv_stamp'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: >-
+          `stamp_fulltext` lo estampa junto a `pdf_source`/`eprint_version`, add-only y entre
+          comillas (sin ellas YAML lo parsea como FLOAT y deja de ser un identificador).

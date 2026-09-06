@@ -569,6 +569,19 @@ def stamp_fulltext(dest, stem: str, slug: str | None) -> bool:
         changed = upsert("pdf_source", psrc, ("fulltext_source", "fulltext", "pdf")) or changed
         if pver:
             changed = upsert("eprint_version", pver, ("pdf_source",)) or changed
+        # ⛔ #426 — el mismo match que dio `eprint`/`eprint_version` trae el ID, y se tiraba: 14 de
+        # 176 notas `pdf_source: eprint` sin `arxiv_id`, 13 recuperables de su propio `.txt` sin
+        # bajar nada. ⚠ Add-only: si la nota YA declara un `arxiv_id` no se pisa — puede venir del
+        # catálogo, que es mejor fuente que un sello leído del margen.
+        if psrc == "eprint" and not str(cfg.split_fm(text).get("arxiv_id") or "").strip():
+            _txt = cfg.FULLTEXT / (slug_ganador or "") / f"{stem}.txt"
+            if _txt.is_file() and (_aid := cfg.arxiv_stamp_id(
+                    _txt.read_text(encoding="utf-8", errors="replace"))):
+                # ⛔ Entre comillas: `2306.11263` sin ellas lo parsea YAML como FLOAT, y el campo
+                # deja de ser el identificador que es (`2306.11263` ≠ `'2306.11263'` para todo
+                # consumidor). Los ids viejos (`astro-ph/0201234`) no tienen el problema, pero la
+                # regla es una sola.
+                changed = upsert("arxiv_id", f"'{_aid}'", ("pdf_source", "doi")) or changed
     if changed:
         cfg.write_text_atomic(dest, text[:ini] + "\n".join(lines) + text[end:])
     return changed

@@ -5551,3 +5551,64 @@ def test_ensure_section_agrega_la_seccion_NUEVA_a_una_ficha_que_ya_existia(toy_v
     assert mn._ensure_section(d, mn.DATOS_HEADER, mn.EXCLUDED_HEADER) is False, "idempotente"
     assert mn._ensure_section(d, "## No Existe", "## Tampoco") is False, \
         "sin ancla no se inventa un punto de inserción (mismo criterio que `stamp_estado`)"
+
+
+def test_toda_seccion_que_make_notes_ESTAMPA_esta_declarada_estampada():
+    """#425 — la red que cierra la clase, no el caso. Una sección que `make_notes` regenera y que
+    `SECCIONES_ESTAMPADAS` no declara queda DENTRO de la prosa, y de ahí cuelgan tres consecuencias
+    que ninguna otra capa ve: `_estado_paper` deriva `sintetizado` del `[[bibcode]]` que el propio
+    estampado escribió —silenciando la red de #75 en esa población—, `lib_blocks` convierte cada
+    fila en un par a verificar en la ficha con un ancla que se vence en cada re-estampado, y el
+    scan de fuga deja de eximirla (#214).
+
+    Se enumera por AST los headers que pasan por `_reemplazar_seccion`, así que una sección nueva
+    entra sola al chequeo — que es lo que faltó cuando #424 agregó `## Datos públicos`."""
+    import ast
+    import pathlib
+    src = pathlib.Path(mn.__file__).read_text(encoding="utf-8")
+    mod = ast.parse(src)
+    consts = {t.id: n.value.value for n in mod.body if isinstance(n, ast.Assign)
+              for t in n.targets if isinstance(t, ast.Name)
+              and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)}
+    headers = set()
+    for n in ast.walk(mod):
+        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "_reemplazar_seccion" and len(n.args) > 1):
+            a = n.args[1]
+            if isinstance(a, ast.Name) and a.id in consts:
+                headers.add(consts[a.id])
+            elif isinstance(a, ast.Constant) and isinstance(a.value, str):
+                headers.add(a.value)
+    assert headers, "el enumerador por AST no encontró ninguna: sin población no afirma nada (D-43)"
+    sin_declarar = sorted(h for h in headers if not cfg._es_estampada(h))
+    assert sin_declarar == [], (
+        f"secciones que `make_notes` estampa y `SECCIONES_ESTAMPADAS` no declara: {sin_declarar}. "
+        f"O van a la tupla, o la decisión de que se verifiquen en la ficha se escribe explícita")
+
+
+def test_el_estampado_del_eprint_se_queda_con_el_ARXIV_ID_que_leyo(toy_vault):
+    """#426 — la misma lectura de disco que estampa `pdf_source: eprint` y `eprint_version` tiene el
+    id en el mismo match y lo tiraba: 14 de 176 notas `eprint` sin `arxiv_id`, 13 recuperables de su
+    propio `.txt` sin bajar nada.
+
+    ⚠ Add-only: un `arxiv_id` que la nota YA declara no se pisa — puede venir del catálogo, que es
+    mejor fuente que un sello leído del margen."""
+    stem = "2020arx....9..9Z"
+    dest = toy_vault.PAPERS / f"{stem}.md"
+    dest.write_text(f"---\ntags: [paper]\nbibcode: {stem}\npdf: null\n---\n\n# x\n",
+                    encoding="utf-8")
+    seed_txt(toy_vault, "test_star", stem,
+             header="arXiv:2306.11263v2 [astro-ph.EP] 5 Jan 2023\n")
+    assert mn.stamp_fulltext(dest, stem, "test_star") is True
+    fm = read_fm(dest)
+    assert fm["pdf_source"] == "eprint" and fm["eprint_version"] == "v2"
+    assert fm["arxiv_id"] == "2306.11263", "el id sale del MISMO match que la versión"
+    assert mn.stamp_fulltext(dest, stem, "test_star") is False, "idempotente"
+
+    otro = toy_vault.PAPERS / "2021arx....9..9Y.md"
+    otro.write_text("---\ntags: [paper]\nbibcode: 2021arx....9..9Y\narxiv_id: '2101.00001'\n"
+                    "pdf: null\n---\n\n# x\n", encoding="utf-8")
+    seed_txt(toy_vault, "test_star", "2021arx....9..9Y",
+             header="arXiv:2306.11263v2 [astro-ph.EP] 5 Jan 2023\n")
+    mn.stamp_fulltext(otro, "2021arx....9..9Y", "test_star")
+    assert read_fm(otro)["arxiv_id"] == "2101.00001", "no pisa el que ya estaba"
