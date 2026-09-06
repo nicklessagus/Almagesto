@@ -2779,6 +2779,281 @@ def check_registro_sweep(stars_slugs, vistos) -> tuple:
             triage_pending, truncated_corpora)
 
 
+def alias_index_cache():
+    """Factory for the concept alias index (#245), built ONCE per run.
+
+    Lifted out of `lint.collect` by #396, as a factory and not a module cache on purpose: the index
+    reads every note of `concepts/`, so calling `concept_alias_index` per indicator turns a cheap
+    check into an O(notas x conceptos) sweep — but caching it across RUNS would make the lint answer
+    about a vault that already changed. The closure lives as long as one `collect`.
+    """
+    _alias_idx: dict = {}
+
+    def cached() -> dict:
+        if not _alias_idx:
+            _alias_idx.update(cfg.concept_alias_index() or {"__vacio__": ""})
+        return _alias_idx
+
+    return cached
+
+
+def is_dangling(name, stems_norm: dict, alias_idx_cached) -> bool:
+    """No note claims this name — neither by stem nor by `aliases` (#243/#245/#348).
+
+    Lifted out of `lint.collect` by #396. ONE predicate for the two dangling categories: they differ
+    in SEVERITY, never in what counts as a destination, and two copies of the rule already diverged
+    once. `alias_idx_cached` comes in as an argument (from `alias_index_cache`) so the caller keeps
+    deciding how long the index lives.
+    """
+    return (cfg.declared_name(name, stems_norm) is None
+            and cfg.method_target(name, alias_idx_cached()) is None)
+
+
+def check_orphans(incoming: dict, kinds: dict, refs_stems) -> list:
+    """`orphans` — concept notes with no incoming link (BLOQUEANTE).
+
+    Extracted from `lint.collect` by #396; the predicate that used to be the closure
+    `is_orphan_candidate` is now this function's body. Papers and stars are reached through
+    Dataview/`index.md`, not by wikilink, so they are not genuine orphans; neither is the README nor
+    the **matrices**, which are structural and navigated from an `index.md` that is `merge=ours` and
+    may not link them in a given instance.
+
+    ⛔ `sorted` is not cosmetic: `incoming` is built over a set of strings whose order depends on the
+    hash Python randomises PER PROCESS, so without it the section comes out in a different order on
+    every run and the report stops being comparable with itself (INV-43).
+    """
+    def candidato(n: str) -> bool:
+        tags = kinds.get(n, [])
+        return (not ({"paper", "star", "matrix"} & set(tags))
+                and n not in NON_ORPHAN and n not in refs_stems)
+    return sorted(n for n, c in incoming.items() if c == 0 and candidato(n))
+
+
+def check_star_without_ground_truth(vistos_gt) -> list:
+    """`incomplete` rows for a star note with no `raw/ground_truth/<slug>.json` (backlog).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. The sweep
+    above is driven by the JSON, so a note with no file was looked at by NOBODY — `teff_K`,
+    `P_rot_days` or whole planets could be invented with the lint green, which voids the entire
+    guarantee of #70 exactly where it promises to watch.
+    """
+    incomplete: list = []
+    # Ficha SIN su ground-truth: el barrido de arriba lo maneja el JSON, así que una ficha sin
+    # archivo no la miraba NADIE — se le podía inventar `teff_K`/`P_rot_days`/planetas enteros con
+    # el lint en verde. Es alcanzable sin salirse de lo documentado (`make_notes.py <slug>` corre
+    # solo, y el sub-modo *borrar* de `maintain` saca el JSON), y anula la garantía entera de #70
+    # justo donde promete vigilar.
+    # Backlog, no bloqueante: la distinción del framework es "hay una violación" (bloquea) vs "la
+    # garantía no corrió acá" (backlog, como #55 triage pendiente y #56 verificación stale).
+    for sf in cfg.note_paths(cfg.STARS):
+        if sf.stem not in vistos_gt:
+            incomplete.append((sf.stem, "ficha sin `raw/ground_truth/<slug>.json` → el espejo #70 "
+                                        "no la vigila: los campos de NEA quedan sin nadie que los "
+                                        f"compare (corré `fetch_ground_truth.py {sf.stem}`)"))
+    return incomplete
+
+
+def check_unsynthesized(extracted, cited_in_entity) -> list:
+    """`unsynthesized` — the paper that was extracted and never made it into any note (#75).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Its
+    failure mode is OMISSION, which leaves no trace: `verify-citations` validates each claim against
+    its source, not the coverage of the set, so a note synthesised from 3 papers out of 40 comes
+    back 100 % supported.
+
+    @inv INV-45
+    """
+    unsynthesized: list = []
+    # Extraído pero no sintetizado (#75, backlog): el análogo del proxy que ya existe para planetas
+    # (cada planeta del frontmatter discutido en prosa). Mide si el paper LLEGÓ, no si la síntesis
+    # es buena. Es el único paso salteable de la cadena que no tenía red —y su modo de falla es
+    # OMISIÓN, que no deja rastro: `verify-citations` valida cada afirmación contra su fuente, no la
+    # cobertura del conjunto, así que una ficha sintetizada desde 3 papers de 40 vuelve 100%
+    # soportada. La población son los papers YA extraídos, no todo el core: la regla de poda manda
+    # dejar fuera de la prosa lo tangencial, pero eso normalmente ni se extrae. Escotilla explícita
+    # para el que sí se extrajo y legítimamente no se inlinea: `no_sintetizado: <motivo>` en la nota
+    # del paper — con motivo, como el `--reason` del triage: no curar en silencio.
+    unsynthesized = []
+    # ordenar por STEM, no por la tupla: dos notas con el mismo stem (una copia de trabajo
+    # de una nota de paper en otra carpeta) comparaban `no_sintetizado` —str contra None—
+    # y volteaban el lint entero con un TypeError. El lint es la compuerta de CI: tiene que
+    # reportar una bóveda rara, no morirse con ella.
+    for stem, marca in sorted(extracted, key=lambda t: t[0]):
+        if stem in cited_in_entity:
+            continue
+        if marca is not _SIN_MARCA:
+            # Un motivo es TEXTO con contenido. Cualquier otra cosa (número, lista, mapa, `true`,
+            # vacío) es la marca pelada que la doc dice seguir reportando: cerraba el hallazgo en
+            # silencio, que es exactamente lo que "motivo obligatorio" existe para impedir.
+            if (not isinstance(marca, str) or not marca.strip()
+                    or marca.strip().lower() in ("true", "sí", "si", "yes")):
+                unsynthesized.append((stem, "`no_sintetizado` sin motivo → poné POR QUÉ no se "
+                                            "inlinea (regla de poda, aporta sólo vía roll-up, …)"))
+            continue
+        # @inv INV-45
+        unsynthesized.append((stem, "extraído (`methods` poblado) pero su bibcode no está citado en "
+                                    "ninguna ficha ni concepto → sintetizarlo donde corresponda, o "
+                                    "marcar `no_sintetizado: <motivo>` en la nota del paper"))
+    return unsynthesized
+
+
+def check_dangling_thesis(thesis_refs: dict, dangling) -> list:
+    """`dangling_thesis` — a `thesis_links` naming no note (BLOQUEANTE).
+
+    Extracted from `lint.collect` by #396. Takes the `dangling` predicate as an argument rather than
+    rebuilding it: it is the SAME rule as `check_dangling_methods` and they differ only in severity
+    — two copies of it already diverged once (#243/#348).
+    """
+    # thesis_links sin página destino: el tag no matchea ninguna nota → no acumula en el roll-up
+    # Dataview de ninguna hipótesis/concepto (típico typo: shift-vs-shape vs shift_vs_shape).
+    dangling_thesis = sorted(
+        (tl, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
+             + (" …" if len(refs) > 3 else ""))
+        for tl, refs in thesis_refs.items() if dangling(tl))
+    return dangling_thesis
+
+
+def check_contraste_pendiente(extracted) -> list:
+    """`contraste_pendiente` — step 3b left the template row untouched (#101).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Only asked
+    for where the contrast is POSSIBLE — at least two extracted papers of the subject; with one
+    there is nothing to contrast against and the finding would be fixed noise.
+    """
+    contraste_pendiente: list = []
+    # Contraste cross-paper (3b) sin rastro (#101): la sección está con la fila de la plantilla.
+    # Sólo se pide donde el contraste es POSIBLE — hacen falta al menos dos papers extraídos del
+    # sujeto; con uno solo no hay contra qué contrastar y el hallazgo sería ruido fijo.
+    contraste_pendiente: list = []
+    for f in sorted(glob.glob(str(cfg.STARS / "*.md"))) + sorted(glob.glob(str(cfg.CONCEPTS / "*" / "*.md"))):
+        stem = basename(f)[:-3]
+        try:
+            texto = Path(f).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not inventario_sin_llenar(texto):
+            continue
+        extraidos = {s for s, _ in extracted}
+        n_extraidos = len({b.strip() for b in LINK_RE.findall(texto)} & extraidos)
+        if n_extraidos >= 2:
+            contraste_pendiente.append(
+                (stem, f"`## Inventario por eje` con la fila vacía de la plantilla y {n_extraidos} "
+                       "paper(s) extraídos citados → el contraste cross-paper (3b) no dejó rastro. "
+                       "Si de verdad no hay ningún eje en disputa, **borrá la sección** y decilo en "
+                       "el `log` (es la escotilla que la plantilla declara)"))
+    return contraste_pendiente
+
+
+def check_dangling_methods(method_refs: dict, dangling) -> list:
+    """`dangling_methods` — a `methods` naming no note, by stem or by `aliases` (backlog).
+
+    Extracted from `lint.collect` by #396. BACKLOG and not blocking, unlike its `thesis_links`
+    sibling, and the asymmetry is real: a `thesis_links` names a concept `ingest-theme` CREATES in
+    the same operation that seeds it, while `methods` is populated by the extraction of
+    `ingest-star`, which creates no concepts. Blocking here would ask `ingest-star` to close
+    something that is not in its chain.
+    """
+    # `methods` sin página destino: el slug no matchea ninguna nota, así que el roll-up de la ficha
+    # lo estampa como código en vez de `[[link]]` (ver `make_notes.metodos_table`) y el tema no tiene
+    # dónde acumular. Es BACKLOG y no bloqueante, al revés que su hermano `thesis_links`, y la
+    # asimetría es real: un `thesis_links` nombra un concepto que `ingest-theme` **crea** en la misma
+    # operación que lo siembra, mientras que `methods` lo puebla la extracción de `ingest-star`, que
+    # no crea conceptos. Bloquear acá le pediría a `ingest-star` cerrar algo que no está en su
+    # cadena. Se cierra ingiriendo el tema (o corrigiendo el typo).
+    # #245 — el destino se resuelve también por los `aliases` del concepto (dentro de `_is_dangling`):
+    # el nombre canónico de un método es el stem de su nota y `aliases` es la tabla de sinónimos que
+    # el schema ya pide. Nadie la leía, así que `bisector span` y `bis` eran dos métodos distintos y
+    # el backlog contaba dos deudas donde hay una. Medido en una bóveda real: cierra 7 de 121 —
+    # chico, y del tipo correcto: lo que vacía el backlog es que el extractor VEA la lista antes de
+    # inventar la grafía.
+    dangling_methods = sorted(
+        (mt, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
+             + (" …" if len(refs) > 3 else "") + " → sin nota en `concepts/` (ni por `aliases`): "
+             "ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota")
+        for mt, refs in method_refs.items() if dangling(mt))
+    return dangling_methods
+
+
+def check_alias_collisions() -> list:
+    """`alias_colision` — the same alias claimed by TWO concepts (#245).
+
+    Extracted from `lint.collect` by #396. It reports and does not resolve: which concept a name
+    denotes is curation, and choosing silently decides for the user (method rule 5).
+    """
+    # #245 — y el alias reclamado por DOS conceptos: se reporta, no se resuelve. Cuál concepto
+    # denota un nombre es curación, y elegir en silencio decide por el usuario (regla de método 5).
+    alias_colision = [(", ".join(sorted(set(stems))),
+                       f"declaran el mismo alias `{alias}` → el roll-up resuelve al primero en orden "
+                       f"alfabético; decidí cuál lo denota y sacalo del otro")
+                      for alias, stems in cfg.alias_collisions()]
+    return alias_colision
+
+
+def check_methods_spelling_collisions(method_refs: dict) -> list:
+    """`methods_colision` — the same method written two ways (#243, backlog).
+
+    Extracted from `lint.collect` by #396. The other side of the dangling defect: this is not an
+    ingest debt, it is noise that inflates the backlog and that up to 1.95.0 split the roll-up's own
+    universe. ⛔ What does NOT get merged on its own are SYNONYMS (`gls` / `periodograma-gls`): that
+    is judgement, and sometimes they are different things.
+    """
+    # #243 — y las COLISIONES de grafía, que son el otro lado del mismo defecto: el mismo método
+    # escrito de dos maneras no es una deuda de ingesta, es ruido que infla el backlog y que hasta
+    # 1.95.0 partía el universo del roll-up. Se reportan NOMBRANDO las grafías (no el conteo), y se
+    # cierran unificando la grafía en las notas o dejando que el roll-up las junte —que es lo que
+    # ahora hace—. ⛔ Lo que NO se junta solo son los SINÓNIMOS (`gls` / `periodograma-gls`,
+    # `lbl` / `line-by-line-rv`): eso es juicio, y a veces son cosas distintas.
+    _por_clave: dict = {}
+    for mt in method_refs:
+        _por_clave.setdefault(cfg.method_key(mt), set()).add(str(mt))
+    methods_colision = sorted(
+        (sorted(v)[0], f"el mismo método con {len(v)} grafías: {', '.join(sorted(v))} — el roll-up "
+                       f"ya las junta (#243); unificá la grafía en las notas para sacarlo del backlog")
+        for v in _por_clave.values() if len(v) > 1)
+    return methods_colision
+
+
+def check_dangling_disputes(dispute_refs, names, kinds: dict) -> list:
+    """`dangling_disputes` — a `disputes[].posiciones[].ref` with no paper note (BLOQUEANTE).
+
+    Extracted from `lint.collect` by #396. The bibcode holding that position does not exist as a
+    note, so the dispute is not traceable: a typo in the bibcode, or a paper never ingested.
+    """
+    # `ref` de una posición sin paper destino: el bibcode que sostiene esa posición no existe como
+    # nota → la disputa no es trazable (typo en el bibcode o paper sin ingestar).
+    dangling_disputes = sorted(
+        (nota, f"disputa `{campo}`: ref `{ref}` sin nota de paper")
+        for nota, campo, ref in dispute_refs if ref not in names or "paper" not in kinds.get(ref, []))
+    return dangling_disputes
+
+
+def check_objective_placeholder(obj_err) -> list:
+    """`objective_warn` — the objective is still the template placeholder (WARN).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Compared
+    against the PLACEHOLDER and not against a plausible example name: a real objective that happened
+    to match would give a permanent WARN with no way to turn it off. (In the template repo this WARN
+    is expected: the seed vault is not instantiated.)
+
+    @inv INV-57
+    """
+    objective_warn: list = []
+    # objetivo sin instanciar (WARN): el template trae objective.yaml con `name` placeholder;
+    # si sigue así, la bóveda clasifica "core" con la regex del ejemplo, no con TU tema — típico
+    # olvido post-instanciación. Se compara contra el placeholder, no contra un nombre de ejemplo
+    # plausible (un objetivo real coincidente daría WARN permanente sin forma de apagarlo).
+    # (En el repo template este WARN es esperable: la bóveda seed no está instanciada.)
+    # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
+    objective_warn = []
+    # @inv INV-57
+    if not obj_err and cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
+        objective_warn.append(
+            ("vault/config/objective.yaml",
+             "objective.name sigue siendo el placeholder del template — corré el skill `setup` "
+             "(o editá el YAML) para definir el objetivo de TU bóveda"))
+    return objective_warn
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -3069,16 +3344,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                 _fm_cache[bib] = {}
         return _fm_cache[bib]
 
-    _alias_idx: dict = {}
-
-    def _alias_idx_cached() -> dict:
-        """The concept alias index (#245), built once per run.
-
-        `concept_alias_index` reads every note of `concepts/`: calling it per indicator turns a
-        cheap check into an O(notas × conceptos) sweep."""
-        if not _alias_idx:
-            _alias_idx.update(cfg.concept_alias_index() or {"__vacio__": ""})
-        return _alias_idx
+    # El índice de alias vive en `alias_index_cache` (#396): factory, no caché de módulo — la
+    # closure dura lo que dura ESTA corrida, o el lint contestaría sobre una bóveda que ya cambió.
+    _alias_idx_cached = alias_index_cache()
 
     _src_cache: dict = {}
     #: #275 · cuántas citas «…» se pudieron EVALUAR de verdad. La categoría declaraba su población
@@ -4959,62 +5227,14 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                      "medias o ficha borrada sin limpiar); recreá la ficha "
                                      f"(`make_notes.py {slug}`) o borrá el ground-truth colgado"))
 
-    # Ficha SIN su ground-truth: el barrido de arriba lo maneja el JSON, así que una ficha sin
-    # archivo no la miraba NADIE — se le podía inventar `teff_K`/`P_rot_days`/planetas enteros con
-    # el lint en verde. Es alcanzable sin salirse de lo documentado (`make_notes.py <slug>` corre
-    # solo, y el sub-modo *borrar* de `maintain` saca el JSON), y anula la garantía entera de #70
-    # justo donde promete vigilar.
-    # Backlog, no bloqueante: la distinción del framework es "hay una violación" (bloquea) vs "la
-    # garantía no corrió acá" (backlog, como #55 triage pendiente y #56 verificación stale).
-    for sf in cfg.note_paths(cfg.STARS):
-        if sf.stem not in vistos_gt:
-            incomplete.append((sf.stem, "ficha sin `raw/ground_truth/<slug>.json` → el espejo #70 "
-                                        "no la vigila: los campos de NEA quedan sin nadie que los "
-                                        f"compare (corré `fetch_ground_truth.py {sf.stem}`)"))
+    # La ficha sin su ground-truth vive en `check_star_without_ground_truth` (#396).
+    incomplete += check_star_without_ground_truth(vistos_gt)
 
-    # huérfanos: notas-concepto sin links entrantes. Papers/estrellas se acceden por
-    # Dataview/index, no por wikilink → no son huérfanos genuinos. README tampoco. Las **matrices**
-    # son estructurales (se navegan desde index.md, que es merge=ours → puede no linkearlas en una
-    # instancia): tampoco son huérfanas genuinas.
-    def is_orphan_candidate(n: str) -> bool:
-        tags = kinds.get(n, [])
-        return (not ({"paper", "star", "matrix"} & set(tags))
-                and n not in NON_ORPHAN and n not in refs_stems)
-    # `sorted`: `incoming` se construye sobre un `set` de strings, cuyo orden depende del hash
-    # que Python randomiza POR PROCESO — sin esto la sección sale en orden distinto en cada
-    # corrida y el reporte deja de ser comparable consigo mismo (INV-43).
-    orphans = sorted(n for n, c in incoming.items() if c == 0 and is_orphan_candidate(n))
+    # Los huérfanos viven en `check_orphans` (#396), con su predicado adentro.
+    orphans = check_orphans(incoming, kinds, refs_stems)
 
-    # Extraído pero no sintetizado (#75, backlog): el análogo del proxy que ya existe para planetas
-    # (cada planeta del frontmatter discutido en prosa). Mide si el paper LLEGÓ, no si la síntesis
-    # es buena. Es el único paso salteable de la cadena que no tenía red —y su modo de falla es
-    # OMISIÓN, que no deja rastro: `verify-citations` valida cada afirmación contra su fuente, no la
-    # cobertura del conjunto, así que una ficha sintetizada desde 3 papers de 40 vuelve 100%
-    # soportada. La población son los papers YA extraídos, no todo el core: la regla de poda manda
-    # dejar fuera de la prosa lo tangencial, pero eso normalmente ni se extrae. Escotilla explícita
-    # para el que sí se extrajo y legítimamente no se inlinea: `no_sintetizado: <motivo>` en la nota
-    # del paper — con motivo, como el `--reason` del triage: no curar en silencio.
-    unsynthesized = []
-    # ordenar por STEM, no por la tupla: dos notas con el mismo stem (una copia de trabajo
-    # de una nota de paper en otra carpeta) comparaban `no_sintetizado` —str contra None—
-    # y volteaban el lint entero con un TypeError. El lint es la compuerta de CI: tiene que
-    # reportar una bóveda rara, no morirse con ella.
-    for stem, marca in sorted(extracted, key=lambda t: t[0]):
-        if stem in cited_in_entity:
-            continue
-        if marca is not _SIN_MARCA:
-            # Un motivo es TEXTO con contenido. Cualquier otra cosa (número, lista, mapa, `true`,
-            # vacío) es la marca pelada que la doc dice seguir reportando: cerraba el hallazgo en
-            # silencio, que es exactamente lo que "motivo obligatorio" existe para impedir.
-            if (not isinstance(marca, str) or not marca.strip()
-                    or marca.strip().lower() in ("true", "sí", "si", "yes")):
-                unsynthesized.append((stem, "`no_sintetizado` sin motivo → poné POR QUÉ no se "
-                                            "inlinea (regla de poda, aporta sólo vía roll-up, …)"))
-            continue
-        # @inv INV-45
-        unsynthesized.append((stem, "extraído (`methods` poblado) pero su bibcode no está citado en "
-                                    "ninguna ficha ni concepto → sintetizarlo donde corresponda, o "
-                                    "marcar `no_sintetizado: <motivo>` en la nota del paper"))
+    # El extraído-y-no-sintetizado vive en `check_unsynthesized` (#396).
+    unsynthesized = check_unsynthesized(extracted, cited_in_entity)
 
     # #243/#348 — «¿este nombre tiene nota destino?» se pregunta por CLAVE NORMALIZADA, la misma que
     # usa el roll-up (`cfg.method_matches`) y `make_notes.theme_membership`. Comparando el string
@@ -5024,108 +5244,33 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # roll-up lo acumulaba) y que el destino no existe, y obligaba a "arreglar" trabajo correcto.
     _stems_norm = cfg.name_index(names)
 
-    def _is_dangling(name) -> bool:
-        """No note claims this name — neither by stem nor by `aliases` (#243/#245/#348).
+    # ⛔ UNA regla para las dos categorías dangling (#243/#348): `is_dangling` es de módulo
+    # desde #396 y las dos la reciben ya parcializada — difieren en SEVERIDAD, nunca en qué
+    # cuenta como destino, y dos copias de esa regla ya divergieron una vez.
+    def _dangling(n):
+        return is_dangling(n, _stems_norm, _alias_idx_cached)
+    dangling_thesis = check_dangling_thesis(thesis_refs, _dangling)
 
-        One predicate for the two dangling categories: they differ in SEVERITY, never in what
-        counts as a destination, and two copies of the rule already diverged once."""
-        return (cfg.declared_name(name, _stems_norm) is None
-                and cfg.method_target(name, _alias_idx_cached()) is None)
+    # El rastro del paso 3b vive en `check_contraste_pendiente` (#396).
+    contraste_pendiente = check_contraste_pendiente(extracted)
 
-    # thesis_links sin página destino: el tag no matchea ninguna nota → no acumula en el roll-up
-    # Dataview de ninguna hipótesis/concepto (típico typo: shift-vs-shape vs shift_vs_shape).
-    dangling_thesis = sorted(
-        (tl, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
-             + (" …" if len(refs) > 3 else ""))
-        for tl, refs in thesis_refs.items() if _is_dangling(tl))
+    # El gemelo backlog de `dangling_thesis` vive en `check_dangling_methods` (#396).
+    dangling_methods = check_dangling_methods(method_refs, _dangling)
+    alias_colision = check_alias_collisions()
 
-    # Contraste cross-paper (3b) sin rastro (#101): la sección está con la fila de la plantilla.
-    # Sólo se pide donde el contraste es POSIBLE — hacen falta al menos dos papers extraídos del
-    # sujeto; con uno solo no hay contra qué contrastar y el hallazgo sería ruido fijo.
-    contraste_pendiente: list = []
-    for f in sorted(glob.glob(str(cfg.STARS / "*.md"))) + sorted(glob.glob(str(cfg.CONCEPTS / "*" / "*.md"))):
-        stem = basename(f)[:-3]
-        try:
-            texto = Path(f).read_text(encoding="utf-8")
-        except OSError:
-            continue
-        if not inventario_sin_llenar(texto):
-            continue
-        extraidos = {s for s, _ in extracted}
-        n_extraidos = len({b.strip() for b in LINK_RE.findall(texto)} & extraidos)
-        if n_extraidos >= 2:
-            contraste_pendiente.append(
-                (stem, f"`## Inventario por eje` con la fila vacía de la plantilla y {n_extraidos} "
-                       "paper(s) extraídos citados → el contraste cross-paper (3b) no dejó rastro. "
-                       "Si de verdad no hay ningún eje en disputa, **borrá la sección** y decilo en "
-                       "el `log` (es la escotilla que la plantilla declara)"))
+    # Las colisiones de grafía viven en `check_methods_spelling_collisions` (#396).
+    methods_colision = check_methods_spelling_collisions(method_refs)
 
-    # `methods` sin página destino: el slug no matchea ninguna nota, así que el roll-up de la ficha
-    # lo estampa como código en vez de `[[link]]` (ver `make_notes.metodos_table`) y el tema no tiene
-    # dónde acumular. Es BACKLOG y no bloqueante, al revés que su hermano `thesis_links`, y la
-    # asimetría es real: un `thesis_links` nombra un concepto que `ingest-theme` **crea** en la misma
-    # operación que lo siembra, mientras que `methods` lo puebla la extracción de `ingest-star`, que
-    # no crea conceptos. Bloquear acá le pediría a `ingest-star` cerrar algo que no está en su
-    # cadena. Se cierra ingiriendo el tema (o corrigiendo el typo).
-    # #245 — el destino se resuelve también por los `aliases` del concepto (dentro de `_is_dangling`):
-    # el nombre canónico de un método es el stem de su nota y `aliases` es la tabla de sinónimos que
-    # el schema ya pide. Nadie la leía, así que `bisector span` y `bis` eran dos métodos distintos y
-    # el backlog contaba dos deudas donde hay una. Medido en una bóveda real: cierra 7 de 121 —
-    # chico, y del tipo correcto: lo que vacía el backlog es que el extractor VEA la lista antes de
-    # inventar la grafía.
-    dangling_methods = sorted(
-        (mt, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
-             + (" …" if len(refs) > 3 else "") + " → sin nota en `concepts/` (ni por `aliases`): "
-             "ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota")
-        for mt, refs in method_refs.items() if _is_dangling(mt))
-    # #245 — y el alias reclamado por DOS conceptos: se reporta, no se resuelve. Cuál concepto
-    # denota un nombre es curación, y elegir en silencio decide por el usuario (regla de método 5).
-    alias_colision = [(", ".join(sorted(set(stems))),
-                       f"declaran el mismo alias `{alias}` → el roll-up resuelve al primero en orden "
-                       f"alfabético; decidí cuál lo denota y sacalo del otro")
-                      for alias, stems in cfg.alias_collisions()]
+    # Las disputas sin paper destino viven en `check_dangling_disputes` (#396).
+    dangling_disputes = check_dangling_disputes(dispute_refs, names, kinds)
 
-    # #243 — y las COLISIONES de grafía, que son el otro lado del mismo defecto: el mismo método
-    # escrito de dos maneras no es una deuda de ingesta, es ruido que infla el backlog y que hasta
-    # 1.95.0 partía el universo del roll-up. Se reportan NOMBRANDO las grafías (no el conteo), y se
-    # cierran unificando la grafía en las notas o dejando que el roll-up las junte —que es lo que
-    # ahora hace—. ⛔ Lo que NO se junta solo son los SINÓNIMOS (`gls` / `periodograma-gls`,
-    # `lbl` / `line-by-line-rv`): eso es juicio, y a veces son cosas distintas.
-    _por_clave: dict = {}
-    for mt in method_refs:
-        _por_clave.setdefault(cfg.method_key(mt), set()).add(str(mt))
-    methods_colision = sorted(
-        (sorted(v)[0], f"el mismo método con {len(v)} grafías: {', '.join(sorted(v))} — el roll-up "
-                       f"ya las junta (#243); unificá la grafía en las notas para sacarlo del backlog")
-        for v in _por_clave.values() if len(v) > 1)
-
-    # `ref` de una posición sin paper destino: el bibcode que sostiene esa posición no existe como
-    # nota → la disputa no es trazable (typo en el bibcode o paper sin ingestar).
-    dangling_disputes = sorted(
-        (nota, f"disputa `{campo}`: ref `{ref}` sin nota de paper")
-        for nota, campo, ref in dispute_refs if ref not in names or "paper" not in kinds.get(ref, []))
-
-    # objetivo sin instanciar (WARN): el template trae objective.yaml con `name` placeholder;
-    # si sigue así, la bóveda clasifica "core" con la regex del ejemplo, no con TU tema — típico
-    # olvido post-instanciación. Se compara contra el placeholder, no contra un nombre de ejemplo
-    # plausible (un objetivo real coincidente daría WARN permanente sin forma de apagarlo).
-    # (En el repo template este WARN es esperable: la bóveda seed no está instanciada.)
-    # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
-    # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
-    # cosmética — un "(0)" se lee como veredicto ("miré y no hay"), y ese cero inventado hacía que
-    # el lint afirmara salud sobre lo que nunca miró. Cada poblador agrega (qué chequeo, por qué),
-    # la categoría CUENTA para el exit ≠ 0, y la categoría normal correspondiente se SUPRIME del
-    # reporte en vez de mostrar su cero.
+    # -- "no evaluado" (D-43 / INV-87) --------------------------------------------------------
+    # Un chequeo que NO PUDO correr no aporta un cero: reporta error, y la categoria normal
+    # correspondiente se SUPRIME del reporte en vez de mostrar su cero.
     if (obj_err := cfg.objective_error()):
         not_evaluated.append(("clasificación de relevancia (la lente)", obj_err))
-
-    objective_warn = []
-    # @inv INV-57
-    if not obj_err and cfg.load_objective().get("name") == cfg.DEFAULT_OBJECTIVE_NAME:
-        objective_warn.append(
-            ("vault/config/objective.yaml",
-             "objective.name sigue siendo el placeholder del template — corré el skill `setup` "
-             "(o editá el YAML) para definir el objetivo de TU bóveda"))
+    # El objetivo sin instanciar vive en `check_objective_placeholder` (#396).
+    objective_warn = check_objective_placeholder(obj_err)
 
     # ── LENTE VACÍA (AUD-56): el bloque vive en `check_lens_broken` (#396).
     lente_rota = check_lens_broken(obj_err)

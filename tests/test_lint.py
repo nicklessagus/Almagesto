@@ -8413,3 +8413,166 @@ def test_check_registro_sweep_saltea__red_y_el_sujeto_con_build_vivo(toy_vault):
     (cfg.REGISTRO / "roto.yaml").write_text("a: [1,\nb: : :\n", encoding="utf-8")
     (ileg, old, *_rest) = lint.check_registro_sweep(set(), set())
     assert [s for s, _m in ileg] == ["roto"] and [s for s, _m in old] == ["ica"]
+
+
+# ── #396 · las closures que subieron a módulo y la región del recorte de lectura ─────────────────
+
+def test_alias_index_cache_construye_UNA_vez_por_corrida(toy_vault, monkeypatch):
+    """#396/#245 — factory y no caché de módulo. Las dos mitades: el índice se arma UNA vez por
+    corrida (`concept_alias_index` lee todas las notas de `concepts/`, así que llamarlo por
+    indicador vuelve O(notas × conceptos) un chequeo barato) y **no** sobrevive a la corrida — una
+    caché de módulo haría que el lint contestara sobre una bóveda que ya cambió."""
+    n = [0]
+    def _contado(devuelve):
+        def _f():
+            n[0] += 1
+            return devuelve
+        return _f
+
+    monkeypatch.setattr(cfg, "concept_alias_index", _contado({"bis": "bisector"}))
+    cached = lint.alias_index_cache()
+    assert cached() == cached() == {"bis": "bisector"}
+    cached()
+    assert n[0] == 1, "tres llamadas, UNA lectura del disco"
+    lint.alias_index_cache()()
+    assert n[0] == 2, "otra corrida vuelve a leer: la caché no cruza corridas"
+
+    # la bóveda SIN alias también se cachea: sin el centinela `__vacio__` el `if not _alias_idx`
+    # sería verdadero para siempre y el índice se re-construiría en cada llamada
+    monkeypatch.setattr(cfg, "concept_alias_index", _contado({}))
+    c2 = lint.alias_index_cache()
+    c2(); c2(); c2()
+    assert n[0] == 3, "el `{__vacio__}` es lo que hace que el vacío también se cachee"
+
+
+def test_is_dangling_resuelve_por_stem_Y_por_alias(toy_vault):
+    """#396/#243/#245/#348 — UNA regla para las dos categorías dangling: difieren en SEVERIDAD,
+    nunca en qué cuenta como destino, y dos copias de la regla ya divergieron una vez. Un nombre
+    tiene destino si lo reclama un stem (por clave normalizada) o un `aliases` de concepto."""
+    mk_note(cfg.CONCEPTS / "methods", "pca", {"tags": ["concept"], "name": "PCA",
+                                              "aliases": ["principal component analysis"]})
+    stems = cfg.name_index({"pca"})
+    idx = lint.alias_index_cache()
+    assert not lint.is_dangling("pca", stems, idx)
+    assert not lint.is_dangling("PCA", stems, idx), "la clave es normalizada (#243)"
+    assert not lint.is_dangling("principal component analysis", stems, idx), "y los alias (#245)"
+    assert lint.is_dangling("sysrem", stems, idx)
+
+
+def test_check_orphans_excluye_papers_estrellas_matrices_y_navegacion(toy_vault):
+    """#396/INV-43 — huérfano es una nota-concepto sin links entrantes. Papers y estrellas se
+    acceden por el índice, no por wikilink; las matrices son estructurales y el `index.md` es
+    `merge=ours`, así que una instancia puede no linkearlas. Y el orden es `sorted` a propósito:
+    `incoming` se arma sobre un set de strings, cuyo orden Python randomiza POR PROCESO."""
+    incoming = {"zeta": 0, "alfa": 0, "unpaper": 0, "unastar": 0, "unamatriz": 0,
+                "index": 0, "linkeada": 3}
+    kinds = {"unpaper": ["paper"], "unastar": ["star"], "unamatriz": ["matrix"],
+             "zeta": ["concept"], "alfa": ["concept"], "linkeada": ["concept"]}
+    assert lint.check_orphans(incoming, kinds, set()) == ["alfa", "zeta"]
+    assert lint.check_orphans(incoming, kinds, {"alfa"}) == ["zeta"], "lo referenciado no es huérfano"
+
+
+def test_check_star_without_ground_truth_es_backlog_no_bloqueante(toy_vault):
+    """#396 — el barrido del espejo lo maneja el JSON, así que una ficha SIN archivo no la miraba
+    nadie: se le podían inventar `teff_K`, `P_rot_days` o planetas enteros con el lint en verde."""
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"})
+    assert lint.check_star_without_ground_truth({"test_star"}) == []
+    filas = lint.check_star_without_ground_truth(set())
+    assert len(filas) == 1 and "fetch_ground_truth.py test_star" in filas[0][1]
+
+
+def test_check_unsynthesized_exige_MOTIVO_y_no_acepta_la_marca_pelada(toy_vault):
+    """#396/#75/INV-45 — el modo de falla es OMISIÓN, que no deja rastro. La escotilla es
+    `no_sintetizado: <motivo>`, y las dos guardas que sobrevivían son las que impiden cerrar el
+    hallazgo con una marca sin contenido: el string vacío y el `true` pelado. Un motivo es TEXTO;
+    cualquier otra cosa es la marca que la doc dice seguir reportando.  @inv INV-45"""
+    S = lint._SIN_MARCA
+    assert lint.check_unsynthesized([("2001X", S)], {"2001X"}) == [], "citado ⇒ sintetizado"
+    filas = lint.check_unsynthesized([("2001X", S)], set())
+    assert len(filas) == 1 and "no está citado" in filas[0][1]
+    assert lint.check_unsynthesized([("2001X", "regla de poda")], set()) == []
+    for marca in ("", "   ", True, 3, ["x"], "true", "sí", "SI", "yes"):
+        filas = lint.check_unsynthesized([("2001X", marca)], set())
+        assert len(filas) == 1 and "sin motivo" in filas[0][1], (marca, filas)
+
+
+def test_check_contraste_pendiente_solo_donde_el_contraste_es_POSIBLE(toy_vault):
+    """#396/#101 — el paso 3b no deja producto si falta, así que la red es la fila vacía de la
+    plantilla. Sólo se pide con ≥2 papers extraídos citados: con uno no hay contra qué contrastar y
+    el hallazgo sería ruido fijo. Y la sección BORRADA es la escotilla declarada, no un hallazgo."""
+    plantilla = (f"\n{lint.INVENTARIO_HEADER}\n\n| Eje | Paper | Dice | Método |\n"
+                 "|---|---|---|---|\n|  |  |  |  |\n")
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"},
+            plantilla + "\n[[2001X]] y [[2002Y]]\n")
+    extracted = [("2001X", lint._SIN_MARCA), ("2002Y", lint._SIN_MARCA)]
+    filas = lint.check_contraste_pendiente(extracted)
+    assert len(filas) == 1 and "2 paper(s) extraídos" in filas[0][1]
+    assert lint.check_contraste_pendiente([("2001X", lint._SIN_MARCA)]) == [], "con uno, no"
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"},
+            "\n[[2001X]] y [[2002Y]]\n")
+    assert lint.check_contraste_pendiente(extracted) == [], "sección borrada = escotilla declarada"
+
+
+def test_las_dos_categorias_dangling_comparten_la_regla_y_difieren_en_SEVERIDAD(toy_vault):
+    """#396/#243/#348 — `check_dangling_thesis` bloquea y `check_dangling_methods` es backlog, y la
+    asimetría es real: un `thesis_links` nombra un concepto que `ingest-theme` CREA en la misma
+    operación que lo siembra, mientras que `methods` lo puebla la extracción de `ingest-star`, que
+    no crea conceptos. Lo que NO difiere es qué cuenta como destino: las dos reciben el MISMO
+    predicado."""
+    refs = {"shift-vs-shape": {"2001X", "2002Y", "2003Z", "2004W"}}
+    ninguno = lambda _n: True          # noqa: E731 — el predicado, explícito
+    filas = lint.check_dangling_thesis(refs, ninguno)
+    assert len(filas) == 1 and "usado en 4 paper(s)" in filas[0][1] and "…" in filas[0][1]
+    filas = lint.check_dangling_methods(refs, ninguno)
+    assert len(filas) == 1 and "sin nota en `concepts/`" in filas[0][1]
+    assert lint.check_dangling_thesis(refs, lambda _n: False) == []
+    assert lint.check_dangling_methods(refs, lambda _n: False) == []
+
+
+def test_check_alias_collisions_reporta_y_no_resuelve(toy_vault):
+    """#396/#245 — cuál concepto denota un nombre es curación: elegir en silencio decide por el
+    usuario (regla de método 5). El roll-up resuelve al primero alfabético y eso se DICE."""
+    assert lint.check_alias_collisions() == []
+    mk_note(cfg.CONCEPTS / "methods", "pca", {"tags": ["concept"], "name": "PCA",
+                                              "aliases": ["descomposicion"]})
+    mk_note(cfg.CONCEPTS / "methods", "ica", {"tags": ["concept"], "name": "ICA",
+                                              "aliases": ["descomposicion"]})
+    filas = lint.check_alias_collisions()
+    assert len(filas) == 1 and "ica, pca" in filas[0][0] and "decidí cuál lo denota" in filas[0][1]
+
+
+def test_check_methods_spelling_collisions_nombra_las_grafias(toy_vault):
+    """#396/#243 — el mismo método escrito de dos maneras no es deuda de ingesta: es ruido que
+    infla el backlog. Se reporta NOMBRANDO las grafías, no el conteo. ⛔ Los SINÓNIMOS no se juntan:
+    eso es juicio, y a veces son cosas distintas."""
+    assert lint.check_methods_spelling_collisions({"PCA": {"2001X"}}) == []
+    assert lint.check_methods_spelling_collisions({"gls": {"a"}, "periodograma-gls": {"b"}}) == [], \
+        "sinónimos: distinta clave, y juntarlos sería juicio"
+    filas = lint.check_methods_spelling_collisions({"SysRem": {"a"}, "sysrem": {"b"},
+                                                   "SYSREM": {"c"}})
+    assert len(filas) == 1 and "3 grafías" in filas[0][1]
+    assert all(g in filas[0][1] for g in ("SysRem", "sysrem", "SYSREM"))
+
+
+def test_check_dangling_disputes_pide_que_el_ref_sea_una_NOTA_DE_PAPER(toy_vault):
+    """#396 — el bibcode que sostiene una posición tiene que existir COMO NOTA DE PAPER: si no, la
+    disputa no es trazable. Que exista una nota con ese nombre no alcanza — tiene que ser un paper,
+    o la posición apunta a un concepto y la cita no lleva a ninguna fuente."""
+    refs = [("test_star", "P_rot", "2001X")]
+    assert lint.check_dangling_disputes(refs, {"2001X"}, {"2001X": ["paper"]}) == []
+    filas = lint.check_dangling_disputes(refs, set(), {})
+    assert len(filas) == 1 and "ref `2001X` sin nota de paper" in filas[0][1]
+    assert len(lint.check_dangling_disputes(refs, {"2001X"}, {"2001X": ["concept"]})) == 1
+
+
+def test_check_objective_placeholder_calla_si_el_objetivo_no_se_pudo_LEER(toy_vault):
+    """#396/INV-57 — la guarda que sobrevivía: con el objetivo ILEGIBLE no se opina. `not obj_err`
+    separa «el objetivo sigue siendo el del template» de «no se pudo leer», que es `not_evaluated`
+    (D-43) — un WARN sobre un archivo que nadie pudo abrir es un veredicto inventado.  @inv INV-57"""
+    obj = cfg.load_objective()
+    write_yaml(cfg.OBJECTIVE_YAML, {**obj, "name": "Mi bóveda de verdad"})
+    assert lint.check_objective_placeholder(None) == []
+    write_yaml(cfg.OBJECTIVE_YAML, {**obj, "name": cfg.DEFAULT_OBJECTIVE_NAME})
+    filas = lint.check_objective_placeholder(None)
+    assert len(filas) == 1 and "placeholder del template" in filas[0][1]
+    assert lint.check_objective_placeholder("el YAML no parsea") == []
