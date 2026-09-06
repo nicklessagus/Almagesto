@@ -135,6 +135,21 @@ def doi_agency(doi: str) -> str:
     return ra if ra in ("crossref", "datacite") else "doi"
 
 
+def _utf8(r) -> str:
+    """The body decoded as UTF-8 explicitly, never `r.text` (#419).
+
+    ⛔ `requests` decodes `.text` with the charset of the header and, when the response does not
+    declare one, it GUESSES. Crossref's BibTeX export declares none, so `.text` came back as
+    Windows-1252: measured on a real vault, **17 of 30** Crossref entries were stored with mojibake
+    and **2 of them in the author field** — `Hyv{\"a}rinen` is the surname that gets PRINTED in the
+    bibliography of whoever cites from the vault. #397 says the entry is brought VERBATIM from the
+    official export; a badly decoded export is not verbatim.
+
+    `errors="replace"` rather than raising: a mangled byte should degrade one character, not throw
+    away an entry that is otherwise correct — and the mojibake detector of the lint sees it."""
+    return (r.content or b"").decode("utf-8", errors="replace")
+
+
 def doi_bibtex(doi: str) -> tuple:
     """`(entrada, fuente)` por content negotiation contra `doi.org`, o `("", "")`.
 
@@ -147,7 +162,7 @@ def doi_bibtex(doi: str) -> tuple:
         return "", ""
     if not r.ok or BIBTEX_CT not in (r.headers.get("Content-Type") or ""):
         return "", ""
-    entrada = (r.text or "").strip()
+    entrada = _utf8(r).strip()
     return (entrada + "\n", doi_agency(doi)) if entrada.startswith("@") else ("", "")
 
 
@@ -159,7 +174,7 @@ def arxiv_bibtex(arxiv_id: str) -> str:
         r.raise_for_status()
     except requests.RequestException:
         return ""
-    entrada = (r.text or "").strip()
+    entrada = _utf8(r).strip()
     return entrada + "\n" if entrada.startswith("@") else ""
 
 

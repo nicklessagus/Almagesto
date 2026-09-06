@@ -1253,10 +1253,19 @@ def fill_abstracts(*, dry_run: bool = False) -> int:
     import openalex
     notes = cfg.note_paths(cfg.PAPERS)
     poblacion = [d for d in notes if cfg.abstract_pending(d.read_text(encoding="utf-8"))]
-    puestos, sin_doi, sin_abstract, fallo = 0, 0, 0, 0
+    puestos, sin_doi, sin_abstract, fallo, no_tiene = 0, 0, 0, 0, 0
     for dest in poblacion:
         text = dest.read_text(encoding="utf-8")
-        doi = str((cfg.split_fm(text) or {}).get("doi") or "").strip()
+        fm = cfg.split_fm(text) or {}
+        # ⛔ #417 — «la fuente NO LO TIENE» no es «falta la copia de catálogo». Un capítulo que
+        # arranca en «1. Introduction» no tiene abstract, y OpenAlex devuelve igual el arranque de
+        # la introducción para ese DOI: llenarlo fabrica una sección. Es el simétrico de
+        # `sin_conclusiones` (#277), que existía para el mismo caso del otro lado.
+        if (motivo := str(fm.get("sin_abstract_motivo") or "").strip()):
+            cfg.print_seguro(f"  · {dest.stem}: la fuente no lo tiene ({motivo}) — no se llena")
+            no_tiene += 1
+            continue
+        doi = str(fm.get("doi") or "").strip()
         if not doi:
             sin_doi += 1
             continue
@@ -1274,7 +1283,20 @@ def fill_abstracts(*, dry_run: bool = False) -> int:
             cfg.print_seguro(f"  {dest.stem}: {len(abstract)} chars en OpenAlex (dry-run)")
             puestos += 1
             continue
-        if _reemplazar_seccion(dest, "## Abstract", abstract):
+        # ⛔ #417 — se reemplaza EL PLACEHOLDER, nunca el encabezado. `_reemplazar_seccion` toma la
+        # sección entera desde su `## `, así que pasarle sólo el texto se llevaba el encabezado y
+        # dejaba el abstract huérfano: las 9 notas que la primera versión llenó pasaron a BLOQUEAR
+        # el lint por «paper sin `## Abstract`» (#124), con el lint en 0 antes de correr el flag.
+        # Es lo que el cosechador ya hacía bien y esta rama no copió.
+        i = cfg.section_start(text, "## Abstract")
+        nuevo = text[:i] + text[i:].replace(cfg.ABSTRACT_PLACEHOLDER, abstract, 1)
+        # La red de #222: se re-parsea y no se escribe si la escritura rompió lo que prometía.
+        if cfg.section_start(nuevo, "## Abstract") < 0 or cfg.abstract_pending(nuevo):
+            cfg.print_seguro(f"  ⚠ {dest.stem}: el reemplazo no dejó un `## Abstract` legible — "
+                             f"no se escribe")
+            continue
+        if nuevo != text:
+            cfg.write_text_atomic(dest, nuevo)
             puestos += 1
     cfg.print_seguro(f"abstracts: {puestos} de {len(poblacion)} notas con placeholder recuperaron "
                      f"su abstract de catálogo{' (dry-run)' if dry_run else ''} "
@@ -1283,7 +1305,8 @@ def fill_abstracts(*, dry_run: bool = False) -> int:
     # conseguir el PDF, o volver a correr.
     for n, motivo in ((sin_doi, "sin `doi` en el frontmatter: no hay por dónde preguntar"),
                       (sin_abstract, "el catálogo no lo tiene: el placeholder es correcto"),
-                      (fallo, "la red falló: NO es «no lo tiene» — volvé a correr")):
+                      (fallo, "la red falló: NO es «no lo tiene» — volvé a correr"),
+                      (no_tiene, "la FUENTE no lo tiene (`sin_abstract_motivo`): está correcto")):
         if n:
             cfg.print_seguro(f"  · {n} — {motivo}")
     return 0
@@ -4276,6 +4299,8 @@ def main() -> int:
                     help="#395: re-estampa `vistas[].lente` y backfillea las líneas de eje desde la "
                          "extracción versionada (la lente son los ejes que se PREGUNTARON, no los "
                          "vigentes al cosechar). No requiere slug.")
+    ap.add_argument("--dry-run", action="store_true", dest="dry_run",
+                    help="sólo con --fill-abstracts: dice qué llenaría y no escribe nada")
     ap.add_argument("--restamp-transcribed-note", action="store_true", dest="restamp_transcribed",
                     help="#416: la línea sobre un `## Abstract` transcrito del PDF deja de afirmar "
                          "un `sin_abstract` que el frontmatter no declara")
@@ -4347,6 +4372,10 @@ def main() -> int:
     ap.add_argument("--reason", dest="pending_motivo",
                     help="(--web --pending) POR QUÉ está pendiente y quién la consigue (obligatorio)")
     args = ap.parse_args()
+    if args.dry_run and not args.fill_abstracts:
+        # Una perilla que sólo aplica a un modo lo DICE, en vez de no hacer nada en los otros: un
+        # `--dry-run` ignorado en silencio se lee como «no escribió» sobre una corrida que escribió.
+        ap.error("--dry-run sólo aplica a --fill-abstracts")
 
     if args.restamp_pdf_links:
         return restamp_pdf_links()

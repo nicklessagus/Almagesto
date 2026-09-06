@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.245.2"
+ALMAGESTO_VERSION = "1.246.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1782,7 +1782,36 @@ LOG_SUPERSEDED_MARK = "⚠ corregido"
 BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv")
 
 
-_BIBTEX_FIELD_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_-]*)\s*=\s*(.+?),?\s*$", re.M)
+def _bibtex_chunks(body: str) -> list:
+    """The `campo = valor` chunks of an entry, split on the commas at brace depth ZERO (#418).
+
+    ⛔ Not line-anchored, which is what the first implementation was: ADS and DataCite export one
+    field per line and **Crossref exports the whole entry on ONE line**, so the regex returned `{}`
+    for every Crossref entry — and `check_paper_bibtex` reads an empty parse as agreement («what
+    one of the two does not say is not a discrepancy»). Measured on a real vault: **30 of 30**
+    Crossref entries came back with no `year`, `doi` or `title`, so the drift check of #397 was
+    blind on that whole population — the falso limpio of D-43 inside the check created to avoid
+    producing one. The `}` that closes the entry ends the scan; quotes are honoured so a `,` inside
+    `"…"` does not split."""
+    out, buf, depth, quoted = [], [], 0, False
+    for ch in body:
+        if quoted:
+            quoted = ch != '"'
+        elif ch == '"':
+            quoted = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            if depth == 0:
+                break                     # el `}` que cierra la entrada
+            depth -= 1
+        elif ch == "," and depth == 0:
+            out.append("".join(buf))
+            buf = []
+            continue
+        buf.append(ch)
+    out.append("".join(buf))
+    return [c for c in (x.strip() for x in out) if c]
 
 
 def bibtex_fields(entry: str) -> dict:
@@ -1796,8 +1825,13 @@ def bibtex_fields(entry: str) -> dict:
     sale como está, y el chequeo que lo consume compara **normalizado** o no compara."""
     out: dict = {}
     cuerpo = entry.split("{", 1)[1] if "{" in entry else entry
-    for m in _BIBTEX_FIELD_RE.finditer(cuerpo):
-        campo, valor = m.group(1).casefold(), m.group(2).strip().rstrip(",").strip()
+    for chunk in _bibtex_chunks(cuerpo):
+        if "=" not in chunk:
+            continue                      # la citekey (`@article{Yang_2007,`) no es un campo
+        campo, valor = chunk.split("=", 1)
+        campo, valor = campo.strip().casefold(), valor.strip().rstrip(",").strip()
+        if not campo or not campo[0].isalpha():
+            continue
         if campo in out:
             continue                      # la primera gana: una entrada bien formada no repite
         if valor[:1] in ("{", '"') and valor[-1:] in ("}", '"'):

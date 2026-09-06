@@ -186,6 +186,10 @@ portadores:
       «Todavía tiene el placeholder» es UNA condición: la sección `## Abstract` existe y su cabeza
       sigue llevando `ABSTRACT_PLACEHOLDER`. Distingue el schema viejo —sin sección, que arregla
       `--restamp-abstracts`— del hueco de contenido, y un abstract real no se pisa nunca.
+      ⛔ Y quien la usa para LLENAR reemplaza el PLACEHOLDER, nunca el encabezado (#417): tomar la
+      sección entera desde su `## ` deja el texto huérfano y la nota pasa a violar el bloqueante de
+      #124 — medido, 9 de 9 notas llenadas se volvieron bloqueantes con el lint en 0 antes de
+      correr el flag. El cosechador ya lo hacía bien; la rama nueva no lo copió.
     funcion: lib_config.abstract_pending
     patron: 'ABSTRACT_PLACEHOLDER'
     consumidores:
@@ -328,3 +332,54 @@ portadores:
         motivo: >-
           Usa `split_blocks` para el `Block.kind` de la exención del `log` (#387); otra regla sobre
           el mismo insumo.
+
+  - issue: 418
+    regla: >-
+      La exportación oficial se parsea sea cual sea su forma: ADS y DataCite escriben un campo por
+      línea y Crossref la entrada ENTERA en una sola, así que los campos se cortan por las comas a
+      profundidad CERO de llaves y no por línea. Un parseo vacío se lee como acuerdo aguas abajo,
+      así que un parser ciego apaga el chequeo en vez de reportarlo (30 de 30 entradas `crossref`).
+    funcion: lib_config.bibtex_fields
+    patron: 'bibtex'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          `check_paper_bibtex` (#397) compara frontmatter contra exportación; era el chequeo que
+          quedaba ciego sobre toda la población de Crossref.
+      - modulo: scripts/check_sources.py
+        estado: usa
+        motivo: El cruce de #392/#353 lee el `.bib` del usuario con el mismo parser.
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: >-
+          TRAE la exportación y no la parsea — su contrato es guardarla verbatim (#397). Que el
+          formato de una línea llegue intacto es asunto suyo; interpretarlo, del comparador.
+      - modulo: scripts/ingest_star.py
+        estado: fuera-de-alcance
+        motivo: Nombra el paso `fetch_bibtex` en la cadena; no toca el formato.
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: Ídem.
+
+  - issue: 419
+    regla: >-
+      El cuerpo de una respuesta HTTP que se guarda como TEXTO se decodifica UTF-8 explícito.
+      `requests` decodifica `.text` con el charset del header y, si no viene, ADIVINA: Crossref
+      sirve `application/x-bibtex` sin charset (verificado con `curl -D`) y volvía Windows-1252 —
+      17 de 30 entradas guardadas con mojibake, 2 en el campo `author`, que es el apellido que sale
+      impreso en la bibliografía de quien cite desde la bóveda.
+    funcion: fetch_bibtex._utf8
+    patron: 'r\.text|resp\.text|\.text or'
+    consumidores:
+      - modulo: scripts/search_arxiv.py
+        estado: fuera-de-alcance
+        motivo: >-
+          arXiv SÍ declara `charset=utf-8` (medido el 2026-09-06 con `curl -D`), así que `.text` no
+          adivina. Fuera de alcance por medición, no por suposición — si el servicio dejara de
+          declararlo, esto es lo que hay que volver a medir.
+      - modulo: scripts/query_ads.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Usa `resp.text` sólo para recortar 200 caracteres en un mensaje de error; no guarda ese
+          texto en la bóveda. Los demás carriles de ADS consumen `r.json()`, que decodifica solo.

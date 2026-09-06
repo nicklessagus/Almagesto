@@ -578,6 +578,10 @@ es justo donde la fuente afirma **de más**: una vista construida desde ahí se 
 `make_notes.py --fill-abstracts` (OpenAlex por `doi`). Para una nota `pending_source` es el **único**
 camino —sin PDF no hay extracción que la complete—, o sea que el placeholder era permanente justo en
 la población donde el abstract es todo lo que hay (medido: 29 con placeholder, 10 recuperables).
+⛔ Reemplaza **el placeholder, nunca el encabezado** (#417: 9 de 9 notas llenadas pasaron a violar el
+bloqueante de arriba), y respeta **`sin_abstract_motivo`** —el simétrico de `sin_conclusiones`: un
+capítulo que arranca en «1. Introduction» **no tiene** abstract, y el catálogo devuelve igual el
+arranque de la introducción para ese DOI—.
 
 ⛔ **Y la nota lleva tres AYUDAS DE LECTURA (#124): `## Traducción del abstract`, `## Conclusiones` y
 `## Traducción de las conclusiones`.** La **vista** es lenteada —dice qué aporta el paper *a ese

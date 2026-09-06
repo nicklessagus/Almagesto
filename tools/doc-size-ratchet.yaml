@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-06"
-techo_lineas: 1759
-techo_bytes: 141662
+techo_lineas: 1764
+techo_bytes: 142102
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -290,3 +290,13 @@ crecimientos:
       cada una; el caso completo vive en su issue.
     techo_lineas: 1759
     techo_bytes: 141662
+  - fecha: "2026-09-06"
+    ancla: "#417"
+    motivo: >-
+      Cinco líneas sobre la regla que la primera versión de #413 rompió y que un agente necesita
+      antes de correr el flag o de declarar una fuente sin abstract: se reemplaza el PLACEHOLDER y
+      nunca el encabezado (9 de 9 notas llenadas pasaron a violar un bloqueante), y
+      `sin_abstract_motivo` es el simétrico de `sin_conclusiones` — «la fuente no lo tiene» no es
+      «falta la copia de catálogo», y el catálogo devuelve igual el arranque de la introducción.
+    techo_lineas: 1764
+    techo_bytes: 142102

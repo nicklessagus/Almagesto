@@ -1999,37 +1999,37 @@
   {
    "number": 402,
    "title": "proposals.py: scope_requests() lee `hueco` con as_list() y devuelve 0 SIEMPRE — falso limpio sobre 206 extracciones",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 403,
    "title": "El fan-out de verify tiene generador y barrera pero NO escritor del hermano .verif.md — y lib_blocks.source_hash() hashea un PDF como texto sin avisar",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 404,
    "title": "El SLUG del sujeto vuelve dentro de `methods` en la extracción (19 de 206), y el lint lo reporta como «el mismo método con 2 grafías»",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 405,
    "title": "`extraction_prompt` resuelve el PDF entre slugs (#305) pero el `.txt` NO: el prompt dice «no hay índice» sobre 26 de 208 pares que sí lo tienen bajo otro slug",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 406,
    "title": "El aviso de #389 sólo ve `[[bibcode]]` AGREGADOS: un empalme que agrega PROSA pasa mudo por `apply_fixes`, `contrast --validar-todo` y `lint --cierre`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 407,
    "title": "Una ronda de verify ACOTADA no puede pasar la barrera: `verify_fanout` sólo genera rondas completas, y #282 prescribe justamente la acotada",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 408,
    "title": "«Un bloque, un hecho» como categoría del lint (medido: los defectos-al-corregir caen en los bloques más largos de la bóveda) — y `apply_fixes` no puede PARTIR un bloque",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 409,
@@ -2039,17 +2039,17 @@
   {
    "number": 410,
    "title": "#404 aplica la regla al REVÉS en todo tema cuyo slug ES el nombre del método: descarta 24 grafías legítimas contra 19 defectos reales",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 411,
    "title": "#406 shippeó sin las guardas MEDIDAS: 407 de 533 hits son ruido de tres causas ya cuantificadas, y 339 son «más» sin tilde",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 412,
    "title": "#403 cerró sin entrada en portadores.yaml, y hay un SEGUNDO escritor del hermano: `make_notes` llama a `render_verif_sidecar` directo",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 413,
@@ -2064,11 +2064,26 @@
   {
    "number": 415,
    "title": "El carril `sources:` no puede declarar `pdf_source`: 38 PDFs que trajo el usuario quedan «procedencia desconocida», y el campo NO es re-derivable para esa población",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 416,
    "title": "La línea que  estampa sobre el  afirma que la nota «declara `sin_abstract`» — y es FALSO en 26 de las 27 notas que la llevan",
+   "state": "CLOSED"
+  },
+  {
+   "number": 417,
+   "title": "#413 (`--fill-abstracts`) BORRA el encabezado `## Abstract` al llenar: las 9 notas que llenó pasan a BLOQUEAR el lint — y llena un capítulo que su propia vista dice que no tiene abstract",
+   "state": "OPEN"
+  },
+  {
+   "number": 418,
+   "title": "bibtex_fields no parsea el export de Crossref (30 de 30 devuelven {}): el chequeo de #397 es CIEGO en toda cita de Crossref, y por eso el año online-first de #414 sigue invisible",
+   "state": "OPEN"
+  },
+  {
+   "number": 419,
+   "title": "fetch_bibtex guarda el export de Crossref con MOJIBAKE (17 de 30, 2 en nombres de autor): r.text adivina Windows-1252 porque la respuesta no declara charset",
    "state": "OPEN"
   }
  ]

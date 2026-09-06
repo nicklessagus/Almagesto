@@ -3278,3 +3278,40 @@ def test_declared_pdf_sources_junta_lo_declarado_y_rechaza_lo_que_no_es_vocabula
     assert "fuera del vocabulario" in capsys.readouterr().out, "el typo se NOMBRA, no se calla"
     monkeypatch.setattr(cfg, "load_themes", lambda: {})
     assert cfg.declared_pdf_sources() == {}
+
+
+#: Exportación REAL de Crossref para `10.1002/hbm.20432`, traída con
+#: `curl -H "Accept: application/x-bibtex" https://doi.org/10.1002/hbm.20432` el 2026-09-06.
+#: Regla de método nº 1: el parser se prueba contra lo que el servicio manda, no contra un doble
+#: multilínea que el parser ya entendía — que es exactamente cómo #397 pasó ciego sobre Crossref.
+CROSSREF_REAL = """@article{Yang_2007, title={Ranking and averaging independent component analysis by reproducibility (RAICAR)}, volume={29}, ISSN={1097-0193}, url={http://dx.doi.org/10.1002/hbm.20432}, DOI={10.1002/hbm.20432}, number={6}, journal={Human Brain Mapping}, publisher={Wiley}, author={Yang, Zhi and LaConte, Stephen and Weng, Xuchu and Hu, Xiaoping}, year={2007}, month=June, pages={711–725} }"""
+
+
+def test_bibtex_fields_parsea_el_export_de_UNA_LINEA_de_crossref():
+    """#418 — ADS y DataCite exportan un campo por línea; Crossref exporta la entrada ENTERA en una
+    sola. El regex anclado a línea devolvía `{}`, y `check_paper_bibtex` lee un parseo vacío como
+    ACUERDO («lo que una de las dos no dice no es una discrepancia»), así que el chequeo de #397
+    estaba ciego sobre toda esa población: 30 de 30 entradas `crossref` sin `year`, `doi` ni
+    `title` en una bóveda real. El falso limpio de D-43 dentro del chequeo creado para no
+    producirlo."""
+    f = cfg.bibtex_fields(CROSSREF_REAL)
+    assert f["year"] == "2007", "el año online-first que #414 dejó invisible"
+    assert f["doi"] == "10.1002/hbm.20432"
+    assert f["title"].startswith("Ranking and averaging independent component analysis")
+    assert f["author"].startswith("Yang, Zhi and LaConte")
+    assert f["pages"] == "711–725", "y el guión largo, que es lo que #419 corrompía"
+
+
+def test_bibtex_fields_sigue_parseando_el_MULTILINEA_y_la_coma_protegida():
+    """La otra mitad de la población (ADS, DataCite) no se puede romper al arreglar la primera, y
+    una coma DENTRO de llaves o comillas no parte un campo: `title = "{A Jupiter-mass companion, at
+    last}"` es un campo, no dos."""
+    ads = ('@ARTICLE{2000Mayor,\n'
+           '       author = {{Mayor}, Michel and {Queloz}, D.},\n'
+           '        title = "{A Jupiter-mass companion, at last}",\n'
+           '         year = 2000,\n'
+           '        pages = {355-359},\n}')
+    f = cfg.bibtex_fields(ads)
+    assert f["title"] == "A Jupiter-mass companion, at last", "la coma protegida no parte el campo"
+    assert f["author"] == "Mayor, Michel and Queloz, D." and f["year"] == "2000"
+    assert cfg.bibtex_fields("") == {} and cfg.bibtex_fields("@article{solo_la_clave}") == {}

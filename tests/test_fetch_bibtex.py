@@ -26,8 +26,14 @@ ENTRADA_ADS = ('@ARTICLE{1995Natur.378..355M,\n'
 
 
 class Resp:
+    """⚠ Lleva `content` Y `text`, como una respuesta de verdad (regla de método nº 2). El doble
+    viejo tenía sólo `text`, así que el carril que ahora decodifica `content` explícito (#419) no
+    tenía cómo probarse contra él — el bug vivía exactamente en la diferencia de contrato entre el
+    doble y lo real, que es el modo de falla que esa regla nombra."""
+
     def __init__(self, status=200, payload=None, text="", ct=""):
         self.status_code, self._payload, self.text = status, payload, text
+        self.content = text.encode("utf-8")
         self.headers = {"Content-Type": ct}
 
     @property
@@ -472,3 +478,37 @@ def test_el_titulo_EXACTO_con_autor_distinto_sale_como_DUDOSO(monkeypatch, tmp_p
     salida = capsys.readouterr().out
     assert "DUDOSO" in salida and "10.5772/52324" in salida, salida
     assert "sin BibTeX (campo VACÍO" not in salida, "no se entierra entre los huecos"
+
+
+def test_el_export_se_decodifica_UTF8_explicito_no_por_adivinanza(monkeypatch):
+    """#419 — Crossref sirve `application/x-bibtex` SIN charset (verificado el 2026-09-06 con
+    `curl -D`), y `requests` entonces ADIVINA: `.text` volvía Windows-1252 y el guión largo de
+    `pages={711–725}` quedaba `711â€“725`. #397 dice que la entrada se trae VERBATIM de la
+    exportación oficial, y una exportación mal decodificada no es verbatim.
+
+    Medido en una bóveda real: 17 de 30 entradas `crossref` con mojibake y **2 en el campo
+    `author`** — `Hyv{\\"a}rinen` es el apellido que sale IMPRESO en la bibliografía de quien cite
+    desde la bóveda."""
+    utf8 = '@article{X, author={Hyv{\\"a}rinen, Aapo}, pages={711–725} }'.encode("utf-8")
+
+    class _R:                       # lo que `requests` entrega cuando el header no declara charset
+        content = utf8
+        text = utf8.decode("cp1252")          # la adivinanza: así se veía antes
+        ok = True
+        headers = {"Content-Type": fb.BIBTEX_CT}
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+    r = _R()
+    assert "â€“" in r.text, "el doble reproduce la adivinanza que el bug tenía"
+    assert fb._utf8(r) == utf8.decode("utf-8")
+    assert "711–725" in fb._utf8(r) and "â€“" not in fb._utf8(r)
+
+    monkeypatch.setattr(fb.requests, "get", lambda *a, **k: r)
+    monkeypatch.setattr(fb, "doi_agency", lambda doi: "crossref")
+    entrada, fuente = fb.doi_bibtex("10.1/a")
+    assert "711–725" in entrada and fuente == "crossref"
+    assert "â€“" not in entrada, "y el carril entero, no sólo el helper"
+    assert "711–725" in fb.arxiv_bibtex("2201.01234"), "el carril de arXiv, igual"

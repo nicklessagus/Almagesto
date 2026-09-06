@@ -5385,7 +5385,11 @@ def test_fill_abstracts_completa_desde_el_CATALOGO_no_desde_el_PDF(toy_vault, mo
         "10.1/c": {},
     }.get(doi))
     assert mn.fill_abstracts() == 0
-    assert "MLPCA estima" in con.read_text(encoding="utf-8"), "verbatim del catálogo"
+    t_con = con.read_text(encoding="utf-8")
+    assert "MLPCA estima" in t_con, "verbatim del catálogo"
+    # ⛔ #417 — se reemplaza el PLACEHOLDER, no la sección: la primera versión se llevaba el
+    # encabezado y las 9 notas que llenó pasaron a bloquear el lint por «paper sin `## Abstract`».
+    assert cfg.section_start(t_con, "## Abstract") >= 0, "el encabezado sobrevive"
     assert cfg.ABSTRACT_PLACEHOLDER in sin_doi.read_text(encoding="utf-8"), "sin `doi`, no se inventa"
     assert cfg.ABSTRACT_PLACEHOLDER in vacio.read_text(encoding="utf-8"), "el catálogo no lo tiene"
     assert "ya está" in ya.read_text(encoding="utf-8"), "un abstract real no se pisa"
@@ -5433,3 +5437,62 @@ def test_restamp_transcribed_note_backfillea_la_afirmacion_falsa(toy_vault):
     assert "sin_abstract" in con.read_text(encoding="utf-8"), "la que SÍ lo declara conserva la cláusula"
     antes = sin.read_text(encoding="utf-8")
     assert mn.restamp_transcribed_note() == 0 and sin.read_text(encoding="utf-8") == antes
+
+
+def test_fill_abstracts_respeta_la_fuente_que_NO_TIENE_abstract(toy_vault, monkeypatch, capsys):
+    """#417 — «la fuente no lo tiene» no es «falta la copia de catálogo». `2011Naik` es un capítulo
+    que arranca en «1. Introduction», su propia vista lo dice, y OpenAlex devuelve igual el arranque
+    de la introducción para ese DOI: llenarlo FABRICA una sección. Es el simétrico de
+    `sin_conclusiones` (#277), que existía para el mismo caso del otro lado."""
+    d = cfg.PAPERS / "2011Naik.md"
+    d.write_text(f"---\ntags: [paper]\nbibcode: 2011Naik\ndoi: 10.1/a\n"
+                 f"sin_abstract_motivo: el capítulo arranca en «1. Introduction» (p. 1 del PDF)\n"
+                 f"---\n\n## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n", encoding="utf-8")
+    import openalex
+    monkeypatch.setattr(openalex, "entity_by_doi",
+                        lambda doi: pytest.fail("no se le pregunta al catálogo por una fuente "
+                                                "que declara no tener abstract"))
+    assert mn.fill_abstracts() == 0
+    assert cfg.ABSTRACT_PLACEHOLDER in d.read_text(encoding="utf-8")
+    out = capsys.readouterr().out
+    assert "la fuente no lo tiene" in out and "sin_abstract_motivo" in out, \
+        "y sale en su propia categoría: no es deuda (D-43)"
+
+
+def test_fill_abstracts_dry_run_dice_y_NO_escribe(toy_vault, monkeypatch, capsys):
+    """Una operación que va a la red Y escribe merece preview. ⚠ Y `--dry-run` sólo aplica a este
+    modo: pasarlo con otro es un error explícito, porque un `--dry-run` ignorado en silencio se lee
+    como «no escribió» sobre una corrida que sí escribió."""
+    d = cfg.PAPERS / "1997Wentzell.md"
+    d.write_text(f"---\ntags: [paper]\nbibcode: 1997Wentzell\ndoi: 10.1/a\n---\n\n"
+                 f"## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n", encoding="utf-8")
+    antes = d.read_text(encoding="utf-8")
+    import openalex
+    monkeypatch.setattr(openalex, "entity_by_doi",
+                        lambda doi: {"abstract_inverted_index": {"MLPCA": [0]}})
+    assert mn.fill_abstracts(dry_run=True) == 0
+    assert d.read_text(encoding="utf-8") == antes, "no escribe un byte"
+    assert "dry-run" in capsys.readouterr().out
+    monkeypatch.setattr(sys, "argv", ["make_notes.py", "--dry-run", "--restamp-abstracts"])
+    with pytest.raises(SystemExit):
+        mn.main()
+
+
+def test_fill_abstracts_no_escribe_lo_que_ROMPIO_lo_que_prometia(toy_vault, monkeypatch, capsys):
+    """La red de #222 sobre esta escritura: se re-parsea y no se publica si el reemplazo dejó la
+    nota sin un `## Abstract` legible. Es la que faltaba cuando #413 salió y por la que las 9 notas
+    llenadas quedaron bloqueando el lint (#417).
+
+    ⚠ Se ejercita la mitad `abstract_pending`; la otra —`section_start < 0`— es la mitad defensiva
+    y hoy ningún input la alcanza, porque la población ya se filtró por tener la sección. Va
+    declarada: es la red, no una rama de negocio."""
+    d = cfg.PAPERS / "1997Wentzell.md"
+    d.write_text(f"---\ntags: [paper]\nbibcode: 1997Wentzell\ndoi: 10.1/a\n---\n\n"
+                 f"## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n", encoding="utf-8")
+    antes = d.read_text(encoding="utf-8")
+    import openalex
+    monkeypatch.setattr(openalex, "entity_by_doi",
+                        lambda doi: {"abstract_inverted_index": {cfg.ABSTRACT_PLACEHOLDER: [0]}})
+    assert mn.fill_abstracts() == 0
+    assert d.read_text(encoding="utf-8") == antes, "no se escribe"
+    assert "no se escribe" in capsys.readouterr().out, "y se dice cuál"
