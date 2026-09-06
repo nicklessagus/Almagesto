@@ -5,10 +5,18 @@
 # esta sesión encontró cuatro veces (un `assert path.glob(...)` siempre truthy, una guarda cuyo
 # test pasaba sin la guarda, un "espera creciente" que `[2.0, 2.0]` satisface, un test de
 # determinismo corriendo las dos pasadas en el mismo proceso).
-medido_en: "2026-08-31"
-alcance: "TODO `scripts/` (648) + `tools/` (24) = 672 funciones, barrido completo
-  (`--todo --ratchet`, 1.169.0); exento declarado aparte: tools/refresh_issues.py"
-techo: 3
+medido_en: "2026-09-06"
+alcance: "TODO `scripts/` + `tools/` = 860 funciones, barrido completo
+  (`--todo --ratchet`, 1.241.0); exento declarado aparte: tools/refresh_issues.py"
+techo: 2
+
+# RE-MEDIDO EL 2026-09-06 (1.241.0) sobre **860** funciones: **bajó a 2**, y las dos son las mismas
+# de siempre (`citation_index._fetch_ads_default` / `_fetch_oa_default`, los dos fetchers por
+# default que la regla de método 1 manda probar contra el servicio real). La población creció de
+# 672 a 860 en una sesión: #396 partió `lint.collect` en 94 funciones `check_*` —donde antes había
+# UNA que ninguna mutación podía aislar— y a cada una se le escribió su test directo. O sea que el
+# techo bajó **mientras** la población subía 28 %, que es lo contrario de lo que pasa cuando se
+# agrega código sin red.
 
 # ⚠ Los dos campos de arriba se leen JUNTOS: `techo` es el veredicto y `alcance` es la población
 # sobre la que se midió (INV-40). Un `alcance` vencido convierte al techo en un número sin
