@@ -1,0 +1,107 @@
+# ⛔ QUIÉN MÁS LLEVA CADA REGLA — la declaración que `tools/carriers.py --check` gatea.
+#
+# POR QUÉ EXISTE. Cuatro lectores independientes clasificaron los ~400 issues del repo por
+# mecanismo, sin verse entre ellos, y tres nombraron el mismo tema dominante (el cuarto, su causa):
+# **el fix se escribe contra el caso medido y no contra la relación estructural que lo contiene**.
+# Medido: 45 de 100 issues en un tramo, ~50 en otro, 32 en el último, y casi la mitad presentándose
+# con la fórmula literal «#N lo cerró para X y dejó Y igual».
+#
+# ⛔ **Un issue cuyo fix tiene portadores no se cierra sin su entrada acá.** La entrada declara la
+# regla, la ÚNICA función que la implementa, y el `patron` por el que se reconoce a un portador en
+# el código; el gate compara las dos direcciones y **rehúsa** si alguien llama sin estar declarado,
+# si un declarado `usa` no llama (el comentario que dice «delega» y no delega, #347), o si un
+# módulo matchea el patrón y nadie dijo nada de él.
+#
+# CÓMO SE ESCRIBE UNA ENTRADA — la lista NO se escribe de memoria:
+#
+#     python tools/carriers.py --propose lib_config.txt_slug --patron 'FULLTEXT\s*/\s*\w+\s*/'
+#
+# imprime quién LLAMA (van `usa`) y quién MATCHEA y no llama (cada uno `usa` —y se lo hace llamar—
+# o `fuera-de-alcance` CON motivo). El `patron` es la parte que piensa una persona: es la relación
+# estructural escrita, y es lo único que hace que el barrido termine donde termina la clase y no
+# donde el agente dejó de mirar.
+#
+# `fuera-de-alcance` necesita `motivo` por el mismo argumento que el `--reason` del triage: en seis
+# meses sirve el motivo, no la categoría.
+
+portadores:
+  - issue: 405
+    regla: >-
+      Resolver el `.txt` de un bibcode entre TODOS los slugs, no sólo bajo el del sujeto: el paper
+      retro-tagueado tiene su artefacto bajo el slug que lo ingestó primero. Seguro sólo porque
+      D-18/D-20 vigilan que el mismo bibcode no tenga `.txt` distinto entre slugs.
+    funcion: lib_config.txt_slug
+    patron: 'FULLTEXT\s*/\s*\w+\s*/'
+    consumidores:
+      - modulo: scripts/extraction_prompt.py
+        estado: usa
+        motivo: el prompt dice si hay índice y a qué copia apuntan sus `grep`
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: elige contra qué archivo se hashea la fila (`txt:` kind)
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: >-
+          `_resolve_txt_slug` era una SEGUNDA implementación idéntica línea por línea; delega desde
+          1.242.0. Fue el primer hallazgo de este gate.
+      - modulo: scripts/fetch_web.py
+        estado: fuera-de-alcance
+        motivo: >-
+          ESCRIBE el snapshot. Escribir es siempre bajo el slug del sujeto que lo pidió: resolver
+          entre slugs al escribir pisaría la copia de otro sujeto.
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Estampa `fulltext:` por verdad de disco para la nota de ESE slug, y el campo es un puntero
+          relativo a esa copia. Apuntar a la de otro slug haría que el link de la nota no resuelva.
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: >-
+          BORRA los artefactos de un par (paper, sujeto) dropeado. El borrado es por slug por
+          diseño (#112): resolver entre slugs borraría la copia que otro sujeto sí quiere.
+      - modulo: scripts/check_sources.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Lee el SNAPSHOT WEB de una fuente declarada, que `fetch_web` escribe bajo el slug del
+          tema que la declaró y no existe bajo ningún otro: no hay copia ajena que resolver.
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Cuenta los `.txt` de un DIRECTORIO de slug (el universo declarado de una hipótesis, D-34);
+          no resuelve un bibcode, así que la regla no aplica.
+
+  - issue: 305
+    regla: >-
+      Resolver el PDF de un bibcode entre TODOS los slugs — el gemelo de #405, y el que lo produjo:
+      #207 invertido, el prompt mandaba declarar `fuente: abstract` sobre un paper que SÍ está en
+      disco bajo otro sujeto.
+    funcion: lib_config.pdf_slug
+    patron: 'PDFS\s*/\s*\w+\s*/'
+    consumidores:
+      - modulo: scripts/extraction_prompt.py
+        estado: usa
+        motivo: "decide si el prompt manda leer el PDF o declarar `fuente: abstract`"
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "cruza `fuente: pdf` contra el disco y rechaza la extracción que miente (#207)"
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: elige el `pdf:` kind y su hash por bytes
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Ídem `fulltext:`: estampa `pdf:` para la nota de ESE slug y el campo es un puntero
+          relativo a esa copia.
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: borra los artefactos del par dropeado, por slug (#112)
+      - modulo: scripts/check_sources.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Abre la primera página del PDF que la fuente DECLARA en su `pdf:`, para cruzar autor/año
+          (#353). Es el archivo declarado, no una búsqueda por bibcode.
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Copia el PDF local que el usuario declaró en `sources[]` hacia el slug del tema: es una
+          escritura, y el destino es por definición el slug del sujeto.

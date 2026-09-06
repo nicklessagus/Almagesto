@@ -71,14 +71,12 @@ PLACEHOLDER_ABSTRACT = cfg.ABSTRACT_PLACEHOLDER   # #277: una sola definición, 
 def _resolve_txt_slug(bib: str, declarado: str) -> str | None:
     """Which slug actually holds this bibcode's `.txt`, or `None` when no copy exists (#230).
 
-    Prefers the declared one —that is the extractor's claim and, when it holds, the anchor is
-    exact— and falls back to any surviving copy, because the same bibcode legitimately lives under
-    several slugs with identical content. `None` means the vault has no `.txt` for it at all.
+    Delegates to `cfg.txt_slug`, the single implementation of that rule (#405). There used to be
+    TWO of them, written apart and line-by-line identical (prefer the declared slug, else the
+    lowest copy): the repo's largest defect class, and the one `tools/carriers.py` exists to
+    catch. This was, in fact, its first finding.
     """
-    if declarado and (cfg.FULLTEXT / declarado / f"{bib}.txt").exists():
-        return declarado
-    otros = sorted(cfg.FULLTEXT.glob(f"*/{bib}.txt")) if cfg.FULLTEXT.exists() else []
-    return otros[0].parent.name if otros else None
+    return cfg.txt_slug(bib, declarado or None)
 
 
 def pdf_on_disk(bibcode: str) -> bool:

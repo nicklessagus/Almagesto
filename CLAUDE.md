@@ -1649,7 +1649,7 @@ tres techos **sólo bajan** y ninguno es un rojo: son deuda anterior a la conven
 fuera de la lista `conocidos` pone el test en rojo aunque el total no suba (impide que la deuda
 rote). Los números los dan las funciones del test, no esta prosa.
 
-## Al escribir código: las nueve redes (regla permanente)
+## Al escribir código: las diez redes (regla permanente)
 
 Toda función nueva de `scripts/` **y de `tools/`** pasa por esto **antes de cerrar el issue**; la 6
 rige también para los scripts de una sola operación. ⛔ **Las redes 1 y 4 cubren `tools/` (#345,
@@ -1705,7 +1705,19 @@ no verde. Detalle y ratchets en `tests/README.md`; el resumen operativo:
    `docs/trazabilidad.md` afirma una cobertura que no existe. ⚠ Sobre-reporta: ante un
    sobreviviente por coincidencia se marca un test que ejerza la rama verdadera.
 
-Las 2, 5, 7 y 8 corren solas en tier 0; la 1 y la 9 son a pedido (cuestan minutos). El motivo de la
+10. **¿Quién MÁS lleva esta regla?** — `python tools/carriers.py --check` (tier 0). ⛔ **Un issue
+    cuyo fix tiene portadores no se cierra sin su entrada en `tools/portadores.yaml`**: la regla, la
+    ÚNICA función que la implementa, y el `patron` por el que se reconoce a un portador. El gate
+    compara las dos direcciones y rehúsa si alguien llama sin estar declarado, si un declarado `usa`
+    **no** llama (el comentario que dice «delega» y no delega), o si un módulo matchea el patrón y
+    nadie dijo nada de él; `fuera-de-alcance` lleva motivo. La lista no se escribe de memoria:
+    `--propose <modulo.simbolo> --patron <re>` la enumera. Motivo: cuatro lectores clasificaron los
+    ~400 issues del repo por mecanismo sin verse entre ellos y tres nombraron el mismo tema
+    dominante — **el fix se escribe contra el caso medido y no contra la relación que lo contiene**
+    (45 de 100 en un tramo, ~50 en otro, 32 en el último). Su primer hallazgo fue una segunda
+    implementación de `txt_slug`, idéntica línea por línea.
+
+Las 2, 5, 7, 8 y 10 corren solas en tier 0; la 1 y la 9 son a pedido (cuestan minutos). El motivo de la
 regla: en la sesión que la produjo, los bugs los encontraron agentes leyendo el código, no la suite
 — y cada hallazgo era decidible, o sea que podría haber sido un assert.
 

@@ -2030,6 +2030,11 @@
    "number": 408,
    "title": "«Un bloque, un hecho» como categoría del lint (medido: los defectos-al-corregir caen en los bloques más largos de la bóveda) — y `apply_fixes` no puede PARTIR un bloque",
    "state": "OPEN"
+  },
+  {
+   "number": 409,
+   "title": "Red 10: «¿quién MÁS lleva esta regla?» — el gate que cierra la familia más grande del repo (el fix a la instancia, no a la clase)",
+   "state": "OPEN"
   }
  ]
 }

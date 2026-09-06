@@ -240,13 +240,13 @@ env PATH=/tmp/binmin /tmp/cienv/bin/python -m pytest tests/ -q      # sin pdftot
 
 ---
 
-## Las nueve redes que corren al escribir código (regla permanente, 2026-08-24)
+## Las diez redes que corren al escribir código (regla permanente, 2026-08-24)
 
 Salieron de una sesión en la que **los bugs los encontraron agentes leyendo, no la suite**. Cada una
-ataca una clase de defecto que se repitió, y las nueve son deterministas: nada acá depende del
+ataca una clase de defecto que se repitió, y las diez son deterministas: nada acá depende del
 juicio de un modelo.
 
-⚠ **La 9 se agregó el 2026-08-28 (AUD-212); la numeración es la de `CLAUDE.md` §*las nueve redes*,
+⚠ **La 9 se agregó el 2026-08-28 (AUD-212) y la 10 el 2026-09-06 (#409); la numeración es la de `CLAUDE.md` §*las diez redes*,
 que manda (AUD-228: los dos docs tenían la 8 y la 9 cruzadas).** El mapa de `docs/trazabilidad.md` mide *que alguien
 puso la marca*, no que la marca esté sobre código que el test cubre — que es la primera de las dos
 lecciones de método de la pasada `/auditar`. El gate vacía cada implementación marcada `@inv` y
