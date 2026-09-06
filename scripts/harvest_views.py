@@ -493,6 +493,12 @@ class ViewUpsertError(RuntimeError):
     Distinct from «nothing to change», which is the normal idempotent case.  @inv INV-139"""
 
 
+#: #420 · los campos de una vista que dicen que la LECTURA ocurrió — los únicos cuyo reemplazo
+#: bajo `--force` se declara en `previa`. `lente` y `enfasis` describen lo que se PREGUNTÓ, y
+#: corregirlos es una migración (#395), no una lectura nueva.
+CAMPOS_DE_LECTURA = ("fecha", "fuente", "txt")
+
+
 def upsert_view(dest: Path, vista: dict, *, force: bool = False) -> bool:
     """Mergea `vista` en `vistas[]` del frontmatter, por `(sujeto, enfasis)`. True si modificó.
 
@@ -538,7 +544,23 @@ def upsert_view(dest: Path, vista: dict, *, force: bool = False) -> bool:
                     + (f" (lente «{vista['enfasis']}»)" if vista.get("enfasis") else "")
                     + f" ya declara otro valor en {', '.join(sorted(choques))}: si es otra lectura, "
                       f"declarala con su propio `enfasis`; si querés reemplazarla, --force")
-            nuevas.append({**v, **vista} if force else {**vista, **v})
+            # ⛔ Sólo los campos que dicen que la LECTURA ocurrió (D-18). Un `lente` reemplazado
+            # es una migración de lo que se PREGUNTÓ (#395, `--restamp-lente`), no una lectura
+            # nueva: marcarlo con `previa` afirmaría un reemplazo que no hubo, en 209 slots.
+            reemplazo = [k for k in choques if k in CAMPOS_DE_LECTURA]
+            if force and reemplazo:
+                # ⛔ #420 — el reemplazo se DECLARA, no se pisa en silencio. El caso que lo pide es
+                # el ascenso que #207 prescribe: una vista `fuente: abstract` es una lectura
+                # degradada Y DECLARADA, así que cerrar esa degradación —conseguir el PDF y
+                # re-leer— tiene que quedar dicho, con la fecha vieja al lado. Sin esto, la única
+                # huella de que hubo una lectura anterior es que la fecha cambió, y eso es
+                # indistinguible de un re-estampado espurio (D-18: la fecha dice que la lectura
+                # OCURRIÓ).
+                # ⚠ Guarda el estado inmediatamente anterior, no una historia: un ascenso
+                # abstract → pdf pasa una vez, y la traza larga vive en el `log`.
+                nuevas.append({**v, **vista, "previa": {k: v[k] for k in sorted(reemplazo)}})
+            else:
+                nuevas.append({**v, **vista} if force else {**vista, **v})
             visto = True
         else:
             nuevas.append(v)
@@ -587,8 +609,15 @@ def bring_fulltext(slug: str, bibcode: str) -> bool:
     return True
 
 
-def harvest(slug: str, *, theme: bool = False, force: bool = False) -> dict:
-    """Cosecha todas las extracciones de `slug`. Devuelve los contadores del reporte.
+def harvest(slug: str, *, theme: bool = False, force: bool = False,
+            paper: str | None = None) -> dict:
+    """Cosecha las extracciones de `slug` —o sólo la de `paper`—. Devuelve los contadores.
+
+    ⛔ `force` es destructivo por definición (reemplaza `fecha`/`fuente` de una lectura que ya
+    ocurrió), así que tiene alcance por UNIDAD (#420): sin `paper` re-estamparía todas las vistas
+    del slug, incluidas las verificadas — medido, 36/45/21 vistas con fecha en los tres slugs donde
+    hacía falta ascender una sola. Es el mismo alcance que ya tenían `fetch_bibtex --paper` y
+    `check_retractions --paper`.
 
     The source directory is NOT a parameter (AUD-284): this is the only gate that runs
     `is_extraction` (INV-103), and an external `src` would let it harvest from an unversioned
@@ -620,7 +649,16 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False) -> dict:
     # decir nada. AVISA y no rechaza: las dos son artefactos caros (#311) y cuál gana lo decide
     # quien las produjo.
     vistos_par: dict = {}
-    for archivo in sorted(src.glob("*.json")):
+    archivos = sorted(src.glob("*.json"))
+    if paper:
+        # Por el bibcode DE ADENTRO no: el nombre del archivo es la identidad que usa el resto de
+        # la cadena (#228/#374), y un `--paper` que no matchea nada lo DICE (D-43) en vez de
+        # cosechar cero y salir 0 como si no hubiera nada.
+        archivos = [a for a in archivos if a.stem.split("__", 1)[0] == paper]
+        if not archivos:
+            cfg.print_seguro(f"  (sin extracción de `{paper}` en {src}; nada que cosechar)")
+            return n
+    for archivo in archivos:
         try:
             data = json.loads(archivo.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
@@ -766,7 +804,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False) -> dict:
             entrada["refuta"] = refuta
             refutados.append((bib, refuta))
         try:
-            toco = upsert_view(dest, entrada)
+            toco = upsert_view(dest, entrada, force=force)
         except ViewUpsertError as exc:
             # AUD-200 / INV-139 — si la vista no se puede DECLARAR, la sección del cuerpo tampoco
             # se escribe: una `## Vista — X` sin su entrada en `vistas[]` es la incoherencia que el
@@ -836,10 +874,21 @@ def main() -> int:
     ap.add_argument("slug")
     ap.add_argument("--theme", action="store_true", help="el slug es un tema, no una estrella")
     ap.add_argument("--force", action="store_true",
-                    help="reescribe la sección de la vista aunque ya tenga prosa redactada")
+                    help="reescribe la sección de la vista aunque ya tenga prosa redactada, y "
+                         "reemplaza los valores que chocan en `vistas[]` (pedí --paper)")
+    ap.add_argument("--paper", default=None, metavar="BIBCODE",
+                    help="acota la cosecha a esa extracción — el alcance por unidad que `--force` "
+                         "necesita para no re-estampar las vistas ya verificadas del slug (#420)")
     args = ap.parse_args()
-    harvest(args.slug, theme=args.theme, force=args.force)
-    cfg.save_paso(args.slug, "harvest_views", flags=["--force"] if args.force else [])
+    if args.force and not args.paper:
+        # `--force` reemplaza la `fecha` de una lectura que OCURRIÓ (D-18/#188), así que a nivel
+        # slug falsifica la procedencia de todo lo demás. No se prohíbe: se pide el alcance.
+        ap.error("--force sin --paper re-estamparía TODAS las vistas del slug, incluidas las "
+                 "verificadas: acotá con --paper <bibcode>")
+    harvest(args.slug, theme=args.theme, force=args.force, paper=args.paper)
+    cfg.save_paso(args.slug, "harvest_views",
+                  flags=([f"--paper {args.paper}"] if args.paper else [])
+                        + (["--force"] if args.force else []))
     return 0
 
 

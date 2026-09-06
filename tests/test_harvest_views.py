@@ -1101,3 +1101,113 @@ def test_la_linea_del_abstract_transcrito_no_afirma_un_sin_abstract_QUE_NO_ESTA(
     assert "sin_abstract" not in hv.transcribed_note({"sin_abstract": False}), "declarado en falso"
     assert "sin_abstract" in hv.transcribed_note({"sin_abstract": True}), "y cuando SÍ está, se dice"
     assert "no es la copia de catálogo" in hv.transcribed_note({"sin_abstract": True})
+
+
+def test_force_LLEGA_a_upsert_view_y_declara_el_ascenso(toy_vault, capsys):
+    """#420 — `upsert_view` aceptaba `force` y el cosechador lo llamaba SIN pasarlo, así que
+    `harvest_views <slug> --force` rehusaba igual con el flag puesto: un parámetro que ningún flag
+    activa, la forma que este repo ya pagó en #103, #112, #256 y `--dry-run`. El caso que lo
+    destapó es la ruta que #207 prescribe —una vista `fuente: abstract` es una lectura degradada y
+    declarada, y el pedido es conseguir el PDF—: sin esto, no se podía ejecutar.
+
+    Y el reemplazo se DECLARA en `previa`: sin eso la única huella de que hubo una lectura anterior
+    es que la fecha cambió, indistinguible de un re-estampado espurio (D-18)."""
+    vista = {"sujeto": "Estrella Test", "tipo": "star", "txt": "test_star", "fuente": "abstract"}
+    dest = sembrar(toy_vault, extraccion(vista=vista))
+    hv.harvest("test_star")
+    v0 = read_fm(dest)["vistas"][0]
+    assert v0["fuente"] == "abstract" and v0.get("fecha"), v0
+
+    # la lectura del abstract fue hace días: el ascenso tiene que preservar ESA fecha
+    dest.write_text(dest.read_text(encoding="utf-8").replace(v0["fecha"], "2026-08-01"),
+                    encoding="utf-8")
+    # ahora aparece el PDF y el extractor re-lee: la vista ASCIENDE (#207). Sin `--force`, choca.
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / f"{BIB}.pdf").write_bytes(b"%PDF-1.4\n")
+    # ⚠ se reescribe SÓLO el JSON: `sembrar` re-crea la nota, y con la nota nueva no habría choque
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(
+        json.dumps(extraccion(vista={**vista, "fuente": "pdf"})), encoding="utf-8")
+    hv.harvest("test_star")
+    assert read_fm(dest)["vistas"][0]["fuente"] == "abstract", "sin force no pisa"
+    assert "ya declara otro valor" in capsys.readouterr().out
+
+    hv.harvest("test_star", force=True)
+    v1 = read_fm(dest)["vistas"][0]
+    assert v1["fuente"] == "pdf", "con force SÍ reemplaza — antes el flag no llegaba"
+    assert v1["previa"]["fuente"] == "abstract", "y queda dicho de dónde vino (#207)"
+    assert v1["previa"]["fecha"] == "2026-08-01", "con la fecha vieja preservada"
+    assert set(v1["previa"]) == {"fecha", "fuente"}, "sólo los campos que chocaron"
+
+    # ⛔ Y `--force` SIN choque no deja `previa`: un `previa: {}` en cada re-cosecha forzada sería
+    # ruido de diff sobre un artefacto versionado, y diría «hubo un reemplazo» donde no lo hubo.
+    hv.harvest("test_star", force=True)
+    assert "previa" not in {k: v for k, v in read_fm(dest)["vistas"][0].items() if k != "previa"} \
+        or read_fm(dest)["vistas"][0]["previa"] == v1["previa"], "no se re-escribe sin choque"
+
+    # directo sobre la función, que es donde vive la guarda: con `force` y SIN choque, la entrada
+    # se completa y no se marca — `previa: {}` en cada re-cosecha forzada sería ruido de diff sobre
+    # un artefacto versionado, y diría «hubo un reemplazo» donde no lo hubo.
+    d2 = cfg.PAPERS / "2021otr....2E.md"
+    d2.write_text("---\ntags: [paper]\nbibcode: 2021otr....2E\n"
+                  "vistas:\n  - sujeto: Estrella Test\n    tipo: star\n---\n\n# x\n",
+                  encoding="utf-8")
+    assert hv.upsert_view(d2, {"sujeto": "Estrella Test", "tipo": "star",
+                               "fecha": "2026-09-06", "fuente": "pdf"}, force=True) is True
+    v2 = read_fm(d2)["vistas"][0]
+    assert v2["fuente"] == "pdf" and "previa" not in v2, "sin choque no hay `previa`"
+
+    # ⚠ Declarado: la cláusula `force` de `if force and reemplazo:` sobrevive a `--guardas` y va a
+    # seguir sobreviviendo — sin `force`, un `choques` no vacío ya levantó `ViewUpsertError` diez
+    # líneas antes, así que la rama es inalcanzable con `force` en falso (red 8).
+
+
+def test_paper_acota_la_cosecha_a_UNA_extraccion(toy_vault, capsys):
+    """#420 — `--force` reemplaza la `fecha` de una lectura que ocurrió, así que a nivel slug
+    falsifica la procedencia de todo lo demás: medido, 36/45/21 vistas con fecha en los tres slugs
+    donde había que ascender UNA. El alcance por unidad es el que ya tenían `fetch_bibtex --paper`
+    y `check_retractions --paper`."""
+    d1 = sembrar(toy_vault, extraccion())
+    d2 = sembrar(toy_vault, extraccion(bibcode="2021otr....2E"), stem="2021otr....2E")
+    n = hv.harvest("test_star", paper=BIB)
+    assert n["cosechadas"] == 1, n
+    assert read_fm(d1)["vistas"][0].get("fecha"), "la pedida se cosechó"
+    assert not read_fm(d2)["vistas"][0].get("fecha"), "la otra queda con su vista SIN leer"
+    # D-43 — un `--paper` que no matchea nada lo DICE, no cosecha cero y sale como si no hubiera
+    assert hv.harvest("test_star", paper="9999nada")["cosechadas"] == 0
+    assert "sin extracción de `9999nada`" in capsys.readouterr().out
+
+
+def test_force_sin_paper_es_un_ERROR_no_un_barrido(toy_vault, monkeypatch):
+    """No se prohíbe `--force`: se pide el alcance. Correrlo sobre el slug entero re-estampa las
+    vistas verificadas, que es justo lo que el flag no debería poder hacer sin que nadie lo pida."""
+    monkeypatch.setattr(sys, "argv", ["harvest_views.py", "test_star", "--force"])
+    with pytest.raises(SystemExit):
+        hv.main()
+    monkeypatch.setattr(sys, "argv",
+                        ["harvest_views.py", "test_star", "--force", "--paper", "2020ext....1E"])
+    assert hv.main() == 0
+
+
+def test_previa_solo_marca_los_campos_de_LECTURA_no_una_migracion(toy_vault):
+    """#420 — `previa` dice «hubo otra lectura antes», así que sólo la marcan los campos que dicen
+    que la lectura OCURRIÓ (`fecha`, `fuente`, `txt`). `lente` describe lo que se PREGUNTÓ y
+    corregirlo es una migración (#395, `--restamp-lente`, que llama `upsert_view(force=True)` sobre
+    209 slots): marcarlo afirmaría un reemplazo que no hubo.
+
+    ⛔ Lo destapó `carriers.py --check` al firmar la entrada de #420 — `make_notes` llamaba a
+    `upsert_view` y la entrada lo daba por fuera de alcance."""
+    d = cfg.PAPERS / "2021otr....2E.md"
+    base = ("---\ntags: [paper]\nbibcode: 2021otr....2E\nvistas:\n  - sujeto: Estrella Test\n"
+            "    tipo: star\n    fecha: '2026-08-01'\n    fuente: abstract\n    lente:\n"
+            "      - rv\n---\n\n# x\n")
+    d.write_text(base, encoding="utf-8")
+    assert hv.upsert_view(d, {"sujeto": "Estrella Test", "tipo": "star",
+                              "lente": ["rv", "actividad"]}, force=True) is True
+    v = read_fm(d)["vistas"][0]
+    assert v["lente"] == ["rv", "actividad"] and "previa" not in v, "migración, no lectura"
+
+    d.write_text(base, encoding="utf-8")
+    assert hv.upsert_view(d, {"sujeto": "Estrella Test", "tipo": "star",
+                              "fuente": "pdf", "lente": ["rv", "actividad"]}, force=True) is True
+    v = read_fm(d)["vistas"][0]
+    assert set(v["previa"]) == {"fuente"}, "el `lente` reemplazado NO entra en `previa`"

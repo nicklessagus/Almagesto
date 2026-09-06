@@ -361,6 +361,10 @@ portadores:
       - modulo: scripts/ingest_theme.py
         estado: fuera-de-alcance
         motivo: Ídem.
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea por la mención de `fetch_bibtex --paper` en un docstring (#420); no toca BibTeX.
 
   - issue: 419
     regla: >-
@@ -383,3 +387,54 @@ portadores:
         motivo: >-
           Usa `resp.text` sólo para recortar 200 caracteres en un mensaje de error; no guarda ese
           texto en la bóveda. Los demás carriles de ADS consumen `r.json()`, que decodifica solo.
+
+  - issue: 420
+    regla: >-
+      Un `--force` es destructivo por definición, así que (a) el flag TIENE que llegar a la función
+      que decide y (b) el escritor necesita alcance por unidad. `upsert_view` aceptaba `force` y el
+      cosechador lo llamaba sin pasarlo: el flag no hacía nada y la ruta abstract → PDF de #207 no
+      se podía ejecutar. Y el reemplazo se DECLARA en `previa`, con la fecha vieja: si no, la única
+      huella de que hubo otra lectura es que la fecha cambió, indistinguible de un re-estampado
+      espurio (D-18).
+    funcion: harvest_views.upsert_view
+    patron: 'args\.force'
+    consumidores:
+      - modulo: scripts/check_retractions.py
+        estado: fuera-de-alcance
+        motivo: >-
+          decide en `if fm.get('retracted') and not args.force` — el flag está en el punto de decisión. Y tiene `--paper`. Auditado en #420: no tenía el defecto.
+      - modulo: scripts/extract_fulltext.py
+        estado: fuera-de-alcance
+        motivo: >-
+          decide en `if out.exists() and not args.force`; el alcance por unidad no aplica (el destino es UN archivo). Auditado en #420: no tenía el defecto.
+      - modulo: scripts/fetch_arxiv.py
+        estado: fuera-de-alcance
+        motivo: >-
+          decide en dos guardas con `args.force` en el punto de decisión, por bibcode. Auditado en #420: no tenía el defecto.
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: >-
+          decide en `if ... and not args.force`, y tiene `--paper`. Auditado en #420: no tenía el defecto.
+      - modulo: scripts/fetch_ground_truth.py
+        estado: fuera-de-alcance
+        motivo: >-
+          decide en `if out.exists() and not args.force`; el sujeto ES la unidad. Auditado en #420: no tenía el defecto.
+      - modulo: scripts/fetch_pdf.py
+        estado: fuera-de-alcance
+        motivo: >-
+          decide en la comprensión que arma la lista, por bibcode. Auditado en #420: no tenía el defecto.
+      - modulo: scripts/fetch_web.py
+        estado: fuera-de-alcance
+        motivo: >-
+          pasa `force=args.force_note` a `make_notes` y decide con `args.force` el snapshot. Auditado en #420: no tenía el defecto.
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: >-
+          pasa `args.force` a `ingest_offads`, que es quien decide. Auditado en #420: no tenía el defecto.
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: >-
+          `--restamp-lente` (#395) llama `upsert_view(..., force=True)`. Lo destapó ESTE gate al
+          firmar la entrada: es el segundo portador del `--force`, y por él `previa` quedó acotado
+          a los campos que dicen que la LECTURA ocurrió — marcar un `lente` corregido afirmaría un
+          reemplazo que no hubo, en 209 slots.

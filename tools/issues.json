@@ -1969,7 +1969,7 @@
   {
    "number": 396,
    "title": "Partir `lint.collect` (3576 líneas, 118 locales): una función por bloque `# ──`, con golden congelado y mutación dirigida por función",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 397,
@@ -1994,7 +1994,7 @@
   {
    "number": 401,
    "title": "CI rojo en el template desde v1.217.0 y en la instancia que lo hereda: `trace_invariants.py --check` dice que `docs/trazabilidad.md` está desactualizado, y el archivo viaja tal cual",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 402,
@@ -2034,7 +2034,7 @@
   {
    "number": 409,
    "title": "Red 10: «¿quién MÁS lleva esta regla?» — el gate que cierra la familia más grande del repo (el fix a la instancia, no a la clase)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 410,
@@ -2054,12 +2054,12 @@
   {
    "number": 413,
    "title": "El `## Abstract` sólo se llena desde el PDF, así que en una nota `pending_source` queda `_(no disponible)_` PARA SIEMPRE — con el abstract disponible en OpenAlex y `openalex._abstract` ya escrito",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 414,
    "title": "El año se toma de Crossref `issued` (fecha ONLINE), no de `published-print`: desmiente el año correcto —y lo BLOQUEA— y mete 2007 en el BibTeX de un paper de 2008",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 415,
@@ -2074,16 +2074,26 @@
   {
    "number": 417,
    "title": "#413 (`--fill-abstracts`) BORRA el encabezado `## Abstract` al llenar: las 9 notas que llenó pasan a BLOQUEAR el lint — y llena un capítulo que su propia vista dice que no tiene abstract",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 418,
    "title": "bibtex_fields no parsea el export de Crossref (30 de 30 devuelven {}): el chequeo de #397 es CIEGO en toda cita de Crossref, y por eso el año online-first de #414 sigue invisible",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 419,
    "title": "fetch_bibtex guarda el export de Crossref con MOJIBAKE (17 de 30, 2 en nombres de autor): r.text adivina Windows-1252 porque la respuesta no declara charset",
+   "state": "CLOSED"
+  },
+  {
+   "number": 420,
+   "title": "harvest_views: --force no llega a upsert_view (se llama sin force=), y no hay --paper — la ruta abstract → PDF de #207 no se puede ejecutar sin pisar las vistas verificadas del slug",
+   "state": "OPEN"
+  },
+  {
+   "number": 421,
+   "title": "El default de `noise_doctypes` nombra `catalog` (0 VizieR en ADS) y omite `dataset` (los 23.351): cada estrella ingesta las tablas de VizieR como si fueran papers",
    "state": "OPEN"
   }
  ]
