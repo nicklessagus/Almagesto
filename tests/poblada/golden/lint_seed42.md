@@ -143,6 +143,12 @@
 ## ⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## ⚠ Bloque con más de un hecho: arriba del p90 en largo o en hechos citados — partilo (#408, WARN) (0)
+> sobre 89 notas de `vault/wiki/`
+
+## ⚠ Costura de unidad: una unidad separada de su número, la firma de un empalme mal hecho (#406, WARN) (0)
+> sobre 89 notas de `vault/wiki/`
+
 ## ⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 

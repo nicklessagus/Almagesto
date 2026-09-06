@@ -14,6 +14,7 @@ import json
 import pytest
 
 import apply_fixes as af
+import lib_blocks as lb
 
 
 def _note(tmp_path, body):
@@ -404,3 +405,68 @@ def test_AUD220_un_fix_por_BLOQUE_que_agrega_una_cita_tambien_avisa(tmp_path):
     r = af.apply(nota, fix, write=True)
     assert r.applied == 1 and r.failed == []
     assert r.added == [("A", 1, ["2021B"])], r.added
+
+
+def test_el_bloque_que_CRECE_sin_ganar_citas_se_avisa(tmp_path, capsys):
+    """#406 — el aviso de #389 sólo veía `[[bibcode]]` agregados, y la regla que la prosa enuncia
+    («los defectos nacidos al corregir llegan con material agregado») es más ancha: un empalme que
+    agregó ~90 caracteres de prosa y cero citas pasó mudo por `apply_fixes`, por
+    `contrast --validar-todo` y por `lint --cierre`. No bloquea: a veces agregar es el arreglo; lo
+    que hoy falta es que el operador se entere de que hay que releer el bloque."""
+    viejo = "El período es de 34 días y la amplitud de 2.5 m/s [[2020X]]."
+    nota = _note(tmp_path, f"# n\n\n{viejo}\n")
+    crecido = (viejo[:-1] + ", y la propia Tabla 2 advierte que el valor de HD 154088 no es "
+               "significativo por apoyarse en dos puntos.")
+    res = af.apply(nota, _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": viejo, "nuevo": crecido}])))
+    assert res.grown and res.grown[0][0] == "2020X" and res.grown[0][2] >= af.CRECE_MIN_CHARS
+    assert res.added == [], "sin cita nueva el aviso de #389 calla — por eso hacía falta éste"
+    assert not res.failed, "avisa, no bloquea"
+    af.main([str(nota), str(tmp_path / "fix")])
+    assert "CRECE" in capsys.readouterr().out
+    # el retoque chico (un número, una palabra) NO dispara: el umbral está declarado y con motivo
+    res = af.apply(nota, _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": viejo,
+                                                       "nuevo": viejo.replace("34", "36")}])))
+    assert res.grown == []
+    # y el que gana una cita lo reporta #389, no éste: dos avisos por lo mismo serían ruido
+    con_cita = crecido[:-1] + " [[2019Y]]."
+    res = af.apply(nota, _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": viejo, "nuevo": con_cita}])))
+    assert res.added and res.grown == []
+
+
+def test_nuevo_como_LISTA_parte_el_bloque_y_los_pares_suben(tmp_path, capsys):
+    """#408 — «un bloque, un hecho» es la operación «un bloque → dos», y `apply_fixes` no la
+    soportaba: `rewrap` colapsaba un `nuevo` con salto de párrafo en UN bloque. Ahora `nuevo` acepta
+    una lista de bloques, cada uno se re-envuelve con línea en blanco entre medio, y el contador de
+    #222 lo admite porque una partición SUBE los pares."""
+    viejo = ("Los ghosts del ThAr contaminan las líneas de Ca II [[2020X]]. Y la recalibración de "
+             "2015 mueve el cero en 0.5 m/s [[2019Y]].")
+    nota = _note(tmp_path, f"# n\n\n{viejo}\n\nOtro párrafo [[2018Z]].\n")
+    partes = ["Los ghosts del ThAr contaminan las líneas de Ca II [[2020X]].",
+              "La recalibración de 2015 mueve el cero en 0.5 m/s [[2019Y]]."]
+    fixes = _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": viejo, "nuevo": partes}]))
+    af.main([str(nota), str(fixes)])                      # dry-run primero: el aviso se imprime
+    assert "se PARTE en 2" in capsys.readouterr().out
+    res = af.apply(nota, fixes, write=True)
+    assert not res.failed and res.split == [("2020X", 1, 2)]
+    assert res.pairs_before == 3 and res.pairs_after == 3, "los pares no bajan: 2 en 1 bloque → 2 en 2"
+    cuerpo = nota.read_text(encoding="utf-8")
+    assert cuerpo.count("\n\n") >= 3 and "[[2018Z]]" in cuerpo
+    bloques = [b.text for b in lb.split_blocks(cuerpo)]
+    assert any("[[2020X]]" in b and "[[2019Y]]" not in b for b in bloques), "dos bloques, no uno"
+    assert af.rewrap("solo uno", "") == ["solo uno"] and af.rewrap(["a", "b"], "") == ["a", "", "b"]
+    # una lista de UN bloque no es una partición: se aplica como bloque y no se cuenta como partido
+    # (el bloque conserva sus DOS citas: si perdiera una, #222 rehusaría, y con razón)
+    nota2 = _note(tmp_path, f"# n\n\n{viejo}\n")
+    res = af.apply(nota2, _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": viejo,
+                                                       "nuevo": [viejo.replace("2015", "2016")]}])))
+    assert not res.failed and res.split == [] and res.by_block == 1
+
+
+def test_una_fila_EXACTA_no_se_parte(tmp_path):
+    """#408 — partir vale para PROSA: una fila de tabla partida en dos deja de ser una fila. El
+    corrector que quiere dos filas manda dos fixes con dos `viejo`; acá se rehúsa y se dice."""
+    fila = "| a | b [[2020X]] |"
+    nota = _note(tmp_path, f"| x | y |\n|---|---|\n{fila}\n")
+    res = af.apply(nota, _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": fila,
+                                                       "nuevo": ["| a | b [[2020X]] |", "| c | d |"]}])))
+    assert res.failed and "partir" in res.failed[0][2]

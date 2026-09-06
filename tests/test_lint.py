@@ -9937,3 +9937,44 @@ def test_toda_funcion_check_tiene_UN_TEST_DIRECTO(toy_vault):
     assert not sin_directo, (
         f"{len(sin_directo)} función(es) `check_*` sin un test que las llame por su nombre "
         f"(el paso 5 del protocolo de #396): " + ", ".join(sin_directo))
+
+
+# ── #406 / #408 · los dos WARN que miran la PROSA entre las citas ───────────────────────────────
+
+def test_check_unit_seams_caza_la_unidad_separada_de_su_numero(toy_vault):
+    """#406 — la firma mecánica de un empalme mal hecho: «2 puntos m/s» donde el `m/s` pertenecía al
+    `1,70` de la frase anterior. Los tres filtros son los que la medición fue agregando (53 → 19 →
+    3 hits sobre 224 notas): número antes, cuantificador antes, preposición antes, y la
+    unidad-anotación (seguida de coma). Lo que queda se revisa a mano (WARN), como la fuga."""
+    def _c(texto):
+        return [m for _s, m in lint.check_unit_seams("nota", texto, 0)]
+    assert _c("la amplitud es 1,70 m/s y el rms 2.5 m/s.") == [], "número antes: es una medida"
+    assert _c("señales de few m/s y de sub m/s; unos pocos km/s") == [], "cuantificador antes"
+    assert _c("expresado en m/s y medido por km/s") == [], "preposición antes"
+    assert _c("| a | puntos m/s |") == [] and _c("> puntos m/s") == [], "tablas y blockquotes no"
+    assert _c("columnas: rms m/s, rms before m/s, N") == [], "unidad-anotación: nombra una columna"
+    assert _c("la unidad, m/s en este caso, es la de siempre") == [], \
+        "y el token ANTERIOR que termina en coma tampoco mide nada: es un inciso"
+    hit = _c("«is not meaningful» por apoyarse en 2 puntos m/s. La mejora la desautoriza el paper.")
+    assert len(hit) == 1 and "puntos m/s" in hit[0] and "L1" in hit[0], hit
+    assert len(_c("x\ny\nel push m/s velocimetry")) == 1 and "L3" in _c("x\ny\nel push m/s velocimetry")[0], \
+        "el falso positivo medido se reporta igual: WARN es revisar a mano, no adivinar"
+    assert lint.check_unit_seams("log", "2 puntos m/s", 0) == [], "la navegación no se mira"
+
+
+def test_check_block_facts_marca_el_bloque_arriba_del_p90(toy_vault):
+    """#408 — medido sobre 672 bloques con cita: p90 968 caracteres y 5 hechos citados, y los tres
+    bloques donde nacieron los defectos al CORREGIR estaban en el p90 o arriba. Un bloque largo
+    tiene costuras, y las costuras es donde el empalme rompe (#406). WARN: la resolución es PARTIR,
+    que `apply_fixes` soporta desde #408. Los techos son constantes con nombre y motivo."""
+    corto = "Una afirmación con su cita «texto de la fuente» (p. 3) [[2020X]].\n"
+    assert lint.check_block_facts("nota", corto, 0) == []
+    largo = "Prosa " * 200 + "[[2020X]]\n"
+    hit = lint.check_block_facts("nota", largo, 0)
+    assert len(hit) == 1 and "1 hecho" not in hit[0][1] and str(lint.BLOQUE_MAX_CHARS) in hit[0][1]
+    muchos = " ".join(f"«hecho número {i} de la fuente» (p. {i})" for i in range(6)) + " [[2020X]]\n"
+    hit = lint.check_block_facts("nota", muchos, 4)
+    assert len(hit) == 1 and "12 hecho(s)" in hit[0][1] and "L5" in hit[0][1], hit
+    assert lint.check_block_facts("nota", "Prosa " * 200 + "sin cita\n", 0) == [], \
+        "un bloque sin `[[bibcode]]` no afirma con fuente: no es esta categoría"
+    assert lint.check_block_facts("index", largo, 0) == [], "la navegación no se mira"

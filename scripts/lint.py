@@ -5437,6 +5437,85 @@ def check_dead_facets(paper_lens_text: dict) -> list:
     return faceta_muerta
 
 
+#: #408 · «un bloque, un hecho». Medido sobre 672 bloques con cita de una bóveda real: mediana 390
+#: caracteres y 2 hechos citados, p90 968 y 5, máximo 2621 y 19 — y los tres bloques donde nacieron
+#: los defectos al CORREGIR estaban en el p90 o arriba (el peor era el más largo de toda la bóveda).
+#: Un bloque largo tiene costuras, y las costuras es donde el empalme rompe (#406). Son los p90; se
+#: declaran acá con nombre y motivo, no como literales adentro de un `if`.
+BLOQUE_MAX_CHARS = 1000
+BLOQUE_MAX_HECHOS = 5
+#: Qué cuenta como «hecho citado» dentro de un bloque: una cita textual «…» o un localizador de
+#: página/línea. Son las dos marcas que el extractor deja al transcribir, así que contarlas mide
+#: cuántas cosas distintas de la fuente el bloque afirma a la vez.
+_HECHO_RE = re.compile(r"«[^»]{8,}»|\(\s*p\.\s*\d+|\(\s*L\d+")
+
+#: #406 · la firma mecánica de un empalme mal hecho: una UNIDAD separada de su número («2 puntos
+#: m/s» donde el `m/s` pertenecía al `1,70` de la frase anterior). Medido sobre 224 notas de una
+#: bóveda real: 53 hits sin filtro, 19 sacando los cuantificadores, **3** sacando además las
+#: preposiciones y la unidad-anotación (token que termina en coma) — los 3 residuales, falsos
+#: positivos revisables. Misma doctrina que la fuga de implementación: WARN, cada hit se mira. Lo
+#: que se midió y DESCARTÓ para esto: el shingle repetido (74 falsos, 0 verdaderos sobre el defecto).
+_UNIDADES = (r"m/s|km/s|cm/s|m\s?s\^?-1|km\s?s\^?-1|mas/yr|mas|ppm|M⊕|M_?J|R⊕|R_?J|"
+             r"M_?sun|M☉|pc|kpc|nm|Å|d[ií]as|days|K")
+_COSTURA_RE = re.compile(r"(?<![\w.,])([^\s]+)\s+(" + _UNIDADES + r")(?=[\s.,;:)\]»]|$)")
+_ANTES_DE_UNIDAD_OK = re.compile(
+    r".*\d[)\]%]?$"                                                # TERMINA en dígito: `1,70`, `K=32.9`
+    r"|^(?:few|a few|pocos|pocas|varios|varias|several|some|sub|hundred|cientos?|nivel|order|"
+    r"orden|escala|unos|unas|mil|thousand|tens|decenas|dozens|docenas|half|medio|media)$"
+    r"|^(?:en|de|del|a|al|por|con|sin|entre|hasta|sobre|the|of|in|at|per|to|from|by|and|or|y|o|"
+    r"u|e)$", re.I)
+
+
+def check_block_facts(stem: str, body_full: str, offset: int) -> list:
+    """`bloque_con_varios_hechos` — a cited block above the p90 in length or in cited facts (#408).
+
+    WARN, never blocking: a long block can be legitimate (a declared table transcription). The
+    resolution is to SPLIT — two paragraphs in prose, two rows of the same axis in a table — which
+    `apply_fixes` supports since #408 (`nuevo` as a list of blocks). The thresholds are the measured
+    p90 of a real vault and live above as named constants.
+    """
+    out: list = []
+    if stem in NON_ORPHAN:
+        return out
+    for b in lb.split_blocks(body_full):
+        if not lb._bibcodes(b.text):
+            continue
+        largo, hechos = len(lb.normalize_ws(b.text)), len(_HECHO_RE.findall(b.text))
+        if largo > BLOQUE_MAX_CHARS or hechos > BLOQUE_MAX_HECHOS:
+            out.append((stem, f"L{b.first_line + offset}: bloque de {largo} caracteres con "
+                              f"{hechos} hecho(s) citado(s) (techos p90: {BLOQUE_MAX_CHARS} / "
+                              f"{BLOQUE_MAX_HECHOS}) → partilo: un bloque, un hecho — los defectos "
+                              f"al corregir caen en los bloques largos (#408)"))
+    return out
+
+
+def check_unit_seams(stem: str, body_full: str, offset: int) -> list:
+    """`costura_unidad` — a unit separated from its number: the mechanical signature of a bad splice
+    (#406). WARN; every hit is reviewed by hand.
+
+    Three filters, in the order the measurement added them: the token before the unit does not END
+    in a digit (`1,70`, but also `K=32.9` — the synthetic corpus caught the whole-token version
+    flagging every `K=<n> m/s`); it is not a quantifier («few m/s», «sub-m/s»); it is not a preposition («en m/s»); and
+    the unit is not an annotation (a unit followed by a comma names a column, it does not measure
+    anything). What survives is «2 puntos m/s» — a unit that lost its number to the sentence before.
+    """
+    out: list = []
+    if stem in NON_ORPHAN:
+        return out
+    for i, line in enumerate(body_full.split("\n"), 1 + offset):
+        if line.lstrip().startswith(("|", "#", ">")):
+            continue                              # tablas, encabezados y blockquotes: otra sintaxis
+        for m in _COSTURA_RE.finditer(line):
+            antes, unidad = m.group(1), m.group(2)
+            if _ANTES_DE_UNIDAD_OK.match(antes) or antes.endswith(","):
+                continue
+            if line[m.end():m.end() + 1] == ",":
+                continue                          # unidad-anotación («m/s,» nombra una columna)
+            out.append((stem, f"L{i}: «{antes} {unidad}» — la unidad no sigue a un número: ¿quedó "
+                              f"pegada a la frase equivocada al empalmar? (#406) Releé el bloque"))
+    return out
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -5590,6 +5669,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     cita_txt_discrepa: list = []       # (stem, motivo) — #333: las dos lecturas del PDF no coinciden
     cita_opaca: list = []              # (stem, motivo) — #220: no evaluable (sin `.txt` / ocr; #275)
     verificar_pdf: list = []           # (stem, motivo) — #225: marcada para chequear contra el PDF
+    bloque_con_varios_hechos: list = []  # (stem, motivo) — #408: bloque arriba del p90
+    costura_unidad: list = []            # (stem, motivo) — #406: unidad separada de su número
     forma_rota: list = []              # (stem, motivo) — #227: fila de tabla que NO renderiza
     forma_sospechosa: list = []        # (stem, motivo) — #227: backtick abierto, párrafo duplicado
     # D-50: los genéricos + un patrón por consumidor declarado. Se arma UNA vez por corrida, no por
@@ -5910,6 +5991,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         _f1, _f2 = check_table_shape(stem, body_full, _offset)
         forma_rota += _f1
         forma_sospechosa += _f2
+        # «Un bloque, un hecho» (#408) y la costura de unidad (#406): los dos WARN que miran la
+        # PROSA entre las citas, que hasta acá no miraba nadie.
+        bloque_con_varios_hechos += check_block_facts(stem, body_full, _offset)
+        costura_unidad += check_unit_seams(stem, body_full, _offset)
 
         # Cabecera no estampable (#69, backlog): una ficha/concepto sin la línea
         # `> _Generado con Almagesto v…_` deja SIN EFECTO a todos los estampadores de cabecera
@@ -6433,6 +6518,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(bad_sources), poblacion='temas'),
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(bad_roles), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(impl_leaks), poblacion='notas'),
+        Categoria('bloque_con_varios_hechos', '⚠ Bloque con más de un hecho: arriba del p90 en largo o en hechos citados — partilo (#408, WARN)', SEV_WARN, tuple(bloque_con_varios_hechos), poblacion='notas'),
+        Categoria('costura_unidad', '⚠ Costura de unidad: una unidad separada de su número, la firma de un empalme mal hecho (#406, WARN)', SEV_WARN, tuple(costura_unidad), poblacion='notas'),
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(cond_sin_clasificar), poblacion='entidades'),
         Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog)', SEV_BACKLOG, tuple(verif_estructura), poblacion='entidades'),
         Categoria('verif_inline', '⛔ Tabla de verificación DENTRO de la nota (schema pre-1.165.0) → `make_notes.py --migrate-verif-sidecar` (#344)', SEV_BLOQUEANTE, tuple(verif_inline), poblacion='entidades'),

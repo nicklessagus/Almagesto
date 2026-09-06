@@ -69,6 +69,15 @@ class Result:
     pairs_before: int = 0
     pairs_after: int = 0
     added: list = field(default_factory=list)      # #389 · (bib, n, [bibcodes que el fix AGREGÓ])
+    grown: list = field(default_factory=list)      # #406 · (bib, n, +chars) — creció SIN citas nuevas
+    split: list = field(default_factory=list)      # #408 · (bib, n, k) — un bloque partido en k
+
+
+#: #406 · a partir de cuántos caracteres NETOS un fix «agrega material» aunque no gane citas.
+#: Medido: el empalme que #406 midió agregó ~90 caracteres de prosa y cero `[[bibcode]]`, y el
+#: aviso de #389 —que sólo mira citas— quedó mudo. Cuarenta es la mitad de eso y más que cualquier
+#: corrección de un número o una palabra; NO bloquea, igual que #389: a veces agregar es el arreglo.
+CRECE_MIN_CHARS = 40
 
 
 def normalise(s: str) -> str:
@@ -138,14 +147,27 @@ def find_block(lines: list, old: str) -> tuple | None:
     return hits[0] if len(hits) == 1 else None
 
 
-def rewrap(new: str, first_line: str) -> list:
+def rewrap(new, first_line: str) -> list:
     """Re-wrap keeping the block's indentation: a list item's continuations stay indented.
+
+    ⛔ #408 — `new` may be a LIST of blocks: the fix that PARTS one block into several («un bloque,
+    un hecho»). Each is re-wrapped on its own with a blank line between, so `split_blocks` reads
+    them back as separate blocks and every one keeps its own pair. A single string is one block, as
+    before; a string with a blank line inside is NOT a split — `normalise` collapses it, on purpose,
+    because a corrector that meant two blocks says so with a list.
 
     ⛔ AUD-141 — **a table row is never wrapped.** Wrapping one at column 100 splits it across
     several lines and the table stops being a table: the `## Verificación de citas` block, whose
     rows carry the anchors, would be destroyed by the very step that exists to keep it honest. A
     row applies as ONE line, however long. Blockquotes keep their `>` markers, which the matcher
     strips to compare and this puts back."""
+    if isinstance(new, list):
+        out: list = []
+        for i, bloque in enumerate(new):
+            if i:
+                out.append("")                            # línea en blanco: dos bloques, no uno
+            out += rewrap(bloque, first_line)
+        return out
     quote = quote_prefix(first_line)
     bare = _bare(first_line)
     indent = re.match(r"\s*", bare).group(0)
@@ -206,6 +228,17 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     for bib, n, old, new in pending:
         idx = [k for k, l in enumerate(lines) if l == old]
         if len(idx) == 1:
+            if isinstance(new, list):
+                # #408 — partir vale para PROSA. Una fila de tabla partida en dos deja de ser una
+                # fila; el corrector que quiere dos filas manda dos fixes con dos `viejo`. Un
+                # párrafo de UNA línea sí se parte: va por la rama de bloque, que re-envuelve.
+                if _bare(lines[idx[0]]).lstrip().startswith("|"):
+                    res.failed.append((bib, n, "`nuevo` es una lista (partir el bloque) sobre una "
+                                               "FILA de tabla: partir vale para prosa; una fila se "
+                                               "reemplaza por una fila (o dos fixes, dos `viejo`)"))
+                    continue
+                planned.append(((idx[0], idx[0] + 1), bib, n, new, "block"))
+                continue
             planned.append(((idx[0], idx[0] + 1), bib, n, [new], "exact"))
             continue
         span = find_block(lines, old)
@@ -244,12 +277,23 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # sobre el segundo objeto, una atribución fabricada con cita verbatim y referente equivocado).
     # No bloquea: a veces agregar una cita ES el arreglo (una `inferencia` que pasa a hecho citado).
     for span, bib, n, new, kind in planned:
-        antes = set(lb._bibcodes("\n".join(lines[span[0]:span[1]])))
+        viejo_txt = "\n".join(lines[span[0]:span[1]])
+        nuevo_txt = "\n".join(new) if isinstance(new, list) else new
+        antes = set(lb._bibcodes(viejo_txt))
         # AUD-220 — en la rama «block» `new` es un `str`: `"\n".join(str)` une carácter por
         # carácter y ningún `[[…]]` sobrevive, así que el aviso callaba justo en la rama medida.
-        entran = sorted(set(lb._bibcodes("\n".join(new) if isinstance(new, list) else new)) - antes)
+        entran = sorted(set(lb._bibcodes(nuevo_txt)) - antes)
         if entran:
             res.added.append((bib, n, entran))
+        # #406 — el aviso de #389 sólo veía `[[bibcode]]` AGREGADOS, y la regla que la prosa
+        # enuncia («llegan con material agregado») es más ancha: un empalme que agrega ~90
+        # caracteres de prosa y cero citas pasaba mudo por acá, por `contrast --validar-todo` y por
+        # `lint --cierre`. Se mide el crecimiento NETO en texto normalizado; no bloquea.
+        delta = len(normalise(nuevo_txt)) - len(normalise(viejo_txt))
+        if delta >= CRECE_MIN_CHARS and not entran:
+            res.grown.append((bib, n, delta))
+        if kind == "block" and isinstance(new, list) and len(new) > 1:
+            res.split.append((bib, n, len(new)))
     for span, bib, n, new, kind in sorted(planned, key=lambda x: -x[0][0]):
         if kind == "exact":
             lines[span[0]] = new[0]
@@ -307,6 +351,14 @@ def main(argv=None) -> int:
         print(f"  ⚠ {bib} par {n}: el fix AGREGA {', '.join(f'[[{b}]]' for b in entran)} al bloque "
               f"que repara. Los defectos nacidos al corregir llegan con material agregado (#389): "
               f"¿es portante? La primera opción es SACAR la parte equivocada, no reescribirla.")
+    for bib, n, delta in res.grown:
+        print(f"  ⚠ {bib} par {n}: el bloque CRECE {delta} caracteres sin ganar citas (#406) — un "
+              f"empalme que agrega prosa es exactamente lo que ninguna otra capa ve: releé el "
+              f"bloque entero antes de escribir (¿el mismo hecho dos veces? ¿una unidad separada "
+              f"de su número?).")
+    for bib, n, k in res.split:
+        print(f"  ✂ {bib} par {n}: el bloque se PARTE en {k} (#408) — cada uno queda con su par; "
+              f"los pares suben, nunca bajan.")
     if res.failed:
         print("⛔ NO se escribió nada: resolvé los que fallan primero.")
         return 1

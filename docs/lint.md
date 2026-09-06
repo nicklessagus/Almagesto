@@ -237,6 +237,20 @@ Deben quedar en **0**:
   al crear el stub, así que el PDF que aparece después (rescate manual, cierre de un `pending`) no
   se linkeaba nunca; medido, 4 de 4—. "Cabecera fuera del contrato" pide normalizar la cabecera
   primero.
+- **Bloque con más de un hecho** (#408): bloque con `[[bibcode]]` arriba del p90 medido en largo
+  (`BLOQUE_MAX_CHARS`, 1000) o en hechos citados (`BLOQUE_MAX_HECHOS`, 5: citas «…» + localizadores
+  `(p. N)`/`(L N)`). Medido sobre 672 bloques de una bóveda real: los tres bloques donde nacieron
+  los defectos al CORREGIR estaban en el p90 o arriba — el peor era el más largo de toda la bóveda.
+  Un bloque largo tiene costuras, y las costuras es donde el empalme rompe. **Resolución: partir**
+  —dos párrafos en prosa, dos filas del mismo eje en una tabla— con `apply_fixes` y `nuevo` como
+  lista de bloques. No bloquea: una transcripción de tabla declarada es larga y está bien.
+- **Costura de unidad** (#406): una unidad (`m/s`, `km/s`, `pc`, `M⊕`…) que no sigue a un número —
+  «2 puntos m/s» donde el `m/s` era del `1,70` de la frase anterior— es la firma mecánica de un
+  empalme mal hecho, y es exactamente lo que ninguna otra capa ve: `contrast --validar-todo`,
+  `lint --cierre` y el fan-out miran las CITAS, y la prosa entre ellas no la mira nadie. Tres
+  filtros medidos (número, cuantificador y preposición antes; unidad-anotación seguida de coma):
+  53 → 19 → **3** hits sobre 224 notas, los 3 falsos positivos revisables. Lo que se midió y
+  DESCARTÓ: el shingle repetido (74 falsos positivos, 0 verdaderos sobre el defecto real).
 - **`.obsidian/` en la raíz del repo**: la bóveda se abrió mal (el grafo indexa el andamiaje);
   abrir `vault/` como vault y borrar ese directorio.
 - **Alias de más** (declarado en `stars.yaml` y que resuelve a otro objeto).
