@@ -9724,3 +9724,216 @@ def test_los_tres_chequeos_de_tema_avisan_lo_que_se_HEREDA(toy_vault):
     assert lint.check_cascade_not_run(), "un tema off-ADS cuya cascada no consta"
     _t()
     assert lint.check_cascade_not_run() == [], "un tema ADS puro no corre la cascada"
+
+
+# ── #396 · test DIRECTO para cada `check_*` que sólo se alcanzaba por el barrido ─────────────────
+#
+# «Todas mueren bajo `mutar --dirigida`» no es lo mismo que «todas tienen test propio»: la primera
+# se satisface con que la nota entera pase por `collect`, y entonces el test que las cubre habla de
+# otra cosa. Estas catorce eran las que faltaban, y el test que lo VIGILA está al final del bloque.
+
+def test_check_second_hand_lifted_pide_la_marca_de_SEGUNDA_MANO(toy_vault):
+    """#279/#350 — #103 pide marcar el valor que la fuente atribuye a OTRO trabajo (el mecanismo de
+    error nº 1 medido), y nada chequeaba que la marca sobreviviera a la ficha. Medido en una nota
+    real: 4 valores la perdieron, uno usado como corroboración INDEPENDIENTE de sí mismo."""
+    sm = {"2020X": [("P_rot", "34.5", "Baliunas 1995")]}
+    fms = {"2020X": {"bibcode": "2020X"}}
+    hall, pares = lint.check_second_hand_lifted({}, sm, fms)
+    assert hall == [] and pares == 0, "sin prosa que lo levante no hay hallazgo"
+    # ⚠ la clave es la RUTA: el chequeo sólo mira prosa de `stars/` y `concepts/`
+    nota = str(cfg.STARS / "test_star.md")
+    cuerpo = {nota: "El período de rotación es de 34.5 días [[2020X]].\n"}
+    hall, pares = lint.check_second_hand_lifted(cuerpo, sm, fms)
+    assert pares == 1 and hall, (hall, pares)
+    assert lint.check_second_hand_lifted({str(cfg.PAPERS / "2020X.md"): cuerpo[nota]}, sm, fms) \
+        == ([], 0), "en una nota de paper no aplica: el hallazgo es sobre la SÍNTESIS"
+    con_marca = {nota: "El período es de 34.5 días (segunda mano, cita a Baliunas 1995) "
+                       "[[2020X]].\n"}
+    hall2, _p = lint.check_second_hand_lifted(con_marca, sm, fms)
+    assert len(hall2) < len(hall), "con la marca puesta deja de ser hallazgo"
+
+
+def test_check_prosa_retractada_exige_la_marca_en_LINEA(toy_vault):
+    """D-47/INV-93 — una afirmación apoyada en una fuente retractada NO se borra (puede ser cierta
+    por otra vía): se MARCA en línea. Sin la marca bloquea; un `(retractada)` pelado daría falso
+    positivo con cualquier mención en prosa.  @inv INV-93"""
+    fms = {"2020X": {"bibcode": "2020X", "retracted": True}}
+    assert lint.check_prosa_retractada({}, fms) == ([], [])
+    sin, con = lint.check_prosa_retractada({"n.md": "X afirma esto [[2020X]].\n"}, fms)
+    assert len(sin) == 1 and con == []
+    sin, con = lint.check_prosa_retractada({"n.md": "X afirma esto [[2020X]] ⛔retractada.\n"}, fms)
+    assert sin == [] and len(con) == 1, "marcada: visible, y ya no bloquea"
+    assert lint.check_prosa_retractada({"n.md": "X [[2020X]].\n"},
+                                       {"2020X": {"bibcode": "2020X"}}) == ([], []), \
+        "un paper NO retractado no tiene nada que marcar"
+
+
+def test_check_identidad_duplicada_bloquea_el_mismo_trabajo_con_dos_notas(toy_vault):
+    """D-19/INV-84 — el preprint y el publicado son bibcodes distintos del MISMO paper: dos notas
+    ahí son doble conteo, dos fuentes donde hay una, y un falso positivo permanente de #75. Hay UNA
+    nota canónica y los bibcodes viejos viven en `versions[]`.  @inv INV-84"""
+    uno = {"2020arXiv1A": {"bibcode": "2020arXiv1A", "doi": "10.1/x"},
+           "2021ApJ..1A": {"bibcode": "2021ApJ..1A", "doi": "10.1/x"}}
+    dup, alias_nota, alias, ya, _inc = lint.check_identidad_duplicada(uno, {}, [])
+    assert len(dup) == 1 and "10.1/x" in dup[0][1].lower() or dup, dup
+    solo = {"2021ApJ..1A": {"bibcode": "2021ApJ..1A", "doi": "10.1/x"}}
+    assert lint.check_identidad_duplicada(solo, {}, [])[0] == [], "una sola nota no es duplicado"
+    # ⛔ #229 — el bibcode declarado ALIAS en `versions[]` no puede tener su propia nota
+    con_alias = {"2021ApJ..1A": {"bibcode": "2021ApJ..1A", "doi": "10.1/x",
+                                 "versions": [{"bibcode": "2020arXiv1A"}]},
+                 "2020arXiv1A": {"bibcode": "2020arXiv1A", "doi": "10.2/y"}}
+    _d, alias_nota, alias, _y, _i = lint.check_identidad_duplicada(con_alias, {}, [])
+    assert alias_nota and "2020arXiv1A" in alias_nota[0][0] + alias_nota[0][1]
+    assert "2020arXiv1A" in alias
+
+
+def test_check_papers_table_stale_compara_el_roll_up_contra_el_DISCO(toy_vault):
+    """D-10 — los tres roll-ups se ESTAMPAN, no son Dataview: un bloque ```dataview``` le muestra al
+    agente que abre el `.md` la query, NO sus resultados. El detector compara la tabla estampada
+    contra la verdad de frontmatter y NOMBRA los stems que faltan."""
+    stale, no_eval = lint.check_papers_table_stale({})
+    assert stale == [] and isinstance(no_eval, list), "bóveda vacía: nada que comparar"
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"},
+            "\n## Papers\n\n| Bibcode | Año |\n|---|---|\n")
+    mk_note(cfg.PAPERS, "2020X", {"tags": ["paper"], "bibcode": "2020X",
+                                  "stars": ["Estrella Test"]})
+    stale, _n = lint.check_papers_table_stale(
+        {"2020X": {"bibcode": "2020X", "stars": ["Estrella Test"]}})
+    assert stale and any("2020X" in m for _s, m in stale), stale
+
+
+def test_check_build_snapshots_junta_los_cuatro_veredictos_del_scratch(toy_vault):
+    """#396 — el driver del scratch. `vistos` no es un hallazgo: es qué sujetos ya contestaron con
+    su verdad viva, y cruza a `check_registro_sweep` para decidir cuándo contesta el registro."""
+    tp, tc, bd, vistos = lint.check_build_snapshots()
+    assert (tp, tc, bd, vistos) == ([], [], [], set()), "sin `build/` no hay nada que leer"
+    d = cfg.ROOT / "build" / "ica"
+    d.mkdir(parents=True)
+    (d / "ads.json").write_text(json.dumps({
+        "slug": "ica", "truncated": {"num_found": 900, "rows": 200},
+        "candidates": [{"bibcode": "2001X"}],
+        "records": [{"bibcode": "2001X", "puertas": ["fantasma"]}]}), encoding="utf-8")
+    tp, tc, bd, vistos = lint.check_build_snapshots()
+    assert vistos == {"ica"} and len(tp) == 1 and len(tc) == 1 and len(bd) == 1
+    (d / "ads.json").write_text("no es json", encoding="utf-8")
+    assert lint.check_build_snapshots() == ([], [], [], set()), \
+        "`build/` es scratch regenerable: un JSON roto no tumba la compuerta de CI"
+
+
+def test_los_tres_saltos_del_bloque_de_verificacion_tienen_test_propio(toy_vault):
+    """#344 — los tres motivos para dejar de mirar una nota, cada uno probado en su función y no
+    sólo a través del driver: la tabla que sigue DENTRO (schema, no lector tolerante), el hermano
+    que NO EXISTE (la cabecera afirma pares que nadie puede evaluar) y la plantilla vieja
+    (`filas is None`, que **no** es «cero pares»).  @inv INV-148"""
+    _con_ancla(toy_vault, CUERPO)
+    ruta = cfg.CONCEPTS / "methods" / "nota-verif.md"
+    texto = ruta.read_text(encoding="utf-8")
+
+    assert lint.check_verif_inline("nota-verif", texto, ruta) == [], "la tabla ya está afuera"
+    tabla = "\n".join(l for l in _hermano(toy_vault).read_text(encoding="utf-8").splitlines()
+                      if l.startswith("|"))
+    inline = CUERPO + "\n## Verificación de citas (2026-01-01)\n\n" + tabla + "\n"
+    filas_i = lint.check_verif_inline("sin-migrar", inline, cfg.CONCEPTS / "methods" / "x.md")
+    assert len(filas_i) == 1 and "--migrate-verif-sidecar" in filas_i[0][1]
+
+    assert lint.check_verif_sidecar_missing("nota-verif", ruta) == []
+    huerfana = lint.check_verif_sidecar_missing("otra", cfg.CONCEPTS / "methods" / "otra.md")
+    assert len(huerfana) == 1 and "no existe su hermano" in huerfana[0][1]
+
+    filas = lb.verif_rows(ruta)
+    assert lint.check_old_verif_template("nota-verif", ruta, filas) == []
+    vieja = lint.check_old_verif_template("nota-verif", ruta, None)
+    assert len(vieja) == 1 and "plantilla vieja" in vieja[0][1]
+
+
+def test_check_table_shape_y_verificar_pdf_mark_cuentan_la_LINEA_real(toy_vault):
+    """#227/#225 — los dos reportan por número de línea, y el `offset` es lo que hace que ese número
+    sea el del ARCHIVO y no el del cuerpo sin frontmatter. Una fila con más celdas que su encabezado
+    NO se renderiza: una afirmación citada y verificada se vuelve invisible mientras el lint cuenta
+    su fila.  @inv INV-149"""
+    ok = "| a | b |\n|---|---|\n| 1 | 2 |\n"
+    assert lint.check_table_shape("n", ok, 0) == ([], [])
+    rota, _sosp = lint.check_table_shape("n", "| a | b |\n|---|---|\n| 1 | 2 | 3 |\n", 0)
+    assert len(rota) == 1 and "L3" in rota[0][1]
+    rota, _s = lint.check_table_shape("n", "| a | b |\n|---|---|\n| 1 | 2 | 3 |\n", 10)
+    assert "L13" in rota[0][1], "el `offset` lleva la línea del cuerpo a la del ARCHIVO"
+
+    assert lint.check_verificar_pdf_mark("n", "prosa sin marcas\n", 0) == []
+    marca = lint.check_verificar_pdf_mark("n", f"algo {lint.VERIFICAR_PDF_MARK} (dudé, 2026)\n", 4)
+    assert len(marca) == 1 and "L5" in marca[0][1]
+    assert lint.check_verificar_pdf_mark("log", f"{lint.VERIFICAR_PDF_MARK}\n", 0) == [], \
+        "la navegación no lleva marcas de auditoría"
+
+
+def test_check_paper_legacy_fields_y_pending(toy_vault):
+    """#205/#80/#298 — los campos retirados en 1.71.0 (`symbols_lost`/`fulltext_layout`) ya no los
+    lee nadie, y `pending` es vocabulario CERRADO con motivo OBLIGATORIO: en seis meses sirve el
+    motivo, no la categoría, y un typo entraba mudo."""
+    sm: dict = {}
+    assert lint.check_paper_legacy_fields("2020X", {}, "cuerpo\n", sm) == [] and sm == {}
+    filas = lint.check_paper_legacy_fields("2020X", {"symbols_lost": 3}, "cuerpo\n", sm)
+    assert len(filas) == 1 and "symbols_lost" in filas[0][1]
+
+    ver, pend, bad = lint.check_paper_pending("2020X", {})
+    assert (ver, pend, bad) == ([], [], [])
+    ver, _p, _b = lint.check_paper_pending("2020X", {"versions_disponible": "2021ApJ..1A"})
+    assert len(ver) == 1 and "--rename-paper" in ver[0][1]
+    _v, pend, _b = lint.check_paper_pending("2020X", {"pending_source": "paywall",
+                                                      "pending_motivo": "detrás del muro"})
+    assert len(pend) == 1 and "detrás del muro" in pend[0][1]
+    _v, _p2, bad = lint.check_paper_pending("2020X", {"pending_source": "inventado",
+                                                      "pending_motivo": "x"})
+    assert bad, "`pending` fuera del vocabulario cerrado"
+    _v, pend2, _b = lint.check_paper_pending("2020X", {"pending_source": "paywall"})
+    assert any("motivo" in m for _s, m in pend2 + _b), "el motivo es obligatorio"
+
+
+def test_check_stale_verif_compara_la_edicion_contra_la_fecha_del_bloque(toy_vault):
+    """D-4 — editar una nota después de que el fan-out corrió deja la cabecera afirmando pares que
+    nadie chequeó contra lo que la nota dice HOY."""
+    bloques = [("wiki/concepts/methods/c.md", "2026-01-01")]
+    assert lint.check_stale_verif(bloques, {}) == [], "sin fecha de edición no hay con qué comparar"
+    assert lint.check_stale_verif(bloques, {"wiki/concepts/methods/c.md": "2025-12-01"}) == [], \
+        "editada ANTES del verify: el bloque sigue vigente"
+    filas = lint.check_stale_verif(bloques, {"wiki/concepts/methods/c.md": "2026-03-01"})
+    assert len(filas) == 1 and "verify-citations" in filas[0][1]
+    sin_fecha = lint.check_stale_verif([("x.md", None)], {"x.md": "2026-03-01"})
+    assert len(sin_fecha) == 1 and "sin fecha" in sin_fecha[0][1], \
+        "un bloque SIN fecha no se compara: se pide fecharlo, que es otro hallazgo"
+
+
+def test_check_facet_boundary_caza_el_token_corto_SIN_frontera(toy_vault):
+    """#236 — un token alfabético corto sin `\\b` matchea DENTRO de otra palabra. Medido: `expres`
+    entraba por «Venus Express» y `neid` por el apellido «Schneider»; con `require: [rv]` esa era la
+    única puerta y **4 de 32 papers vivos eran core por accidente**. El falso positivo de una faceta
+    NO DEJA RASTRO: el paper entra, se baja, se lee y se sintetiza."""
+    obj = cfg.load_objective()
+    write_yaml(cfg.OBJECTIVE_YAML, {**obj, "relevance": {"facets": {"rv": r"\bradial velocit"}}})
+    assert lint.check_facet_boundary() == [], "con `\\b` la faceta no matchea dentro de otra palabra"
+    write_yaml(cfg.OBJECTIVE_YAML, {**obj, "relevance": {"facets": {"instr": "expres"}}})
+    filas = lint.check_facet_boundary()
+    assert len(filas) == 1 and "expres" in filas[0][1] and "palabra" in filas[0][1]
+
+
+def test_toda_funcion_check_tiene_UN_TEST_DIRECTO(toy_vault):
+    """⛔ La red de este bloque, y la que evita que la próxima extracción vuelva a quedar cubierta
+    «de rebote».
+
+    «Todas mueren bajo `mutar --dirigida`» NO es lo mismo que «todas tienen test propio»: la primera
+    se satisface con que la nota entera pase por `collect`, y entonces el test que las mata habla de
+    otra cosa —el protocolo de #396 lo dice en su paso 5, «no vale *ya lo cubre el barrido*»—.
+    Medido al cerrar #396: de 94 funciones `check_*`, **14** no aparecían nombradas en ningún test.
+
+    Se chequea por NOMBRE llamado (`lint.<fn>(`) y no por cobertura de líneas: lo que este test
+    fija es que exista un test que le hable A ELLA."""
+    import pathlib as _pl
+    fuente = _pl.Path(lint.__file__).read_text(encoding="utf-8")
+    checks = [n.split("(")[0].strip() for n in fuente.split("\ndef ")[1:]
+              if n.startswith("check_")]
+    assert len(checks) >= 90, f"sólo {len(checks)} funciones `check_*`: ¿cambió el prefijo?"
+    tests = "\n".join(p.read_text(encoding="utf-8")
+                      for p in _pl.Path(__file__).parent.rglob("*.py"))
+    sin_directo = sorted(c for c in checks if f"lint.{c}(" not in tests)
+    assert not sin_directo, (
+        f"{len(sin_directo)} función(es) `check_*` sin un test que las llame por su nombre "
+        f"(el paso 5 del protocolo de #396): " + ", ".join(sin_directo))
