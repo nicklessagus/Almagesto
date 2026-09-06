@@ -4236,6 +4236,362 @@ def check_radio_without_link(stem: str, f, body_full: str, concept_slugs) -> lis
     return radio_sin_link
 
 
+def check_paper_retractions(stem: str, fm: dict) -> tuple:
+    """`(retracted, corrections)` — lo que `check_retractions.py` estampó en la nota (#52/D-47).
+
+    Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. A retraction invalidates the source and BLOCKS; a correction does not —the paper is
+    still citable— but it is the signal that most directly AGES a number already extracted.
+    """
+    retracted: list = []
+    corrections: list = []
+    if fm.get("retracted"):
+        # `or {}` no alcanza si `retraction` es un ESCALAR (edición a mano, p. ej.
+        # `retraction: "retractado en 2021"`): un string es truthy, no cae en el `or`, y
+        # `.get` revienta con AttributeError — la compuerta de CI muerta por el mismo
+        # frontmatter raro que este chequeo existe para reportar (#h03).
+        rt = cfg.as_map(fm.get("retraction"))
+        retracted.append((stem, f"{rt.get('type', 'retraction')} ({rt.get('date') or 's/f'})"))
+    # corrección no-retractante (#52, backlog): erratum/corrigendum/expression-of-concern.
+    # NO bloquea —el paper sigue siendo citable—, pero un corrigendum cambia justamente el
+    # valor que se extrajo y una EoC deja la fuente en duda → revisar lo que la cita.
+    for c in (fm.get("corrections") or []):
+        if not isinstance(c, dict):
+            continue
+        notice = c.get("notice_doi") or "sin DOI del aviso"
+        corrections.append((stem, f"{c.get('type', 'corrección')} "
+                                  f"({c.get('date') or 's/f'}) → {notice}"))
+    return retracted, corrections
+
+
+def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf_on_disk: dict) -> tuple:
+    """The three LAYERS a paper note publishes: auditable, translation, lensed synthesis (#124/#247).
+
+    Returns `(sin_abstract, sin_conclusiones, sin_conclusiones_ok, sin_aviso_llm,
+    vista_solo_abstract)`. Extracted from the paper sub-block of `lint.collect` by #396; the blocks
+    compute and the caller accumulates.
+
+    `## Abstract` is the auditable layer of the body —a catalogue copy, not a synthesis— and it
+    weighs more since #205: on a `pending_source` the abstract is ALL the note has. The declared
+    absence of conclusions (`sin_conclusiones`) is a structural exclusion, not a length threshold.
+    """
+    sin_abstract: list = []
+    sin_conclusiones: list = []
+    sin_conclusiones_ok: list = []
+    sin_aviso_llm: list = []
+    vista_solo_abstract: list = []
+    if cfg.section_start(text, "## Abstract") < 0:
+        sin_abstract.append(
+            (stem, "sin `## Abstract`: es la única capa AUDITABLE del cuerpo (copia de "
+                   "catálogo, no síntesis) y `classify_offline` la lee para re-clasificar "
+                   "sin `build/` (D-49) → `python scripts/make_notes.py --restamp-abstracts`"))
+    # `## Conclusiones` es lo que el paper afirma SIN lente (#124): lo que hace barata una
+    # segunda vista cuando otro sujeto reclama el mismo paper. Tres exenciones, las tres
+    # estructurales y machine-readable — un documento largo no tiene esa sección, y un paper
+    # leído sólo del abstract no la tiene POR CONSTRUCCIÓN (#207).
+    _marca_sc = fm.get("sin_conclusiones", _SIN_MARCA)
+    _solo_abstract = bool(fm.get("vistas")) and all(
+        str((v_ or {}).get("fuente") or "") == "abstract"
+        for v_ in cfg.as_list(fm.get("vistas")) if isinstance(v_, dict))
+    if _marca_sc is not _SIN_MARCA:
+        # Escotilla declarada: motivo OBLIGATORIO, mismo criterio que `no_vista` /
+        # `no_sintetizado` / el `--reason` del triage. Sin motivo sigue siendo deuda.
+        if str(_marca_sc or "").strip():
+            sin_conclusiones_ok.append((stem, f"`sin_conclusiones: {_marca_sc}`"))
+        else:
+            sin_conclusiones.append(
+                (stem, "`sin_conclusiones` sin motivo: la escotilla lo exige (en seis meses "
+                       "sirve el motivo, no la categoría)"))
+    elif (str(fm.get("unidad_cita") or "") != "pagina" and stem in pdf_on_disk
+            and not _solo_abstract and cfg.section_start(text, "## Conclusiones") < 0):
+        sin_conclusiones.append(
+            (stem, "sin `## Conclusiones`: es lo que el paper afirma SIN lente, y lo que "
+                   "hace barata una segunda vista (#124) → transcribilas, o declará "
+                   "`sin_conclusiones: <motivo>` si la fuente no tiene esa sección"))
+    # #247 — el aviso de capa LLM. Se busca en el CUERPO, no en el texto entero: un
+    # `pending_motivo` que mencione esas dos palabras daría falso negativo (AUD-135).
+    if mn.AVISO_LLM_MARCA not in body_full:
+        sin_aviso_llm.append(
+            (stem, "sin el aviso de **capa LLM**: la nota de paper es la que más contenido "
+                   "generado tiene y no dice cuál de sus tres capas es auditable → "
+                   "`python scripts/make_notes.py --restamp-headers`"))
+    return sin_abstract, sin_conclusiones, sin_conclusiones_ok, sin_aviso_llm, vista_solo_abstract
+
+
+def check_paper_legacy_fields(stem: str, fm: dict, body_full: str, segunda_mano: dict) -> list:
+    """`campos_txt_viejos` — `symbols_lost` / `fulltext_layout`, retired in 1.71.0 (#205).
+
+    Extracted from the paper sub-block of `lint.collect` by #396; the block computes and the caller
+    accumulates. They existed to decide whether the extractor read the `.txt` or the PDF, and that
+    decision is no longer taken: the source is the PDF.
+
+    `segunda_mano` comes in as the index it fills —second-hand rows of this note— because it is
+    consumed later by `check_second_hand_lifted`, not a finding of its own.
+    """
+    campos_txt_viejos: list = []
+    if (_sm := lb.second_hand_rows(body_full)):
+        segunda_mano[stem] = _sm
+    _viejos = [k for k in ("symbols_lost", "fulltext_layout") if k in fm]
+    if _viejos:
+        campos_txt_viejos.append(
+            (stem, f"`{'`, `'.join(_viejos)}` — schema pre-#205, ya no lo lee nadie: "
+                   "`python scripts/make_notes.py --migrate-txt-fields`"))
+    return campos_txt_viejos
+
+
+def check_paper_citation_unit(stem: str, fm: dict) -> tuple:
+    """`(bad_roles, incomplete, pdf_source_contra)` — how a LONG source declares it is cited (#80),
+    and the `pdf_source` the note's own prose contradicts.
+
+    Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. A book breaks two assumptions of `verify-citations`: the fan-out assumes a `.txt`
+    read WHOLE, and «line 18443» is not a usable reference.
+    """
+    bad_roles: list = []
+    incomplete: list = []
+    pdf_source_contra: list = []
+    if (_u := str(fm.get("unidad_cita") or "").strip()):
+        if _u not in cfg.UNIDAD_CITA_OK:
+            # @inv INV-46, INV-109
+            bad_roles.append((stem, f"`unidad_cita: {_u}` fuera del vocabulario "
+                                    f"({' | '.join(cfg.UNIDAD_CITA_OK)}) — el verificador "
+                                    f"no sabe cómo citar esta fuente"))
+        elif _u != "linea" and not str(fm.get("alcance") or "").strip():
+            incomplete.append((stem, f"`unidad_cita: {_u}` (documento largo) sin `alcance`: "
+                                     f"no consta qué parte entró, así que un recorte "
+                                     f"deliberado se lee como omisión"))
+    # #296 — los otros dos vocabularios CERRADOS del schema de paper, que `CLAUDE.md`
+    # declaraba cerrados y nadie validaba. El campo DECIDE LECTURAS (`eprint` dice que las
+    # citas son contra el preprint), así que un valor fuera de vocabulario cae por el `else`
+    # de todo `== "eprint"` en silencio. ⚠ #363: hasta 1.111.0 ese `else` eximía además del
+    # chequeo de cita textual; #275 la sacó y la doc lo siguió afirmando 59 versiones.
+    # #383 — `pdf_source: publisher|ads|web` + `eprint_version` es una contradicción INTERNA
+    # del frontmatter, no un valor viejo: la nota manda a re-verificar contra el documento
+    # equivocado. Lo detectó el extractor al releer; el lint no lo miraba.
+    if (str(fm.get("pdf_source") or "") in ("publisher", "ads", "web")
+            and str(fm.get("eprint_version") or "").strip()):
+        pdf_source_contra.append(
+            (stem, f"`pdf_source: {fm.get('pdf_source')}` con `eprint_version: "
+                   f"{fm.get('eprint_version')}`: el PDF es del editor y la nota dice que "
+                   f"leyó un preprint → borrá `eprint_version`, o corregí `pdf_source` "
+                   f"(#383)"))
+    return bad_roles, incomplete, pdf_source_contra
+
+
+def check_paper_bibtex(stem: str, fm: dict) -> tuple:
+    """`(bibtex_sin_fuente, bibtex_drift, bad_roles)` — the BibTeX entry and the two closed
+    vocabularies of the artefact fields (#397/#296).
+
+    Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. A `bibtex` with no `bibtex_source` is a block written BY HAND, and an invented entry
+    comes out plausible —with believable volume and pages— over the datum that ends up printed.
+    """
+    bibtex_sin_fuente: list = []
+    bibtex_drift: list = []
+    bad_roles: list = []
+    _btx = str(fm.get("bibtex") or "").strip()
+    if _btx and not str(fm.get("bibtex_source") or "").strip():
+        bibtex_sin_fuente.append(
+            (stem, "tiene `bibtex` y no declara `bibtex_source`: una entrada sin "
+                   "procedencia es un bloque escrito a mano, y una cita inventada sale "
+                   "plausible → `python scripts/fetch_bibtex.py --paper "
+                   f"{stem} --force`, o borrá el campo (#397)"))
+    if _btx:
+        _campos = cfg.bibtex_fields(_btx)
+        for _c in ("doi", "year", "title"):
+            _nota, _oficial = str(fm.get(_c) or "").strip(), str(_campos.get(_c) or "").strip()
+            if not _nota or not _oficial:
+                continue          # lo que una de las dos no dice no es una discrepancia
+            # #400 — se pliega el MARKUP de los dos mundos antes de comparar: el
+            # frontmatter trae el HTML del catálogo ADS (`H<SUB>2</SUB>O`, `&amp;`) y la
+            # exportación el TeX (`H$_2$O`, `\&`). Medido: 3 de los 7 primeros hallazgos de
+            # esta categoría eran el MISMO título en dos marcados, o sea que todo título
+            # con un subíndice o un `&` era un hallazgo permanente. Debajo sigue
+            # `method_key`, que es lo que hace que `10.1038/378355A0` no sea una
+            # discrepancia.
+            _kn, _ko = cfg.catalog_compare_key(_nota), cfg.catalog_compare_key(_oficial)
+            if _kn == _ko:
+                continue
+            # #400 — cuál de los dos está mal SÍ se puede decidir en un caso, y es el
+            # frecuente: si el del frontmatter es **prefijo estricto** del oficial, está
+            # truncado (medido: 3 de 7, cortados en 84, 80 y 71 caracteres — no es un
+            # `[:N]`). Decir «uno de los dos está mal» ahí es no decir nada.
+            if _c == "title" and _ko.startswith(_kn):
+                bibtex_drift.append(
+                    (stem, f"`title` del frontmatter está TRUNCADO: termina en «…"
+                           f"{_nota[-40:]}» y la exportación oficial sigue «…"
+                           f"{_oficial[len(_nota):][:60]}» → re-estampalo desde el catálogo "
+                           f"(#400)"))
+                continue
+            bibtex_drift.append(
+                (stem, f"`{_c}` del frontmatter dice «{_nota[:60]}» y la exportación "
+                       f"oficial dice «{_oficial[:60]}» — uno de los dos está mal, y el "
+                       f"que viaja al informe es el BibTeX (#397)"))
+    for _campo, _ok in (("pdf_source", cfg.PDF_SOURCE_OK),
+                        ("fulltext_source", cfg.FULLTEXT_SOURCE_OK),
+                        ("bibtex_source", cfg.BIBTEX_SOURCES)):
+        _v = fm.get(_campo)
+        if _v in (None, ""):
+            continue          # ausente/`null` = DESCONOCIDO, que es un valor legítimo (#57)
+        if str(_v).strip() not in _ok:
+            # @inv INV-46
+            bad_roles.append((stem, f"`{_campo}: {str(_v)[:60]}` fuera del vocabulario "
+                                    f"({' | '.join(_ok)}) — `null`/ausente es el valor de "
+                                    f"«desconocido»; si querías escribir una nota, va a "
+                                    f"`pending_motivo` o a `salvedades`. Migrador: "
+                                    f"`python scripts/make_notes.py --migrate-source-fields`"))
+    return bibtex_sin_fuente, bibtex_drift, bad_roles
+
+
+def check_paper_pending(stem: str, fm: dict) -> tuple:
+    """`(version_publicada, pending_srcs, bad_roles)` — the published version the sweep found (#298)
+    and the source that could not be obtained (#80).
+
+    Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. `pending` is a CLOSED vocabulary with a mandatory reason: in six months what helps
+    is the reason, not the category, and a typo used to enter mute.
+    """
+    version_publicada: list = []
+    pending_srcs: list = []
+    bad_roles: list = []
+    if (_vd := str(fm.get("versions_disponible") or "").strip()):
+        version_publicada.append(
+            (stem, f"`versions_disponible: {_vd}`: el preprint salió publicado y nadie "
+                   f"renombró nada → `python scripts/make_notes.py --rename-paper {stem} "
+                   f"{_vd}` (o declaralo en `versions[]` si ya lo revisaste)"))
+    elif (str(fm.get("pdf_source") or "") == "eprint"
+            and "arxiv" not in str(fm.get("bibcode") or stem).lower()):
+        version_publicada.append(
+            (stem, "`pdf_source: eprint` con bibcode PUBLICADO: la nota se apoya en el "
+                   "preprint teniendo versión publicada, así que una discrepancia numérica "
+                   "contra un valor publicado es candidata a diferencia de VERSIÓN → "
+                   "conseguí el PDF publicado (`python scripts/fetch_pdf.py <slug> "
+                   "--force`) o dejá la salvedad"))
+    if fm.get("pending_source"):
+        ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
+        _p = str(fm["pending_source"])
+        # #80: la categoría sola no dice si alguien está consiguiendo la fuente o si nadie
+        # la miró nunca, y `adquisicion` (un libro en camino) no es un fallo como los otros
+        # tres. El motivo no se puede inventar, así que esto es backlog y no bloqueante:
+        # nombra la nota para que alguien lo escriba.
+        _falta = ("" if str(fm.get("pending_motivo") or "").strip() else
+                  " — ⚠ sin `pending_motivo`: escribí qué pasa con esta fuente y quién la consigue")
+        if _p not in cfg.PENDING_OK:
+            # #129: el TYPO de vocabulario es bloqueante, como en `role` y `unidad_cita`.
+            # Estaba acá, en backlog, y con eso INV-46 —*"un valor fuera de vocabulario
+            # bloquea"*, universal y `garantizado y medido`— era falso para uno de los
+            # cuatro vocabularios cerrados del schema. El argumento de INV-108 (*"el motivo
+            # no se puede inventar"*) justifica el backlog del `pending_motivo` FALTANTE,
+            # que sigue abajo; no el de un valor que nadie declaró.
+            # @inv INV-46, INV-108
+            bad_roles.append((stem, f"`pending_source: {_p}` fuera del vocabulario "
+                                    f"({' | '.join(cfg.PENDING_OK)})"))
+        pending_srcs.append(
+            (stem, f"{_p}{' · ' + str(fm['pending_motivo']) if fm.get('pending_motivo') else ''}"
+                   f" — proveer la fuente; puntero: {ptr}{_falta}"))
+    return version_publicada, pending_srcs, bad_roles
+
+
+def check_paper_role(stem: str, fm: dict, relevancia: str, thesis_refs: dict, method_refs: dict) -> tuple:
+    """`(bad_roles, incomplete)` — `role`, the closed vocabulary that makes «contrast two papers»
+    defined at all (#73).
+
+    Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. Without `role`, foundational↔foundational, application↔application and
+    foundational↔application are indistinguishable — and treating the third as a disagreement
+    FABRICATES disputes.
+
+    `thesis_refs` and `method_refs` come in as the indices this note feeds: they are what the two
+    dangling categories are computed over, not findings of their own.
+    """
+    bad_roles: list = []
+    incomplete: list = []
+    rol = fm.get("role")
+    roles = rol if isinstance(rol, list) else ([rol] if rol else [])
+    for r in roles:
+        if str(r).strip() not in ROLES:
+            # @inv INV-46
+            bad_roles.append((stem, f"`role: {r}` no está en el vocabulario "
+                                    f"({'/'.join(ROLES)}) → typo: el rol queda mudo para el "
+                                    f"contraste cross-paper"))
+    # Mismo recorte que el de #75 tres líneas arriba: a una nota no-core (escrita con
+    # `--all`) no se le pide rol, igual que no se le pide que aterrice en una síntesis.
+    if fm.get("methods") and not roles and relevancia != "low":
+        incomplete.append((stem, "paper extraído sin `role` (fundacional/aplicacion/arbitro) "
+                                 "→ sin rol, contrastarlo contra otro no está definido"))
+    for tl in fm.get("thesis_links") or []:
+        thesis_refs.setdefault(str(tl), []).append(stem)
+    for mt in fm.get("methods") or []:
+        method_refs.setdefault(str(mt), []).append(stem)
+    return bad_roles, incomplete
+
+
+def check_paper_pdf_link(stem: str, fm: dict, text: str, pdf_on_disk: dict, header_line) -> tuple:
+    """`(fm_broken, pdf_issues)` — the note's `pdf:` against the truth on disk, and its header.
+
+    Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. A note pointing at a file that is not there claims something false about the disk.
+    """
+    fm_broken: list = []
+    pdf_issues: list = []
+    pdf, on_disk = fm.get("pdf"), pdf_on_disk.get(stem)
+    if pdf is not None and not isinstance(pdf, str):
+        fm_broken.append((stem, f"`pdf` no es una ruta (es {type(pdf).__name__}) → el "
+                                f"chequeo PDF ↔ disco de esta nota no corre"))
+        pdf = None
+    pdf_ok = False
+    if pdf:
+        pdf_ok = (cfg.WIKI / "papers" / pdf).resolve().exists()
+        if not pdf_ok:
+            pdf_issues.append((stem, f"`pdf` apunta a archivo inexistente: {pdf}"))
+    elif on_disk:                      # pdf null/vacío pero el PDF está bajado → drift
+        slug_dir = Path(on_disk).parent.name
+        pdf_issues.append((stem, f"PDF en disco sin linkear → poné `pdf: ../../raw/pdfs/{slug_dir}/{stem}.pdf`"))
+    # CUERPO ↔ frontmatter (higiene; WARN, #48): el chequeo de arriba mira frontmatter vs
+    # disco y no ve el cuerpo — en una instancia real el frontmatter estaba sano mientras 351/621
+    # notas no tenían el link `[📄 PDF]`, y el modo de falla sobrevivió invisible hasta que
+    # un humano abrió una nota. La cabecera es metadata DERIVADA: debe llevar el link sii
+    # `pdf` apunta a un PDF que existe. Se distingue "sin link" (lo arregla el backfill
+    # `make_notes.py --restamp-pdf-links`) de "cabecera fuera del contrato" (hay que
+    # normalizarla a mano primero: el re-estampado la saltea, por eso quedaba muda).
+    # #380 — TRES estados, no dos. El reporte de «fuera del contrato» estaba condicionado a
+    # `not has_link`, y `has_link` es un `in` sobre el texto ENTERO: una cabecera desplazada
+    # sigue conteniendo su `[📄 PDF]`, así que la conjunción apagaba el detector. Medido: de
+    # 10 notas fuera de contrato el lint reportaba 7 y callaba sobre 3 —los tres LIBROS del
+    # corpus, donde perder la cabecera es más caro, a una corrida del cosechador de
+    # perderla—, y lo que decidía si hablaba era un accidente. Desplazada y ausente piden
+    # acciones OPUESTAS: mover no es reconstruir, y `--restamp-pdf-links` no puede reparar
+    # la ausente (`stamp_pdf_link` necesita la cabecera que ya no está, así que se saltea:
+    # el patrón de #69, el comando que el mensaje receta y no-opea).
+    cab_ok = header_line(text) is not None
+    # ⚠ Sigue atado a `pdf_ok`, como antes: la categoría es «PDF ↔ disco / cuerpo» y el
+    # defecto medido son notas CON PDF cuya cabecera el re-estampado no puede tocar. Soltar
+    # también esa condición pasaría la categoría de 0 a 60 sobre el corpus sintético del
+    # golden —notas que nunca tuvieron cabecera y tampoco PDF—, o sea ensanchar la población
+    # más allá de lo que el hallazgo justifica. Lo que se saca es la conjunción con
+    # `has_link`, que es la que apagaba el detector por un accidente.
+    if pdf_ok and not cab_ok:
+        desplazada = mn.header_line_anywhere(text) is not None
+        pdf_issues.append((stem, (
+            "cabecera DESPLAZADA (existe, fuera del contrato: no es la primera línea del "
+            "cuerpo antes de la primera `## `) → movela a su lugar, o corré "
+            "`make_notes.py --fix-header-order` si la corrió un backfill (#378)")
+            if desplazada else (
+            "cabecera AUSENTE (no hay línea `· ` con la clave en backticks) → hay que "
+            "reconstruirla, del historial de git si la borró el cosechador (#379); "
+            "`--restamp-pdf-links` NO puede: necesita la cabecera que falta")))
+    has_link = "[📄 PDF](" in text
+    if not cab_ok:
+        pass                       # ya reportada arriba: el link es un eje ortogonal
+    elif pdf_ok and not has_link:
+        pdf_issues.append((stem, "PDF linkeado en el frontmatter pero sin `[📄 PDF]` en el "
+                                 "cuerpo → correr make_notes.py --restamp-pdf-links"))
+    elif has_link and not pdf_ok:      # drift inverso: link a un PDF que ya no está
+        pdf_issues.append((stem, "link `[📄 PDF]` en el cuerpo sin PDF vigente en `pdf` → "
+                                 "correr make_notes.py --restamp-pdf-links"))
+    return fm_broken, pdf_issues
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -4949,22 +5305,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # retracción (bloqueante): el flag lo estampa check_retractions.py (red); acá se surface
             # offline. Una fuente retractada citada viola el contrato de la bóveda (todo respaldado
             # por fuente citable válida) → revisar cada afirmación que la cita.
-            if fm.get("retracted"):
-                # `or {}` no alcanza si `retraction` es un ESCALAR (edición a mano, p. ej.
-                # `retraction: "retractado en 2021"`): un string es truthy, no cae en el `or`, y
-                # `.get` revienta con AttributeError — la compuerta de CI muerta por el mismo
-                # frontmatter raro que este chequeo existe para reportar (#h03).
-                rt = cfg.as_map(fm.get("retraction"))
-                retracted.append((stem, f"{rt.get('type', 'retraction')} ({rt.get('date') or 's/f'})"))
-            # corrección no-retractante (#52, backlog): erratum/corrigendum/expression-of-concern.
-            # NO bloquea —el paper sigue siendo citable—, pero un corrigendum cambia justamente el
-            # valor que se extrajo y una EoC deja la fuente en duda → revisar lo que la cita.
-            for c in (fm.get("corrections") or []):
-                if not isinstance(c, dict):
-                    continue
-                notice = c.get("notice_doi") or "sin DOI del aviso"
-                corrections.append((stem, f"{c.get('type', 'corrección')} "
-                                          f"({c.get('date') or 's/f'}) → {notice}"))
+            # Retracciones y correcciones viven en `check_paper_retractions` (#396).
+            _r1, _r2 = check_paper_retractions(stem, fm)
+            retracted += _r1
+            corrections += _r2
             # fuente pendiente (issue #7): derivada al usuario — precondición, como las citas no
             # verificables: sin la fuente no hay fulltext ni verify. Se estampa en el ingest
             # (ingest_theme/make_notes --web con `pending`) o a mano en la nota.
@@ -4977,81 +5321,30 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # sobre 138 notas reales con el lint en rc 0: **39 sin `## Abstract`** y 69 sin
             # `## Conclusiones`. Las tres secciones se podían borrar sin que nada las extrañara, y
             # una de ellas es la única capa AUDITABLE del cuerpo.
-            if cfg.section_start(text, "## Abstract") < 0:
-                sin_abstract.append(
-                    (stem, "sin `## Abstract`: es la única capa AUDITABLE del cuerpo (copia de "
-                           "catálogo, no síntesis) y `classify_offline` la lee para re-clasificar "
-                           "sin `build/` (D-49) → `python scripts/make_notes.py --restamp-abstracts`"))
-            # `## Conclusiones` es lo que el paper afirma SIN lente (#124): lo que hace barata una
-            # segunda vista cuando otro sujeto reclama el mismo paper. Tres exenciones, las tres
-            # estructurales y machine-readable — un documento largo no tiene esa sección, y un paper
-            # leído sólo del abstract no la tiene POR CONSTRUCCIÓN (#207).
-            _marca_sc = fm.get("sin_conclusiones", _SIN_MARCA)
-            _solo_abstract = bool(fm.get("vistas")) and all(
-                str((v_ or {}).get("fuente") or "") == "abstract"
-                for v_ in cfg.as_list(fm.get("vistas")) if isinstance(v_, dict))
-            if _marca_sc is not _SIN_MARCA:
-                # Escotilla declarada: motivo OBLIGATORIO, mismo criterio que `no_vista` /
-                # `no_sintetizado` / el `--reason` del triage. Sin motivo sigue siendo deuda.
-                if str(_marca_sc or "").strip():
-                    sin_conclusiones_ok.append((stem, f"`sin_conclusiones: {_marca_sc}`"))
-                else:
-                    sin_conclusiones.append(
-                        (stem, "`sin_conclusiones` sin motivo: la escotilla lo exige (en seis meses "
-                               "sirve el motivo, no la categoría)"))
-            elif (str(fm.get("unidad_cita") or "") != "pagina" and stem in pdf_on_disk
-                    and not _solo_abstract and cfg.section_start(text, "## Conclusiones") < 0):
-                sin_conclusiones.append(
-                    (stem, "sin `## Conclusiones`: es lo que el paper afirma SIN lente, y lo que "
-                           "hace barata una segunda vista (#124) → transcribilas, o declará "
-                           "`sin_conclusiones: <motivo>` si la fuente no tiene esa sección"))
-            # #247 — el aviso de capa LLM. Se busca en el CUERPO, no en el texto entero: un
-            # `pending_motivo` que mencione esas dos palabras daría falso negativo (AUD-135).
-            if mn.AVISO_LLM_MARCA not in body_full:
-                sin_aviso_llm.append(
-                    (stem, "sin el aviso de **capa LLM**: la nota de paper es la que más contenido "
-                           "generado tiene y no dice cuál de sus tres capas es auditable → "
-                           "`python scripts/make_notes.py --restamp-headers`"))
+            # Las tres capas de una nota de paper viven en `check_paper_reading_aids` (#396).
+            _a1, _a2, _a3, _a4, _a5 = check_paper_reading_aids(stem, fm, text, body_full,
+                                                               pdf_on_disk)
+            sin_abstract += _a1
+            sin_conclusiones += _a2
+            sin_conclusiones_ok += _a3
+            sin_aviso_llm += _a4
+            vista_solo_abstract += _a5
             # #279 — los valores que la vista marcó de SEGUNDA MANO. La marca la pide #103 (el
             # número no es de esta fuente: es el mecanismo de error nº 1 medido) y nadie chequeaba
             # que llegara a la ficha. Medido: 4 casos en una ficha real, uno usado como falsa
             # corroboración independiente —«otras dos fuentes dan 7,15» era una sola medición ajena
             # contada dos veces—.
-            if (_sm := lb.second_hand_rows(body_full)):
-                segunda_mano[stem] = _sm
-            _viejos = [k for k in ("symbols_lost", "fulltext_layout") if k in fm]
-            if _viejos:
-                campos_txt_viejos.append(
-                    (stem, f"`{'`, `'.join(_viejos)}` — schema pre-#205, ya no lo lee nadie: "
-                           "`python scripts/make_notes.py --migrate-txt-fields`"))
+            # Los campos retirados viven en `check_paper_legacy_fields` (#396); `segunda_mano` es
+            # el índice que la nota alimenta, no un hallazgo suyo.
+            campos_txt_viejos += check_paper_legacy_fields(stem, fm, body_full, segunda_mano)
             # #80: la unidad de cita de una fuente larga y el recorte que entró. Vocabulario
             # cerrado (bloquea, como `role`); el `alcance` faltante es backlog porque no se puede
             # inventar — pero sin él un recorte deliberado se lee como omisión.
-            if (_u := str(fm.get("unidad_cita") or "").strip()):
-                if _u not in cfg.UNIDAD_CITA_OK:
-                    # @inv INV-46, INV-109
-                    bad_roles.append((stem, f"`unidad_cita: {_u}` fuera del vocabulario "
-                                            f"({' | '.join(cfg.UNIDAD_CITA_OK)}) — el verificador "
-                                            f"no sabe cómo citar esta fuente"))
-                elif _u != "linea" and not str(fm.get("alcance") or "").strip():
-                    incomplete.append((stem, f"`unidad_cita: {_u}` (documento largo) sin `alcance`: "
-                                             f"no consta qué parte entró, así que un recorte "
-                                             f"deliberado se lee como omisión"))
-            # #296 — los otros dos vocabularios CERRADOS del schema de paper, que `CLAUDE.md`
-            # declaraba cerrados y nadie validaba. El campo DECIDE LECTURAS (`eprint` dice que las
-            # citas son contra el preprint), así que un valor fuera de vocabulario cae por el `else`
-            # de todo `== "eprint"` en silencio. ⚠ #363: hasta 1.111.0 ese `else` eximía además del
-            # chequeo de cita textual; #275 la sacó y la doc lo siguió afirmando 59 versiones.
-            # #383 — `pdf_source: publisher|ads|web` + `eprint_version` es una contradicción INTERNA
-            # del frontmatter, no un valor viejo: la nota manda a re-verificar contra el documento
-            # equivocado. Lo detectó el extractor al releer; el lint no lo miraba.
-            if (str(fm.get("pdf_source") or "") in ("publisher", "ads", "web")
-                    and str(fm.get("eprint_version") or "").strip()):
-                pdf_source_contra.append(
-                    (stem, f"`pdf_source: {fm.get('pdf_source')}` con `eprint_version: "
-                           f"{fm.get('eprint_version')}`: el PDF es del editor y la nota dice que "
-                           f"leyó un preprint → borrá `eprint_version`, o corregí `pdf_source` "
-                           f"(#383)"))
+            # La unidad de cita de una fuente larga vive en `check_paper_citation_unit` (#396).
+            _c1, _c2, _c3 = check_paper_citation_unit(stem, fm)
+            bad_roles += _c1
+            incomplete += _c2
+            pdf_source_contra += _c3
             # #397 — el BibTeX de la ficha, que es lo que termina IMPRESO en un informe. Dos
             # chequeos que sólo existen desde que el campo existe:
             # (a) una entrada sin procedencia es, por definición, un bloque que escribió alguien —
@@ -5060,57 +5353,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             #     misma, el único objeto de la bóveda que se reconstruía en vez de traerse.
             # (b) el frontmatter y la exportación oficial no pueden decir cosas distintas del mismo
             #     paper. El caso que lo motivó: una ficha `2011Naik` con `year: 2012` adentro.
-            _btx = str(fm.get("bibtex") or "").strip()
-            if _btx and not str(fm.get("bibtex_source") or "").strip():
-                bibtex_sin_fuente.append(
-                    (stem, "tiene `bibtex` y no declara `bibtex_source`: una entrada sin "
-                           "procedencia es un bloque escrito a mano, y una cita inventada sale "
-                           "plausible → `python scripts/fetch_bibtex.py --paper "
-                           f"{stem} --force`, o borrá el campo (#397)"))
-            if _btx:
-                _campos = cfg.bibtex_fields(_btx)
-                for _c in ("doi", "year", "title"):
-                    _nota, _oficial = str(fm.get(_c) or "").strip(), str(_campos.get(_c) or "").strip()
-                    if not _nota or not _oficial:
-                        continue          # lo que una de las dos no dice no es una discrepancia
-                    # #400 — se pliega el MARKUP de los dos mundos antes de comparar: el
-                    # frontmatter trae el HTML del catálogo ADS (`H<SUB>2</SUB>O`, `&amp;`) y la
-                    # exportación el TeX (`H$_2$O`, `\&`). Medido: 3 de los 7 primeros hallazgos de
-                    # esta categoría eran el MISMO título en dos marcados, o sea que todo título
-                    # con un subíndice o un `&` era un hallazgo permanente. Debajo sigue
-                    # `method_key`, que es lo que hace que `10.1038/378355A0` no sea una
-                    # discrepancia.
-                    _kn, _ko = cfg.catalog_compare_key(_nota), cfg.catalog_compare_key(_oficial)
-                    if _kn == _ko:
-                        continue
-                    # #400 — cuál de los dos está mal SÍ se puede decidir en un caso, y es el
-                    # frecuente: si el del frontmatter es **prefijo estricto** del oficial, está
-                    # truncado (medido: 3 de 7, cortados en 84, 80 y 71 caracteres — no es un
-                    # `[:N]`). Decir «uno de los dos está mal» ahí es no decir nada.
-                    if _c == "title" and _ko.startswith(_kn):
-                        bibtex_drift.append(
-                            (stem, f"`title` del frontmatter está TRUNCADO: termina en «…"
-                                   f"{_nota[-40:]}» y la exportación oficial sigue «…"
-                                   f"{_oficial[len(_nota):][:60]}» → re-estampalo desde el catálogo "
-                                   f"(#400)"))
-                        continue
-                    bibtex_drift.append(
-                        (stem, f"`{_c}` del frontmatter dice «{_nota[:60]}» y la exportación "
-                               f"oficial dice «{_oficial[:60]}» — uno de los dos está mal, y el "
-                               f"que viaja al informe es el BibTeX (#397)"))
-            for _campo, _ok in (("pdf_source", cfg.PDF_SOURCE_OK),
-                                ("fulltext_source", cfg.FULLTEXT_SOURCE_OK),
-                                ("bibtex_source", cfg.BIBTEX_SOURCES)):
-                _v = fm.get(_campo)
-                if _v in (None, ""):
-                    continue          # ausente/`null` = DESCONOCIDO, que es un valor legítimo (#57)
-                if str(_v).strip() not in _ok:
-                    # @inv INV-46
-                    bad_roles.append((stem, f"`{_campo}: {str(_v)[:60]}` fuera del vocabulario "
-                                            f"({' | '.join(_ok)}) — `null`/ausente es el valor de "
-                                            f"«desconocido»; si querías escribir una nota, va a "
-                                            f"`pending_motivo` o a `salvedades`. Migrador: "
-                                            f"`python scripts/make_notes.py --migrate-source-fields`"))
+            # El BibTeX y los dos vocabularios cerrados viven en `check_paper_bibtex` (#396).
+            _b1, _b2, _b3 = check_paper_bibtex(stem, fm)
+            bibtex_sin_fuente += _b1
+            bibtex_drift += _b2
+            bad_roles += _b3
             # #298 — las dos señales de «la bóveda se apoya en el preprint». (a) El hallazgo del
             # detector de versiones, estampado para que SOBREVIVA a la corrida: sin él, correr la
             # pasada y no actuar en el momento borraba el hallazgo y la siguiente lo redescubría.
@@ -5120,41 +5367,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # notas). ⚠ #363: acá decía que el `eprint` EXIME además del chequeo de cita textual;
             # esa exención salió en 1.111.0 (#275) y la premisa falsa viajaba en las 94 líneas que
             # esta categoría imprime.
-            if (_vd := str(fm.get("versions_disponible") or "").strip()):
-                version_publicada.append(
-                    (stem, f"`versions_disponible: {_vd}`: el preprint salió publicado y nadie "
-                           f"renombró nada → `python scripts/make_notes.py --rename-paper {stem} "
-                           f"{_vd}` (o declaralo en `versions[]` si ya lo revisaste)"))
-            elif (str(fm.get("pdf_source") or "") == "eprint"
-                    and "arxiv" not in str(fm.get("bibcode") or stem).lower()):
-                version_publicada.append(
-                    (stem, "`pdf_source: eprint` con bibcode PUBLICADO: la nota se apoya en el "
-                           "preprint teniendo versión publicada, así que una discrepancia numérica "
-                           "contra un valor publicado es candidata a diferencia de VERSIÓN → "
-                           "conseguí el PDF publicado (`python scripts/fetch_pdf.py <slug> "
-                           "--force`) o dejá la salvedad"))
-            if fm.get("pending_source"):
-                ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
-                _p = str(fm["pending_source"])
-                # #80: la categoría sola no dice si alguien está consiguiendo la fuente o si nadie
-                # la miró nunca, y `adquisicion` (un libro en camino) no es un fallo como los otros
-                # tres. El motivo no se puede inventar, así que esto es backlog y no bloqueante:
-                # nombra la nota para que alguien lo escriba.
-                _falta = ("" if str(fm.get("pending_motivo") or "").strip() else
-                          " — ⚠ sin `pending_motivo`: escribí qué pasa con esta fuente y quién la consigue")
-                if _p not in cfg.PENDING_OK:
-                    # #129: el TYPO de vocabulario es bloqueante, como en `role` y `unidad_cita`.
-                    # Estaba acá, en backlog, y con eso INV-46 —*"un valor fuera de vocabulario
-                    # bloquea"*, universal y `garantizado y medido`— era falso para uno de los
-                    # cuatro vocabularios cerrados del schema. El argumento de INV-108 (*"el motivo
-                    # no se puede inventar"*) justifica el backlog del `pending_motivo` FALTANTE,
-                    # que sigue abajo; no el de un valor que nadie declaró.
-                    # @inv INV-46, INV-108
-                    bad_roles.append((stem, f"`pending_source: {_p}` fuera del vocabulario "
-                                            f"({' | '.join(cfg.PENDING_OK)})"))
-                pending_srcs.append(
-                    (stem, f"{_p}{' · ' + str(fm['pending_motivo']) if fm.get('pending_motivo') else ''}"
-                           f" — proveer la fuente; puntero: {ptr}{_falta}"))
+            # La versión publicada y el `pending` viven en `check_paper_pending` (#396).
+            _p1, _p2, _p3 = check_paper_pending(stem, fm)
+            version_publicada += _p1
+            pending_srcs += _p2
+            bad_roles += _p3
             # el tooling escribe siempre `high`/`low`; el `.lower()` cubre la edición a mano,
             # donde un `Low` entraba a la población que el recorte quería dejar afuera.
             relevancia = str(fm.get("relevance") or "").strip().lower()
@@ -5437,79 +5654,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                             reclamo_sin_vista.append(
                                 (stem, f"lo reclama **{sujeto}** y nadie lo leyó desde ahí → hacer "
                                        f"la vista, o declararla con `no_vista` y su motivo"))
-            rol = fm.get("role")
-            roles = rol if isinstance(rol, list) else ([rol] if rol else [])
-            for r in roles:
-                if str(r).strip() not in ROLES:
-                    # @inv INV-46
-                    bad_roles.append((stem, f"`role: {r}` no está en el vocabulario "
-                                            f"({'/'.join(ROLES)}) → typo: el rol queda mudo para el "
-                                            f"contraste cross-paper"))
-            # Mismo recorte que el de #75 tres líneas arriba: a una nota no-core (escrita con
-            # `--all`) no se le pide rol, igual que no se le pide que aterrice en una síntesis.
-            if fm.get("methods") and not roles and relevancia != "low":
-                incomplete.append((stem, "paper extraído sin `role` (fundacional/aplicacion/arbitro) "
-                                         "→ sin rol, contrastarlo contra otro no está definido"))
-            for tl in fm.get("thesis_links") or []:
-                thesis_refs.setdefault(str(tl), []).append(stem)
-            for mt in fm.get("methods") or []:
-                method_refs.setdefault(str(mt), []).append(stem)
+            # El `role` vive en `check_paper_role` (#396); los dos `*_refs` son índices.
+            _rl1, _rl2 = check_paper_role(stem, fm, relevancia, thesis_refs, method_refs)
+            bad_roles += _rl1
+            incomplete += _rl2
             # PDF ↔ disco (higiene; WARN): el campo `pdf` debe reflejar el PDF real bajado.
-            pdf, on_disk = fm.get("pdf"), pdf_on_disk.get(stem)
-            if pdf is not None and not isinstance(pdf, str):
-                fm_broken.append((stem, f"`pdf` no es una ruta (es {type(pdf).__name__}) → el "
-                                        f"chequeo PDF ↔ disco de esta nota no corre"))
-                pdf = None
-            pdf_ok = False
-            if pdf:
-                pdf_ok = (cfg.WIKI / "papers" / pdf).resolve().exists()
-                if not pdf_ok:
-                    pdf_issues.append((stem, f"`pdf` apunta a archivo inexistente: {pdf}"))
-            elif on_disk:                      # pdf null/vacío pero el PDF está bajado → drift
-                slug_dir = Path(on_disk).parent.name
-                pdf_issues.append((stem, f"PDF en disco sin linkear → poné `pdf: ../../raw/pdfs/{slug_dir}/{stem}.pdf`"))
-            # CUERPO ↔ frontmatter (higiene; WARN, #48): el chequeo de arriba mira frontmatter vs
-            # disco y no ve el cuerpo — en una instancia real el frontmatter estaba sano mientras 351/621
-            # notas no tenían el link `[📄 PDF]`, y el modo de falla sobrevivió invisible hasta que
-            # un humano abrió una nota. La cabecera es metadata DERIVADA: debe llevar el link sii
-            # `pdf` apunta a un PDF que existe. Se distingue "sin link" (lo arregla el backfill
-            # `make_notes.py --restamp-pdf-links`) de "cabecera fuera del contrato" (hay que
-            # normalizarla a mano primero: el re-estampado la saltea, por eso quedaba muda).
-            # #380 — TRES estados, no dos. El reporte de «fuera del contrato» estaba condicionado a
-            # `not has_link`, y `has_link` es un `in` sobre el texto ENTERO: una cabecera desplazada
-            # sigue conteniendo su `[📄 PDF]`, así que la conjunción apagaba el detector. Medido: de
-            # 10 notas fuera de contrato el lint reportaba 7 y callaba sobre 3 —los tres LIBROS del
-            # corpus, donde perder la cabecera es más caro, a una corrida del cosechador de
-            # perderla—, y lo que decidía si hablaba era un accidente. Desplazada y ausente piden
-            # acciones OPUESTAS: mover no es reconstruir, y `--restamp-pdf-links` no puede reparar
-            # la ausente (`stamp_pdf_link` necesita la cabecera que ya no está, así que se saltea:
-            # el patrón de #69, el comando que el mensaje receta y no-opea).
-            cab_ok = find_header_line(text) is not None
-            # ⚠ Sigue atado a `pdf_ok`, como antes: la categoría es «PDF ↔ disco / cuerpo» y el
-            # defecto medido son notas CON PDF cuya cabecera el re-estampado no puede tocar. Soltar
-            # también esa condición pasaría la categoría de 0 a 60 sobre el corpus sintético del
-            # golden —notas que nunca tuvieron cabecera y tampoco PDF—, o sea ensanchar la población
-            # más allá de lo que el hallazgo justifica. Lo que se saca es la conjunción con
-            # `has_link`, que es la que apagaba el detector por un accidente.
-            if pdf_ok and not cab_ok:
-                desplazada = mn.header_line_anywhere(text) is not None
-                pdf_issues.append((stem, (
-                    "cabecera DESPLAZADA (existe, fuera del contrato: no es la primera línea del "
-                    "cuerpo antes de la primera `## `) → movela a su lugar, o corré "
-                    "`make_notes.py --fix-header-order` si la corrió un backfill (#378)")
-                    if desplazada else (
-                    "cabecera AUSENTE (no hay línea `· ` con la clave en backticks) → hay que "
-                    "reconstruirla, del historial de git si la borró el cosechador (#379); "
-                    "`--restamp-pdf-links` NO puede: necesita la cabecera que falta")))
-            has_link = "[📄 PDF](" in text
-            if not cab_ok:
-                pass                       # ya reportada arriba: el link es un eje ortogonal
-            elif pdf_ok and not has_link:
-                pdf_issues.append((stem, "PDF linkeado en el frontmatter pero sin `[📄 PDF]` en el "
-                                         "cuerpo → correr make_notes.py --restamp-pdf-links"))
-            elif has_link and not pdf_ok:      # drift inverso: link a un PDF que ya no está
-                pdf_issues.append((stem, "link `[📄 PDF]` en el cuerpo sin PDF vigente en `pdf` → "
-                                         "correr make_notes.py --restamp-pdf-links"))
+            # El `pdf:` contra el disco y la cabecera viven en `check_paper_pdf_link` (#396).
+            _pl1, _pl2 = check_paper_pdf_link(stem, fm, text, pdf_on_disk, find_header_line)
+            fm_broken += _pl1
+            pdf_issues += _pl2
 
     # verificación STALE (backlog, #56): el bloque `## Verificación de citas` lleva fecha; si la nota
     # se editó DESPUÉS —un refresh de `maintain A`, un `append-knowledge`, una síntesis nueva—, las

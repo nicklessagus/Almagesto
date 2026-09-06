@@ -9172,3 +9172,136 @@ def test_check_paper_destination_y_radio_sin_link(toy_vault):
         "una nota no se linkea a sí misma"
     assert lint.check_radio_without_link("hub", hub, cuerpo, {"otra-cosa"}) == [], \
         "lo que no es un concepto declarado no es un radio: sería exigir link a la nada"
+
+
+# ── #396 · los ocho chequeos del sub-bloque de PAPER ─────────────────────────────────────────────
+
+def test_check_paper_retractions_saltea_la_correccion_con_forma_invalida(toy_vault):
+    """#396/#52/D-47 — una retractación invalida la fuente y BLOQUEA; una corrección no la invalida
+    —el paper sigue citable— pero es la señal que más directamente ENVEJECE un número ya extraído.
+    La guarda que sobrevivía: una entrada de `corrections` que no es un mapa se saltea en vez de
+    reventar el lint entero con un `.get` sobre un string."""
+    assert lint.check_paper_retractions("2020X", {}) == ([], [])
+    ret, _c = lint.check_paper_retractions("2020X", {"retracted": True, "retraction": {}})
+    assert len(ret) == 1
+    _r, cor = lint.check_paper_retractions("2020X", {"corrections": ["no soy un mapa", 3]})
+    assert cor == [], "una corrección con forma inválida no se puede leer: se saltea"
+    _r, cor = lint.check_paper_retractions(
+        "2020X", {"corrections": [{"type": "erratum", "notice_doi": "10.1/x"}]})
+    assert len(cor) == 1 and "erratum" in cor[0][1]
+
+
+def test_check_paper_reading_aids_pide_conclusiones_solo_donde_TIENE_SENTIDO(toy_vault):
+    """#396/#124/#277 — las dos guardas que sobrevivían acotan `## Conclusiones` a la población
+    donde existe: hace falta el PDF en disco (sin él la nota no pudo leerlas) y que la sección NO
+    esté ya escrita. Un documento largo o una vista hecha sólo del abstract quedan excluidos por
+    construcción, no por umbral de largo."""
+    base = {"vistas": [{"sujeto": "x", "fuente": "pdf"}]}
+    cuerpo = f"## Abstract\nx\n{mn.AVISO_LLM_MARCA}\n"
+    def _sc(fm, texto=cuerpo, disco=("2020X",)):
+        return lint.check_paper_reading_aids("2020X", fm, texto, texto,
+                                             {s: "x.pdf" for s in disco})[1]
+    assert len(_sc(base)) == 1, "con PDF y sin la sección, se pide"
+    assert _sc(base, disco=()) == [], "sin PDF en disco la nota no pudo leer conclusiones"
+    assert _sc(base, cuerpo + "\n## Conclusiones\ny\n") == [], "ya está escrita"
+    assert _sc({**base, "unidad_cita": "pagina"}) == [], "un documento largo no las tiene (#80)"
+    assert _sc({"vistas": [{"sujeto": "x", "fuente": "abstract"}]}) == [], \
+        "una vista hecha del abstract tampoco (#207)"
+    # y la escotilla declarada exige MOTIVO, como el `--reason` del triage: con motivo baja a
+    # «declarado y resuelto», sin motivo sigue siendo deuda
+    def _ok(fm):
+        return lint.check_paper_reading_aids("2020X", fm, cuerpo, cuerpo, {"2020X": "x.pdf"})[2]
+    assert _sc({**base, "sin_conclusiones": "es un libro"}) == []
+    assert len(_ok({**base, "sin_conclusiones": "es un libro"})) == 1
+    assert len(_sc({**base, "sin_conclusiones": ""})) == 1 and _ok({**base, "sin_conclusiones": ""}) == []
+
+
+def test_check_paper_citation_unit_y_pdf_source_contra(toy_vault):
+    """#396/#80/#383 — las cuatro guardas que sobrevivían, dos por chequeo.
+
+    Una fuente LARGA declara `unidad_cita` y `alcance`; la que se cita por LÍNEA (el default) no
+    debe nada, y la que ya declaró su alcance tampoco. Y `pdf_source` de editor con
+    `eprint_version` es la contradicción de #383: la nota manda a re-verificar contra el documento
+    equivocado — pero un `eprint` CON versión es lo correcto, y un editor SIN versión también."""
+    def _u(fm):
+        return lint.check_paper_citation_unit("2020X", fm)
+    assert _u({}) == ([], [], [])
+    assert _u({"unidad_cita": "linea"})[1] == [], "la línea es el default: no debe `alcance`"
+    assert len(_u({"unidad_cita": "pagina"})[1]) == 1
+    assert _u({"unidad_cita": "pagina", "alcance": "caps. 1-3"})[1] == []
+    assert len(_u({"unidad_cita": "inventada"})[0]) == 1, "vocabulario cerrado"
+
+    assert _u({"pdf_source": "eprint", "eprint_version": "v1"})[2] == [], \
+        "un preprint CON su versión es exactamente lo correcto"
+    assert _u({"pdf_source": "publisher"})[2] == [], "un publicado sin `eprint_version` también"
+    assert len(_u({"pdf_source": "publisher", "eprint_version": "v1"})[2]) == 1
+
+
+def test_check_paper_bibtex_no_inventa_drift_donde_falta_un_lado(toy_vault):
+    """#396/#397/#400 — las dos guardas que sobrevivían. Lo que una de las dos fuentes NO DICE no es
+    una discrepancia: comparar contra el vacío reportaría drift sobre toda nota incompleta. Y el
+    `title` TRUNCADO es su propia categoría —el frontmatter empieza igual y se corta— porque «uno de
+    los dos está mal» ahí es no decir nada; el corte no es un `[:N]` fijo (medido: 84, 80 y 71)."""
+    bib = ("@ARTICLE{2020X,\n  title = {Un titulo largo y completo del trabajo},\n"
+           "  year = {2020},\n  doi = {10.1/ok},\n}")
+    base = {"bibtex": bib, "bibtex_source": "ads"}
+    def _b(fm):
+        return lint.check_paper_bibtex("2020X", fm)
+    assert _b({**base, "year": 2020, "doi": "10.1/ok",
+               "title": "Un titulo largo y completo del trabajo"})[1] == []
+    assert _b(base)[1] == [], "el frontmatter que no declara nada no contradice a nadie"
+    # …y al revés: el campo que el frontmatter SÍ trae y la exportación NO tampoco es drift —
+    # comparar contra el vacío reportaría discrepancia sobre toda entrada incompleta
+    solo_year = "@ARTICLE{2020X,\n  year = {2020},\n}"
+    assert _b({"bibtex": solo_year, "bibtex_source": "ads", "doi": "10.1/ok"})[1] == []
+    assert _b({**base, "year": 2019})[1], "el año que difiere sí es drift"
+
+    truncado = _b({**base, "title": "Un titulo largo y completo del"})[1]
+    assert len(truncado) == 1 and "TRUNCADO" in truncado[0][1]
+    # …y el mismo prefijo en OTRO campo no es «truncado»: es drift normal
+    otro = _b({**base, "doi": "10.1/"})[1]
+    assert len(otro) == 1 and "TRUNCADO" not in otro[0][1]
+
+    assert len(_b({"bibtex": bib})[0]) == 1, "sin `bibtex_source` bloquea (#397)"
+    assert _b({})[0] == [], "sin `bibtex` no hay procedencia que pedir"
+
+
+def test_check_paper_role_no_se_lo_pide_al_que_ya_lo_tiene(toy_vault):
+    """#396/#73 — sin `role`, «contrastar dos papers» no está definido: fundacional↔aplicación NO es
+    contraste sino instanciación, y tratarlo como desacuerdo FABRICA disputas. La guarda que
+    sobrevivía es la obvia y la que más importa que no falle: al que YA declara rol no se le pide."""
+    tr, mr = {}, {}
+    assert lint.check_paper_role("2020X", {}, "high", tr, mr) == ([], [])
+    _b, inc = lint.check_paper_role("2020X", {"methods": ["PCA"]}, "high", tr, mr)
+    assert len(inc) == 1 and "sin `role`" in inc[0][1]
+    _b, inc = lint.check_paper_role("2020X", {"methods": ["PCA"], "role": ["fundacional"]},
+                                    "high", tr, mr)
+    assert inc == [], "con rol declarado no se pide"
+    _b, inc = lint.check_paper_role("2020X", {"methods": ["PCA"]}, "low", tr, mr)
+    assert inc == [], "a una nota no-core no se le pide rol (mismo recorte que #75)"
+    bad, _i = lint.check_paper_role("2020X", {"role": ["inventado"]}, "high", tr, mr)
+    assert len(bad) == 1 and "no está en el vocabulario" in bad[0][1]
+    # y los dos índices que la nota alimenta
+    lint.check_paper_role("2020X", {"thesis_links": ["ica"], "methods": ["PCA"],
+                                    "role": ["aplicacion"]}, "high", tr, mr)
+    assert "ica" in tr and "PCA" in mr
+
+
+def test_check_paper_pdf_link_solo_pide_cabecera_donde_hay_PDF(toy_vault):
+    """#396 — la guarda que sobrevivía: la cabecera DESPLAZADA se reporta sobre la nota que tiene
+    PDF. Sin PDF el hallazgo sería otro (la nota que nunca pasó por el estampador), y mezclarlos
+    manda a arreglar la cosa equivocada."""
+    sin_cab = lambda _t: None                       # noqa: E731
+    con_cab = lambda _t: 1                          # noqa: E731
+    # el PDF tiene que EXISTIR: `pdf_ok` es verdad de disco, no del frontmatter
+    (cfg.PDFS / "s").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "s" / "2020X.pdf").write_bytes(b"%PDF-1.4\n")
+    disco = {"2020X": cfg.PDFS / "s" / "2020X.pdf"}
+    fm = {"pdf": "../../raw/pdfs/s/2020X.pdf"}
+    _f, pi = lint.check_paper_pdf_link("2020X", fm, "cuerpo", disco, sin_cab)
+    assert any("cabecera" in m for _s, m in pi), pi
+    _f, pi = lint.check_paper_pdf_link("2020X", fm, "cuerpo", disco, con_cab)
+    assert not any("DESPLAZADA" in m for _s, m in pi), pi
+    _f, pi = lint.check_paper_pdf_link("2020X", {}, "cuerpo", {}, sin_cab)
+    assert not any("cabecera" in m for _s, m in pi), \
+        "sin PDF no se pide cabecera de ninguna de las dos formas: el hallazgo es otro"
