@@ -4592,6 +4592,331 @@ def check_paper_pdf_link(stem: str, fm: dict, text: str, pdf_on_disk: dict, head
     return fm_broken, pdf_issues
 
 
+def check_paper_coverage(stem: str, fm: dict, relevancia: str, pdf_on_disk: dict, fulltext: dict, sin_extraer_por_sujeto: dict, extracted: list) -> tuple:
+    """`(incomplete, no_vista, nv_error)` — cuán lejos llegó este paper en la cadena (#90/#268).
+
+    Extracted from the paper sub-block of `lint.collect` by #396; the block computes and the caller
+    accumulates. Two OPPOSITE situations used to come out with the same message —«downloaded and
+    nobody read it» and «never obtained»— and they ask for opposite things: one is the agent's work,
+    the other is the user's queue.
+
+    `no_vista` is parsed HERE and returned because three nets that run earlier needed it and none
+    looked at it: the hatch #256 made reachable decided over ONE category while the others counted
+    the same note as debt. `nv_error` travels instead of being swallowed — the invalid shape is
+    reported by the vistas block, which is the one that owns that field; eating it here would let
+    the note evade the check of its own field.
+
+    `sin_extraer_por_sujeto` and `extracted` are the indices this note feeds, not findings.
+    """
+    incomplete: list = []
+    # #268 — `no_vista` se parsea ACÁ porque tres redes que corren antes lo necesitaban y
+    # ninguna lo miraba: la escotilla que #256 hizo alcanzable decidía sobre UNA sola
+    # categoría, y las otras contaban la misma nota como deuda. Medido: una nota con
+    # `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla
+    # VizieR, que no es un paper. La forma inválida se reporta más abajo, en su bloque.
+    try:
+        no_vista, nv_error = (
+            {v["sujeto"]: v["motivo"] for v in cfg.load_no_vista(fm, entry=stem)}, None)
+    except cfg.VistasError as _e:
+        # La forma inválida NO se pierde: se guarda y se re-levanta en el bloque de vistas,
+        # que es el que la reporta como `fm_broken`. Tragarla acá dejaría la nota evadiendo
+        # el chequeo de su propio campo, que es el bug que ese bloqueante existe para cerrar.
+        no_vista, nv_error = {}, _e
+    if relevancia == "high" and not fm.get("methods") and not no_vista:
+        # #90: dos situaciones OPUESTAS salían con el mismo mensaje — «bajado y nadie lo
+        # leyó» (trabajo del agente) y «nunca se pudo bajar» (trabajo del usuario: conseguir
+        # la fuente). Son colas distintas con dueños distintos, así que mezclarlas hace
+        # imposible priorizar o derivar. El residuo del resolver vivía en
+        # `build/<slug>/missing_pdf.json`, gitignored, y la nota quedaba muda.
+        # La verdad de disco alcanza y no hay que estampar nada: sin `.txt` y sin PDF, la
+        # fuente no está. Un `pending_source` declarado ya se reporta arriba, así que no se
+        # cuenta dos veces.
+        # @inv INV-112
+        if stem in fulltext or stem in pdf_on_disk or fm.get("pending_source"):
+            incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
+        else:
+            incomplete.append(
+                (stem, "paper relevante **sin fuente en disco** (ni `.txt` ni PDF): no es "
+                       "que falte leerlo, es que nunca se consiguió → conseguir el PDF, o "
+                       "declararlo con `pending`/`pending_motivo` para derivarlo"))
+        # D-13/INV-83: el sujeto de ese paper queda anotado; después del barrido se
+        # contrasta contra lo que el registro DECLARÓ haber leído.
+        # ⛔ #348 — se indexa por CLAVE NORMALIZADA (`method_key`, #243) y el consumidor
+        # busca con la misma clave: con el string crudo, un paper con `thesis_links: [PCA]`
+        # no caía en el balde del tema `pca` y el recorte se reportaba o no según la grafía
+        # que eligió el extractor (medido: 0 con `PCA`, 1 con `pca`).
+        # Qué campos entran: `stars` para estrellas y `thesis_links` para temas — la
+        # pertenencia de un paper a un tema NO vive en las facetas (otro eje). `methods` no
+        # se recorre, y **no es la mitad que falta** de la unión de
+        # `make_notes.theme_membership` (D-24): esta rama exige `not fm.get("methods")`, así
+        # que acá el campo está vacío por construcción y recorrerlo sería un condicional que
+        # no decide nada (red 8). El comentario anterior prometía «mismo predicado que
+        # `make_notes._papers_del_sujeto`» y era falso por los dos ejes (#348).
+        for campo in ("stars", "thesis_links"):
+            for sujeto in cfg.as_list(fm.get(campo)):
+                # #268 — el sujeto DECLARADO no cuenta como «sin extraer» para el recorte:
+                # con él adentro, el detector afirmaba *«quedan N sin extraer»* sobre un
+                # `criterio: todos los core` que sí se había cumplido.
+                if str(sujeto) in no_vista:
+                    continue
+                if (subject_key := cfg.method_key(sujeto)):
+                    sin_extraer_por_sujeto.setdefault(subject_key, set()).add(stem)
+    # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
+    # que alguien gastó en él el paso más caro de la cadena; si su contenido nunca llegó a
+    # una ficha ni a un concepto, la extracción se perdió. Se recolecta acá y se resuelve
+    # después del barrido, cuando ya se sabe qué citó cada nota de entidad.
+    if fm.get("methods") and relevancia != "low":
+        # centinela: `no_sintetizado: ""` / `null` / `false` / `0` son marca PRESENTE pero
+        # sin motivo — con `.get(campo)` a secas colapsaban con "no hay marca" y el lint
+        # respondía "poné `no_sintetizado`" sobre una nota que ya lo tenía puesto.
+        extracted.append((stem, fm.get("no_sintetizado", _SIN_MARCA)))
+    return incomplete, no_vista, nv_error
+
+
+def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, theme_index: dict, temas_por_sujeto: dict) -> tuple:
+    """The twelve verdicts about `vistas[]` — WHICH READING was made of this paper (#188).
+
+    Extracted from the paper sub-block of `lint.collect` by #396: the largest single block of the
+    whole issue after the sweep itself, and the one with the most categories hanging off one read.
+
+    `stars`/`thesis_links`/`methods` are CLAIMS —the retro-link merges them add-only without reading
+    anything— and `vistas[]` are READINGS. Without that distinction the note's silence about an axis
+    is indistinguishable from «we looked and there is nothing», which is the same false-clean D-34
+    chases in hypotheses.
+
+    @inv INV-146
+    """
+    fm_broken: list = []
+    vistas_schema_viejo: list = []
+    vistas_vs_cuerpo: list = []
+    vista_sin_fecha: list = []
+    vista_sin_fuente: list = []
+    vista_sin_fuente_en_disco: list = []
+    vista_solo_abstract: list = []
+    vista_con_plantilla: list = []
+    vista_ejes_faltantes: list = []
+    reclamo_sin_vista: list = []
+    reclamo_sin_vista_declarado: list = []
+    reclamo_refutado: list = []
+    # aplicación NO es contraste sino instanciación, y leerlo como desacuerdo fabrica
+    # disputas falsas. Se puebla en la extracción (la regex del clasificador no puede
+    # inferirlo) — por eso el aviso cuelga de `methods`, la marca de "ya se extrajo".
+    # #188 · qué LECTURA se hizo. `stars`/`thesis_links`/`methods` son RECLAMOS (el
+    # retro-link los mergea add-only sin leer nada); `vistas[]` son lecturas. Sin la
+    # distinción, el silencio de la nota sobre un eje es indistinguible de «se miró y no
+    # hay nada» — el mismo falso limpio que D-34 persigue en las hipótesis.
+    try:
+        vistas = cfg.load_vistas(fm, entry=stem)
+        if nv_error is not None:
+            raise nv_error
+        # #268 — `no_vista` ya viene parseado de `check_paper_coverage`, de la MISMA fuente. Lo
+        # que esta rama hace es re-levantar su error para que caiga en el `except` de abajo: la
+        # forma inválida la reporta ESTE bloque, que es el dueño del campo.
+    except cfg.VistasError as e:
+        # Se REPORTA, no tumba el barrido: es la razón de que el loader levante en vez de
+        # salir. Cae en `fm_broken` porque es literalmente eso — un campo con forma
+        # inválida hace que la nota evada los chequeos de su tipo (los cuatro de abajo).
+        fm_broken.append((stem, str(e).replace("\n", " ")))
+        vistas, no_vista = [], {}
+    else:
+        # #270 — #254 hizo que el prompt derive sus ejes de `relevance.facets` y no dejó
+        # red: nada compara los ejes que la vista CONTESTA contra la `lente` que DECLARA, y
+        # una faceta que la vista no menciona se lee como «se miró y no hay nada». Medido:
+        # 257 huecos sobre 79 vistas con lente declarada. Backlog: una vista puede
+        # legítimamente no tener nada que decir sobre un eje — lo que no puede es callarlo.
+        _ejes_por_sujeto = cfg.view_axes(text)
+        for _v in vistas:
+            _lente = [str(x).strip() for x in (_v.get("lente") or []) if str(x).strip()]
+            if not _lente or not _v.get("fecha"):
+                continue          # sin lente declarada o sin lectura, no hay qué comparar
+            # #360 — con `ejes:` sin declarar la lente que la vista declara es la GLOBAL,
+            # o sea el conjunto equivocado: comparar contra ella daba un cero limpio o
+            # huecos sobre ejes que el tema nunca debió preguntar. D-43: no evaluable.
+            _tm = temas_por_sujeto.get(str(_v.get("sujeto") or "").strip().casefold()) \
+                if _v.get("tipo") == "theme" else None
+            if _tm is not None and cfg.theme_inherited_axes(_tm) is not None:
+                vista_ejes_faltantes.append(
+                    (stem, f"no evaluable: la vista de «{_v['sujeto']}» se leyó con los ejes "
+                           f"del objetivo porque el tema no declara `ejes:` — declaralos "
+                           f"(#360) y este chequeo vuelve a comparar contra la lente propia"))
+                continue
+            # #395c — la clave es el PAR `(sujeto, énfasis)`: una segunda lectura del
+            # mismo sujeto (#239) contesta SUS ejes en su `### Lente — …`, y con la clave
+            # por sujeto se la comparaba contra los de la primera. Medido: 13 vistas
+            # reportadas como «no contesta NINGUNO de sus 7 ejes» con los siete ahí mismo.
+            _clave = (_v["sujeto"], str(_v.get("enfasis") or "").strip())
+            _faltan = [e for e in _lente if e not in _ejes_por_sujeto.get(_clave, set())]
+            if _faltan:
+                _cual = f" (lente «{_clave[1]}»)" if _clave[1] else ""
+                vista_ejes_faltantes.append(
+                    (stem, f"la vista de «{_v['sujeto']}»{_cual} declara la lente "
+                           f"`{', '.join(_lente)}` y no contesta `{', '.join(_faltan)}`: el "
+                           f"silencio sobre un eje se lee como «se miró y no hay nada»"))
+        # #239 — la coherencia de las SUB-secciones por lente, en los dos sentidos: una
+        # lente declarada sin su `### Lente — …` y una sub-sección sin declarar. Es el mismo
+        # chequeo de #188 un nivel abajo, y hace falta porque la lente es lo que distingue
+        # dos lecturas del mismo sujeto: sin él, la segunda vuelve a ser invisible.
+        _lentes_cuerpo = {m.group(1).strip() for m in _LENTE_RE.finditer(text)}
+        _lentes_decl = {str(v.get("enfasis") or "").strip() for v in vistas
+                        if str(v.get("enfasis") or "").strip()}
+        for _falta in sorted(_lentes_decl - _lentes_cuerpo):
+            vistas_vs_cuerpo.append(
+                (stem, f"declara la lente «{_falta}» en `vistas[]` y el cuerpo no tiene su "
+                       f"`### Lente — {_falta}`"))
+        for _sobra in sorted(_lentes_cuerpo - _lentes_decl):
+            vistas_vs_cuerpo.append(
+                (stem, f"tiene `### Lente — {_sobra}` en el cuerpo y ninguna entrada de "
+                       f"`vistas[]` la declara"))
+        secciones = vistas_en_cuerpo(text)
+        declaradas = {v["sujeto"] for v in vistas}
+        #  @inv INV-134
+        if not vistas and EXTRACCION_VIEJA_RE.search(text):
+            vistas_schema_viejo.append(
+                (stem, "`## Extracción (LLM)` sin `vistas[]`: no consta desde qué sujeto se "
+                       "leyó este paper, así que su silencio sobre un eje no se distingue "
+                       "de «se miró y no hay nada» → `python scripts/make_notes.py "
+                       "--migrate-vistas` (AUD-175)"))
+        # Declarada y sin hacer. El stub nace con la vista de su sujeto y SIN `fecha`
+        # (la ausencia es «no consta», paso 1): la fecha es lo que dice que la lectura
+        # ocurrió. Sin este renglón, declarar la vista al crear el stub apagaría
+        # `reclamo_sin_vista` para el sujeto que la sembró y el silencio volvería a leerse
+        # como «se miró y no hay nada» — el defecto que #188 cierra, por otra puerta.
+        # ⛔ #256 — la escotilla `no_vista` decide ACÁ, sobre la vista sin fecha, y no
+        # sobre `reclamos - declaradas`, que el propio sembrado de arriba deja SIEMPRE
+        # vacío: `make_notes` pone una entrada de `vistas[]` por cada reclamo, así que ni
+        # la deuda ni la escotilla podían dispararse desde esa rama. Medido: **0 de 138**
+        # notas de una bóveda real la alcanzaban, o sea que `load_no_vista` se parseaba y
+        # su resultado no lo consumía nadie. Sin esto, «falta leerlo» y «no hay nada que
+        # leer, y está dicho por qué» caen en el mismo bolsón — que es justo lo que la
+        # categoría DECLARADA existe para separar. ⚠ `no_vista` NO borra la entrada de
+        # `vistas[]`: la nota sigue diciendo que ese sujeto la reclama; lo que declara es
+        # por qué no se leyó.
+        for v in vistas:
+            if not str(v.get("fecha") or "").strip() and v["sujeto"] in no_vista:
+                reclamo_sin_vista_declarado.append(
+                    (stem, f"**{v['sujeto']}** — {no_vista[v['sujeto']]}"))
+            elif not str(v.get("fecha") or "").strip():
+                vista_sin_fecha.append(
+                    (stem, f"la vista de **{v['sujeto']}** está declarada y sin `fecha`: no "
+                           f"consta que se haya leído desde ahí"))
+            # #207 · de QUÉ se construyó. Sin el campo, una vista escrita desde ocho líneas
+            # de abstract es indistinguible de una escrita leyendo el paper — el falso
+            # limpio de D-34 aplicado a la lectura. Ausente = no consta, así que backlog:
+            # el dato no se inventa, se pide.
+            elif not (_f := str(v.get("fuente") or "").strip()):
+                vista_sin_fuente.append(
+                    (stem, f"la vista de **{v['sujeto']}** no dice de qué se construyó "
+                           f"(`fuente: pdf|abstract`): una lectura del abstract se lee "
+                           f"igual que una del paper"))
+            elif _f == "abstract":
+                # NO es un error: la vista es legítima y está declarada. El hallazgo pide
+                # el PDF — mismo carril que `pending_source`, visto desde la lectura.
+                vista_solo_abstract.append(
+                    (stem, f"la vista de **{v['sujeto']}** se construyó SÓLO del abstract: "
+                           f"conseguir el PDF para leer el paper (y ojo, el abstract es "
+                           f"donde la fuente afirma de más)"))
+        # #217 — la vista OCURRIÓ (tiene fecha) y su fuente ya no está en disco: sus citas
+        # no se pueden contrastar nunca más. Pasa cuando `--drop-core` borra los artefactos
+        # y conserva la nota, y es peor en la rama «se conserva porque pertenece a OTRO
+        # sujeto»: ahí el paper puede estar citado en la ficha de esa entidad, con pares ya
+        # verificados. El ancla de fuente (D-20) no lo ve —el archivo no cambió,
+        # DESAPARECIÓ— y `## Citas no verificables` mira los bibcodes citados desde
+        # conceptos/queries, no los pares ya verificados de una ficha. Sin esta categoría,
+        # la vista se lee igual de firme que cualquier otra.
+        if any(str(v.get("fecha") or "").strip() for v in vistas) and not (
+                list(cfg.PDFS.glob(f"*/{stem}.pdf")) if cfg.PDFS.exists() else []) and not (
+                list(cfg.FULLTEXT.glob(f"*/{stem}.txt")) if cfg.FULLTEXT.exists() else []):
+            vista_sin_fuente_en_disco.append(
+                (stem, "tiene vista FECHADA y ya no hay fuente en disco (ni PDF ni `.txt`): "
+                       "la lectura ocurrió y sus localizadores siguen siendo válidos, pero "
+                       "`verify-citations` no puede contrastarla nunca más — conseguir de "
+                       "nuevo la fuente, o declarar la pérdida en `salvedades` de la vista"))
+        # #212 — la lectura REFUTÓ el reclamo y el reclamo sigue en el frontmatter. Es el
+        # simétrico del «reclamado sin vista» de #188: allá nadie leyó, acá se leyó y el
+        # resultado dice que el reclamo es falso. El lint no lo veía porque mira la
+        # coherencia `vistas[] ↔ sección`, no `reclamo ↔ contenido de la vista`, y el
+        # merge de `harvest_views` es add-only a propósito, así que el reclamo sembrado es
+        # infalsificable por la lectura. Backlog: sacar el paper del sujeto es decisión del
+        # usuario —puede ser core de OTRO— y el roll-up del concepto lo sigue listando
+        # mientras tanto.
+        _reclamados = {str(x).strip() for x in
+                       cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))}
+        for v in vistas:
+            for suj in cfg.as_list(v.get("refuta")):
+                if str(suj).strip() in _reclamados:
+                    reclamo_refutado.append(
+                        (stem, f"la vista de **{v.get('sujeto')}** REFUTA el reclamo de "
+                               f"**{suj}**, que sigue en el frontmatter: el roll-up lo va a "
+                               f"seguir listando → `triage.py <slug> --drop-core {stem} "
+                               f"--reason \"…\"`, o quitá el reclamo a mano si el paper "
+                               f"pertenece a otro sujeto"))
+        # #398 — la sección de un sujeto declarado `no_vista` sigue publicando la
+        # PLANTILLA del stub: las instrucciones al extractor, bajo un encabezado que la nota
+        # presenta como síntesis (#247). Medido: 46 notas así durante seis días, invisibles
+        # porque el lint miraba la coherencia `vistas[] ↔ sección` y la escotilla decide
+        # sobre el frontmatter. Backlog con su migrador: la decisión ya está tomada, lo que
+        # falta es que el cuerpo la diga.
+        import make_notes as _mn          # import local: `make_notes` no importa al lint
+        for _v in vistas:
+            _suj = str(_v.get("sujeto") or "").strip()
+            if not _suj or _mn.view_stub_kind(
+                    text, _suj, str(_v.get("tipo") or "") == "theme") != "plantilla":
+                continue
+            vista_con_plantilla.append(
+                (stem, f"la `## Vista` de **{_suj}** sigue publicando la PLANTILLA del stub "
+                       f"(las instrucciones al extractor, visibles como si fueran "
+                       f"contenido) → `python scripts/make_notes.py --restamp-vista-stub`"))
+        for falta in sorted(declaradas - secciones):
+            vistas_vs_cuerpo.append(
+                (stem, f"`vistas[]` declara la lectura de **{falta}** y el cuerpo no tiene "
+                       f"su `## Vista — {falta}`: afirma una lectura que no está"))
+        for falta in sorted(secciones - declaradas):
+            vistas_vs_cuerpo.append(
+                (stem, f"`## Vista — {falta}` sin entrada en `vistas[]`: no consta de qué "
+                       f"`.txt` salió ni con qué lente se leyó"))
+        # Reclamado y no leído. Sólo si la nota YA tiene alguna vista: a una del schema
+        # viejo la reporta la categoría de arriba, y pedirle además una vista por sujeto
+        # duplicaría el hallazgo en cada nota del corpus — así nace un backlog de 900 que
+        # nadie mira.
+        # ⛔ #398 — la condición es «la nota DECLARA el campo», no «tiene alguna vista».
+        # Con `if vistas:`, una nota con `vistas: []` —el estado que deja el operador que
+        # saca la entrada y la sección— salía del chequeo de reclamos ENTERO: ni deuda ni
+        # declarada. Medido: la categoría de reclamos declarados cayó de 66 a 30 sin que las
+        # 36 restantes aparecieran en ninguna otra. Es el falso limpio de D-43 dentro de la
+        # categoría que #188 existe para sostener. Lo que el recorte protege sigue en pie:
+        # la nota de schema VIEJO (sin la clave) la reporta la categoría de arriba, y
+        # pedirle además una vista por sujeto duplicaría el hallazgo en cada nota del corpus.
+        # @inv INV-153
+        if vistas or fm.get("vistas") is not None:
+            # Qué cuenta como RECLAMO, y por qué `methods` no entra entero: `stars` y
+            # `thesis_links` los siembra el ingest —son «este sujeto pidió que se leyera
+            # este paper»—, mientras que `methods` lo puebla la EXTRACCIÓN, o sea que es un
+            # producto de la lectura («este paper usa un periodograma») y no un sujeto que
+            # la pidió. Contarlo entero le exigiría una vista propia a cada método
+            # nombrado, y así nace un backlog de centenares que nadie mira. Cuenta sólo
+            # cuando ese nombre ES un tema declarado, que es cuando su roll-up alcanza al
+            # paper — el mismo predicado de pertenencia que `theme_membership` (D-24).
+            # ⛔ #348 — «ES un tema declarado» se evalúa por CLAVE NORMALIZADA (#243): con
+            # el string crudo, `methods: [PCA]` no era el tema `pca` y la categoría salía
+            # vacía o no según la grafía que eligió el extractor. Y lo que entra al set es
+            # el nombre DECLARADO del tema, no esa grafía: es contra el nombre declarado que
+            # se comparan las vistas y el `no_vista` de abajo.
+            reclamos = {str(x).strip()
+                        for campo in ("stars", "thesis_links")
+                        for x in cfg.as_list(fm.get(campo)) if str(x).strip()}
+            reclamos |= {theme for x in cfg.as_list(fm.get("methods"))
+                         if (theme := cfg.declared_name(x, theme_index))}
+            for sujeto in sorted(reclamos - declaradas):
+                if sujeto in no_vista:
+                    reclamo_sin_vista_declarado.append(
+                        (stem, f"**{sujeto}** — {no_vista[sujeto]}"))
+                else:
+                    reclamo_sin_vista.append(
+                        (stem, f"lo reclama **{sujeto}** y nadie lo leyó desde ahí → hacer "
+                               f"la vista, o declararla con `no_vista` y su motivo"))
+    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -5375,285 +5700,30 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # el tooling escribe siempre `high`/`low`; el `.lower()` cubre la edición a mano,
             # donde un `Low` entraba a la población que el recorte quería dejar afuera.
             relevancia = str(fm.get("relevance") or "").strip().lower()
-            # #268 — `no_vista` se parsea ACÁ porque tres redes que corren antes lo necesitaban y
-            # ninguna lo miraba: la escotilla que #256 hizo alcanzable decidía sobre UNA sola
-            # categoría, y las otras contaban la misma nota como deuda. Medido: una nota con
-            # `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla
-            # VizieR, que no es un paper. La forma inválida se reporta más abajo, en su bloque.
-            try:
-                _no_vista, _nv_error = (
-                    {v["sujeto"]: v["motivo"] for v in cfg.load_no_vista(fm, entry=stem)}, None)
-            except cfg.VistasError as _e:
-                # La forma inválida NO se pierde: se guarda y se re-levanta en el bloque de vistas,
-                # que es el que la reporta como `fm_broken`. Tragarla acá dejaría la nota evadiendo
-                # el chequeo de su propio campo, que es el bug que ese bloqueante existe para cerrar.
-                _no_vista, _nv_error = {}, _e
-            if relevancia == "high" and not fm.get("methods") and not _no_vista:
-                # #90: dos situaciones OPUESTAS salían con el mismo mensaje — «bajado y nadie lo
-                # leyó» (trabajo del agente) y «nunca se pudo bajar» (trabajo del usuario: conseguir
-                # la fuente). Son colas distintas con dueños distintos, así que mezclarlas hace
-                # imposible priorizar o derivar. El residuo del resolver vivía en
-                # `build/<slug>/missing_pdf.json`, gitignored, y la nota quedaba muda.
-                # La verdad de disco alcanza y no hay que estampar nada: sin `.txt` y sin PDF, la
-                # fuente no está. Un `pending_source` declarado ya se reporta arriba, así que no se
-                # cuenta dos veces.
-                # @inv INV-112
-                if stem in fulltext or stem in pdf_on_disk or fm.get("pending_source"):
-                    incomplete.append((stem, "paper relevante sin methods (sin extraer)"))
-                else:
-                    incomplete.append(
-                        (stem, "paper relevante **sin fuente en disco** (ni `.txt` ni PDF): no es "
-                               "que falte leerlo, es que nunca se consiguió → conseguir el PDF, o "
-                               "declararlo con `pending`/`pending_motivo` para derivarlo"))
-                # D-13/INV-83: el sujeto de ese paper queda anotado; después del barrido se
-                # contrasta contra lo que el registro DECLARÓ haber leído.
-                # ⛔ #348 — se indexa por CLAVE NORMALIZADA (`method_key`, #243) y el consumidor
-                # busca con la misma clave: con el string crudo, un paper con `thesis_links: [PCA]`
-                # no caía en el balde del tema `pca` y el recorte se reportaba o no según la grafía
-                # que eligió el extractor (medido: 0 con `PCA`, 1 con `pca`).
-                # Qué campos entran: `stars` para estrellas y `thesis_links` para temas — la
-                # pertenencia de un paper a un tema NO vive en las facetas (otro eje). `methods` no
-                # se recorre, y **no es la mitad que falta** de la unión de
-                # `make_notes.theme_membership` (D-24): esta rama exige `not fm.get("methods")`, así
-                # que acá el campo está vacío por construcción y recorrerlo sería un condicional que
-                # no decide nada (red 8). El comentario anterior prometía «mismo predicado que
-                # `make_notes._papers_del_sujeto`» y era falso por los dos ejes (#348).
-                for campo in ("stars", "thesis_links"):
-                    for sujeto in cfg.as_list(fm.get(campo)):
-                        # #268 — el sujeto DECLARADO no cuenta como «sin extraer» para el recorte:
-                        # con él adentro, el detector afirmaba *«quedan N sin extraer»* sobre un
-                        # `criterio: todos los core` que sí se había cumplido.
-                        if str(sujeto) in _no_vista:
-                            continue
-                        if (subject_key := cfg.method_key(sujeto)):
-                            sin_extraer_por_sujeto.setdefault(subject_key, set()).add(stem)
-            # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
-            # que alguien gastó en él el paso más caro de la cadena; si su contenido nunca llegó a
-            # una ficha ni a un concepto, la extracción se perdió. Se recolecta acá y se resuelve
-            # después del barrido, cuando ya se sabe qué citó cada nota de entidad.
-            if fm.get("methods") and relevancia != "low":
-                # centinela: `no_sintetizado: ""` / `null` / `false` / `0` son marca PRESENTE pero
-                # sin motivo — con `.get(campo)` a secas colapsaban con "no hay marca" y el lint
-                # respondía "poné `no_sintetizado`" sobre una nota que ya lo tenía puesto.
-                extracted.append((stem, fm.get("no_sintetizado", _SIN_MARCA)))
+            # Cuán lejos llegó el paper vive en `check_paper_coverage` (#396); `no_vista` y su
+            # error viajan al bloque de vistas, que es el que reporta la forma inválida.
+            _cv, _no_vista, _nv_error = check_paper_coverage(
+                stem, fm, relevancia, pdf_on_disk, fulltext, sin_extraer_por_sujeto, extracted)
+            incomplete += _cv
             # (D-21 retiró `bearing` del paper: el campo incompleto "thesis_links sin bearing"
             #  quedó sin población y se eliminó. La postura vive en la hipótesis.)
             # ROL del paper (#73). `bearing` dice la POSTURA respecto de una tesis; `role` dice qué
             # tipo de aporte es, que es lo que determina la operación de contraste: fundacional ↔
-            # aplicación NO es contraste sino instanciación, y leerlo como desacuerdo fabrica
-            # disputas falsas. Se puebla en la extracción (la regex del clasificador no puede
-            # inferirlo) — por eso el aviso cuelga de `methods`, la marca de "ya se extrajo".
-            # #188 · qué LECTURA se hizo. `stars`/`thesis_links`/`methods` son RECLAMOS (el
-            # retro-link los mergea add-only sin leer nada); `vistas[]` son lecturas. Sin la
-            # distinción, el silencio de la nota sobre un eje es indistinguible de «se miró y no
-            # hay nada» — el mismo falso limpio que D-34 persigue en las hipótesis.
-            try:
-                vistas = cfg.load_vistas(fm, entry=stem)
-                if _nv_error is not None:
-                    raise _nv_error
-                no_vista = _no_vista          # #268: ya parseado arriba, misma fuente
-            except cfg.VistasError as e:
-                # Se REPORTA, no tumba el barrido: es la razón de que el loader levante en vez de
-                # salir. Cae en `fm_broken` porque es literalmente eso — un campo con forma
-                # inválida hace que la nota evada los chequeos de su tipo (los cuatro de abajo).
-                fm_broken.append((stem, str(e).replace("\n", " ")))
-                vistas, no_vista = [], {}
-            else:
-                # #270 — #254 hizo que el prompt derive sus ejes de `relevance.facets` y no dejó
-                # red: nada compara los ejes que la vista CONTESTA contra la `lente` que DECLARA, y
-                # una faceta que la vista no menciona se lee como «se miró y no hay nada». Medido:
-                # 257 huecos sobre 79 vistas con lente declarada. Backlog: una vista puede
-                # legítimamente no tener nada que decir sobre un eje — lo que no puede es callarlo.
-                _ejes_por_sujeto = cfg.view_axes(text)
-                for _v in vistas:
-                    _lente = [str(x).strip() for x in (_v.get("lente") or []) if str(x).strip()]
-                    if not _lente or not _v.get("fecha"):
-                        continue          # sin lente declarada o sin lectura, no hay qué comparar
-                    # #360 — con `ejes:` sin declarar la lente que la vista declara es la GLOBAL,
-                    # o sea el conjunto equivocado: comparar contra ella daba un cero limpio o
-                    # huecos sobre ejes que el tema nunca debió preguntar. D-43: no evaluable.
-                    _tm = _temas_por_sujeto.get(str(_v.get("sujeto") or "").strip().casefold()) \
-                        if _v.get("tipo") == "theme" else None
-                    if _tm is not None and cfg.theme_inherited_axes(_tm) is not None:
-                        vista_ejes_faltantes.append(
-                            (stem, f"no evaluable: la vista de «{_v['sujeto']}» se leyó con los ejes "
-                                   f"del objetivo porque el tema no declara `ejes:` — declaralos "
-                                   f"(#360) y este chequeo vuelve a comparar contra la lente propia"))
-                        continue
-                    # #395c — la clave es el PAR `(sujeto, énfasis)`: una segunda lectura del
-                    # mismo sujeto (#239) contesta SUS ejes en su `### Lente — …`, y con la clave
-                    # por sujeto se la comparaba contra los de la primera. Medido: 13 vistas
-                    # reportadas como «no contesta NINGUNO de sus 7 ejes» con los siete ahí mismo.
-                    _clave = (_v["sujeto"], str(_v.get("enfasis") or "").strip())
-                    _faltan = [e for e in _lente if e not in _ejes_por_sujeto.get(_clave, set())]
-                    if _faltan:
-                        _cual = f" (lente «{_clave[1]}»)" if _clave[1] else ""
-                        vista_ejes_faltantes.append(
-                            (stem, f"la vista de «{_v['sujeto']}»{_cual} declara la lente "
-                                   f"`{', '.join(_lente)}` y no contesta `{', '.join(_faltan)}`: el "
-                                   f"silencio sobre un eje se lee como «se miró y no hay nada»"))
-                # #239 — la coherencia de las SUB-secciones por lente, en los dos sentidos: una
-                # lente declarada sin su `### Lente — …` y una sub-sección sin declarar. Es el mismo
-                # chequeo de #188 un nivel abajo, y hace falta porque la lente es lo que distingue
-                # dos lecturas del mismo sujeto: sin él, la segunda vuelve a ser invisible.
-                _lentes_cuerpo = {m.group(1).strip() for m in _LENTE_RE.finditer(text)}
-                _lentes_decl = {str(v.get("enfasis") or "").strip() for v in vistas
-                                if str(v.get("enfasis") or "").strip()}
-                for _falta in sorted(_lentes_decl - _lentes_cuerpo):
-                    vistas_vs_cuerpo.append(
-                        (stem, f"declara la lente «{_falta}» en `vistas[]` y el cuerpo no tiene su "
-                               f"`### Lente — {_falta}`"))
-                for _sobra in sorted(_lentes_cuerpo - _lentes_decl):
-                    vistas_vs_cuerpo.append(
-                        (stem, f"tiene `### Lente — {_sobra}` en el cuerpo y ninguna entrada de "
-                               f"`vistas[]` la declara"))
-                secciones = vistas_en_cuerpo(text)
-                declaradas = {v["sujeto"] for v in vistas}
-                #  @inv INV-134
-                if not vistas and EXTRACCION_VIEJA_RE.search(text):
-                    vistas_schema_viejo.append(
-                        (stem, "`## Extracción (LLM)` sin `vistas[]`: no consta desde qué sujeto se "
-                               "leyó este paper, así que su silencio sobre un eje no se distingue "
-                               "de «se miró y no hay nada» → `python scripts/make_notes.py "
-                               "--migrate-vistas` (AUD-175)"))
-                # Declarada y sin hacer. El stub nace con la vista de su sujeto y SIN `fecha`
-                # (la ausencia es «no consta», paso 1): la fecha es lo que dice que la lectura
-                # ocurrió. Sin este renglón, declarar la vista al crear el stub apagaría
-                # `reclamo_sin_vista` para el sujeto que la sembró y el silencio volvería a leerse
-                # como «se miró y no hay nada» — el defecto que #188 cierra, por otra puerta.
-                # ⛔ #256 — la escotilla `no_vista` decide ACÁ, sobre la vista sin fecha, y no
-                # sobre `reclamos - declaradas`, que el propio sembrado de arriba deja SIEMPRE
-                # vacío: `make_notes` pone una entrada de `vistas[]` por cada reclamo, así que ni
-                # la deuda ni la escotilla podían dispararse desde esa rama. Medido: **0 de 138**
-                # notas de una bóveda real la alcanzaban, o sea que `load_no_vista` se parseaba y
-                # su resultado no lo consumía nadie. Sin esto, «falta leerlo» y «no hay nada que
-                # leer, y está dicho por qué» caen en el mismo bolsón — que es justo lo que la
-                # categoría DECLARADA existe para separar. ⚠ `no_vista` NO borra la entrada de
-                # `vistas[]`: la nota sigue diciendo que ese sujeto la reclama; lo que declara es
-                # por qué no se leyó.
-                for v in vistas:
-                    if not str(v.get("fecha") or "").strip() and v["sujeto"] in no_vista:
-                        reclamo_sin_vista_declarado.append(
-                            (stem, f"**{v['sujeto']}** — {no_vista[v['sujeto']]}"))
-                    elif not str(v.get("fecha") or "").strip():
-                        vista_sin_fecha.append(
-                            (stem, f"la vista de **{v['sujeto']}** está declarada y sin `fecha`: no "
-                                   f"consta que se haya leído desde ahí"))
-                    # #207 · de QUÉ se construyó. Sin el campo, una vista escrita desde ocho líneas
-                    # de abstract es indistinguible de una escrita leyendo el paper — el falso
-                    # limpio de D-34 aplicado a la lectura. Ausente = no consta, así que backlog:
-                    # el dato no se inventa, se pide.
-                    elif not (_f := str(v.get("fuente") or "").strip()):
-                        vista_sin_fuente.append(
-                            (stem, f"la vista de **{v['sujeto']}** no dice de qué se construyó "
-                                   f"(`fuente: pdf|abstract`): una lectura del abstract se lee "
-                                   f"igual que una del paper"))
-                    elif _f == "abstract":
-                        # NO es un error: la vista es legítima y está declarada. El hallazgo pide
-                        # el PDF — mismo carril que `pending_source`, visto desde la lectura.
-                        vista_solo_abstract.append(
-                            (stem, f"la vista de **{v['sujeto']}** se construyó SÓLO del abstract: "
-                                   f"conseguir el PDF para leer el paper (y ojo, el abstract es "
-                                   f"donde la fuente afirma de más)"))
-                # #217 — la vista OCURRIÓ (tiene fecha) y su fuente ya no está en disco: sus citas
-                # no se pueden contrastar nunca más. Pasa cuando `--drop-core` borra los artefactos
-                # y conserva la nota, y es peor en la rama «se conserva porque pertenece a OTRO
-                # sujeto»: ahí el paper puede estar citado en la ficha de esa entidad, con pares ya
-                # verificados. El ancla de fuente (D-20) no lo ve —el archivo no cambió,
-                # DESAPARECIÓ— y `## Citas no verificables` mira los bibcodes citados desde
-                # conceptos/queries, no los pares ya verificados de una ficha. Sin esta categoría,
-                # la vista se lee igual de firme que cualquier otra.
-                if any(str(v.get("fecha") or "").strip() for v in vistas) and not (
-                        list(cfg.PDFS.glob(f"*/{stem}.pdf")) if cfg.PDFS.exists() else []) and not (
-                        list(cfg.FULLTEXT.glob(f"*/{stem}.txt")) if cfg.FULLTEXT.exists() else []):
-                    vista_sin_fuente_en_disco.append(
-                        (stem, "tiene vista FECHADA y ya no hay fuente en disco (ni PDF ni `.txt`): "
-                               "la lectura ocurrió y sus localizadores siguen siendo válidos, pero "
-                               "`verify-citations` no puede contrastarla nunca más — conseguir de "
-                               "nuevo la fuente, o declarar la pérdida en `salvedades` de la vista"))
-                # #212 — la lectura REFUTÓ el reclamo y el reclamo sigue en el frontmatter. Es el
-                # simétrico del «reclamado sin vista» de #188: allá nadie leyó, acá se leyó y el
-                # resultado dice que el reclamo es falso. El lint no lo veía porque mira la
-                # coherencia `vistas[] ↔ sección`, no `reclamo ↔ contenido de la vista`, y el
-                # merge de `harvest_views` es add-only a propósito, así que el reclamo sembrado es
-                # infalsificable por la lectura. Backlog: sacar el paper del sujeto es decisión del
-                # usuario —puede ser core de OTRO— y el roll-up del concepto lo sigue listando
-                # mientras tanto.
-                _reclamados = {str(x).strip() for x in
-                               cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))}
-                for v in vistas:
-                    for suj in cfg.as_list(v.get("refuta")):
-                        if str(suj).strip() in _reclamados:
-                            reclamo_refutado.append(
-                                (stem, f"la vista de **{v.get('sujeto')}** REFUTA el reclamo de "
-                                       f"**{suj}**, que sigue en el frontmatter: el roll-up lo va a "
-                                       f"seguir listando → `triage.py <slug> --drop-core {stem} "
-                                       f"--reason \"…\"`, o quitá el reclamo a mano si el paper "
-                                       f"pertenece a otro sujeto"))
-                # #398 — la sección de un sujeto declarado `no_vista` sigue publicando la
-                # PLANTILLA del stub: las instrucciones al extractor, bajo un encabezado que la nota
-                # presenta como síntesis (#247). Medido: 46 notas así durante seis días, invisibles
-                # porque el lint miraba la coherencia `vistas[] ↔ sección` y la escotilla decide
-                # sobre el frontmatter. Backlog con su migrador: la decisión ya está tomada, lo que
-                # falta es que el cuerpo la diga.
-                import make_notes as _mn          # import local: `make_notes` no importa al lint
-                for _v in vistas:
-                    _suj = str(_v.get("sujeto") or "").strip()
-                    if not _suj or _mn.view_stub_kind(
-                            text, _suj, str(_v.get("tipo") or "") == "theme") != "plantilla":
-                        continue
-                    vista_con_plantilla.append(
-                        (stem, f"la `## Vista` de **{_suj}** sigue publicando la PLANTILLA del stub "
-                               f"(las instrucciones al extractor, visibles como si fueran "
-                               f"contenido) → `python scripts/make_notes.py --restamp-vista-stub`"))
-                for falta in sorted(declaradas - secciones):
-                    vistas_vs_cuerpo.append(
-                        (stem, f"`vistas[]` declara la lectura de **{falta}** y el cuerpo no tiene "
-                               f"su `## Vista — {falta}`: afirma una lectura que no está"))
-                for falta in sorted(secciones - declaradas):
-                    vistas_vs_cuerpo.append(
-                        (stem, f"`## Vista — {falta}` sin entrada en `vistas[]`: no consta de qué "
-                               f"`.txt` salió ni con qué lente se leyó"))
-                # Reclamado y no leído. Sólo si la nota YA tiene alguna vista: a una del schema
-                # viejo la reporta la categoría de arriba, y pedirle además una vista por sujeto
-                # duplicaría el hallazgo en cada nota del corpus — así nace un backlog de 900 que
-                # nadie mira.
-                # ⛔ #398 — la condición es «la nota DECLARA el campo», no «tiene alguna vista».
-                # Con `if vistas:`, una nota con `vistas: []` —el estado que deja el operador que
-                # saca la entrada y la sección— salía del chequeo de reclamos ENTERO: ni deuda ni
-                # declarada. Medido: la categoría de reclamos declarados cayó de 66 a 30 sin que las
-                # 36 restantes aparecieran en ninguna otra. Es el falso limpio de D-43 dentro de la
-                # categoría que #188 existe para sostener. Lo que el recorte protege sigue en pie:
-                # la nota de schema VIEJO (sin la clave) la reporta la categoría de arriba, y
-                # pedirle además una vista por sujeto duplicaría el hallazgo en cada nota del corpus.
-                # @inv INV-153
-                if vistas or fm.get("vistas") is not None:
-                    # Qué cuenta como RECLAMO, y por qué `methods` no entra entero: `stars` y
-                    # `thesis_links` los siembra el ingest —son «este sujeto pidió que se leyera
-                    # este paper»—, mientras que `methods` lo puebla la EXTRACCIÓN, o sea que es un
-                    # producto de la lectura («este paper usa un periodograma») y no un sujeto que
-                    # la pidió. Contarlo entero le exigiría una vista propia a cada método
-                    # nombrado, y así nace un backlog de centenares que nadie mira. Cuenta sólo
-                    # cuando ese nombre ES un tema declarado, que es cuando su roll-up alcanza al
-                    # paper — el mismo predicado de pertenencia que `theme_membership` (D-24).
-                    # ⛔ #348 — «ES un tema declarado» se evalúa por CLAVE NORMALIZADA (#243): con
-                    # el string crudo, `methods: [PCA]` no era el tema `pca` y la categoría salía
-                    # vacía o no según la grafía que eligió el extractor. Y lo que entra al set es
-                    # el nombre DECLARADO del tema, no esa grafía: es contra el nombre declarado que
-                    # se comparan las vistas y el `no_vista` de abajo.
-                    reclamos = {str(x).strip()
-                                for campo in ("stars", "thesis_links")
-                                for x in cfg.as_list(fm.get(campo)) if str(x).strip()}
-                    reclamos |= {theme for x in cfg.as_list(fm.get("methods"))
-                                 if (theme := cfg.declared_name(x, theme_index))}
-                    for sujeto in sorted(reclamos - declaradas):
-                        if sujeto in no_vista:
-                            reclamo_sin_vista_declarado.append(
-                                (stem, f"**{sujeto}** — {no_vista[sujeto]}"))
-                        else:
-                            reclamo_sin_vista.append(
-                                (stem, f"lo reclama **{sujeto}** y nadie lo leyó desde ahí → hacer "
-                                       f"la vista, o declararla con `no_vista` y su motivo"))
+            # Las DOCE categorías de `vistas[]` viven en `check_paper_views` (#396).
+            _v = check_paper_views(stem, fm, text, _no_vista, _nv_error, theme_index,
+                                   _temas_por_sujeto)
+            fm_broken += _v[0]
+            vistas_schema_viejo += _v[1]
+            vistas_vs_cuerpo += _v[2]
+            vista_sin_fecha += _v[3]
+            vista_sin_fuente += _v[4]
+            vista_sin_fuente_en_disco += _v[5]
+            vista_solo_abstract += _v[6]
+            vista_con_plantilla += _v[7]
+            vista_ejes_faltantes += _v[8]
+            reclamo_sin_vista += _v[9]
+            reclamo_sin_vista_declarado += _v[10]
+            reclamo_refutado += _v[11]
             # El `role` vive en `check_paper_role` (#396); los dos `*_refs` son índices.
             _rl1, _rl2 = check_paper_role(stem, fm, relevancia, thesis_refs, method_refs)
             bad_roles += _rl1

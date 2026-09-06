@@ -9305,3 +9305,134 @@ def test_check_paper_pdf_link_solo_pide_cabecera_donde_hay_PDF(toy_vault):
     _f, pi = lint.check_paper_pdf_link("2020X", {}, "cuerpo", {}, sin_cab)
     assert not any("cabecera" in m for _s, m in pi), \
         "sin PDF no se pide cabecera de ninguna de las dos formas: el hallazgo es otro"
+
+
+# ── #396 · la cobertura del paper y las doce categorías de `vistas[]` ────────────────────────────
+
+def test_check_paper_coverage_separa_las_DOS_situaciones_opuestas(toy_vault):
+    """#396/#90/#268/INV-112 — «bajado y nadie lo leyó» y «nunca se pudo bajar» salían con el MISMO
+    mensaje y piden cosas opuestas: una es trabajo del agente, la otra es la cola del usuario. Las
+    cuatro guardas que sobrevivían son las que hacen esa partición, más la escotilla `no_vista`, que
+    hasta #268 decidía sobre UNA sola categoría mientras las otras contaban la nota como deuda.
+
+    ⛔ **Hallazgo, no deuda de test:** el `if str(sujeto) in no_vista: continue` de adentro es
+    INALCANZABLE. La rama entera cuelga de `… and not no_vista`, así que cuando se entra el mapa
+    está vacío y la pertenencia es siempre falsa. Las dos formas de la regla no dicen lo mismo: la
+    de afuera saltea la nota ENTERA si cualquier sujeto está declarado, la de adentro saltearía
+    sólo ESE sujeto y seguiría contando los demás. Cuál es la correcta es una decisión de producto
+    —por eso el chequeo se dejó como está y el test fija el comportamiento VIGENTE—, pero el código
+    afirma las dos a la vez, que es la regla escrita a medias de la red 8. Anotado en #396."""
+    def _c(fm, ft=(), pdf=(), rel="high"):
+        return lint.check_paper_coverage("2020X", fm, rel, {s: "x" for s in pdf},
+                                         {s: "x" for s in ft}, {}, [])
+    assert _c({"methods": ["PCA"]})[0] == [], "con `methods` ya se extrajo"
+    assert _c({}, rel="low")[0] == [], "a una nota no-core no se le pide extracción"
+    assert _c({"no_vista": [{"sujeto": "x", "motivo": "es una tabla VizieR"}]})[0] == [], \
+        "la escotilla declarada silencia las cuatro redes (#268)"
+
+    # las tres puertas del «sin extraer»: `.txt`, PDF o `pending_source` declarado
+    for kw in ({"ft": ("2020X",)}, {"pdf": ("2020X",)}):
+        inc, *_x = _c({}, **kw)
+        assert len(inc) == 1 and "sin extraer" in inc[0][1], (kw, inc)
+    inc, *_x = _c({"pending_source": "paywall"})
+    assert len(inc) == 1 and "sin extraer" in inc[0][1]
+    inc, *_x = _c({})
+    assert len(inc) == 1 and "sin extraer" not in inc[0][1], \
+        "sin artefacto ni `pending` el hallazgo es el OPUESTO: nunca se pudo conseguir"
+
+    # el paper sin extraer anota SU SUJETO por clave normalizada (#348), y el que declaró
+    # `no_vista` no anota nada: no es deuda de extracción (#268)
+    idx: dict = {}
+    lint.check_paper_coverage("2020X", {"thesis_links": ["PCA"]}, "high", {}, {"2020X": "x"},
+                              idx, [])
+    assert idx == {cfg.method_key("PCA"): {"2020X"}}, idx
+    idx2: dict = {}
+    lint.check_paper_coverage("2020X", {"thesis_links": ["PCA"],
+                                        "no_vista": [{"sujeto": "PCA", "motivo": "tabla"}]},
+                              "high", {}, {"2020X": "x"}, idx2, [])
+    assert idx2 == {}, "el sujeto con `no_vista` declarado no es deuda de extracción (#268)"
+
+    # y `no_vista` vuelve para el bloque de vistas, que es el dueño del campo
+    _i, nv, err = _c({"no_vista": [{"sujeto": "x", "motivo": "m"}]})
+    assert nv == {"x": "m"} and err is None
+    _i, nv, err = _c({"no_vista": "no soy una lista"})
+    assert nv == {} and err is not None, "la forma inválida VIAJA, no se traga acá"
+
+
+def test_check_paper_views_no_pide_lo_que_no_se_puede_evaluar(toy_vault):
+    """#396/#188/#360/INV-146 — `stars`/`thesis_links`/`methods` son RECLAMOS y `vistas[]` son
+    LECTURAS; sin esa distinción el silencio de la nota sobre un eje es indistinguible de «se miró y
+    no hay nada». Las guardas que sobrevivían son todas del mismo tipo: no pedirle a una vista lo
+    que sobre ella NO SE PUEDE decidir.
+
+    · sin lente declarada o sin fecha no hay ejes contra qué comparar;
+    · con el tema sin `ejes:` la lente es la GLOBAL, o sea el conjunto equivocado: **no evaluable**,
+      que es distinto de un cero limpio (D-43);
+    · el sujeto con `no_vista` declarado no es un reclamo sin vista: es una escotilla firmada;
+    · y una vista sin sujeto no se puede buscar en el cuerpo.
+
+    ⚠ Cuatro guardas de este bloque sobreviven a `mutar --guardas` y van a seguir sobreviviendo,
+    todas por ser redundantes con lo que ya decide la línea de al lado (red 8, código anterior a
+    #396): `not _lente` (con la lente vacía `_faltan` sale vacío igual), `_tm is not None`
+    (`theme_inherited_axes(None)` devuelve `None`), `not _suj` (sin sujeto el stub nunca es
+    `plantilla`) y `vistas` en `if vistas or fm.get("vistas") is not None` (con `vistas` no vacío,
+    el campo tampoco es `None`). Son atajos, no reglas."""
+    def _v(fm, text="", nv=None, ti=None, tps=None):
+        return lint.check_paper_views("2020X", fm, text, nv or {}, None, ti or {}, tps or {})
+
+    assert _v({}) == ([],) * 12, "una nota sin `vistas[]` ni reclamos no dispara nada"
+
+    # (a) ejes: sin lente o sin fecha no se compara; con el tema sin `ejes:` es NO EVALUABLE
+    sin_fecha = {"vistas": [{"sujeto": "ica", "tipo": "theme", "lente": ["rv"]}],
+                 "thesis_links": ["ica"]}
+    assert _v(sin_fecha)[8] == [], "sin fecha la lectura no ocurrió: no hay ejes que exigir"
+    con_lente = {"vistas": [{"sujeto": "ica", "tipo": "theme", "lente": ["rv"],
+                             "fecha": "2026-03-01"}], "thesis_links": ["ica"]}
+    faltan = _v(con_lente)[8]
+    assert len(faltan) == 1 and "no contesta `rv`" in faltan[0][1], faltan
+    # el eje se contesta en el CUERPO, en el bloque `**Ejes:**` de su `## Vista` (#270)
+    cuerpo = "## Vista — ica\n\n**Ejes:**\n\n- **rv:** lo que el paper dice del eje\n"
+    assert _v(con_lente, cuerpo)[8] == [], "el eje contestado no es hueco"
+    # …y con el tema SIN `ejes:` la lente es la GLOBAL: no evaluable, que no es un cero limpio
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "abs:x", "facet": "ica"}})
+    _tm = cfg.load_themes()["ica"]
+    no_eval = _v(con_lente, tps={"ica": _tm})[8]
+    assert len(no_eval) == 1 and "no evaluable" in no_eval[0][1], no_eval
+
+    # (b) el reclamo con `no_vista` declarado sale por su propia categoría, no como deuda
+    reclamo = {"thesis_links": ["ica"],
+               "vistas": [{"sujeto": "ica", "tipo": "theme"}]}   # sin `fecha`: reclamada, sin leer
+    r = _v(reclamo, nv={"ica": "es una tabla VizieR"})
+    assert r[10] and "VizieR" in r[10][0][1], r[10]
+    assert not any("ica" in m for _s, m in r[9]), "declarado ≠ pendiente"
+
+    # (c) el schema viejo bloquea, y sólo cuando NO hay `vistas[]`
+    viejo = "## Extracción (LLM)\n\nqué dice el paper\n"
+    assert _v({}, viejo)[1], "`## Extracción (LLM)` sin `vistas[]` es schema viejo"
+    assert _v(con_lente, viejo)[1] == [], "con `vistas[]` declaradas ya no es el schema viejo"
+
+    # (d) la forma inválida de `vistas[]` cae en `fm_broken`, que es el bloqueante del campo
+    assert _v({"vistas": "no soy una lista"})[0], "un escalar en `vistas[]` bloquea"
+
+    # (e) la vista con lente VACÍA tampoco se compara: no hay ejes declarados que exigir
+    sin_lente = {"vistas": [{"sujeto": "ica", "tipo": "theme", "fecha": "2026-03-01",
+                             "lente": []}], "thesis_links": ["ica"]}
+    assert _v(sin_lente)[8] == [], "sin lente declarada no hay contra qué comparar"
+
+    # (f) el sujeto declarado `no_vista` cuya vista SÍ tiene fecha se leyó: no es una escotilla
+    leida = {"thesis_links": ["ica"],
+             "vistas": [{"sujeto": "ica", "tipo": "theme", "fecha": "2026-03-01"}]}
+    assert _v(leida, nv={"ica": "tabla VizieR"})[10] == [], \
+        "con fecha la lectura ocurrió: la escotilla ya no aplica"
+
+    # (g) la vista FECHADA sin fuente en disco es su propia categoría — y con la fuente, calla
+    assert _v(leida)[5], "vista fechada y sin PDF ni `.txt`: nadie puede re-contrastarla"
+    (cfg.PDFS / "s").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "s" / "2020X.pdf").write_bytes(b"%PDF-1.4\n")
+    assert _v(leida)[5] == [], "con el PDF en disco la vista se puede contrastar"
+
+    # (h) `vistas: []` declarado NO es lo mismo que no declarar nada: el reclamo se sigue pidiendo
+    assert _v({"thesis_links": ["ica"], "vistas": []})[9], \
+        "declarar la lista vacía no borra el reclamo"
+    assert _v({"thesis_links": ["ica"]})[9] == [], "sin `vistas[]` la nota no llegó a ese paso"
