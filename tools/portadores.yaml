@@ -254,3 +254,77 @@ portadores:
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: Lo VIGILA; leer un campo no es afirmar sobre él.
+
+  - issue: 402
+    regla: >-
+      Un campo que el schema de la extracción declara ESCALAR no se lee con `as_list`, que sobre un
+      string devuelve `[]` y produce un falso limpio: `hueco` es `"hueco":""` en el bloque de
+      salida del prompt, y `scope_requests` devolvía 0 sobre 206 extracciones. La lectura tolera
+      las tres formas que el corpus tiene de verdad (string, mapa, lista) y no una sola.
+    funcion: proposals.scope_request_texts
+    patron: '"hueco"'
+    consumidores:
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: >-
+          DECLARA la forma en el bloque de salida del prompt (`"hueco":""`), que es lo que hace
+          escalar al campo; no lo lee.
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Lo lee con `str(... or "")`, que es correcto para un escalar y era la lectura que #402
+          tenía que copiar. No comparte código porque lo estampa en la nota, no lo propone.
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: Lo nombra en `CAMPOS` para agrupar el digest por campo; no interpreta su forma.
+
+  - issue: 407
+    regla: >-
+      El ALCANCE de una ronda de verify viaja EN el manifiesto (`alcance: {modo, fuentes}` al lado
+      de `nota_total`), así que la barrera puede decir «32 de 32 en el alcance; 114 fuera,
+      re-anclados» en vez de «faltan 114». Una ronda acotada es lo que #282 prescribe para no
+      re-preguntar lo que sólo hay que re-anclar, y sin esto no podía pasar la barrera.
+    funcion: verify_fanout.scoped_sources
+    patron: 'MANIFEST|nota_total|_esperado\.json'
+    consumidores:
+      - modulo: scripts/check_verify_fanout.py
+        estado: fuera-de-alcance
+        motivo: >-
+          CONSUME el manifiesto (`scope_line`): es el otro lado de la regla, no una segunda
+          implementación. Si construyera su propio alcance, la barrera juzgaría contra un alcance
+          distinto del que la ronda declaró.
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Corre la barrera (`check_dir`) y saltea el manifiesto por nombre; el alcance le llega
+          resuelto. Es el tercer portador que el reporte nombró y no escribe la regla.
+
+  - issue: 408
+    regla: >-
+      Un bloque, un hecho: el bloque citado que pasa el p90 en largo o en hechos citados se reporta
+      (WARN) y se resuelve PARTIÉNDOLO. Es donde caen los defectos-al-corregir, porque el ancla es
+      de bloque y un bloque largo obliga al corrector a reescribir alrededor de lo que no toca.
+    funcion: lint.check_block_facts
+    patron: 'BLOQUE_MAX|split_blocks'
+    consumidores:
+      - modulo: scripts/apply_fixes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          La otra mitad de #408: APLICA la partición (`rewrap` acepta una lista de bloques) y la
+          declara en `Result.split`. Detectar el bloque largo y partirlo son operaciones distintas
+          y no comparten decisión — el aplicador parte lo que el corrector le pasa partido.
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: >-
+          DEFINE qué es un bloque (`split_blocks`), que es el insumo de la regla y no la regla.
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: Usa `split_blocks` para recorrer la nota al validar citas; no mide largos.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: Menciona `split_blocks` en prosa de docstring; no lo llama.
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Usa `split_blocks` para el `Block.kind` de la exención del `log` (#387); otra regla sobre
+          el mismo insumo.
