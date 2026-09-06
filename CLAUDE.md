@@ -94,6 +94,15 @@ de framework**, **abrí el issue en el template y pará ahí (#377)**: anotá el
 en una sesión **del template**, no desde una bóveda. *(En el repo template mismo, editar
 framework **es** la tarea.)*
 
+⛔ **Y todo issue —al REPORTARLO y al CERRARLO— contesta «¿quién MÁS lleva esta regla?» (#409).**
+Un reporte que describe sólo el caso produce un fix contra el caso, y ésa es la familia de defectos
+**más grande del repo** (medida sobre sus ~400 issues: entre el 30 % y el 50 % de cada tramo). Así
+que el issue nombra **la regla**, no sólo el síntoma, y antes de cerrarlo se enumeran los portadores
+con `python tools/carriers.py --propose <mod>.<simbolo> --patron '<re>'` — `--check` en 0 **no
+alcanza** si nadie enumeró. Firmarlos en `tools/portadores.yaml` es **framework**: desde una
+instancia el hallazgo va al issue del template con la salida pegada, y el issue de la instancia se
+cierra recién cuando esa entrada existe.
+
 ## ⛔ Frontera dura — la bóveda es SÓLO bibliografía (regla #0, no negociable)
 
 **Esta wiki es una referencia bibliográfica. Punto.** Almagesto recopila información bibliográfica y

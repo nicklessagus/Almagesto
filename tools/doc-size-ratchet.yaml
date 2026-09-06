@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-06"
-techo_lineas: 1740
-techo_bytes: 139987
+techo_lineas: 1749
+techo_bytes: 140734
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -267,3 +267,14 @@ crecimientos:
       +1063 bytes.
     techo_lineas: 1740
     techo_bytes: 139987
+  - fecha: "2026-09-06"
+    ancla: "#409"
+    motivo: >-
+      La red 10 quedó escrita como herramienta y le faltaba el momento: la regla que dice CUÁNDO se
+      corre —al reportar y al cerrar un issue— vive en §Framework vs instancia, que es donde una
+      instancia lee qué hacer con un hallazgo de framework. Sin eso el gate sale 0 en un repo donde
+      nadie enumeró nada, que es el falso limpio de D-43 un nivel más arriba. Pedida por el usuario
+      con todas las letras («que lo incorpore como regla general cada vez que tiene que reportar o
+      cerrar errores»). Ocho líneas; la medición vive en #409.
+    techo_lineas: 1749
+    techo_bytes: 140734
