@@ -5455,11 +5455,21 @@ _HECHO_RE = re.compile(r"«[^»]{8,}»|\(\s*p\.\s*\d+|\(\s*L\d+")
 #: preposiciones y la unidad-anotación (token que termina en coma) — los 3 residuales, falsos
 #: positivos revisables. Misma doctrina que la fuga de implementación: WARN, cada hit se mira. Lo
 #: que se midió y DESCARTÓ para esto: el shingle repetido (74 falsos, 0 verdaderos sobre el defecto).
-_UNIDADES = (r"m/s|km/s|cm/s|m\s?s\^?-1|km\s?s\^?-1|mas/yr|mas|ppm|M⊕|M_?J|R⊕|R_?J|"
-             r"M_?sun|M☉|pc|kpc|nm|Å|d[ií]as|days|K")
+#:
+#: ⛔ El vocabulario shippeado en 1.241.0 se había ido del prototipo MEDIDO por tres lados, y la
+#: categoría pasó de 3 a **533 hits, 407 de ellos ruido** (#411, medido en la bóveda real). Los
+#: tres, cerrados acá: (a) **`mas` no es una unidad en esta bóveda** —la prosa va en castellano
+#: (`CLAUDE.md`) y `mas` sin tilde es palabra corriente: 339 hits, el 64 % de la categoría, con
+#: milliarcsecond apareciendo CERO veces en el corpus—; (b) **`K` tampoco** —en astronomía es tipo
+#: espectral y nombre de línea (Ca II H&K) mucho más seguido que Kelvin: 33 hits—; (c) el token
+#: previo puede **cerrar matemática o adorno** (`$83$ m/s`, `**1,70** m/s`), y ahí el número SÍ
+#: está: el prototipo lo excluía y la versión shippeada exigía que el dígito fuera el último
+#: carácter. `mas/yr` se queda: no es ambiguo.
+_UNIDADES = (r"m/s|km/s|cm/s|m\s?s\^?-1|km\s?s\^?-1|mas/yr|ppm|M⊕|M_?J|R⊕|R_?J|"
+             r"M_?sun|M☉|pc|kpc|nm|Å|d[ií]as|days")
 _COSTURA_RE = re.compile(r"(?<![\w.,])([^\s]+)\s+(" + _UNIDADES + r")(?=[\s.,;:)\]»]|$)")
 _ANTES_DE_UNIDAD_OK = re.compile(
-    r".*\d[)\]%]?$"                                                # TERMINA en dígito: `1,70`, `K=32.9`
+    r".*\d[)\]%»\"'$*`_]*$"                                        # el dígito, con su cierre: `1,70`, `$83$`, `**2**`
     r"|^(?:few|a few|pocos|pocas|varios|varias|several|some|sub|hundred|cientos?|nivel|order|"
     r"orden|escala|unos|unas|mil|thousand|tens|decenas|dozens|docenas|half|medio|media)$"
     r"|^(?:en|de|del|a|al|por|con|sin|entre|hasta|sobre|the|of|in|at|per|to|from|by|and|or|y|o|"

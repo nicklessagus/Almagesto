@@ -176,18 +176,24 @@ def split_subject_slugs(valores: list, slug: str) -> tuple[list, list]:
     mismo método con 2 grafías» and proposes unifying the spelling, which CONTRADICTS #243 — the
     operator is left choosing between two rules of the framework.
 
-    Filtered by normalised key (`method_key`) against the SUBJECT's slug only, so `ica` and `ICA`
-    are the same slug. ⚠ NOT against the stems of `concepts/`, which the issue also suggested: a
+    ⛔ Compared by LITERAL equality against the subject's slug, never by `method_key` (#410). The
+    normalised key was the first implementation and it applied the rule BACKWARDS on every theme
+    whose slug IS the method's name: `method_key('ICA') == method_key('ica')`, so in the theme
+    `ica` it threw away `ICA` — which is exactly how the paper writes it. Measured on the real
+    corpus: 24 legitimate spellings discarded against 19 real defects, and the falses included
+    `HARPS DRS` in `harps-drs`, the very theme that produced the issue. It is the same trap #243
+    names: the key normalises on COMPARE, and here comparing decides what gets written, so
+    normalising is writing. Literal equality separates the 19 from the 24 with no false positive.
+    ⚠ NOT against the stems of `concepts/`, which the issue also suggested: a
     `methods: [pca]` that resolves to `concepts/methods/pca.md` is not a defect, it is the roll-up
     doing its job (#245 links `[[método]]` exactly when that note exists) — filtering it would
     silently disconnect every paper from every method concept it names. What no paper names is the
     subject's own identifier, and that is the measured population. ⛔ The JSON is not touched: it
     is versioned and not regenerable without re-reading the PDF (#311). The filter lives here, at
     the one gate that WRITES the note."""
-    clave = cfg.method_key(slug)
     metodos, slugs = [], []
     for v in valores:
-        (slugs if cfg.method_key(v) == clave else metodos).append(v)
+        (slugs if str(v) == slug else metodos).append(v)
     return metodos, slugs
 
 

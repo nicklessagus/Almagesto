@@ -2035,6 +2035,21 @@
    "number": 409,
    "title": "Red 10: «¿quién MÁS lleva esta regla?» — el gate que cierra la familia más grande del repo (el fix a la instancia, no a la clase)",
    "state": "OPEN"
+  },
+  {
+   "number": 410,
+   "title": "#404 aplica la regla al REVÉS en todo tema cuyo slug ES el nombre del método: descarta 24 grafías legítimas contra 19 defectos reales",
+   "state": "OPEN"
+  },
+  {
+   "number": 411,
+   "title": "#406 shippeó sin las guardas MEDIDAS: 407 de 533 hits son ruido de tres causas ya cuantificadas, y 339 son «más» sin tilde",
+   "state": "OPEN"
+  },
+  {
+   "number": 412,
+   "title": "#403 cerró sin entrada en portadores.yaml, y hay un SEGUNDO escritor del hermano: `make_notes` llama a `render_verif_sidecar` directo",
+   "state": "OPEN"
   }
  ]
 }

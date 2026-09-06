@@ -267,16 +267,20 @@ def test_el_SLUG_del_sujeto_no_se_publica_como_metodo(toy_vault, capsys):
 
     ⚠ Y filtra SÓLO el slug del sujeto, no los stems de `concepts/` que el issue también sugería:
     `methods: [PCA]` con `concepts/methods/pca.md` en disco es el roll-up funcionando (#245), no un
-    defecto — filtrarlo desconectaría en silencio a todo paper de todo método que nombra."""
+    defecto — filtrarlo desconectaría en silencio a todo paper de todo método que nombra.
+
+    ⚠ Y sólo el slug LITERAL (#410): `TEST_STAR` sobrevive. Es el recorte declarado — la variante de
+    caja de un slug de estrella no está en la población medida, y perseguirla cuesta la grafía del
+    paper en todo tema cuyo slug es el nombre del método, que sí lo está (24 contra 19)."""
     (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
     (cfg.CONCEPTS / "methods" / "pca.md").write_text("---\ntags: [concept]\n---\n# PCA\n",
                                                      encoding="utf-8")
     dest = sembrar(toy_vault, extraccion(methods=["periodograma", "test_star", "TEST_STAR", "PCA"]))
     hv.harvest("test_star")
     fm = read_fm(dest)
-    assert fm["methods"] == ["periodograma", "PCA"], fm["methods"]
+    assert fm["methods"] == ["periodograma", "TEST_STAR", "PCA"], fm["methods"]
     out = capsys.readouterr().out
-    assert "es el SLUG del sujeto" in out and "2 slug(s) filtrados" in out
+    assert "es el SLUG del sujeto" in out and "1 slug(s) filtrados" in out
     assert "test_star" in out, "se NOMBRA lo que se filtró: no se cura en silencio"
     # el JSON versionado queda tal cual (#311): el filtro es del cosechador, no de la extracción
     import json as _json
@@ -284,13 +288,24 @@ def test_el_SLUG_del_sujeto_no_se_publica_como_metodo(toy_vault, capsys):
     assert "test_star" in guardado["methods"]
 
 
-def test_split_subject_slugs_compara_por_CLAVE_normalizada(toy_vault):
-    """#404 — `ica`, `ICA` e `I.C.A.` son el mismo slug bajo `method_key` (#243): filtrar por string
-    crudo dejaría pasar la mitad. Y lo que no es slug ni stem de concepto pasa intacto, con SU
-    grafía — la del extractor es información."""
+def test_split_subject_slugs_compara_por_string_LITERAL_no_por_clave(toy_vault):
+    """#404 arreglado por #410. El identificador de la bóveda que el extractor devolvió es el string
+    LITERAL; comparar por `method_key` aplica la regla al revés en todo tema cuyo slug ES el nombre
+    del método —`method_key('ICA') == method_key('ica')`— y descarta la grafía del paper, que es lo
+    que #243 declara información. Medido en la bóveda real: 24 falsos contra 19 verdaderos."""
     metodos, slugs = hv.split_subject_slugs(["GLS", "ica", "ICA", "SysRem"], "ica")
-    assert metodos == ["GLS", "SysRem"] and slugs == ["ica", "ICA"]
+    assert slugs == ["ica"], "sólo el slug literal"
+    assert metodos == ["GLS", "ICA", "SysRem"], "`ICA` es cómo el paper nombra el método"
     assert hv.split_subject_slugs([], "ica") == ([], [])
+
+
+def test_split_subject_slugs_no_descarta_la_grafia_DEL_PAPER(toy_vault):
+    """Los tres casos medidos en `Almagesto-Tesis` (#410), incluido `HARPS DRS` en el tema que
+    originó #404: el fix viejo tiraba justamente el caso que decía resolver."""
+    assert hv.split_subject_slugs(["ICASSO", "Icasso", "centrotipo"], "icasso") == (
+        ["ICASSO", "Icasso", "centrotipo"], [])
+    assert hv.split_subject_slugs(["harps-drs", "HARPS DRS", "CCF"], "harps-drs") == (
+        ["HARPS DRS", "CCF"], ["harps-drs"])
 
 
 def test_cosecha_escribe_la_seccion_de_la_vista(toy_vault):

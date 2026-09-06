@@ -105,3 +105,56 @@ portadores:
         motivo: >-
           Copia el PDF local que el usuario declaró en `sources[]` hacia el slug del tema: es una
           escritura, y el destino es por definición el slug del sujeto.
+
+  - issue: 403
+    regla: >-
+      El hermano `<nota>.verif.md` se ESCRIBE por un solo camino: desde un fan-out que pasó la
+      barrera, emparejando por `(bibcode, ancla)` y hasheando por tipo de archivo. Un segundo
+      escritor produce filas que nadie cruzó contra el manifiesto — medido, el agente lo escribió a
+      mano cuatro veces y dos salieron mal (117 falsos «vencido por fuente»).
+    funcion: write_verif_sidecar.main
+    patron: 'render_verif_sidecar'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: DEFINE la primitiva de render; no la consume.
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          `--migrate-verif-sidecar` MUEVE la tabla verbatim y a propósito no la re-renderiza, para
+          que anclas y hashes sobrevivan (#344). Construir filas desde un fan-out es otra operación.
+
+  - issue: 404
+    regla: >-
+      El identificador interno de la bóveda no es un método del paper, y se lo reconoce por el
+      string LITERAL — nunca por `method_key`, que aplica la regla al revés en todo tema cuyo slug
+      ES el nombre del método (#410: 24 grafías legítimas descartadas contra 19 defectos reales).
+      El filtro vive en la única compuerta que ESCRIBE `methods` en una nota.
+    funcion: harvest_views.split_subject_slugs
+    patron: '"methods":\s*\['
+    consumidores:
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Emite el ESQUELETO del JSON que el extractor completa — es donde el slug se pregunta, no
+          donde se publica. El JSON es versionado y no se toca (#311).
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Crea la clave VACÍA en el stub y la lee para los roll-ups; el único que le mete valores
+          es el cosechador.
+
+  - issue: 406
+    regla: >-
+      Una unidad tiene que seguir a un número: si sigue a una palabra, hubo un empalme. El
+      vocabulario de unidades es de ESTA bóveda —castellano, y astronomía—, así que `mas` y `K` no
+      entran (#411: 372 de 533 hits eran «más» sin tilde, tipo espectral y línea Ca II K).
+    funcion: lint.check_unit_seams
+    patron: 'm/s|km/s|mas/yr'
+    consumidores:
+      - modulo: scripts/bench_verify.py
+        estado: fuera-de-alcance
+        motivo: Unidades dentro de las citas SEMBRADAS del benchmark; no decide qué es una unidad.
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: Unidades en literales de plantilla (cabeceras, ejemplos); no implementa la regla.

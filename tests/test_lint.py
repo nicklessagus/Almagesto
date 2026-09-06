@@ -9962,6 +9962,23 @@ def test_check_unit_seams_caza_la_unidad_separada_de_su_numero(toy_vault):
     assert lint.check_unit_seams("log", "2 puntos m/s", 0) == [], "la navegación no se mira"
 
 
+def test_check_unit_seams_no_confunde_CASTELLANO_ni_astronomia_con_unidades(toy_vault):
+    """#411 — las tres causas que hacían el 76 % de la categoría (407 de 533 hits en la bóveda real)
+    y que el prototipo medido de #406 no tenía. No son casos de borde: `mas` solo era el 64 % de la
+    categoría entera."""
+    def _c(texto):
+        return [m for _s, m in lint.check_unit_seams("nota", texto, 0)]
+    assert _c("pero mas de tres papers lo dicen; no mas que un indicador") == [], \
+        "`mas` es castellano sin tilde, no milliarcsec — y la prosa de la bóveda va en castellano"
+    assert _c("la línea Ca II K y las enanas K de la muestra") == [], \
+        "`K` en astronomía es tipo espectral y nombre de línea mucho antes que Kelvin"
+    assert _c("un valor de $83$ m/s y otro de **1,70** m/s") == [], \
+        "cierre de matemática o de adorno: el número ESTÁ, sólo que no es el último carácter"
+    assert len(_c("deriva medida en 12 puntos mas/yr")) == 1, \
+        "`mas/yr` se queda: no es ambiguo, y sacarlo tiraría la detección con el ruido"
+    assert _c("una deriva de 3 mas/yr") == []
+
+
 def test_check_block_facts_marca_el_bloque_arriba_del_p90(toy_vault):
     """#408 — medido sobre 672 bloques con cita: p90 968 caracteres y 5 hechos citados, y los tres
     bloques donde nacieron los defectos al CORREGIR estaban en el p90 o arriba. Un bloque largo
