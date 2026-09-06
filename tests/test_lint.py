@@ -8954,3 +8954,221 @@ def test_check_log_quotes_no_evalua_lo_que_no_tiene_txt(toy_vault):
     # y la MENCIÓN en blockquote está exenta por estructura, no por olfatear el string (#387)
     en_quote = f'## 2026-03-01 — x\n\n> El paper dice «{cita}» [[2020X]].\n'
     assert lint.check_log_quotes("log", en_quote, _fuente("texto cualquiera")) == []
+
+
+# ── #396 · citas, disputas, cabecera de estado, destino y radios ─────────────────────────────────
+
+def test_check_note_quotes_rutea_cada_veredicto_a_SU_categoria(toy_vault, monkeypatch):
+    """#396/#324 — `quote_verdict` decide UNA vez (y por eso vive en `lib_quotes`); lo que este
+    chequeo hace es **rutear** su veredicto a la categoría que corresponde, y cada una pide una
+    acción distinta: el índice degradado no se toca, la extracción que discrepa manda al PDF, y sólo
+    la evidencia POSITIVA de alteración bloquea. Colapsarlas manda a hacer el trabajo equivocado.
+
+    El doble devuelve `(veredicto, detalle)`, el contrato real de `quote_verdict`, con las claves
+    que cada rama consume — no una tupla a ojo (regla de método 2).
+
+    ⚠ Declarado: `if not _citas: continue` sobrevive a `mutar --guardas` y va a seguir
+    sobreviviendo — el `for _c in _citas` de abajo no itera igual, así que la guarda no decide
+    nada. Red 8 sobre código anterior a #396."""
+    ruta = cfg.CONCEPTS / "methods" / "m.md"
+    cita = "esta frase larga y distintiva se afirma como textual en la prosa de la nota"
+    texto = f'# m\n\nEl paper dice «{cita}» [[2020X]].\n'
+    fuentes = lambda _b: ({"2020X": ["texto cualquiera"]}, [])   # noqa: E731
+
+    def _con(ver, det=None):
+        monkeypatch.setattr(cfg, "quote_verdict", lambda *_a, **_k: (ver, det or {}))
+        return lint.check_note_quotes("m", ruta, {}, texto, fuentes, [0])
+
+    inv, nov, opa, deg, dis = _con("en_su_txt")
+    assert (inv, nov, opa, deg, dis) == ([], [], [], [], []), "en su `.txt`: no hay nada que decir"
+
+    *_x, deg, _d = _con("txt_degradado", {"en_extraccion": ["2020X"]})
+    assert len(deg) == 1 and "defecto es del índice" in deg[0][1]
+
+    *_x, dis = _con("txt_acusa", {"bib": "2020X", "cola_txt": "aaa", "cola_cita": "bbb"})
+    assert len(dis) == 1 and lint.VERIFICAR_PDF_MARK in dis[0][1]
+
+    *_x, deg, _d = _con("txt_parte")
+    assert len(deg) == 1 and "el `.txt` la parte" in deg[0][1]
+
+    inv, *_x = _con("alterada", {"otro_bib": ["2019Y"]})
+    assert len(inv) == 1 and "fuente equivocada" in inv[0][1]
+    inv, *_x = _con("alterada", {"otro_bib": []})
+    assert len(inv) == 1 and "se completó al copiar" in inv[0][1]
+
+    _i, nov, *_x = _con("no_verbatim")
+    assert len(nov) == 1 and "confirmala en el PDF" in nov[0][1]
+
+    # ⛔ `en_su_txt` CORTA: una fuente opaca en el mismo bloque no convierte en hallazgo una cita
+    # que su propio `.txt` ya confirmó
+    monkeypatch.setattr(cfg, "quote_verdict", lambda *_a, **_k: ("en_su_txt", {}))
+    assert lint.check_note_quotes(
+        "m", ruta, {}, texto,
+        lambda _b: ({"2020X": ["x"]}, [("2019Y", "sin `.txt` en disco")]), [0]) \
+        == ([], [], [], [], [])
+
+    # y la fuente OPACA: no se puede chequear, que no es lo mismo que estar mal
+    monkeypatch.setattr(cfg, "quote_verdict", lambda *_a, **_k: ("no_evaluable", {}))
+    _i, _n, opa, *_x = lint.check_note_quotes(
+        "m", ruta, {}, texto, lambda _b: ({}, [("2020X", "sin `.txt` en disco")]), [0])
+    assert len(opa) == 1 and "no se puede chequear" in opa[0][1]
+
+    # #394 — en una nota de PAPER el bibcode es la NOTA, no un link: se SUMA a los candidatos.
+    # Sin eso, una transcripción de su propia `## Vista` se juzgaba contra el `.txt` del vecino.
+    vistos = []
+    monkeypatch.setattr(cfg, "quote_verdict",
+                        lambda _c, _bc, nb, *_a, **_k: (vistos.append(sorted(nb)), ("en_su_txt", {}))[1])
+    # ⛔ el bibcode PROPIO tiene que ser uno que el bloque NO linkea, o el test pasaría por el link
+    pap = cfg.PAPERS / "2019Own.md"
+    lint.check_note_quotes("2019Own", pap, {"bibcode": "2019Own"}, texto, fuentes, [0])
+    assert vistos == [["2019Own", "2020X"]], vistos
+    # ⛔ y SUMA, nunca reemplaza ni ensucia: una nota que no es de paper no tiene bibcode propio y
+    # el conjunto sigue siendo sólo el de los links (un `None` adentro reventaría al ordenarlo)
+    vistos.clear()
+    lint.check_note_quotes("m", ruta, {}, texto, fuentes, [0])
+    assert vistos == [["2020X"]], vistos
+
+    # un bloque SIN comillas no llega ni a preguntar
+    vistos.clear()
+    lint.check_note_quotes("m", ruta, {}, "# m\n\nprosa sin comillas [[2020X]].\n", fuentes, [0])
+    assert vistos == [], "sin cita no hay veredicto que pedir"
+
+    # la población efectiva se cuenta donde el chequeo OCURRE (#275): un `(0)` sobre población
+    # cero se leía como «miré y está limpio»
+    n = [0]
+    _con2 = monkeypatch.setattr(cfg, "quote_verdict", lambda *_a, **_k: ("en_su_txt", {}))
+    lint.check_note_quotes("m", ruta, {}, texto, fuentes, n)
+    assert n[0] == 1, "la cita con fuente chequeable SUMA a la población"
+    lint.check_note_quotes("m", ruta, {}, texto, lambda _b: ({}, []), n)
+    assert n[0] == 1, "la que no tiene fuente NO suma: nadie la evaluó"
+
+
+def test_check_note_disputes_cubre_forma_ref_y_las_citas_del_frontmatter(toy_vault):
+    """#396/#71/INV-12 — un desacuerdo se taguea, no se sobreescribe, y cada posición dice QUIÉN la
+    sostiene: eso es lo que distingue «hay autoridad y dice X» de «la bóveda no sabe». Las cuatro
+    guardas que sobrevivían son las de FORMA, y cada una deja la disputa muda de otra manera.
+
+    ⚠ Declarado: `if _citas_pos:` sobrevive a `mutar --guardas` — el `for` de abajo no itera sobre
+    una lista vacía, así que la guarda sólo ahorra una llamada. Red 8, código anterior a #396.
+    @inv INV-12"""
+    sin_txt = lambda _b: ({}, [])       # noqa: E731
+    def _d(disputes):
+        return lint.check_note_disputes("n", {"disputes": disputes}, sin_txt)
+
+    ok = [{"field": "P_rot", "posiciones": [{"ref": "2020X", "value": 34},
+                                            {"source": "ground_truth", "value": 35}]}]
+    bad, refs, _nv, _op = _d(ok)
+    assert bad == [] and refs == [("n", "P_rot", "2020X")]
+
+    assert any("al menos dos" in m for _s, m in
+               _d([{"field": "P_rot", "posiciones": [{"ref": "2020X", "value": 1}]}])[0])
+    assert any("no es un mapa" in m for _s, m in
+               _d([{"field": "P_rot", "posiciones": ["x", {"ref": "2020X"}]}])[0])
+    assert any("fuera del vocabulario" in m for _s, m in
+               _d([{"field": "P_rot", "posiciones": [{"source": "inventado", "value": 1},
+                                                     {"ref": "2020X", "value": 2}]}])[0])
+    assert any("`ref` Y `source`" in m for _s, m in
+               _d([{"field": "P_rot", "posiciones": [{"ref": "2020X", "source": "ground_truth"},
+                                                     {"ref": "2019Y"}]}])[0])
+    assert any("sin `ref` ni `source`" in m for _s, m in
+               _d([{"field": "P_rot", "posiciones": [{"value": 1}, {"ref": "2020X"}]}])[0])
+
+    # la cita del `note` y la del `value` se chequean contra SU fuente, no contra las de la nota
+    _b, _r, nov, _o = lint.check_note_disputes(
+        "n", {"disputes": [{"field": "P_rot", "note": "«una cita bien larga y distintiva que no está en ningún texto»",
+                            "posiciones": [{"ref": "2020X"}, {"ref": "2019Y"}]}]},
+        lambda _bs: ({b: ["otra cosa"] for b in _bs}, []))
+    assert len(nov) == 1 and "disputes[P_rot].note" in nov[0][1]
+
+    # sin `.txt` en disco la misma cita no es «no verbatim»: es OPACA, que pide otra cosa
+    _b, _r, nov, opa = lint.check_note_disputes(
+        "n", {"disputes": [{"field": "P_rot", "note": "«una cita bien larga y distintiva que no "
+                            "está en ningún texto»",
+                            "posiciones": [{"ref": "2020X"}, {"ref": "2019Y"}]}]},
+        lambda _bs: ({}, [(b, "sin `.txt` en disco") for b in _bs]))
+    assert nov == [] and len(opa) == 1 and "no se puede chequear" in opa[0][1]
+
+    # y el `value` de una posición se chequea contra SU PROPIA `ref`: juntar los refs de la nota
+    # fabricaría la atribución cruzada que este framework persigue como modo de falla dominante
+    _b, _r, nov, _o = lint.check_note_disputes(
+        "n", {"disputes": [{"field": "P_rot", "posiciones": [
+            {"ref": "2020X", "value": "«una cita bien larga y distintiva del valor declarado»"},
+            {"ref": "2019Y", "value": 35}]}]},
+        lambda _bs: ({b: ["otra cosa"] for b in _bs}, []))
+    assert len(nov) == 1 and "posiciones[].value" in nov[0][1]
+    _b, _r, nov, _o = lint.check_note_disputes(
+        "n", {"disputes": [{"field": "P_rot", "posiciones": [{"ref": "2020X", "value": 34},
+                                                             {"ref": "2019Y", "value": 35}]}]},
+        lambda _bs: ({b: ["otra cosa"] for b in _bs}, []))
+    assert nov == [], "un `value` numérico no tiene cita que chequear"
+
+
+def test_check_state_header_solo_habla_de_la_nota_que_YA_publica_una(toy_vault):
+    """#396/D-12/INV-82 — el hallazgo es el DESFASE, no la ausencia. Una nota que nunca tuvo la
+    línea es el caso de #69 (cabecera no estampable) y marcarla acá duplicaría el hallazgo en dos
+    categorías con severidades distintas, que es cómo una de las dos se deja de mirar. Medido: sin
+    ese recorte, un corpus sintético limpio reportaba 4 fichas que nunca pasaron por el estampador.
+
+    ⚠ Declarado: las DOS cláusulas del `if slug_ent and GENERATOR_LINE in text:` sobreviven a
+    `mutar --guardas`, y las dos por la misma razón — el `if _quiere and _hay:` de adentro ya las
+    subsume (sin slug no hay línea que estampar, sin `GENERATOR_LINE` no hay línea publicada). Red 8
+    sobre código anterior a #396: son atajos, no reglas."""
+    # el estampador necesita algo que estampar: una búsqueda en el registro
+    write_yaml(cfg.REGISTRO / "test_star.yaml",
+               {"slug": "test_star", "busquedas": [{"fecha": "2026-03-01", "n_found": 40,
+                                                    "n_core": 12, "bibcodes": ["2020X"]}]})
+    ruta = cfg.STARS / "test_star.md"
+    assert mn.estado_line("test_star", ruta), "sin línea que estampar el test no probaría nada"
+    assert lint.check_state_header("test_star", ruta, "sin generator", "test_star") == []
+    assert lint.check_state_header("test_star", ruta,
+                                   f"{lint.GENERATOR_LINE}\ncuerpo\n", None) == [], \
+        "sin slug de entidad no hay contra qué comparar"
+    assert lint.check_state_header("test_star", ruta,
+                                   f"{lint.GENERATOR_LINE}\ncuerpo sin línea de estado\n",
+                                   "test_star") == [], "la ausencia la reporta #69, no esta categoría"
+    texto = f"{lint.GENERATOR_LINE}\n{lint.ESTADO_PREFIJO} mentira\n"
+    filas = lint.check_state_header("test_star", ruta, texto, "test_star")
+    assert len(filas) == 1 and "no es la que el estampador da hoy" in filas[0][1]
+    # …y con el registro VACÍO no hay línea que estampar: la nota publica una y no se la contradice
+    # con la nada — comparar contra `""` diría siempre «desfasada»
+    write_yaml(cfg.REGISTRO / "test_star.yaml", {"slug": "test_star"})
+    assert lint.check_state_header("test_star", ruta, texto, "test_star") == [], \
+        "sin nada que estampar no hay desfase que declarar"
+
+
+def test_check_paper_destination_y_radio_sin_link(toy_vault):
+    """#396/D-23/INV-94/#235 — dos chequeos chicos con guardas que ningún test distinguía.
+
+    Un paper sin NINGUNO de `stars`/`thesis_links`/`methods` no entra en ningún roll-up: es
+    extracción ya pagada vuelta invisible, y la salida es poblar el campo, nunca borrar la nota. Y
+    un hub que nombra un radio entre backticks en vez de linkearlo lo deja fuera del grafo — pero
+    sólo si ese slug EXISTE como concepto y no es la nota misma.
+
+    ⚠ Declarado: el `concept_slugs` de `if concept_slugs and str(f).startswith(…)` sobrevive — el
+    `_slug in concept_slugs` de adentro ya lo subsume. Red 8, código anterior a #396.  @inv INV-94"""
+    pap, otra = cfg.PAPERS / "2020X.md", cfg.STARS / "s.md"
+    assert lint.check_paper_destination("s", otra, {}, None) == ([], []), "sólo notas de paper"
+    assert lint.check_paper_destination("2020X", pap, {}, "fm rota") == ([], []), \
+        "con el frontmatter roto no se opina"
+    sin, _b = lint.check_paper_destination("2020X", pap, {}, None)
+    assert len(sin) == 1 and "no pertenece a ninguna entidad" in sin[0][1].lower() or sin, sin
+    assert lint.check_paper_destination("2020X", pap, {"stars": ["tau Cet"]}, None)[0] == []
+    _s, bear = lint.check_paper_destination("2020X", pap, {"bearing": "apoya",
+                                                           "stars": ["x"]}, None)
+    assert len(bear) == 1, "el `bearing` es schema viejo (D-21)"
+
+    hub = cfg.CONCEPTS / "methods" / "hub.md"
+    cuerpo = "# hub\n\nel radio `gp-kernels` profundiza el kernel.\n"
+    assert lint.check_radio_without_link("hub", hub, cuerpo, set()) == [], \
+        "sin conceptos declarados no hay radio que reconocer"
+    assert lint.check_radio_without_link("hub", cfg.STARS / "s.md", cuerpo,
+                                         {"gp-kernels"}) == [], "sólo dentro de `concepts/`"
+    filas = lint.check_radio_without_link("hub", hub, cuerpo, {"gp-kernels"})
+    assert len(filas) == 1 and "gp-kernels" in filas[0][1]
+    assert lint.check_radio_without_link(
+        "hub", hub, cuerpo + "\n[[gp-kernels]]\n", {"gp-kernels"}) == [], "linkeado: no es hallazgo"
+    assert lint.check_radio_without_link(
+        "gp-kernels", hub, "el radio `gp-kernels` …", {"gp-kernels"}) == [], \
+        "una nota no se linkea a sí misma"
+    assert lint.check_radio_without_link("hub", hub, cuerpo, {"otra-cosa"}) == [], \
+        "lo que no es un concepto declarado no es un radio: sería exigir link a la nada"

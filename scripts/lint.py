@@ -3928,6 +3928,314 @@ def check_log_quotes(stem: str, body_full: str, sources_for) -> list:
     return cita_log
 
 
+def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluadas: list) -> tuple:
+    """The five verdicts about a VERBATIM QUOTE in a note's prose (#220/#316/#324/#333).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. A quote is a claim that a MACHINE can decide, which is what separates these from
+    everything `verify-citations` does: the question is not «does this value match the published
+    one?» but «is this string in the file that was read?».
+
+    `n_evaluadas` comes in as the one-element list that counts the effective population (#275): the
+    category declared its population in NOTES, so a `(0)` over an effective population of ZERO —45
+    of 49 papers exempt— read as «I looked and it is clean».
+
+    @inv INV-40
+    """
+    cita_inventada: list = []
+    cita_no_verbatim: list = []
+    cita_opaca: list = []
+    cita_txt_degradado: list = []
+    cita_txt_discrepa: list = []
+    if stem not in NON_ORPHAN:
+        _por_bloque: dict = {}
+        for _par in lb.pairs_of(text):
+            _por_bloque.setdefault((_par.block.first_line, _par.block.text), []).append(_par.bibcode)
+        # #321 — los bibcodes de TODA la nota: el error de atribución medido es la frase de un
+        # paper puesta bajo otro de la misma nota (6 de 32 hits), y ésa es evidencia POSITIVA.
+        _bibs_nota = {b for _bs in _por_bloque.values() for b in _bs}
+        # #394 — el simétrico de #373, que `contrast` ya tenía y este gate no: en una nota de
+        # PAPER el bibcode es la nota y no un link, así que una transcripción de su `## Vista`
+        # se juzgaba contra el `.txt` del `[[wikilink]]` vecino —que en esa frase es una
+        # MENCIÓN—. Medido en una bóveda real: 5 de 19 hallazgos de esta categoría eran
+        # palabras del propio paper, 3 de ellas verbatim en su propio `.txt`. Misma cita, dos
+        # veredictos: limpia en `contrast --validar-todo` y backlog acá, que es la divergencia
+        # que #324 declaró prohibida — por eso la regla es UNA función, no una copia.
+        _propio = cfg.note_own_bibcode(Path(f), fm)   # el fm YA parseado: una sola pasada de YAML
+        if _propio:
+            _bibs_nota.add(_propio)
+        for (_ln, _btxt), _bibs in _por_bloque.items():
+            _bibs = cfg.with_own_bibcode(_bibs, _propio)
+            _citas = cfg.quotes_in(_btxt)
+            if not _citas:
+                continue
+            for _c in _citas:
+                # #316 — la cita se prueba contra SU fuente, no contra todas las del bloque. Un
+                # párrafo que contrasta dos o tres papers es la forma normal de la prosa que
+                # este framework pide, y probar cada cita contra cada bibcode marca la nota
+                # **por decir la verdad** (medido: 12 de 12 hallazgos duros de un hub, en cuatro
+                # líneas que atribuyen bien en prosa). Peor: el arreglo aparente —reatribuir la
+                # cita al bibcode contra el que se testeó— **destruye la inferencia** que la
+                # nota declara. Sin dueño adyacente la ambigüedad se DECLARA en el mensaje.
+                _duenio = lb.quote_owner(_btxt, _c, _bibs)
+                _bibs_c = [_duenio] if _duenio else _bibs
+                _fuentes, _opacas = sources_for(_bibs_c)
+                n_evaluadas[0] += 1 if _fuentes else 0
+                _amb = "" if _duenio or len(_bibs) == 1 else (
+                    f" ⚠ el bloque cita {', '.join(sorted(_bibs))} y la cita no lleva "
+                    f"`[[bibcode]]` adyacente: se probó contra TODAS, así que el hallazgo es "
+                    f"más débil — poné la cita al lado de su fuente (#316)")
+                # #324 — UNA sola implementación de la regla, en `cfg.quote_verdict`: acá y
+                # en `contrast.validar` se decide lo mismo, y con código separado ya divergían
+                # (13 contra 12 sobre el mismo corpus el mismo día). El orden lo fija esa
+                # función, y su primer paso —la cita contra el `.txt` de SU fuente— es el que
+                # evita marcar como mal atribuida una cita correcta cuya extracción,
+                # selectiva (#188), no la transcribió.
+                _ver, _det = cfg.quote_verdict(_c, _bibs_c, _bibs_nota, _fuentes, ambiguo=bool(_amb))
+                _corte = _c if len(_c) <= 70 else _c[:70] + "…"
+                if _ver == "en_su_txt":
+                    continue
+                if _ver == "txt_degradado":
+                    # #315/#317 — la EXTRACCIÓN es la transcripción hecha leyendo el PDF, así
+                    # que si la cita está ahí la nota es fiel y lo que falló es el `.txt` (#205
+                    # lo declara índice degradado). Medido: con el `.txt` de único juez la señal
+                    # era 2 de 17 en un concepto y 0 de 35 en otro.
+                    cita_txt_degradado.append(
+                        (stem, f"L{_ln}: «{_corte}» está en la EXTRACCIÓN de "
+                               f"{', '.join(_det['en_extraccion'])} (que se hizo leyendo el "
+                               f"PDF) y no en su `.txt`: la nota está bien y el defecto es del "
+                               f"índice — re-extraé el `.txt` si molesta (#315)"))
+                elif _ver == "txt_acusa":
+                    # #333 — la extracción la aprueba y el `.txt` de ESA MISMA fuente trae el
+                    # arranque y sigue distinto, en prosa y sobre un borde de palabra. Son dos
+                    # lecturas del mismo PDF —`pdftotext` y un LLM— y la única certeza es la
+                    # página. Backlog, nunca bloqueante: el `.txt` es índice degradado (#205).
+                    cita_txt_discrepa.append(
+                        (stem, f"L{_ln}: «{_corte}» — el `.txt` de {_det['bib']} dice "
+                               f"«…{_det['cola_txt'][:70]}» donde la extracción dice "
+                               f"«…{_det['cola_cita'][:70]}». Confirmala en el PDF y, si no "
+                               f"podés, marcala `{VERIFICAR_PDF_MARK}`{_amb}"))
+                elif _ver == "txt_parte":
+                    # #288 — la fuente SÍ la dice: lo que la rompió es la EXTRACCIÓN del `.txt`
+                    # (números de línea de un preprint a dos columnas metidos en medio de la
+                    # frase, una columna vecina empalmada). Es otro trabajo y otra severidad.
+                    # Medido sobre cinco hallazgos abiertos uno por uno, CUATRO eran esto.
+                    cita_txt_degradado.append(
+                        (stem, f"L{_ln}: «{_corte}» está en la fuente pero el `.txt` la parte "
+                               f"({', '.join(sorted(_fuentes))}): números de línea o columnas "
+                               f"empalmadas. La cita no se toca — confirmala en el PDF y, si "
+                               f"hace falta, re-extraé el `.txt`{_amb}"))
+                elif _ver == "alterada":
+                    # #318/#321 — el GATE, con la premisa corregida: bloquea sólo la EVIDENCIA
+                    # POSITIVA (la frase bajo otro bibcode, o el prefijo largo con la cola
+                    # divergente). El silencio de una transcripción selectiva (#188) sobre un
+                    # corpus que se cita del PDF (#205) no prueba fabricación — medido sobre 32
+                    # hits: 6 de atribución, 6 de alteración, y entre los otros 20 una cita que
+                    # #315 usa como ejemplo de cita CORRECTA.
+                    _porque = (f"la frase está verbatim en la extracción de "
+                               f"**{', '.join(_det['otro_bib'])}**, no en la de "
+                               f"{', '.join(sorted(_fuentes))}: la cita está atribuida a la "
+                               f"fuente equivocada" if _det["otro_bib"] else
+                               "el arranque coincide con la extracción y la cola diverge: la "
+                               "cita se completó al copiar (el patrón de #314)")
+                    cita_inventada.append(
+                        (stem, f"L{_ln}: «{_corte}» — {_porque}. Copiala del JSON de extracción "
+                               f"(`contrast.py <slug> --grep …`) o parafraseá SIN comillas"))
+                elif _ver == "no_verbatim":
+                    cita_no_verbatim.append(
+                        (stem, f"L{_ln}: «{_corte}» no está en el `.txt` de "
+                               f"{', '.join(sorted(_fuentes))} → ⚠ **confirmala en el PDF antes "
+                               f"de tocar la nota**: desde #205 el `.txt` es el ÍNDICE, no la "
+                               f"fuente, y un `.txt` a dos columnas empalma texto vecino en "
+                               f"medio de la frase. Si el PDF la dice, el defecto es de la "
+                               f"extracción; si no, la cita no es verbatim{_amb}"))
+                elif _opacas:
+                    cita_opaca.append(
+                        (stem, f"L{_ln}: «{_corte}» no se puede chequear — "
+                               + "; ".join(f"{b}: {m}" for b, m in _opacas)))
+    return cita_inventada, cita_no_verbatim, cita_opaca, cita_txt_degradado, cita_txt_discrepa
+
+
+def check_note_disputes(stem: str, fm: dict, sources_for) -> tuple:
+    """`disputes[]` — shape, `ref` with a destination, and the quote each position carries (#71).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. A disagreement is tagged, never overwritten, and each position says WHO holds it —
+    which is what tells «there is an authority and it says X» from «the vault genuinely does not
+    know».
+
+    @inv INV-12
+    """
+    bad_disputes: list = []
+    dispute_refs: list = []
+    cita_no_verbatim: list = []
+    cita_opaca: list = []
+    _refs_disputa: list = []
+    for campo, posiciones, motivos_forma, _nota_disputa in note_disputes(fm):
+        for motivo in motivos_forma:
+            bad_disputes.append((stem, motivo))
+        if not campo:
+            bad_disputes.append((stem, "disputa sin `field`: no se sabe sobre QUÉ es el desacuerdo"))
+        if len(posiciones) < 2:
+            bad_disputes.append((stem, f"disputa `{campo or '?'}` con {len(posiciones)} "
+                                       f"posición(es): un desacuerdo necesita al menos dos — con "
+                                       f"una sola es una afirmación, y va a la prosa citada"))
+        _refs_campo: list = []
+        for pos in posiciones:
+            if isinstance(pos, dict) and str(pos.get("ref") or "").strip():
+                _refs_campo.append(str(pos["ref"]).strip())
+        for _c in cfg.quotes_in(_nota_disputa):
+            _f, _o = sources_for(_refs_campo)
+            _corte = _c if len(_c) <= 70 else _c[:70] + "…"
+            if any(cfg.quote_found(_c, _t) for _ts in _f.values() for _t in _ts):
+                continue
+            if _f:
+                cita_no_verbatim.append(
+                    (stem, f"frontmatter `disputes[{campo}].note`: «{_corte}» no está en el "
+                           f"`.txt` de {', '.join(sorted(_f))} — misma regla que el cuerpo: "
+                           f"alcanza con que UNA de las fuentes de la disputa la tenga"))
+            elif _o:
+                cita_opaca.append(
+                    (stem, f"frontmatter `disputes[{campo}].note`: «{_corte}» no se puede "
+                           f"chequear — " + "; ".join(f"{b}: {m}" for b, m in _o)))
+        for pos in posiciones:
+            if not isinstance(pos, dict):
+                bad_disputes.append((stem, f"disputa `{campo or '?'}`: posición que no es un mapa "
+                                           f"(`ref`/`source` + `value`)"))
+                continue
+            ref, src = str(pos.get("ref") or "").strip(), str(pos.get("source") or "").strip()
+            # `source` se valida SIEMPRE que esté, no sólo cuando falta `ref`: una posición con
+            # los dos declara dos dueños distintos y esquivaba el vocabulario cerrado entero.
+            if src and src not in DISPUTE_SOURCES:
+                bad_disputes.append((stem, f"disputa `{campo}`: `source: {src}` fuera del "
+                                           f"vocabulario ({'/'.join(DISPUTE_SOURCES)})"))
+            if ref and src:
+                bad_disputes.append((stem, f"disputa `{campo}`: posición con `ref` Y `source` "
+                                           f"→ una posición la sostiene UNA fuente"))
+            if ref:
+                dispute_refs.append((stem, campo, ref))
+                _refs_disputa.append(ref)
+                # El `value` se chequea contra SU PROPIA `ref`: juntar los refs de la nota
+                # fabricaría la atribución cruzada que este framework persigue como modo de
+                # falla dominante. `str()` defensivo: `value` puede ser numérico.
+                _citas_pos = cfg.quotes_in(str(pos.get("value") or ""))
+                if _citas_pos:
+                    _f, _o = sources_for([ref])
+                    for _c in _citas_pos:
+                        _corte = _c if len(_c) <= 70 else _c[:70] + "…"
+                        if any(cfg.quote_found(_c, _t) for _t in _f.get(ref, [])):
+                            continue
+                        if _f:
+                            cita_no_verbatim.append(
+                                (stem, f"frontmatter `disputes[{campo}].posiciones[].value`: "
+                                       f"«{_corte}» no está en el `.txt` de {ref}"))
+                        elif _o:
+                            cita_opaca.append(
+                                (stem, f"frontmatter `disputes[{campo}].posiciones[].value`: "
+                                       f"«{_corte}» no se puede chequear — "
+                                       + "; ".join(f"{b}: {m}" for b, m in _o)))
+            elif not src:
+                bad_disputes.append((stem, f"disputa `{campo}`: posición sin `ref` ni `source` "
+                                           f"→ no se sabe quién la sostiene"))
+    return bad_disputes, dispute_refs, cita_no_verbatim, cita_opaca
+
+
+def check_state_header(stem: str, f, text: str, slug_ent) -> list:
+    """`estado_desfasado` — the `> _Estado — …_` header against the truth on disk (D-12/INV-82).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. The three dates move separately and may diverge without any of them lying; with a
+    single one, refreshing the corpus made things look re-verified that nobody checked again.
+    """
+    estado_desfasado: list = []
+    if slug_ent and GENERATOR_LINE in text:
+        try:
+            _quiere = mn.estado_line(slug_ent, Path(f))
+        except Exception:                             # noqa: BLE001 — un registro roto ya se reporta
+            _quiere = ""
+        _hay = next((l for l in text.split("\n") if l.startswith(ESTADO_PREFIJO)), "")
+        # ⚠ Sólo la nota que YA publica una línea de estado: el hallazgo es el DESFASE, no la
+        # ausencia. Una nota que nunca la tuvo es el caso de #69 (cabecera no estampable) y
+        # marcarla acá duplicaría ese hallazgo en dos categorías con severidades distintas —
+        # que es cómo una de las dos se deja de mirar. Medido: sin este recorte el corpus
+        # sintético limpio reportaba 4 fichas que nunca habían pasado por el estampador.
+        if _quiere and _hay:
+            if _hay.strip() != _quiere.strip():
+                # #334 — el comando sale de `make_notes_cmd`, no del slug pelado: `_entity_slug`
+                # devuelve el slug del TEMA para toda nota de `concepts/`, así que sin el flag
+                # el 100 % de la población de conceptos recibía un remedio que no corre.
+                estado_desfasado.append(
+                    (stem, "la cabecera `> _Estado — …_` no es la que el estampador da hoy "
+                           "(¿faltó re-correr después del último paso?) → "
+                           f"`{cfg.make_notes_cmd(slug_ent)}`"))
+    return estado_desfasado
+
+
+def check_paper_destination(stem: str, f, fm: dict, err) -> tuple:
+    """`(sin_destino, old_bearing)` — the paper note that belongs to no entity (D-23/INV-94).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. With none of `stars`, `thesis_links` or `methods` populated the paper enters no
+    roll-up and no note reaches it: it is extraction already paid for, turned invisible. The way out
+    is to populate the field, never to delete the note.
+
+    @inv INV-94
+    """
+    sin_destino: list = []
+    old_bearing: list = []
+    if in_dir(f, "papers") and not err:
+        # D-21: la POSTURA de un paper depende de la TESIS, y un paper puede tocar varias.
+        # Dejarla en el paper obligaba a elegir una sola para todas; vive en la tabla de
+        # evidencia de la hipótesis.
+        if fm.get("bearing") is not None:
+            old_bearing.append((stem, "usa `bearing:` (schema pre-D-21) — la postura respecto de "
+                                      "una tesis vive en la tabla de evidencia de la hipótesis, "
+                                      "no en el paper: depende de la tesis, y un paper puede "
+                                      "tocar varias"))
+        # D-23: sin ninguno de los tres, el paper no pertenece a nada — no entra en ningún
+        # roll-up y ninguna síntesis lo alcanza. Que además esté linkeado no lo salva.
+        if not any(fm.get(k) for k in ("stars", "thesis_links", "methods")):
+            sin_destino.append((stem, "sin destino: ni `stars`, ni `thesis_links`, ni `methods` "
+                                      "— no entra en ningún roll-up ni lo alcanza ninguna síntesis"))
+    return sin_destino, old_bearing
+
+
+def check_verificar_pdf_mark(stem: str, body_full: str, offset: int) -> list:
+    """`verificar_pdf` — the fourth inline mark: what an audit could NOT verify (#225).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. It does not destroy the claim —it may well be true— and it is visible; the lint
+    raises it so the debt is not forgotten, and it goes away when somebody verifies it with evidence.
+    """
+    verificar_pdf: list = []
+    if stem not in NON_ORPHAN:
+        for _i, _l in enumerate(body_full.split("\n"), 1 + offset):
+            if VERIFICAR_PDF_MARK in _l:
+                verificar_pdf.append(
+                    (stem, f"L{_i}: una afirmación quedó marcada para chequear contra el PDF — "
+                           f"«{_l.strip()[:90]}»"))
+    return verificar_pdf
+
+
+def check_radio_without_link(stem: str, f, body_full: str, concept_slugs) -> list:
+    """`radio_sin_link` — a hub naming a spoke as code instead of `[[wikilink]]` (#235).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. Without the link the spoke is not in the graph, does not count as an incoming link,
+    and the hub reads as if the sub-aspect did not exist.
+    """
+    radio_sin_link: list = []
+    if concept_slugs and str(f).startswith(str(cfg.CONCEPTS)):
+        for _m in _RADIO_RE.finditer(body_full):
+            _slug = _m.group(1)
+            if _slug != stem and _slug in concept_slugs and f"[[{_slug}]]" not in body_full:
+                radio_sin_link.append(
+                    (stem, f"nombra el radio `{_slug}` entre backticks y no lo linkea "
+                           f"`[[{_slug}]]` — sin el link no entra al grafo ni cuenta como link "
+                           f"entrante, y el hub se lee como si el sub-aspecto no existiera"))
+    return radio_sin_link
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -4486,12 +4794,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # se reporta hasta que alguien la verifique y la saque. Backlog, nunca bloqueante — la
         # afirmación puede ser cierta, y la marca existe justamente para hacerla visible sin
         # destruirla, igual que `⛔retractada` y `⚠desactualizado`.
-        if stem not in NON_ORPHAN:
-            for _i, _l in enumerate(body_full.split("\n"), 1 + _offset):
-                if VERIFICAR_PDF_MARK in _l:
-                    verificar_pdf.append(
-                        (stem, f"L{_i}: una afirmación quedó marcada para chequear contra el PDF — "
-                               f"«{_l.strip()[:90]}»"))
+        # La marca `⚠verificar en el PDF` vive en `check_verificar_pdf_mark` (#396).
+        verificar_pdf += check_verificar_pdf_mark(stem, body_full, _offset)
 
         # #220 — la cita textual, que es una afirmación DECIDIBLE SOBRE UN ARCHIVO. «esta cadena
         # está en este `.txt`» lo contesta un `grep`, y hoy lo único que las mira es el fan-out de
@@ -4518,125 +4822,20 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # La cita textual del `log` vive en `check_log_quotes` (#396).
         cita_log += check_log_quotes(stem, body_full, _sources_for)
 
-        if stem not in NON_ORPHAN:
-            _por_bloque: dict = {}
-            for _par in lb.pairs_of(text):
-                _por_bloque.setdefault((_par.block.first_line, _par.block.text), []).append(_par.bibcode)
-            # #321 — los bibcodes de TODA la nota: el error de atribución medido es la frase de un
-            # paper puesta bajo otro de la misma nota (6 de 32 hits), y ésa es evidencia POSITIVA.
-            _bibs_nota = {b for _bs in _por_bloque.values() for b in _bs}
-            # #394 — el simétrico de #373, que `contrast` ya tenía y este gate no: en una nota de
-            # PAPER el bibcode es la nota y no un link, así que una transcripción de su `## Vista`
-            # se juzgaba contra el `.txt` del `[[wikilink]]` vecino —que en esa frase es una
-            # MENCIÓN—. Medido en una bóveda real: 5 de 19 hallazgos de esta categoría eran
-            # palabras del propio paper, 3 de ellas verbatim en su propio `.txt`. Misma cita, dos
-            # veredictos: limpia en `contrast --validar-todo` y backlog acá, que es la divergencia
-            # que #324 declaró prohibida — por eso la regla es UNA función, no una copia.
-            _propio = cfg.note_own_bibcode(Path(f), fm)   # el fm YA parseado: una sola pasada de YAML
-            if _propio:
-                _bibs_nota.add(_propio)
-            for (_ln, _btxt), _bibs in _por_bloque.items():
-                _bibs = cfg.with_own_bibcode(_bibs, _propio)
-                _citas = cfg.quotes_in(_btxt)
-                if not _citas:
-                    continue
-                for _c in _citas:
-                    # #316 — la cita se prueba contra SU fuente, no contra todas las del bloque. Un
-                    # párrafo que contrasta dos o tres papers es la forma normal de la prosa que
-                    # este framework pide, y probar cada cita contra cada bibcode marca la nota
-                    # **por decir la verdad** (medido: 12 de 12 hallazgos duros de un hub, en cuatro
-                    # líneas que atribuyen bien en prosa). Peor: el arreglo aparente —reatribuir la
-                    # cita al bibcode contra el que se testeó— **destruye la inferencia** que la
-                    # nota declara. Sin dueño adyacente la ambigüedad se DECLARA en el mensaje.
-                    _duenio = lb.quote_owner(_btxt, _c, _bibs)
-                    _bibs_c = [_duenio] if _duenio else _bibs
-                    _fuentes, _opacas = _sources_for(_bibs_c)
-                    _n_citas_evaluadas[0] += 1 if _fuentes else 0
-                    _amb = "" if _duenio or len(_bibs) == 1 else (
-                        f" ⚠ el bloque cita {', '.join(sorted(_bibs))} y la cita no lleva "
-                        f"`[[bibcode]]` adyacente: se probó contra TODAS, así que el hallazgo es "
-                        f"más débil — poné la cita al lado de su fuente (#316)")
-                    # #324 — UNA sola implementación de la regla, en `cfg.quote_verdict`: acá y
-                    # en `contrast.validar` se decide lo mismo, y con código separado ya divergían
-                    # (13 contra 12 sobre el mismo corpus el mismo día). El orden lo fija esa
-                    # función, y su primer paso —la cita contra el `.txt` de SU fuente— es el que
-                    # evita marcar como mal atribuida una cita correcta cuya extracción,
-                    # selectiva (#188), no la transcribió.
-                    _ver, _det = cfg.quote_verdict(_c, _bibs_c, _bibs_nota, _fuentes, ambiguo=bool(_amb))
-                    _corte = _c if len(_c) <= 70 else _c[:70] + "…"
-                    if _ver == "en_su_txt":
-                        continue
-                    if _ver == "txt_degradado":
-                        # #315/#317 — la EXTRACCIÓN es la transcripción hecha leyendo el PDF, así
-                        # que si la cita está ahí la nota es fiel y lo que falló es el `.txt` (#205
-                        # lo declara índice degradado). Medido: con el `.txt` de único juez la señal
-                        # era 2 de 17 en un concepto y 0 de 35 en otro.
-                        cita_txt_degradado.append(
-                            (stem, f"L{_ln}: «{_corte}» está en la EXTRACCIÓN de "
-                                   f"{', '.join(_det['en_extraccion'])} (que se hizo leyendo el "
-                                   f"PDF) y no en su `.txt`: la nota está bien y el defecto es del "
-                                   f"índice — re-extraé el `.txt` si molesta (#315)"))
-                    elif _ver == "txt_acusa":
-                        # #333 — la extracción la aprueba y el `.txt` de ESA MISMA fuente trae el
-                        # arranque y sigue distinto, en prosa y sobre un borde de palabra. Son dos
-                        # lecturas del mismo PDF —`pdftotext` y un LLM— y la única certeza es la
-                        # página. Backlog, nunca bloqueante: el `.txt` es índice degradado (#205).
-                        cita_txt_discrepa.append(
-                            (stem, f"L{_ln}: «{_corte}» — el `.txt` de {_det['bib']} dice "
-                                   f"«…{_det['cola_txt'][:70]}» donde la extracción dice "
-                                   f"«…{_det['cola_cita'][:70]}». Confirmala en el PDF y, si no "
-                                   f"podés, marcala `{VERIFICAR_PDF_MARK}`{_amb}"))
-                    elif _ver == "txt_parte":
-                        # #288 — la fuente SÍ la dice: lo que la rompió es la EXTRACCIÓN del `.txt`
-                        # (números de línea de un preprint a dos columnas metidos en medio de la
-                        # frase, una columna vecina empalmada). Es otro trabajo y otra severidad.
-                        # Medido sobre cinco hallazgos abiertos uno por uno, CUATRO eran esto.
-                        cita_txt_degradado.append(
-                            (stem, f"L{_ln}: «{_corte}» está en la fuente pero el `.txt` la parte "
-                                   f"({', '.join(sorted(_fuentes))}): números de línea o columnas "
-                                   f"empalmadas. La cita no se toca — confirmala en el PDF y, si "
-                                   f"hace falta, re-extraé el `.txt`{_amb}"))
-                    elif _ver == "alterada":
-                        # #318/#321 — el GATE, con la premisa corregida: bloquea sólo la EVIDENCIA
-                        # POSITIVA (la frase bajo otro bibcode, o el prefijo largo con la cola
-                        # divergente). El silencio de una transcripción selectiva (#188) sobre un
-                        # corpus que se cita del PDF (#205) no prueba fabricación — medido sobre 32
-                        # hits: 6 de atribución, 6 de alteración, y entre los otros 20 una cita que
-                        # #315 usa como ejemplo de cita CORRECTA.
-                        _porque = (f"la frase está verbatim en la extracción de "
-                                   f"**{', '.join(_det['otro_bib'])}**, no en la de "
-                                   f"{', '.join(sorted(_fuentes))}: la cita está atribuida a la "
-                                   f"fuente equivocada" if _det["otro_bib"] else
-                                   "el arranque coincide con la extracción y la cola diverge: la "
-                                   "cita se completó al copiar (el patrón de #314)")
-                        cita_inventada.append(
-                            (stem, f"L{_ln}: «{_corte}» — {_porque}. Copiala del JSON de extracción "
-                                   f"(`contrast.py <slug> --grep …`) o parafraseá SIN comillas"))
-                    elif _ver == "no_verbatim":
-                        cita_no_verbatim.append(
-                            (stem, f"L{_ln}: «{_corte}» no está en el `.txt` de "
-                                   f"{', '.join(sorted(_fuentes))} → ⚠ **confirmala en el PDF antes "
-                                   f"de tocar la nota**: desde #205 el `.txt` es el ÍNDICE, no la "
-                                   f"fuente, y un `.txt` a dos columnas empalma texto vecino en "
-                                   f"medio de la frase. Si el PDF la dice, el defecto es de la "
-                                   f"extracción; si no, la cita no es verbatim{_amb}"))
-                    elif _opacas:
-                        cita_opaca.append(
-                            (stem, f"L{_ln}: «{_corte}» no se puede chequear — "
-                                   + "; ".join(f"{b}: {m}" for b, m in _opacas)))
+        # Las cinco preguntas sobre una cita textual viven en `check_note_quotes` (#396).
+        _q = check_note_quotes(stem, f, fm, text, _sources_for, _n_citas_evaluadas)
+        cita_inventada += _q[0]
+        cita_no_verbatim += _q[1]
+        cita_opaca += _q[2]
+        cita_txt_degradado += _q[3]
+        cita_txt_discrepa += _q[4]
 
         # #235 — el hub que nombra un radio SIN `[[wikilink]]`. La convención hub/radio pide que el
         # hub «referencie cada radio explícitamente», y sin red el radio aparecía como slug entre
         # backticks dentro de un bullet: no entra al grafo, no cuenta como link entrante para el
         # detector de huérfanos, y el hub se lee como si el sub-aspecto no existiera.
-        if _CONCEPT_SLUGS and str(f).startswith(str(cfg.CONCEPTS)):
-            for _m in _RADIO_RE.finditer(body_full):
-                _slug = _m.group(1)
-                if _slug != stem and _slug in _CONCEPT_SLUGS and f"[[{_slug}]]" not in body_full:
-                    radio_sin_link.append(
-                        (stem, f"nombra el radio `{_slug}` entre backticks y no lo linkea "
-                               f"`[[{_slug}]]` — sin el link no entra al grafo ni cuenta como link "
-                               f"entrante, y el hub se lee como si el sub-aspecto no existiera"))
+        # El radio nombrado sin link vive en `check_radio_without_link` (#396).
+        radio_sin_link += check_radio_without_link(stem, f, body_full, _CONCEPT_SLUGS)
 
         # #227 — la FORMA del artefacto. El artefacto es lo que viaja, y hasta 1.82.3 nadie miraba
         # si renderiza. Medido en una nota real con `lint --cierre` en 0: una fila de tabla con 9
@@ -4665,26 +4864,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # arriba: allá eran dos implementaciones que discrepaban, acá una que nadie verifica que se
         # haya corrido. Backlog: la nota es válida, lo que falta es re-estampar.
         _slug_ent = _entity_slug(f)
-        if _slug_ent and GENERATOR_LINE in text:
-            try:
-                _quiere = mn.estado_line(_slug_ent, Path(f))
-            except Exception:                             # noqa: BLE001 — un registro roto ya se reporta
-                _quiere = ""
-            _hay = next((l for l in text.split("\n") if l.startswith(ESTADO_PREFIJO)), "")
-            # ⚠ Sólo la nota que YA publica una línea de estado: el hallazgo es el DESFASE, no la
-            # ausencia. Una nota que nunca la tuvo es el caso de #69 (cabecera no estampable) y
-            # marcarla acá duplicaría ese hallazgo en dos categorías con severidades distintas —
-            # que es cómo una de las dos se deja de mirar. Medido: sin este recorte el corpus
-            # sintético limpio reportaba 4 fichas que nunca habían pasado por el estampador.
-            if _quiere and _hay:
-                if _hay.strip() != _quiere.strip():
-                    # #334 — el comando sale de `make_notes_cmd`, no del slug pelado: `_entity_slug`
-                    # devuelve el slug del TEMA para toda nota de `concepts/`, así que sin el flag
-                    # el 100 % de la población de conceptos recibía un remedio que no corre.
-                    estado_desfasado.append(
-                        (stem, "la cabecera `> _Estado — …_` no es la que el estampador da hoy "
-                               "(¿faltó re-correr después del último paso?) → "
-                               f"`{cfg.make_notes_cmd(_slug_ent)}`"))
+        # La cabecera `> _Estado — …_` vive en `check_state_header` (#396).
+        estado_desfasado += check_state_header(stem, f, text, _slug_ent)
 
         if f.startswith((str(cfg.STARS), str(cfg.CONCEPTS))) and GENERATOR_LINE not in text:
             headerless.append((stem, "sin la línea `_Generado con Almagesto v…_`: los estampadores "
@@ -4706,73 +4887,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # en una ficha real: 23 posiciones con `ref:` y 6 citas «…», cero chequeadas — y una
         # corrección de la verificación aterrizó sólo en la prosa, dejando el frontmatter (la capa
         # que el contrato llama auditable) con el número que la verificación había corregido.
-        _refs_disputa: list = []
-        for campo, posiciones, motivos_forma, _nota_disputa in note_disputes(fm):
-            for motivo in motivos_forma:
-                bad_disputes.append((stem, motivo))
-            if not campo:
-                bad_disputes.append((stem, "disputa sin `field`: no se sabe sobre QUÉ es el desacuerdo"))
-            if len(posiciones) < 2:
-                bad_disputes.append((stem, f"disputa `{campo or '?'}` con {len(posiciones)} "
-                                           f"posición(es): un desacuerdo necesita al menos dos — con "
-                                           f"una sola es una afirmación, y va a la prosa citada"))
-            _refs_campo: list = []
-            for pos in posiciones:
-                if isinstance(pos, dict) and str(pos.get("ref") or "").strip():
-                    _refs_campo.append(str(pos["ref"]).strip())
-            for _c in cfg.quotes_in(_nota_disputa):
-                _f, _o = _sources_for(_refs_campo)
-                _corte = _c if len(_c) <= 70 else _c[:70] + "…"
-                if any(cfg.quote_found(_c, _t) for _ts in _f.values() for _t in _ts):
-                    continue
-                if _f:
-                    cita_no_verbatim.append(
-                        (stem, f"frontmatter `disputes[{campo}].note`: «{_corte}» no está en el "
-                               f"`.txt` de {', '.join(sorted(_f))} — misma regla que el cuerpo: "
-                               f"alcanza con que UNA de las fuentes de la disputa la tenga"))
-                elif _o:
-                    cita_opaca.append(
-                        (stem, f"frontmatter `disputes[{campo}].note`: «{_corte}» no se puede "
-                               f"chequear — " + "; ".join(f"{b}: {m}" for b, m in _o)))
-            for pos in posiciones:
-                if not isinstance(pos, dict):
-                    bad_disputes.append((stem, f"disputa `{campo or '?'}`: posición que no es un mapa "
-                                               f"(`ref`/`source` + `value`)"))
-                    continue
-                ref, src = str(pos.get("ref") or "").strip(), str(pos.get("source") or "").strip()
-                # `source` se valida SIEMPRE que esté, no sólo cuando falta `ref`: una posición con
-                # los dos declara dos dueños distintos y esquivaba el vocabulario cerrado entero.
-                if src and src not in DISPUTE_SOURCES:
-                    bad_disputes.append((stem, f"disputa `{campo}`: `source: {src}` fuera del "
-                                               f"vocabulario ({'/'.join(DISPUTE_SOURCES)})"))
-                if ref and src:
-                    bad_disputes.append((stem, f"disputa `{campo}`: posición con `ref` Y `source` "
-                                               f"→ una posición la sostiene UNA fuente"))
-                if ref:
-                    dispute_refs.append((stem, campo, ref))
-                    _refs_disputa.append(ref)
-                    # El `value` se chequea contra SU PROPIA `ref`: juntar los refs de la nota
-                    # fabricaría la atribución cruzada que este framework persigue como modo de
-                    # falla dominante. `str()` defensivo: `value` puede ser numérico.
-                    _citas_pos = cfg.quotes_in(str(pos.get("value") or ""))
-                    if _citas_pos:
-                        _f, _o = _sources_for([ref])
-                        for _c in _citas_pos:
-                            _corte = _c if len(_c) <= 70 else _c[:70] + "…"
-                            if any(cfg.quote_found(_c, _t) for _t in _f.get(ref, [])):
-                                continue
-                            if _f:
-                                cita_no_verbatim.append(
-                                    (stem, f"frontmatter `disputes[{campo}].posiciones[].value`: "
-                                           f"«{_corte}» no está en el `.txt` de {ref}"))
-                            elif _o:
-                                cita_opaca.append(
-                                    (stem, f"frontmatter `disputes[{campo}].posiciones[].value`: "
-                                           f"«{_corte}» no se puede chequear — "
-                                           + "; ".join(f"{b}: {m}" for b, m in _o)))
-                elif not src:
-                    bad_disputes.append((stem, f"disputa `{campo}`: posición sin `ref` ni `source` "
-                                               f"→ no se sabe quién la sostiene"))
+        # Las disputas viven en `check_note_disputes` (#396).
+        _d1, _d2, _d3, _d4 = check_note_disputes(stem, fm, _sources_for)
+        bad_disputes += _d1
+        dispute_refs += _d2
+        cita_no_verbatim += _d3
+        cita_opaca += _d4
 
         # chequeos de completitud por tipo
         tags = fm.get("tags", []) or []
@@ -4791,20 +4911,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             old_facets.append((stem, "usa `topics:` (schema pre-R-5) — el campo vigente es "
                                      "`facets:` y el lector ya no mira `topics` → "
                                      "`python scripts/make_notes.py --migrate-facets`"))
-        if in_dir(f, "papers") and not err:
-            # D-21: la POSTURA de un paper depende de la TESIS, y un paper puede tocar varias.
-            # Dejarla en el paper obligaba a elegir una sola para todas; vive en la tabla de
-            # evidencia de la hipótesis.
-            if fm.get("bearing") is not None:
-                old_bearing.append((stem, "usa `bearing:` (schema pre-D-21) — la postura respecto de "
-                                          "una tesis vive en la tabla de evidencia de la hipótesis, "
-                                          "no en el paper: depende de la tesis, y un paper puede "
-                                          "tocar varias"))
-            # D-23: sin ninguno de los tres, el paper no pertenece a nada — no entra en ningún
-            # roll-up y ninguna síntesis lo alcanza. Que además esté linkeado no lo salva.
-            if not any(fm.get(k) for k in ("stars", "thesis_links", "methods")):
-                sin_destino.append((stem, "sin destino: ni `stars`, ni `thesis_links`, ni `methods` "
-                                          "— no entra en ningún roll-up ni lo alcanza ninguna síntesis"))
+        # El paper sin destino vive en `check_paper_destination` (#396).
+        _pd1, _pd2 = check_paper_destination(stem, f, fm, err)
+        sin_destino += _pd1
+        old_bearing += _pd2
         # Lo propio de una hipótesis vive en `check_hypothesis_note` (#396).
         _h1, _h2, _h3, _h4 = check_hypothesis_note(stem, f, fm, text, err)
         alcance_corto += _h1
