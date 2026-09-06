@@ -158,3 +158,25 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: Unidades en literales de plantilla (cabeceras, ejemplos); no implementa la regla.
+
+  - issue: 414
+    regla: >-
+      El año de una fuente es el que la CITA usa —para un artículo de revista, el de imprenta—, y
+      Crossref pone en `issued` el más temprano de print y online. Se leen los dos y vale
+      cualquiera de ellos: cuál usa una cita es convención del editor, no algo que este repo decida
+      por quien consume (regla #0).
+    funcion: lib_config.crossref_years
+    patron: 'issued'
+    consumidores:
+      - modulo: scripts/check_sources.py
+        estado: usa
+        motivo: El cruce de #353 comparaba contra `issued` y desmentía el año correcto.
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: >-
+          El segundo portador, con el MISMO defecto y sin aparecer en el síntoma: filtra los
+          candidatos de DOI por año con tolerancia ±1, así que en un online-first descartaba solo
+          el registro bueno. Lo encontró la red 10, no el reporte.
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: Matchea por la palabra «issued» en un docstring en inglés; no lee fechas de Crossref.

@@ -2050,6 +2050,21 @@
    "number": 412,
    "title": "#403 cerró sin entrada en portadores.yaml, y hay un SEGUNDO escritor del hermano: `make_notes` llama a `render_verif_sidecar` directo",
    "state": "OPEN"
+  },
+  {
+   "number": 413,
+   "title": "El `## Abstract` sólo se llena desde el PDF, así que en una nota `pending_source` queda `_(no disponible)_` PARA SIEMPRE — con el abstract disponible en OpenAlex y `openalex._abstract` ya escrito",
+   "state": "OPEN"
+  },
+  {
+   "number": 414,
+   "title": "El año se toma de Crossref `issued` (fecha ONLINE), no de `published-print`: desmiente el año correcto —y lo BLOQUEA— y mete 2007 en el BibTeX de un paper de 2008",
+   "state": "OPEN"
+  },
+  {
+   "number": 415,
+   "title": "El carril `sources:` no puede declarar `pdf_source`: 38 PDFs que trajo el usuario quedan «procedencia desconocida», y el campo NO es re-derivable para esa población",
+   "state": "OPEN"
   }
  ]
 }

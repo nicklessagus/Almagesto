@@ -51,9 +51,29 @@ def test_norm_tira_la_dieresis_suelta_de_pdftotext():
 # ── Crossref ─────────────────────────────────────────────────────────────────────────────────────
 
 def test_crossref_meta_lee_primer_autor_anio_y_titulo():
-    assert cs.crossref_meta(PENDSE) == {"family": "Pendse", "year": 2011,
+    assert cs.crossref_meta(PENDSE) == {"family": "Pendse", "year": 2011, "years": [2011],
                                         "title": PENDSE["title"][0]}
-    assert cs.crossref_meta({}) == {"family": "", "year": None, "title": ""}
+    assert cs.crossref_meta({}) == {"family": "", "year": None, "years": [], "title": ""}
+
+
+def test_el_anio_de_la_CITA_es_el_de_IMPRENTA_no_el_de_issued():
+    """#414 — Crossref pone en `issued` el MÁS TEMPRANO de print y online, así que en cualquier
+    online-first desmentía el año correcto. Medido en `2008Yang` (Human Brain Mapping 29, 2008):
+    `issued` y `published-online` dicen 2007-06-27, `published-print` dice 2008-06.
+
+    Se devuelven LOS DOS y vale cualquiera: cuál usa una cita es convención del editor, no algo
+    que este repo decida por quien consume (regla #0)."""
+    msg = {"issued": {"date-parts": [[2007, 6, 27]]},
+           "published-online": {"date-parts": [[2007, 6, 27]]},
+           "published-print": {"date-parts": [[2008, 6]]},
+           "author": [{"family": "Yang", "sequence": "first"}], "title": ["RAICAR"]}
+    meta = cs.crossref_meta(msg)
+    assert meta["years"] == [2008, 2007], "print primero"
+    decl = {"author": "Yang", "title": "RAICAR"}
+    assert cs.compare_crossref({**decl, "year": 2008}, meta) == ("ok", ""), "el año de la cita"
+    assert cs.compare_crossref({**decl, "year": 2007}, meta) == ("ok", ""), "y el online también"
+    assert cs.compare_crossref({**decl, "year": 2010}, meta)[0] == "anio", "el que no es ninguno, sí"
+    assert cs.crossref_years(msg) == cfg.crossref_years(msg), "una sola implementación (#414)"
 
 
 def test_el_caso_del_issue_da_autor_falso():
@@ -80,7 +100,9 @@ def test_compare_pdf_exige_apellido_y_anio_en_la_pagina():
             + "abstract " * 60)          # una primera página real supera el mínimo de `is_legible`
     assert cs.compare_pdf({"author": "Hyvärinen, A.", "year": 2000, "title": ""}, page) == ("ok", "")
     assert cs.compare_pdf({"author": "Yang", "year": 2000, "title": ""}, page)[0] == "autor"
-    assert cs.compare_pdf({"author": "Hyvarinen", "year": 2004, "title": ""}, page)[0] == "anio"
+    v, det = cs.compare_pdf({"author": "Hyvarinen", "year": 2004, "title": ""}, page)
+    assert v == "no-evaluable" and "no consta" in det, \
+        "#414 — una portada que no imprime el año declarado no lo DESMIENTE: 13 de 13 falsos"
     assert cs.compare_pdf({"author": "", "year": None, "title": ""}, page)[0] == "no-evaluable"
     assert cs.compare_pdf({"author": "Yang", "year": 2000, "title": ""}, "   ")[0] == "no-evaluable"
 

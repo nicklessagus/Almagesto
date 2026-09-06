@@ -5464,16 +5464,26 @@ _HECHO_RE = re.compile(r"«[^»]{8,}»|\(\s*p\.\s*\d+|\(\s*L\d+")
 #: espectral y nombre de línea (Ca II H&K) mucho más seguido que Kelvin: 33 hits—; (c) el token
 #: previo puede **cerrar matemática o adorno** (`$83$ m/s`, `**1,70** m/s`), y ahí el número SÍ
 #: está: el prototipo lo excluía y la versión shippeada exigía que el dígito fuera el último
-#: carácter. `mas/yr` se queda: no es ambiguo.
+#: carácter. `mas/yr` se queda: no es ambiguo. **Medido sobre la bóveda real (215 notas): 570 → 3**,
+#: y los 3 son los falsos positivos que el propio #406 midió y aceptó.
 _UNIDADES = (r"m/s|km/s|cm/s|m\s?s\^?-1|km\s?s\^?-1|mas/yr|ppm|M⊕|M_?J|R⊕|R_?J|"
              r"M_?sun|M☉|pc|kpc|nm|Å|d[ií]as|days")
 _COSTURA_RE = re.compile(r"(?<![\w.,])([^\s]+)\s+(" + _UNIDADES + r")(?=[\s.,;:)\]»]|$)")
+#: ⚠ El token previo llega con el markup pegado —`$83$`, `**1,70**`, `(en`, `«pocos`—, así que el
+#: dígito y la palabra se buscan DENTRO de sus cierres y aperturas. Sin eso el 4.º modo de ceguera
+#: al markup de la regla de método nº 4 reaparece acá: `150^{+28}_{-25}$ km/s` es una medida con
+#: su número a la vista y salía como costura.
+_CIERRE = r"[)\]}%»\"'$*`_]*"
+_APERTURA = r"[(\[{«\"'$*`_]*"
 _ANTES_DE_UNIDAD_OK = re.compile(
-    r".*\d[)\]%»\"'$*`_]*$"                                        # el dígito, con su cierre: `1,70`, `$83$`, `**2**`
-    r"|^(?:few|a few|pocos|pocas|varios|varias|several|some|sub|hundred|cientos?|nivel|order|"
-    r"orden|escala|unos|unas|mil|thousand|tens|decenas|dozens|docenas|half|medio|media)$"
-    r"|^(?:en|de|del|a|al|por|con|sin|entre|hasta|sobre|the|of|in|at|per|to|from|by|and|or|y|o|"
-    r"u|e)$", re.I)
+    r".*[\d⁰¹²³⁴⁵⁶⁷⁸⁹]" + _CIERRE + r"$"                             # el dígito y su cierre: `1,70`, `$83$`, `1,7·10⁻⁵`
+    r"|^" + _APERTURA + r"(?:few|a few|pocos|pocas|varios|varias|several|some|sub|hundred|cientos?|"
+    r"nivel|order|orden|escala|unos|unas|mil|thousand|tens|decenas|dozens|docenas|half|medio|"
+    r"media|cuantos|cuántos|how many|" +
+    r"un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|doce|one|two|three|four|five|six|"
+    r"seven|eight|nine|ten)" + _CIERRE + r"$"
+    r"|^" + _APERTURA + r"(?:en|de|del|a|al|por|con|sin|entre|hasta|sobre|durante|cada|the|of|in|"
+    r"at|per|to|from|by|for|over|and|or|y|o|u|e)" + _CIERRE + r"$", re.I)
 
 
 def check_block_facts(stem: str, body_full: str, offset: int) -> list:

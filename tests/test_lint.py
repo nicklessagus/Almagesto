@@ -9979,6 +9979,17 @@ def test_check_unit_seams_no_confunde_CASTELLANO_ni_astronomia_con_unidades(toy_
     assert _c("una deriva de 3 mas/yr") == []
 
 
+def test_check_unit_seams_ve_el_numero_DEBAJO_del_markup(toy_vault):
+    """#411, 2.ª pasada — el token previo llega con el markup pegado, y la guarda exigía que el
+    dígito fuera el ÚLTIMO carácter. Es la 4.ª reaparición de la ceguera al markup de la regla de
+    método nº 4: `150^{+28}_{-25}$ km/s` es una medida con su número a la vista."""
+    def _c(texto):
+        return [m for _s, m in lint.check_unit_seams("nota", texto, 0)]
+    assert _c("de $150^{+28}_{-25}$ km/s y de 1,7·10⁻⁵ días") == [], "cierre de llave y superíndice"
+    assert _c("expresado (en ppm) y también (in ppm)") == [], "preposición con su paréntesis"
+    assert _c("durante ocho días y for ten days") == [], "número en palabras y `durante`/`for`"
+
+
 def test_check_block_facts_marca_el_bloque_arriba_del_p90(toy_vault):
     """#408 — medido sobre 672 bloques con cita: p90 968 caracteres y 5 hechos citados, y los tres
     bloques donde nacieron los defectos al CORREGIR estaban en el p90 o arriba. Un bloque largo

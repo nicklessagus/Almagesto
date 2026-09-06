@@ -123,13 +123,15 @@ def crossref_meta(msg: dict) -> dict:
     autores = [cfg.as_map(a) for a in cfg.as_list(msg.get("author"))]
     primero = next((a for a in autores if str(a.get("sequence") or "") == "first"),
                    autores[0] if autores else {})
-    partes = cfg.as_list(cfg.as_map(msg.get("issued")).get("date-parts"))
-    year = None
-    if partes and cfg.as_list(partes[0]):
-        year = _year(cfg.as_list(partes[0])[0])
+    años = crossref_years(msg)
     titulo = cfg.as_list(msg.get("title"))
-    return {"family": str(primero.get("family") or ""), "year": year,
-            "title": str(titulo[0]) if titulo else ""}
+    return {"family": str(primero.get("family") or ""), "year": años[0] if años else None,
+            "years": años, "title": str(titulo[0]) if titulo else ""}
+
+
+def crossref_years(msg: dict) -> list:
+    """Delegates to `cfg.crossref_years`, the single implementation of the rule (#414)."""
+    return cfg.crossref_years(msg)
 
 
 def compare_crossref(declared: dict, found: dict, fuente: str = "Crossref") -> tuple[str, str]:
@@ -140,8 +142,10 @@ def compare_crossref(declared: dict, found: dict, fuente: str = "Crossref") -> t
         return "no-evaluable", f"{fuente} no trae autor ni año para esta fuente"
     if declared.get("author") and found.get("family") and not family_match(declared["author"], found["family"]):
         return "autor", f"declarado «{declared['author']}», {fuente} dice «{found['family']}»"
-    if declared.get("year") and found.get("year") and declared["year"] != found["year"]:
-        return "anio", f"declarado {declared['year']}, {fuente} dice {found['year']}"
+    años = found.get("years") or ([found["year"]] if found.get("year") else [])
+    if declared.get("year") and años and declared["year"] not in años:
+        return "anio", (f"declarado {declared['year']}, {fuente} dice "
+                        f"{' / '.join(str(y) for y in años)}")
     if declared.get("title") and found.get("title") and norm(declared["title"]) != norm(found["title"]):
         return "titulo", f"declarado «{declared['title']}», {fuente} dice «{found['title']}»"
     return "ok", ""
@@ -257,7 +261,20 @@ def compare_pdf(declared: dict, page: str, donde: str = "la primera página del 
     if fam and not re.search(rf"\b{re.escape(fam)}\b", texto) and fam_full not in texto.replace(" ", ""):
         return "autor", f"declarado «{declared['author']}» y el apellido no está en {donde}"
     if declared.get("year") and not re.search(rf"\b{declared['year']}\b", texto):
-        return "anio", f"declarado {declared['year']} y ese año no aparece en {donde}"
+        # ⛔ AUSENCIA ≠ CONTRADICCIÓN (#414). Una portada que no imprime el año declarado no lo
+        # DESMIENTE: no consta. Medido sobre las 21 fuentes con PDF de una bóveda real, el
+        # veredicto `anio` por esta vía salió 13 veces y fue falso las 13 — preprints y actas cuya
+        # p.1 lleva la fecha de OTRA cosa: el sello de arXiv, la fecha de envío, el número de un
+        # programa de becas, el identificador `1907.02579` y hasta la dirección postal
+        # `2015 Neil Avenue`. Ninguna de esas páginas afirma un año de publicación distinto. Con
+        # el mismo ⛔ que un año desmentido por Crossref, la categoría enterraba su único hallazgo
+        # verdadero entre falsos, que es el modo de falla de la regla de método nº 4.
+        # ⚠ Lo que la volvería decidible es exigir el año en CONTEXTO de publicación (©, «Vol.»,
+        # «Received»); no se implementa porque no hay un solo verdadero positivo contra el que
+        # medirlo, y una guarda afinada a ciegas es la que después nadie sabe por qué está.
+        # El apellido SÍ discrimina y se queda: es lo que cazó la atribución fabricada de #353.
+        return "no-evaluable", (f"declarado {declared['year']} y ese año no está en {donde}: no "
+                                f"consta (una portada que no lo imprime no lo desmiente)")
     if not fam and not declared.get("year"):
         return "no-evaluable", "el item no declara `author` ni `year`: no hay nada que cruzar"
     return "ok", ""

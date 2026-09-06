@@ -191,7 +191,7 @@ def doi_candidate(title: str, first_author: str, year=None) -> tuple:
     if not titulo or not familia:
         return "", "sin `title` o sin `first_author`: no hay con qué preguntar"
     params = {"query.bibliographic": titulo, "query.author": familia, "rows": 5,
-              "select": "DOI,title,author,issued"}
+              "select": "DOI,title,author,issued,published-print,published-online"}
     if (correo := cfg.get_mailto()):
         params["mailto"] = correo              # polite pool, opt-in (#: nunca sale de git config)
     try:
@@ -208,8 +208,11 @@ def doi_candidate(title: str, first_author: str, year=None) -> tuple:
         if cfg.method_key(cand) != cfg.method_key(titulo):
             continue                           # ⛔ título EXACTO normalizado, nunca parecido
         if year:
-            partes = ((it.get("issued") or {}).get("date-parts") or [[None]])[0]
-            if partes and partes[0] and abs(int(partes[0]) - int(year)) > 1:
+            # ⛔ Los años que Crossref publica, print primero (`cfg.crossref_years`, #414): `issued`
+            # es el MÁS TEMPRANO de print y online, así que en un online-first el candidato bueno
+            # queda a dos años del declarado y se descartaba solo.
+            años = cfg.crossref_years(it)
+            if años and min(abs(int(a) - int(year)) for a in años) > 1:
                 continue
         autores = it.get("author") or [{}]
         cr_familia = str(autores[0].get("family") or "").strip()

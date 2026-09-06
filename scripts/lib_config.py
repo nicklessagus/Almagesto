@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.243.0"
+ALMAGESTO_VERSION = "1.244.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2153,6 +2153,33 @@ def print_seguro(texto: str, file=None) -> None:
     except UnicodeEncodeError:
         enc = getattr(stream, "encoding", None) or "ascii"
         print(texto.encode(enc, errors="replace").decode(enc), file=stream)
+
+
+def crossref_years(msg: dict) -> list:
+    """Every year Crossref publishes for the record, PRINT first (#414).
+
+    ⛔ `issued` is not the citation year: Crossref sets it to the EARLIER of print and online, so
+    for any online-first article it hands back the online year while the citation —and the
+    journal's own volume— carry the print one. Measured on `2008Yang` (Human Brain Mapping 29,
+    2008): `issued` and `published-online` say 2007-06-27, `published-print` says 2008-06. The
+    rail was calling the correct declaration false.
+
+    All of them are returned, not just the preferred one, because a declaration matching ANY of
+    them is right: which of the two a citation uses is the editor's convention, not something this
+    repo gets to decide for the consumer (regla #0)."""
+    out = []
+    for clave in ("published-print", "published-online", "issued", "published"):
+        partes = as_list(as_map(msg.get(clave)).get("date-parts"))
+        if partes and as_list(partes[0]) and (y := _crossref_year(as_list(partes[0])[0])):
+            if y not in out:
+                out.append(y)
+    return out
+
+
+def _crossref_year(v) -> int | None:
+    """`1997` from `1997`, `"1997"`, `"1997-06"`; `None` from anything that is not a year."""
+    m = re.match(r"\s*(\d{4})", str(v or ""))
+    return int(m.group(1)) if m and 1500 <= int(m.group(1)) <= 2200 else None
 
 
 def as_list(v) -> list:

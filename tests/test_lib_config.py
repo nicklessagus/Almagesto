@@ -3233,3 +3233,18 @@ def test_txt_slug_resuelve_bajo_cualquier_slug_con_precedencia(toy_vault):
     assert cfg.txt_slug("2002Cardoso", "no_existe") == "ica", "cae al menor, no a None"
     assert cfg.txt_slug("2020nada") is None
     assert cfg.txt_slug("2020nada", "ica") is None, "el preferido sin copia tampoco inventa"
+
+
+def test_crossref_years_devuelve_print_primero_y_todos(tmp_path):
+    """#414 — `issued` es el MÁS TEMPRANO de print y online, así que para un online-first no es el
+    año de la cita. La función devuelve TODOS los que Crossref publica, print primero, y es la
+    ÚNICA implementación de la regla: la llaman `check_sources` (el cruce de #353) y
+    `fetch_bibtex` (el filtro de candidatos por DOI), que llevaba el mismo defecto."""
+    assert cfg.crossref_years({"issued": {"date-parts": [[2007, 6, 27]]},
+                               "published-online": {"date-parts": [[2007, 6, 27]]},
+                               "published-print": {"date-parts": [[2008, 6]]}}) == [2008, 2007]
+    assert cfg.crossref_years({"issued": {"date-parts": [[2011]]}}) == [2011], "sin print, `issued`"
+    assert cfg.crossref_years({"issued": {"date-parts": [["1997-06"]]}}) == [1997], "año-mes string"
+    assert cfg.crossref_years({}) == [], "sin fechas no se inventa ninguna"
+    assert cfg.crossref_years({"issued": {"date-parts": [[None]]}}) == []
+    assert cfg.crossref_years({"issued": {"date-parts": [[99]]}}) == [], "99 no es un año"
