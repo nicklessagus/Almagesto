@@ -3248,3 +3248,33 @@ def test_crossref_years_devuelve_print_primero_y_todos(tmp_path):
     assert cfg.crossref_years({}) == [], "sin fechas no se inventa ninguna"
     assert cfg.crossref_years({"issued": {"date-parts": [[None]]}}) == []
     assert cfg.crossref_years({"issued": {"date-parts": [[99]]}}) == [], "99 no es un año"
+
+
+def test_abstract_pending_distingue_el_hueco_del_schema_viejo():
+    """#413 — la regla la llaman `--fill-abstracts` y el cosechador, y estaba escrita dos veces.
+    Distingue tres estados: sin sección (schema pre-#277, lo arregla `--restamp-abstracts`), con
+    el placeholder (hueco de contenido) y con un abstract real, que no se pisa nunca."""
+    cab = "---\ntags: [paper]\n---\n\n"
+    assert not cfg.abstract_pending(cab + "# Nota\n"), "sin sección no es «pendiente»: es otro estado"
+    assert cfg.abstract_pending(cab + f"## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n")
+    assert not cfg.abstract_pending(cab + "## Abstract\nUn abstract de catálogo.\n")
+    assert not cfg.abstract_pending(cab + "## Abstract\n" + "x" * 300 + f"\n{cfg.ABSTRACT_PLACEHOLDER}\n"), \
+        "el placeholder se busca en la CABEZA: más abajo es prosa que lo menciona"
+
+
+def test_declared_pdf_sources_junta_lo_declarado_y_rechaza_lo_que_no_es_vocabulario(monkeypatch, capsys):
+    """#415 — el carril `sources:` es el único que puede declarar la procedencia de un PDF que
+    trajo el usuario, y el valor NO es re-derivable para esa población. Un valor fuera del
+    vocabulario cerrado NO se escribe: caería por el `else` de todo `== "eprint"` en silencio
+    (#296), que es justo lo que el campo decide."""
+    monkeypatch.setattr(cfg, "load_themes", lambda: {
+        "ica-ruido": {"sources": [{"key": "1997Wentzell", "pdf_source": "publisher"},
+                                  {"key": "2000Ikeda", "pdf_source": "revista"},
+                                  {"key": "2013Voss"},
+                                  {"key": "", "pdf_source": "ads"},
+                                  "no soy un mapa"]},
+        "ica": {"sources": [{"key": "2011Naik", "pdf_source": "eprint"}]}})
+    assert cfg.declared_pdf_sources() == {"1997Wentzell": "publisher", "2011Naik": "eprint"}
+    assert "fuera del vocabulario" in capsys.readouterr().out, "el typo se NOMBRA, no se calla"
+    monkeypatch.setattr(cfg, "load_themes", lambda: {})
+    assert cfg.declared_pdf_sources() == {}

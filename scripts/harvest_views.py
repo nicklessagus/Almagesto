@@ -308,9 +308,11 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
     # Se rellena en dos casos: la sección **falta** (nota off-ADS, que no tiene catálogo del que
     # copiar) o está con el **placeholder** `_(no disponible)_` (ADS no lo devolvió). Sin el segundo
     # caso el placeholder sería permanente, porque el guard vería la sección y no la tocaría nunca.
+    # ⛔ El guard de «todavía tiene el placeholder» lo decide `cfg.abstract_pending`, que es la
+    # ÚNICA implementación de esa regla (#413): acá y en `--fill-abstracts` estaba escrito dos
+    # veces, que es la familia que la red 10 caza.
     _ini = cfg.section_start(texto_nota, "## Abstract")
-    _vacio = _ini >= 0 and PLACEHOLDER_ABSTRACT in texto_nota[_ini:_ini + 200]
-    if _ini < 0 or _vacio:
+    if _ini < 0 or cfg.abstract_pending(texto_nota):
         # ⛔ AUD-203 / INV-110 — el abstract que llega por acá lo **transcribió el modelo del PDF**,
         # no es la copia de catálogo, y el contrato hace descansar en esa distinción que
         # `## Abstract` sea la capa **auditable** del cuerpo. Sin decirlo, las dos se leen igual y

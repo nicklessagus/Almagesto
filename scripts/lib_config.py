@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.244.0"
+ALMAGESTO_VERSION = "1.245.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2658,6 +2658,46 @@ def load_extra_core(meta: dict, *, entry: str = "?") -> list:
                      f"parte entró (p. ej. `alcance: caps. 2-3`), o el chequeo de completitud lee un "
                      f"recorte deliberado como omisión (#80/#382).")
     return v
+
+
+def abstract_pending(text: str) -> bool:
+    """The note has the `## Abstract` section and it still holds the placeholder (#413).
+
+    Same guard as the harvester's: the section EXISTS (so it is not the pre-#277 schema, which is
+    `--restamp-abstracts`' job) and its head still carries `ABSTRACT_PLACEHOLDER`. A real abstract
+    already in place is never touched."""
+    i = section_start(text, "## Abstract")
+    return i >= 0 and ABSTRACT_PLACEHOLDER in text[i:i + 200]
+
+
+def declared_pdf_sources() -> dict:
+    """`{key: pdf_source}` declared in the `sources:` of every theme (#415).
+
+    ⛔ `pdf_source` DECIDES READINGS —with `eprint` a numeric discrepancy against a published value
+    is a candidate version difference, not an error of the note— and the `sources:` rail was the
+    one lane that could not declare it: no fetcher runs for a PDF the user brought, and there is no
+    arXiv stamp on a publisher's copy, so `pdf_source_info` returned `None` (= UNKNOWN) forever.
+    Measured on a real vault: 38 of the 57 notes with a PDF and no provenance came in through this
+    rail, and the value is not re-derivable for them — nobody can recover it except by opening the
+    file and looking at the cover.
+
+    It is the versioned half of the rule, which is why it lives in the config and not in `build/`:
+    «`build/` holds what is regenerable, the registry holds what is not». Values off
+    `PDF_SOURCE_OK` are dropped with a warning rather than written: a value outside the vocabulary
+    falls through every `== "eprint"` in silence (#296)."""
+    out: dict = {}
+    for slug, meta in (load_themes() or {}).items():
+        for item in as_list(as_map(meta).get("sources")):
+            if not isinstance(item, dict) or not (k := str(item.get("key") or "").strip()):
+                continue
+            if not (v := str(item.get("pdf_source") or "").strip()):
+                continue
+            if v not in PDF_SOURCE_OK:
+                print_seguro(f"  ⚠ `{slug}`/`{k}`: `pdf_source: {v}` fuera del vocabulario "
+                             f"({'|'.join(PDF_SOURCE_OK)}) — se ignora (#296)")
+                continue
+            out[k] = v
+    return out
 
 
 def extra_core_scope(meta: dict, *, entry: str = "?") -> dict:

@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-06"
-techo_lineas: 1749
-techo_bytes: 140734
+techo_lineas: 1759
+techo_bytes: 141662
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -278,3 +278,15 @@ crecimientos:
       cerrar errores»). Ocho líneas; la medición vive en #409.
     techo_lineas: 1749
     techo_bytes: 140734
+  - fecha: "2026-09-06"
+    ancla: "#415"
+    motivo: >-
+      Dos reglas de ESCRITURA que un agente necesita antes de declarar una fuente o de mirar el
+      hueco de un abstract, las dos medidas en la bóveda real. #415: el item de `sources:` declara
+      `pdf_source`, que es el único campo del schema que decide lecturas y que para esa población
+      NO es re-derivable (38 de 57 notas con PDF sin procedencia). #413: el `## Abstract` se llena
+      desde el catálogo y no sólo desde el PDF, o el placeholder es permanente justo donde el
+      abstract es todo lo que la nota tiene (29 con placeholder, 10 recuperables). Cinco líneas
+      cada una; el caso completo vive en su issue.
+    techo_lineas: 1759
+    techo_bytes: 141662

@@ -5336,3 +5336,79 @@ def test_restamp_vista_stub_saltea_la_entrada_malformada_sin_romperse(toy_vault,
                  "# p\n\n" + mn._legacy_vista_block("ica", True), encoding="utf-8")
     mn.restamp_vista_stub()
     assert "_No leído desde `ica`: entra por el roll-up._" in f.read_text(encoding="utf-8")
+
+
+def test_el_carril_sources_puede_declarar_pdf_source(toy_vault, monkeypatch, capsys):
+    """#415 — `pdf_source` DECIDE LECTURAS y era el único campo que el carril `sources:` no podía
+    declarar: para un PDF que trajo el usuario no corre ningún fetcher y no hay marca de arXiv, así
+    que el campo quedaba `None` (= desconocido) para siempre. Medido: 38 de las 57 notas con PDF y
+    sin procedencia de una bóveda real entraron por ahí, y el valor no es re-derivable para esa
+    población — nadie lo recupera salvo abriendo el archivo y mirando la portada.
+
+    La marca de arXiv sigue mandando (#57: un ADS_PDF que sirve el eprint ES el eprint)."""
+    _txt("test_star", "2020arx....1..1A",
+         "arXiv:2201.01234v3 [astro-ph.EP] 5 Jan 2022\n\nA Study of Something\n")
+    cfg.record_pdf_source("test_star", "1997Wentzell", "ads")
+    monkeypatch.setattr(cfg, "load_themes", lambda: {
+        "ica-ruido": {"sources": [{"key": "1997Wentzell", "pdf_source": "publisher"},
+                                  {"key": "2000Ikeda", "pdf_source": "revista"},
+                                  {"key": "2020arx....1..1A", "pdf_source": "publisher"}]}})
+    assert mn.pdf_source_info("test_star", "1997Wentzell") == ("publisher", None), \
+        "lo declarado gana sobre `build/`, que es scratch gitignored y no viaja"
+    assert mn.pdf_source_info("test_star", "2020arx....1..1A") == ("eprint", "v3"), \
+        "la marca de arXiv manda sobre lo declarado (#57)"
+    assert mn.pdf_source_info("test_star", "2000Ikeda") == (None, None), \
+        "fuera del vocabulario NO se escribe: caería por el `else` de todo `== 'eprint'` (#296)"
+    assert "fuera del vocabulario" in capsys.readouterr().out, "y se avisa, no se calla"
+    assert mn.pdf_source_info("test_star", "2020unk....1..1U") == (None, None), "sin declarar, igual"
+
+
+def test_fill_abstracts_completa_desde_el_CATALOGO_no_desde_el_PDF(toy_vault, monkeypatch, capsys):
+    """#413 — `CLAUDE.md` dice que los tres backends devuelven el abstract y que pesa justo donde
+    NO hay PDF («en un `pending_source` el abstract es TODO lo que la nota tiene»). La
+    implementación sólo lo llenaba desde el PDF, así que en esa población el placeholder era
+    PERMANENTE. Medido en la bóveda real: 29 notas con placeholder, 15 con DOI, OpenAlex tenía el
+    abstract de 10 — las dos `pending_source` incluidas."""
+    def _nota(stem, doi, cuerpo):
+        d = cfg.PAPERS / f"{stem}.md"
+        d.write_text(f"---\ntags: [paper]\nbibcode: {stem}\ndoi: {doi}\n---\n\n"
+                     f"## Abstract\n{cuerpo}\n", encoding="utf-8")
+        return d
+    con = _nota("1997Wentzell", "10.1/a", cfg.ABSTRACT_PLACEHOLDER)
+    sin_doi = _nota("2000Ikeda", "", cfg.ABSTRACT_PLACEHOLDER)
+    vacio = _nota("2004Beckmann", "10.1/c", cfg.ABSTRACT_PLACEHOLDER)
+    ya = _nota("2011Naik", "10.1/d", "Un abstract de catálogo que ya está.")
+
+    import openalex
+    monkeypatch.setattr(openalex, "entity_by_doi", lambda doi: {
+        "10.1/a": {"abstract_inverted_index": {"MLPCA": [0], "estima": [1]}},
+        "10.1/c": {},
+    }.get(doi))
+    assert mn.fill_abstracts() == 0
+    assert "MLPCA estima" in con.read_text(encoding="utf-8"), "verbatim del catálogo"
+    assert cfg.ABSTRACT_PLACEHOLDER in sin_doi.read_text(encoding="utf-8"), "sin `doi`, no se inventa"
+    assert cfg.ABSTRACT_PLACEHOLDER in vacio.read_text(encoding="utf-8"), "el catálogo no lo tiene"
+    assert "ya está" in ya.read_text(encoding="utf-8"), "un abstract real no se pisa"
+
+    out = capsys.readouterr().out
+    assert "1 de 3" in out, "la población son las notas con placeholder, no todas"
+    # D-43 — los tres motivos por los que NO se pudo piden cosas distintas y se dicen por separado
+    assert "sin `doi`" in out and "el catálogo no lo tiene" in out
+    assert mn.fill_abstracts() == 0, "idempotente"
+
+
+def test_fill_abstracts_no_confunde_la_RED_CAIDA_con_no_lo_tiene(toy_vault, monkeypatch, capsys):
+    """D-43 — «OpenAlex no contestó» y «OpenAlex no lo tiene» piden lo contrario: volver a correr,
+    o aceptar que el placeholder es correcto. Salían iguales."""
+    d = cfg.PAPERS / "1997Wentzell.md"
+    d.write_text(f"---\ntags: [paper]\nbibcode: 1997Wentzell\ndoi: 10.1/a\n---\n\n"
+                 f"## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n", encoding="utf-8")
+    import openalex
+
+    def _cae(doi):
+        raise ConnectionError("boom")
+    monkeypatch.setattr(openalex, "entity_by_doi", _cae)
+    assert mn.fill_abstracts() == 0
+    out = capsys.readouterr().out
+    assert "OpenAlex no contestó" in out and "NO es «no lo tiene»" in out
+    assert cfg.ABSTRACT_PLACEHOLDER in d.read_text(encoding="utf-8"), "no se toca la nota"

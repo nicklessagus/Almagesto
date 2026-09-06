@@ -95,9 +95,11 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
     Precedencia: manda la **verdad de disco** —la marca que arXiv estampa en cada página, visible
     en el .txt—, porque no depende de que el fetcher haya dejado registro y por eso funciona
     retroactivamente sobre un corpus ya bajado (y porque un ADS_PDF que sirve el eprint ES el
-    eprint, diga lo que diga la rama). Sin marca, vale lo que registró el fetcher de la corrida
-    (`build/<slug>/pdf_source.json`). Sin ninguna de las dos: None (desconocido, no "publicado":
-    afirmar de más acá sería peor que no saber)."""
+    eprint, diga lo que diga la rama). Después, lo **declarado** en el `sources:` del tema (#415:
+    para un PDF que trajo el usuario no corre ningún fetcher y no hay marca, así que sin este
+    escalón el campo era `None` para siempre — 38 notas de una bóveda real). Después, lo que
+    registró el fetcher de la corrida (`build/<slug>/pdf_source.json`). Sin ninguna de las tres:
+    None (desconocido, no "publicado": afirmar de más acá sería peor que no saber)."""
     if not slug:
         return None, None
     txt = cfg.FULLTEXT / slug / f"{stem}.txt"
@@ -110,6 +112,12 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
         ver = cfg.arxiv_stamp(txt.read_text(encoding="utf-8", errors="replace"))
         if ver is not None:
             return "eprint", (ver or None)
+    # #415 — lo DECLARADO en `sources:`. Va después de la marca de arXiv (que manda por el
+    # argumento de #57: un ADS_PDF que sirve el eprint ES el eprint) y antes del registro de
+    # `build/`, que es scratch gitignored: entre una declaración versionada y un archivo que no
+    # viaja, manda la que viaja.
+    if (src := cfg.declared_pdf_sources().get(stem)):
+        return src, None
     reg = cfg.ROOT / "build" / slug / "pdf_source.json"
     if reg.exists():
         try:
@@ -1188,9 +1196,70 @@ def restamp_abstracts() -> int:
         nuevo = (text[:corte] + f"\n## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n" + text[corte:])
         cfg.write_text_atomic(dest, nuevo)
         changed += 1
+    pend = sum(1 for d in notes if cfg.abstract_pending(d.read_text(encoding="utf-8")))
     cfg.print_seguro(f"abstracts: {changed} de {len(notes)} notas de paper recuperaron su "
                      f"`## Abstract` (contenido `{cfg.ABSTRACT_PLACEHOLDER}`: falta la copia de "
-                     f"catálogo, la completa la próxima extracción)")
+                     f"catálogo)")
+    # ⛔ #413/D-43 — el mensaje viejo prometía «la completa la próxima extracción», y para una nota
+    # `pending_source` esa extracción NO VA A OCURRIR: no hay PDF y no lo va a haber hasta que
+    # alguien consiga la fuente. Un «se completa después» que no se puede cumplir es el falso
+    # limpio en versión optimista. Se dice cuántas quedan y por dónde se cierran de verdad.
+    if pend:
+        cfg.print_seguro(f"  ⚠ {pend} nota(s) siguen con el placeholder → "
+                         f"`python scripts/make_notes.py --fill-abstracts` (catálogo, red). "
+                         f"Para una nota `pending_source` es el ÚNICO camino: sin PDF no hay "
+                         f"extracción que la complete (#413)")
+    return 0
+
+
+def fill_abstracts(*, dry_run: bool = False) -> int:
+    """Fill the placeholder `## Abstract` from the CATALOGUE, not from the PDF (#413).
+
+    `CLAUDE.md` says the three backends return it —ADS in `abstract`, arXiv in `summary`, OpenAlex
+    as the inverted index `openalex._abstract` rebuilds— and that it matters most exactly where
+    there is no PDF: «in a `pending_source` the abstract is ALL the note has, and it can be
+    enough». The implementation only ever filled it from the PDF, so in that population the
+    placeholder was permanent. Measured on a real vault: 29 notes with the placeholder, 15 with a
+    DOI, and OpenAlex had the abstract for 10 of them — including the two `pending_source`.
+
+    ⛔ Verbatim from the catalogue or nothing: the placeholder is not replaced by a summary. A note
+    whose section already holds a real abstract is not touched (same guard as the harvester)."""
+    import openalex
+    notes = cfg.note_paths(cfg.PAPERS)
+    poblacion = [d for d in notes if cfg.abstract_pending(d.read_text(encoding="utf-8"))]
+    puestos, sin_doi, sin_abstract, fallo = 0, 0, 0, 0
+    for dest in poblacion:
+        text = dest.read_text(encoding="utf-8")
+        doi = str((cfg.split_fm(text) or {}).get("doi") or "").strip()
+        if not doi:
+            sin_doi += 1
+            continue
+        try:
+            work = openalex.entity_by_doi(doi)
+        except Exception as exc:                       # noqa: BLE001 — la red, dicha y no tapada
+            cfg.print_seguro(f"  ⚠ {dest.stem}: OpenAlex no contestó ({exc.__class__.__name__})")
+            fallo += 1
+            continue
+        abstract = openalex._abstract(work or {}).strip()
+        if not abstract:
+            sin_abstract += 1
+            continue
+        if dry_run:
+            cfg.print_seguro(f"  {dest.stem}: {len(abstract)} chars en OpenAlex (dry-run)")
+            puestos += 1
+            continue
+        if _reemplazar_seccion(dest, "## Abstract", abstract):
+            puestos += 1
+    cfg.print_seguro(f"abstracts: {puestos} de {len(poblacion)} notas con placeholder recuperaron "
+                     f"su abstract de catálogo{' (dry-run)' if dry_run else ''} "
+                     f"— sobre {len(notes)} notas de paper")
+    # D-43: los tres motivos por los que NO se pudo piden cosas distintas — conseguir el DOI,
+    # conseguir el PDF, o volver a correr.
+    for n, motivo in ((sin_doi, "sin `doi` en el frontmatter: no hay por dónde preguntar"),
+                      (sin_abstract, "el catálogo no lo tiene: el placeholder es correcto"),
+                      (fallo, "la red falló: NO es «no lo tiene» — volvé a correr")):
+        if n:
+            cfg.print_seguro(f"  · {n} — {motivo}")
     return 0
 
 
@@ -4181,6 +4250,10 @@ def main() -> int:
                     help="#395: re-estampa `vistas[].lente` y backfillea las líneas de eje desde la "
                          "extracción versionada (la lente son los ejes que se PREGUNTARON, no los "
                          "vigentes al cosechar). No requiere slug.")
+    ap.add_argument("--fill-abstracts", action="store_true", dest="fill_abstracts",
+                    help="#413: completa el `## Abstract` con el placeholder desde el CATÁLOGO "
+                         "(OpenAlex por `doi`, red). Para una nota `pending_source` es el único "
+                         "camino: sin PDF no hay extracción que lo complete")
     ap.add_argument("--restamp-alcance", action="store_true", dest="restamp_alcance",
                     help="#312: re-estampa `alcance`/`unidad_cita` de las notas desde `sources[]` de "
                          "themes.yaml (la config es la autoridad). No requiere slug.")
@@ -4274,6 +4347,8 @@ def main() -> int:
 
     if args.restamp_sources_meta:
         return restamp_sources_meta()
+    if args.fill_abstracts:
+        return fill_abstracts(dry_run=bool(getattr(args, "dry_run", False)))
     if args.restamp_alcance:
         return restamp_scope()
     if args.restamp_lente:
@@ -4339,7 +4414,7 @@ def main() -> int:
         return 0
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
-                 "--restamp-headers, --restamp-abstracts, --restamp-vista-stub, "
+                 "--restamp-headers, --restamp-abstracts, --fill-abstracts, --restamp-vista-stub, "
                  "--restamp-alcance, --restamp-lente, --clean-catalog-markup, "
                  "--migrate-disputes, --migrate-bearing, --migrate-extracciones, "
                  "--migrate-source-fields, "

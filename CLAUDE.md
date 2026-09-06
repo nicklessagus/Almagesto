@@ -574,7 +574,10 @@ Los tres backends la devuelven: ADS en `abstract`, arXiv en el `summary`, OpenAl
 invertido que `openalex._abstract` rearma. Pesa más desde #205: con el PDF como única fuente de
 lectura, en un `pending_source` el abstract es **todo** lo que la nota tiene, y puede alcanzar. ⚠ Y
 es justo donde la fuente afirma **de más**: una vista construida desde ahí se declara
-`fuente: abstract` (#207).
+`fuente: abstract` (#207). ⛔ **Y se llena desde el CATÁLOGO, no sólo desde el PDF (#413):**
+`make_notes.py --fill-abstracts` (OpenAlex por `doi`). Para una nota `pending_source` es el **único**
+camino —sin PDF no hay extracción que la complete—, o sea que el placeholder era permanente justo en
+la población donde el abstract es todo lo que hay (medido: 29 con placeholder, 10 recuperables).
 
 ⛔ **Y la nota lleva tres AYUDAS DE LECTURA (#124): `## Traducción del abstract`, `## Conclusiones` y
 `## Traducción de las conclusiones`.** La **vista** es lenteada —dice qué aporta el paper *a ese
@@ -609,6 +612,13 @@ una traducción no es una afirmación de la bóveda. La red está aguas abajo �
 **ficha** sí se verifica contra el PDF—: **son ayuda de lectura, nunca fuente de la que citar.**
 
 #### Notas off-ADS y fuentes largas
+
+⛔ **Y el item de `sources:` declara `pdf_source` (#415), que es el único campo del schema que
+DECIDE LECTURAS.** Para un PDF que trajo el usuario no corre ningún fetcher y no hay marca de arXiv,
+así que el campo quedaba `null` = *desconocido* para siempre (medido: 38 de 57 notas con PDF sin
+procedencia). Precedencia: marca de arXiv → **lo declarado** → `build/` — entre una declaración
+versionada y un archivo gitignored que no viaja, manda la que viaja. Vocabulario cerrado (#296): el
+valor fuera de lista se avisa y **no se escribe**.
 
 En notas **off-ADS** el schema suma `source_url` (URL de la fuente web; `null` si es PDF local),
 `accessed` (la cita "Retrieved <fecha>") y, si la fuente no se pudo conseguir, `pending_source:
