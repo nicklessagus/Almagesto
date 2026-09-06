@@ -264,6 +264,34 @@ def _norm(texto: str) -> str:
 section_span = cfg.section_span
 
 
+#: #124 — la mitad SIEMPRE cierta: este `## Abstract` lo transcribió el modelo del PDF, no es la
+#: copia de catálogo, y el contrato hace descansar en esa distinción que la sección sea la capa
+#: auditable del cuerpo (AUD-203 / INV-110).
+TRANSCRITO = "_(transcrito del PDF por la extracción — no es la copia de catálogo.)_"
+#: La segunda mitad sólo vale si el campo ESTÁ (#416).
+TRANSCRITO_SIN_ABSTRACT = (
+    "_(transcrito del PDF por la extracción — no es la copia de catálogo; el frontmatter sigue "
+    "declarando `sin_abstract` porque así se **clasificó** el paper.)_")
+
+
+def transcribed_note(fm: dict) -> str:
+    """The line above a PDF-transcribed `## Abstract`, with its second half CONDITIONED (#416).
+
+    The distinction it draws is real and always true: a transcription is not the catalogue copy.
+    What was not true is the clause that followed it — «the note still declares `sin_abstract`» —
+    stamped unconditionally over a field the note almost never has. Measured on a real vault: of
+    the 27 notes carrying the line, **26 had no `sin_abstract` in their frontmatter**, and the
+    whole vault had exactly one note with the field populated.
+
+    The reason is structural: `sin_abstract` is written by the DISCOVERY lane (`query_ads`,
+    `openalex`, `search_arxiv`, copied into the stub by `make_notes` only when it comes), while the
+    line is stamped by the HARVEST lane, which never read it — and in an off-ADS theme declared
+    through `sources:` none of those three ever runs, so the field cannot exist and the line
+    invoked it anyway. A sentence that asserts something about the note's OWN frontmatter is the
+    easiest kind to believe without checking, which is what makes it worse than an empty map."""
+    return TRANSCRITO_SIN_ABSTRACT if fm.get("sin_abstract") else TRANSCRITO
+
+
 def stamp_reading_aids(dest: Path, data: dict) -> bool:
     """`## Traducción del abstract`, `## Conclusiones` y su traducción — las ayudas de lectura (#124).
 
@@ -321,8 +349,7 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
         # paper (título + keywords y nada más), no qué tiene la nota hoy—, así que sin esta línea la
         # nota se contradice a sí misma a la vista.
         if (_abs := str(data.get("abstract") or "").strip()):
-            _abs = (f"_(transcrito del PDF por la extracción — el catálogo no lo devolvió; la nota "
-                    f"sigue declarando `sin_abstract` porque así se **clasificó**.)_\n\n{_abs}")
+            _abs = f"{transcribed_note(fm or {})}\n\n{_abs}"
         piezas.append(("## Abstract", _abs))
     piezas.append(("## Traducción del abstract", data.get("abstract_es")))
     if not largo:

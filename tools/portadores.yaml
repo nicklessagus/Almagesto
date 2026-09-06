@@ -224,3 +224,33 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: Define `record_pdf_source` y el vocabulario `PDF_SOURCE_OK`; no resuelve la precedencia.
+
+  - issue: 416
+    regla: >-
+      La línea sobre un `## Abstract` transcrito del PDF afirma DOS cosas y sólo una vale siempre:
+      que no es la copia de catálogo (cierto en los 27 casos medidos) y que el frontmatter declara
+      `sin_abstract` (falso en 26 de 27). La segunda se condiciona a que el campo esté. El campo lo
+      escribe el carril de DESCUBRIMIENTO; la línea, el de COSECHA, que no lo leía.
+    funcion: harvest_views.transcribed_note
+    patron: 'sin_abstract'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: >-
+          `--restamp-transcribed-note` (#416) reescribe la línea vieja con la que el escritor
+          pondría HOY para ese frontmatter, así que las dos comparten la decisión.
+      - modulo: scripts/query_ads.py
+        estado: fuera-de-alcance
+        motivo: PRODUCE el campo al clasificar; no afirma nada sobre él en la nota.
+      - modulo: scripts/openalex.py
+        estado: fuera-de-alcance
+        motivo: Ídem — es uno de los tres backends de descubrimiento que lo pueblan.
+      - modulo: scripts/search_arxiv.py
+        estado: fuera-de-alcance
+        motivo: Ídem.
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: Lo MUESTRA (`⚠sin-abstract`) en la pantalla de curación; no lo afirma en la nota.
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: Lo VIGILA; leer un campo no es afirmar sobre él.

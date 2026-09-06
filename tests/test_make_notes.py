@@ -5412,3 +5412,24 @@ def test_fill_abstracts_no_confunde_la_RED_CAIDA_con_no_lo_tiene(toy_vault, monk
     out = capsys.readouterr().out
     assert "OpenAlex no contestó" in out and "NO es «no lo tiene»" in out
     assert cfg.ABSTRACT_PLACEHOLDER in d.read_text(encoding="utf-8"), "no se toca la nota"
+
+
+def test_restamp_transcribed_note_backfillea_la_afirmacion_falsa(toy_vault):
+    """#416 — las 26 notas ya estampadas llevan hoy la afirmación falsa, así que sacarla del
+    escritor no alcanza. La línea se reemplaza por la que el escritor pondría HOY para ESE
+    frontmatter, así que la nota que sí declara el campo conserva su cláusula."""
+    viejo = ("_(transcrito del PDF por la extracción — el catálogo no lo devolvió; la nota "
+             "sigue declarando `sin_abstract` porque así se **clasificó**.)_")
+    sin = cfg.PAPERS / "1997Wentzell.md"
+    sin.write_text(f"---\ntags: [paper]\nbibcode: 1997Wentzell\n---\n\n"
+                   f"## Abstract\n{viejo}\n\nMLPCA estima.\n", encoding="utf-8")
+    con = cfg.PAPERS / "2011Naik.md"
+    con.write_text(f"---\ntags: [paper]\nbibcode: 2011Naik\nsin_abstract: true\n---\n\n"
+                   f"## Abstract\n{viejo}\n\nOtro.\n", encoding="utf-8")
+    assert mn.restamp_transcribed_note() == 0
+    t_sin = sin.read_text(encoding="utf-8")
+    assert "sin_abstract" not in t_sin and "no es la copia de catálogo" in t_sin
+    assert "MLPCA estima." in t_sin, "el abstract de abajo no se toca"
+    assert "sin_abstract" in con.read_text(encoding="utf-8"), "la que SÍ lo declara conserva la cláusula"
+    antes = sin.read_text(encoding="utf-8")
+    assert mn.restamp_transcribed_note() == 0 and sin.read_text(encoding="utf-8") == antes

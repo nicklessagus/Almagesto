@@ -1167,6 +1167,32 @@ def fix_header_order() -> int:
     return n
 
 
+def restamp_transcribed_note() -> int:
+    """Backfill #416: the line above a PDF-transcribed `## Abstract` no longer claims the note
+    declares `sin_abstract` when it does not.
+
+    Measured on a real vault: 26 of the 27 notes carrying the line had no such field. The line is
+    replaced by the one `harvest_views.transcribed_note` would write TODAY for that frontmatter, so
+    the note that really declares the field keeps its clause. Surgery on the line, never on the
+    abstract below it; idempotent."""
+    import harvest_views as hv
+    viejo = ("_(transcrito del PDF por la extracción — el catálogo no lo devolvió; la nota "
+             "sigue declarando `sin_abstract` porque así se **clasificó**.)_")
+    notes = cfg.note_paths(cfg.PAPERS)
+    tocadas = 0
+    for dest in notes:
+        text = dest.read_text(encoding="utf-8")
+        if viejo not in text:
+            continue
+        nuevo_txt = text.replace(viejo, hv.transcribed_note(cfg.split_fm(text) or {}))
+        if nuevo_txt != text:
+            cfg.write_text_atomic(dest, nuevo_txt)
+            tocadas += 1
+    cfg.print_seguro(f"papers: {tocadas} de {len(notes)} notas dejaron de afirmar un "
+                     f"`sin_abstract` que su frontmatter no declara (#416)")
+    return 0
+
+
 def restamp_abstracts() -> int:
     """Backfill #277: writes the `## Abstract` section into every paper note that lacks it.
 
@@ -4250,6 +4276,9 @@ def main() -> int:
                     help="#395: re-estampa `vistas[].lente` y backfillea las líneas de eje desde la "
                          "extracción versionada (la lente son los ejes que se PREGUNTARON, no los "
                          "vigentes al cosechar). No requiere slug.")
+    ap.add_argument("--restamp-transcribed-note", action="store_true", dest="restamp_transcribed",
+                    help="#416: la línea sobre un `## Abstract` transcrito del PDF deja de afirmar "
+                         "un `sin_abstract` que el frontmatter no declara")
     ap.add_argument("--fill-abstracts", action="store_true", dest="fill_abstracts",
                     help="#413: completa el `## Abstract` con el placeholder desde el CATÁLOGO "
                          "(OpenAlex por `doi`, red). Para una nota `pending_source` es el único "
@@ -4347,6 +4376,8 @@ def main() -> int:
 
     if args.restamp_sources_meta:
         return restamp_sources_meta()
+    if args.restamp_transcribed:
+        return restamp_transcribed_note()
     if args.fill_abstracts:
         return fill_abstracts(dry_run=bool(getattr(args, "dry_run", False)))
     if args.restamp_alcance:
@@ -4415,6 +4446,7 @@ def main() -> int:
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
                  "--restamp-headers, --restamp-abstracts, --fill-abstracts, --restamp-vista-stub, "
+                 "--restamp-transcribed-note, "
                  "--restamp-alcance, --restamp-lente, --clean-catalog-markup, "
                  "--migrate-disputes, --migrate-bearing, --migrate-extracciones, "
                  "--migrate-source-fields, "

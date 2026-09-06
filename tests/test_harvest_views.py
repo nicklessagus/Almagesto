@@ -1085,3 +1085,19 @@ def test_sin_lente_declarada_sigue_mandando_la_del_sujeto(toy_vault):
     hv.harvest("test_star")
     v = read_fm(cfg.PAPERS / f"{BIB}.md")["vistas"][0]
     assert v["lente"] == list(mn.objective_lens()[0])
+
+
+def test_la_linea_del_abstract_transcrito_no_afirma_un_sin_abstract_QUE_NO_ESTA(toy_vault):
+    """#416 — la distinción que la línea traza es real y siempre cierta (una transcripción no es la
+    copia de catálogo); la cláusula que la seguía —«la nota sigue declarando `sin_abstract`»— se
+    estampaba INCONDICIONALMENTE sobre un campo que la nota casi nunca tiene. Medido: 26 de las 27
+    notas que la llevaban no lo tenían, y toda la bóveda tenía UNA con el campo poblado.
+
+    Es estructural: `sin_abstract` lo escribe el carril de DESCUBRIMIENTO y la línea la estampa el
+    de COSECHA, que no lo leía — y en un tema off-ADS declarado por `sources:` no corre ninguno de
+    los tres backends, así que el campo no existe nunca."""
+    assert "no es la copia de catálogo" in hv.transcribed_note({}), "la mitad que SIEMPRE vale"
+    assert "sin_abstract" not in hv.transcribed_note({})
+    assert "sin_abstract" not in hv.transcribed_note({"sin_abstract": False}), "declarado en falso"
+    assert "sin_abstract" in hv.transcribed_note({"sin_abstract": True}), "y cuando SÍ está, se dice"
+    assert "no es la copia de catálogo" in hv.transcribed_note({"sin_abstract": True})

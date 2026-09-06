@@ -2065,6 +2065,11 @@
    "number": 415,
    "title": "El carril `sources:` no puede declarar `pdf_source`: 38 PDFs que trajo el usuario quedan «procedencia desconocida», y el campo NO es re-derivable para esa población",
    "state": "OPEN"
+  },
+  {
+   "number": 416,
+   "title": "La línea que  estampa sobre el  afirma que la nota «declara `sin_abstract`» — y es FALSO en 26 de las 27 notas que la llevan",
+   "state": "OPEN"
   }
  ]
 }
