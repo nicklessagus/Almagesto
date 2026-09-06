@@ -471,6 +471,19 @@ bloqueante no lo ve. La señal es el **`## Abstract` verbatim** normalizado y co
 **reporta, no fusiona**: *«mismo trabajo en dos congresos»* vs *«dos etapas con resultados
 distintos»* es una distinción real. La salida es `--rename-paper` + `versions[]`, o `--drop-core`.
 
+#### `data_availability` — dónde están los DATOS del paper (#424)
+
+⛔ **El puntero público a los datos que publicó un paper vive en SU nota**, como
+`data_availability: [{doi|url, que, localizador}]`, y la ficha lo agrega en la sección estampada
+`## Datos públicos`. Es un hecho **que el paper afirma** —su sección *Data availability*, o la nota
+al pie de la tabla—, así que es citable con página y `verify-citations` lo chequea como cualquier
+otra afirmación; el lint reporta como backlog la entrada incompleta (sin `doi|url` no hay qué
+seguir, sin `que` es un link y no un dato, sin `localizador` no se puede chequear contra la fuente).
+⚠ Es lo **contrario** de `data_local`, que es ruta machine-local y no viaja. Y existe porque
+arreglar #421 abre el hueco: con el catálogo VizieR fuera del core —que es lo correcto, es la tabla
+y no un paper— el puntero desaparece del corpus, y hasta entonces estaba ahí **por accidente**.
+⛔ La bóveda **no baja ni guarda** los datos (regla #0): lo que entra es el puntero citado.
+
 #### Los dos artefactos y sus dos `*_source`
 
 `pdf` es **lo que se lee** (extracción y verificación) y `fulltext` el **índice de búsqueda** del

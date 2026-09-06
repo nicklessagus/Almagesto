@@ -4447,6 +4447,38 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     return bibtex_sin_fuente, bibtex_drift, bad_roles
 
 
+def check_data_availability(stem: str, fm: dict) -> list:
+    """`data_mal_formada` — entries of `data_availability` that cannot be used or verified (#424).
+
+    The field is the PUBLIC and citable pointer to a paper's data (the CDS/VizieR DOI the paper
+    declares in its *Data availability*), and it exists because fixing #421 opens the hole: with
+    the VizieR catalogue out of the core —correctly: it is the data table, not a paper— the pointer
+    disappears from the corpus, and until then it existed BY ACCIDENT, because the `yCat` was core
+    and its note carried the DOI.
+
+    Three things make an entry useless, and each is decidable: no `doi` nor `url` (there is nothing
+    to follow), no `que` (a pointer that does not say what it points at is a link, not a datum),
+    and no `localizador` (without it the claim cannot be checked against the source, which is what
+    keeps it inside the hard boundary — the paper AFFIRMS it, with its page). Backlog, not
+    blocking: an incomplete pointer is worth more than none, and completing it means opening the
+    PDF."""
+    filas: list = []
+    for i, d in enumerate(cfg.as_list(fm.get("data_availability")), 1):
+        if not isinstance(d, dict):
+            filas.append((stem, f"`data_availability[{i}]` no es un mapa: se espera "
+                                f"`{{doi|url, que, localizador}}` (#424)"))
+            continue
+        faltan = [k for k in ("que", "localizador") if not str(d.get(k) or "").strip()]
+        if not str(d.get("doi") or "").strip() and not str(d.get("url") or "").strip():
+            faltan.insert(0, "doi|url")
+        if faltan:
+            filas.append((stem, f"`data_availability[{i}]` sin {', '.join(f'`{k}`' for k in faltan)}"
+                                f" → sin `doi|url` no hay qué seguir, sin `que` es un link y no un "
+                                f"dato, y sin `localizador` la afirmación no se puede chequear "
+                                f"contra la fuente que la hace (#424)"))
+    return filas
+
+
 def check_paper_pending(stem: str, fm: dict) -> tuple:
     """`(version_publicada, pending_srcs, bad_roles)` — the published version the sweep found (#298)
     and the source that could not be obtained (#80).
@@ -5642,6 +5674,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     vista_con_plantilla: list = []     # (stem, motivo) — #398: la `## Vista` publica el prompt
     pdf_source_contra: list = []       # (stem, motivo) — #383: `pdf_source` de editor + `eprint_version`
     bibtex_sin_fuente: list = []       # (stem, motivo) — #397: `bibtex` sin `bibtex_source`
+    data_mal_formada: list = []        # (stem, motivo) — #424: `data_availability` inusable
     bibtex_drift: list = []            # (stem, motivo) — #397: frontmatter ≠ exportación oficial
     old_bearing: list = []             # `bearing` en nota de paper: schema pre-D-21
     sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)
@@ -6149,6 +6182,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             bibtex_sin_fuente += _b1
             bibtex_drift += _b2
             bad_roles += _b3
+            data_mal_formada += check_data_availability(stem, fm)          # #424
             # #298 — las dos señales de «la bóveda se apoya en el preprint». (a) El hallazgo del
             # detector de versiones, estampado para que SOBREVIVA a la corrida: sin él, correr la
             # pasada y no actuar en el momento borraba el hallazgo y la siguiente lo redescubría.
@@ -6505,6 +6539,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   SEV_BLOQUEANTE, tuple(pdf_source_contra), poblacion='papers'),
         Categoria('vista_con_plantilla', '🧩 `## Vista` que sigue publicando la PLANTILLA del stub: el prompt al extractor, visible como si fuera contenido (#398, backlog)',
                   SEV_BACKLOG, tuple(vista_con_plantilla), poblacion='papers'),
+        Categoria('data_availability_mal_formada',
+                  'Puntero a datos públicos incompleto: no se puede seguir ni chequear (backlog) (#424)',
+                  SEV_BACKLOG, tuple(data_mal_formada), poblacion='papers'),
         Categoria('bibtex_sin_fuente', '⛔ `bibtex` sin `bibtex_source`: una entrada de cita sin procedencia es un bloque escrito a mano (#397)',
                   SEV_BLOQUEANTE, tuple(bibtex_sin_fuente), poblacion='papers'),
         Categoria('bibtex_drift', '📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog)',

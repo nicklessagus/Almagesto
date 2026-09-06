@@ -10006,3 +10006,26 @@ def test_check_block_facts_marca_el_bloque_arriba_del_p90(toy_vault):
     assert lint.check_block_facts("nota", "Prosa " * 200 + "sin cita\n", 0) == [], \
         "un bloque sin `[[bibcode]]` no afirma con fuente: no es esta categoría"
     assert lint.check_block_facts("index", largo, 0) == [], "la navegación no se mira"
+
+
+def test_check_data_availability_pide_lo_que_hace_al_puntero_USABLE(toy_vault):
+    """#424 — el campo es el puntero PÚBLICO y citable a los datos de un paper (el DOI del CDS que
+    la fuente declara en su *Data availability*), y existe porque arreglar #421 abre el hueco: con
+    el catálogo VizieR fuera del core —correctamente: es la tabla, no un paper— el puntero
+    desaparece del corpus, y hasta entonces existía POR ACCIDENTE.
+
+    Tres cosas lo vuelven inusable y las tres son decidibles: sin `doi|url` no hay qué seguir, sin
+    `que` es un link y no un dato, y sin `localizador` la afirmación no se puede chequear contra la
+    fuente que la hace — que es lo que la mantiene dentro de la frontera dura. Backlog, no
+    bloqueante: un puntero incompleto vale más que ninguno."""
+    ok = {"doi": "10.26093/cds/vizier.36880112", "que": "250 RVs HARPS",
+          "localizador": "p. 4, Data availability"}
+    assert lint.check_data_availability("b", {"data_availability": [ok]}) == []
+    assert lint.check_data_availability("b", {}) == [], "el campo ausente no es deuda"
+    assert lint.check_data_availability("b", {"data_availability": [{**ok, "doi": None,
+                                                                    "url": "https://x/y"}]}) == []
+    for falta in ("doi", "que", "localizador"):
+        filas = lint.check_data_availability("b", {"data_availability": [{**ok, falta: ""}]})
+        assert len(filas) == 1 and (falta if falta != "doi" else "doi|url") in filas[0][1], (falta, filas)
+    filas = lint.check_data_availability("b", {"data_availability": ["10.1/a"]})
+    assert len(filas) == 1 and "no es un mapa" in filas[0][1], "el escalar no se lee como entrada"

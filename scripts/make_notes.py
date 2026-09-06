@@ -3034,9 +3034,77 @@ def missing_anchors(dest, headers) -> list:
     return [h for h in headers if cfg.section_start(text, h) < 0]
 
 
+DATOS_HEADER = "## Datos públicos"
+
+
+def datos_rows(name: str) -> list:
+    """`[(stem, year, que, ref, localizador)]` — the public data the papers of this star declare
+    (#424).
+
+    Same cut and same parser as `metodos_rows`: `split_fm`, never grep — `stars: [tau Cet]` in flow
+    style and in block style coexist in the same corpus, and text matching confuses `GJ 71` with
+    `GJ 710`."""
+    filas = []
+    for stem, fm in papers_fm_index().items():
+        if name not in cfg.as_list(fm.get("stars")):
+            continue
+        for d in cfg.as_list(fm.get("data_availability")):
+            if not isinstance(d, dict):
+                continue
+            ref = str(d.get("doi") or d.get("url") or "").strip()
+            filas.append((stem, str(fm.get("year") or ""), str(d.get("que") or "").strip(),
+                          ref, str(d.get("localizador") or "").strip()))
+    return sorted(filas)
+
+
+def datos_table(rows: list) -> str:
+    """`## Datos públicos` materialised — one row per published dataset, with its `[[bibcode]]`
+    (#424).
+
+    ⛔ The fact lives in the PAPER's note (`data_availability`), which is what asserts it and
+    against whose PDF it is verified; here it is only aggregated. Same split as `methods` and its
+    roll-up, and it is what makes the claim checkable: «the data are in the CDS under DOI X» is
+    said by the paper's own *Data availability* section, with its page.
+
+    Why it exists: taking the VizieR catalogues out of the core (#421) —which is right: they are
+    the data table, not a paper— removes the pointer from the corpus, and until then it was there
+    BY ACCIDENT, because the `yCat` was core and its note carried the DOI. So fixing #421 opens
+    this hole. Measured on a real vault: 4 tables in a single star, all four RVs and activity
+    indices.
+
+    ⚠ The vault does NOT download or store the data (regla #0): what enters is the cited pointer."""
+    out = [f"{DATOS_HEADER} ({len(rows)} publicación(es) de datos)", ""]
+    if not rows:
+        out += ["_(ningún paper de esta estrella declara `data_availability` todavía — el dato "
+                "vive en la sección *Data availability* de la fuente, y se declara ahí)_"]
+        return "\n".join(out) + "\n"
+    out += ["| Paper | Año | Qué | DOI / URL | Localizador |", "|---|---|---|---|---|"]
+    for stem, year, que, ref, loc in rows:
+        out.append(f"| [[{stem}]] | {year} | {cfg.escape_cell(que) or '—'} | "
+                   f"{cfg.escape_cell(ref) or '—'} | {cfg.escape_cell(loc) or '—'} |")
+    return "\n".join(out) + "\n"
+
+
 def stamp_papers_table(slug: str, dest, kind: str = "star") -> bool:
     """Reemplaza el bloque ```dataview``` de `## Papers` por la tabla materializada (D-10/D-11)."""
     return _reemplazar_seccion(dest, PAPERS_HEADER, papers_table(papers_universe(slug, kind)))
+
+
+def _ensure_section(dest, header: str, antes: str) -> bool:
+    """Insert an empty `header` before `antes` when the note lacks it. True if it added one.
+
+    A NEW schema section is missing from every note that already exists, and `_reemplazar_seccion`
+    deliberately does NOT invent it — appending it would land it after the excluded appendix, out
+    of place. Without this, a new roll-up is stamped only on notes created after the change, which
+    is the false clean of a backfill that never runs."""
+    text = dest.read_text(encoding="utf-8")
+    if cfg.section_start(text, header) >= 0:
+        return False
+    i = cfg.section_start(text, antes)
+    if i < 0:
+        return False
+    cfg.write_text_atomic(dest, text[:i] + f"{header}\n_(se estampa determinista.)_\n\n" + text[i:])
+    return True
 
 
 def stamp_star_rollups(slug: str, dest) -> bool:
@@ -3054,7 +3122,11 @@ def stamp_star_rollups(slug: str, dest) -> bool:
         name = fm.get("name") or slug
     tocado = _reemplazar_seccion(dest, PLANETAS_HEADER, planetas_table(fm))
     tocado = _reemplazar_seccion(dest, INDICADORES_HEADER, indicadores_table(fm)) or tocado   # #250
-    return _reemplazar_seccion(dest, METODOS_HEADER, metodos_table(metodos_rows(name))) or tocado
+    tocado = _reemplazar_seccion(dest, METODOS_HEADER, metodos_table(metodos_rows(name))) or tocado
+    # #424 — la sección es nueva: la ficha que ya existía no la tiene, y `_reemplazar_seccion` no
+    # la inventa. Se agrega ANTES del apéndice de excluidos, que va siempre último.
+    tocado = _ensure_section(dest, DATOS_HEADER, EXCLUDED_HEADER) or tocado
+    return _reemplazar_seccion(dest, DATOS_HEADER, datos_table(datos_rows(name))) or tocado
 
 
 def stamp_concept_rollup(slug: str, dest) -> bool:
@@ -3746,6 +3818,15 @@ _(se estampa determinista: `make_notes.py {slug}` lo regenera.)_
 
 ## Métodos aplicados a esta estrella
 _(se estampa determinista: `make_notes.py {slug}` lo regenera.)_
+
+## Datos públicos
+_(se estampa determinista: `make_notes.py {slug}` lo regenera.)_
+
+<!-- #424: `## Datos públicos` es el roll-up de `data_availability` de las notas de paper — el
+     puntero PÚBLICO y citable a los datos de esta estrella (el DOI del CDS/VizieR que el paper
+     declara en su *Data availability*). Es lo contrario de `data_local`, que es machine-local y no
+     viaja; y es la información que se pierde al hacer lo correcto, porque desde #421 el catálogo
+     VizieR ya no entra al core y hasta entonces el puntero existía por accidente. -->
 
 <!-- AUD-189 / INV-5: `data_local` NO se copia al cuerpo. La regla afinada de la frontera dura
      (CLAUDE.md) permite el puntero downstream como CAMPO ESTRUCTURAL del frontmatter —es parte del

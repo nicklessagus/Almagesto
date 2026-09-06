@@ -56,6 +56,9 @@
 ## 🧩 `## Vista` que sigue publicando la PLANTILLA del stub: el prompt al extractor, visible como si fuera contenido (#398, backlog) (0)
 > sobre 60 notas de `papers/`
 
+## Puntero a datos públicos incompleto: no se puede seguir ni chequear (backlog) (#424) (0)
+> sobre 60 notas de `papers/`
+
 ## ⛔ `bibtex` sin `bibtex_source`: una entrada de cita sin procedencia es un bloque escrito a mano (#397) (0)
 > sobre 60 notas de `papers/`
 

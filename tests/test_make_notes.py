@@ -5496,3 +5496,58 @@ def test_fill_abstracts_no_escribe_lo_que_ROMPIO_lo_que_prometia(toy_vault, monk
     assert mn.fill_abstracts() == 0
     assert d.read_text(encoding="utf-8") == antes, "no se escribe"
     assert "no se escribe" in capsys.readouterr().out, "y se dice cuál"
+
+
+def test_el_rollup_de_datos_publicos_junta_lo_que_los_papers_DECLARAN(toy_vault):
+    """#424 — el hecho vive en la nota del PAPER (`data_availability`), que es quien lo afirma y
+    contra cuyo PDF se verifica; la ficha lo agrega. Mismo reparto que `methods` y su roll-up, y es
+    lo que hace la afirmación chequeable: «los datos están en el CDS bajo el DOI X» lo dice la
+    sección *Data availability* de la fuente, con su página.
+
+    Por qué existe: al sacar los catálogos VizieR del core (#421) el puntero al dato desaparece del
+    corpus — hasta entonces existía por accidente, porque el `yCat` era core y su nota llevaba el
+    DOI. Medido: 4 tablas en una sola estrella, las cuatro RVs e índices de actividad."""
+    for stem, star, da in [
+        ("2024A&A...688A.112V", "Estrella Test",
+         [{"doi": "10.26093/cds/vizier.36880112", "que": "250 RVs HARPS + 54 CARMENES",
+           "localizador": "p. 4"}]),
+        ("2007A&A...469L..43U", "Estrella Test",
+         [{"url": "https://cdsarc.cds.unistra.fr/x", "que": "curva de RV", "localizador": "p. 2"}]),
+        ("2009otra....1X", "Otra Estrella",
+         [{"doi": "10.1/z", "que": "no es de esta estrella", "localizador": "p. 1"}]),
+    ]:
+        (cfg.PAPERS / f"{stem}.md").write_text(
+            "---\ntags: [paper]\nbibcode: " + stem + "\nyear: 2024\nstars: [" + star + "]\n"
+            "data_availability:\n" + "".join(
+                f"  - {k}: {v!r}\n" if i else f"  - {k}: {v!r}\n"
+                for d in da for i, (k, v) in enumerate(d.items())).replace("  - que", "    que")
+            .replace("  - localizador", "    localizador") + "---\n\n# x\n", encoding="utf-8")
+    filas = mn.datos_rows("Estrella Test")
+    assert len(filas) == 2, filas
+    assert {f[0] for f in filas} == {"2024A&A...688A.112V", "2007A&A...469L..43U"}, \
+        "sólo los papers de ESTA estrella"
+    tabla = mn.datos_table(filas)
+    assert "[[2024A&A...688A.112V]]" in tabla and "10.26093/cds/vizier.36880112" in tabla
+    assert "https://cdsarc.cds.unistra.fr/x" in tabla, "el `url` sirve igual que el `doi`"
+    assert "2 publicación(es)" in tabla, "declara su población (INV-40)"
+    vacia = mn.datos_table([])
+    assert "0 publicación(es)" in vacia and "data_availability" in vacia, \
+        "sin filas dice DÓNDE se declara, no queda mudo"
+
+
+def test_ensure_section_agrega_la_seccion_NUEVA_a_una_ficha_que_ya_existia(toy_vault):
+    """#424 — una sección nueva del schema no la tienen las fichas que ya existen, y
+    `_reemplazar_seccion` a propósito NO la inventa: agregarla al final la pondría después del
+    apéndice de excluidos, fuera de su lugar. Sin esto un roll-up nuevo se estampa sólo en las
+    fichas creadas después del cambio, que es el falso limpio de un backfill que no corre."""
+    d = cfg.STARS / "test-star.md"
+    d.parent.mkdir(parents=True, exist_ok=True)
+    d.write_text("---\ntags: [star]\n---\n\n## Papers\n\nx\n\n"
+                 f"{mn.EXCLUDED_HEADER} (no-core)\n\ny\n", encoding="utf-8")
+    assert mn._ensure_section(d, mn.DATOS_HEADER, mn.EXCLUDED_HEADER) is True
+    t = d.read_text(encoding="utf-8")
+    assert t.index(mn.DATOS_HEADER) < t.index(mn.EXCLUDED_HEADER), "antes del apéndice, no al final"
+    assert "x" in t and "y" in t, "no toca la prosa"
+    assert mn._ensure_section(d, mn.DATOS_HEADER, mn.EXCLUDED_HEADER) is False, "idempotente"
+    assert mn._ensure_section(d, "## No Existe", "## Tampoco") is False, \
+        "sin ancla no se inventa un punto de inserción (mismo criterio que `stamp_estado`)"

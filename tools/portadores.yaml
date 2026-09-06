@@ -509,3 +509,24 @@ portadores:
       - modulo: scripts/triage.py
         estado: usa
         motivo: Ídem.
+
+  - issue: 424
+    regla: >-
+      El puntero PÚBLICO a los datos de un paper (el DOI del CDS/VizieR que la fuente declara en su
+      *Data availability*) vive en la nota del PAPER —`data_availability`, que es quien lo afirma y
+      contra cuyo PDF se verifica— y la ficha lo AGREGA en `## Datos públicos`. Es lo contrario de
+      `data_local`, que es machine-local y no viaja. Existe porque arreglar #421 abre el hueco: con
+      el catálogo VizieR fuera del core, el puntero desaparece del corpus, y hasta entonces existía
+      por accidente.
+    funcion: make_notes.datos_rows
+    patron: 'data_availability'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: >-
+          `check_data_availability` VALIDA la forma de cada entrada (sin `doi|url` no hay qué
+          seguir, sin `que` es un link, sin `localizador` no se puede chequear contra la fuente);
+          no arma el roll-up.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: Declara la clave en el schema de `papers/`; no la lee.
