@@ -18,6 +18,7 @@ relevance:
     method: gaussian process|independent component|principal component|\bICA\b|\bPCA\b|neural
       network|deep learning|machine learning|periodogram|line-?by-?line|deconvolution|disentangl
   noise_doctypes:
+  - dataset          # #421 — los catálogos VizieR son `dataset`, no `catalog` (23.351 vs 0)
   - catalog
   - proposal
   - abstract

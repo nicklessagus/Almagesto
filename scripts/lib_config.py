@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.247.0"
+ALMAGESTO_VERSION = "1.248.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2187,6 +2187,36 @@ def print_seguro(texto: str, file=None) -> None:
     except UnicodeEncodeError:
         enc = getattr(stream, "encoding", None) or "ascii"
         print(texto.encode(enc, errors="replace").decode(enc), file=stream)
+
+
+#: #422 · prefijos de TIPO que SIMBAD antepone a un identificador. No son parte del nombre: los
+#: papers escriben `AU Mic`, `eps Eri`, `Proxima Cen`, y SIMBAD `V* AU Mic`, `V* eps Eri`,
+#: `NAME Proxima Cen`. Medido contra ADS el 2026-09-06: `AU Mic` → 406 resultados, `V* AU Mic` → 0.
+SIMBAD_TYPE_PREFIXES = ("NAME-IAU", "NAME", "V*", "*", "**", "Cl*", "Ass*", "Cl", "EM*")
+
+
+def norm_simbad_id(x) -> str:
+    """A SIMBAD identifier or a declared alias, comparable (#422).
+
+    ⛔ Strips the TYPE PREFIX first, then everything that is not alphanumeric. There were two
+    implementations of this and both failed, in different ways: `lint._norm_alias` dropped the `*`
+    but not the `V`, so `V* HO Lib` became `vholib`; `fetch_ground_truth._norm_id` dropped neither.
+    Each fed one side of the SAME check (#82), so the same identifier came out at once as MISSING
+    (backlog: «SIMBAD knows it and `stars.yaml` does not declare it») and as FOREIGN (WARN: «SIMBAD
+    does not list it — it may pull another object's papers»), with no declaration able to silence
+    both. Measured on 9 typical RV targets: **7** carry at least one prefixed identifier, and two
+    of them —AU Mic and eps Eri— are the examples this framework documents itself with.
+
+    And the action the backlog proposed made things worse: `aliases:` feeds `build_query`, so
+    adding `V* AU Mic` writes a clause that matches nothing in ADS (406 → 0)."""
+    t = str(x or "").strip()
+    for pref in SIMBAD_TYPE_PREFIXES:
+        if t.upper().startswith(pref.upper() + " ") or (
+                t.upper().startswith(pref.upper()) and len(t) > len(pref)
+                and not t[len(pref)].isalnum()):
+            t = t[len(pref):].strip()
+            break
+    return re.sub(r"[^a-z0-9]", "", t.lower())
 
 
 def crossref_years(msg: dict) -> list:

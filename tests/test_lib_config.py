@@ -3315,3 +3315,26 @@ def test_bibtex_fields_sigue_parseando_el_MULTILINEA_y_la_coma_protegida():
     assert f["title"] == "A Jupiter-mass companion, at last", "la coma protegida no parte el campo"
     assert f["author"] == "Mayor, Michel and Queloz, D." and f["year"] == "2000"
     assert cfg.bibtex_fields("") == {} and cfg.bibtex_fields("@article{solo_la_clave}") == {}
+
+
+def test_norm_simbad_id_saca_el_PREFIJO_DE_TIPO_y_es_una_sola_implementacion():
+    """#422 — SIMBAD antepone el tipo (`V*`, `NAME`, `NAME-IAU`) y los papers no lo escriben. Había
+    DOS normalizaciones, ya divergentes, y las dos fallaban: `lint._norm_alias` sacaba el `*` y no
+    la `V` (`vholib`), `fetch_ground_truth._norm_id` no sacaba ninguno (`v*holib`). Cada una
+    alimentaba UN lado del mismo chequeo (#82), así que el mismo identificador salía a la vez como
+    FALTANTE (backlog) y como AJENO (WARN), sin declaración que apagara las dos.
+
+    Y lo que el backlog proponía degradaba el recall: `aliases:` alimenta `build_query`, y medido
+    contra ADS el 2026-09-06 `AU Mic` → 406 resultados y `V* AU Mic` → 0."""
+    import lint, fetch_ground_truth as fgt
+    pares = [("V* HO Lib", "HO Lib"), ("V* AU Mic", "AU Mic"), ("V* eps Eri", "eps Eri"),
+             ("NAME Proxima Cen", "Proxima Cen"), ("NAME-IAU Orkaria", "Orkaria"),
+             ("HD  40307", "HD 40307")]
+    for simbad, paper in pares:
+        assert cfg.norm_simbad_id(simbad) == cfg.norm_simbad_id(paper), (simbad, paper)
+        # la paridad de las dos mitades del chequeo, que es lo que faltaba (regla de método nº 2)
+        assert lint._norm_alias(simbad) == fgt._norm_id(paper) == cfg.norm_simbad_id(paper)
+    # ⛔ y no muerde un nombre que sólo EMPIEZA como un prefijo: el corte exige separador
+    assert cfg.norm_simbad_id("NAMELESS") == "nameless"
+    assert cfg.norm_simbad_id("Vega") == "vega" and cfg.norm_simbad_id("GJ 581") == "gj581"
+    assert cfg.norm_simbad_id(None) == "" and cfg.norm_simbad_id("") == ""

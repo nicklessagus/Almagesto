@@ -438,3 +438,74 @@ portadores:
           firmar la entrada: es el segundo portador del `--force`, y por él `previa` quedó acotado
           a los campos que dicen que la LECTURA ocurrió — marcar un `lente` corregido afirmaría un
           reemplazo que no hubo, en 209 slots.
+
+  - issue: 422
+    regla: >-
+      Comparar un alias declarado contra un identificador de SIMBAD normaliza el prefijo de TIPO
+      (`V*`, `NAME`, `NAME-IAU`) además del espaciado y la caja, y esa normalización es UNA
+      función. Eran dos, ya divergentes, cada una alimentando UN lado del mismo chequeo (#82): el
+      mismo identificador salía a la vez como faltante (backlog) y como ajeno (WARN), sin
+      declaración que apagara las dos. Medido: 7 de 9 targets de RV típicos tienen al menos un
+      identificador con prefijo.
+    funcion: lib_config.norm_simbad_id
+    patron: '_norm_alias|_norm_id|simbad'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          `_norm_alias` alimenta el lado «SIMBAD lo conoce y `stars.yaml` no lo declara» (backlog);
+          sacaba el `*` y no la `V`.
+      - modulo: scripts/fetch_ground_truth.py
+        estado: usa
+        motivo: >-
+          `_norm_id` alimenta el lado «alias que SIMBAD no reconoce» (WARN); no sacaba ninguno de
+          los dos. Es el simétrico, y normalizaba por su cuenta y distinto.
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea por la clave `simbad_id` del frontmatter, que COPIA lo que SIMBAD contestó; no
+          compara identificadores.
+
+  - issue: 423
+    regla: >-
+      Un paso que corrió y no tenía trabajo que hacer IGUAL corrió: el early-return de trabajo-cero
+      no puede saltear `save_paso`. Es distinto del caso que la guarda del final protege —el paso
+      que no pudo mirar TODO no deja traza— y salían por el mismo lado. No se cierra solo: con el
+      trabajo hecho, la condición queda vacía en toda corrida futura.
+    funcion: lib_config.save_paso
+    patron: 'save_paso'
+    consumidores:
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: >-
+          El ÚNICO portador con el defecto (auditados los 10): su `return 0` de trabajo-cero salía
+          antes del estampado.
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: >-
+          Sus 8 `return 0` previos son salidas de SUB-COMANDO (`--restamp-*`, `--migrate-*`,
+          `--rename-paper`) que NO deben estampar `make_notes` como paso de cadena. Auditado.
+      - modulo: scripts/query_ads.py
+        estado: usa
+        motivo: Sin `return 0` de éxito antes del estampado. Auditado en #423.
+      - modulo: scripts/fetch_arxiv.py
+        estado: usa
+        motivo: Ídem.
+      - modulo: scripts/fetch_pdf.py
+        estado: usa
+        motivo: Ídem.
+      - modulo: scripts/fetch_ground_truth.py
+        estado: usa
+        motivo: Ídem.
+      - modulo: scripts/extract_fulltext.py
+        estado: usa
+        motivo: Ídem.
+      - modulo: scripts/check_retractions.py
+        estado: usa
+        motivo: Ídem.
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: Ídem.
+      - modulo: scripts/triage.py
+        estado: usa
+        motivo: Ídem.

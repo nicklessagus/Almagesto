@@ -89,8 +89,14 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      **Cuándo cambiarlo:** si la bóveda va a traer **métodos de otras disciplinas** (estadística, ML,
      signal processing) cuya bibliografía canónica ADS no clasifica como astronomía, el default los
      mata antes de que `facets` los vea. Preguntárselo al usuario en el paso 1, no asumirlo.
-   - `noise_doctypes`: el default (catalog, proposal, abstract, erratum, bookreview, newsletter,
-     pressrelease, circular, software) salvo razón.
+   - `noise_doctypes`: el default (**dataset**, catalog, proposal, abstract, erratum, bookreview,
+     newsletter, pressrelease, circular, software) salvo razón. ⛔ **`dataset` es el que filtra los
+     catálogos VizieR y hasta 1.247.0 faltaba** (#421, medido contra ADS el 2026-09-06:
+     `bibstem:yCat doctype:catalog` → **0**, `bibstem:yCat doctype:dataset` → **23.351**, o sea
+     todos). Entran al core porque el CDS **le copia el abstract al paper**, así que `classify()`
+     —que lee título + abstract + keywords— ve un paper de RV en los tres campos; el `doctype` es
+     el único donde difieren. Costo por cada uno y por cada estrella: una nota, un slot del
+     universo que la ficha publica y un `no_vista` escrito a mano.
    - `concept_areas`: sugerir 3–5 áreas según el foco (`methods`/`hypotheses` reservadas + las que
      tengan sentido). Son abiertas: es un punto de partida, no una jaula.
    - `downstream`: **opcional** (D-50) — los nombres propios de quien va a **consumir** la bóveda (un

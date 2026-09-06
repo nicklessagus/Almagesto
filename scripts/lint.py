@@ -696,8 +696,8 @@ def note_files() -> list:
 
 
 def _norm_alias(x: str) -> str:
-    """Alias comparable: sin espacios ni mayúsculas, sin el `*` de SIMBAD. `GJ 71` == `gj71`."""
-    return re.sub(r"[^a-z0-9]", "", str(x).lower())
+    """Delegates to `cfg.norm_simbad_id`, the single implementation of the rule (#422)."""
+    return cfg.norm_simbad_id(x)
 
 
 BIBCODE_RE = cfg.BIBCODE_LIKE_RE        # heurística: target de link que parece bibcode (AUD-277)

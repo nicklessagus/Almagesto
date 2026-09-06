@@ -2095,6 +2095,21 @@
    "number": 421,
    "title": "El default de `noise_doctypes` nombra `catalog` (0 VizieR en ADS) y omite `dataset` (los 23.351): cada estrella ingesta las tablas de VizieR como si fueran papers",
    "state": "OPEN"
+  },
+  {
+   "number": 422,
+   "title": "`_norm_alias`/`_norm_id` no sacan el prefijo de tipo de SIMBAD (`V*`, `NAME`): el MISMO identificador sale a la vez como faltante (backlog) y como ajeno (WARN), y lo que el backlog propone devuelve 0 en ADS",
+   "state": "OPEN"
+  },
+  {
+   "number": 423,
+   "title": "`fetch_bibtex` no estampa `cadena` cuando no hay nada que bajar: un sujeto con todo el BibTeX puesto queda con «la cadena se cortó en fetch_bibtex» para siempre",
+   "state": "OPEN"
+  },
+  {
+   "number": 424,
+   "title": "Propuesta: que la ficha registre canónicamente DÓNDE están los datos públicos de cada paper (VizieR/CDS) — hoy no hay campo ni sección, y `data_local` es machine-local",
+   "state": "OPEN"
   }
  ]
 }

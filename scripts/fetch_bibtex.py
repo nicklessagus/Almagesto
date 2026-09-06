@@ -317,6 +317,14 @@ def main() -> int:
     if not pendientes:
         cfg.print_seguro(f"bibtex: {len(notas)} nota(s) miradas, todas ya lo tienen "
                          f"(--force para re-bajar)")
+        # ⛔ #423 — un paso que corrió y no tenía trabajo IGUAL corrió. Es el caso OPUESTO al que
+        # protege la guarda del final (el paso que no pudo mirar todo no deja traza): acá se
+        # miraron las N notas y no había nada que hacer. Sin estampar, el sujeto cuyo BibTeX ya
+        # está completo queda con «la cadena se cortó en fetch_bibtex» PARA SIEMPRE —`pendientes`
+        # va a estar vacío en toda corrida futura— y el consejo del propio hallazgo (re-correr la
+        # cadena, que es idempotente) no lo cierra.
+        if args.slug:
+            cfg.save_paso(args.slug, "fetch_bibtex", flags=cfg.flags_usados(args, ap))
         return 0
 
     # Una sola llamada a ADS para todos los bibcodes de la corrida: es el carril que resuelve la

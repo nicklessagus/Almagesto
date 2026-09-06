@@ -512,3 +512,25 @@ def test_el_export_se_decodifica_UTF8_explicito_no_por_adivinanza(monkeypatch):
     assert "711–725" in entrada and fuente == "crossref"
     assert "â€“" not in entrada, "y el carril entero, no sólo el helper"
     assert "711–725" in fb.arxiv_bibtex("2201.01234"), "el carril de arXiv, igual"
+
+
+def test_estampa_la_cadena_aunque_NO_HAYA_NADA_que_bajar(tmp_path, monkeypatch, capsys):
+    """#423 — un paso que corrió y no tenía trabajo IGUAL corrió. Es el caso OPUESTO al que protege
+    la guarda del final («un paso que no pudo mirar todo no deja traza»): acá se miraron las N notas
+    y no había nada que hacer.
+
+    No se cerraba solo: una vez que todas las notas del sujeto tienen `bibtex`, `pendientes` queda
+    vacío en TODA corrida futura, así que el sujeto quedaba con «la cadena se cortó en
+    fetch_bibtex» para siempre — y el consejo del propio hallazgo (re-correr la cadena, que es
+    idempotente) no lo arreglaba. Medido: 1 de las 2 estrellas de una bóveda real."""
+    pasos = []
+    monkeypatch.setattr(fb.cfg, "save_paso",
+                        lambda slug, paso, **kw: pasos.append((slug, paso)))
+    monkeypatch.setattr(fb, "notes_to_check", lambda args: [tmp_path / "a.md", tmp_path / "b.md"])
+    monkeypatch.setattr(fb.cfg, "split_fm", lambda t: {"bibtex": "@article{x}"})
+    for f in ("a.md", "b.md"):
+        (tmp_path / f).write_text("---\nbibtex: '@article{x}'\n---\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--slug", "hd_40307"])
+    assert fb.main() == 0
+    assert "todas ya lo tienen" in capsys.readouterr().out
+    assert pasos == [("hd_40307", "fetch_bibtex")], "el paso corrió y quedó estampado"

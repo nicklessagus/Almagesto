@@ -28,11 +28,12 @@ import lib_config as cfg
 
 
 def _norm_id(s: str) -> str:
-    """Un identificador de catálogo, comparable: sin espacios internos y en minúsculas.
+    """Delegates to `cfg.norm_simbad_id`, the single implementation of the rule (#422).
 
-    SIMBAD escribe `HD  40307` con espaciado variable y `stars.yaml` `HD 40307`; sin normalizar,
-    todo alias legítimo saldría reportado."""
-    return "".join(str(s).split()).lower()
+    SIMBAD writes `HD  40307` with variable spacing and prefixes the type (`V* HO Lib`); without
+    normalising both, every legitimate alias came out reported — and this was the OTHER half of the
+    same check, normalising on its own and differently."""
+    return cfg.norm_simbad_id(s)
 
 
 def simbad_identifiers(host: str) -> list | None:
