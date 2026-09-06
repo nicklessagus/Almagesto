@@ -204,8 +204,14 @@ def test_las_cuatro_guardas_que_el_barrido_no_distinguia(toy_vault):
     assert any("2019Txt" in m for _s, m in lint.collect().por_clave("stale_pairs").items), \
         "el par no juzgado sale como SIN VERIFICAR, no como verificado ni como huérfano"
 
+    # un fan-out VACÍO con hermano previo no es un error: es la ronda de re-anclaje puro que
+    # `--solo-nuevos` produce cuando no hay nada nuevo (#407) — 0 juzgadas, todas arrastradas
     vacio = toy_vault.ROOT / "build" / "concepto" / "verif" / "vacia"
     vacio.mkdir(parents=True)
+    r = ws.write(nota, vacio, fecha="2026-03-02")
+    assert r["juzgadas"] == 0 and r["arrastradas"] == 1
+    # …y SIN hermano previo sí es un error: no hay tabla que escribir ni fila que llevar
+    cfg.verif_sidecar(nota).unlink()
     with pytest.raises(ws.SidecarError, match="ningún par"):
         ws.write(nota, vacio)
 
@@ -218,3 +224,30 @@ def test_las_cuatro_guardas_que_el_barrido_no_distinguia(toy_vault):
              "/ 0 sin clasificar: la `acota` era: SNR > 50, resuelta acotando la frase")
     assert ws.free_text_of(largo, "Condiciones perdidas") == \
         "la `acota` era: SNR > 50, resuelta acotando la frase"
+
+
+def test_la_ronda_ACOTADA_arrastra_los_pares_de_afuera_con_el_ancla_recalculada(toy_vault):
+    """#407/#282/#257 — la partición que `reverify_subset` emite, cerrada: los pares del alcance
+    reciben su veredicto nuevo; los de AFUERA se llevan el veredicto que tenían con el ancla
+    recalculada (match por ancla exacta o por cobertura del extracto, nunca cruzando `bibcode`).
+    La prueba de que el ciclo converge es que el lint no reporta un solo par vencido después."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}, ronda="r1"), fecha="2026-03-01")
+    ancla_vieja = {f.bibcode: f.anchor for f in lb.verif_rows(nota)}["2019Txt"]
+
+    # se edita la frase de 2019Txt SIN cambiar lo que afirma (cobertura alta) y se re-verifica SÓLO
+    # 2020Pdf: la ronda acotada de #407
+    texto = nota.read_text(encoding="utf-8").replace(
+        "La amplitud es 2.5 m/s [[2019Txt]].", "La amplitud es 2.5 m/s, medida en 2019 [[2019Txt]].")
+    nota.write_text(texto, encoding="utf-8")
+    d = _fanout(toy_vault, nota, {"2020Pdf": "no-soportada"}, ronda="r2")
+    (d / "2019Txt.json").unlink()
+    r = ws.write(nota, d, fecha="2026-03-02")
+    assert r["juzgadas"] == 1 and r["arrastradas"] == 1 and r["filas"] == 2
+
+    filas = {f.bibcode: f for f in lb.verif_rows(nota)}
+    assert filas["2020Pdf"].verdict == "soportada→no-soportada"
+    assert filas["2019Txt"].verdict == "soportada", "fuera del alcance: el veredicto se LLEVA"
+    assert filas["2019Txt"].anchor != ancla_vieja, "…y el ancla se RECALCULA sobre el texto nuevo"
+    assert lint.collect().por_clave("stale_pairs").items == (), \
+        "ni vencido por edición ni huérfano: la partición de #282 cerró"

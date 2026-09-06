@@ -139,3 +139,26 @@ def test_el_manifiesto_NO_cuenta_como_salida_del_fanout(tmp_path):
     _manifiesto(d, {"2020ApJ...900....1A": 1})
     pairs, errors = cvf.check_dir(d)
     assert errors == [] and list(pairs) == ["2020ApJ...900....1A.json"]
+
+
+def test_la_barrera_lee_el_alcance_y_no_pide_lo_que_quedo_afuera(tmp_path, capsys, monkeypatch):
+    """#407 — con el alcance en el manifiesto, la ronda acotada PASA la barrera y la pantalla dice
+    qué quedó afuera y por qué no falta: «se re-anclan al escribir el hermano», en vez de «faltan
+    114». Sin `alcance` (manifiesto viejo) sigue leyéndose como ronda completa."""
+    import check_verify_fanout as cvf
+    d = _dir_con(tmp_path, **{"2020ApJ...900....1A": _ok()})
+    manifiesto = {"nota": "x.md", "fuentes": {"2020ApJ...900....1A": 1}, "pares": 1,
+                  "alcance": {"modo": "fuentes", "fuentes": ["2020ApJ...900....1A"]},
+                  "nota_total": {"pares": 12, "fuentes": 4}}
+    (d / cvf.MANIFEST).write_text(json.dumps(manifiesto), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["check_verify_fanout.py", str(d)])
+    assert cvf.main() == 0
+    out = capsys.readouterr().out
+    assert "1 de 1 par(es) en el alcance declarado" in out and "11 par(es)" in out
+    assert "quedan FUERA" in out and "no faltan" in out
+
+    assert "ronda completa" in cvf.scope_line({"pares": 3}, {"a.json": 3})
+    assert "ronda completa" in cvf.scope_line({"pares": 3, "alcance": {"modo": "completa"}}, {})
+    # un manifiesto que declara alcance pero NO el total de la nota no puede decir cuántos quedan
+    # afuera: se lee como completa en vez de inventar un «fuera» sin denominador (D-43)
+    assert "ronda completa" in cvf.scope_line({"pares": 3, "alcance": {"modo": "fuentes"}}, {})

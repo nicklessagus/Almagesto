@@ -7,6 +7,7 @@ leer un «TOTAL 60 en 16 fuentes» y transcribirlo. Medido: 15 subagentes para 1
 from __future__ import annotations
 
 import json
+import pytest
 import sys
 from pathlib import Path
 
@@ -61,3 +62,45 @@ def test_el_manifiesto_es_lo_que_la_barrera_lee(tmp_path):
     lo lee (regla de método 2)."""
     import check_verify_fanout as cvf
     assert vf.MANIFEST == cvf.MANIFEST
+
+
+def test_la_ronda_ACOTADA_lleva_su_alcance_en_el_manifiesto(tmp_path):
+    """#407 — #282 prescribe la ronda acotada y el generador sólo sabía rondas completas, así que la
+    correcta no podía pasar la barrera («faltan 114»). El alcance viaja EN el manifiesto, al lado del
+    total de la nota: `fuentes`/`pares` son lo que la barrera cuenta, `alcance` dice cómo se eligió
+    y `nota_total` qué hay — una ronda acotada se lee como acotada, nunca como una completa que
+    volvió corta (D-43)."""
+    nota = _nota(tmp_path)
+    todas = vf.write_round(nota, tmp_path / "full")
+    assert todas["alcance"] == {"modo": "completa", "fuentes": sorted(todas["fuentes"])}
+    assert todas["nota_total"] == {"pares": todas["pares"], "fuentes": len(todas["fuentes"])}
+
+    una = sorted(todas["fuentes"])[0]
+    m = vf.write_round(nota, tmp_path / "r2", fuentes=[una])
+    assert set(m["fuentes"]) == {una} and m["alcance"] == {"modo": "fuentes", "fuentes": [una]}
+    assert m["pares"] == todas["fuentes"][una] and m["nota_total"] == todas["nota_total"]
+    assert sorted(p.stem for p in (tmp_path / "r2" / "prompts").glob("*.md")) == [una], \
+        "sólo se generan los prompts del alcance"
+
+    with pytest.raises(vf.ScopeError, match="no cita"):
+        vf.write_round(nota, tmp_path / "r3", fuentes=["2099Nadie"])
+
+
+def test_solo_nuevos_sin_hermano_es_la_ronda_completa_y_lo_DICE(tmp_path):
+    """#407 — sin bloque evaluable `reverify_subset` manda TODOS los pares al subconjunto (D-43: eso
+    no es «nada que re-verificar»), así que `--solo-nuevos` equivale a la ronda completa; el
+    manifiesto conserva el modo pedido, que es lo que permite distinguirlo después."""
+    nota = _nota(tmp_path)
+    m = vf.write_round(nota, tmp_path / "r1", solo_nuevos=True)
+    assert m["alcance"]["modo"] == "solo-nuevos"
+    assert m["pares"] == m["nota_total"]["pares"]
+
+
+def test_el_cli_acepta_el_alcance_y_rehusa_la_fuente_desconocida(tmp_path, capsys):
+    nota = _nota(tmp_path)
+    assert vf.main([str(nota), "--out", str(tmp_path / "r1"), "--fuentes", "2099Nadie"]) == 2
+    assert "no cita" in capsys.readouterr().out
+    una = sorted(vf.by_source(lb.pairs_of(nota.read_text(encoding="utf-8"))))[0]
+    assert vf.main([str(nota), "--out", str(tmp_path / "r2"), "--fuentes", una]) == 0
+    out = capsys.readouterr().out
+    assert "alcance `fuentes`" in out and "FUERA" in out and "re-anclan" in out

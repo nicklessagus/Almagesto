@@ -130,7 +130,10 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None) -> li
     «sin verificar», which is true."""
     pares = lb.pairs_of(text)
     por_clave = {(p.bibcode, p.anchor): p for p in pares}
-    previas = {(r.bibcode, r.anchor): r for r in (previous or [])}
+    # #407/#282 — la fila previa de cada par se resuelve como `reverify_subset`: ancla exacta
+    # primero, cobertura del extracto después, NUNCA cruzando `bibcode`. Es lo que permite que una
+    # ronda ACOTADA deje a los pares de afuera con su veredicto y el ancla recalculada.
+    asignado = lb.match_rows_to_pairs(pares, previous or [])[0] if previous else {}
     sobrantes = [(b, str(par.get("ancla") or "")) for b, ps in fanout.items() for par in ps
                  if (b, str(par.get("ancla") or "")) not in por_clave]
     if sobrantes:
@@ -141,11 +144,19 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None) -> li
     rows, n = [], 0
     for p in pares:
         par = juzgados.get((p.bibcode, p.anchor))
+        previa = asignado.get(p, (None, 0.0))[0]
         if par is None:
+            if previa is None:
+                continue                      # sin veredicto ni fila que llevar: «sin verificar»
+            # fuera del alcance de esta ronda: el veredicto se LLEVA y el ancla se recalcula (#257)
+            n += 1
+            rows.append(lb.Row(n=str(n), claim=lb.truncate_claim(lb.normalize_ws(p.block.text)),
+                               bibcode=p.bibcode, verdict=previa.verdict, anchor=p.anchor,
+                               source_hash=previa.source_hash, condition=previa.condition,
+                               source_kind=previa.source_kind, evidence=previa.evidence))
             continue
         n += 1
         veredicto = str(par["veredicto"]).strip()
-        previa = previas.get((p.bibcode, p.anchor))
         celda = chained_verdict(previa.verdict if previa else None, veredicto)
         ref = source_ref_for(p.bibcode, veredicto)
         kind, h = lb.split_source_ref(ref)
@@ -219,7 +230,9 @@ def write(note: Path, fanout_dir: Path, fecha: str | None = None, dry_run: bool 
         cfg.write_text_atomic(cfg.verif_sidecar(note), hermano)
         cfg.write_text_atomic(note, nuevo)
     c = lb.verif_counts(rows)
-    return {"filas": len(rows), "pares_cuerpo": len(lb.pairs_of(text)),
+    juzgados = sum(len(ps) for ps in fanout.values())
+    return {"filas": len(rows), "pares_cuerpo": len(lb.pairs_of(text)), "juzgadas": juzgados,
+            "arrastradas": len(rows) - juzgados,
             "encadenadas": c["cadenas"], "hermano": cfg.verif_sidecar(note).name}
 
 
@@ -245,7 +258,10 @@ def main(argv=None) -> int:
         return 1
     accion = "se escribiría" if args.dry_run else "escrito"
     cfg.print_seguro(f"{accion} {r['hermano']}: {r['filas']} fila(s) sobre {r['pares_cuerpo']} "
-                     f"par(es) del cuerpo" + (f", {r['encadenadas']} encadenada(s)" if r["encadenadas"] else "")
+                     f"par(es) del cuerpo — {r['juzgadas']} juzgada(s) en esta ronda"
+                     + (f", {r['arrastradas']} arrastrada(s) re-ancladas de la anterior (#407)"
+                        if r["arrastradas"] else "")
+                     + (f", {r['encadenadas']} encadenada(s)" if r["encadenadas"] else "")
                      + f" — la cabecera de la nota la da `verif_summary`; las sub-secciones que "
                        f"digan «{PENDIENTE}» son el triage de la corrida: completalas")
     return 0

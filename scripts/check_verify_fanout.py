@@ -108,6 +108,24 @@ def pair_count_errors(pairs: dict, expected: int) -> list[str]:
             f"Contado sobre los {len(pairs)} archivo(s) que cumplen el schema."]
 
 
+def scope_line(manifest: dict, pairs: dict) -> str:
+    """What this round covers, in the manifest's own words (#407).
+
+    A scoped round used to read as a full one that came back short («faltan 114»); with the scope
+    in the manifest the barrier can say what is IN and what is OUT — and that the pairs outside
+    are re-anchored, not forgotten. A manifest with no `alcance` is a full round by construction."""
+    alc = manifest.get("alcance") or {}
+    modo = alc.get("modo") or "completa"
+    total = (manifest.get("nota_total") or {}).get("pares")
+    en = sum(pairs.values())
+    if modo == "completa" or total is None:
+        return f"alcance: ronda completa — {en} de {manifest.get('pares')} par(es) de la nota"
+    fuera = int(total) - int(manifest.get("pares") or 0)
+    return (f"alcance `{modo}` ({len(alc.get('fuentes') or [])} fuente(s)): {en} de "
+            f"{manifest.get('pares')} par(es) en el alcance declarado; {fuera} par(es) de la nota "
+            f"quedan FUERA y se re-anclan al escribir el hermano (#407), no faltan")
+
+
 def main() -> int:
     """CLI. rc 0 si el directorio cumple, 1 si hay hallazgos, 2 si no se pudo mirar."""
     ap = argparse.ArgumentParser(description=__doc__,
@@ -145,6 +163,7 @@ def main() -> int:
         if manifest:
             errors += manifest_errors(pairs, manifest, args.esperados)
             errors += pair_count_errors(pairs, int(manifest.get("pares") or 0))
+            print(scope_line(manifest, pairs))
     elif args.esperados is not None:
         errors += pair_count_errors(pairs, args.esperados)
     else:

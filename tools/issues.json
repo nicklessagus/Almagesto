@@ -2015,6 +2015,21 @@
    "number": 405,
    "title": "`extraction_prompt` resuelve el PDF entre slugs (#305) pero el `.txt` NO: el prompt dice «no hay índice» sobre 26 de 208 pares que sí lo tienen bajo otro slug",
    "state": "OPEN"
+  },
+  {
+   "number": 406,
+   "title": "El aviso de #389 sólo ve `[[bibcode]]` AGREGADOS: un empalme que agrega PROSA pasa mudo por `apply_fixes`, `contrast --validar-todo` y `lint --cierre`",
+   "state": "OPEN"
+  },
+  {
+   "number": 407,
+   "title": "Una ronda de verify ACOTADA no puede pasar la barrera: `verify_fanout` sólo genera rondas completas, y #282 prescribe justamente la acotada",
+   "state": "OPEN"
+  },
+  {
+   "number": 408,
+   "title": "«Un bloque, un hecho» como categoría del lint (medido: los defectos-al-corregir caen en los bloques más largos de la bóveda) — y `apply_fixes` no puede PARTIR un bloque",
+   "state": "OPEN"
   }
  ]
 }
