@@ -8702,3 +8702,81 @@ def test_check_verif_row_pairs_no_inventa_hallazgos_sobre_la_fila_correcta(toy_v
     _con_ancla(toy_vault, CUERPO, kind="pdf", verdict="no verificable por extracción")
     r = lint.check_verif_row_pairs("nota-verif", texto, lb.verif_rows(ruta), vigente)
     assert r[1] != [], "si la fila DECLARA un archivo, se evalúa contra el disco igual"
+
+
+# ── #396 · el espejo de NEA y el recorte de lectura ──────────────────────────────────────────────
+
+def test_check_extraccion_no_declarada_tiene_DOS_severidades_sobre_el_mismo_hecho(toy_vault):
+    """#396/D-15/INV-83 — leer un subconjunto del core va a ser el caso normal (≈6M tokens por
+    estrella si no), así que el problema no es recortar: es recortar EN SILENCIO. Sin `criterio`
+    declarado es hallazgo con señal; con criterio es backlog normal. Y `--extraccion todos` con
+    core sin leer NO silencia: una declaración que no se cumple es peor que no declarar nada, porque
+    apaga el chequeo que la habría desmentido.  @inv INV-83"""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "abs:x"}})
+    assert lint.check_extraccion_no_declarada({}) == [], "sin pendientes no hay nada que declarar"
+    pend = {cfg.method_key("ica"): {"2001X", "2002Y"}}
+    filas = lint.check_extraccion_no_declarada(pend)
+    assert len(filas) == 1 and "no declaró" in filas[0][1] and "2 paper(s)" in filas[0][1]
+
+    write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "extraccion": {
+        "criterio": "los que hablan del blanqueo", "fecha": "2026-03-01", "subconjunto": True}})
+    assert lint.check_extraccion_no_declarada(pend) == [], "el subconjunto declarado sí silencia"
+
+    write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "extraccion": {
+        "criterio": "todos los core", "fecha": "2026-03-01"}})
+    filas = lint.check_extraccion_no_declarada(pend)
+    assert len(filas) == 1 and "declara `extraccion: todos los core`" in filas[0][1]
+
+
+def test_check_ground_truth_mirror_no_inventa_hallazgos_sobre_lo_que_NEA_no_trae(toy_vault):
+    """#396/#70/AUD-155/INV-10 — los `null` de NEA son el caso NORMAL (`pl_rvamp` y `pl_orbeccen`
+    faltan seguido) y no son errores de la bóveda. Las cuatro guardas que sobrevivían son las que
+    separan «el espejo discrepa» de «NEA no trae el dato»:
+
+    · `host` ausente no es `host` malformado;
+    · sin `mass_earth` no se pide la m·sini implícita (no hay contra qué compararla);
+    · con `mass_earth` y sin `K_ms` se DECLARA qué campo falta, que es distinto de callarse;
+    · y sin `mass_earth` no hay masa sospechosa que reportar.
+
+    ⚠ Declarado: el `chk is None` de `if chk is None and m:` sobrevive a `mutar --guardas` y va a
+    seguir sobreviviendo — `faltan` sólo sale no vacío cuando alguno de los tres insumos es `None`,
+    y en ese caso `msini_earth` ya devolvió `None`, así que la cláusula no decide nada. Red 8 sobre
+    código anterior a #396.  @inv INV-10"""
+    from fetch_ground_truth import msini_earth
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
+                                     "planets": [{"letter": "b"}]})
+
+    # NEA sin `host` y sin ningún dato del planeta: silencio, no hallazgos inventados
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps(
+        {"slug": "test_star", "planets": [{"letter": "b", "status": "confirmed"}]}),
+        encoding="utf-8")
+    contra, masa, vistos, _p, inc = lint.check_ground_truth_mirror(msini_earth)
+    assert vistos == {"test_star"} and masa == []
+    assert not any("host" in m for _s, m in contra), contra
+    assert not any("K_ms" in m for _s, m in inc), "sin `mass_earth` no se pide la m·sini"
+
+    # `mass_earth` sin `K_ms`: se DECLARA el campo que falta
+    write_gt(toy_vault, [gt_planet(mass=1.0) | {"K_ms": None}])
+    *_x, inc = lint.check_ground_truth_mirror(msini_earth)
+    assert any("K_ms" in m for _s, m in inc), inc
+
+    # `K_ms`/`P_days` presentes y `mass_earth` ausente: no hay masa sospechosa que reportar
+    write_gt(toy_vault, [gt_planet(mass=None)])
+    _c, masa, *_x = lint.check_ground_truth_mirror(msini_earth)
+    assert masa == [], "sin `mass_earth` no hay con qué comparar la m·sini"
+
+    # y el espejo consistente calla, mientras que el inconsistente habla
+    write_gt(toy_vault, [gt_planet(mass=1.0)])
+    _c, masa, *_x = lint.check_ground_truth_mirror(msini_earth)
+    assert masa == []
+    write_gt(toy_vault, [gt_planet(mass=lint.MASA_FACTOR_SOSPECHA * 2)])
+    _c, masa, *_x = lint.check_ground_truth_mirror(msini_earth)
+    assert len(masa) == 1 and "m·sini implícita" in masa[0][1]
+
+    # el `host` que llega malformado sí es hallazgo: si no, el espejo #70 deja de vigilar los
+    # cuatro campos estelares sin decir nada
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps(
+        {"slug": "test_star", "host": "no soy un mapa", "planets": []}), encoding="utf-8")
+    contra, *_x = lint.check_ground_truth_mirror(msini_earth)
+    assert any("`host` del ground-truth no es un mapa" in m for _s, m in contra), contra

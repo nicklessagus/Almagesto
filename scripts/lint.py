@@ -3380,6 +3380,208 @@ def check_verification_pairs(anchor_notes, evidencia_hash_de) -> tuple:
             verif_sin_localizador, verif_truncada, cond_sin_clasificar)
 
 
+def check_extraccion_no_declarada(sin_extraer_por_sujeto: dict) -> list:
+    """`extraccion_no_declarada` — the ingest read a SUBSET of the core and did not say so (D-15).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Reading a
+    subset is going to be the normal case (~6M tokens per star otherwise), so the problem is not
+    trimming: it is trimming IN SILENCE. A note presents itself as a snapshot of its universe and a
+    reader has no way to know the synthesis came from 8 papers out of 42.
+
+    Two severities over the same fact: with no `extraccion.criterio` declared it is a finding with
+    signal; with a criterion it is ordinary backlog, the visible tail of D-15 that `maintain` eats.
+
+    @inv INV-83
+    """
+    # ── el recorte de lectura no declarado (D-13/D-15 · INV-83) ──────────────────────────────────
+    # El contrato dice que el ingest lee TODOS los core. La reconciliación anticipa que el
+    # subconjunto va a ser el caso normal (≈6M tokens por estrella si no), así que el problema no es
+    # recortar: es recortar **en silencio**. Una ficha se presenta como snapshot de su universo, y
+    # un lector no tiene forma de saber que la síntesis salió de 8 de 42 papers.
+    # Dos severidades sobre el mismo hecho: sin `extraccion.criterio` declarado, hallazgo con señal
+    # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
+    # D-15, que el skill `maintain` consume.
+    # ⛔ #346 — el barrido es `cfg.all_subjects()`, el MISMO que el roll-up de arriba. Acá se le
+    # pedía `slug` también a la entrada de un tema, donde el slug es la CLAVE del YAML: `None`
+    # para todo tema, `continue`, y el detector apagado para 2 de los 3 sujetos de una bóveda real.
+    extraccion_no_declarada: list = []      # @inv INV-83
+    for _kind_s, slug_s, nombre_s, meta_s in cfg.all_subjects():
+        # Cómo lo NOMBRA un paper: el canónico del YAML (`stars`/`thesis_links`) y, en un tema, el
+        # `concept` si difiere del slug — el mismo par que `papers_universe` usa para `no_vista`.
+        # Por CLAVE NORMALIZADA (#348): el índice se llena con la grafía del extractor y acá se
+        # busca con la del YAML, así que compararlas crudas apagaba el detector por un `PCA`.
+        pendientes: set = set()
+        for named_as in (nombre_s, meta_s.get("concept") or ""):
+            if (subject_key := cfg.method_key(named_as)):
+                pendientes |= sin_extraer_por_sujeto.get(subject_key, set())
+        if not pendientes:
+            continue
+        decl = cfg.load_extraccion(slug_s)
+        if not decl.get("criterio"):
+            extraccion_no_declarada.append(
+                (slug_s, f"{len(pendientes)} paper(s) core sin extraer y el registro **no declaró** "
+                         f"el recorte ({', '.join(sorted(pendientes)[:3])}…) → o se leen, o se "
+                         f"declara el criterio (`extraccion:` en el registro): la ficha se presenta "
+                         f"como snapshot del universo y hoy no lo es"))
+        elif not decl.get("subconjunto"):
+            # AUD-157 — `--extraccion todos` silenciaba el detector **aunque quedara core sin
+            # extraer**: la declaración dice «se leyeron todos» y el corpus dice que no. Una
+            # declaración que no se cumple es peor que no declarar nada, porque apaga el chequeo
+            # que la habría desmentido. `subconjunto: true` sí silencia, que es su función.
+            extraccion_no_declarada.append(
+                (slug_s, f"el registro declara `extraccion: todos los core` ({decl.get('fecha')}) y "
+                         f"quedan {len(pendientes)} sin extraer "
+                         f"({', '.join(sorted(pendientes)[:3])}…) → o se leen, o se re-declara con "
+                         f"`python scripts/triage.py {slug_s} --extraccion subconjunto --reason "
+                         f"\"<motivo>\"`"))
+    return extraccion_no_declarada
+
+
+def check_ground_truth_mirror(msini_earth) -> tuple:
+    """`(contradictions, mass_issues, vistos_gt, gt_prosa, incomplete)` — the NEA mirror, note by
+    note (#70 / INV-10).
+
+    Extracted from `lint.collect` by #396; the blocks compute and the caller accumulates.
+    `vistos_gt` is not a finding: it is which stars had a ground-truth file at all, and
+    `check_star_without_ground_truth` needs it to tell «the mirror disagrees» from «nobody is
+    watching this note». It comes back as a value because it crosses two checks.
+
+    @inv INV-10
+    """
+    contradictions: list = []
+    mass_issues: list = []
+    vistos_gt: set = set()
+    gt_prosa: list = []
+    incomplete: list = []
+    # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
+    # @inv INV-10
+    mass_issues = []
+    vistos_gt = set()
+    for gtf in sorted(glob.glob(str(cfg.GROUND_TRUTH / "*.json"))):
+        # El NOMBRE DEL ARCHIVO manda, no el campo `slug` de adentro: el archivo lo escribe
+        # `fetch_ground_truth --slug <slug>` con el mismo slug que nombra a `stars/<slug>.md`, así
+        # que es el que aparea el espejo con su ficha. Cuando el campo interno decía otra cosa
+        # —renombre a medias: el skill `maintain` C nombra el archivo, la nota y el registro, pero
+        # no el campo— el espejo buscaba una ficha inexistente y quedaba MUDO en silencio, que es
+        # justo lo que #70 existe para impedir.
+        slug = basename(gtf)[:-5]
+        vistos_gt.add(slug)
+        try:
+            gt = json.loads(open(gtf, encoding="utf-8").read())
+        except (ValueError, OSError) as e:
+            # El lint es la compuerta de CI: un ground-truth ilegible se REPORTA (y su ficha queda
+            # sin vigilancia), no voltea el barrido entero.
+            contradictions.append((slug, f"`raw/ground_truth/{slug}.json` no se pudo leer "
+                                         f"({type(e).__name__}) → el espejo #70 no puede vigilar "
+                                         f"esa ficha; re-corré `fetch_ground_truth.py {slug}`"))
+            continue
+        if not isinstance(gt, dict):
+            contradictions.append((slug, f"`raw/ground_truth/{slug}.json` no es un objeto JSON "
+                                         f"(es {type(gt).__name__}) → el espejo no puede leerlo"))
+            continue
+        if (interno := gt.get("slug")) and str(interno) != slug:
+            contradictions.append((slug, f"el JSON declara `slug: {interno}` y el archivo es "
+                                         f"{slug}.json → renombre a medias; corregí el campo (el "
+                                         f"archivo es el que aparea con `stars/{slug}.md`)"))
+        host = gt.get("host")
+        if host is not None and not isinstance(host, dict):
+            # Hermano del `planets` no-lista de abajo: sin este chequeo un `host` malformado se
+            # reemplazaba por `{}` MÁS ABAJO en silencio y el espejo #70 dejaba de vigilar los
+            # cuatro campos estelares (spectral_type/teff_K/dist_pc/P_rot_days) sin reportar nada
+            # — y de paso disparaba hallazgos FALSOS ("P_rot_days: 1.0 contradice el ground-truth")
+            # que apuntan al síntoma equivocado (host vacío, no el valor de la ficha).
+            contradictions.append((slug, f"`host` del ground-truth no es un mapa (es "
+                                         f"{type(host).__name__}) → el espejo #70 no puede vigilar "
+                                         f"spectral_type/teff_K/dist_pc/P_rot_days de esta ficha"))
+        mstar = host.get("mass_msun") if isinstance(host, dict) else None
+        # SIN `or []`: el `isinstance` de abajo ya neutraliza el caso None/ausente (cae al mismo
+        # `else []`), pero un `or []` acá tapaba el caso falsy-no-None — `planets: 0` (int) — que
+        # es justo lo que el chequeo existe para atrapar: se degradaba a `[]` en silencio (0 or []
+        # → []) y el espejo #70 dejaba de vigilar la ficha sin reportar nada.
+        planetas_gt = gt.get("planets")
+        if not isinstance(planetas_gt, list):
+            contradictions.append((slug, f"`planets` del ground-truth no es una lista (es "
+                                         f"{type(planetas_gt).__name__})"))
+            planetas_gt = []
+        malformados = [x for x in planetas_gt if not isinstance(x, dict)]
+        if malformados:
+            contradictions.append((slug, f"{len(malformados)} entrada(s) de `planets` del "
+                                         f"ground-truth que no son un mapa → quedan fuera del espejo"))
+        planetas_gt = [x for x in planetas_gt if isinstance(x, dict)]
+        gt = {**gt, "planets": planetas_gt, "host": host if isinstance(host, dict) else {}}
+        for p in planetas_gt:
+            if p.get("mass_flag"):                       # ya marcado por el fetch
+                mass_issues.append((slug, f"{p.get('letter')}: {p['mass_flag']}"))
+                continue
+            # Ground-truth corrupto (K_ms/P_days/e/mass_msun editado a mano como texto): alimentar
+            # eso a `msini_earth` revienta comparando un string con 0 (`K_ms <= 0`) — se detecta
+            # ANTES de llamarlo y se reporta como ground-truth corrupto en vez de tumbar el barrido
+            # con un TypeError (#h03).
+            no_numericos = [c for c, v in (("K_ms", p.get("K_ms")), ("P_days", p.get("P_days")),
+                                           ("e", p.get("e")), ("mass_msun", mstar))
+                            if v is not None and (isinstance(v, bool)
+                                                   or not isinstance(v, (int, float)))]
+            if no_numericos:
+                mass_issues.append((slug, f"{p.get('letter')}: ground-truth con valor no numérico "
+                                          f"en {', '.join(no_numericos)} → no se puede calcular la "
+                                          f"m·sini implícita; revisá `raw/ground_truth/{slug}.json`"))
+                continue
+            chk = msini_earth(p.get("K_ms"), p.get("P_days"), p.get("e"), mstar)
+            m = p.get("mass_earth")
+            # AUD-155 / INV-10 — sin `host.mass_msun` (o sin `K_ms`/`P_days`) `msini_earth` devuelve
+            # `None` y el chequeo **no corre**, sin que nada lo diga: la ficha se lee como vigilada
+            # cuando nadie la miró. Es el cero inventado de D-43 dentro del detector de masas
+            # espurias. No bloquea —el dato falta en NEA, no es un error de la bóveda— pero se
+            # declara, con el campo que falta nombrado.
+            if chk is None and m:
+                faltan = [c for c, v in (("host.mass_msun", mstar), ("K_ms", p.get("K_ms")),
+                                         ("P_days", p.get("P_days"))) if v is None]
+                if faltan:
+                    incomplete.append(
+                        (slug, f"{p.get('letter')}: la m·sini implícita **no se pudo calcular** "
+                               f"(falta {', '.join(faltan)} en el ground-truth) → `mass_earth` "
+                               f"queda sin vigilancia; NO es que el chequeo haya dado limpio"))
+            # NO es un fallback de compatibilidad: es el chequeo INDEPENDIENTE del lint sobre todo
+            # planeta que el fetch no marcó (que son casi todos). `mass_flag` es la marca del fetch;
+            # esto la re-deriva offline, que es el trabajo del lint.
+            if chk and m and not (1 / MASA_FACTOR_SOSPECHA < m / chk < MASA_FACTOR_SOSPECHA):
+                mass_issues.append((slug, f"{p.get('letter')}: mass_earth={m:.3g} M⊕ "
+                                          f"≠ m·sini implícita {chk:.3g} M⊕"))
+        sf = cfg.STARS / f"{slug}.md"
+        if sf.exists():
+            texto_ficha = sf.read_text(encoding="utf-8")
+            fm_ficha = split_fm(texto_ficha)
+            if not fm_ficha:
+                # Sin frontmatter legible, comparar campo por campo produciría un hallazgo fantasma
+                # por cada valor de NEA ("teff_K: None contradice…") apuntando al síntoma
+                # equivocado: el hallazgo real es que la ficha no tiene contrato.
+                contradictions.append((slug, "la ficha no tiene frontmatter legible → el espejo #70 "
+                                             "no puede compararla con el ground-truth"))
+            else:
+                contradictions += mirror_issues(slug, fm_ficha, gt)
+                # #278 — la otra mitad: la PROSA. `solo_prosa` saca las secciones estampadas, que
+                # nombran la autoridad en su propio encabezado y listan todas las letras (`##
+                # Planetas`): sin ese recorte el detector se dispara contra la tabla que el
+                # estampador escribe — mismo argumento que #214 con el detector de fuga.
+                _partes_f = cfg.frontmatter_span(texto_ficha)
+                _prosa_f = cfg.solo_prosa(_partes_f[1] if _partes_f else texto_ficha)
+                _letras_gt = {str(pl.get("letter")) for pl in planetas_gt if isinstance(pl, dict)}
+                for _frase, _motivo in gt_prose_conflicts(_prosa_f, _letras_gt):
+                    gt_prosa.append((slug, f"{_motivo} → «{_frase[:160]}»"))
+        else:
+            # Hermano simétrico de "ficha sin ground-truth" (más abajo): un ground-truth sin su
+            # ficha es un renombre a medias (el skill `maintain` renombra el JSON pero no llegó a
+            # crear/renombrar `stars/<slug>.md`) o una ficha borrada sin limpiar el JSON que la
+            # acompañaba. El espejo #70 no tiene con qué comparar → nadie lo mira. Backlog, no
+            # bloqueante: es "la garantía no corrió acá" (no hay ficha con la que contradecir),
+            # no "hay una violación" — misma severidad que el hermano.
+            incomplete.append((slug, f"`raw/ground_truth/{slug}.json` sin su `stars/{slug}.md` → "
+                                     "el espejo #70 no tiene ficha con la que comparar (renombre a "
+                                     "medias o ficha borrada sin limpiar); recreá la ficha "
+                                     f"(`make_notes.py {slug}`) o borrá el ground-truth colgado"))
+    return contradictions, mass_issues, vistos_gt, gt_prosa, incomplete
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -5183,174 +5385,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # El bloque vive en `check_papers_table_stale` (#396).
     papers_table_stale, _pt_no_eval = check_papers_table_stale(paper_fms)
     not_evaluated += _pt_no_eval
-    # ── el recorte de lectura no declarado (D-13/D-15 · INV-83) ──────────────────────────────────
-    # El contrato dice que el ingest lee TODOS los core. La reconciliación anticipa que el
-    # subconjunto va a ser el caso normal (≈6M tokens por estrella si no), así que el problema no es
-    # recortar: es recortar **en silencio**. Una ficha se presenta como snapshot de su universo, y
-    # un lector no tiene forma de saber que la síntesis salió de 8 de 42 papers.
-    # Dos severidades sobre el mismo hecho: sin `extraccion.criterio` declarado, hallazgo con señal
-    # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
-    # D-15, que el skill `maintain` consume.
-    # ⛔ #346 — el barrido es `cfg.all_subjects()`, el MISMO que el roll-up de arriba. Acá se le
-    # pedía `slug` también a la entrada de un tema, donde el slug es la CLAVE del YAML: `None`
-    # para todo tema, `continue`, y el detector apagado para 2 de los 3 sujetos de una bóveda real.
-    extraccion_no_declarada: list = []      # @inv INV-83
-    for _kind_s, slug_s, nombre_s, meta_s in cfg.all_subjects():
-        # Cómo lo NOMBRA un paper: el canónico del YAML (`stars`/`thesis_links`) y, en un tema, el
-        # `concept` si difiere del slug — el mismo par que `papers_universe` usa para `no_vista`.
-        # Por CLAVE NORMALIZADA (#348): el índice se llena con la grafía del extractor y acá se
-        # busca con la del YAML, así que compararlas crudas apagaba el detector por un `PCA`.
-        pendientes: set = set()
-        for named_as in (nombre_s, meta_s.get("concept") or ""):
-            if (subject_key := cfg.method_key(named_as)):
-                pendientes |= sin_extraer_por_sujeto.get(subject_key, set())
-        if not pendientes:
-            continue
-        decl = cfg.load_extraccion(slug_s)
-        if not decl.get("criterio"):
-            extraccion_no_declarada.append(
-                (slug_s, f"{len(pendientes)} paper(s) core sin extraer y el registro **no declaró** "
-                         f"el recorte ({', '.join(sorted(pendientes)[:3])}…) → o se leen, o se "
-                         f"declara el criterio (`extraccion:` en el registro): la ficha se presenta "
-                         f"como snapshot del universo y hoy no lo es"))
-        elif not decl.get("subconjunto"):
-            # AUD-157 — `--extraccion todos` silenciaba el detector **aunque quedara core sin
-            # extraer**: la declaración dice «se leyeron todos» y el corpus dice que no. Una
-            # declaración que no se cumple es peor que no declarar nada, porque apaga el chequeo
-            # que la habría desmentido. `subconjunto: true` sí silencia, que es su función.
-            extraccion_no_declarada.append(
-                (slug_s, f"el registro declara `extraccion: todos los core` ({decl.get('fecha')}) y "
-                         f"quedan {len(pendientes)} sin extraer "
-                         f"({', '.join(sorted(pendientes)[:3])}…) → o se leen, o se re-declara con "
-                         f"`python scripts/triage.py {slug_s} --extraccion subconjunto --reason "
-                         f"\"<motivo>\"`"))
+    # El recorte de lectura no declarado vive en `check_extraccion_no_declarada` (#396).
+    extraccion_no_declarada = check_extraccion_no_declarada(sin_extraer_por_sujeto)
 
-    # contradicción ground-truth ↔ ficha (qué planetas + campo por campo) + masa sospechosa
-    # @inv INV-10
-    mass_issues = []
-    vistos_gt = set()
-    for gtf in sorted(glob.glob(str(cfg.GROUND_TRUTH / "*.json"))):
-        # El NOMBRE DEL ARCHIVO manda, no el campo `slug` de adentro: el archivo lo escribe
-        # `fetch_ground_truth --slug <slug>` con el mismo slug que nombra a `stars/<slug>.md`, así
-        # que es el que aparea el espejo con su ficha. Cuando el campo interno decía otra cosa
-        # —renombre a medias: el skill `maintain` C nombra el archivo, la nota y el registro, pero
-        # no el campo— el espejo buscaba una ficha inexistente y quedaba MUDO en silencio, que es
-        # justo lo que #70 existe para impedir.
-        slug = basename(gtf)[:-5]
-        vistos_gt.add(slug)
-        try:
-            gt = json.loads(open(gtf, encoding="utf-8").read())
-        except (ValueError, OSError) as e:
-            # El lint es la compuerta de CI: un ground-truth ilegible se REPORTA (y su ficha queda
-            # sin vigilancia), no voltea el barrido entero.
-            contradictions.append((slug, f"`raw/ground_truth/{slug}.json` no se pudo leer "
-                                         f"({type(e).__name__}) → el espejo #70 no puede vigilar "
-                                         f"esa ficha; re-corré `fetch_ground_truth.py {slug}`"))
-            continue
-        if not isinstance(gt, dict):
-            contradictions.append((slug, f"`raw/ground_truth/{slug}.json` no es un objeto JSON "
-                                         f"(es {type(gt).__name__}) → el espejo no puede leerlo"))
-            continue
-        if (interno := gt.get("slug")) and str(interno) != slug:
-            contradictions.append((slug, f"el JSON declara `slug: {interno}` y el archivo es "
-                                         f"{slug}.json → renombre a medias; corregí el campo (el "
-                                         f"archivo es el que aparea con `stars/{slug}.md`)"))
-        host = gt.get("host")
-        if host is not None and not isinstance(host, dict):
-            # Hermano del `planets` no-lista de abajo: sin este chequeo un `host` malformado se
-            # reemplazaba por `{}` MÁS ABAJO en silencio y el espejo #70 dejaba de vigilar los
-            # cuatro campos estelares (spectral_type/teff_K/dist_pc/P_rot_days) sin reportar nada
-            # — y de paso disparaba hallazgos FALSOS ("P_rot_days: 1.0 contradice el ground-truth")
-            # que apuntan al síntoma equivocado (host vacío, no el valor de la ficha).
-            contradictions.append((slug, f"`host` del ground-truth no es un mapa (es "
-                                         f"{type(host).__name__}) → el espejo #70 no puede vigilar "
-                                         f"spectral_type/teff_K/dist_pc/P_rot_days de esta ficha"))
-        mstar = host.get("mass_msun") if isinstance(host, dict) else None
-        # SIN `or []`: el `isinstance` de abajo ya neutraliza el caso None/ausente (cae al mismo
-        # `else []`), pero un `or []` acá tapaba el caso falsy-no-None — `planets: 0` (int) — que
-        # es justo lo que el chequeo existe para atrapar: se degradaba a `[]` en silencio (0 or []
-        # → []) y el espejo #70 dejaba de vigilar la ficha sin reportar nada.
-        planetas_gt = gt.get("planets")
-        if not isinstance(planetas_gt, list):
-            contradictions.append((slug, f"`planets` del ground-truth no es una lista (es "
-                                         f"{type(planetas_gt).__name__})"))
-            planetas_gt = []
-        malformados = [x for x in planetas_gt if not isinstance(x, dict)]
-        if malformados:
-            contradictions.append((slug, f"{len(malformados)} entrada(s) de `planets` del "
-                                         f"ground-truth que no son un mapa → quedan fuera del espejo"))
-        planetas_gt = [x for x in planetas_gt if isinstance(x, dict)]
-        gt = {**gt, "planets": planetas_gt, "host": host if isinstance(host, dict) else {}}
-        for p in planetas_gt:
-            if p.get("mass_flag"):                       # ya marcado por el fetch
-                mass_issues.append((slug, f"{p.get('letter')}: {p['mass_flag']}"))
-                continue
-            # Ground-truth corrupto (K_ms/P_days/e/mass_msun editado a mano como texto): alimentar
-            # eso a `msini_earth` revienta comparando un string con 0 (`K_ms <= 0`) — se detecta
-            # ANTES de llamarlo y se reporta como ground-truth corrupto en vez de tumbar el barrido
-            # con un TypeError (#h03).
-            no_numericos = [c for c, v in (("K_ms", p.get("K_ms")), ("P_days", p.get("P_days")),
-                                           ("e", p.get("e")), ("mass_msun", mstar))
-                            if v is not None and (isinstance(v, bool)
-                                                   or not isinstance(v, (int, float)))]
-            if no_numericos:
-                mass_issues.append((slug, f"{p.get('letter')}: ground-truth con valor no numérico "
-                                          f"en {', '.join(no_numericos)} → no se puede calcular la "
-                                          f"m·sini implícita; revisá `raw/ground_truth/{slug}.json`"))
-                continue
-            chk = msini_earth(p.get("K_ms"), p.get("P_days"), p.get("e"), mstar)
-            m = p.get("mass_earth")
-            # AUD-155 / INV-10 — sin `host.mass_msun` (o sin `K_ms`/`P_days`) `msini_earth` devuelve
-            # `None` y el chequeo **no corre**, sin que nada lo diga: la ficha se lee como vigilada
-            # cuando nadie la miró. Es el cero inventado de D-43 dentro del detector de masas
-            # espurias. No bloquea —el dato falta en NEA, no es un error de la bóveda— pero se
-            # declara, con el campo que falta nombrado.
-            if chk is None and m:
-                faltan = [c for c, v in (("host.mass_msun", mstar), ("K_ms", p.get("K_ms")),
-                                         ("P_days", p.get("P_days"))) if v is None]
-                if faltan:
-                    incomplete.append(
-                        (slug, f"{p.get('letter')}: la m·sini implícita **no se pudo calcular** "
-                               f"(falta {', '.join(faltan)} en el ground-truth) → `mass_earth` "
-                               f"queda sin vigilancia; NO es que el chequeo haya dado limpio"))
-            # NO es un fallback de compatibilidad: es el chequeo INDEPENDIENTE del lint sobre todo
-            # planeta que el fetch no marcó (que son casi todos). `mass_flag` es la marca del fetch;
-            # esto la re-deriva offline, que es el trabajo del lint.
-            if chk and m and not (1 / MASA_FACTOR_SOSPECHA < m / chk < MASA_FACTOR_SOSPECHA):
-                mass_issues.append((slug, f"{p.get('letter')}: mass_earth={m:.3g} M⊕ "
-                                          f"≠ m·sini implícita {chk:.3g} M⊕"))
-        sf = cfg.STARS / f"{slug}.md"
-        if sf.exists():
-            texto_ficha = sf.read_text(encoding="utf-8")
-            fm_ficha = split_fm(texto_ficha)
-            if not fm_ficha:
-                # Sin frontmatter legible, comparar campo por campo produciría un hallazgo fantasma
-                # por cada valor de NEA ("teff_K: None contradice…") apuntando al síntoma
-                # equivocado: el hallazgo real es que la ficha no tiene contrato.
-                contradictions.append((slug, "la ficha no tiene frontmatter legible → el espejo #70 "
-                                             "no puede compararla con el ground-truth"))
-            else:
-                contradictions += mirror_issues(slug, fm_ficha, gt)
-                # #278 — la otra mitad: la PROSA. `solo_prosa` saca las secciones estampadas, que
-                # nombran la autoridad en su propio encabezado y listan todas las letras (`##
-                # Planetas`): sin ese recorte el detector se dispara contra la tabla que el
-                # estampador escribe — mismo argumento que #214 con el detector de fuga.
-                _partes_f = cfg.frontmatter_span(texto_ficha)
-                _prosa_f = cfg.solo_prosa(_partes_f[1] if _partes_f else texto_ficha)
-                _letras_gt = {str(pl.get("letter")) for pl in planetas_gt if isinstance(pl, dict)}
-                for _frase, _motivo in gt_prose_conflicts(_prosa_f, _letras_gt):
-                    gt_prosa.append((slug, f"{_motivo} → «{_frase[:160]}»"))
-        else:
-            # Hermano simétrico de "ficha sin ground-truth" (más abajo): un ground-truth sin su
-            # ficha es un renombre a medias (el skill `maintain` renombra el JSON pero no llegó a
-            # crear/renombrar `stars/<slug>.md`) o una ficha borrada sin limpiar el JSON que la
-            # acompañaba. El espejo #70 no tiene con qué comparar → nadie lo mira. Backlog, no
-            # bloqueante: es "la garantía no corrió acá" (no hay ficha con la que contradecir),
-            # no "hay una violación" — misma severidad que el hermano.
-            incomplete.append((slug, f"`raw/ground_truth/{slug}.json` sin su `stars/{slug}.md` → "
-                                     "el espejo #70 no tiene ficha con la que comparar (renombre a "
-                                     "medias o ficha borrada sin limpiar); recreá la ficha "
-                                     f"(`make_notes.py {slug}`) o borrá el ground-truth colgado"))
+    # El espejo de NEA vive en `check_ground_truth_mirror` (#396). `vistos_gt` vuelve como
+    # valor porque cruza a `check_star_without_ground_truth`: distingue «el espejo
+    # discrepa» de «no hay nadie vigilando esta ficha».
+    (contradictions, mass_issues, vistos_gt,
+     _gt_prosa, _gt_incompletos) = check_ground_truth_mirror(msini_earth)
+    gt_prosa += _gt_prosa
+    incomplete += _gt_incompletos
 
     # La ficha sin su ground-truth vive en `check_star_without_ground_truth` (#396).
     incomplete += check_star_without_ground_truth(vistos_gt)
