@@ -939,8 +939,8 @@ verificable:
                          Estampa la vista (fecha · txt · lente) y la sección de la nota.
                          ⛔ Y cruza cada cita del JSON contra el `.txt` (#359): avisa.
 
-6. verify-citations   →  un subagente por fuente (reparto y manifiesto: `verify_fanout.py`, #369); lee el PDF.
-                         Cada par verificado deja una fila con DOS hashes.
+6. verify-citations   →  un subagente por fuente (`verify_fanout.py`, #369) lee el PDF; DOS hashes por
+                         par, y el hermano `.verif.md` lo escribe `write_verif_sidecar.py` (#403).
 ```
 
 ⛔ **La fuente es el PDF; el `.txt` es el ÍNDICE (#205).** La rama vieja —leer el `.txt` y escalar

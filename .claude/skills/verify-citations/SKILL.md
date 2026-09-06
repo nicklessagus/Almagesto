@@ -540,6 +540,27 @@ cerrar:
 
 ### 5. Escribir el bloque de veredicto — la nota y su HERMANO (#344)
 
+⛔ **No lo armes a mano: lo escribe un script (#403).** Con el fan-out cerrado (paso 2b en verde):
+
+```bash
+python scripts/write_verif_sidecar.py <nota.md> --from build/<slug>/verif/<ronda> [--fecha AAAA-MM-DD] [--dry-run]
+```
+
+Corre la barrera primero y **rehúsa** si no cierra; matchea cada par por `(bibcode, ancla)` —el
+`bibcode` va a nivel de archivo y el `ancla` a nivel de par— y rehúsa nombrando el par cuya ancla
+no está en el cuerpo; hashea por TIPO de archivo (`pdf:` con `bytes_hash`, que es lo que el lint
+recalcula; `txt:` con `source_hash`; y nada para `no verificable por extracción`, #223); antepone
+`acota:`/`contextualiza:` desde `cond_tipo`; en una segunda ronda **encadena** el veredicto en vez
+de pisarlo (`no-soportada→corregida`, #232); y escribe la cabecera con `verif_summary` y el
+fragmento de conteo de cada sub-sección (#280). Medido antes de que existiera: el armador escrito a
+mano se equivocó **2 de 4 veces** —matcheó `bibcode` en el nivel equivocado (55 falsos «sin
+veredicto») y hasheó un PDF como texto (117 «vencidos por fuente» sobre PDFs que nadie tocó)—.
+Lo que **no** escribe es el texto libre de las tres sub-secciones: ése es el triage de la corrida y
+queda marcado `⚠ triage de la corrida pendiente` hasta que lo completes. Correrlo dos veces sobre el
+mismo fan-out no cambia un byte.
+
+Lo que sigue describe **qué** produce, para que sepas leerlo y corregirlo:
+
 ⛔ **La TABLA no va en la nota: va en `<nota>.verif.md`, el hermano en el mismo directorio.** Una
 nota de entidad pesaba ~72-75 k tokens y el **71-77 %** de esos bytes era esta tabla, que **no es
 para el lector** —es para el lint y para re-auditar—; el contenido real son 16-21 k. En la nota

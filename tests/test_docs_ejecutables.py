@@ -671,3 +671,21 @@ def test_la_doc_no_afirma_la_exencion_que_275_saco():
         "eximir del chequeo de cita textual en 1.111.0 (#275), y hoy se exime SÓLO por "
         "`.txt` ausente y `fulltext_source: ocr` "
         f"(`lint._sources_for`):\n  " + "\n  ".join(culpables))
+
+
+def test_el_mapa_de_trazabilidad_commiteado_esta_al_dia():
+    """#401 — `docs/trazabilidad.md` es un artefacto GENERADO y viaja tal cual a las instancias: si
+    el template lo commitea viejo, el CI de TODAS las bóvedas que lo heredan se pone rojo y ninguna
+    puede arreglarlo (regla de oro: la instancia no edita framework). Medido: tres releases seguidas
+    (v1.217–v1.219) en rojo, cazadas por el CI de la instancia, DESPUÉS del push.
+
+    El `--check` del CI corre en un paso aparte del `pytest`; este test lo trae a tier 0, que es lo
+    que corre antes de cada commit — así el mapa viejo no llega ni al commit, y menos al push."""
+    import io, contextlib
+    import trace_invariants
+    salida = io.StringIO()
+    with contextlib.redirect_stdout(salida):
+        rc = trace_invariants.main(["--check"])
+    assert rc == 0, ("`docs/trazabilidad.md` está desactualizado respecto de las marcas `@inv` del "
+                     "código — correr `python scripts/trace_invariants.py` y commitear el archivo:\n"
+                     + salida.getvalue())
