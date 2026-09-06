@@ -532,3 +532,18 @@ def test_el_mapa_distingue_pendiente_de_sin_marcar(repo: Path):
         {"estado": "garantizado y medido (la implementación pendiente de #160 ya salió)"}) or True
     assert not ti.declares_no_implementation({"estado": "garantizado y medido"})
     assert not ti.declares_no_implementation({})
+
+
+def test_avisa_cuando_el_mapa_CAMBIO_porque_es_versionado(repo: Path, capsys, monkeypatch):
+    """#401 — el mapa es un artefacto GENERADO y VERSIONADO, y la regla del repo manda
+    `git add <archivos>` y nunca `-A`, así que regenerarlo y no incluirlo en el commit es el modo
+    de falla natural: el CI se pone rojo por un archivo que YA está regenerado en el árbol. Pasó
+    dos veces en un día (v1.217.0 y v1.244.0), las dos con la misma categoría. El aviso sale
+    SÓLO cuando el archivo cambió — si saliera siempre, sería ruido y nadie lo leería."""
+    monkeypatch.setattr(sys, "argv", ["trace_invariants.py"])
+    monkeypatch.setattr(ti, "ROOT", repo)
+    ti.main()
+    assert "git add docs/trazabilidad.md" in capsys.readouterr().out, "la primera vez lo escribe"
+    ti.main()
+    assert "git add docs/trazabilidad.md" not in capsys.readouterr().out, \
+        "y la segunda no cambió nada: sin aviso"

@@ -517,8 +517,17 @@ def main(argv=None) -> int:
             return 1
     else:
         artefacto.parent.mkdir(parents=True, exist_ok=True)
+        cambio = (artefacto.read_text(encoding="utf-8") if artefacto.exists() else None) != texto
         artefacto.write_text(texto, encoding="utf-8")
         print(f"→ {artefacto}")
+        if cambio:
+            # #401 — el artefacto es GENERADO y VERSIONADO, y la regla del repo manda
+            # `git add <archivos>` (nunca `-A`), así que regenerarlo y no incluirlo en el commit es
+            # el modo de falla natural: el CI se pone rojo por un archivo que YA está regenerado en
+            # el árbol. Pasó dos veces en un día (v1.217.0 y v1.244.0), las dos con la misma
+            # categoría. El comando exacto sale acá, cuando el archivo acaba de cambiar.
+            print("  ⚠ el mapa CAMBIÓ y es un artefacto versionado → `git add docs/trazabilidad.md` "
+                  "en este commit, o el CI se pone rojo por un archivo que ya está regenerado")
 
     print(f"invariantes: {len(registro)} · sin marca: {len(sin_marca)} (techo {techos['sin_marca']}) "
           f"· sin test: {len(sin_test)} (techo {techos['sin_test']}) "
