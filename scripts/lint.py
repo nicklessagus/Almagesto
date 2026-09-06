@@ -2387,6 +2387,398 @@ def check_sources_metadata() -> tuple:
     return fuente_metadata_falsa, fuente_metadata_dudosa
 
 
+def check_gate_vocabulary(slug: str, data: dict) -> list:
+    """`bad_decisions` rows for a `puertas` value outside the closed vocabulary (AUD-283).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. A value
+    off the list is not «another policy», it is a typo that `triage --prioridad` groups as if it
+    were one — and the reading cut is decided on that screen.
+    """
+    bad_decisions: list = []
+    # AUD-283 — `puertas` es vocabulario CERRADO (#126, `cfg.PUERTAS`) y hasta acá no lo
+    # validaba nadie: un valor fuera de la lista no es «otra política», es un typo que
+    # `triage --prioridad` agrupa como si fuera una, y el recorte de lectura se decide sobre
+    # esa pantalla. Misma familia que la decisión con forma inválida: registrada, leída mal.
+    for _r in cfg.as_list(data.get("records")):
+        if not isinstance(_r, dict):
+            continue
+        _fuera = [str(x) for x in cfg.as_list(_r.get("puertas")) if str(x) not in cfg.PUERTAS]
+        if _fuera:
+            bad_decisions.append(
+                (slug, f"`puertas: {_fuera}` de `{_r.get('bibcode') or '?'}` en "
+                       f"`build/{slug}/ads.json` no está en el vocabulario "
+                       f"({' | '.join(cfg.PUERTAS)}) → `triage --prioridad` lo agrupa como "
+                       f"una política que no existe; re-corré `query_ads` para re-estampar"))
+    return bad_decisions
+
+
+def check_truncated_corpus(slug: str, data: dict) -> list:
+    """`truncated_corpora` rows for the direct query that brought fewer papers than ADS reports.
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. The
+    warning used to live only in the run's stdout, which nobody keeps.
+    """
+    truncated_corpora: list = []
+    t = data.get("truncated")
+    if t:
+        # `recent` (#79) = cuántos rescató la segunda pasada por fecha. Sólo lo traen los
+        # ads.json de 1.12.0 en adelante; sin la clave, el mensaje es el de antes (la marca de
+        # un corpus viejo no puede afirmar que la cola reciente se cubrió).
+        rec_n = t.get("recent")
+        pasada = ("" if rec_n is None else
+                  f" + {rec_n} de la segunda pasada por fecha (la cola RECIENTE ya está "
+                  f"cubierta; falta el medio)")
+        truncated_corpora.append(
+            (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')}{pasada} → "
+                   f"corpus incompleto; re-ingestá con --rows mayor (o paginá) para cubrir el resto"))
+    return truncated_corpora
+
+
+def check_triage_pending(slug: str, data: dict) -> list:
+    """`triage_pending` rows — chaining candidates nobody has judged yet (#55).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. The step
+    with the most judgement in the whole operation was the only one with no net: an ingest could
+    close on lint 0 with hundreds of candidates pending.
+    """
+    triage_pending: list = []
+    # elementos de `candidates` que no son mapas (edición a mano / artefacto de red) se sacan
+    # de la vista en vez de reventar en `c.get('bibcode', ...)` — misma política que
+    # `normalize_lists` sobre el frontmatter (#h03).
+    cands = [c for c in cfg.as_list(data.get("candidates")) if isinstance(c, dict)]
+    if cands:
+        top = ", ".join(c.get("bibcode", "?") for c in cands[:3])
+        triage_pending.append(
+            (slug, f"{len(cands)} candidato(s) del chaining sin juzgar (p. ej. {top}"
+                   f"{' …' if len(cands) > 3 else ''}) → `python scripts/triage.py {slug}`: "
+                   f"pertinente → `extra_core` en stars.yaml; ruido → `--drop … --reason`"))
+    return triage_pending
+
+
+def check_truncated_glyph(slug: str, data: dict) -> list:
+    """`truncated_corpora` rows for the GLYPH RESCUE that was cut short (#43 / #28).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Sibling
+    of `check_truncated_corpus` and a different check: here the top-by-citations cut happens BEFORE
+    the client-side filter, so the tail can hide the subject's own papers.
+    """
+    truncated_corpora: list = []
+    # `truncated_glyph` no iterable (escalar en vez de lista) revienta el `for`; `as_list` lo
+    # degrada a `[]` en vez de tumbar el barrido (#h03).
+    for tg in cfg.as_list(data.get("truncated_glyph")):
+        if not isinstance(tg, dict):
+            continue
+        consts = "/".join(cfg.as_list(tg.get("constellations"))) or tg.get("letter") or "?"
+        truncated_corpora.append(
+            (slug, f"rescate por glifo incompleto: el superset de {consts} reporta "
+                   f"{tg.get('num_found')} y se escanearon {tg.get('rows')} (top por citas, "
+                   f"antes del filtro) → re-ingestá con --rows mayor"))
+    return truncated_corpora
+
+
+def check_registro_unreadable(slug: str) -> list:
+    """`registro_ilegible` — the registro that does not parse (AUD-131, BLOQUEANTE).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Rows here
+    mean the caller must SKIP the subject: while it does not parse, the whole curation of that slug
+    is silently reverted — the drops stop applying, the `--drop-core` go back to being core, and
+    the triage re-proposes them WITHOUT the reason.
+    """
+    registro_ilegible: list = []
+    if (err_reg := cfg.registro_error(slug)):
+        # AUD-131 — esto era BACKLOG, con un mensaje que describía el daño chico ("no se puede
+        # saber si hay triage pendiente"). El daño real es otro y es el peor de la bóveda: el
+        # registro es el ÚNICO artefacto no regenerable, y mientras no parsee la curación entera
+        # queda **revertida en silencio** — los `--drop` dejan de aplicarse, los `--drop-core`
+        # vuelven a ser core, `fetch_pdf` los baja de nuevo y el triage los re-propone SIN el
+        # motivo. O sea el bug de #51 más el de #112, disparados por un `:` sin comillas. Es la
+        # misma familia que el `triage.json` viejo, que ya bloquea: un juicio que queda mudo.
+        # `load_decisiones` además rehúsa operar (INV-139), así que la cadena no puede correr
+        # con la curación apagada; acá se reporta para que el lint no muera y lo nombre.
+        registro_ilegible.append(
+            (slug, f"{err_reg} → mientras no parsee, TODA la curación de `{slug}` queda sin "
+                   f"aplicar (los descartes vuelven a ser core y el triage los re-propone sin "
+                   f"su motivo); arreglá el YAML a mano y volvé a correr el lint"))
+    # ⛔ El `continue` que este bloque tenía dentro de `collect` es AHORA del llamador: una fila acá
+    # significa «saltea el sujeto», y `check_registro_sweep` lo hace. Devolverla y seguir chequeando
+    # sería peor que el bug original — se reportaría contra un registro que ya se sabe ilegible.
+    return registro_ilegible
+
+
+def check_old_registro_schema(slug: str, reg: dict) -> list:
+    """`old_registro` — the registro still using the pre-D-28 `busqueda:` key.
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    """
+    old_registro: list = []
+    # D-28: la clave vieja `busqueda:` (mapa, UNA corrida) es el schema pre-1.26. El lector
+    # nuevo no la entiende y no se le agrega un lector tolerante (regla del repo): se detecta y
+    # bloquea, porque un registro mudo deja la ficha afirmando sobre un universo que nadie puede
+    # reconstruir. Se cierra re-corriendo la cadena (la corrida nueva reescribe `busquedas`).
+    if reg.get("busqueda") is not None:
+        old_registro.append(
+            (slug, "el registro usa la clave `busqueda:` (schema pre-D-28, una sola corrida) — "
+                   "el lector ya no la lee → `python scripts/make_notes.py "
+                   "--migrate-registros` (pliega la corrida vieja en `busquedas: []` sin "
+                   "perderla; re-correr la cadena también sirve, pero cuesta una pasada de red)"))
+    return old_registro
+
+
+def check_chain_incomplete(slug: str, stars_slugs) -> list:
+    """`cadena_incompleta` — the chain trace that stops before the canonical order ends (D-57).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. STARS
+    only: a theme's order depends on its `source`, so comparing it against the astro order would
+    invent cuts that do not exist.
+
+    @inv INV-44
+    """
+    cadena_incompleta: list = []
+    # D-57 / INV-91: la cadena deja traza estructurada de qué pasos corrieron. Si el registro
+    # tiene `cadena` y le falta un paso del orden canónico, se NOMBRA el paso donde se cortó —
+    # "faltan 4 pasos" no es accionable, "se cortó en `fetch_ground_truth`" sí. Backlog: una
+    # cadena a medias no invalida lo que hay, pero deja la bóveda con notas a medio hacer y
+    # nadie lo diría. Sólo se evalúa para ESTRELLAS: el orden de un tema depende de su `source`
+    # (off-ADS no corre query_ads ni fetch_ground_truth) y compararlo contra el orden astro
+    # inventaría cortes que no existen.
+    # @inv INV-44
+    if slug in stars_slugs and (corte := cfg.cadena_cortada(slug)):
+        if corte == cfg.CADENA_SIN_TRAZA:
+            # AUD-149: esto devolvía `None` —el valor de "corrió entera"—, así que el sujeto sin
+            # traza salía del chequeo por la puerta del verde. No consta ≠ está completa.
+            cadena_incompleta.append(
+                (slug, "no consta: el registro no tiene `cadena` (sujeto anterior a D-57, o "
+                       "ninguna corrida estampó su paso) → no se puede saber dónde se cortó; "
+                       f"re-corré `python scripts/ingest_star.py {slug}` (es idempotente)"))
+        else:
+            corridos = [p.get("paso") for p in cfg.load_cadena(slug)]
+            cadena_incompleta.append(
+                (slug, f"la cadena se cortó en `{corte}` (corrieron: {', '.join(corridos)}) → "
+                       f"re-corré `python scripts/ingest_star.py {slug}` (es idempotente)"))
+    return cadena_incompleta
+
+
+def check_decisions_shape(slug: str, reg: dict) -> list:
+    """`bad_decisions` — a `decisiones` entry that is not a map (#h12).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
+    `load_decisiones` filters it silently and its docstring promises THE LINT reports it.
+    """
+    bad_decisions: list = []
+    # Decisión que no es un mapa (#h12): `2006Rasmussen: descartado`, sin `motivo`/`fecha`/
+    # `decision`. `load_decisiones` la filtra en silencio (documentado en su docstring, que
+    # promete que EL LINT la reporta) — sin este chequeo el triage vuelve a proponer lo ya
+    # descartado sin el motivo, el mismo bug que #51 cerró. Corre para TODO registro, tenga o
+    # no `build/` local: es independiente del fallback de triage-pendiente/corpus-truncado de
+    # abajo.
+    dec = reg.get("decisiones")
+    if isinstance(dec, dict):
+        for clave, v in dec.items():
+            if not isinstance(v, dict):
+                bad_decisions.append(
+                    (slug, f"decisión `{clave}` no es un mapa (es {type(v).__name__}, falta "
+                           f"`decision`/`motivo`/`fecha`) → `load_decisiones` la descarta en "
+                           f"silencio y el triage vuelve a proponerla sin el motivo"))
+    return bad_decisions
+
+
+def check_lens_desync(slug: str) -> list:
+    """`lente_desync` — the corpus classified with a lens that is no longer the current one (D-49).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Offline
+    on purpose: the input is the notes (title + abstract + `keywords`, D-17), which travel, while
+    `reclass_diff` measures the same thing and needs `build/`, which is gitignored scratch.
+    """
+    lente_desync: list = []
+    # D-49 — LENTE DESINCRONIZADA (backlog). `busquedas[].lente` guarda la regla con la que se
+    # clasificó esa corrida; `relevance.facets` se edita después y el corte core/no-core se
+    # mueve **sin mover `almagesto_version`**, así que el corpus queda clasificado con una
+    # regla que ya no es la vigente y nada lo dice. El caso NORMAL es lente-igual y es gratis:
+    # el diff (N notas × las regex) sólo se corre cuando `lens_delta` encuentra diferencias.
+    # Offline a propósito: el insumo son las notas (título + abstract + `keywords`, D-17), que
+    # viajan — `reclass_diff` mide lo mismo pero necesita `build/`, que es scratch gitignored.
+    if not cfg.objective_error():
+        stored = cfg.lens_stored(slug)
+        if stored is None:
+            # D-43: no hay con qué comparar → se DICE, no se cuenta como "lente al día". Un
+            # registro sin `lente` es pre-1.10.3 (o una corrida que no la guardó).
+            lente_desync.append(
+                (slug, "no evaluado: la última búsqueda del registro no guarda `lente`, así "
+                       "que no hay contra qué comparar la vigente → re-corré la cadena del "
+                       "sujeto para que la estampe"))
+        elif (delta := cfg.lens_delta(stored, cfg.lens_current(slug))):
+            detalle = "; ".join(delta)
+            if not cfg.lens_textual_changed(delta):
+                # El cambio es real y el diff offline NO lo puede ver re-clasificando texto. El
+                # motivo se NOMBRA, no se asume: hasta #106 el mensaje decía siempre "la nota no
+                # guarda `doctype`", que sobre un cambio de umbral es una explicación de otro
+                # caso — atribuir mal es peor que no decir nada (regla de método #4). Se declara
+                # en vez de devolver "0 entran, 0 salen", que se leería como "no movió nada".
+                if all(d.startswith("fundacional_min_citas ") for d in delta):
+                    porque = ("es la puerta 2, no un cambio textual — el diff por umbral se "
+                              "reporta en la línea de abajo")
+                elif all(d.startswith("noise_doctypes ") for d in delta):
+                    porque = "la nota de paper no guarda `doctype`"
+                else:
+                    porque = ("mezcla cambios no evaluables offline (`doctype` no vive en la "
+                              "nota; el umbral es la puerta 2)")
+                lente_desync.append(
+                    (slug, f"la lente cambió ({detalle}) pero el diff offline no lo puede "
+                           f"evaluar: {porque} → "
+                           f"`python scripts/query_ads.py --dry-run --slug {slug}` con build/ presente"))
+            else:
+                entran, salen, sin_nota = cfg.lens_diff_offline(slug)
+                techo = (f"; {len(sin_nota)} paper(s) del universo sin nota → no evaluables "
+                         f"offline" if sin_nota else "")
+                lente_desync.append(
+                    (slug, f"la lente cambió desde la última corrida ({detalle}) → "
+                           f"+{len(entran)} entrarían" + (f" ({_muestra(entran)})" if entran else "")
+                           + f" / −{len(salen)} saldrían" + (f" ({_muestra(salen)})" if salen else "")
+                           + techo + "; re-corré la cadena del sujeto para re-clasificar"))
+    return lente_desync
+
+
+def check_gate2_desync(slug: str) -> list:
+    """`lente_desync` rows for the gate-2 threshold (`fundacional_min_citas`) that moved (#106).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Its own
+    function for the same reason it sat OUTSIDE the textual `if delta`: the threshold can be edited
+    without the textual lens changing, and hanging it off that delta left it mute in the very case
+    it exists to see.
+    """
+    lente_desync: list = []
+    # Puerta 2 (#106): va FUERA del `if delta`, porque el umbral puede haberse editado sin que
+    # la lente TEXTUAL cambie — son dos ejes distintos del mismo corte, y colgarlo del delta
+    # textual lo dejaba mudo justo en el caso que existe para ver.
+    p2_entran, p2_salen, p2_sin = cfg.puerta2_cruces(slug)
+    if p2_entran or p2_salen or p2_sin:
+        techo2 = (f"; {p2_sin} nota(s) sin `citation_count` → no evaluables" if p2_sin else "")
+        lente_desync.append(
+            (slug, f"el umbral de la puerta 2 (`fundacional_min_citas`) cambió desde la última "
+                   f"corrida → +{len(p2_entran)} entrarían"
+                   + (f" ({_muestra([b for b, _n in p2_entran])})" if p2_entran else "")
+                   + f" / −{len(p2_salen)} saldrían"
+                   + (f" ({_muestra([b for b, _n in p2_salen])})" if p2_salen else "")
+                   + techo2 + "; el conteo que se movió SOLO lo ve "
+                              "`python scripts/sweep_external.py`"))
+    return lente_desync
+
+
+def check_registro_fallback(slug: str, reg: dict) -> tuple:
+    """`(triage_pending, truncated_corpora)` from the VERSIONED registro, for subjects with no
+    local `build/` (#51/#64).
+
+    Extracted from `lint.collect` by #396; the blocks compute and the caller accumulates. Post
+    clone, on another machine, or after cleaning the scratch, the two live checks reported 0 without
+    having looked at anything — a «clean» that did not mean clean. The snapshot is not the living
+    truth, so it is reported WITH its date and saying the scratch is missing: a dated figure beats
+    an invented zero.
+    """
+    triage_pending: list = []
+    truncated_corpora: list = []
+    bs = [x for x in cfg.as_list(reg.get("busquedas")) if isinstance(x, dict)]
+    b = bs[-1] if bs else {}
+    fecha = b.get("fecha") or "s/f"
+    if b.get("n_candidates"):
+        triage_pending.append(
+            (slug, f"{b['n_candidates']} candidato(s) sin juzgar según el registro del {fecha} "
+                   f"(sin build/{slug}/ local: es el snapshot de esa corrida, no el conteo "
+                   f"vigente) → re-corré la cadena y después `python scripts/triage.py {slug}`"))
+    if b.get("truncated"):
+        truncated_corpora.append(
+            (slug, f"corpus truncado según el registro del {fecha} (ADS reporta "
+                   f"{b.get('n_found')} y se pidieron {b.get('rows')}) → re-ingestá con --rows "
+                   f"mayor para cubrir la cola"))
+    # AUD-148: la marca hermana también cae al registro sin `build/`. Antes vivía SÓLO en
+    # scratch gitignored, así que post-clone el rescate por glifo incompleto desaparecía y la
+    # bóveda se leía como si hubiera visto todo el superset de la constelación.
+    if b.get("truncated_glyph"):
+        truncated_corpora.append(
+            (slug, f"rescate por glifo incompleto en {b['truncated_glyph']} letra(s) según el "
+                   f"registro del {fecha} (sin build/{slug}/ local: es el snapshot de esa "
+                   f"corrida) → re-ingestá con --rows mayor; pueden faltar papers con lookalike"))
+    return triage_pending, truncated_corpora
+
+
+def check_build_snapshots() -> tuple:
+    """`(triage_pending, truncated_corpora, bad_decisions, vistos)` — what `build/*/ads.json` says.
+
+    Extracted from `lint.collect` by #396. FOUR checks lived inside one loop over the scratch
+    snapshots; what they share is the read of the file and the `slug`, and nothing else, so each
+    verdict is its own module function and this is the driver.
+
+    `vistos` is not a finding: it is the set of subjects whose living truth was already reported
+    here, and `check_registro_sweep` uses it to decide when the versioned registro has to answer
+    instead. It comes back as a value because it crosses the two sweeps.
+    """
+    triage_pending: list = []
+    truncated_corpora: list = []
+    bad_decisions: list = []
+    vistos: set = set()
+    for aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
+        try:
+            # JSON válido pero no-objeto (`[]`, `null` — un ads.json cortado por un Ctrl-C a mitad
+            # de escritura) llegaba tal cual a `.get` y volteaba el barrido con AttributeError:
+            # build/ es scratch regenerable, no motivo para tumbar la compuerta de CI (#h03).
+            data = cfg.as_map(json.loads(open(aj, encoding="utf-8").read()))
+        except (ValueError, OSError):
+            continue
+        slug = data.get("slug") or Path(aj).parent.name
+        vistos.add(slug)
+        bad_decisions += check_gate_vocabulary(slug, data)
+        truncated_corpora += check_truncated_corpus(slug, data)
+        triage_pending += check_triage_pending(slug, data)
+        truncated_corpora += check_truncated_glyph(slug, data)
+    return triage_pending, truncated_corpora, bad_decisions, vistos
+
+
+def check_registro_sweep(stars_slugs, vistos) -> tuple:
+    """The seven checks of the VERSIONED registro, one subject at a time (#396).
+
+    Returns `(registro_ilegible, old_registro, cadena_incompleta, bad_decisions, lente_desync,
+    triage_pending, truncated_corpora)`. Extracted from `lint.collect`: seven verdicts shared one
+    loop and the one call to `cfg.load_registro`, so the loop stays here as the driver and each
+    verdict is its own module function — which is what lets `mutar --dirigida` isolate them.
+
+    Two things stay in the driver because they decide whether the subject is swept at all: the
+    unreadable registro (its curation is reverted, so nothing else about it can be trusted) and
+    `vistos`, the subjects whose living truth `check_build_snapshots` already reported.
+    """
+    registro_ilegible: list = []
+    old_registro: list = []
+    cadena_incompleta: list = []
+    bad_decisions: list = []
+    lente_desync: list = []
+    triage_pending: list = []
+    truncated_corpora: list = []
+    for rf in sorted(glob.glob(str(cfg.REGISTRO / "*.yaml"))):
+        slug = Path(rf).stem
+        # #297 — `_red.yaml` (la pasada de red, D-46) es de la BÓVEDA entera, no de un sujeto: no
+        # tiene `busquedas`, así que este bloque lo reportaba como *lente desincronizada: no
+        # evaluado* y mandaba a «re-correr la cadena del sujeto» sobre un slug que no existe.
+        if slug.startswith("_"):
+            continue
+        # Lector BLINDADO (#h05): antes esto reimplementaba `yaml.safe_load` a mano acá mismo —
+        # el único de seis lectores del registro que lo hacía— y por eso se saltaba el blindaje
+        # que `cfg.load_registro` ya tiene (YAML roto / forma inválida → `{}`, no una excepción).
+        reg = cfg.load_registro(slug)
+        if (ilegible := check_registro_unreadable(slug)):
+            registro_ilegible += ilegible
+            continue
+        old_registro += check_old_registro_schema(slug, reg)
+        cadena_incompleta += check_chain_incomplete(slug, stars_slugs)
+        bad_decisions += check_decisions_shape(slug, reg)
+        lente_desync += check_lens_desync(slug)
+        lente_desync += check_gate2_desync(slug)
+        if slug in vistos:
+            continue                                  # build/ presente: ya se reportó la verdad viva
+        _tp, _tc = check_registro_fallback(slug, reg)
+        triage_pending += _tp
+        truncated_corpora += _tc
+    return (registro_ilegible, old_registro, cadena_incompleta, bad_decisions, lente_desync,
+            triage_pending, truncated_corpora)
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -4750,239 +5142,21 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # ads.json y surfacearlo acá convierte un fallo silencioso en backlog visible (#17). build/ es
     # scratch: si no está, no hay nada que reportar (el censo de bóvedas pre-registro es otro modo).
     # `truncated_glyph` (#43) es la marca hermana pero del RESCATE POR GLIFO (#28): ahí el corte
-    # top-por-citas pasa ANTES del filtro client-side — la cola puede esconder papers del sujeto
-    # (los que escriben `∊ Eri` no son los más citados) → cobertura incompleta del rescate.
-    #
-    # Candidatos de triage sin juzgar (#55, backlog): la compuerta (#38) deja en `candidates` los
-    # papers que el chaining trajo y NADIE decidió todavía (no se bajan: 18% de precisión medida).
-    # El único recordatorio era el stdout de query_ads y el mensaje final del orquestador — los dos
-    # se pierden apenas scrollea la terminal, así que un ingest podía cerrarse con lint en 0 y
-    # cientos de candidatos pendientes: el paso con más juicio de la operación era el único sin red.
-    # `candidates` ya viene NETO de decisiones (los descartados de triage.json no se re-proponen y
-    # los aceptados pasaron a extra_core → son core), así que basta con contarlos.
-    triage_pending = []
-    truncated_corpora = []
-    legacy_triage = []                 # (slug, motivo) — juicio en el build/<slug>/triage.json viejo
-    vistos = set()
-    for aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
-        try:
-            # JSON válido pero no-objeto (`[]`, `null` — un ads.json cortado por un Ctrl-C a mitad
-            # de escritura) llegaba tal cual a `.get` y volteaba el barrido con AttributeError:
-            # build/ es scratch regenerable, no motivo para tumbar la compuerta de CI (#h03).
-            data = cfg.as_map(json.loads(open(aj, encoding="utf-8").read()))
-        except (ValueError, OSError):
-            continue
-        slug = data.get("slug") or Path(aj).parent.name
-        vistos.add(slug)
-        # AUD-283 — `puertas` es vocabulario CERRADO (#126, `cfg.PUERTAS`) y hasta acá no lo
-        # validaba nadie: un valor fuera de la lista no es «otra política», es un typo que
-        # `triage --prioridad` agrupa como si fuera una, y el recorte de lectura se decide sobre
-        # esa pantalla. Misma familia que la decisión con forma inválida: registrada, leída mal.
-        for _r in cfg.as_list(data.get("records")):
-            if not isinstance(_r, dict):
-                continue
-            _fuera = [str(x) for x in cfg.as_list(_r.get("puertas")) if str(x) not in cfg.PUERTAS]
-            if _fuera:
-                bad_decisions.append(
-                    (slug, f"`puertas: {_fuera}` de `{_r.get('bibcode') or '?'}` en "
-                           f"`build/{slug}/ads.json` no está en el vocabulario "
-                           f"({' | '.join(cfg.PUERTAS)}) → `triage --prioridad` lo agrupa como "
-                           f"una política que no existe; re-corré `query_ads` para re-estampar"))
-        t = data.get("truncated")
-        if t:
-            # `recent` (#79) = cuántos rescató la segunda pasada por fecha. Sólo lo traen los
-            # ads.json de 1.12.0 en adelante; sin la clave, el mensaje es el de antes (la marca de
-            # un corpus viejo no puede afirmar que la cola reciente se cubrió).
-            rec_n = t.get("recent")
-            pasada = ("" if rec_n is None else
-                      f" + {rec_n} de la segunda pasada por fecha (la cola RECIENTE ya está "
-                      f"cubierta; falta el medio)")
-            truncated_corpora.append(
-                (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')}{pasada} → "
-                       f"corpus incompleto; re-ingestá con --rows mayor (o paginá) para cubrir el resto"))
-        # elementos de `candidates` que no son mapas (edición a mano / artefacto de red) se sacan
-        # de la vista en vez de reventar en `c.get('bibcode', ...)` — misma política que
-        # `normalize_lists` sobre el frontmatter (#h03).
-        cands = [c for c in cfg.as_list(data.get("candidates")) if isinstance(c, dict)]
-        if cands:
-            top = ", ".join(c.get("bibcode", "?") for c in cands[:3])
-            triage_pending.append(
-                (slug, f"{len(cands)} candidato(s) del chaining sin juzgar (p. ej. {top}"
-                       f"{' …' if len(cands) > 3 else ''}) → `python scripts/triage.py {slug}`: "
-                       f"pertinente → `extra_core` en stars.yaml; ruido → `--drop … --reason`"))
-        # `truncated_glyph` no iterable (escalar en vez de lista) revienta el `for`; `as_list` lo
-        # degrada a `[]` en vez de tumbar el barrido (#h03).
-        for tg in cfg.as_list(data.get("truncated_glyph")):
-            if not isinstance(tg, dict):
-                continue
-            consts = "/".join(cfg.as_list(tg.get("constellations"))) or tg.get("letter") or "?"
-            truncated_corpora.append(
-                (slug, f"rescate por glifo incompleto: el superset de {consts} reporta "
-                       f"{tg.get('num_found')} y se escanearon {tg.get('rows')} (top por citas, "
-                       f"antes del filtro) → re-ingestá con --rows mayor"))
-
-    # El triage en el lugar pre-1.9.0 vive en `check_legacy_triage` (#396).
-    legacy_triage += check_legacy_triage()
-
-    # Fallback al registro VERSIONADO (#51/#64) para los sujetos SIN build/ local: post-clone, otra
-    # máquina, o después de limpiar el scratch, los dos chequeos de arriba reportaban 0 sin haber
-    # mirado nada — un "limpio" que no significaba limpio. El snapshot no es la verdad viva (si
-    # dropeaste sin re-correr la cadena, el conteo quedó viejo), así que se reporta CON su fecha y
-    # diciendo que falta el scratch: mejor un dato fechado que un cero inventado.
-    for rf in sorted(glob.glob(str(cfg.REGISTRO / "*.yaml"))):
-        slug = Path(rf).stem
-        # #297 — `_red.yaml` (la pasada de red, D-46) es de la BÓVEDA entera, no de un sujeto: no
-        # tiene `busquedas`, así que este bloque lo reportaba como *lente desincronizada: no
-        # evaluado* y mandaba a «re-correr la cadena del sujeto» sobre un slug que no existe. El
-        # otro loop sobre `REGISTRO/*.yaml` ya lo saltea con este mismo criterio; éste no.
-        if slug.startswith("_"):
-            continue
-        # Lector BLINDADO (#h05): antes esto reimplementaba `yaml.safe_load` a mano acá mismo —
-        # el único de seis lectores del registro que lo hacía— y por eso se saltaba el blindaje
-        # que `cfg.load_registro` ya tiene (YAML roto / forma inválida → `{}`, no una excepción).
-        reg = cfg.load_registro(slug)
-        if (err_reg := cfg.registro_error(slug)):
-            # AUD-131 — esto era BACKLOG, con un mensaje que describía el daño chico ("no se puede
-            # saber si hay triage pendiente"). El daño real es otro y es el peor de la bóveda: el
-            # registro es el ÚNICO artefacto no regenerable, y mientras no parsee la curación entera
-            # queda **revertida en silencio** — los `--drop` dejan de aplicarse, los `--drop-core`
-            # vuelven a ser core, `fetch_pdf` los baja de nuevo y el triage los re-propone SIN el
-            # motivo. O sea el bug de #51 más el de #112, disparados por un `:` sin comillas. Es la
-            # misma familia que el `triage.json` viejo, que ya bloquea: un juicio que queda mudo.
-            # `load_decisiones` además rehúsa operar (INV-139), así que la cadena no puede correr
-            # con la curación apagada; acá se reporta para que el lint no muera y lo nombre.
-            registro_ilegible.append(
-                (slug, f"{err_reg} → mientras no parsee, TODA la curación de `{slug}` queda sin "
-                       f"aplicar (los descartes vuelven a ser core y el triage los re-propone sin "
-                       f"su motivo); arreglá el YAML a mano y volvé a correr el lint"))
-            continue
-        # Decisión que no es un mapa (#h12): `2006Rasmussen: descartado`, sin `motivo`/`fecha`/
-        # `decision`. `load_decisiones` la filtra en silencio (documentado en su docstring, que
-        # promete que EL LINT la reporta) — sin este chequeo el triage vuelve a proponer lo ya
-        # descartado sin el motivo, el mismo bug que #51 cerró. Corre para TODO registro, tenga o
-        # no `build/` local: es independiente del fallback de triage-pendiente/corpus-truncado de
-        # abajo.
-        # D-28: la clave vieja `busqueda:` (mapa, UNA corrida) es el schema pre-1.26. El lector
-        # nuevo no la entiende y no se le agrega un lector tolerante (regla del repo): se detecta y
-        # bloquea, porque un registro mudo deja la ficha afirmando sobre un universo que nadie puede
-        # reconstruir. Se cierra re-corriendo la cadena (la corrida nueva reescribe `busquedas`).
-        if reg.get("busqueda") is not None:
-            old_registro.append(
-                (slug, "el registro usa la clave `busqueda:` (schema pre-D-28, una sola corrida) — "
-                       "el lector ya no la lee → `python scripts/make_notes.py "
-                       "--migrate-registros` (pliega la corrida vieja en `busquedas: []` sin "
-                       "perderla; re-correr la cadena también sirve, pero cuesta una pasada de red)"))
-        # D-57 / INV-91: la cadena deja traza estructurada de qué pasos corrieron. Si el registro
-        # tiene `cadena` y le falta un paso del orden canónico, se NOMBRA el paso donde se cortó —
-        # "faltan 4 pasos" no es accionable, "se cortó en `fetch_ground_truth`" sí. Backlog: una
-        # cadena a medias no invalida lo que hay, pero deja la bóveda con notas a medio hacer y
-        # nadie lo diría. Sólo se evalúa para ESTRELLAS: el orden de un tema depende de su `source`
-        # (off-ADS no corre query_ads ni fetch_ground_truth) y compararlo contra el orden astro
-        # inventaría cortes que no existen.
-        # @inv INV-44
-        if slug in stars_slugs and (corte := cfg.cadena_cortada(slug)):
-            if corte == cfg.CADENA_SIN_TRAZA:
-                # AUD-149: esto devolvía `None` —el valor de "corrió entera"—, así que el sujeto sin
-                # traza salía del chequeo por la puerta del verde. No consta ≠ está completa.
-                cadena_incompleta.append(
-                    (slug, "no consta: el registro no tiene `cadena` (sujeto anterior a D-57, o "
-                           "ninguna corrida estampó su paso) → no se puede saber dónde se cortó; "
-                           f"re-corré `python scripts/ingest_star.py {slug}` (es idempotente)"))
-            else:
-                corridos = [p.get("paso") for p in cfg.load_cadena(slug)]
-                cadena_incompleta.append(
-                    (slug, f"la cadena se cortó en `{corte}` (corrieron: {', '.join(corridos)}) → "
-                           f"re-corré `python scripts/ingest_star.py {slug}` (es idempotente)"))
-        dec = reg.get("decisiones")
-        if isinstance(dec, dict):
-            for clave, v in dec.items():
-                if not isinstance(v, dict):
-                    bad_decisions.append(
-                        (slug, f"decisión `{clave}` no es un mapa (es {type(v).__name__}, falta "
-                               f"`decision`/`motivo`/`fecha`) → `load_decisiones` la descarta en "
-                               f"silencio y el triage vuelve a proponerla sin el motivo"))
-        # D-49 — LENTE DESINCRONIZADA (backlog). `busquedas[].lente` guarda la regla con la que se
-        # clasificó esa corrida; `relevance.facets` se edita después y el corte core/no-core se
-        # mueve **sin mover `almagesto_version`**, así que el corpus queda clasificado con una
-        # regla que ya no es la vigente y nada lo dice. El caso NORMAL es lente-igual y es gratis:
-        # el diff (N notas × las regex) sólo se corre cuando `lens_delta` encuentra diferencias.
-        # Offline a propósito: el insumo son las notas (título + abstract + `keywords`, D-17), que
-        # viajan — `reclass_diff` mide lo mismo pero necesita `build/`, que es scratch gitignored.
-        if not cfg.objective_error():
-            stored = cfg.lens_stored(slug)
-            if stored is None:
-                # D-43: no hay con qué comparar → se DICE, no se cuenta como "lente al día". Un
-                # registro sin `lente` es pre-1.10.3 (o una corrida que no la guardó).
-                lente_desync.append(
-                    (slug, "no evaluado: la última búsqueda del registro no guarda `lente`, así "
-                           "que no hay contra qué comparar la vigente → re-corré la cadena del "
-                           "sujeto para que la estampe"))
-            elif (delta := cfg.lens_delta(stored, cfg.lens_current(slug))):
-                detalle = "; ".join(delta)
-                if not cfg.lens_textual_changed(delta):
-                    # El cambio es real y el diff offline NO lo puede ver re-clasificando texto. El
-                    # motivo se NOMBRA, no se asume: hasta #106 el mensaje decía siempre "la nota no
-                    # guarda `doctype`", que sobre un cambio de umbral es una explicación de otro
-                    # caso — atribuir mal es peor que no decir nada (regla de método #4). Se declara
-                    # en vez de devolver "0 entran, 0 salen", que se leería como "no movió nada".
-                    if all(d.startswith("fundacional_min_citas ") for d in delta):
-                        porque = ("es la puerta 2, no un cambio textual — el diff por umbral se "
-                                  "reporta en la línea de abajo")
-                    elif all(d.startswith("noise_doctypes ") for d in delta):
-                        porque = "la nota de paper no guarda `doctype`"
-                    else:
-                        porque = ("mezcla cambios no evaluables offline (`doctype` no vive en la "
-                                  "nota; el umbral es la puerta 2)")
-                    lente_desync.append(
-                        (slug, f"la lente cambió ({detalle}) pero el diff offline no lo puede "
-                               f"evaluar: {porque} → "
-                               f"`python scripts/query_ads.py --dry-run --slug {slug}` con build/ presente"))
-                else:
-                    entran, salen, sin_nota = cfg.lens_diff_offline(slug)
-                    techo = (f"; {len(sin_nota)} paper(s) del universo sin nota → no evaluables "
-                             f"offline" if sin_nota else "")
-                    lente_desync.append(
-                        (slug, f"la lente cambió desde la última corrida ({detalle}) → "
-                               f"+{len(entran)} entrarían" + (f" ({_muestra(entran)})" if entran else "")
-                               + f" / −{len(salen)} saldrían" + (f" ({_muestra(salen)})" if salen else "")
-                               + techo + "; re-corré la cadena del sujeto para re-clasificar"))
-        # Puerta 2 (#106): va FUERA del `if delta`, porque el umbral puede haberse editado sin que
-        # la lente TEXTUAL cambie — son dos ejes distintos del mismo corte, y colgarlo del delta
-        # textual lo dejaba mudo justo en el caso que existe para ver.
-        p2_entran, p2_salen, p2_sin = cfg.puerta2_cruces(slug)
-        if p2_entran or p2_salen or p2_sin:
-            techo2 = (f"; {p2_sin} nota(s) sin `citation_count` → no evaluables" if p2_sin else "")
-            lente_desync.append(
-                (slug, f"el umbral de la puerta 2 (`fundacional_min_citas`) cambió desde la última "
-                       f"corrida → +{len(p2_entran)} entrarían"
-                       + (f" ({_muestra([b for b, _n in p2_entran])})" if p2_entran else "")
-                       + f" / −{len(p2_salen)} saldrían"
-                       + (f" ({_muestra([b for b, _n in p2_salen])})" if p2_salen else "")
-                       + techo2 + "; el conteo que se movió SOLO lo ve "
-                                  "`python scripts/sweep_external.py`"))
-        if slug in vistos:
-            continue                                  # build/ presente: ya se reportó la verdad viva
-        bs = [x for x in cfg.as_list(reg.get("busquedas")) if isinstance(x, dict)]
-        b = bs[-1] if bs else {}
-        fecha = b.get("fecha") or "s/f"
-        if b.get("n_candidates"):
-            triage_pending.append(
-                (slug, f"{b['n_candidates']} candidato(s) sin juzgar según el registro del {fecha} "
-                       f"(sin build/{slug}/ local: es el snapshot de esa corrida, no el conteo "
-                       f"vigente) → re-corré la cadena y después `python scripts/triage.py {slug}`"))
-        if b.get("truncated"):
-            truncated_corpora.append(
-                (slug, f"corpus truncado según el registro del {fecha} (ADS reporta "
-                       f"{b.get('n_found')} y se pidieron {b.get('rows')}) → re-ingestá con --rows "
-                       f"mayor para cubrir la cola"))
-        # AUD-148: la marca hermana también cae al registro sin `build/`. Antes vivía SÓLO en
-        # scratch gitignored, así que post-clone el rescate por glifo incompleto desaparecía y la
-        # bóveda se leía como si hubiera visto todo el superset de la constelación.
-        if b.get("truncated_glyph"):
-            truncated_corpora.append(
-                (slug, f"rescate por glifo incompleto en {b['truncated_glyph']} letra(s) según el "
-                       f"registro del {fecha} (sin build/{slug}/ local: es el snapshot de esa "
-                       f"corrida) → re-ingestá con --rows mayor; pueden faltar papers con lookalike"))
+    # ── build/*/ads.json y el registro versionado: los dos barridos viven en
+    # `check_build_snapshots` y `check_registro_sweep` (#396), con un chequeo por función adentro.
+    # `vistos` cruza de uno al otro: es qué sujetos ya contestaron con su verdad viva.
+    triage_pending, truncated_corpora, _bd_ads, vistos = check_build_snapshots()
+    bad_decisions += _bd_ads
+    legacy_triage = check_legacy_triage()
+    (_reg_ileg, _reg_old, _reg_cad, _reg_bd, _reg_lente,
+     _reg_tp, _reg_tc) = check_registro_sweep(stars_slugs, vistos)
+    registro_ilegible += _reg_ileg
+    old_registro += _reg_old
+    cadena_incompleta += _reg_cad
+    bad_decisions += _reg_bd
+    lente_desync += _reg_lente
+    triage_pending += _reg_tp
+    truncated_corpora += _reg_tc
 
     # Las capas colgadas de una entidad muerta viven en `check_dangling_layers` (#396).
     artefactos_colgados += check_dangling_layers()

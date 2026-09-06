@@ -7786,11 +7786,12 @@ def test_los_bloques_extraidos_de_collect_devuelven_lo_que_el_llamador_acumula()
     El test fija el CONTRATO de las siete: todas devuelven tuplas o listas, ninguna muta un
     parámetro. Sin esto, la próxima extracción puede volver a appendear a un global y nadie lo ve."""
     import inspect
-    extraidas = [lint.check_ground_truth_movido, lint.check_duplicate_without_id,
-                 lint.check_second_hand_lifted, lint.check_prosa_retractada,
-                 lint.check_identidad_duplicada, lint.check_papers_table_stale,
-                 lint.check_sweep_registered, lint.check_log_entry_missing,
-                 lint.check_log_coverage]
+    # ⛔ La lista NO se mantiene a mano: se enumera `lint.check_*`. Con una lista escrita, la
+    # extracción siguiente se olvida de agregarse y el contrato deja de cubrirla en silencio — que
+    # es exactamente el modo de falla que este test existe para cerrar.
+    extraidas = [f for n, f in sorted(vars(lint).items())
+                 if n.startswith("check_") and callable(f) and getattr(f, "__module__", "") == "lint"]
+    assert len(extraidas) >= 30, f"sólo {len(extraidas)} funciones `check_*`: ¿se renombró el prefijo?"
     for fn in extraidas:
         fuente = inspect.getsource(fn)
         assert "\n    return " in fuente, f"{fn.__name__} no devuelve nada: ¿escribe en un global?"
@@ -8206,3 +8207,209 @@ def test_check_sources_metadata_separa_lo_que_bloquea_de_lo_que_es_backlog(toy_v
     write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "local-pdfs",
                                          "sources": [{**decl, "author": "Otro"}]}})
     assert "lo declarado cambió" in lint.check_sources_metadata()[1][0][1]
+
+
+# ── #396 · los dos barridos: `build/*/ads.json` y el registro versionado ─────────────────────────
+
+def _ads_json(slug, **data):
+    d = cfg.ROOT / "build" / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"slug": slug, **data}), encoding="utf-8")
+    return cfg.as_map(json.loads((d / "ads.json").read_text(encoding="utf-8")))
+
+
+def test_check_gate_vocabulary_saltea_el_record_que_no_es_un_mapa(toy_vault):
+    """#396/AUD-283 — `puertas` es vocabulario cerrado (#126) y un valor fuera de la lista no es
+    otra política: es un typo que `triage --prioridad` agrupa como si fuera una. La guarda que
+    sobrevivía es la del `records` con un elemento que no es mapa (edición a mano, artefacto de
+    red): sin ella el chequeo revienta en `.get` sobre un string."""
+    data = _ads_json("ica", records=["no soy un mapa", 3,
+                                     {"bibcode": "2001ok", "puertas": ["fundacional", "manual"]}])
+    assert lint.check_gate_vocabulary("ica", data) == []
+    data = _ads_json("ica", records=[{"bibcode": "2001typo", "puertas": ["fundacionl"]}])
+    filas = lint.check_gate_vocabulary("ica", data)
+    assert len(filas) == 1 and "2001typo" in filas[0][1] and "fundacionl" in filas[0][1]
+
+
+def test_check_truncated_corpus_y_glyph_son_dos_chequeos_distintos(toy_vault):
+    """#396 — el mismo acumulador, dos hechos distintos: la query directa que trajo menos de lo que
+    ADS reporta, y el RESCATE POR GLIFO cortado (#43/#28), donde el corte top-por-citas pasa ANTES
+    del filtro client-side. La guarda que sobrevivía es la del `truncated_glyph` con un elemento
+    que no es mapa: `as_list` lo deja pasar y el `.get` reventaba."""
+    data = _ads_json("ica", truncated={"num_found": 900, "rows": 200})
+    filas = lint.check_truncated_corpus("ica", data)
+    assert len(filas) == 1 and "900" in filas[0][1] and "segunda pasada" not in filas[0][1]
+    data = _ads_json("ica", truncated={"num_found": 900, "rows": 200, "recent": 30})
+    assert "segunda pasada" in lint.check_truncated_corpus("ica", data)[0][1]
+    assert lint.check_truncated_corpus("ica", _ads_json("ica")) == []
+
+    assert lint.check_truncated_glyph("ica", _ads_json("ica", truncated_glyph=["x", 3])) == []
+    data = _ads_json("ica", truncated_glyph=[{"constellations": ["Eri"], "num_found": 9, "rows": 2}])
+    filas = lint.check_truncated_glyph("ica", data)
+    assert len(filas) == 1 and "Eri" in filas[0][1] and "glifo" in filas[0][1]
+
+
+def test_check_triage_pending_cuenta_los_candidatos_netos(toy_vault):
+    """#396/#55 — `candidates` viene NETO de decisiones, así que basta con contarlos. El paso con
+    más juicio de la operación era el único sin red: un ingest cerraba con lint 0 y cientos de
+    candidatos pendientes."""
+    assert lint.check_triage_pending("ica", _ads_json("ica")) == []
+    assert lint.check_triage_pending("ica", _ads_json("ica", candidates=["no mapa"])) == []
+    data = _ads_json("ica", candidates=[{"bibcode": f"200{i}X"} for i in range(5)])
+    filas = lint.check_triage_pending("ica", data)
+    assert len(filas) == 1 and "5 candidato(s)" in filas[0][1] and "…" in filas[0][1]
+
+
+def test_check_chain_incomplete_es_solo_de_estrellas_y_separa_no_consta_de_cortada(toy_vault):
+    """#396/D-57/AUD-149/INV-44 — las dos guardas que ningún test separaba: el chequeo es de
+    ESTRELLAS (el orden de un tema depende de su `source`, así que compararlo inventaría cortes), y
+    «no consta» ≠ «se cortó en X» — devolver `None` sobre el sujeto sin traza lo sacaba por la
+    puerta del verde.  @inv INV-44"""
+    write_yaml(cfg.REGISTRO / "test_star.yaml", {"slug": "test_star"})
+    assert lint.check_chain_incomplete("test_star", set()) == [], "un tema no se compara"
+    filas = lint.check_chain_incomplete("test_star", {"test_star"})
+    assert len(filas) == 1 and "no consta" in filas[0][1]
+
+    write_yaml(cfg.REGISTRO / "test_star.yaml",
+               {"slug": "test_star", "cadena": [{"paso": cfg.CADENA_ESTRELLA[0],
+                                                 "fecha": "2026-03-01"}]})
+    filas = lint.check_chain_incomplete("test_star", {"test_star"})
+    assert len(filas) == 1 and "se cortó en" in filas[0][1] and "no consta" not in filas[0][1]
+
+    write_yaml(cfg.REGISTRO / "test_star.yaml",
+               {"slug": "test_star", "cadena": [{"paso": p, "fecha": "2026-03-01"}
+                                                for p in cfg.CADENA_ESTRELLA]})
+    assert lint.check_chain_incomplete("test_star", {"test_star"}) == []
+
+
+def test_check_registro_unreadable_y_decisions_shape(toy_vault):
+    """#396/AUD-131/#h12 — el registro es el ÚNICO artefacto no regenerable: mientras no parsee, la
+    curación entera queda revertida en silencio. Y una decisión que no es un mapa `load_decisiones`
+    la filtra callada, con su docstring prometiendo que EL LINT la reporta."""
+    write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica"})
+    assert lint.check_registro_unreadable("ica") == []
+    (cfg.REGISTRO / "roto.yaml").write_text("a: [1,\nb: : :\n", encoding="utf-8")
+    filas = lint.check_registro_unreadable("roto")
+    assert len(filas) == 1 and "TODA la curación" in filas[0][1]
+
+    assert lint.check_decisions_shape("ica", {"decisiones": "no es un mapa"}) == []
+    assert lint.check_decisions_shape("ica", {"decisiones": {"2001X": {"decision": "drop"}}}) == []
+    filas = lint.check_decisions_shape("ica", {"decisiones": {"2001X": "descartado"}})
+    assert len(filas) == 1 and "no es un mapa" in filas[0][1] and "2001X" in filas[0][1]
+
+
+def test_check_old_registro_schema_bloquea_la_clave_busqueda(toy_vault):
+    """#396/D-28 — `busqueda:` (mapa, UNA corrida) es el schema pre-1.26 y el lector nuevo no lo
+    lee: un registro mudo deja la ficha afirmando sobre un universo que nadie puede reconstruir."""
+    assert lint.check_old_registro_schema("ica", {"busquedas": []}) == []
+    filas = lint.check_old_registro_schema("ica", {"busqueda": {"fecha": "2026-01-01"}})
+    assert len(filas) == 1 and "--migrate-registros" in filas[0][1]
+
+
+def test_check_lens_desync_nombra_POR_QUE_el_diff_offline_no_puede(toy_vault):
+    """#396/D-49/#106 — las dos guardas que sobrevivían son las que eligen el MOTIVO, y elegir mal
+    es la regla de método nº 4: hasta #106 el mensaje decía siempre «la nota no guarda `doctype`»,
+    que sobre un cambio de umbral es la explicación de otro caso."""
+    lente = cfg.lens_shape(cfg.as_map(cfg.load_objective().get("relevance")))
+    def _reg(**lente_extra):
+        write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "busquedas": [
+            {"fecha": "2026-03-01", "lente": {**lente, **lente_extra}}]})
+    def _tema(**extra):
+        write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                             "query": "abs:x", "facet": "ica", **extra}})
+
+    write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "busquedas": [{"fecha": "2026-03-01"}]})
+    assert "no evaluado" in lint.check_lens_desync("ica")[0][1], "sin `lente` no hay contra qué comparar"
+
+    _tema(fundacional_min_citas=2000)
+    _reg(regla_tema={"facet": "ica", "umbral": 100})
+    filas = lint.check_lens_desync("ica")
+    # ⚠ el substring tiene que ser DISTINTIVO: el mensaje «mezcla …» también dice «es la puerta 2»,
+    # así que asertar eso dejaba pasar la rama equivocada (lo cazó `mutar --guardas`).
+    assert len(filas) == 1 and "no un cambio textual" in filas[0][1], filas
+
+    _tema()
+    _reg(noise_doctypes=["abstract"], regla_tema={"facet": "ica"})
+    filas = lint.check_lens_desync("ica")
+    assert len(filas) == 1 and "no guarda `doctype`" in filas[0][1], filas
+
+    _tema(fundacional_min_citas=2000)
+    _reg(noise_doctypes=["abstract"], regla_tema={"facet": "ica", "umbral": 100})
+    filas = lint.check_lens_desync("ica")
+    assert len(filas) == 1 and "mezcla cambios no evaluables" in filas[0][1], filas
+
+    _tema()
+    _reg(facets={**lente["facets"], "nueva": "algo"}, regla_tema={"facet": "ica"})
+    filas = lint.check_lens_desync("ica")
+    assert len(filas) == 1 and "entrarían" in filas[0][1] and "saldrían" in filas[0][1], filas
+
+
+def test_check_gate2_desync_distingue_sus_tres_poblaciones(toy_vault):
+    """#396/#106/INV-104 — la puerta 2 es la única metadata que cambia SOLA, y esto ve la mitad
+    «editaste el umbral». Las cuatro guardas que sobrevivían son las tres poblaciones del reporte
+    —entran, salen y las notas SIN `citation_count`— más el caso normal: un `entran: 0` sobre notas
+    que nadie pudo evaluar se lee como «no cambia nada», y ése es el cero inventado."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "abs:x", "facet": "ica",
+                                         "fundacional_min_citas": 2000}})
+    def _reg(umbral):
+        write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "busquedas": [
+            {"fecha": "2026-03-01", "lente": {"regla_tema": {"facet": "ica", "umbral": umbral}}}]})
+    mk_note(cfg.CONCEPTS / "methods", "ica", {"tags": ["concept"], "name": "ICA"})
+    mk_note(cfg.PAPERS, "2001Alto", {"tags": ["paper"], "bibcode": "2001Alto",
+                                     "thesis_links": ["ica"], "citation_count": 5000})
+    mk_note(cfg.PAPERS, "2003Medio", {"tags": ["paper"], "bibcode": "2003Medio",
+                                      "thesis_links": ["ica"], "citation_count": 500})
+    _reg(2000)
+    assert lint.check_gate2_desync("ica") == [], "umbral sin mover: el caso normal es gratis"
+    _reg(9000)
+    filas = lint.check_gate2_desync("ica")
+    assert len(filas) == 1 and "+1 entrarían" in filas[0][1] and "2001Alto" in filas[0][1]
+    _reg(100)
+    assert "−1 saldrían" in lint.check_gate2_desync("ica")[0][1], "el que era core y ya no"
+
+    mk_note(cfg.PAPERS, "2002Sin", {"tags": ["paper"], "bibcode": "2002Sin",
+                                    "thesis_links": ["ica"]})
+    _reg(9000)
+    assert "1 nota(s) sin `citation_count`" in lint.check_gate2_desync("ica")[0][1]
+
+    # y `sin_dato` SOLO —nadie entra, nadie sale, nadie se pudo evaluar— tiene que hablar igual:
+    # un «+0 / −0» callado sobre notas que nadie midió es el cero inventado que D-43 prohíbe
+    for stem in ("2001Alto", "2003Medio"):
+        (cfg.PAPERS / f"{stem}.md").unlink()
+    filas = lint.check_gate2_desync("ica")
+    assert len(filas) == 1 and "+0 entrarían" in filas[0][1] and "1 nota(s) sin" in filas[0][1]
+
+
+def test_check_registro_fallback_reporta_el_snapshot_CON_su_fecha(toy_vault):
+    """#396/#51/#64 — post-clone, en otra máquina o tras limpiar el scratch, los chequeos vivos
+    reportaban 0 sin haber mirado nada: un «limpio» que no significaba limpio. El snapshot no es la
+    verdad viva, así que se reporta CON su fecha y diciendo que falta el scratch."""
+    assert lint.check_registro_fallback("ica", {}) == ([], [])
+    reg = {"busquedas": [{"fecha": "2026-03-01", "n_candidates": 7, "truncated": True,
+                          "n_found": 900, "rows": 200, "truncated_glyph": 2}]}
+    tp, tc = lint.check_registro_fallback("ica", reg)
+    assert len(tp) == 1 and "7 candidato(s)" in tp[0][1] and "2026-03-01" in tp[0][1]
+    assert len(tc) == 2 and any("glifo" in m for _s, m in tc)
+
+
+def test_check_registro_sweep_saltea__red_y_el_sujeto_con_build_vivo(toy_vault):
+    """#396 — el driver. Tres decisiones suyas, no de los chequeos: `_red.yaml` no es un sujeto
+    (D-46), el registro ilegible SALTEA el resto (chequear contra una curación que se sabe
+    revertida sería peor que el bug original), y el sujeto cuya verdad viva ya reportó
+    `check_build_snapshots` no se vuelve a contar desde el snapshot."""
+    write_yaml(cfg.REGISTRO / "_red.yaml", {"ultima_pasada_red": {"fecha": "2026-03-01"}})
+    reg = {"slug": "ica", "busqueda": {"fecha": "2026-01-01"},
+           "busquedas": [{"fecha": "2026-03-01", "n_candidates": 4}]}
+    write_yaml(cfg.REGISTRO / "ica.yaml", reg)
+    (ileg, old, cad, bd, lente, tp, tc) = lint.check_registro_sweep(set(), set())
+    assert [s for s, _m in old] == ["ica"], old
+    assert [s for s, _m in tp] == ["ica"], "sin build/ contesta el registro"
+    assert ileg == [] and cad == [] and bd == []
+
+    *_, tp2, _tc2 = lint.check_registro_sweep(set(), {"ica"})
+    assert tp2 == [], "con build/ presente ya se reportó la verdad viva"
+
+    (cfg.REGISTRO / "roto.yaml").write_text("a: [1,\nb: : :\n", encoding="utf-8")
+    (ileg, old, *_rest) = lint.check_registro_sweep(set(), set())
+    assert [s for s, _m in ileg] == ["roto"] and [s for s, _m in old] == ["ica"]
