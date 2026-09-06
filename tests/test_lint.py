@@ -9609,3 +9609,111 @@ def test_check_verification_coverage_parte_sobre_las_citas_que_la_nota_TIENE(toy
     anchors.clear()
     _v(con_bloque, stem="log", f=str(cfg.LOG))
     assert anchors == [], "la navegación no se indexa como nota anclada"
+
+
+# ── #396 · alias contra SIMBAD, facetas muertas y los tres chequeos de tema ──────────────────────
+
+def test_check_simbad_aliases_es_PROPUESTA_y_tiene_escotilla_del_NO(toy_vault):
+    """#396/#82/#252 — el lado «de menos» degrada los TRES mecanismos de recall a la vez y su modo
+    de falla es silencioso: un paper que nunca aparece. Es PROPUESTA, no adopción — SIMBAD devuelve
+    identificadores que no sirven para buscar texto (Gaia DR3, 2MASS J…) junto a los que sí.
+
+    Las guardas que sobrevivían son las que acotan la población: sin `_unresolved_aliases` el
+    snapshot es anterior a #82 y no hay nada que decir, y sin `stars.yaml` legible no se opina.
+
+    ⚠ Declarado: las dos cláusulas de `if not isinstance(data, dict) or "_unresolved_aliases" not
+    in data: continue` sobreviven a `mutar --guardas` — sin esas claves el resto del bloque no
+    encuentra nada y devuelve lo mismo. Es un atajo, no una regla (red 8, código anterior a #396).
+    Ídem el `isinstance(_m, dict)` del barrido de `stars.yaml`: `_m.get` sobre lo que no es mapa ya
+    lo filtra el `and` de al lado."""
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    def _gt(**extra):
+        (cfg.GROUND_TRUTH / "test_star.json").write_text(
+            json.dumps({"slug": "test_star", **extra}), encoding="utf-8")
+    _gt()
+    assert lint.check_simbad_aliases() == ([], [], []), \
+        "snapshot pre-#82: sin `_unresolved_aliases` no hay nada que decir"
+    _gt(_unresolved_aliases=["HD 99999"])
+    *_x, ajenos = lint.check_simbad_aliases()
+    assert len(ajenos) == 1 and "HD 99999" in ajenos[0][1] and "OTRO objeto" in ajenos[0][1]
+
+    # ⛔ `null` (SIMBAD no contestó) ≠ `[]` (contestó y no hay más): el primero es NO EVALUADO
+    _gt(_unresolved_aliases=[], _simbad_aliases=None)
+    faltan, *_x = lint.check_simbad_aliases()
+    assert len(faltan) == 1 and "NO EVALUADO" in faltan[0][1]
+    _gt(_unresolved_aliases=[], _simbad_aliases=[])
+    assert lint.check_simbad_aliases()[0] == [], "contestó y no hay más: silencio"
+
+    _gt(_unresolved_aliases=[], _simbad_aliases=["HD 12345", "Gaia DR3 999"])
+    faltan, rech, _a = lint.check_simbad_aliases()
+    assert len(faltan) == 1 and "Gaia DR3 999" in faltan[0][1]
+    assert "HD 12345" not in faltan[0][1], "ya declarado en `stars.yaml` del fixture"
+    assert rech == []
+
+    # y el identificador CONSIDERADO Y RECHAZADO no es deuda: es la escotilla del NO (#252)
+    stars = cfg.load_stars()
+    stars["Estrella Test"]["aliases_descartados"] = [
+        {"id": "Gaia DR3 999", "motivo": "catálogo-máquina: no sirve para buscar texto"}]
+    write_yaml(cfg.STARS_YAML, stars)
+    faltan2, rech2, _a = lint.check_simbad_aliases()
+    assert faltan2 == [] and len(rech2) == 1 and "catálogo-máquina" in rech2[0][1]
+
+    # ⛔ y los alias se buscan en la estrella de ESE ground-truth, no en cualquiera: con dos
+    # estrellas declaradas, los alias de la otra no cuentan como declarados acá
+    stars["Otra Estrella"] = {"slug": "otra", "aliases": ["HD 77777"]}
+    write_yaml(cfg.STARS_YAML, stars)
+    _gt(_unresolved_aliases=[], _simbad_aliases=["HD 77777"])
+    faltan3, *_x = lint.check_simbad_aliases()
+    assert len(faltan3) == 1 and "HD 77777" in faltan3[0][1], \
+        "el alias de OTRA estrella no está declarado para ésta"
+
+
+def test_check_dead_facets_declara_cuando_NO_PUEDE_evaluar(toy_vault):
+    """#396/D-43 — una faceta que no matchea nada no es una regla estricta: es una regla que nadie
+    puede distinguir de un typo. Pero con la bóveda SIN notas de paper el chequeo **no se puede
+    correr**, y eso se DICE en vez de contarse como faceta muerta — que es el cero inventado."""
+    obj = cfg.load_objective()
+    write_yaml(cfg.OBJECTIVE_YAML, {**obj, "relevance": {"facets": {"rv": "radial velocit"}}})
+    filas = lint.check_dead_facets({})
+    assert len(filas) == 1 and "no evaluable" in filas[0][1] and "población 0" in filas[0][1]
+    filas = lint.check_dead_facets({"2020X": "un paper de radial velocity"})
+    assert not any("no evaluable" in m for _s, m in filas), filas
+    muerta = lint.check_dead_facets({"2020X": "un paper de otra cosa"})
+    assert muerta and not any("no evaluable" in m for _s, m in muerta), muerta
+
+    # y el tema SIN `facet:` propia no tiene faceta que medir: se saltea, no se reporta muerta
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "concept": "ica",
+                                         "query": "abs:x"}})
+    assert not any("tema" in s for s, _m in lint.check_dead_facets({"2020X": "x"})), \
+        "sin `facet:` propia no hay nada que medir en el tema"
+
+
+def test_los_tres_chequeos_de_tema_avisan_lo_que_se_HEREDA(toy_vault):
+    """#396/#351/#360/#361 — los tres miran lo mismo desde ángulos distintos: qué se está heredando
+    sin declarar. El `fq` heredado cierra la puerta 2 para siempre (medido en `ica`: 0 papers contra
+    2 sin él); los `ejes` heredados hacen que a un tema de método se le pregunten los ejes de una
+    bóveda astro; y la cascada que nunca corrió deja todos los verdes leyéndose como exhaustivos.
+
+    ⛔ Un `null` DECLARADO calla los avisos: un null declarado es una decisión, y no se lee igual
+    que no declarar nada."""
+    base = {"title": "ICA", "area": "methods", "concept": "ica", "query": "abs:x",
+            "facet": "ica", "fundacional_min_citas": 2000}
+    def _t(**extra):
+        write_yaml(cfg.THEMES_YAML, {"ica": {**base, **extra}})
+
+    _t()
+    assert lint.check_theme_inherited_fq(), "sin `search_fq` el tema hereda y la puerta 2 no abre"
+    _t(search_fq=None)
+    assert lint.check_theme_inherited_fq() == [], "un `null` declarado es una decisión"
+    _t(search_fq="database:general")
+    assert lint.check_theme_inherited_fq() == []
+
+    _t()
+    assert lint.check_theme_inherited_axes()[0], "sin `ejes:` se preguntan los del objetivo"
+    _t(ejes=[])
+    assert lint.check_theme_inherited_axes()[0] == [], "`ejes: []` declarado calla el aviso"
+
+    _t(source="local-pdfs")
+    assert lint.check_cascade_not_run(), "un tema off-ADS cuya cascada no consta"
+    _t()
+    assert lint.check_cascade_not_run() == [], "un tema ADS puro no corre la cascada"

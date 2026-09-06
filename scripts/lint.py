@@ -5152,65 +5152,14 @@ def check_verification_coverage(stem: str, f, text: str, nbib: int, in_verifiabl
     return unverified, verif_blocks
 
 
-def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
-    """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
+def check_simbad_aliases() -> tuple:
+    """`(alias_faltantes, alias_rechazados, alias_ajenos)` — the aliases SIMBAD does or does not
+    back (#82).
 
-    `cierre` es R-1: el MISMO detector de pares vencidos con dos severidades según el
-    momento. Va acá y no en `render` porque cambia el exit, no el texto.
-
-    `slug` es #121: acota el EXIT a las notas de ese sujeto (el barrido sigue siendo de la bóveda
-    entera — la deuda ajena se reporta igual, sólo que no frena una operación que no la causó).
-    `ValueError` si el slug no existe: acotar a una entidad inexistente daría 0 hallazgos en
-    alcance, o sea un verde inventado, que es el falso limpio que este lint existe para no
-    producir."""
-    # ⚠ `slug` se REBINDEA más abajo (el barrido lo usa como variable de loop en cuatro lugares),
-    # así que el alcance se captura ACÁ. Sin esta línea el resultado se etiquetaba con el último
-    # slug que tocó el barrido — un alcance inventado, y encima plausible.
-    alcance_slug, alcance = slug, frozenset()
-    if slug is not None:
-        stems = entity.notas_del_slug(slug)
-        if stems is None:
-            raise ValueError(f"entidad desconocida: {slug!r} — no está en stars.yaml ni en "
-                             f"themes.yaml, así que `--cierre {slug}` no acota nada")
-        alcance = frozenset(stems)
-    files = note_files()
-    # fulltext disponible (un .txt por bibcode, bajo cualquier slug/tema) → precondición de
-    # verificabilidad: una cita en query/hipótesis sin su .txt no se puede chequear claim↔fuente.
-    fulltext_files = sorted(glob.glob(str(cfg.RAW / "fulltext" / "**" / "*.txt"), recursive=True))
-    fulltext = {basename(p)[:-4] for p in fulltext_files}
-    # Fulltext ILEGIBLE (precondición): el .txt existe pero es mojibake (fuentes sin ToUnicode) o
-    # casi vacío (escaneo sin capa de texto) → no sirve para grep ni para verify-citations. Mismo
-    # umbral determinista que extract_fulltext. Rescate: reemplazar el PDF por uno con capa de texto
-    # sana, extraer por OCR, o marcar la fuente `pending` en sources: para derivarla al usuario.
-    illegible_txt = []
-    # Hash de fuente (D-20) por bibcode, calculado sobre la MISMA lectura que ya hace `is_legible`
-    # —el 77% de los 5,6 s del lint sobre 908 notas—: cero lecturas extra. El hashing de ~66 MB es
-    # marginal frente al parseo YAML. Si un bibcode vive bajo varios slugs con contenido idéntico,
-    # el hash coincide; si difieren, gana el primero en orden alfabético (determinista).
-    ft_hash: dict[str, str] = {}
-    # #190: el `setdefault` de arriba se queda con UNA copia y descarta el resto — determinista,
-    # y con `vistas[]` (#188) insuficiente: la vista de un sujeto se escribe leyendo el `.txt` de
-    # SU slug y el ancla la compararía contra el de otro. Se acumulan las copias por bibcode
-    # (mismo bucle, misma lectura: cero I/O extra) y `diverged_copies` las compara después.
-    ft_copies: dict[str, dict[str, list]] = {}
-    for p in fulltext_files:
-        contenido = open(p, encoding="utf-8", errors="replace").read()
-        _bib, _h = basename(p)[:-4], lb.sha10(contenido)
-        ft_hash.setdefault(_bib, _h)
-        ft_copies.setdefault(_bib, {}).setdefault(_h, []).append(
-            Path(p).relative_to(cfg.RAW).as_posix())
-        ok, why = is_legible(contenido)
-        if not ok:
-            illegible_txt.append((Path(p).relative_to(cfg.RAW).as_posix(), why))
-    divergent_txt = diverged_copies(ft_copies)
-    # PDFs en disco (un <bibcode>.pdf por slug en vault/raw/pdfs/) → chequear drift `pdf` ↔ archivo.
-    # stem = safe_name(bibcode), igual que el nombre de la nota del paper.
-    pdf_on_disk = {}
-    for _p in glob.glob(str(cfg.PDFS / "**" / "*.pdf"), recursive=True):
-        pdf_on_disk.setdefault(basename(_p)[:-4], _p)
-    unverifiable: list = []            # (stem, "cita <bibcode> sin fulltext")
-    coverage: list = []                # concept/hipótesis sin citas [[bibcode]] → no chequeable
-    unverified: list = []              # query/concept CON citas pero SIN bloque de verify-citations
+    Extracted from `lint.collect` by #396; the blocks compute and the caller accumulates. The «too
+    many» side is the dangerous one: an alias SIMBAD does not list as an identifier of this star may
+    resolve to ANOTHER object and pull its papers into the corpus.
+    """
     # Alias que SIMBAD no reconoce (#82): el lado "de más" del recall. `_unresolved_aliases` lo
     # persiste `fetch_ground_truth`; acá se surface OFFLINE, que es donde se mira. `null` significa
     # "SIMBAD no contestó" y NO es lo mismo que `[]`: se reporta como sin verificar, no como limpio.
@@ -5270,6 +5219,268 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             alias_ajenos.append((gt.stem, f"alias `{alias}` declarado en stars.yaml pero SIMBAD no lo "
                                           "lista como identificador de esta estrella → puede resolver "
                                           "a OTRO objeto y meter sus papers al corpus"))
+    return alias_faltantes, alias_rechazados, alias_ajenos
+
+
+def check_stale_verif(verif_blocks, changed: dict) -> list:
+    """`stale_verif` — the note edited after its own verification block (D-4).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Editing a
+    note after the fan-out ran leaves the header claiming pairs that were never checked against what
+    the note says TODAY.
+    """
+    stale_verif: list = []
+    for f, d in sorted(verif_blocks):
+        stem = basename(f)[:-3]
+        if d is None:
+            stale_verif.append((stem, "bloque de verificación sin fecha en el encabezado → re-fechalo "
+                                      "(`## Verificación de citas (AAAA-MM-DD)`): sin fecha no hay "
+                                      "forma de saber si sigue vigente"))
+        elif (c := changed.get(f)) and c > d:
+            stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d} → "
+                                      f"correr `verify-citations` sobre lo agregado"))
+    return stale_verif
+
+
+def check_facet_boundary() -> list:
+    """`faceta_sin_frontera` — a short alphabetic token in a facet with no word boundary (#236).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Without
+    `\b` the facet matches inside another word and the lens silently classifies as core what it
+    never meant to.
+    """
+    faceta_sin_frontera: list = []
+    # #236 — un token alfabético corto SIN `\b` en una faceta matchea DENTRO de otra palabra.
+    # Medido: `expres` (por el espectrógrafo EXPRES) entraba por «Venus Express», «Mars Express» y
+    # «expressed», y `neid` por el apellido «Schneider»; 19 de 193 registros tenían esa faceta sólo
+    # por ahí, y como la bóveda declaraba `require: [rv]` eso la volvía la única puerta: **4 de 32
+    # papers vivos eran core por accidente**. El falso positivo de una faceta NO DEJA RASTRO —el
+    # paper entra, se baja, se lee y se sintetiza—, así que sólo se ve corriendo la regex contra el
+    # corpus y mirando QUÉ matcheó. Con `build/<slug>/ads.json` a mano se nombran las palabras.
+    if not cfg.objective_error():
+        _textos = []
+        for _aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
+            try:
+                for _r in (json.load(open(_aj, encoding="utf-8")) or {}).get("records", []):
+                    _t = _r.get("title")
+                    _textos.append(" ".join([_t if isinstance(_t, str) else " ".join(_t or []),
+                                             _r.get("abstract") or ""]))
+            except (OSError, ValueError):
+                continue
+        for _nombre, _pat in (cfg.load_objective().get("relevance", {}).get("facets", {}) or {}).items():
+            for _tok in cfg.facet_tokens_without_boundary(_pat):
+                _leaks = cfg.facet_token_leaks(_tok, _textos) if _textos else []
+                _ev = (" — matchea dentro de " + ", ".join(f"«{w}»" for w in _leaks)) if _leaks else \
+                      " (sin corpus en `build/` para medir dentro de qué palabras cae)"
+                faceta_sin_frontera.append(
+                    (str(_nombre), f"el token `{_tok}` no lleva `\\b` y matchea DENTRO de otra "
+                                   f"palabra{_ev} → escribilo `\\b{_tok}\\b`"))
+    return faceta_sin_frontera
+
+
+def check_theme_inherited_fq() -> list:
+    """`tema_fq_heredado` — a method theme that does not declare `search_fq` (#351).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Inheriting
+    `database:astronomy` means gate 2 NEVER opens: measured on `ica`, 0 papers with the inherited
+    `fq` against 2 without it — the theme closed without its canon and had to be re-synthesised.
+    A DECLARED `null` silences it, because a declared null is a decision.
+    """
+    tema_fq_heredado: list = []
+    # `fundacional_min_citas: 2000` declarado) y dos sin él, Comon 1994 incluido. Ese tema se
+    # ingestó, se sintetizó y se **cerró** sin su canon, y nada en el reporte decía que faltara.
+    # Backlog y no bloqueante: heredar puede ser correcto (un tema de método con literatura astro),
+    # y lo que falta es que la herencia deje de ser invisible.
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            try:
+                _fq_h = cfg.theme_inherited_fq(_tmeta)
+            except RuntimeError:
+                # `search_fq` del objetivo con forma inválida: lo reporta `query_ads` al clasificar
+                # (falla ruidoso). Acá el aviso se calla — un backlog no puede tumbar al lint.
+                continue
+            if _fq_h is None:
+                continue
+            tema_fq_heredado.append(
+                (f"tema `{_slug}`",
+                 f"declara `facet:` propia (tema de MÉTODO, D-26) y NO declara `search_fq`: hereda "
+                 f"`{_fq_h}` del objetivo, que acota el universo server-side, antes de traer nada. "
+                 f"Medido en `ica`: 0 papers por la puerta fundacional con el fq heredado, 2 sin él "
+                 f"(incl. Comon 1994) → declaralo en `themes.yaml`, aunque sea `null`"))
+    return tema_fq_heredado
+
+
+def check_theme_inherited_axes() -> tuple:
+    """`(tema_ejes_heredados, not_evaluated)` — the theme with no `ejes:` of its own (#360/#307).
+
+    Extracted from `lint.collect` by #396; the blocks compute and the caller accumulates. The literal
+    mirror of #351 on the other axis: a method theme asked the axes of an astro vault answers the
+    wrong questions, and what it needed is never asked.
+    """
+    tema_ejes_heredados: list = []
+    not_evaluated: list = []
+    # #360 — el simétrico literal de #351 sobre el otro eje de #307: sin `ejes:` un tema de método
+    # LEE con los ejes de una bóveda astro (medido: 6 de 8 facetas vacías en 12 extracciones, y
+    # los ejes del tema desparramados en `aporte`). Backlog: heredar puede ser correcto; lo que
+    # no puede es ser invisible. `ejes: []` es decisión y calla.
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            try:
+                _ejes_h = cfg.theme_inherited_axes(_tmeta)
+            except Exception as _exc:                           # noqa: BLE001 — D-43, ver abajo
+                # AUD-286: el objetivo ilegible YA lo reporta `not_evaluated` («clasificación de
+                # relevancia (la lente)»), así que ahí se calla para no duplicarlo; cualquier
+                # OTRO fallo se declara, no se saltea.
+                if not cfg.objective_error():
+                    not_evaluated.append(
+                        (f"ejes heredados de `{_slug}` (#360)",
+                         f"{_exc.__class__.__name__}: {_exc}"))
+                continue
+            if _ejes_h is None:
+                continue
+            tema_ejes_heredados.append(
+                (f"tema `{_slug}`",
+                 f"declara `facet:` propia (tema de MÉTODO, D-26) y NO declara `ejes:`: la extracción "
+                 f"pregunta los del objetivo (`{', '.join(_ejes_h)}`), que son los de una bóveda "
+                 f"astro. Los ejes salen del contraste (3b) → declaralos en `themes.yaml`, aunque "
+                 f"sea `ejes: []`"))
+    return tema_ejes_heredados, not_evaluated
+
+
+def check_cascade_not_run() -> list:
+    """`cascada_sin_correr` — an off-ADS or mixed theme whose discovery cascade never ran (#361).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. A theme
+    closed without it is one where all the greens read as exhaustive over a universe nobody swept.
+    """
+    cascada_sin_correr: list = []
+    # todos los verdes se lee como exhaustivo. Sólo para el tema off-ADS o MIXTO (`source:`
+    # declarado y distinto de `ads`), que es donde el skill prescribe el paso; un tema ADS puro se
+    # descubre por `query_ads` y exigirle la cascada inventaría deuda. Tres estados (D-43), porque
+    # piden acciones distintas: nunca corrió · corrió y no trajo nada · corrió con backends caídos.
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            _tm = cfg.as_map(_tmeta)
+            _src = str(_tm.get("source") or "ads").strip()
+            if _src == "ads":
+                continue
+            _estado = discovery_state(cfg.as_list((cfg.load_registro(_slug) or {}).get("descubrimientos")))
+            if _estado is not None:
+                cascada_sin_correr.append(
+                    (f"tema `{_slug}`",
+                     f"{_estado} → `python scripts/discover.py --theme {_slug}` (paso 0b del skill "
+                     f"`ingest-theme`: un tema cerrado sin él se lee como exhaustivo y no lo es)"))
+    return cascada_sin_correr
+
+
+def check_dead_facets(paper_lens_text: dict) -> list:
+    """`faceta_muerta` — a facet that classifies NOTHING in the corpus it is supposed to cut.
+
+    Extracted from `lint.collect` by #396; the blocks compute and the caller accumulates. A facet
+    that never matches is not a strict rule: it is a rule nobody can tell from a typo, and the lens
+    keeps advertising a cut it does not make.
+    """
+    faceta_muerta: list = []
+    if not cfg.themes_error():
+        for _slug, _tmeta in (cfg.load_themes() or {}).items():
+            _facet = cfg.as_map(_tmeta).get("facet")
+            if not _facet:
+                continue
+            _stems = {st for st, _f, _t in cfg.notes_of_subject(_slug)}
+            _textos = [paper_lens_text[st] for st in sorted(_stems) if st in paper_lens_text]
+            for _alt in cfg.facet_duplicated_alternatives(str(_facet)):
+                faceta_muerta.append((f"tema `{_slug}`",
+                                      f"alternativa DUPLICADA `{_alt}` — inofensiva, pero es la "
+                                      f"señal barata de que la cadena se editó a mano y a ciegas"))
+            if not _textos:
+                # D-43 — sobre un tema recién declarado el chequeo NO es evaluable, y decir «todas
+                # muertas» sería el veredicto inventado que esta categoría existe para no producir.
+                faceta_muerta.append((f"tema `{_slug}`",
+                                      "no evaluable: el tema todavía no tiene notas de paper "
+                                      "(población 0) — no es que sus alternativas estén muertas"))
+                continue
+            for _alt, _motivo in cfg.facet_dead_alternatives(str(_facet), _textos):
+                faceta_muerta.append((f"tema `{_slug}`",
+                                      f"alternativa `{_alt}`: {_motivo} (sobre {len(_textos)} "
+                                      f"notas del tema) → ¿un `|` perdido, o un término que "
+                                      f"todavía no se ingestó?"))
+    if not cfg.objective_error():
+        _todos = [paper_lens_text[st] for st in sorted(paper_lens_text)]
+        for _nombre, _pat in (cfg.load_objective().get("relevance", {}).get("facets", {}) or {}).items():
+            for _alt in cfg.facet_duplicated_alternatives(str(_pat)):
+                faceta_muerta.append((f"faceta `{_nombre}`", f"alternativa DUPLICADA `{_alt}`"))
+            if not _todos:
+                faceta_muerta.append((f"faceta `{_nombre}`",
+                                      "no evaluable: la bóveda no tiene notas de paper (población 0)"))
+                continue
+            for _alt, _motivo in cfg.facet_dead_alternatives(str(_pat), _todos):
+                faceta_muerta.append((f"faceta `{_nombre}`",
+                                      f"alternativa `{_alt}`: {_motivo} (sobre {len(_todos)} "
+                                      f"notas de paper)"))
+    return faceta_muerta
+
+
+def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
+    """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
+
+    `cierre` es R-1: el MISMO detector de pares vencidos con dos severidades según el
+    momento. Va acá y no en `render` porque cambia el exit, no el texto.
+
+    `slug` es #121: acota el EXIT a las notas de ese sujeto (el barrido sigue siendo de la bóveda
+    entera — la deuda ajena se reporta igual, sólo que no frena una operación que no la causó).
+    `ValueError` si el slug no existe: acotar a una entidad inexistente daría 0 hallazgos en
+    alcance, o sea un verde inventado, que es el falso limpio que este lint existe para no
+    producir."""
+    # ⚠ `slug` se REBINDEA más abajo (el barrido lo usa como variable de loop en cuatro lugares),
+    # así que el alcance se captura ACÁ. Sin esta línea el resultado se etiquetaba con el último
+    # slug que tocó el barrido — un alcance inventado, y encima plausible.
+    alcance_slug, alcance = slug, frozenset()
+    if slug is not None:
+        stems = entity.notas_del_slug(slug)
+        if stems is None:
+            raise ValueError(f"entidad desconocida: {slug!r} — no está en stars.yaml ni en "
+                             f"themes.yaml, así que `--cierre {slug}` no acota nada")
+        alcance = frozenset(stems)
+    files = note_files()
+    # fulltext disponible (un .txt por bibcode, bajo cualquier slug/tema) → precondición de
+    # verificabilidad: una cita en query/hipótesis sin su .txt no se puede chequear claim↔fuente.
+    fulltext_files = sorted(glob.glob(str(cfg.RAW / "fulltext" / "**" / "*.txt"), recursive=True))
+    fulltext = {basename(p)[:-4] for p in fulltext_files}
+    # Fulltext ILEGIBLE (precondición): el .txt existe pero es mojibake (fuentes sin ToUnicode) o
+    # casi vacío (escaneo sin capa de texto) → no sirve para grep ni para verify-citations. Mismo
+    # umbral determinista que extract_fulltext. Rescate: reemplazar el PDF por uno con capa de texto
+    # sana, extraer por OCR, o marcar la fuente `pending` en sources: para derivarla al usuario.
+    illegible_txt = []
+    # Hash de fuente (D-20) por bibcode, calculado sobre la MISMA lectura que ya hace `is_legible`
+    # —el 77% de los 5,6 s del lint sobre 908 notas—: cero lecturas extra. El hashing de ~66 MB es
+    # marginal frente al parseo YAML. Si un bibcode vive bajo varios slugs con contenido idéntico,
+    # el hash coincide; si difieren, gana el primero en orden alfabético (determinista).
+    ft_hash: dict[str, str] = {}
+    # #190: el `setdefault` de arriba se queda con UNA copia y descarta el resto — determinista,
+    # y con `vistas[]` (#188) insuficiente: la vista de un sujeto se escribe leyendo el `.txt` de
+    # SU slug y el ancla la compararía contra el de otro. Se acumulan las copias por bibcode
+    # (mismo bucle, misma lectura: cero I/O extra) y `diverged_copies` las compara después.
+    ft_copies: dict[str, dict[str, list]] = {}
+    for p in fulltext_files:
+        contenido = open(p, encoding="utf-8", errors="replace").read()
+        _bib, _h = basename(p)[:-4], lb.sha10(contenido)
+        ft_hash.setdefault(_bib, _h)
+        ft_copies.setdefault(_bib, {}).setdefault(_h, []).append(
+            Path(p).relative_to(cfg.RAW).as_posix())
+        ok, why = is_legible(contenido)
+        if not ok:
+            illegible_txt.append((Path(p).relative_to(cfg.RAW).as_posix(), why))
+    divergent_txt = diverged_copies(ft_copies)
+    # PDFs en disco (un <bibcode>.pdf por slug en vault/raw/pdfs/) → chequear drift `pdf` ↔ archivo.
+    # stem = safe_name(bibcode), igual que el nombre de la nota del paper.
+    pdf_on_disk = {}
+    for _p in glob.glob(str(cfg.PDFS / "**" / "*.pdf"), recursive=True):
+        pdf_on_disk.setdefault(basename(_p)[:-4], _p)
+    unverifiable: list = []            # (stem, "cita <bibcode> sin fulltext")
+    coverage: list = []                # concept/hipótesis sin citas [[bibcode]] → no chequeable
+    unverified: list = []              # query/concept CON citas pero SIN bloque de verify-citations
+    # Los alias contra SIMBAD viven en `check_simbad_aliases` (#396).
+    alias_faltantes, alias_rechazados, alias_ajenos = check_simbad_aliases()
 
     # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
     # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
@@ -5891,15 +6102,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
              "fecha del bloque contra la del último cambio de la nota — el chequeo queda "
              "desactivado, no en cero")) 
     changed = last_change_dates(fechados) if stale_evaluable else {}
-    for f, d in sorted(verif_blocks):
-        stem = basename(f)[:-3]
-        if d is None:
-            stale_verif.append((stem, "bloque de verificación sin fecha en el encabezado → re-fechalo "
-                                      "(`## Verificación de citas (AAAA-MM-DD)`): sin fecha no hay "
-                                      "forma de saber si sigue vigente"))
-        elif (c := changed.get(f)) and c > d:
-            stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d} → "
-                                      f"correr `verify-citations` sobre lo agregado"))
+    # La nota editada después de su bloque vive en `check_stale_verif` (#396).
+    stale_verif += check_stale_verif(verif_blocks, changed)
 
     # ── pares de verificación vencidos (D-4 / D-20 / INV-78) ─────────────────────────────────────
     # El bloque `## Verificación de citas` se lee como "esta nota está verificada". Acá eso se mide
@@ -6117,31 +6321,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
 
 
     # ── la tabla: clave, título, severidad, hallazgos. **Una sola declaración** de cada cosa.
-    # #236 — un token alfabético corto SIN `\b` en una faceta matchea DENTRO de otra palabra.
-    # Medido: `expres` (por el espectrógrafo EXPRES) entraba por «Venus Express», «Mars Express» y
-    # «expressed», y `neid` por el apellido «Schneider»; 19 de 193 registros tenían esa faceta sólo
-    # por ahí, y como la bóveda declaraba `require: [rv]` eso la volvía la única puerta: **4 de 32
-    # papers vivos eran core por accidente**. El falso positivo de una faceta NO DEJA RASTRO —el
-    # paper entra, se baja, se lee y se sintetiza—, así que sólo se ve corriendo la regex contra el
-    # corpus y mirando QUÉ matcheó. Con `build/<slug>/ads.json` a mano se nombran las palabras.
-    if not cfg.objective_error():
-        _textos = []
-        for _aj in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "ads.json"))):
-            try:
-                for _r in (json.load(open(_aj, encoding="utf-8")) or {}).get("records", []):
-                    _t = _r.get("title")
-                    _textos.append(" ".join([_t if isinstance(_t, str) else " ".join(_t or []),
-                                             _r.get("abstract") or ""]))
-            except (OSError, ValueError):
-                continue
-        for _nombre, _pat in (cfg.load_objective().get("relevance", {}).get("facets", {}) or {}).items():
-            for _tok in cfg.facet_tokens_without_boundary(_pat):
-                _leaks = cfg.facet_token_leaks(_tok, _textos) if _textos else []
-                _ev = (" — matchea dentro de " + ", ".join(f"«{w}»" for w in _leaks)) if _leaks else \
-                      " (sin corpus en `build/` para medir dentro de qué palabras cae)"
-                faceta_sin_frontera.append(
-                    (str(_nombre), f"el token `{_tok}` no lleva `\\b` y matchea DENTRO de otra "
-                                   f"palabra{_ev} → escribilo `\\b{_tok}\\b`"))
+    # La faceta sin frontera de palabra vive en `check_facet_boundary` (#396).
+    faceta_sin_frontera = check_facet_boundary()
 
     # #291 — la dirección SIMÉTRICA de #236: la alternativa que no matchea nada. Una alternativa
     # muerta no se ve nunca —la faceta compila, el corte da un número plausible, el registro guarda
@@ -6157,111 +6338,23 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # objetivo —`database:astronomy` en una bóveda astro—, que acota el universo **server-side,
     # antes de traer nada**, y ninguna `facet:` puede recuperar lo que ese `fq` dejó afuera. Medido
     # sobre `ica`: **cero** papers entran por la puerta fundacional con el fq heredado (teniendo
-    # `fundacional_min_citas: 2000` declarado) y dos sin él, Comon 1994 incluido. Ese tema se
-    # ingestó, se sintetizó y se **cerró** sin su canon, y nada en el reporte decía que faltara.
-    # Backlog y no bloqueante: heredar puede ser correcto (un tema de método con literatura astro),
-    # y lo que falta es que la herencia deje de ser invisible.
-    if not cfg.themes_error():
-        for _slug, _tmeta in (cfg.load_themes() or {}).items():
-            try:
-                _fq_h = cfg.theme_inherited_fq(_tmeta)
-            except RuntimeError:
-                # `search_fq` del objetivo con forma inválida: lo reporta `query_ads` al clasificar
-                # (falla ruidoso). Acá el aviso se calla — un backlog no puede tumbar al lint.
-                continue
-            if _fq_h is None:
-                continue
-            tema_fq_heredado.append(
-                (f"tema `{_slug}`",
-                 f"declara `facet:` propia (tema de MÉTODO, D-26) y NO declara `search_fq`: hereda "
-                 f"`{_fq_h}` del objetivo, que acota el universo server-side, antes de traer nada. "
-                 f"Medido en `ica`: 0 papers por la puerta fundacional con el fq heredado, 2 sin él "
-                 f"(incl. Comon 1994) → declaralo en `themes.yaml`, aunque sea `null`"))
+    # El tema que hereda el `fq` vive en `check_theme_inherited_fq` (#396).
+    tema_fq_heredado = check_theme_inherited_fq()
 
-    # #360 — el simétrico literal de #351 sobre el otro eje de #307: sin `ejes:` un tema de método
-    # LEE con los ejes de una bóveda astro (medido: 6 de 8 facetas vacías en 12 extracciones, y
-    # los ejes del tema desparramados en `aporte`). Backlog: heredar puede ser correcto; lo que
-    # no puede es ser invisible. `ejes: []` es decisión y calla.
-    if not cfg.themes_error():
-        for _slug, _tmeta in (cfg.load_themes() or {}).items():
-            try:
-                _ejes_h = cfg.theme_inherited_axes(_tmeta)
-            except Exception as _exc:                           # noqa: BLE001 — D-43, ver abajo
-                # AUD-286: el objetivo ilegible YA lo reporta `not_evaluated` («clasificación de
-                # relevancia (la lente)»), así que ahí se calla para no duplicarlo; cualquier
-                # OTRO fallo se declara, no se saltea.
-                if not cfg.objective_error():
-                    not_evaluated.append(
-                        (f"ejes heredados de `{_slug}` (#360)",
-                         f"{_exc.__class__.__name__}: {_exc}"))
-                continue
-            if _ejes_h is None:
-                continue
-            tema_ejes_heredados.append(
-                (f"tema `{_slug}`",
-                 f"declara `facet:` propia (tema de MÉTODO, D-26) y NO declara `ejes:`: la extracción "
-                 f"pregunta los del objetivo (`{', '.join(_ejes_h)}`), que son los de una bóveda "
-                 f"astro. Los ejes salen del contraste (3b) → declaralos en `themes.yaml`, aunque "
-                 f"sea `ejes: []`"))
+    # El tema sin `ejes:` propios vive en `check_theme_inherited_axes` (#396).
+    tema_ejes_heredados, _te_no_eval = check_theme_inherited_axes()
+    not_evaluated += _te_no_eval
 
     # #361 (b) — el paso 0b (la cascada de los tres backends, `discover.py --theme <slug>`) es
     # MANUAL por diseño (#95/#209) y el registro versionado guarda si corrió: `descubrimientos`.
     # Nadie lo leía. Medido: un tema cerrado entero —12 papers, 265 valores, 107 pares verificados,
     # `lint --cierre` en 0— sin haber corrido la cascada, y ningún gate lo dijo; lo detectó el
     # usuario preguntando «¿falta algo del tema?». Es el peor caso para el silencio: un tema con
-    # todos los verdes se lee como exhaustivo. Sólo para el tema off-ADS o MIXTO (`source:`
-    # declarado y distinto de `ads`), que es donde el skill prescribe el paso; un tema ADS puro se
-    # descubre por `query_ads` y exigirle la cascada inventaría deuda. Tres estados (D-43), porque
-    # piden acciones distintas: nunca corrió · corrió y no trajo nada · corrió con backends caídos.
-    if not cfg.themes_error():
-        for _slug, _tmeta in (cfg.load_themes() or {}).items():
-            _tm = cfg.as_map(_tmeta)
-            _src = str(_tm.get("source") or "ads").strip()
-            if _src == "ads":
-                continue
-            _estado = discovery_state(cfg.as_list((cfg.load_registro(_slug) or {}).get("descubrimientos")))
-            if _estado is not None:
-                cascada_sin_correr.append(
-                    (f"tema `{_slug}`",
-                     f"{_estado} → `python scripts/discover.py --theme {_slug}` (paso 0b del skill "
-                     f"`ingest-theme`: un tema cerrado sin él se lee como exhaustivo y no lo es)"))
+    # La cascada que nunca corrió vive en `check_cascade_not_run` (#396).
+    cascada_sin_correr = check_cascade_not_run()
 
-    if not cfg.themes_error():
-        for _slug, _tmeta in (cfg.load_themes() or {}).items():
-            _facet = cfg.as_map(_tmeta).get("facet")
-            if not _facet:
-                continue
-            _stems = {st for st, _f, _t in cfg.notes_of_subject(_slug)}
-            _textos = [paper_lens_text[st] for st in sorted(_stems) if st in paper_lens_text]
-            for _alt in cfg.facet_duplicated_alternatives(str(_facet)):
-                faceta_muerta.append((f"tema `{_slug}`",
-                                      f"alternativa DUPLICADA `{_alt}` — inofensiva, pero es la "
-                                      f"señal barata de que la cadena se editó a mano y a ciegas"))
-            if not _textos:
-                # D-43 — sobre un tema recién declarado el chequeo NO es evaluable, y decir «todas
-                # muertas» sería el veredicto inventado que esta categoría existe para no producir.
-                faceta_muerta.append((f"tema `{_slug}`",
-                                      "no evaluable: el tema todavía no tiene notas de paper "
-                                      "(población 0) — no es que sus alternativas estén muertas"))
-                continue
-            for _alt, _motivo in cfg.facet_dead_alternatives(str(_facet), _textos):
-                faceta_muerta.append((f"tema `{_slug}`",
-                                      f"alternativa `{_alt}`: {_motivo} (sobre {len(_textos)} "
-                                      f"notas del tema) → ¿un `|` perdido, o un término que "
-                                      f"todavía no se ingestó?"))
-    if not cfg.objective_error():
-        _todos = [paper_lens_text[st] for st in sorted(paper_lens_text)]
-        for _nombre, _pat in (cfg.load_objective().get("relevance", {}).get("facets", {}) or {}).items():
-            for _alt in cfg.facet_duplicated_alternatives(str(_pat)):
-                faceta_muerta.append((f"faceta `{_nombre}`", f"alternativa DUPLICADA `{_alt}`"))
-            if not _todos:
-                faceta_muerta.append((f"faceta `{_nombre}`",
-                                      "no evaluable: la bóveda no tiene notas de paper (población 0)"))
-                continue
-            for _alt, _motivo in cfg.facet_dead_alternatives(str(_pat), _todos):
-                faceta_muerta.append((f"faceta `{_nombre}`",
-                                      f"alternativa `{_alt}`: {_motivo} (sobre {len(_todos)} "
-                                      f"notas de paper)"))
+    # La faceta que no clasifica nada vive en `check_dead_facets` (#396).
+    faceta_muerta = check_dead_facets(paper_lens_text)
 
     categorias = [
         Categoria('not_evaluated', '⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la bóveda — cuenta para el exit)', SEV_BLOQUEANTE, tuple(not_evaluated)),
