@@ -3701,6 +3701,20 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                                           "lista como identificador de esta estrella → puede resolver "
                                           "a OTRO objeto y meter sus papers al corpus"))
 
+    # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
+    # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
+    # cosmética — un "(0)" se lee como veredicto ("miré y no hay"), y ese cero inventado hacía que
+    # el lint afirmara salud sobre lo que nunca miró. Cada poblador agrega (qué chequeo, por qué),
+    # la categoría CUENTA para el exit ≠ 0, y la categoría normal correspondiente se SUPRIME del
+    # reporte en vez de mostrar su cero.
+    # ⛔ Se declara ACÁ, antes del PRIMER poblador, y no más abajo con las otras listas: el chequeo
+    # del driver `merge=ours` (#390) la appendeaba 16 líneas ANTES de su `not_evaluated: list = []`,
+    # así que en el único caso que ese poblador tiene —un `.gitattributes` ILEGIBLE— `collect`
+    # moría con `UnboundLocalError` en vez de reportar *no evaluado*. O sea: la compuerta de CI se
+    # caía justo en el camino que D-43 existe para que NO se caiga. El orden de esta línea es el
+    # invariante; moverla abajo reintroduce el bug sin que nada más cambie.
+    not_evaluated: list = []
+
     # merge=ours con el driver REGISTRADO (#390): protege contra el template y destruye contra la
     # otra máquina. Es una decisión del CLON, así que se reporta una vez nombrando lo que abarca —
     # una línea por patrón serían 7 hallazgos de una sola causa.
@@ -3715,14 +3729,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                    f"con `git -c merge.ours.driver=true merge upstream/main`, que conserva la "
                    f"protección sin dejarla puesta contra `origin`")] if con_driver else []
 
-    # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
-    # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
-    # cosmética — un "(0)" se lee como veredicto ("miré y no hay"), y ese cero inventado hacía que
-    # el lint afirmara salud sobre lo que nunca miró. Cada poblador agrega (qué chequeo, por qué),
-    # la categoría CUENTA para el exit ≠ 0, y la categoría normal correspondiente se SUPRIME del
-    # reporte en vez de mostrar su cero. Se declara acá arriba porque los pobladores están
-    # repartidos por todo `main()`.
-    not_evaluated: list = []
+    # ── "no evaluado" (D-43 / INV-87) — la declaración vive ARRIBA de todo, ver el comienzo de
+    # `collect`. Acá siguen las demás.
     anchor_bodies: dict = {}           # {archivo: texto} de TODA nota de entidad/query — D-47
     old_registro: list = []            # registros con la clave `busqueda:` (schema pre-D-28)
     registro_ilegible: list = []       # registro que no parsea → la curación queda sin aplicar (AUD-131)

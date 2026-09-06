@@ -8780,3 +8780,20 @@ def test_check_ground_truth_mirror_no_inventa_hallazgos_sobre_lo_que_NEA_no_trae
         {"slug": "test_star", "host": "no soy un mapa", "planets": []}), encoding="utf-8")
     contra, *_x = lint.check_ground_truth_mirror(msini_earth)
     assert any("`host` del ground-truth no es un mapa" in m for _s, m in contra), contra
+
+
+def test_el_gitattributes_ilegible_sale_NO_EVALUADO_y_no_tumba_el_lint(toy_vault, monkeypatch):
+    """El `.gitattributes` que no se deja leer es el ÚNICO caso donde `merge_ours_driver_risk`
+    devuelve motivo, y ahí `collect` moría con `UnboundLocalError`: appendeaba a `not_evaluated`
+    dieciséis líneas ANTES de su propia declaración. O sea que la compuerta de CI **se caía** justo
+    en el camino que D-43 existe para que no se caiga — un chequeo que no pudo correr lo DICE, no
+    se lleva puesto al lint entero.
+
+    Encontrado leyendo el orden de asignaciones por AST durante #396; ninguna suite lo veía porque
+    el poblador no dispara nunca sobre un `.gitattributes` sano.  @inv INV-87"""
+    monkeypatch.setattr(lint, "merge_ours_patterns",
+                        lambda: ([], "`.gitattributes` ilegible (PermissionError)"))
+    res = lint.collect()          # ⛔ antes de la corrección esto levantaba UnboundLocalError
+    motivos = dict(res.por_clave("not_evaluated").items)
+    assert "driver de `merge=ours`" in motivos, motivos
+    assert "ilegible" in motivos["driver de `merge=ours`"]
