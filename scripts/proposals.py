@@ -54,7 +54,23 @@ def scope_requests(slug: str | None = None) -> tuple:
 
     Returns `([(bibcode, subject, verbatim motive)], population)` — the population is the number of
     extractions actually read, because a `0` without a denominator does not tell «I looked at
-    everything» from «there was nothing to look at» (INV-40)."""
+    everything» from «there was nothing to look at» (INV-40).
+
+    ⛔ #402 — three things this used to get wrong, and the first was a FALSE CLEAN with a declared
+    population: (1) `hueco` is a **string** in the schema every extractor receives
+    (`"hueco":""` in the prompt's output block) and this read it with `as_list`, which turns a
+    scalar into `[]` — so the loop never ran and the screen printed a zero over 206 non-empty
+    fields; (2) the prompt tells the extractor to leave the scope request in `salvedades`, which
+    this never read; and (3) the population is **long sources** — the category is about widening
+    the declared scope of a long source, and the gap field of an 11-page paper is a general-purpose
+    field the prompt asks to fill always, not a request to widen anything. Counting those would
+    list every extraction in the vault as a proposal, which is the noise that makes a category
+    stop being read.
+
+    So: population = extractions whose paper note declares `unidad_cita` other than `linea`; a
+    request is any non-empty `hueco` (string, or list — both are tolerated on READ, never
+    normalised on write) or any PROSE `salvedades` item (a string, or a map without `tipo`: the
+    structured ones are decidable facts about the artefact, not requests)."""
     out, poblacion = [], 0
     dirs = [cfg.EXTRACCION / slug] if slug else sorted(
         d for d in (cfg.EXTRACCION.iterdir() if cfg.EXTRACCION.exists() else []) if d.is_dir())
@@ -64,12 +80,45 @@ def scope_requests(slug: str | None = None) -> tuple:
                 data = json.loads(f.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
+            if not is_long_source(f.stem):
+                continue
             poblacion += 1
-            for h in cfg.as_list(data.get("hueco")):
-                texto = h if isinstance(h, str) else str(h.get("hueco") or h) if isinstance(h, dict) else ""
-                if texto.strip():
-                    out.append((f.stem, d.name, texto.strip()))
+            for texto in scope_request_texts(data):
+                out.append((f.stem, d.name, texto))
     return out, poblacion
+
+
+def is_long_source(bibcode: str) -> bool:
+    """Does this paper's note declare it is cited by page/section, i.e. a LONG source (#80)?
+
+    Read from the note's frontmatter, which is where `unidad_cita` lives (the extraction JSON does
+    not carry it). A missing note or `linea` (the default) is «not long»."""
+    nota = cfg.PAPERS / f"{cfg.note_stem(bibcode)}.md"
+    if not nota.exists():
+        return False
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
+    unidad = str(fm.get("unidad_cita") or "").strip()
+    return bool(unidad) and unidad != "linea"
+
+
+def scope_request_texts(data: dict) -> list:
+    """The verbatim requests one extraction JSON carries: its `hueco` and its prose `salvedades`.
+
+    `hueco` may arrive as a string (the schema) or a list (tolerated); a `salvedades` item is
+    prose when it is a string or a map with no `tipo` — the structured ones (`SALVEDAD_TIPOS`) are
+    decidable facts about the artefact, which the harvester checks, not requests to a person."""
+    textos: list = []
+    hueco = data.get("hueco")
+    for h in (hueco if isinstance(hueco, list) else [hueco]):
+        texto = h if isinstance(h, str) else str(h.get("hueco") or "") if isinstance(h, dict) else ""
+        if texto.strip():
+            textos.append(texto.strip())
+    for s in cfg.as_list(data.get("salvedades")):
+        if isinstance(s, str) and s.strip():
+            textos.append(s.strip())
+        elif isinstance(s, dict) and not s.get("tipo") and str(s.get("nota") or "").strip():
+            textos.append(str(s["nota"]).strip())
+    return textos
 
 
 def refutations(slug: str | None = None) -> tuple:

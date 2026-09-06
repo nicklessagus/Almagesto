@@ -758,3 +758,28 @@ def test_un_slug_de_ESTRELLA_sigue_generando_el_prompt(toy_vault, monkeypatch, c
     (cfg.PDFS / "test_star" / "2020Test.pdf").write_bytes(b"%PDF-1.4\n")
     assert _run_main(monkeypatch, ["test_star", "2020Test"]) == 0
     assert "⛔ '" not in capsys.readouterr().out
+
+
+def test_el_txt_bajo_OTRO_slug_si_es_indice_y_los_greps_apuntan_ahi(toy_vault):
+    """#405 — `hay_pdf` resolvía entre slugs (#305) y `hay_txt` sólo bajo el del sujeto: el prompt
+    emitía «NO HAY ÍNDICE» sobre un paper cuyo `.txt` está bajo el slug que lo ingestó primero —el
+    retro-tagueado, por definición—. El extractor lee el PDF igual (#205), pero pierde el índice
+    para UBICAR, y en un paper largo eso es grepear un término contra recorrer 30 páginas.
+
+    Apuntar a la copia ajena es seguro sólo porque D-18/D-20 ya lo vigilan: el lint bloquea el
+    mismo bibcode con `.txt` distinto entre slugs."""
+    bib = "2020Retro"
+    mk_note(cfg.PAPERS, bib, {"tags": ["paper"], "bibcode": bib})
+    (cfg.PDFS / "otro").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "otro" / f"{bib}.pdf").write_bytes(b"%PDF-1.4\n")
+    (cfg.FULLTEXT / "otro").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "otro" / f"{bib}.txt").write_text("texto del paper", encoding="utf-8")
+    prompt = ep.build_prompt("test_star", bib, "Estrella Test", ["HD 12345"])
+    assert "NO HAY ÍNDICE" not in prompt, "el índice EXISTE, bajo otro slug"
+    assert "grep -niE" in prompt and f"vault/raw/fulltext/otro/{bib}.txt" in prompt, \
+        "los `grep` apuntan a la copia que existe, no a la ruta del sujeto"
+    assert f"vault/raw/fulltext/test_star/{bib}.txt" not in prompt, \
+        "y no a un archivo que no está"
+    # y sin copia en NINGÚN lado la ruta sigue siendo la del sujeto: es donde `extract_fulltext`
+    # la escribiría, y ahí el «no hay índice» es verdad
+    assert "NO HAY ÍNDICE" in ep.build_prompt("test_star", "2020SinPDF", "Estrella Test", ["HD 12345"])

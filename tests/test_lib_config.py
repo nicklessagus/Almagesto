@@ -3218,3 +3218,18 @@ def test_fold_tex_no_es_un_renderizador_y_deja_lo_que_no_entiende():
     assert cfg.fold_tex(r"9.2 M$_{{\ensuremath{\oplus}}}$") == r"9.2 M_\oplus"
     assert cfg.fold_tex("") == "" and cfg.fold_tex(None) is None
     assert cfg.fold_tex(2020) == 2020, "lo que no es un string vuelve como está"
+
+
+def test_txt_slug_resuelve_bajo_cualquier_slug_con_precedencia(toy_vault):
+    """#405 — el gemelo de `pdf_slug`, para la misma población y por el mismo motivo: #305 corrigió la
+    resolución del PDF entre slugs y dejó el `.txt` resuelto SÓLO bajo el slug del sujeto, así que el
+    prompt decía «no hay índice» sobre 26 de 208 reclamos de tema cuyo `.txt` está bajo otro slug.
+    Misma precedencia declarada: el preferido, después el menor, nunca según el orden de ingesta."""
+    for slug in ("zeta", "ica"):
+        (cfg.FULLTEXT / slug).mkdir(parents=True, exist_ok=True)
+        (cfg.FULLTEXT / slug / "2002Cardoso.txt").write_text("x", encoding="utf-8")
+    assert cfg.txt_slug("2002Cardoso") == "ica", "sin preferencia, el menor: determinista"
+    assert cfg.txt_slug("2002Cardoso", "zeta") == "zeta", "el preferido, si está"
+    assert cfg.txt_slug("2002Cardoso", "no_existe") == "ica", "cae al menor, no a None"
+    assert cfg.txt_slug("2020nada") is None
+    assert cfg.txt_slug("2020nada", "ica") is None, "el preferido sin copia tampoco inventa"

@@ -30,11 +30,72 @@ def test_el_pedido_de_ampliar_el_alcance_sale_CON_SU_MOTIVO(toy_vault):
     `--reason` obligatorio del triage)."""
     motivo = ("el capítulo de contrastes es el cap. 3 y FastICA/negentropía el cap. 6, los dos "
               "fuera del alcance declarado")
-    _extraccion("ica", "2010CJ", hueco=[motivo])
-    _extraccion("ica", "2001HKO")
+    _nota_larga("2010CJ"); _nota_larga("2001HKO")
+    # ⛔ #402 — `hueco` es un STRING en el schema que recibe todo extractor (`"hueco":""` en el
+    # bloque de salida del prompt). El doble de este test lo escribía como LISTA, y el productor
+    # real escribe un string: `as_list` sobre un escalar devuelve `[]`, el bucle nunca corría, y
+    # la pantalla publicaba `0 · sobre N extracciones` — un falso limpio con población declarada
+    # (D-43), sobre 206 extracciones de una bóveda real. Regla de método 2, textual: el doble con
+    # distinto contrato que la función real escondía el bug en la diferencia.
+    _extraccion("ica", "2010CJ", hueco=motivo)
+    _extraccion("ica", "2001HKO", hueco="")
     filas, poblacion = pr.scope_requests()
     assert poblacion == 2, "declara sobre cuántas extracciones miró (INV-40)"
     assert filas == [("2010CJ", "ica", motivo)]
+    # la lista se TOLERA al leer (nunca se normaliza al escribir): mismo resultado
+    _extraccion("ica", "2010CJ", hueco=[motivo])
+    assert pr.scope_requests()[0] == [("2010CJ", "ica", motivo)]
+
+
+def _nota_larga(bib: str, unidad: str = "pagina") -> None:
+    """La nota de paper que declara una fuente LARGA (#80): es lo que define la población."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / f"{bib}.md").write_text(
+        f"---\nbibcode: {bib}\nunidad_cita: {unidad}\nalcance: caps. 1-3\n---\n\n## Abstract\n\nx\n",
+        encoding="utf-8")
+
+
+def test_el_pedido_de_alcance_lo_hace_el_extractor_donde_el_PROMPT_le_dice(toy_vault):
+    """#402 — el prompt manda «extraé lo que hay dentro y decilo en `salvedades`», y la herramienta
+    leía SÓLO `hueco`. Se leen los dos: el `hueco` (string o lista) y toda salvedad en PROSA — una
+    estructurada (`tipo` de `SALVEDAD_TIPOS`) es un hecho decidible sobre el artefacto que chequea
+    el cosechador, no un pedido a una persona."""
+    _nota_larga("2010CJ")
+    _extraccion("ica", "2010CJ", hueco="", salvedades=[
+        "el §11.2 del manual queda fuera del alcance y el tema lo necesita",
+        {"tipo": "pdf_paginas", "n": 300},
+        {"nota": "ampliar a §3", "motivo": "sin tipo: es prosa"}])
+    filas, _p = pr.scope_requests()
+    textos = [m for _b, _s, m in filas]
+    assert "el §11.2 del manual queda fuera del alcance y el tema lo necesita" in textos
+    assert "ampliar a §3" in textos, "el mapa SIN `tipo` es prosa, y se lee su `nota`"
+    assert not any("pdf_paginas" in m or "300" in m for m in textos), \
+        "la salvedad ESTRUCTURADA es un hecho chequeable, no un pedido"
+    # las dos guardas de forma: el mapa CON `tipo` no cuenta aunque traiga `nota` (es estructurado),
+    # y el mapa sin `tipo` pero con `nota` vacía tampoco (no hay texto que proponer)
+    _extraccion("ica", "2010CJ", hueco="", salvedades=[
+        {"tipo": "txt_pierde", "cadena": "√", "nota": "esto NO es un pedido"},
+        {"nota": "   "}, {"motivo": "sin nota no hay texto"}])
+    assert pr.scope_requests()[0] == [], pr.scope_requests()[0]
+
+
+def test_el_hueco_de_una_fuente_CORTA_no_es_un_pedido_de_alcance(toy_vault):
+    """#402 — la categoría es «ampliar el `alcance` de una fuente LARGA»: el `hueco` de un paper de
+    once páginas es un campo de propósito general que el prompt pide llenar siempre, no un pedido
+    de ampliar nada. Contarlo listaría todas las extracciones de la bóveda como propuestas — el
+    ruido que hace que una categoría se deje de leer. Población = notas con `unidad_cita` ≠ línea."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020Corto.md").write_text(
+        "---\nbibcode: 2020Corto\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
+    _extraccion("ica", "2020Corto", hueco="no pude confirmar el valor de la Tabla 3")
+    _extraccion("ica", "2021SinNota", hueco="tampoco")
+    _nota_larga("2010CJ", unidad="linea")
+    _extraccion("ica", "2010CJ", hueco="una fuente que se cita por línea no es larga")
+    filas, poblacion = pr.scope_requests()
+    assert (filas, poblacion) == ([], 0), "sin fuentes largas la población es CERO, y se dice"
+    assert pr.is_long_source("2020Corto") is False and pr.is_long_source("2021SinNota") is False
+    _nota_larga("2010CJ", unidad="seccion")
+    assert pr.is_long_source("2010CJ") and pr.scope_requests()[1] == 1
 
 
 def test_la_refutacion_se_PROPONE_con_el_comando_que_la_aplicaria(toy_vault):

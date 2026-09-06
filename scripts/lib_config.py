@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.237.0"
+ALMAGESTO_VERSION = "1.238.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2999,6 +2999,26 @@ def pdf_slug(stem: str, prefiere: str | None = None) -> str | None:
     if prefiere and (PDFS / prefiere / f"{stem}.pdf").exists():
         return prefiere
     otros = sorted(PDFS.glob(f"*/{stem}.pdf")) if PDFS.exists() else []
+    return otros[0].parent.name if otros else None
+
+
+def txt_slug(stem: str, prefiere: str | None = None) -> str | None:
+    """Which slug actually holds this paper's `.txt`, or `None` when no copy exists (#405).
+
+    The twin of `pdf_slug`, for the same population and the same reason: #305 fixed the PDF
+    resolution across slugs and left the `.txt` resolved under the SUBJECT's slug only, so the
+    extraction prompt said «there is no index, no grep to run» about a paper whose `.txt` sat under
+    another slug — measured on a real vault, 26 of 208 theme claims, across five themes. The
+    extractor still reads the PDF (#205), but loses the index it uses to LOCATE, and in a long paper
+    that is the difference between grepping a term and walking 30 pages.
+
+    ⛔ Pointing at another slug's copy is safe ONLY because D-18/D-20 already guard it: the lint
+    BLOCKS the same bibcode with a different `.txt` between slugs, so whichever copy resolves is
+    the same text. Declared precedence, same as `pdf_slug`: the preferred slug first, then the
+    lexicographically smallest, so the answer does not depend on ingest order."""
+    if prefiere and (FULLTEXT / prefiere / f"{stem}.txt").exists():
+        return prefiere
+    otros = sorted(FULLTEXT.glob(f"*/{stem}.txt")) if FULLTEXT.exists() else []
     return otros[0].parent.name if otros else None
 
 

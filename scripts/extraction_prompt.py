@@ -102,8 +102,13 @@ def subject_patterns(name: str, aliases=(), kind: str = "star") -> list[str]:
 
 
 def _txt_rel(slug: str, bibcode: str) -> str:
-    """Repo-root-relative path of the fulltext, the way every script and grep names it."""
-    return f"{(cfg.FULLTEXT / slug / (bibcode + '.txt')).relative_to(cfg.ROOT).as_posix()}"
+    """Repo-root-relative path of the fulltext, the way every script and grep names it.
+
+    #405 — resolved across slugs with `cfg.txt_slug`, the same rule `pdf_slug` applies to the PDF:
+    the grep the prompt hands the extractor has to point at the copy that EXISTS. When no copy
+    exists anywhere the path stays the subject's, which is where `extract_fulltext` would write it."""
+    donde = cfg.txt_slug(bibcode, slug) or slug
+    return f"{(cfg.FULLTEXT / donde / (bibcode + '.txt')).relative_to(cfg.ROOT).as_posix()}"
 
 
 def is_extraction(d) -> bool:
@@ -492,7 +497,7 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
                               ensure_ascii=False, separators=(",", ":"))
     metodos_conocidos = known_methods()   # #245: el vocabulario que la bóveda ya tiene
     hay_pdf = cfg.pdf_slug(bibcode, slug) is not None    # #305: la misma resolución que el cosechador
-    hay_txt = (cfg.FULLTEXT / slug / f"{bibcode}.txt").exists()
+    hay_txt = cfg.txt_slug(bibcode, slug) is not None    # #405: ídem, la misma regla que el PDF
     txt_nota = f"""
 ⛔ **El `.txt` NO es fuente.** `{_txt_rel(slug, bibcode)}` lo produce `pdftotext` y es el **índice
 de búsqueda** del corpus, no material de lectura: sirve para *ubicar* dónde se menciona el sujeto,

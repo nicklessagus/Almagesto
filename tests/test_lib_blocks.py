@@ -176,6 +176,21 @@ def test_source_hash_estable_y_sensible(tmp_path):
     assert lb.source_hash(p) != h
 
 
+def test_source_hash_REHUSA_un_pdf(tmp_path):
+    """#403 — el contrato («lee TEXTO; para un PDF hasheá los bytes») vivía en prosa y nada lo hacía
+    cumplir: `errors="replace"` hace que leer binario como UTF-8 no falle, así que un PDF pasaba y
+    producía un hash que nunca iba a coincidir con el que el lint calcula por bytes. Medido armando
+    un `.verif.md` a mano: **117 pares «vencidos por fuente»** sobre PDFs que nadie tocó, con el
+    mensaje apuntando al lugar equivocado. El error tiene que saltar donde el hash se ESCRIBE."""
+    pdf = tmp_path / "2019Autor.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n\x00\xff binario")
+    with pytest.raises(ValueError, match="pdf:"):
+        lb.source_hash(pdf)
+    with pytest.raises(ValueError):
+        lb.source_hash(tmp_path / "2019Autor.PDF")     # la extensión no distingue mayúsculas
+    assert len(lb.sha10(pdf.read_bytes())) == 10, "el camino correcto para el `pdf:` kind sigue abierto"
+
+
 def test_sha10_permite_pasar_el_texto_ya_leido(tmp_path):
     """El lint YA lee cada `.txt` para `is_legible` (77% de sus 5,6 s sobre 908 notas): una sola
     lectura tiene que alimentar los dos chequeos. Sin esta puerta, agregar el hash de fuente

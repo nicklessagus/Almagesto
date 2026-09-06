@@ -167,6 +167,32 @@ def split_salvedades(bibcode: str, data: dict) -> tuple[list, list, list]:
     return verificadas, prosa, falsas
 
 
+def split_subject_slugs(valores: list, slug: str) -> tuple[list, list]:
+    """`(métodos, slugs)` — what the extractor wrote in `methods` that is NOT a method (#404).
+
+    The prompt asks «what does this paper say about {sujeto}» naming the subject by its SLUG, and
+    the extractor hands the slug back as if it were a method of the paper. Measured on a real
+    corpus: 19 of 206 extractions, across four themes — not an accident of one run. It matters
+    because `methods` is «how the PAPER names it» (that is why it is normalised on compare and
+    never on write, #243), and no paper writes `harps-drs`; and because the lint then reports «el
+    mismo método con 2 grafías» and proposes unifying the spelling, which CONTRADICTS #243 — the
+    operator is left choosing between two rules of the framework.
+
+    Filtered by normalised key (`method_key`) against the SUBJECT's slug only, so `ica` and `ICA`
+    are the same slug. ⚠ NOT against the stems of `concepts/`, which the issue also suggested: a
+    `methods: [pca]` that resolves to `concepts/methods/pca.md` is not a defect, it is the roll-up
+    doing its job (#245 links `[[método]]` exactly when that note exists) — filtering it would
+    silently disconnect every paper from every method concept it names. What no paper names is the
+    subject's own identifier, and that is the measured population. ⛔ The JSON is not touched: it
+    is versioned and not regenerable without re-reading the PDF (#311). The filter lives here, at
+    the one gate that WRITES the note."""
+    clave = cfg.method_key(slug)
+    metodos, slugs = [], []
+    for v in valores:
+        (slugs if cfg.method_key(v) == clave else metodos).append(v)
+    return metodos, slugs
+
+
 def render_view(sujeto: str, data: dict) -> str:
     """The `## Vista — <sujeto>` section built from one extraction JSON.
 
@@ -535,7 +561,8 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False) -> dict:
     `is_extraction` (INV-103), and an external `src` would let it harvest from an unversioned
     directory — exactly what #311 forbids. No caller ever passed one."""
     src = cfg.EXTRACCION / slug              # #311: versionadas, no en `build/`
-    n = {"cosechadas": 0, "rechazadas": 0, "sin_nota": 0, "sin_cambios": 0, "txt_traidos": 0}
+    n = {"cosechadas": 0, "rechazadas": 0, "sin_nota": 0, "sin_cambios": 0, "txt_traidos": 0,
+         "slug_en_methods": 0}
     if not src.exists():
         cfg.print_seguro(f"  (sin {src}; nada que cosechar)")
         return n
@@ -717,6 +744,12 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False) -> dict:
             continue
         for campo in ("methods", "thesis_links", "role"):
             valores = [str(x).strip() for x in cfg.as_list(data.get(campo)) if str(x).strip()]
+            if campo == "methods":
+                valores, _slugs = split_subject_slugs(valores, slug)
+                for _s in _slugs:
+                    n["slug_en_methods"] += 1
+                    cfg.print_seguro(f"  ⚠ {bib}: `{_s}` en `methods` es el SLUG del sujeto, no "
+                                     f"un método que el paper nombre — no se publica (#404)")
             if valores and mn.merge_frontmatter_list(dest, campo, valores):
                 toco = True
         # #213 — la salvedad estructurada que NO resiste su propio chequeo no se publica, y se
@@ -741,7 +774,9 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False) -> dict:
         f"  vistas: {n['cosechadas']} cosechadas, {n['sin_cambios']} sin cambios"
         + (f", {n['rechazadas']} RECHAZADAS" if n["rechazadas"] else "")
         + (f", {n['sin_nota']} sin nota destino" if n["sin_nota"] else "")
-        + (f", {n['txt_traidos']} .txt traídos al slug" if n["txt_traidos"] else ""))
+        + (f", {n['txt_traidos']} .txt traídos al slug" if n["txt_traidos"] else "")
+        + (f", {n['slug_en_methods']} slug(s) filtrados de `methods` (#404)"
+           if n["slug_en_methods"] else ""))
     if salvedades_falsas:
         cfg.print_seguro(f"\n⛔ {len(salvedades_falsas)} salvedad(es) ESTRUCTURADAS resultaron "
                          f"FALSAS contra el archivo y NO se publicaron (#213). Una afirmación "

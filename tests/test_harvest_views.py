@@ -256,6 +256,43 @@ def test_cosecha_mergea_methods_role_y_thesis_links_add_only(toy_vault):
     assert fm["role"] == ["aplicacion"] and fm["thesis_links"] == ["activity-rv"]
 
 
+def test_el_SLUG_del_sujeto_no_se_publica_como_metodo(toy_vault, capsys):
+    """#404 — el prompt nombra el sujeto por su slug y el extractor lo devuelve dentro de `methods`
+    (19 de 206 extracciones, en cuatro temas). `methods` es «cómo lo nombra el PAPER» —por eso se
+    normaliza al comparar y nunca al escribir (#243)— y ningún paper escribe `harps-drs`. Publicado,
+    el lint reportaba «el mismo método con 2 grafías» y proponía unificar la grafía, que CONTRADICE
+    #243: el operador quedaba eligiendo entre dos reglas del framework.
+
+    El filtro vive en la única compuerta que ESCRIBE la nota; el JSON no se toca (#311).
+
+    ⚠ Y filtra SÓLO el slug del sujeto, no los stems de `concepts/` que el issue también sugería:
+    `methods: [PCA]` con `concepts/methods/pca.md` en disco es el roll-up funcionando (#245), no un
+    defecto — filtrarlo desconectaría en silencio a todo paper de todo método que nombra."""
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "pca.md").write_text("---\ntags: [concept]\n---\n# PCA\n",
+                                                     encoding="utf-8")
+    dest = sembrar(toy_vault, extraccion(methods=["periodograma", "test_star", "TEST_STAR", "PCA"]))
+    hv.harvest("test_star")
+    fm = read_fm(dest)
+    assert fm["methods"] == ["periodograma", "PCA"], fm["methods"]
+    out = capsys.readouterr().out
+    assert "es el SLUG del sujeto" in out and "2 slug(s) filtrados" in out
+    assert "test_star" in out, "se NOMBRA lo que se filtró: no se cura en silencio"
+    # el JSON versionado queda tal cual (#311): el filtro es del cosechador, no de la extracción
+    import json as _json
+    guardado = _json.loads(next((cfg.EXTRACCION / "test_star").glob("*.json")).read_text(encoding="utf-8"))
+    assert "test_star" in guardado["methods"]
+
+
+def test_split_subject_slugs_compara_por_CLAVE_normalizada(toy_vault):
+    """#404 — `ica`, `ICA` e `I.C.A.` son el mismo slug bajo `method_key` (#243): filtrar por string
+    crudo dejaría pasar la mitad. Y lo que no es slug ni stem de concepto pasa intacto, con SU
+    grafía — la del extractor es información."""
+    metodos, slugs = hv.split_subject_slugs(["GLS", "ica", "ICA", "SysRem"], "ica")
+    assert metodos == ["GLS", "SysRem"] and slugs == ["ica", "ICA"]
+    assert hv.split_subject_slugs([], "ica") == ([], [])
+
+
 def test_cosecha_escribe_la_seccion_de_la_vista(toy_vault):
     dest = sembrar(toy_vault)
     hv.harvest("test_star")

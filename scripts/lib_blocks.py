@@ -135,9 +135,20 @@ def sha10(text: str | bytes) -> str:
 
 
 def source_hash(path: Path) -> str:
-    """Hash de un archivo de fuente leído como TEXTO (el `.txt`; the `txt:` kind). For a PDF hash
-    its bytes with `sha10` directly. Cuando el texto ya está en memoria, usar `sha10` directo.
+    """Hash of a source file read as TEXT (the `.txt`; the `txt:` kind). For a PDF hash its bytes
+    with `sha10(path.read_bytes())` — the `pdf:` kind. When the text is already in memory, call
+    `sha10` directly.
+
+    ⛔ Refuses a `.pdf` (#403). The contract above lived in prose and nothing enforced it:
+    `errors="replace"` makes reading binary as UTF-8 succeed, so a PDF went through and produced a
+    hash that could never match the one the lint computes from bytes. Measured writing a
+    `.verif.md` by hand: **117 pairs «vencidos por fuente»** over PDFs nobody had touched, and the
+    message pointed at the wrong place («el PDF cambió desde la verificación»). The error has to
+    fire where the hash is WRITTEN, not 117 findings later.
     @inv INV-78"""
+    if Path(path).suffix.lower() == ".pdf":
+        raise ValueError(f"source_hash lee TEXTO y recibió un PDF ({Path(path).name}): para el "
+                         f"`pdf:` kind usá `sha10(path.read_bytes())` (#403)")
     return sha10(Path(path).read_text(encoding="utf-8", errors="replace"))
 
 
