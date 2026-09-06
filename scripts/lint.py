@@ -5528,7 +5528,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     bibtex_sin_fuente: list = []       # (stem, motivo) — #397: `bibtex` sin `bibtex_source`
     bibtex_drift: list = []            # (stem, motivo) — #397: frontmatter ≠ exportación oficial
     old_bearing: list = []             # `bearing` en nota de paper: schema pre-D-21
-    sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)  @inv INV-94
+    sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
     # `stars.yaml`/`themes.yaml` ilegibles no pueden tumbar el lint: se declaran NO EVALUADO y los
     # chequeos que dependen de ellos se saltean con población vacía (INV-80/INV-87).
@@ -6116,7 +6116,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     #   (e) bloque sin columnas de hash        → plantilla vieja   (BLOQUEANTE siempre)
     # (e) va aparte y bloquea sin `--cierre`: no es un par vencido, es un bloque que nadie puede
     # evaluar — reportarlo como "0 vencidos" sería el cero inventado que D-43 prohíbe.
-    # @inv INV-78, INV-79
+    # ⛔ La marca `@inv` de los dos invariantes vive en `check_verif_row_pairs`, que es quien los
+    # cumple: dejarla acá le adjudicaba a `collect` un chequeo que ya no hace (#396, regla 4).
     # #117: el archivo que vigila cada fila lo declara LA FILA (`txt:` / `pdf:` en `Hash fuente`),
     # no el frontmatter. La regla inferida de #113/B-2 —`symbols_lost` ⇒ PDF, si no el `.txt`— es
     # más angosta que la práctica: una fuente `ocr` también se verifica contra el PDF cuando el
