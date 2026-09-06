@@ -8576,3 +8576,129 @@ def test_check_objective_placeholder_calla_si_el_objetivo_no_se_pudo_LEER(toy_va
     filas = lint.check_objective_placeholder(None)
     assert len(filas) == 1 and "placeholder del template" in filas[0][1]
     assert lint.check_objective_placeholder("el YAML no parsea") == []
+
+
+# ── #396 · las doce categorías del bloque de verificación ────────────────────────────────────────
+
+def _ruta_nota(stem="nota-verif"):
+    return cfg.CONCEPTS / "methods" / f"{stem}.md"
+
+
+def test_check_verification_pairs_saltea_la_nota_en_sus_TRES_casos(toy_vault):
+    """#396/#344 — el driver. Tres motivos distintos para dejar de mirar una nota, y ninguno es el
+    mismo: la tabla que sigue DENTRO (schema viejo — detector, nunca lector tolerante), el hermano
+    que NO EXISTE (la cabecera afirma pares que nadie puede evaluar, INV-148) y la plantilla vieja
+    (`filas is None`, que **no** es «cero pares»). En los tres no se puede decir nada más de esa
+    nota, así que el barrido sigue."""
+    _con_ancla(toy_vault, CUERPO)
+    ruta = _ruta_nota()
+    anchor = {("nota-verif", ruta.read_text(encoding="utf-8"), ruta)}
+    sin_hash = lambda _b, _k: None      # noqa: E731
+    r = lint.check_verification_pairs(anchor, sin_hash)
+    assert r[6] == [] and r[7] == [] and r[1] == [], "la nota sana no dispara ningún salto"
+
+    # (1) la tabla vuelve a la nota (schema pre-1.165.0) → `verif_inline`, y NADA más se evalúa.
+    # Se arma sin el migrador a propósito: lo que este caso simula es la nota que nunca se migró.
+    inline = mk_note(cfg.CONCEPTS / "methods", "sin-migrar", {"tags": ["methods"]},
+                     CUERPO + "\n## Verificación de citas (2026-01-01)\n\n"
+                     + "\n".join(l for l in _hermano(toy_vault).read_text(encoding="utf-8")
+                                  .splitlines() if l.startswith("|")) + "\n")
+    r = lint.check_verification_pairs(
+        {("sin-migrar", inline.read_text(encoding="utf-8"), inline)}, sin_hash)
+    assert len(r[6]) == 1 and "--migrate-verif-sidecar" in r[6][0][1]
+    assert r[0] == [] and r[8] == [], "salteada: no se dice nada más de ella"
+
+    # (2) el hermano desaparece → `verif_sin_hermano`
+    _con_ancla(toy_vault, CUERPO)
+    _hermano(toy_vault).unlink()
+    texto = ruta.read_text(encoding="utf-8")
+    r = lint.check_verification_pairs({("nota-verif", texto, ruta)}, sin_hash)
+    assert len(r[7]) == 1 and "no existe su hermano" in r[7][0][1]
+
+    # (3) plantilla vieja: sin `Ancla` / `Hash fuente` → `old_verif_template`
+    _con_ancla(toy_vault, CUERPO)
+    h = _hermano(toy_vault)
+    h.write_text("| # | Afirmación (extracto) | Fuente | Veredicto |\n|---|---|---|---|\n"
+                 "| 1 | x | [[2020citC...1..1C]] | soportada |\n", encoding="utf-8")
+    r = lint.check_verification_pairs({("nota-verif", texto, ruta)}, sin_hash)
+    assert len(r[1]) == 1 and "plantilla vieja" in r[1][0][1]
+    assert r[0] == [], "no es «cero pares»: es que no se puede evaluar ninguno"
+
+
+def test_check_verif_structure_pide_las_tres_subsecciones_y_la_cabecera(toy_vault):
+    """#396/#232/#344/INV-148 — la estructura del bloque, que nadie miraba más allá de la tabla.
+    Las tres sub-secciones van **aunque digan «ninguna»**: son el único lugar donde queda escrito
+    el triage de la corrida, y la diferencia entre «no hubo» y «nadie miró» es lo que este
+    framework persigue.  @inv INV-148"""
+    _con_ancla(toy_vault, CUERPO)
+    ruta = _ruta_nota()
+    texto = ruta.read_text(encoding="utf-8")
+    filas = lb.verif_rows(ruta)
+    est, cab = lint.check_verif_structure("nota-verif", texto, ruta, filas)
+    assert len(est) == 1 and "de las tres sub-secciones" in est[0][1]
+    assert len(cab) == 1 and lb.verif_summary(filas) in cab[0][1]
+
+    # la nota que SÍ publica la cabecera canónica y las tres sub-secciones con SU conteo
+    # (INV-81: los números los da el mismo código que lee la tabla, nunca la prosa)
+    _fm = cfg.frontmatter_span(texto)
+    frags = lb.verif_subsection_lines(filas, cfg.solo_prosa(_fm[1] if _fm else texto))
+    completo = (texto + "\n" + lb.verif_summary(filas) + "\n"
+                + "".join(f"\n{s} {frags.get(s, '')}: ninguna\n" for s in lb.VERIF_SUBSECCIONES))
+    est, cab = lint.check_verif_structure("nota-verif", completo, ruta, filas)
+    assert est == [] and cab == [], (est, cab)
+
+
+def test_check_verif_row_pairs_no_inventa_hallazgos_sobre_la_fila_correcta(toy_vault):
+    """#396 — las tres guardas del bucle de filas que ningún test distinguía, y las tres apagan un
+    falso positivo sobre una fila que está BIEN:
+
+    · la condición VACÍA no es «condición sin clasificar» (#221) — sólo se pide clasificar la que
+      está escrita;
+    · el localizador que CASA con el archivo vigilado no es el cruce de #122 — se reporta cuando
+      la fila cita una página y vigila el `.txt`, no cuando coinciden;
+    · el veredicto `no verificable por extracción` exime de declarar archivo SÓLO si la fila no lo
+      declara (#223): la que sí lo declara se sigue evaluando contra el disco.
+
+    ⚠ Declarado: el `_locs` de `if _locs and _locs != {fila.source_kind} and len(_locs) == 1`
+    sobrevive a `mutar --guardas` y va a seguir sobreviviendo — `len(_locs) == 1` ya implica que no
+    está vacío, así que la primera cláusula no decide nada. Familia de la red 8 sobre código
+    anterior a #396; se anota en vez de inventarle un test que probaría otra cosa.
+    """
+    ft = _con_ancla(toy_vault, CUERPO)
+    ruta = _ruta_nota()
+    texto = ruta.read_text(encoding="utf-8")
+    vigente = lambda _b, k: lb.source_hash(ft) if k == "txt" else None   # noqa: E731
+
+    filas = lb.verif_rows(ruta)
+    r = lint.check_verif_row_pairs("nota-verif", texto, filas, vigente)
+    # ⚠ `verif_sin_localizador` (índice 4) SÍ sale: la tabla base no tiene columna `Evidencia`, así
+    # que el cruce de #122 declara que no se pudo evaluar — que es su trabajo (#226), no un falso
+    # positivo. Los otros seis tienen que callar.
+    assert [x for i, x in enumerate(r) if i != 4] == [[]] * 6, r
+    # la condición vacía no se reporta como sin clasificar, ni escrita como «—» ni en blanco
+    assert r[6] == []
+    _editar_tabla(toy_vault, "| — |", "|  |")
+    assert lint.check_verif_row_pairs("nota-verif", texto, lb.verif_rows(ruta), vigente)[6] == [], \
+        "la celda EN BLANCO tampoco: no hay condición que clasificar"
+    _editar_tabla(toy_vault, "|  |", "| bajo SNR alto |")
+    r = lint.check_verif_row_pairs("nota-verif", texto, lb.verif_rows(ruta), vigente)
+    assert len(r[6]) == 1 and "acota:" in r[6][0][1], "la condición ESCRITA sí se pide clasificar"
+
+    # el localizador que casa con el archivo vigilado no es hallazgo de #122
+    _con_ancla(toy_vault, CUERPO)
+    _con_evidencia(toy_vault, '"la cita" (`.txt` L1)')
+    r = lint.check_verif_row_pairs("nota-verif", texto, lb.verif_rows(ruta), vigente)
+    assert r[2] == [], "línea + `txt:` casan: no hay contradicción que reportar"
+    _con_ancla(toy_vault, CUERPO)
+    _con_evidencia(toy_vault, '"la cita" (p. 628)')
+    r = lint.check_verif_row_pairs("nota-verif", texto, lb.verif_rows(ruta), vigente)
+    assert len(r[2]) == 1 and "cita una PÁGINA" in r[2][0][1]
+
+    # #223 — el veredicto sin archivo exime a la fila que NO declara archivo; la que declara uno
+    # sigue midiéndose contra el disco
+    _con_ancla(toy_vault, CUERPO, kind=None, verdict="no verificable por extracción")
+    r = lint.check_verif_row_pairs("nota-verif", texto, lb.verif_rows(ruta), vigente)
+    assert r[1] == [], "sin archivo declarado y con ese veredicto: no hay qué hashear (#223)"
+    _con_ancla(toy_vault, CUERPO, kind="pdf", verdict="no verificable por extracción")
+    r = lint.check_verif_row_pairs("nota-verif", texto, lb.verif_rows(ruta), vigente)
+    assert r[1] != [], "si la fila DECLARA un archivo, se evalúa contra el disco igual"

@@ -3054,6 +3054,332 @@ def check_objective_placeholder(obj_err) -> list:
     return objective_warn
 
 
+def check_verif_inline(stem: str, texto: str, ruta) -> list:
+    """`verif_inline` — the verification table is still INSIDE the note (#344, BLOQUEANTE).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Rows here
+    mean the caller must SKIP the note: **detector, never tolerant reader** — reading the table from
+    both sides would give it two homes, which is the duplication #344 came to remove.
+    """
+    verif_inline: list = []
+    # #344 · schema viejo: la tabla adentro de la nota. **Detector, nunca lector tolerante** —
+    # leerla de los dos lados dejaría dos casas para una tabla, que es la duplicación que #344
+    # vino a sacar (y la política del repo es migrador + bloqueante, sin capa de compat).
+    if lb.inline_verif_rows(texto):
+        verif_inline.append(
+            (stem, f"la tabla de verificación sigue DENTRO de la nota (schema anterior a "
+                   f"1.165.0) → `python scripts/make_notes.py --migrate-verif-sidecar` la mueve "
+                   f"a `{cfg.verif_sidecar(ruta).name}` y deja la cabecera, las tres "
+                   f"sub-secciones y el puntero"))
+    return verif_inline
+
+
+def check_verif_sidecar_missing(stem: str, ruta) -> list:
+    """`verif_sin_hermano` — the note claims N verified pairs and the sibling holding them is gone.
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. The other
+    half of the pair invariant (INV-148): the note publishes its header line, which is a claim about
+    N pairs, and the table that backs it is nowhere. Rows here mean the caller must SKIP the note.
+    """
+    verif_sin_hermano: list = []
+    if not cfg.verif_sidecar(ruta).exists():
+        # La otra mitad del par (INV-148): la nota publica su línea de cabecera —que es una
+        # afirmación sobre N pares— y la tabla que la respalda no está en ningún lado.
+        verif_sin_hermano.append(
+            (stem, f"la nota tiene bloque `## Verificación de citas` y no existe su hermano "
+                   f"`{cfg.verif_sidecar(ruta).name}` → la cabecera afirma pares que no se "
+                   f"pueden evaluar; re-correr `verify-citations` o mover la tabla con "
+                   f"`make_notes.py --migrate-verif-sidecar`"))
+    return verif_sin_hermano
+
+
+def check_old_verif_template(stem: str, ruta, filas) -> list:
+    """`old_verif_template` — the sidecar has no `Ancla` / `Hash fuente` columns (BLOQUEANTE).
+
+    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. `filas is
+    None` is what `lb.verif_rows` answers for the old template, and it is not «zero pairs»: nothing
+    about that note can be evaluated, so rows here mean the caller must SKIP it.
+    """
+    old_verif_template: list = []
+    if filas is None:
+        old_verif_template.append(
+            (stem, f"`{cfg.verif_sidecar(ruta).name}` no tiene las columnas `Ancla` / "
+                   f"`Hash fuente` (plantilla vieja) → no se puede evaluar qué par sigue "
+                   f"vigente; re-correr `verify-citations` para que lo reescriba con un par "
+                   f"por fila"))
+    return old_verif_template
+
+
+def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
+    """`(verif_estructura, verif_cabecera)` — the block's STRUCTURE, beyond the table (#232/#344).
+
+    Extracted from `lint.collect` by #396; the blocks compute and the caller accumulates. Three
+    rules that share one read of the note: the three sub-sections the template closes (they go in
+    even saying «ninguna» — the difference between «there was none» and «nobody looked» is exactly
+    what this framework chases), the canonical header line, and each sub-section's own count.
+
+    ⛔ The prose comes from THIS note. Until 1.144.0 `body_full` was passed in, assigned by another
+    sweep that had already finished, so the three notes of a `--cierre` got the LAST swept note's
+    counts — INV-81 violated inside the very check that mechanises it.
+
+    @inv INV-148
+    """
+    verif_estructura: list = []
+    verif_cabecera: list = []
+    # #232 — la ESTRUCTURA del bloque, que nadie miraba más allá de la tabla. Las tres
+    # sub-secciones que la plantilla cierra son el único lugar donde queda escrito el triage de
+    # la corrida: medido, de 91 condiciones pobladas 28 declaraban una omisión de la nota y
+    # nada decía cuáles se juzgaron no vinculantes — el razonamiento se hizo, vivió en `build/`
+    # (scratch) y no llegó al artefacto que viaja. Se exigen aunque digan «ninguna»: la
+    # diferencia entre «no hubo» y «nadie miró» es exactamente lo que este framework persigue.
+    _falt = [x for x in lb.VERIF_SUBSECCIONES if x not in texto]
+    if _falt:
+        verif_estructura.append(
+            (stem, f"el bloque no trae {len(_falt)} de las tres sub-secciones que la plantilla "
+                   f"cierra ({', '.join(_falt)}) — van aunque digan «ninguna»: es el único "
+                   f"lugar donde queda escrito el triage de la corrida"))
+    # #232/#344 — los conteos de la cabecera los da el MISMO código que lee la tabla (INV-81),
+    # y desde que la tabla vive en OTRO ARCHIVO la cabecera es lo único del rastro que viaja
+    # con la nota: si deriva, el consumidor no tiene cómo notarlo. Por eso se exige la línea
+    # CANÓNICA entera y bloquea (hasta 1.164.0 se comparaba sólo el fragmento «N pares», con la
+    # tabla ahí al lado para desmentirla). Severidad R-1: la cabecera la escribe
+    # `verify-citations`, que es paso de CIERRE, así que ahí bloquea; en la pasada periódica es
+    # deuda.  @inv INV-148
+    _resumen = lb.verif_summary(filas)
+    if not lb.verif_summary_stated(texto, filas):
+        verif_cabecera.append(
+            (stem, f"la cabecera de la nota no es la que da la tabla de "
+                   f"`{cfg.verif_sidecar(ruta).name}` ({len(filas)} filas) → línea canónica: "
+                   f"«{_resumen}»"))
+
+    # #280 — y el conteo de cada SUB-SECCIÓN, por el mismo argumento (INV-81) un nivel abajo.
+    # Se compara por FRAGMENTO verbatim, como el `N pares` de arriba: parsear el primer entero
+    # de la prosa erraría justo en el caso medido, donde la frase tiene dos números y el malo es
+    # el segundo. Sólo se chequea la sub-sección PRESENTE: la ausente ya la reporta `_falt`, y
+    # duplicar el hallazgo manda a hacer dos veces el mismo trabajo.
+    # ⛔ #337 — la prosa sale de ESTA nota. Hasta 1.144.0 se pasaba `body_full`, que lo asigna
+    # el barrido principal —otro loop, ya terminado—, así que las tres notas de un `--cierre`
+    # recibían el conteo de marcas `inferencia` de la ÚLTIMA nota barrida (medido: 1, 7 y 19
+    # marcas reales, «19» para las tres). Es INV-81 violado en el chequeo que lo mecaniza: la
+    # nota que publicaba SU número correcto quedaba reportada como deuda para siempre.
+    _fm_v = cfg.frontmatter_span(texto)
+    _frags = lb.verif_subsection_lines(filas, cfg.solo_prosa(_fm_v[1] if _fm_v else texto))
+    for _sub, _frag in _frags.items():
+        if _frag and _sub in texto and _frag not in texto:
+            verif_estructura.append(
+                (stem, f"la sub-sección «{_sub}» no publica el conteo que su propia tabla da → "
+                       f"línea canónica: «{_sub} {_frag}: …»"))
+    return verif_estructura, verif_cabecera
+
+
+def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tuple:
+    """The seven verdicts that are decided ROW BY ROW of the verification table (#396).
+
+    Returns `(stale_pairs, verif_sin_archivo, verif_localizador, verif_sin_resolver,
+    verif_sin_localizador, verif_truncada, cond_sin_clasificar)`. Extracted from `lint.collect`:
+    they all walk the same rows against the same `pairs_of(texto)`, which is the one thing they
+    share — each verdict is its own rule and none of them can be measured while this is a loop
+    inside a 3717-line function.
+
+    @inv INV-78, INV-79
+    """
+    stale_pairs: list = []
+    verif_sin_archivo: list = []
+    verif_localizador: list = []
+    verif_sin_resolver: list = []
+    verif_sin_localizador: list = []
+    verif_truncada: list = []
+    cond_sin_clasificar: list = []
+    pendientes = lb.pairs_of(texto)
+    for fila in filas:
+        # #91: el lint miraba el bloque SÓLO por su encabezado (¿existe? ¿está fresco?) y nunca
+        # su contenido, así que una fila `no-soportada` pasaba limpia — sentada bajo un
+        # encabezado que se lee como garantía. El contrato manda RESOLVER cada falla, no
+        # registrarla: es la frontera dura, igual que citar una fuente retractada.
+        if not lb.verdict_valido(fila.verdict):
+            # Typo o celda vacía: se arregla distinto que un `no-soportada` sin resolver, así
+            # que el mensaje no puede ser el mismo. Y hasta 2026-08-28 esto pasaba **limpio**:
+            # `resueltos('contradise')` devolvía True y apagaba el bloqueante de INV-117.
+            verif_sin_resolver.append(
+                (stem, f"[[{fila.bibcode}]] tiene `{fila.verdict or '(vacío)'}` en la columna "
+                       f"`Veredicto`, que no está en el vocabulario cerrado "
+                       f"({' | '.join(lb.VERDICTS)}): la celda no se puede leer, así que no "
+                       f"certifica nada — corregí el veredicto"))
+        elif not lb.resueltos(fila.verdict):
+            verif_sin_resolver.append(
+                (stem, f"[[{fila.bibcode}]] quedó `{fila.verdict}` en el bloque: la nota afirma "
+                       f"algo que su propia fuente no respalda → bajala a lo que dice la fuente, "
+                       f"reasigná la cita, marcala `inferencia`, o tagueá la disputa"))
+        exacto = next((p for p in pendientes
+                       if p.bibcode == fila.bibcode and p.anchor == fila.anchor), None)
+        if exacto is not None:
+            pendientes.remove(exacto)
+            # #113/B-2: si la fuente perdió el cuerpo de sus ecuaciones, la evidencia de sus
+            # pares es una PÁGINA del PDF y el archivo a vigilar es el PDF. Hashear el `.txt`
+            # ahí se dispara en falso al re-extraerlo (la fuente real no se movió) y no vigila
+            # el archivo del que sale la cita.
+            if fila.source_kind is None and lb.has_no_source_file(fila.verdict):
+                # #223: `no verificable por extracción` es propiedad de la FUENTE —no hay PDF ni
+                # `.txt` en disco— así que la fila NO PUEDE declarar un archivo: no hay qué
+                # hashear. Exigírselo era pedirle que nombrara un archivo justo a la fila que
+                # existe para decir que no lo hay. Mismo criterio con que ese veredicto ya está
+                # fuera de `VERDICTS_SIN_RESOLVER`.
+                continue
+            if fila.source_kind is None:
+                # #117: sin declaración no hay contra qué comparar. Inferirlo del frontmatter es
+                # justamente lo que fabricaba pares vencidos, así que acá se declara NO
+                # EVALUABLE y se migra — no se adivina.
+                verif_sin_archivo.append(
+                    (stem, f"la fila de [[{fila.bibcode}]] no declara contra qué archivo se "
+                           f"verificó (`Hash fuente` sin prefijo `txt:`/`pdf:`) → "
+                           f"`python scripts/make_notes.py --migrate-verif-archivo`"))
+                continue
+            # #122: el localizador de `Evidencia` y el prefijo dicen lo mismo desde ángulos
+            # distintos. Si discrepan, el hash vigila un archivo del que la cita no salió —
+            # se dispara en falso al re-extraer el `.txt` y no ve que el PDF cambió.
+            # #200: una fila con los DOS localizadores no es hallazgo (`len(_locs) == 1`), y ésa
+            # es la salida que el mensaje tiene que nombrar. Una fuente `unidad_cita: pagina`
+            # leída del `.txt` cae acá **siempre** —#80 manda citar por página, #117 que el
+            # prefijo case— y las dos salidas obvias empeoran la fila: poner `pdf:` miente sobre
+            # qué archivo se abrió, y citar por línea rompe #80. Medido: 6 de 8 filas marcadas
+            # de un concepto real eran ese caso, todas correctas.
+            # #226 — la celda TRUNCADA. Medido sobre las 99 filas de una nota real: 81
+            # `Evidencia` y 79 `Condición` cortadas con `…` a exactamente 191 caracteres. El
+            # docstring de `lib_blocks` dice que sin `condición` el bloque «tiraba lo que la
+            # corrida había encontrado sobre el régimen — el output más valioso del fan-out»;
+            # truncar hace la mitad de eso, y lo cortado NO se recupera desde la nota (una fila
+            # corta en «(a) la calibración sintética…» y nunca llega a (b)). El `Afirmación` sí
+            # se puede truncar: es un extracto por definición, y lo dice su encabezado.
+            for _col, _val in (("Evidencia", fila.evidence), ("Condición", fila.condition)):
+                if str(_val).rstrip().endswith("…"):
+                    verif_truncada.append(
+                        (stem, f"[[{fila.bibcode}]] par {fila.n}: `{_col}` quedó cortada con "
+                               f"`…` — lo que el fan-out encontró y no entró no se recupera "
+                               f"desde la nota; sólo `Afirmación (extracto)` es truncable"))
+            # #221 — la condición sin CLASIFICAR. El fan-out la puebla al 89 % de los pares,
+            # así que la instrucción «resolvé cada condición no vacía» es inaplicable tal cual
+            # —86 filas de `## Régimen de validez` sobre una nota de 413 líneas, contra la regla
+            # de poda— y se deja de cumplir en silencio. El vocabulario cerrado separa la que
+            # obliga a editar (`acota`: la afirmación es FALSA fuera de esa condición) de la que
+            # sólo agrega procedencia (`contextualiza`). Es el diagnóstico de #198 un eje más
+            # allá: acotar la pregunta, no eliminarla.
+            _cond = str(fila.condition or "").strip()
+            if _cond and _cond not in ("—", "-", "–") and lb.condition_kind(_cond) is None:
+                cond_sin_clasificar.append(
+                    (stem, f"[[{fila.bibcode}]] par {fila.n}: la condición no declara si "
+                           f"`acota:` (la afirmación es falsa fuera de ella → hay que resolverla) "
+                           f"o `contextualiza:` (agrega procedencia → va al reporte)"))
+            _locs = lb.locator_kinds(fila.evidence)
+            # #226 — `_locs` vacío NO puede ser silencio: es NO EVALUABLE, y acá eso se declara
+            # (D-43) en vez de resolverse a favor. Medido: al truncar `Evidencia` se va el `p. N`
+            # del final, así que 62 de 90 filas con `pdf:` no tenían localizador legible y el
+            # chequeo de #122 devolvía 0 — un cero que se lee como verde sobre el 69 % de la
+            # nota. Sub-disparo silencioso, la dirección de error que `lib_blocks` prohíbe.
+            if not _locs:
+                verif_sin_localizador.append(
+                    (stem, f"[[{fila.bibcode}]] par {fila.n}: la evidencia no trae localizador "
+                           f"(`p. N` o `L…`), así que el cruce de #122 contra `{fila.source_kind}:` "
+                           f"NO se pudo evaluar en esta fila"))
+            if _locs and _locs != {fila.source_kind} and len(_locs) == 1:
+                _l = next(iter(_locs))
+                verif_localizador.append(
+                    (stem, f"[[{fila.bibcode}]]: la evidencia cita "
+                           f"{'una PÁGINA' if _l == 'pdf' else 'una LÍNEA'} y la fila vigila "
+                           f"{'el `.txt`' if fila.source_kind == 'txt' else 'el PDF'} → si la "
+                           f"cita salió de ese archivo, re-anclar a `{_l}:`; si la fuente es "
+                           f"larga (`unidad_cita: pagina`) y se leyó del `.txt`, poné los DOS "
+                           f"localizadores (`p. 271 / \u0060.txt\u0060 L13931`) — las dos cosas "
+                           f"son ciertas y ninguna se ablanda"))
+            vigente = evidencia_hash_de(fila.bibcode, fila.source_kind)
+            que = "el PDF" if fila.source_kind == "pdf" else "el `.txt`"
+            if vigente is None:
+                verif_sin_archivo.append(
+                    (stem, f"la fila de [[{fila.bibcode}]] dice haberse verificado contra "
+                           f"{que} y ese archivo no está en la bóveda → no se puede evaluar "
+                           f"si la fuente cambió"))
+            elif fila.source_hash != vigente:
+                stale_pairs.append(
+                    (stem, f"[[{fila.bibcode}]] vencido **por fuente**: {que} cambió desde "
+                           f"la verificación ({fila.source_hash} → {vigente}) — re-verificar"))
+            continue
+        # sin coincidencia exacta: ¿la nota sigue citando esa fuente en algún bloque? Entonces
+        # la afirmación se EDITÓ. Si ya no la cita, la fila quedó huérfana. Se consume el par
+        # para no reportar el mismo evento dos veces (como edición Y como sin-verificar).
+        movido = next((p for p in pendientes if p.bibcode == fila.bibcode), None)
+        if movido is not None:
+            pendientes.remove(movido)
+            stale_pairs.append(
+                (stem, f"[[{fila.bibcode}]] vencido **por edición**: el bloque que lo cita "
+                       f"cambió desde la verificación ({fila.anchor} → {movido.anchor})"))
+        else:
+            stale_pairs.append(
+                (stem, f"fila **huérfana**: la tabla verifica [[{fila.bibcode}]] pero el cuerpo "
+                       "ya no lo cita — se borró la afirmación y la fila quedó afirmando de más"))
+    for p in pendientes:
+        stale_pairs.append(
+            (stem, f"[[{p.bibcode}]] **sin verificar**: hay una afirmación que lo cita y no "
+                   f"tiene fila en el bloque (ancla {p.anchor})"))
+    return stale_pairs, verif_sin_archivo, verif_localizador, verif_sin_resolver, verif_sin_localizador, verif_truncada, cond_sin_clasificar
+
+
+def check_verification_pairs(anchor_notes, evidencia_hash_de) -> tuple:
+    """The whole `## Verificación de citas` sweep, one note at a time (#396).
+
+    Returns `(stale_pairs, old_verif_template, verif_sin_archivo, verif_localizador,
+    verif_sin_resolver, verif_estructura, verif_inline, verif_sin_hermano, verif_cabecera,
+    verif_sin_localizador, verif_truncada, cond_sin_clasificar)`.
+
+    Extracted from `lint.collect` by #396, and it was the most entangled of the three regions the
+    plan named: TWELVE categories came out of one loop over `anchor_notes`. What they share is the
+    read of the note and of its `.verif.md` sibling; every verdict is its own rule, so each one is
+    its own module function and this is only the driver.
+
+    The driver keeps exactly what decides whether the note is swept at all, and the three cases are
+    not the same: the table still inside the note (#344 — schema, no reader), the sibling that does
+    not exist (INV-148 — the header claims pairs nobody can evaluate) and the old template
+    (`filas is None`, which is NOT «zero pairs»). In all three nothing further can be said about
+    that note, so the sweep moves on.
+    """
+    stale_pairs: list = []
+    old_verif_template: list = []
+    verif_sin_archivo: list = []
+    verif_localizador: list = []
+    verif_sin_resolver: list = []
+    verif_estructura: list = []
+    verif_inline: list = []
+    verif_sin_hermano: list = []
+    verif_cabecera: list = []
+    verif_sin_localizador: list = []
+    verif_truncada: list = []
+    cond_sin_clasificar: list = []
+    for stem, texto, ruta in sorted(anchor_notes):
+        if (inline := check_verif_inline(stem, texto, ruta)):
+            verif_inline += inline
+            continue
+        if (sin_hermano := check_verif_sidecar_missing(stem, ruta)):
+            verif_sin_hermano += sin_hermano
+            continue
+        filas = lb.verif_rows(ruta)
+        if (plantilla := check_old_verif_template(stem, ruta, filas)):
+            old_verif_template += plantilla
+            continue
+        _est, _cab = check_verif_structure(stem, texto, ruta, filas)
+        verif_estructura += _est
+        verif_cabecera += _cab
+        (_stale, _sin_arch, _loc, _sin_res,
+         _sin_loc, _trunc, _cond) = check_verif_row_pairs(stem, texto, filas, evidencia_hash_de)
+        stale_pairs += _stale
+        verif_sin_archivo += _sin_arch
+        verif_localizador += _loc
+        verif_sin_resolver += _sin_res
+        verif_sin_localizador += _sin_loc
+        verif_truncada += _trunc
+        cond_sin_clasificar += _cond
+    return (stale_pairs, old_verif_template, verif_sin_archivo, verif_localizador,
+            verif_sin_resolver, verif_estructura, verif_inline, verif_sin_hermano, verif_cabecera,
+            verif_sin_localizador, verif_truncada, cond_sin_clasificar)
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -3239,9 +3565,6 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     fuente_metadata_falsa: list = []   # (key, motivo) — #353: autor/año declarados ≠ Crossref (atribución falsa publicada)
     fuente_metadata_dudosa: list = []  # (key, motivo) — #353: título ≠, primera página no confirma, no evaluable o sin cruzar
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
-    cond_sin_clasificar: list = []     # (stem, motivo) — #221: condición sin `acota:`/`contextualiza:`
-    verif_truncada: list = []          # (stem, motivo) — #226: `Evidencia`/`Condición` cortada
-    verif_sin_localizador: list = []   # (stem, motivo) — #226: #122 no evaluable en esa fila
     indice_viejo: list = []            # (stem, motivo) — #237: index.md contra la verdad de disco
     radio_sin_link: list = []          # (stem, motivo) — #235: hub que nombra un radio sin wikilink
     sin_abstract: list = []            # (stem, motivo) — #277: nota de paper sin `## Abstract`
@@ -4819,216 +5142,18 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     sweep_pendiente += _sweep_pendiente
     not_evaluated += _log_no_eval
 
-    stale_pairs: list = []
-    old_verif_template: list = []
-    verif_sin_archivo: list = []       # (stem, motivo) — #117: la fila no dice qué archivo leyó
-    verif_localizador: list = []       # (stem, motivo) — #122: el localizador contradice al prefijo
-    verif_sin_resolver: list = []      # (stem, motivo) — #91: veredicto que exige acción y no la tuvo
-    verif_estructura: list = []        # (stem, motivo) — #232: sub-secciones del bloque
-    verif_inline: list = []            # (stem, motivo) — #344: la tabla sigue dentro de la nota
-    verif_sin_hermano: list = []       # (stem, motivo) — #344: cabecera sin su `<nota>.verif.md`
-    verif_cabecera: list = []          # (stem, motivo) — #344/INV-148: cabecera ≠ tabla del hermano
-    for stem, texto, ruta in sorted(anchor_notes):
-        # #344 · schema viejo: la tabla adentro de la nota. **Detector, nunca lector tolerante** —
-        # leerla de los dos lados dejaría dos casas para una tabla, que es la duplicación que #344
-        # vino a sacar (y la política del repo es migrador + bloqueante, sin capa de compat).
-        if lb.inline_verif_rows(texto):
-            verif_inline.append(
-                (stem, f"la tabla de verificación sigue DENTRO de la nota (schema anterior a "
-                       f"1.165.0) → `python scripts/make_notes.py --migrate-verif-sidecar` la mueve "
-                       f"a `{cfg.verif_sidecar(ruta).name}` y deja la cabecera, las tres "
-                       f"sub-secciones y el puntero"))
-            continue
-        if not cfg.verif_sidecar(ruta).exists():
-            # La otra mitad del par (INV-148): la nota publica su línea de cabecera —que es una
-            # afirmación sobre N pares— y la tabla que la respalda no está en ningún lado.
-            verif_sin_hermano.append(
-                (stem, f"la nota tiene bloque `## Verificación de citas` y no existe su hermano "
-                       f"`{cfg.verif_sidecar(ruta).name}` → la cabecera afirma pares que no se "
-                       f"pueden evaluar; re-correr `verify-citations` o mover la tabla con "
-                       f"`make_notes.py --migrate-verif-sidecar`"))
-            continue
-        filas = lb.verif_rows(ruta)
-        if filas is None:
-            old_verif_template.append(
-                (stem, f"`{cfg.verif_sidecar(ruta).name}` no tiene las columnas `Ancla` / "
-                       f"`Hash fuente` (plantilla vieja) → no se puede evaluar qué par sigue "
-                       f"vigente; re-correr `verify-citations` para que lo reescriba con un par "
-                       f"por fila"))
-            continue
-        # #232 — la ESTRUCTURA del bloque, que nadie miraba más allá de la tabla. Las tres
-        # sub-secciones que la plantilla cierra son el único lugar donde queda escrito el triage de
-        # la corrida: medido, de 91 condiciones pobladas 28 declaraban una omisión de la nota y
-        # nada decía cuáles se juzgaron no vinculantes — el razonamiento se hizo, vivió en `build/`
-        # (scratch) y no llegó al artefacto que viaja. Se exigen aunque digan «ninguna»: la
-        # diferencia entre «no hubo» y «nadie miró» es exactamente lo que este framework persigue.
-        _falt = [x for x in lb.VERIF_SUBSECCIONES if x not in texto]
-        if _falt:
-            verif_estructura.append(
-                (stem, f"el bloque no trae {len(_falt)} de las tres sub-secciones que la plantilla "
-                       f"cierra ({', '.join(_falt)}) — van aunque digan «ninguna»: es el único "
-                       f"lugar donde queda escrito el triage de la corrida"))
-        # #232/#344 — los conteos de la cabecera los da el MISMO código que lee la tabla (INV-81),
-        # y desde que la tabla vive en OTRO ARCHIVO la cabecera es lo único del rastro que viaja
-        # con la nota: si deriva, el consumidor no tiene cómo notarlo. Por eso se exige la línea
-        # CANÓNICA entera y bloquea (hasta 1.164.0 se comparaba sólo el fragmento «N pares», con la
-        # tabla ahí al lado para desmentirla). Severidad R-1: la cabecera la escribe
-        # `verify-citations`, que es paso de CIERRE, así que ahí bloquea; en la pasada periódica es
-        # deuda.  @inv INV-148
-        _resumen = lb.verif_summary(filas)
-        if not lb.verif_summary_stated(texto, filas):
-            verif_cabecera.append(
-                (stem, f"la cabecera de la nota no es la que da la tabla de "
-                       f"`{cfg.verif_sidecar(ruta).name}` ({len(filas)} filas) → línea canónica: "
-                       f"«{_resumen}»"))
-
-        # #280 — y el conteo de cada SUB-SECCIÓN, por el mismo argumento (INV-81) un nivel abajo.
-        # Se compara por FRAGMENTO verbatim, como el `N pares` de arriba: parsear el primer entero
-        # de la prosa erraría justo en el caso medido, donde la frase tiene dos números y el malo es
-        # el segundo. Sólo se chequea la sub-sección PRESENTE: la ausente ya la reporta `_falt`, y
-        # duplicar el hallazgo manda a hacer dos veces el mismo trabajo.
-        # ⛔ #337 — la prosa sale de ESTA nota. Hasta 1.144.0 se pasaba `body_full`, que lo asigna
-        # el barrido principal —otro loop, ya terminado—, así que las tres notas de un `--cierre`
-        # recibían el conteo de marcas `inferencia` de la ÚLTIMA nota barrida (medido: 1, 7 y 19
-        # marcas reales, «19» para las tres). Es INV-81 violado en el chequeo que lo mecaniza: la
-        # nota que publicaba SU número correcto quedaba reportada como deuda para siempre.
-        _fm_v = cfg.frontmatter_span(texto)
-        _frags = lb.verif_subsection_lines(filas, cfg.solo_prosa(_fm_v[1] if _fm_v else texto))
-        for _sub, _frag in _frags.items():
-            if _frag and _sub in texto and _frag not in texto:
-                verif_estructura.append(
-                    (stem, f"la sub-sección «{_sub}» no publica el conteo que su propia tabla da → "
-                           f"línea canónica: «{_sub} {_frag}: …»"))
-
-        pendientes = lb.pairs_of(texto)
-        for fila in filas:
-            # #91: el lint miraba el bloque SÓLO por su encabezado (¿existe? ¿está fresco?) y nunca
-            # su contenido, así que una fila `no-soportada` pasaba limpia — sentada bajo un
-            # encabezado que se lee como garantía. El contrato manda RESOLVER cada falla, no
-            # registrarla: es la frontera dura, igual que citar una fuente retractada.
-            if not lb.verdict_valido(fila.verdict):
-                # Typo o celda vacía: se arregla distinto que un `no-soportada` sin resolver, así
-                # que el mensaje no puede ser el mismo. Y hasta 2026-08-28 esto pasaba **limpio**:
-                # `resueltos('contradise')` devolvía True y apagaba el bloqueante de INV-117.
-                verif_sin_resolver.append(
-                    (stem, f"[[{fila.bibcode}]] tiene `{fila.verdict or '(vacío)'}` en la columna "
-                           f"`Veredicto`, que no está en el vocabulario cerrado "
-                           f"({' | '.join(lb.VERDICTS)}): la celda no se puede leer, así que no "
-                           f"certifica nada — corregí el veredicto"))
-            elif not lb.resueltos(fila.verdict):
-                verif_sin_resolver.append(
-                    (stem, f"[[{fila.bibcode}]] quedó `{fila.verdict}` en el bloque: la nota afirma "
-                           f"algo que su propia fuente no respalda → bajala a lo que dice la fuente, "
-                           f"reasigná la cita, marcala `inferencia`, o tagueá la disputa"))
-            exacto = next((p for p in pendientes
-                           if p.bibcode == fila.bibcode and p.anchor == fila.anchor), None)
-            if exacto is not None:
-                pendientes.remove(exacto)
-                # #113/B-2: si la fuente perdió el cuerpo de sus ecuaciones, la evidencia de sus
-                # pares es una PÁGINA del PDF y el archivo a vigilar es el PDF. Hashear el `.txt`
-                # ahí se dispara en falso al re-extraerlo (la fuente real no se movió) y no vigila
-                # el archivo del que sale la cita.
-                if fila.source_kind is None and lb.has_no_source_file(fila.verdict):
-                    # #223: `no verificable por extracción` es propiedad de la FUENTE —no hay PDF ni
-                    # `.txt` en disco— así que la fila NO PUEDE declarar un archivo: no hay qué
-                    # hashear. Exigírselo era pedirle que nombrara un archivo justo a la fila que
-                    # existe para decir que no lo hay. Mismo criterio con que ese veredicto ya está
-                    # fuera de `VERDICTS_SIN_RESOLVER`.
-                    continue
-                if fila.source_kind is None:
-                    # #117: sin declaración no hay contra qué comparar. Inferirlo del frontmatter es
-                    # justamente lo que fabricaba pares vencidos, así que acá se declara NO
-                    # EVALUABLE y se migra — no se adivina.
-                    verif_sin_archivo.append(
-                        (stem, f"la fila de [[{fila.bibcode}]] no declara contra qué archivo se "
-                               f"verificó (`Hash fuente` sin prefijo `txt:`/`pdf:`) → "
-                               f"`python scripts/make_notes.py --migrate-verif-archivo`"))
-                    continue
-                # #122: el localizador de `Evidencia` y el prefijo dicen lo mismo desde ángulos
-                # distintos. Si discrepan, el hash vigila un archivo del que la cita no salió —
-                # se dispara en falso al re-extraer el `.txt` y no ve que el PDF cambió.
-                # #200: una fila con los DOS localizadores no es hallazgo (`len(_locs) == 1`), y ésa
-                # es la salida que el mensaje tiene que nombrar. Una fuente `unidad_cita: pagina`
-                # leída del `.txt` cae acá **siempre** —#80 manda citar por página, #117 que el
-                # prefijo case— y las dos salidas obvias empeoran la fila: poner `pdf:` miente sobre
-                # qué archivo se abrió, y citar por línea rompe #80. Medido: 6 de 8 filas marcadas
-                # de un concepto real eran ese caso, todas correctas.
-                # #226 — la celda TRUNCADA. Medido sobre las 99 filas de una nota real: 81
-                # `Evidencia` y 79 `Condición` cortadas con `…` a exactamente 191 caracteres. El
-                # docstring de `lib_blocks` dice que sin `condición` el bloque «tiraba lo que la
-                # corrida había encontrado sobre el régimen — el output más valioso del fan-out»;
-                # truncar hace la mitad de eso, y lo cortado NO se recupera desde la nota (una fila
-                # corta en «(a) la calibración sintética…» y nunca llega a (b)). El `Afirmación` sí
-                # se puede truncar: es un extracto por definición, y lo dice su encabezado.
-                for _col, _val in (("Evidencia", fila.evidence), ("Condición", fila.condition)):
-                    if str(_val).rstrip().endswith("…"):
-                        verif_truncada.append(
-                            (stem, f"[[{fila.bibcode}]] par {fila.n}: `{_col}` quedó cortada con "
-                                   f"`…` — lo que el fan-out encontró y no entró no se recupera "
-                                   f"desde la nota; sólo `Afirmación (extracto)` es truncable"))
-                # #221 — la condición sin CLASIFICAR. El fan-out la puebla al 89 % de los pares,
-                # así que la instrucción «resolvé cada condición no vacía» es inaplicable tal cual
-                # —86 filas de `## Régimen de validez` sobre una nota de 413 líneas, contra la regla
-                # de poda— y se deja de cumplir en silencio. El vocabulario cerrado separa la que
-                # obliga a editar (`acota`: la afirmación es FALSA fuera de esa condición) de la que
-                # sólo agrega procedencia (`contextualiza`). Es el diagnóstico de #198 un eje más
-                # allá: acotar la pregunta, no eliminarla.
-                _cond = str(fila.condition or "").strip()
-                if _cond and _cond not in ("—", "-", "–") and lb.condition_kind(_cond) is None:
-                    cond_sin_clasificar.append(
-                        (stem, f"[[{fila.bibcode}]] par {fila.n}: la condición no declara si "
-                               f"`acota:` (la afirmación es falsa fuera de ella → hay que resolverla) "
-                               f"o `contextualiza:` (agrega procedencia → va al reporte)"))
-                _locs = lb.locator_kinds(fila.evidence)
-                # #226 — `_locs` vacío NO puede ser silencio: es NO EVALUABLE, y acá eso se declara
-                # (D-43) en vez de resolverse a favor. Medido: al truncar `Evidencia` se va el `p. N`
-                # del final, así que 62 de 90 filas con `pdf:` no tenían localizador legible y el
-                # chequeo de #122 devolvía 0 — un cero que se lee como verde sobre el 69 % de la
-                # nota. Sub-disparo silencioso, la dirección de error que `lib_blocks` prohíbe.
-                if not _locs:
-                    verif_sin_localizador.append(
-                        (stem, f"[[{fila.bibcode}]] par {fila.n}: la evidencia no trae localizador "
-                               f"(`p. N` o `L…`), así que el cruce de #122 contra `{fila.source_kind}:` "
-                               f"NO se pudo evaluar en esta fila"))
-                if _locs and _locs != {fila.source_kind} and len(_locs) == 1:
-                    _l = next(iter(_locs))
-                    verif_localizador.append(
-                        (stem, f"[[{fila.bibcode}]]: la evidencia cita "
-                               f"{'una PÁGINA' if _l == 'pdf' else 'una LÍNEA'} y la fila vigila "
-                               f"{'el `.txt`' if fila.source_kind == 'txt' else 'el PDF'} → si la "
-                               f"cita salió de ese archivo, re-anclar a `{_l}:`; si la fuente es "
-                               f"larga (`unidad_cita: pagina`) y se leyó del `.txt`, poné los DOS "
-                               f"localizadores (`p. 271 / \u0060.txt\u0060 L13931`) — las dos cosas "
-                               f"son ciertas y ninguna se ablanda"))
-                vigente = evidencia_hash_de(fila.bibcode, fila.source_kind)
-                que = "el PDF" if fila.source_kind == "pdf" else "el `.txt`"
-                if vigente is None:
-                    verif_sin_archivo.append(
-                        (stem, f"la fila de [[{fila.bibcode}]] dice haberse verificado contra "
-                               f"{que} y ese archivo no está en la bóveda → no se puede evaluar "
-                               f"si la fuente cambió"))
-                elif fila.source_hash != vigente:
-                    stale_pairs.append(
-                        (stem, f"[[{fila.bibcode}]] vencido **por fuente**: {que} cambió desde "
-                               f"la verificación ({fila.source_hash} → {vigente}) — re-verificar"))
-                continue
-            # sin coincidencia exacta: ¿la nota sigue citando esa fuente en algún bloque? Entonces
-            # la afirmación se EDITÓ. Si ya no la cita, la fila quedó huérfana. Se consume el par
-            # para no reportar el mismo evento dos veces (como edición Y como sin-verificar).
-            movido = next((p for p in pendientes if p.bibcode == fila.bibcode), None)
-            if movido is not None:
-                pendientes.remove(movido)
-                stale_pairs.append(
-                    (stem, f"[[{fila.bibcode}]] vencido **por edición**: el bloque que lo cita "
-                           f"cambió desde la verificación ({fila.anchor} → {movido.anchor})"))
-            else:
-                stale_pairs.append(
-                    (stem, f"fila **huérfana**: la tabla verifica [[{fila.bibcode}]] pero el cuerpo "
-                           "ya no lo cita — se borró la afirmación y la fila quedó afirmando de más"))
-        for p in pendientes:
-            stale_pairs.append(
-                (stem, f"[[{p.bibcode}]] **sin verificar**: hay una afirmación que lo cita y no "
-                       f"tiene fila en el bloque (ancla {p.anchor})"))
+    # ── pares de verificación vencidos (D-4 / D-20 / INV-78) ─────────────────────────────────────
+    # Las DOCE categorías del bloque `## Verificación de citas` viven en `check_verification_pairs`
+    # (#396), con una función por regla adentro. Era la región más entrelazada de las tres que el
+    # plan nombró: doce salidas de un solo bucle sobre `anchor_notes`.
+    (stale_pairs, old_verif_template, verif_sin_archivo, verif_localizador, verif_sin_resolver,
+     _v_estructura, verif_inline, verif_sin_hermano, verif_cabecera,
+     _v_sin_localizador, _v_truncada, _v_cond) = check_verification_pairs(
+        anchor_notes, evidencia_hash_de)
+    verif_estructura = _v_estructura
+    verif_sin_localizador = _v_sin_localizador
+    verif_truncada = _v_truncada
+    cond_sin_clasificar = _v_cond
 
     # ── #279/#350 · la prosa que levanta un valor de SEGUNDA MANO sin decirlo ────────────────
     # El bloque vive en `check_second_hand_lifted` (#396).
