@@ -1990,9 +1990,10 @@ def check_fulltext_without_note() -> list:
     # tema. Su gemelo PDF, veinte líneas abajo, hacía la tercera variante —prosa sin comando
     # ejecutable («re-corré `make_notes.py` sobre `<slug>`»)—; las tres formas de la misma regla
     # son el patrón de #215/#324, y ya habían divergido.
+    # ⚠ Sin guarda de directorio a propósito: `Path(<archivo>).glob()` devuelve vacío y no
+    # levanta, así que un archivo suelto en `raw/fulltext/` no produce nada. Un `if not
+    # _dir.is_dir()` acá sería un condicional que no decide (red 8) — se sacó en #396.
     for _dir in sorted(cfg.FULLTEXT.glob("*")) if cfg.FULLTEXT.exists() else []:
-        if not _dir.is_dir():
-            continue
         for _txt in sorted(_dir.glob("*.txt")):
             if not (cfg.PAPERS / f"{cfg.note_stem(_txt.stem)}.md").exists():
                 incomplete.append(
@@ -2017,9 +2018,8 @@ def check_pdf_without_note() -> list:
     # exactamente el mismo defecto (descarga ya pagada que no alcanza ninguna síntesis) y desde
     # #205 pesa MÁS que su hermano, porque el PDF es la fuente de lectura y el `.txt` sólo el
     # índice: un PDF colgado es la mitad cara de la cadena tirada.
+    # ⚠ Ídem el gemelo de arriba: sin guarda de directorio, por el mismo motivo.
     for _dir in sorted(cfg.PDFS.glob("*")) if cfg.PDFS.exists() else []:
-        if not _dir.is_dir():
-            continue
         for _pdf in sorted(_dir.glob("*.pdf")):
             if not (cfg.PAPERS / f"{cfg.note_stem(_pdf.stem)}.md").exists():
                 incomplete.append(
@@ -2197,8 +2197,8 @@ def check_dangling_layers() -> list:
                                        ("raw/pdfs", cfg.PDFS, "*"),
                                        ("raw/fulltext", cfg.FULLTEXT, "*"),
                                        ("build", cfg.ROOT / "build", "*")):
-            if not base.exists():
-                continue
+            # ⚠ Sin `if not base.exists()`: el `glob` sobre un directorio inexistente devuelve
+            # vacío y no levanta, así que la guarda no decidía nada (red 8, sacada en #396).
             for p_ in sorted(base.glob(patron)):
                 # #230 — `build/` es, por `.gitignore`, «scratch del tooling», así que tratar TODO
                 # subdirectorio suyo como capa de entidad garantiza el falso positivo: el
@@ -3280,7 +3280,9 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tu
                     (stem, f"[[{fila.bibcode}]] par {fila.n}: la evidencia no trae localizador "
                            f"(`p. N` o `L…`), así que el cruce de #122 contra `{fila.source_kind}:` "
                            f"NO se pudo evaluar en esta fila"))
-            if _locs and _locs != {fila.source_kind} and len(_locs) == 1:
+            # `len(_locs) == 1` ya implica que no está vacío: el `_locs and` que había acá no
+            # decidía nada (red 8, sacado en #396).
+            if _locs != {fila.source_kind} and len(_locs) == 1:
                 _l = next(iter(_locs))
                 verif_localizador.append(
                     (stem, f"[[{fila.bibcode}]]: la evidencia cita "
@@ -3533,7 +3535,10 @@ def check_ground_truth_mirror(msini_earth) -> tuple:
             # cuando nadie la miró. Es el cero inventado de D-43 dentro del detector de masas
             # espurias. No bloquea —el dato falta en NEA, no es un error de la bóveda— pero se
             # declara, con el campo que falta nombrado.
-            if chk is None and m:
+            # ⚠ Sin `chk is None and`: `faltan` sólo sale no vacío cuando alguno de los tres
+            # insumos es `None`, y en ese caso `msini_earth` YA devolvió `None`. La cláusula no
+            # decidía nada (red 8, sacada en #396); lo que decide es `faltan`.
+            if m:
                 faltan = [c for c, v in (("host.mass_msun", mstar), ("K_ms", p.get("K_ms")),
                                          ("P_days", p.get("P_days"))) if v is None]
                 if faltan:
@@ -3966,10 +3971,8 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
             _bibs_nota.add(_propio)
         for (_ln, _btxt), _bibs in _por_bloque.items():
             _bibs = cfg.with_own_bibcode(_bibs, _propio)
-            _citas = cfg.quotes_in(_btxt)
-            if not _citas:
-                continue
-            for _c in _citas:
+            # ⚠ Sin `if not _citas: continue`: el `for` de abajo no itera igual (red 8, #396).
+            for _c in cfg.quotes_in(_btxt):
                 # #316 — la cita se prueba contra SU fuente, no contra todas las del bloque. Un
                 # párrafo que contrasta dos o tres papers es la forma normal de la prosa que
                 # este framework pide, y probar cada cita contra cada bibcode marca la nota
@@ -4225,7 +4228,8 @@ def check_radio_without_link(stem: str, f, body_full: str, concept_slugs) -> lis
     and the hub reads as if the sub-aspect did not exist.
     """
     radio_sin_link: list = []
-    if concept_slugs and str(f).startswith(str(cfg.CONCEPTS)):
+    # ⚠ Sin `concept_slugs and`: el `_slug in concept_slugs` de adentro ya lo subsume (red 8, #396).
+    if str(f).startswith(str(cfg.CONCEPTS)):
         for _m in _RADIO_RE.finditer(body_full):
             _slug = _m.group(1)
             if _slug != stem and _slug in concept_slugs and f"[[{_slug}]]" not in body_full:
@@ -4654,11 +4658,15 @@ def check_paper_coverage(stem: str, fm: dict, relevancia: str, pdf_on_disk: dict
         # `make_notes._papers_del_sujeto`» y era falso por los dos ejes (#348).
         for campo in ("stars", "thesis_links"):
             for sujeto in cfg.as_list(fm.get(campo)):
-                # #268 — el sujeto DECLARADO no cuenta como «sin extraer» para el recorte:
-                # con él adentro, el detector afirmaba *«quedan N sin extraer»* sobre un
-                # `criterio: todos los core` que sí se había cumplido.
-                if str(sujeto) in no_vista:
-                    continue
+                # #268 — el sujeto DECLARADO no cuenta como «sin extraer» para el recorte: con él
+                # adentro, el detector afirmaba *«quedan N sin extraer»* sobre un `criterio: todos
+                # los core` que sí se había cumplido. ⛔ Lo decide la RAMA (`… and not no_vista`),
+                # que saltea la nota entera; acá había además un `if str(sujeto) in no_vista` que
+                # era INALCANZABLE —cuando se entra, el mapa está vacío—. Las dos formas no dicen
+                # lo mismo (la de afuera saltea la nota, la de adentro saltearía sólo ESE sujeto y
+                # seguiría contando los demás) y el código afirmaba las dos a la vez: la muerta se
+                # sacó en #396 SIN cambiar comportamiento, y cuál de las dos es la correcta queda
+                # como pregunta abierta del issue.
                 if (subject_key := cfg.method_key(sujeto)):
                     sin_extraer_por_sujeto.setdefault(subject_key, set()).add(stem)
     # El eslabón SIGUIENTE (#75): el paper que SÍ se extrajo. `methods` poblado significa
@@ -4734,7 +4742,9 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
             # huecos sobre ejes que el tema nunca debió preguntar. D-43: no evaluable.
             _tm = temas_por_sujeto.get(str(_v.get("sujeto") or "").strip().casefold()) \
                 if _v.get("tipo") == "theme" else None
-            if _tm is not None and cfg.theme_inherited_axes(_tm) is not None:
+            # ⚠ Sin `_tm is not None and`: `theme_inherited_axes(None)` devuelve `None`, así que
+            # la cláusula no decidía nada (red 8, sacada en #396).
+            if cfg.theme_inherited_axes(_tm) is not None:
                 vista_ejes_faltantes.append(
                     (stem, f"no evaluable: la vista de «{_v['sujeto']}» se leyó con los ejes "
                            f"del objetivo porque el tema no declara `ejes:` — declaralos "
@@ -4859,7 +4869,9 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         import make_notes as _mn          # import local: `make_notes` no importa al lint
         for _v in vistas:
             _suj = str(_v.get("sujeto") or "").strip()
-            if not _suj or _mn.view_stub_kind(
+            # ⚠ Sin `not _suj or`: con el sujeto vacío `view_stub_kind` devuelve `""`, que ya
+            # es distinto de `"plantilla"` (red 8, sacado en #396).
+            if _mn.view_stub_kind(
                     text, _suj, str(_v.get("tipo") or "") == "theme") != "plantilla":
                 continue
             vista_con_plantilla.append(
@@ -4887,7 +4899,9 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # la nota de schema VIEJO (sin la clave) la reporta la categoría de arriba, y
         # pedirle además una vista por sujeto duplicaría el hallazgo en cada nota del corpus.
         # @inv INV-153
-        if vistas or fm.get("vistas") is not None:
+        # ⚠ Sin `vistas or`: `vistas` sale de `load_vistas(fm)`, así que no vacío implica que el
+        # campo tampoco es `None` (red 8, sacado en #396).
+        if fm.get("vistas") is not None:
             # Qué cuenta como RECLAMO, y por qué `methods` no entra entero: `stars` y
             # `thesis_links` los siembra el ingest —son «este sujeto pidió que se leyera
             # este paper»—, mientras que `methods` lo puebla la EXTRACCIÓN, o sea que es un
@@ -5039,7 +5053,8 @@ def check_schema_completeness(stem: str, f, fm: dict, refs_stems) -> list:
                  "paper" if "paper" in _tags else
                  "star" if "star" in _tags else
                  "concept" if in_dir(f, "concepts") else "")
-        if _tipo and (_faltan := cfg.missing_schema_fields(_tipo, fm)):
+        # ⚠ Sin `_tipo and`: `missing_schema_fields("", fm)` devuelve `[]` (red 8, sacado en #396).
+        if (_faltan := cfg.missing_schema_fields(_tipo, fm)):
             schema_incompleto.append(
                 (stem, f"nota de tipo `{_tipo}` sin {len(_faltan)} campo(s) del schema: "
                        f"{', '.join('`%s`' % k for k in _faltan)} → re-corré "
@@ -5071,9 +5086,9 @@ def check_note_links(stem: str, f, text: str, names, fulltext: dict, incoming: d
     links_prosa = [t.strip() for t in LINK_RE.findall(solo_prosa(text))]
     prosa_links = set(links_prosa) if in_entity_note else set()
     nbib = 0                              # citas [[bibcode]] EN PROSA de esta nota
+    # ⚠ Sin la guarda de placeholders que sí lleva el SEGUNDO bucle: acá el `BIBCODE_RE.match`
+    # de abajo ya la subsume —nada de `LINK_SKIP` matchea, y un `/` tampoco— (red 8, #396).
     for tgt in links_prosa:
-        if "/" in tgt or tgt in LINK_SKIP:
-            continue                       # placeholder/ejemplo, no link real
         if BIBCODE_RE.match(tgt):
             nbib += 1
             if in_verifiable_note and tgt not in fulltext:
@@ -5104,7 +5119,9 @@ def check_note_links(stem: str, f, text: str, names, fulltext: dict, incoming: d
         # off-ADS (`2006RasmussenWilliams`, y peor: cualquiera que no empiece con AAAA+letra)
         # sí matchea BIBCODE_RE… pero un citekey inválido no, y el paper quedaba reportado como
         # "no sintetizado" para siempre AUNQUE la ficha lo citara, sin forma de cerrarlo.
-        if in_entity_note and tgt in prosa_links:
+        # ⚠ Sin `in_entity_note and`: `prosa_links` YA sale vacío cuando la nota no es de
+        # entidad (red 8, sacado en #396).
+        if tgt in prosa_links:
             cited_in_entity.add(tgt)
     return broken, unverifiable, nbib
 

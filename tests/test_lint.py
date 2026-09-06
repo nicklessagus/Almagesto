@@ -8010,11 +8010,9 @@ def test_check_fulltext_y_pdf_without_note_saltean_lo_que_no_es_un_slug(toy_vaul
     Lo que fija este test es el CONTRATO observable: un archivo suelto en `raw/fulltext/` o en
     `raw/pdfs/` —que no es un slug— no produce hallazgo, y el par slug+artefacto sin nota sí.
 
-    ⚠ Declarado, no tapado: el `if not _dir.is_dir(): continue` de los dos sobrevive a
-    `mutar --guardas` y va a seguir sobreviviendo, porque NINGÚN test puede distinguirlo. Medido:
-    `Path(<archivo>).glob("*")` devuelve vacío y no levanta, así que sacar la guarda da exactamente
-    el mismo resultado. Es de la familia de la red 8 (un condicional que no decide nada) sobre
-    código anterior a #396; se anota acá en vez de inventarle un test que probaría otra cosa."""
+    ⛔ Y lo sostiene SIN guarda de directorio: `Path(<archivo>).glob("*")` devuelve vacío y no
+    levanta, así que el `if not _dir.is_dir(): continue` que los dos tenían no decidía nada y se
+    SACÓ (red 8). Este test es lo que prueba que sacarlo no cambió el contrato."""
     (cfg.FULLTEXT / "suelto.txt").write_text("x", encoding="utf-8")
     (cfg.PDFS / "suelto.pdf").write_bytes(b"%PDF-1.4\n")
     assert lint.check_fulltext_without_note() == [] and lint.check_pdf_without_note() == []
@@ -8116,9 +8114,8 @@ def test_check_dangling_layers_saltea_lo_que_no_es_capa_de_entidad(toy_vault):
     capa colgada de algo que no lo es: `build/auditoria/` (scratch del tooling, no capa), `_red.yaml`
     (de la bóveda entera, D-46), y un archivo suelto donde se esperan directorios de slug.
 
-    ⚠ Declarado: el `if not base.exists()` sobrevive a `mutar --guardas` y va a seguir
-    sobreviviendo. Medido: `Path(<inexistente>).glob("*")` devuelve vacío y no levanta, así que
-    sacarlo da el mismo resultado — familia de la red 8 sobre código anterior a #396.  @inv INV-19"""
+    ⛔ Sostenido SIN `if not base.exists()`: `Path(<inexistente>).glob("*")` devuelve vacío y no
+    levanta, así que esa guarda no decidía nada y se SACÓ (red 8).  @inv INV-19"""
     assert lint.check_dangling_layers() == []
     (cfg.ROOT / "build" / "auditoria").mkdir(parents=True)
     write_yaml(cfg.REGISTRO / "_red.yaml", {"ultima_pasada_red": {"fecha": "2026-03-01"}})
@@ -8659,10 +8656,8 @@ def test_check_verif_row_pairs_no_inventa_hallazgos_sobre_la_fila_correcta(toy_v
     · el veredicto `no verificable por extracción` exime de declarar archivo SÓLO si la fila no lo
       declara (#223): la que sí lo declara se sigue evaluando contra el disco.
 
-    ⚠ Declarado: el `_locs` de `if _locs and _locs != {fila.source_kind} and len(_locs) == 1`
-    sobrevive a `mutar --guardas` y va a seguir sobreviviendo — `len(_locs) == 1` ya implica que no
-    está vacío, así que la primera cláusula no decide nada. Familia de la red 8 sobre código
-    anterior a #396; se anota en vez de inventarle un test que probaría otra cosa.
+    ⛔ El `_locs and` que precedía a `_locs != {source_kind} and len(_locs) == 1` se SACÓ: la
+    tercera cláusula ya implica que no está vacío (red 8).
     """
     ft = _con_ancla(toy_vault, CUERPO)
     ruta = _ruta_nota()
@@ -8739,10 +8734,9 @@ def test_check_ground_truth_mirror_no_inventa_hallazgos_sobre_lo_que_NEA_no_trae
     · con `mass_earth` y sin `K_ms` se DECLARA qué campo falta, que es distinto de callarse;
     · y sin `mass_earth` no hay masa sospechosa que reportar.
 
-    ⚠ Declarado: el `chk is None` de `if chk is None and m:` sobrevive a `mutar --guardas` y va a
-    seguir sobreviviendo — `faltan` sólo sale no vacío cuando alguno de los tres insumos es `None`,
-    y en ese caso `msini_earth` ya devolvió `None`, así que la cláusula no decide nada. Red 8 sobre
-    código anterior a #396.  @inv INV-10"""
+    ⛔ El `chk is None and` se SACÓ: `faltan` sólo sale no vacío cuando alguno de los tres insumos
+    es `None`, y ahí `msini_earth` ya devolvió `None` (red 8). Lo que decide es `faltan`.
+    @inv INV-10"""
     from fetch_ground_truth import msini_earth
     mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
                                      "planets": [{"letter": "b"}]})
@@ -8967,9 +8961,7 @@ def test_check_note_quotes_rutea_cada_veredicto_a_SU_categoria(toy_vault, monkey
     El doble devuelve `(veredicto, detalle)`, el contrato real de `quote_verdict`, con las claves
     que cada rama consume — no una tupla a ojo (regla de método 2).
 
-    ⚠ Declarado: `if not _citas: continue` sobrevive a `mutar --guardas` y va a seguir
-    sobreviviendo — el `for _c in _citas` de abajo no itera igual, así que la guarda no decide
-    nada. Red 8 sobre código anterior a #396."""
+    ⛔ El `if not _citas: continue` se SACÓ: el `for` de abajo no itera igual (red 8)."""
     ruta = cfg.CONCEPTS / "methods" / "m.md"
     cita = "esta frase larga y distintiva se afirma como textual en la prosa de la nota"
     texto = f'# m\n\nEl paper dice «{cita}» [[2020X]].\n'
@@ -9048,8 +9040,9 @@ def test_check_note_disputes_cubre_forma_ref_y_las_citas_del_frontmatter(toy_vau
     sostiene: eso es lo que distingue «hay autoridad y dice X» de «la bóveda no sabe». Las cuatro
     guardas que sobrevivían son las de FORMA, y cada una deja la disputa muda de otra manera.
 
-    ⚠ Declarado: `if _citas_pos:` sobrevive a `mutar --guardas` — el `for` de abajo no itera sobre
-    una lista vacía, así que la guarda sólo ahorra una llamada. Red 8, código anterior a #396.
+    ⚠ `if _citas_pos:` sobrevive a `mutar --guardas` y **se queda**: no cambia el resultado, pero
+    evita una llamada a `sources_for` —que globea el disco— por cada posición sin cita. Es un
+    atajo con costo real detrás, no un condicional que no decide (red 8 mira lo segundo).
     @inv INV-12"""
     sin_txt = lambda _b: ({}, [])       # noqa: E731
     def _d(disputes):
@@ -9109,10 +9102,10 @@ def test_check_state_header_solo_habla_de_la_nota_que_YA_publica_una(toy_vault):
     categorías con severidades distintas, que es cómo una de las dos se deja de mirar. Medido: sin
     ese recorte, un corpus sintético limpio reportaba 4 fichas que nunca pasaron por el estampador.
 
-    ⚠ Declarado: las DOS cláusulas del `if slug_ent and GENERATOR_LINE in text:` sobreviven a
-    `mutar --guardas`, y las dos por la misma razón — el `if _quiere and _hay:` de adentro ya las
-    subsume (sin slug no hay línea que estampar, sin `GENERATOR_LINE` no hay línea publicada). Red 8
-    sobre código anterior a #396: son atajos, no reglas."""
+    ⚠ Las dos cláusulas de `if slug_ent and GENERATOR_LINE in text:` sobreviven a
+    `mutar --guardas` y **se quedan**: no cambian el resultado —el `if _quiere and _hay:` de adentro
+    ya las subsume— pero evitan una llamada a `mn.estado_line`, que LEE EL REGISTRO del disco por
+    nota. Atajo con costo real detrás, no red 8."""
     # el estampador necesita algo que estampar: una búsqueda en el registro
     write_yaml(cfg.REGISTRO / "test_star.yaml",
                {"slug": "test_star", "busquedas": [{"fecha": "2026-03-01", "n_found": 40,
@@ -9315,13 +9308,13 @@ def test_check_paper_coverage_separa_las_DOS_situaciones_opuestas(toy_vault):
     cuatro guardas que sobrevivían son las que hacen esa partición, más la escotilla `no_vista`, que
     hasta #268 decidía sobre UNA sola categoría mientras las otras contaban la nota como deuda.
 
-    ⛔ **Hallazgo, no deuda de test:** el `if str(sujeto) in no_vista: continue` de adentro es
-    INALCANZABLE. La rama entera cuelga de `… and not no_vista`, así que cuando se entra el mapa
-    está vacío y la pertenencia es siempre falsa. Las dos formas de la regla no dicen lo mismo: la
-    de afuera saltea la nota ENTERA si cualquier sujeto está declarado, la de adentro saltearía
-    sólo ESE sujeto y seguiría contando los demás. Cuál es la correcta es una decisión de producto
-    —por eso el chequeo se dejó como está y el test fija el comportamiento VIGENTE—, pero el código
-    afirma las dos a la vez, que es la regla escrita a medias de la red 8. Anotado en #396."""
+    ⛔ **Pregunta abierta del issue.** Adentro había un `if str(sujeto) in no_vista: continue`
+    INALCANZABLE —la rama entera cuelga de `… and not no_vista`, así que al entrar el mapa está
+    vacío—. Se SACÓ sin cambiar comportamiento (red 8: el código afirmaba dos reglas a la vez), y
+    este test fija la VIGENTE. Lo que queda decidido por nadie es cuál de las dos corresponde: la de
+    afuera saltea la nota ENTERA si cualquier sujeto está declarado; la de adentro saltearía sólo
+    ESE sujeto y seguiría contando los demás, que es lo que `CLAUDE.md` describe cuando dice que el
+    motivo es «por sujeto»."""
     def _c(fm, ft=(), pdf=(), rel="high"):
         return lint.check_paper_coverage("2020X", fm, rel, {s: "x" for s in pdf},
                                          {s: "x" for s in ft}, {}, [])
@@ -9371,12 +9364,12 @@ def test_check_paper_views_no_pide_lo_que_no_se_puede_evaluar(toy_vault):
     · el sujeto con `no_vista` declarado no es un reclamo sin vista: es una escotilla firmada;
     · y una vista sin sujeto no se puede buscar en el cuerpo.
 
-    ⚠ Cuatro guardas de este bloque sobreviven a `mutar --guardas` y van a seguir sobreviviendo,
-    todas por ser redundantes con lo que ya decide la línea de al lado (red 8, código anterior a
-    #396): `not _lente` (con la lente vacía `_faltan` sale vacío igual), `_tm is not None`
-    (`theme_inherited_axes(None)` devuelve `None`), `not _suj` (sin sujeto el stub nunca es
-    `plantilla`) y `vistas` en `if vistas or fm.get("vistas") is not None` (con `vistas` no vacío,
-    el campo tampoco es `None`). Son atajos, no reglas."""
+    ⛔ Tres guardas se SACARON por no decidir nada (red 8): `_tm is not None`
+    (`theme_inherited_axes(None)` devuelve `None`), `not _suj` (con el sujeto vacío `view_stub_kind`
+    devuelve `""`) y el `vistas or` de `if vistas or fm.get("vistas") is not None` (con `vistas` no
+    vacío el campo tampoco es `None`). La que NO se sacó es `not _lente`, porque sí decide: con
+    lente vacía y fecha puesta, sin ella el bloque llegaría a reportar «no evaluable» sobre una
+    vista que no declara ningún eje. Está probada abajo."""
     def _v(fm, text="", nv=None, ti=None, tps=None):
         return lint.check_paper_views("2020X", fm, text, nv or {}, None, ti or {}, tps or {})
 
@@ -9415,10 +9408,14 @@ def test_check_paper_views_no_pide_lo_que_no_se_puede_evaluar(toy_vault):
     # (d) la forma inválida de `vistas[]` cae en `fm_broken`, que es el bloqueante del campo
     assert _v({"vistas": "no soy una lista"})[0], "un escalar en `vistas[]` bloquea"
 
-    # (e) la vista con lente VACÍA tampoco se compara: no hay ejes declarados que exigir
+    # (e) la vista con lente VACÍA tampoco se compara: no hay ejes declarados que exigir. ⛔ Y la
+    # guarda decide de verdad — con el tema en el índice y SIN `ejes:`, sin ella el bloque
+    # reportaría «no evaluable» sobre una vista que no declara ningún eje
     sin_lente = {"vistas": [{"sujeto": "ica", "tipo": "theme", "fecha": "2026-03-01",
                              "lente": []}], "thesis_links": ["ica"]}
     assert _v(sin_lente)[8] == [], "sin lente declarada no hay contra qué comparar"
+    assert _v(sin_lente, tps={"ica": _tm})[8] == [], \
+        "…ni siquiera con el tema en el índice: sin lente no hay nada que evaluar"
 
     # (f) el sujeto declarado `no_vista` cuya vista SÍ tiene fecha se leyó: no es una escotilla
     leida = {"thesis_links": ["ica"],
@@ -9510,9 +9507,8 @@ def test_check_schema_completeness_solo_pide_lo_que_el_TIPO_declara(toy_vault):
     segundo es una decisión declarada. La guarda que sobrevivía acota la población al tipo: una nota
     que no es paper, ficha ni concepto no tiene schema que incumplir.
 
-    ⚠ Declarado: el `_tipo` de `if _tipo and (_faltan := …)` sobrevive a `mutar --guardas` —
-    `missing_schema_fields("", fm)` devuelve `[]`, así que la cláusula no decide nada. Red 8 sobre
-    código anterior a #396.  @inv INV-63"""
+    ⛔ El `_tipo and` se SACÓ: `missing_schema_fields("", fm)` devuelve `[]` (red 8).
+    @inv INV-63"""
     otra = str(cfg.QUERIES / "q.md")
     assert lint.check_schema_completeness("q", otra, {"tags": ["query"]}, set()) == [], \
         "una query no declara schema por tipo"
@@ -9537,12 +9533,10 @@ def test_check_note_links_reparte_cada_wikilink_a_su_indice(toy_vault):
       es metadata derivada, y si contara ninguna nota podría volver a ser huérfana;
     · y `cited_in_entity` se puebla desde la PROSA de una ficha, no desde cualquier link.
 
-    ⚠ Declarado: el `if "/" in tgt or tgt in LINK_SKIP: continue` del PRIMER bucle sobrevive a
-    `mutar --guardas` y va a seguir sobreviviendo — el `BIBCODE_RE.match(tgt)` de la línea siguiente
-    ya lo subsume (nada de `LINK_SKIP` matchea, y un `/` tampoco). Red 8 sobre código anterior a
-    #396; en el SEGUNDO bucle la misma guarda SÍ decide, y ahí está probada. Ídem el
-    `in_entity_note` de `if in_entity_note and tgt in prosa_links`: `prosa_links` YA sale vacío
-    cuando la nota no es de entidad, así que la primera cláusula es un atajo, no una regla."""
+    ⛔ Dos guardas se SACARON (red 8): la de placeholders del PRIMER bucle —el `BIBCODE_RE.match`
+    de la línea siguiente ya la subsume, y en el SEGUNDO bucle la misma guarda SÍ decide y está
+    probada acá— y el `in_entity_note and`, porque `prosa_links` ya sale vacío cuando la nota no es
+    de entidad."""
     mk_note(cfg.PAPERS, "2020X", {"tags": ["paper"], "bibcode": "2020X"})
     inc: dict = {"2020X": 0}
     cite: set = set()
@@ -9621,11 +9615,9 @@ def test_check_simbad_aliases_es_PROPUESTA_y_tiene_escotilla_del_NO(toy_vault):
     Las guardas que sobrevivían son las que acotan la población: sin `_unresolved_aliases` el
     snapshot es anterior a #82 y no hay nada que decir, y sin `stars.yaml` legible no se opina.
 
-    ⚠ Declarado: las dos cláusulas de `if not isinstance(data, dict) or "_unresolved_aliases" not
-    in data: continue` sobreviven a `mutar --guardas` — sin esas claves el resto del bloque no
-    encuentra nada y devuelve lo mismo. Es un atajo, no una regla (red 8, código anterior a #396).
-    Ídem el `isinstance(_m, dict)` del barrido de `stars.yaml`: `_m.get` sobre lo que no es mapa ya
-    lo filtra el `and` de al lado."""
+    Las tres guardas que faltaban probar SÍ deciden, y por eso se quedan: el ground-truth que no
+    es un mapa (un `.get` ahí levanta), el snapshot sin `_unresolved_aliases` —que es anterior a
+    #82 y sobre el que no hay nada que decir— y la entrada de `stars.yaml` que no es un mapa."""
     cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
     def _gt(**extra):
         (cfg.GROUND_TRUTH / "test_star.json").write_text(
@@ -9666,6 +9658,21 @@ def test_check_simbad_aliases_es_PROPUESTA_y_tiene_escotilla_del_NO(toy_vault):
     faltan3, *_x = lint.check_simbad_aliases()
     assert len(faltan3) == 1 and "HD 77777" in faltan3[0][1], \
         "el alias de OTRA estrella no está declarado para ésta"
+
+    # ⛔ las tres guardas de forma, que SÍ deciden (y por eso no se sacaron con las de red 8):
+    #   (a) el ground-truth que no es un mapa — un `in`/`.get` ahí levanta
+    (cfg.GROUND_TRUTH / "test_star.json").write_text("5", encoding="utf-8")
+    assert lint.check_simbad_aliases() == ([], [], []), "un JSON escalar se saltea, no revienta"
+    #   (b) el snapshot SIN `_unresolved_aliases` es anterior a #82: no hay nada que decir, ni
+    #       siquiera si trae `_simbad_aliases` con identificadores no declarados
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(
+        json.dumps({"slug": "test_star", "_simbad_aliases": ["HD 88888"]}), encoding="utf-8")
+    assert lint.check_simbad_aliases() == ([], [], []), "snapshot pre-#82: no se opina"
+    #   (c) la entrada de `stars.yaml` que no es un mapa — `_m.get` ahí levanta
+    stars["Rota"] = "no soy un mapa"
+    write_yaml(cfg.STARS_YAML, stars)
+    _gt(_unresolved_aliases=[], _simbad_aliases=["HD 77777"])
+    assert lint.check_simbad_aliases()[0], "la estrella malformada se saltea, no tumba el chequeo"
 
 
 def test_check_dead_facets_declara_cuando_NO_PUEDE_evaluar(toy_vault):
