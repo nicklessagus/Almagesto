@@ -5019,6 +5019,139 @@ def check_inferences_without_premises(stem: str, text: str) -> list:
     return infer_sin_premisas
 
 
+def check_schema_completeness(stem: str, f, fm: dict, refs_stems) -> list:
+    """`schema_incompleto` — the note does not bring the fields ITS TYPE declares (INV-63).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. PRESENCE, not value: an absent field and an empty field do NOT read the same, and
+    the second is a declared decision.
+
+    @inv INV-63
+    """
+    schema_incompleto: list = []
+    # INV-63 — ¿la nota trae los campos que el schema de SU TIPO declara? Presencia, no valor:
+    # un `null` es el caso normal (el espejo #70 deja en `null` lo que la autoridad no trae, y
+    # rellenarlo con literatura está prohibido). El tipo sale de los `tags`, que es lo que el
+    # resto del lint ya usa. Backlog: el corpus viejo tiene notas anteriores al campo.
+    if fm and stem not in refs_stems:
+        _tags = [str(t) for t in cfg.as_list(fm.get("tags"))]
+        _tipo = ("hypothesis" if "hypothesis" in _tags else
+                 "paper" if "paper" in _tags else
+                 "star" if "star" in _tags else
+                 "concept" if in_dir(f, "concepts") else "")
+        if _tipo and (_faltan := cfg.missing_schema_fields(_tipo, fm)):
+            schema_incompleto.append(
+                (stem, f"nota de tipo `{_tipo}` sin {len(_faltan)} campo(s) del schema: "
+                       f"{', '.join('`%s`' % k for k in _faltan)} → re-corré "
+                       f"`make_notes.py <slug>` (los escribe en `null` si no hay valor; el "
+                       f"campo ausente y el campo vacío NO se leen igual)"))
+    return schema_incompleto
+
+
+def check_note_links(stem: str, f, text: str, names, fulltext: dict, incoming: dict, cited_in_entity: set, in_entity_note: bool, in_verifiable_note: bool) -> tuple:
+    """`(broken, unverifiable, nbib)` — every `[[wikilink]]` of the note, and what it can be cited
+    against.
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. `incoming` and `cited_in_entity` come in as the indices this note feeds — the first
+    is what the orphan check is computed over, the second is what tells «extracted» from
+    «synthesised» — and `nbib` goes back out because two checks downstream partition on it.
+
+    ⛔ The sibling `.verif.md` counts for broken links: it is not a note, but its `[[bibcode]]` point
+    somewhere and a rename has to reach them (#344).
+
+    @inv INV-02
+    """
+    broken: list = []
+    unverifiable: list = []
+    # de pares imposibles (medido en el clean-room del 2026-08-25: 117 "citas" en tau_ceti, 0 de
+    # ellas en prosa) y encima reportando como "no verificable" cada paper del universo sin
+    # fulltext. Es el mismo lazo que ya cierra `solo_prosa` para los otros proxies: un artefacto
+    # que se mide a sí mismo siempre da el resultado que su propia existencia produce.
+    links_prosa = [t.strip() for t in LINK_RE.findall(solo_prosa(text))]
+    prosa_links = set(links_prosa) if in_entity_note else set()
+    nbib = 0                              # citas [[bibcode]] EN PROSA de esta nota
+    for tgt in links_prosa:
+        if "/" in tgt or tgt in LINK_SKIP:
+            continue                       # placeholder/ejemplo, no link real
+        if BIBCODE_RE.match(tgt):
+            nbib += 1
+            if in_verifiable_note and tgt not in fulltext:
+                # @inv INV-03
+                unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
+    # #344 — los links del HERMANO cuentan como los de la nota. La tabla vivía adentro hasta
+    # 1.164.0, así que sacarla del barrido bajaría en silencio la población del detector de
+    # wikilinks rotos —bloqueante— justo sobre el artefacto que existe para poder re-auditar.
+    _side = cfg.verif_sidecar(Path(f))
+    _link_text = text + ("\n" + _side.read_text(encoding="utf-8") if _side.exists() else "")
+    for tgt in LINK_RE.findall(_link_text):
+        tgt = tgt.strip()
+        if "/" in tgt or tgt in LINK_SKIP:
+            continue                       # placeholder/ejemplo, no link real
+        # #249 — el ÍNDICE no cuenta como link entrante. Antes de #237 era prosa a mano y un
+        # link desde ahí era evidencia de que alguien catalogó la nota; desde que se ESTAMPA
+        # por verdad de disco lista todo, así que ninguna estrella ni concepto podía volver a
+        # ser huérfano y el detector —que BLOQUEA— quedaba en 0 permanente. Mismo criterio con
+        # que las secciones estampadas quedan fuera del fan-out y del detector de fuga (#214):
+        # metadata derivada no es evidencia. Lo cazó el corpus sintético al mover el golden.
+        if tgt in incoming and stem != "index":
+            incoming[tgt] += 1
+        elif tgt not in names:
+            # @inv INV-02
+            broken.append((stem, tgt))
+        # #75: "citado" se mide contra el STEM de la nota de paper, así que se registra todo
+        # target de una nota de entidad — no sólo los que parecen bibcode. Una clave sintética
+        # off-ADS (`2006RasmussenWilliams`, y peor: cualquiera que no empiece con AAAA+letra)
+        # sí matchea BIBCODE_RE… pero un citekey inválido no, y el paper quedaba reportado como
+        # "no sintetizado" para siempre AUNQUE la ficha lo citara, sin forma de cerrarlo.
+        if in_entity_note and tgt in prosa_links:
+            cited_in_entity.add(tgt)
+    return broken, unverifiable, nbib
+
+
+def check_verification_coverage(stem: str, f, text: str, nbib: int, in_verifiable_note: bool, anchor_notes: set, coverage: list) -> tuple:
+    """`(unverified, verif_blocks)` — the note that claims with citations and has no verification
+    block, and the concept that claims with NO citation at all (D-5).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. D-5 says a note is BORN 100 % verified, so «citations with no block» is not old
+    debt: it means the operation did not finish. `anchor_notes` and `coverage` are the indices this
+    note feeds.
+    """
+    unverified: list = []
+    verif_blocks: list = []
+    # cobertura: un concepto/hipótesis que afirma sin ninguna cita [[bibcode]] no es chequeable
+    # (todo lo apuntable debe ser citable o marcado `inferencia`; ver Verify en CLAUDE.md). Backlog.
+    if in_dir(f, "concepts") and nbib == 0:
+        coverage.append((stem, "sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)"))
+    # cobertura de VERIFICACIÓN (ALCE-adjacent): una nota apuntable con citas pero sin el bloque
+    # `## Verificación de citas` nunca pasó por verify-citations → sus claims no fueron chequeados
+    # claim↔fuente.
+    # ⚠ Severidad R-1 desde 1.36.0 (antes: backlog siempre). D-5 dice que la nota **nace 100%
+    # verificada**, así que "tiene citas y ningún bloque" no es deuda vieja: es la operación que
+    # la tocó sin terminar. INV-79 —«una nota con citas sin verificar no cierra»— lo pedía ya, y
+    # el detector que sí contaba para el exit (`stale_pairs`) sólo se puebla con notas que YA
+    # tienen bloque: la nota nunca verificada se escapaba por abajo. Las fichas de estrella
+    # entran: los valores NEA no se verifican contra papers, pero sus disputas y todo lo
+    # atribuido a un `[[bibcode]]`, sí.
+    has_verif, verif_date = verify_block(text)
+    if in_verifiable_note and nbib > 0 and not has_verif:
+        unverified.append((stem, f"{nbib} cita(s) sin bloque de verify-citations → correr el skill"))
+    # la vigencia del bloque se evalúa después del loop (necesita git; ver `stale_verif`). Vale
+    # para TODA nota con bloque —también fichas de estrella—, no sólo las de la cobertura de
+    # arriba: ampliar una ficha es justo cuando el bloque queda atrás.
+    if has_verif and stem not in NON_ORPHAN:
+        verif_blocks.append((f, verif_date))
+        anchor_notes.append((stem, text, Path(f)))
+    # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
+    # AUD-190 / INV-4 — el número de línea se contaba desde el CUERPO y el hallazgo se publica
+    # como `L{i}`, que por convención de este repo es la de `grep -n` sobre el ARCHIVO (skill
+    # verify-citations, #29). En una ficha de estrella el frontmatter tiene decenas de líneas,
+    # así que el puntero mandaba al operador a otra parte de la nota — un mapa que atribuye mal.
+    # Y el cortador es `frontmatter_span`, no `split("---", 2)`: éste corta dentro de un escalar
+    return unverified, verif_blocks
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -5409,22 +5542,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         stem = basename(f)[:-3]
         for motivo in normalize_lists(fm):     # ANTES de cualquier lector (ver normalize_lists)
             fm_broken.append((stem, motivo))
-        # INV-63 — ¿la nota trae los campos que el schema de SU TIPO declara? Presencia, no valor:
-        # un `null` es el caso normal (el espejo #70 deja en `null` lo que la autoridad no trae, y
-        # rellenarlo con literatura está prohibido). El tipo sale de los `tags`, que es lo que el
-        # resto del lint ya usa. Backlog: el corpus viejo tiene notas anteriores al campo.
-        if fm and stem not in refs_stems:
-            _tags = [str(t) for t in cfg.as_list(fm.get("tags"))]
-            _tipo = ("hypothesis" if "hypothesis" in _tags else
-                     "paper" if "paper" in _tags else
-                     "star" if "star" in _tags else
-                     "concept" if in_dir(f, "concepts") else "")
-            if _tipo and (_faltan := cfg.missing_schema_fields(_tipo, fm)):
-                schema_incompleto.append(
-                    (stem, f"nota de tipo `{_tipo}` sin {len(_faltan)} campo(s) del schema: "
-                           f"{', '.join('`%s`' % k for k in _faltan)} → re-corré "
-                           f"`make_notes.py <slug>` (los escribe en `null` si no hay valor; el "
-                           f"campo ausente y el campo vacío NO se leen igual)"))
+        # La completitud del schema vive en `check_schema_completeness` (#396).
+        schema_incompleto += check_schema_completeness(stem, f, fm, refs_stems)
         kinds[stem] = fm.get("tags", []) or []
         err = fm_error(text)
         if err:
@@ -5460,77 +5579,18 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # una cita: es metadata que estampó `make_notes`, y `verify-citations` no puede chequearla
         # —no hay afirmación que contrastar contra la fuente, hay una fila—. Contándolos, una ficha
         # recién creada, con la prosa todavía en plantilla, nacía pidiendo verificación de decenas
-        # de pares imposibles (medido en el clean-room del 2026-08-25: 117 "citas" en tau_ceti, 0 de
-        # ellas en prosa) y encima reportando como "no verificable" cada paper del universo sin
-        # fulltext. Es el mismo lazo que ya cierra `solo_prosa` para los otros proxies: un artefacto
-        # que se mide a sí mismo siempre da el resultado que su propia existencia produce.
-        links_prosa = [t.strip() for t in LINK_RE.findall(solo_prosa(text))]
-        prosa_links = set(links_prosa) if in_entity_note else set()
-        nbib = 0                              # citas [[bibcode]] EN PROSA de esta nota
-        for tgt in links_prosa:
-            if "/" in tgt or tgt in LINK_SKIP:
-                continue                       # placeholder/ejemplo, no link real
-            if BIBCODE_RE.match(tgt):
-                nbib += 1
-                if in_verifiable_note and tgt not in fulltext:
-                    # @inv INV-03
-                    unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
-        # #344 — los links del HERMANO cuentan como los de la nota. La tabla vivía adentro hasta
-        # 1.164.0, así que sacarla del barrido bajaría en silencio la población del detector de
-        # wikilinks rotos —bloqueante— justo sobre el artefacto que existe para poder re-auditar.
-        _side = cfg.verif_sidecar(Path(f))
-        _link_text = text + ("\n" + _side.read_text(encoding="utf-8") if _side.exists() else "")
-        for tgt in LINK_RE.findall(_link_text):
-            tgt = tgt.strip()
-            if "/" in tgt or tgt in LINK_SKIP:
-                continue                       # placeholder/ejemplo, no link real
-            # #249 — el ÍNDICE no cuenta como link entrante. Antes de #237 era prosa a mano y un
-            # link desde ahí era evidencia de que alguien catalogó la nota; desde que se ESTAMPA
-            # por verdad de disco lista todo, así que ninguna estrella ni concepto podía volver a
-            # ser huérfano y el detector —que BLOQUEA— quedaba en 0 permanente. Mismo criterio con
-            # que las secciones estampadas quedan fuera del fan-out y del detector de fuga (#214):
-            # metadata derivada no es evidencia. Lo cazó el corpus sintético al mover el golden.
-            if tgt in incoming and stem != "index":
-                incoming[tgt] += 1
-            elif tgt not in names:
-                # @inv INV-02
-                broken.append((stem, tgt))
-            # #75: "citado" se mide contra el STEM de la nota de paper, así que se registra todo
-            # target de una nota de entidad — no sólo los que parecen bibcode. Una clave sintética
-            # off-ADS (`2006RasmussenWilliams`, y peor: cualquiera que no empiece con AAAA+letra)
-            # sí matchea BIBCODE_RE… pero un citekey inválido no, y el paper quedaba reportado como
-            # "no sintetizado" para siempre AUNQUE la ficha lo citara, sin forma de cerrarlo.
-            if in_entity_note and tgt in prosa_links:
-                cited_in_entity.add(tgt)
-        # cobertura: un concepto/hipótesis que afirma sin ninguna cita [[bibcode]] no es chequeable
-        # (todo lo apuntable debe ser citable o marcado `inferencia`; ver Verify en CLAUDE.md). Backlog.
-        if in_dir(f, "concepts") and nbib == 0:
-            coverage.append((stem, "sin citas [[bibcode]] → afirmaciones no chequeables (cobertura)"))
-        # cobertura de VERIFICACIÓN (ALCE-adjacent): una nota apuntable con citas pero sin el bloque
-        # `## Verificación de citas` nunca pasó por verify-citations → sus claims no fueron chequeados
-        # claim↔fuente.
-        # ⚠ Severidad R-1 desde 1.36.0 (antes: backlog siempre). D-5 dice que la nota **nace 100%
-        # verificada**, así que "tiene citas y ningún bloque" no es deuda vieja: es la operación que
-        # la tocó sin terminar. INV-79 —«una nota con citas sin verificar no cierra»— lo pedía ya, y
-        # el detector que sí contaba para el exit (`stale_pairs`) sólo se puebla con notas que YA
-        # tienen bloque: la nota nunca verificada se escapaba por abajo. Las fichas de estrella
-        # entran: los valores NEA no se verifican contra papers, pero sus disputas y todo lo
-        # atribuido a un `[[bibcode]]`, sí.
-        has_verif, verif_date = verify_block(text)
-        if in_verifiable_note and nbib > 0 and not has_verif:
-            unverified.append((stem, f"{nbib} cita(s) sin bloque de verify-citations → correr el skill"))
-        # la vigencia del bloque se evalúa después del loop (necesita git; ver `stale_verif`). Vale
-        # para TODA nota con bloque —también fichas de estrella—, no sólo las de la cobertura de
-        # arriba: ampliar una ficha es justo cuando el bloque queda atrás.
-        if has_verif and stem not in NON_ORPHAN:
-            verif_blocks.append((f, verif_date))
-            anchor_notes.append((stem, text, Path(f)))
-        # frontera dura: fuga de implementación (código no bibliográfico) al vault (WARN, no bloquea).
-        # AUD-190 / INV-4 — el número de línea se contaba desde el CUERPO y el hallazgo se publica
-        # como `L{i}`, que por convención de este repo es la de `grep -n` sobre el ARCHIVO (skill
-        # verify-citations, #29). En una ficha de estrella el frontmatter tiene decenas de líneas,
-        # así que el puntero mandaba al operador a otra parte de la nota — un mapa que atribuye mal.
-        # Y el cortador es `frontmatter_span`, no `split("---", 2)`: éste corta dentro de un escalar
+        # Los wikilinks de la nota viven en `check_note_links` (#396); `incoming` y
+        # `cited_in_entity` son los índices que alimenta, y `nbib` vuelve porque dos chequeos
+        # de abajo parten sobre él.
+        _bk, _uv, nbib = check_note_links(stem, f, text, names, fulltext, incoming,
+                                          cited_in_entity, in_entity_note, in_verifiable_note)
+        broken += _bk
+        unverifiable += _uv
+        # La cobertura de verificación vive en `check_verification_coverage` (#396).
+        _un, _vb = check_verification_coverage(stem, f, text, nbib, in_verifiable_note,
+                                               anchor_notes, coverage)
+        unverified += _un
+        verif_blocks += _vb
         # entrecomillado que lleve `---` (H-11), y ahí el offset quedaba peor todavía.
         _partes = cfg.frontmatter_span(text)
         body_full = _partes[1] if _partes else text

@@ -9501,3 +9501,111 @@ def test_check_inferences_without_premises_exige_al_menos_un_bibcode(toy_vault):
         "n", "---\nfm: 1\n---\nX (inferencia de [[2020A]], [[2019B]]).\n") == []
     filas = lint.check_inferences_without_premises("n", "---\nfm: 1\n---\nX (inferencia).\n")
     assert len(filas) == 1 and "sin premisas" in filas[0][1]
+
+
+# ── #396 · los tres últimos chequeos del barrido ─────────────────────────────────────────────────
+
+def test_check_schema_completeness_solo_pide_lo_que_el_TIPO_declara(toy_vault):
+    """#396/INV-63 — PRESENCIA, no valor: el campo ausente y el campo vacío NO se leen igual, y el
+    segundo es una decisión declarada. La guarda que sobrevivía acota la población al tipo: una nota
+    que no es paper, ficha ni concepto no tiene schema que incumplir.
+
+    ⚠ Declarado: el `_tipo` de `if _tipo and (_faltan := …)` sobrevive a `mutar --guardas` —
+    `missing_schema_fields("", fm)` devuelve `[]`, así que la cláusula no decide nada. Red 8 sobre
+    código anterior a #396.  @inv INV-63"""
+    otra = str(cfg.QUERIES / "q.md")
+    assert lint.check_schema_completeness("q", otra, {"tags": ["query"]}, set()) == [], \
+        "una query no declara schema por tipo"
+    pap = str(cfg.PAPERS / "2020X.md")
+    filas = lint.check_schema_completeness("2020X", pap, {"tags": ["paper"]}, set())
+    assert len(filas) == 1 and "sin" in filas[0][1] and "schema" in filas[0][1]
+    assert lint.check_schema_completeness("2020X", pap, {"tags": ["paper"]}, {"2020X"}) == [], \
+        "una nota de `raw/refs/` no se juzga por el schema de la bóveda"
+    conc = str(cfg.CONCEPTS / "methods" / "c.md")
+    assert lint.check_schema_completeness("c", conc, {}, set()) == [], \
+        "sin frontmatter no hay schema que incumplir: eso lo reporta `fm_broken`"
+
+
+def test_check_note_links_reparte_cada_wikilink_a_su_indice(toy_vault):
+    """#396/INV-02/INV-03/#249 — el barrido de `[[wikilink]]` de una nota alimenta tres cosas que se
+    consumen aparte: los rotos (bloqueante), las citas sin `.txt` (no chequeables) y los índices
+    `incoming` / `cited_in_entity`. Las guardas que sobrevivían son las que deciden QUÉ es un link:
+
+    · `[[carpeta/nota]]` y los de `LINK_SKIP` son placeholders, no links reales;
+    · una cita sin `.txt` sólo es hallazgo en una nota VERIFICABLE;
+    · ⛔ el `index.md` NO cuenta como link entrante (#249): desde que se ESTAMPA, un link desde ahí
+      es metadata derivada, y si contara ninguna nota podría volver a ser huérfana;
+    · y `cited_in_entity` se puebla desde la PROSA de una ficha, no desde cualquier link.
+
+    ⚠ Declarado: el `if "/" in tgt or tgt in LINK_SKIP: continue` del PRIMER bucle sobrevive a
+    `mutar --guardas` y va a seguir sobreviviendo — el `BIBCODE_RE.match(tgt)` de la línea siguiente
+    ya lo subsume (nada de `LINK_SKIP` matchea, y un `/` tampoco). Red 8 sobre código anterior a
+    #396; en el SEGUNDO bucle la misma guarda SÍ decide, y ahí está probada. Ídem el
+    `in_entity_note` de `if in_entity_note and tgt in prosa_links`: `prosa_links` YA sale vacío
+    cuando la nota no es de entidad, así que la primera cláusula es un atajo, no una regla."""
+    mk_note(cfg.PAPERS, "2020X", {"tags": ["paper"], "bibcode": "2020X"})
+    inc: dict = {"2020X": 0}
+    cite: set = set()
+    def _l(text, stem="c", f=None, ft=None, ent=True, ver=True):
+        return lint.check_note_links(stem, f or str(cfg.CONCEPTS / "methods" / "c.md"), text,
+                                     {"2020X"}, ft or {}, inc, cite, ent, ver)
+
+    bk, uv, n = _l("cita [[2020X]] en prosa.\n")
+    assert bk == [] and n == 1 and inc["2020X"] == 1 and cite == {"2020X"}
+    assert len(uv) == 1 and "sin fulltext" in uv[0][1], "sin `.txt` no es chequeable (INV-03)"
+    assert _l("cita [[2020X]].\n", ft={"2020X": "x"})[1] == [], "con `.txt` sí lo es"
+    assert _l("cita [[2020X]].\n", ver=False)[1] == [], \
+        "en una nota no verificable la cita sin `.txt` no es hallazgo"
+
+    inc.clear(); inc["2020X"] = 0
+    bk, _u, n = _l("ver [[carpeta/2020X]] y [[" + next(iter(lint.LINK_SKIP)) + "]].\n")
+    assert n == 0 and inc["2020X"] == 0, "placeholders y ejemplos no son links reales"
+    assert bk == [], "…y tampoco se reportan como ROTOS: no apuntan a nada porque no son links"
+
+    inc.clear(); inc["2020X"] = 0
+    _l("cita [[2020X]].\n", stem="index", f=str(cfg.WIKI / "index.md"))
+    assert inc["2020X"] == 0, "#249 — el índice estampado NO cuenta como link entrante"
+
+    cite.clear()
+    _l("cita [[2020X]].\n", ent=False)
+    assert cite == set(), "`cited_in_entity` se puebla desde una ficha, no desde cualquier nota"
+    cite.clear()
+    _l(f"# c\n\n{next(iter(lint.SECCIONES_ESTAMPADAS))}\n[[2020X]]\n")
+    assert cite == set(), \
+        "y desde la PROSA: un link en una sección estampada es metadata, no una síntesis"
+
+    bk, *_x = _l("link a [[fantasma]].\n")
+    assert len(bk) == 1 and "fantasma" in bk[0][1]
+
+
+def test_check_verification_coverage_parte_sobre_las_citas_que_la_nota_TIENE(toy_vault):
+    """#396/D-5 — la nota nace 100 % verificada, así que «citas sin bloque» no es deuda vieja: es
+    que la operación no terminó. Las tres guardas que sobrevivían acotan cada población: la
+    cobertura CERO se le pide a `concepts/` (una ficha de estrella afirma sobre ground-truth, que no
+    se cita), y el bloque se indexa para TODA nota con bloque salvo la navegación."""
+    conc = str(cfg.CONCEPTS / "methods" / "c.md")
+    anchors: list = []
+    cov: list = []
+    def _v(text, stem="c", f=conc, nbib=0, ver=True):
+        return lint.check_verification_coverage(stem, f, text, nbib, ver, anchors, cov)
+
+    _v("prosa sin citas\n")
+    assert len(cov) == 1 and "sin citas" in cov[0][1]
+    cov.clear()
+    _v("prosa sin citas\n", f=str(cfg.STARS / "s.md"), stem="s")
+    assert cov == [], "una ficha de estrella afirma sobre ground-truth: no se cita"
+    _v("cita [[2020X]]\n", nbib=1)
+    assert cov == [], "con citas la cobertura no es cero"
+
+    un, vb = _v("cita [[2020X]]\n", nbib=1)
+    assert len(un) == 1 and "sin bloque" in un[0][1].lower() or un, un
+    assert _v("cita [[2020X]]\n", nbib=1, ver=False)[0] == [], \
+        "a una nota no verificable no se le pide bloque"
+
+    anchors.clear()
+    con_bloque = "cita [[2020X]]\n\n## Verificación de citas (2026-01-01)\n\n| # |\n"
+    _v(con_bloque, nbib=1)
+    assert anchors and anchors[0][0] == "c", anchors
+    anchors.clear()
+    _v(con_bloque, stem="log", f=str(cfg.LOG))
+    assert anchors == [], "la navegación no se indexa como nota anclada"
