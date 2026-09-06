@@ -8797,3 +8797,160 @@ def test_el_gitattributes_ilegible_sale_NO_EVALUADO_y_no_tumba_el_lint(toy_vault
     motivos = dict(res.por_clave("not_evaluated").items)
     assert "driver de `merge=ours`" in motivos, motivos
     assert "ilegible" in motivos["driver de `merge=ours`"]
+
+
+# ── #396 · los seis primeros chequeos del BARRIDO PRINCIPAL de notas ─────────────────────────────
+
+def test_check_hypothesis_note_solo_habla_de_hipotesis_LEGIBLES(toy_vault):
+    """#396/D-37/INV-46 — las tres guardas que ningún test distinguía. El chequeo es de
+    `concepts/hypotheses/` y de nada más; una nota cuyo frontmatter NO PARSEA se saltea (ya la
+    reporta la categoría bloqueante que corresponde, y opinar sobre un `status` que no se pudo leer
+    sería inventar); y `status` ausente no es `status` fuera del vocabulario — el campo es opcional
+    y lo que se prohíbe es la prosa libre.  @inv INV-46"""
+    ruta = cfg.CONCEPTS / "hypotheses" / "h.md"
+    otra = cfg.CONCEPTS / "methods" / "m.md"
+    vacio = ([], [], [], [])
+    assert lint.check_hypothesis_note("m", otra, {"status": "inventado"}, "", None) == vacio, \
+        "una nota que no es hipótesis no entra"
+    assert lint.check_hypothesis_note("h", ruta, {"status": "inventado"}, "", "fm rota") == vacio, \
+        "con el frontmatter roto no se opina"
+    assert lint.check_hypothesis_note("h", ruta, {}, "", None)[2] == [], \
+        "`status` ausente no es `status` fuera del vocabulario"
+    bad = lint.check_hypothesis_note("h", ruta, {"status": "inventado"}, "", None)[2]
+    assert len(bad) == 1 and "fuera del vocabulario" in bad[0][1]
+    assert lint.check_hypothesis_note("h", ruta, {"status": "abierta"}, "", None)[2] == []
+
+
+def test_check_star_note_calla_donde_NEA_o_la_prosa_ya_contestaron(toy_vault):
+    """#396 — las cuatro guardas que apagan un falso positivo sobre una ficha correcta: el `P_rot`
+    que NEA sí trae, el indicador cuya clave normalizada queda vacía, el que YA es una nota (por eso
+    se compara contra `names`, no sólo contra `concepts/`), y el planeta sin letra, que no se puede
+    ni nombrar en la prosa."""
+    idx = lint.alias_index_cache()
+    fm = {"P_rot_days": 34.0, "activity_indicators_expected": ["S-index"], "planets": []}
+    def _prot(f_, texto=""):
+        return [m for _s, m in lint.check_star_note("s", f_, texto, ["star"], {"s-index"}, idx)[0]
+                if "P_rot" in m]
+    assert _prot(fm) == [], "con `P_rot_days` de NEA no hay hueco"
+    assert len(_prot({**fm, "P_rot_days": None})) == 1
+    assert _prot({**fm, "P_rot_days": None}, "El P_rot es de 34 días [[2020X]].") == [], \
+        "documentado en la prosa con su cita: ya no es hueco"
+
+    # el indicador que tiene nota (por stem) no es hallazgo; el que no la tiene, sí
+    fm_ind = {**fm, "activity_indicators_expected": ["S-index"]}
+    _i, dest = lint.check_star_note("s", fm_ind, "", ["star"], {"s-index"}, idx)
+    assert dest == [], "el indicador que YA es una nota no tiene destino faltante"
+    _i, dest = lint.check_star_note("s", fm_ind, "", ["star"], set(), idx)
+    assert len(dest) == 1 and "S-index" in dest[0][1]
+    _i, dest = lint.check_star_note("s", {**fm, "activity_indicators_expected": ["", "  "]},
+                                    "", ["star"], set(), idx)  # claves vacías
+    assert dest == [], "un indicador cuya clave queda vacía no se puede buscar"
+
+    # el planeta SIN letra no se puede nombrar en la prosa: no se le exige que esté
+    def _pl(planets):
+        inc = lint.check_star_note("s", {**fm, "planets": planets}, "", ["star"],
+                                   {"s-index"}, idx)[0]
+        return [m for _s, m in inc if "P_rot" not in m and "indicators" not in m]
+    assert _pl([{"letter": "  "}]) == [], "un planeta sin letra no se puede nombrar en la prosa"
+    assert len(_pl([{"letter": "b"}])) == 1, "el planeta con letra sí se exige discutido"
+
+
+def _nota_huecos(alcance: str, stem="ficha"):
+    """Ficha con `## Huecos` de un bullet y el blockquote de alcance que el test quiera."""
+    return (f"# {stem}\n\n## Huecos\n\n{alcance}\n- falta medir el P_rot con TESS\n")
+
+
+def test_check_gaps_scope_recorre_la_escalera_de_estados(toy_vault):
+    """#396/#342/D-34 — un hueco es una afirmación NEGATIVA y no lleva `[[bibcode]]`, así que no la
+    mira ninguna capa: `verify-citations` va claim↔su fuente y `find-contradictions` claim↔claim, y
+    las dos parten de una cita. El alcance vuelve *acotada verdadera* una universal falsa.
+
+    Los cuatro peldaños que ningún test separaba —`sin_slugs`, `sin_n`, `slug_fantasma` y la nota
+    que no es ficha ni concepto— piden acciones distintas, y colapsarlos manda a arreglar otra cosa."""
+    ruta = cfg.STARS / "ficha.md"
+    otra = cfg.PAPERS / "2020X.md"
+    n = [0]
+    assert lint.check_gaps_scope("2020X", otra, _nota_huecos(""), n) == ([], []), \
+        "un paper no declara alcance de huecos"
+
+    hue, _w = lint.check_gaps_scope("ficha", ruta, _nota_huecos(""), n)
+    assert len(hue) == 1 and "sin `> Alcance" in hue[0][1]
+
+    hue, _w = lint.check_gaps_scope(
+        "ficha", ruta, _nota_huecos("> Alcance 2026-01-01 · 5 papers"), n)
+    assert len(hue) == 1 and "no nombra ningún slug" in hue[0][1]
+
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2001A.txt").write_text("x", encoding="utf-8")
+    hue, _w = lint.check_gaps_scope(
+        "ficha", ruta, _nota_huecos("> Alcance 2026-01-01 · temas: [ica]"), n)
+    assert len(hue) == 1 and "no declara" in hue[0][1] and "N papers" in hue[0][1]
+
+    hue, _w = lint.check_gaps_scope(
+        "ficha", ruta, _nota_huecos("> Alcance 2026-01-01 · temas: [fantasma] · 5 papers"), n)
+    assert len(hue) == 1 and "sin fulltext en disco" in hue[0][1]
+
+    hue, _w = lint.check_gaps_scope(
+        "ficha", ruta, _nota_huecos("> Alcance 2026-01-01 · temas: [ica] · 1 papers"), n)
+    assert hue == [], "alcance completo y al día: silencio"
+
+
+def test_check_paper_salvedades_separa_la_chequeada_de_la_que_es_juicio(toy_vault):
+    """#396/#213/#234 — las cinco guardas del bloque. Una salvedad sobre el ARTEFACTO no lleva
+    `[[bibcode]]`, así que `verify-citations` la deja afuera POR CONSTRUCCIÓN: o es decidible y la
+    chequea un script, o se publica marcada NO VERIFICADAS. Publicarla al mismo nivel visual que una
+    fila chequeada es lo que dejó leer un defecto inventado como un hecho medido."""
+    pap, otra = cfg.PAPERS / "2020X.md", cfg.STARS / "s.md"
+    assert lint.check_paper_salvedades("s", otra, "**Salvedades:** x") == ([], []), \
+        "sólo las notas de paper"
+    assert lint.check_paper_salvedades("2020X", pap, "sin salvedades acá") == ([], []), \
+        "sin el bloque no hay nada que mirar"
+
+    _d, sin = lint.check_paper_salvedades("2020X", pap, "**Salvedades:**\n- el .txt perdió √\n")
+    assert len(sin) == 1 and "sin la marca de #213" in sin[0][1]
+    _d, sin = lint.check_paper_salvedades(
+        "2020X", pap, "**Salvedades:** verificadas contra el archivo\n- ok\n")
+    assert sin == [], "con la marca de chequeadas, no falta nada"
+    _d, sin = lint.check_paper_salvedades(
+        "2020X", pap, "**Salvedades:** ⚠ NO VERIFICADAS — juicio del extractor\n- x\n")
+    assert sin == []
+
+    # la salvedad DECIDIBLE en prosa se propone estructurada…
+    juicio = "**Salvedades:** ⚠ NO VERIFICADAS — juicio del extractor\n"
+    dec, _s = lint.check_paper_salvedades(
+        "2020X", pap, juicio + "- el .txt perdió el símbolo √ en la ecuación 3\n")
+    assert len(dec) == 1 and "podría decidir" in dec[0][1]
+    # …y las dos guardas que la acotan, que ningún test distinguía:
+    #   (a) el bloque de juicio TERMINA en el próximo `## ` — lo de después es otra sección
+    dec, _s = lint.check_paper_salvedades(
+        "2020X", pap, juicio + "\n## Vista — x\n\n- el .txt perdió el símbolo √ en la ecuación 3\n")
+    assert dec == [], "pasado el próximo encabezado ya no es una salvedad"
+    #   (b) sólo la línea que es BULLET: la prosa suelta del bloque no es una salvedad enumerada
+    dec, _s = lint.check_paper_salvedades(
+        "2020X", pap, juicio + "el .txt perdió el símbolo √ en la ecuación 3\n")
+    assert dec == [], "sin viñeta no es una salvedad de la lista"
+
+
+def test_check_log_quotes_no_evalua_lo_que_no_tiene_txt(toy_vault):
+    """#396/#220/#391 — la bitácora es el único lugar de `vault/wiki/` que ninguna capa audita, y
+    medido, una entrada publicó como cita textual CON PÁGINA una frase que invierte lo que dice el
+    paper. La guarda que sobrevivía es la de #205 aplicada acá: sin `.txt` chequeable la cita **no
+    es evaluable**, y eso NO es un hallazgo — el silencio del corpus no acusa a nadie."""
+    cita = "esta frase larga no aparece en ningún archivo del corpus, y se afirma igual"
+    cuerpo = f'## 2026-03-01 — ingest: x\n\n- El paper dice «{cita}» [[2020X]].\n'
+    # `sources_for` devuelve `({bibcode: [textos]}, [opacas])` — el mismo contrato que la closure
+    # real de `collect`, para que el doble no esconda el bug en la diferencia (regla de método 2)
+    def _fuente(*textos):
+        return lambda _b: ({"2020X": list(textos)}, [])
+
+    assert lint.check_log_quotes("otra", cuerpo, _fuente("texto cualquiera")) == [], \
+        "sólo se mira `log.md`: en una nota la cita la cubren el fan-out y las anclas"
+    assert lint.check_log_quotes("log", cuerpo, lambda _b: ({}, [])) == [], \
+        "sin `.txt` chequeable la cita NO es evaluable, y eso no es un hallazgo (#205)"
+    hall = lint.check_log_quotes("log", cuerpo, _fuente("texto cualquiera"))
+    assert len(hall) == 1 and "no afirma citas textuales" in hall[0][1], hall
+    assert lint.check_log_quotes("log", cuerpo, _fuente(f"bla bla {cita} bla")) == [], \
+        "si el `.txt` la trae, la cita es verdadera"
+    # y la MENCIÓN en blockquote está exenta por estructura, no por olfatear el string (#387)
+    en_quote = f'## 2026-03-01 — x\n\n> El paper dice «{cita}» [[2020X]].\n'
+    assert lint.check_log_quotes("log", en_quote, _fuente("texto cualquiera")) == []

@@ -3582,6 +3582,352 @@ def check_ground_truth_mirror(msini_earth) -> tuple:
     return contradictions, mass_issues, vistos_gt, gt_prosa, incomplete
 
 
+def check_hypothesis_note(stem: str, f, fm: dict, text: str, err) -> tuple:
+    """`(alcance_corto, alcance_wikilink, bad_status, status_vs_evidencia)` — lo propio de una nota
+    de `concepts/hypotheses/` (D-21/D-34/D-37).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. What they share is being about a hypothesis and nothing else: the declared scope of
+    the verdict, the closed vocabulary of `status`, and `status` against its own evidence table.
+    """
+    alcance_corto: list = []
+    alcance_wikilink: list = []
+    bad_status: list = []
+    status_vs_evidencia: list = []
+    if in_dir(f, "hypotheses") and not err:
+        st = fm.get("status")
+        if st is not None and st not in HYP_STATUS:
+            # @inv INV-46
+            bad_status.append((stem, f"`status: {st}` fuera del vocabulario "
+                                     f"({' | '.join(HYP_STATUS)})"))
+        # D-37 · #177: `status` se DERIVA de la tabla de evidencia. `CLAUDE.md` promete que una
+        # `sostenida` con filas `desafía` se marca, y no lo hacía nadie: el único chequeo era la
+        # pertenencia al vocabulario, así que la contradicción tabla↔status pasaba muda. Es lo
+        # único que impide que `status` sea un campo que el agente elige — y el consumidor lo lee
+        # justamente para decidir si se apoya en la hipótesis.
+        if (n_desafia := challenging_rows(text)) and st == "sostenida":
+            status_vs_evidencia.append(
+                (stem, f"`status: sostenida` con {n_desafia} fila(s) `desafía` en la tabla de "
+                       f"evidencia: el status se DERIVA de la tabla (D-37). Si la evidencia está "
+                       f"repartida, el status es `disputada`"))
+        # #368 — el mismo razonamiento vale para el alcance del VEREDICTO (D-34 lo comparte
+        # con `## Huecos`): un `[[bibcode]]` ahí es contabilidad, no cita. No se midió acá; se
+        # cubre porque la regla es la misma y dejarla en un solo sitio es escribirla a medias.
+        for _wl in scope_wikilinks(text):
+            alcance_wikilink.append(
+                (stem, f"`[[{_wl}]]` dentro del blockquote de alcance de la hipótesis: es "
+                       f"contabilidad del corpus, no una cita, y el fan-out lo toma como par "
+                       f"que ningún PDF puede respaldar → reemplazalo por el nombre del paper "
+                       f"(#368)"))
+        # D-34 — el ALCANCE define qué significa el veredicto. Sin él, "no hay evidencia" se lee
+        # como "no existe evidencia": el mismo *afirmar de más* que la bóveda persigue en todos
+        # lados, pero aplicado a una conclusión. Y con él, el alcance CRECE: sumar un tema (o
+        # refrescar uno) deja el veredicto testeado contra un universo que ya no es el vigente —
+        # misma familia de staleness que los pares de verificación. Backlog: la nota no es
+        # inválida, quedó atrás. Se cierra re-corriendo el test y re-estampando la línea.
+        # La escalera es `scope_state` (una sola implementación, #342); la prosa del
+        # reproche no, que la salida de una hipótesis no es la de un `## Huecos`.
+        _est, alc, vigente, faltan = scope_state(text)
+        if _est == "sin_declarar":
+            alcance_corto.append(
+                (stem, "sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin "
+                       "alcance declarado se lee como universal → declararlo (skill "
+                       "`test-hypothesis`, paso 0)"))
+        elif _est == "sin_slugs":
+            # AUD-171 / INV-92 — un blockquote SIN slugs apagaba el chequeo entero en silencio:
+            # la nota tiene la línea, así que pasa el primer caso, y el `elif` no entra. El
+            # veredicto sigue leyéndose como universal y encima ahora parece declarado.
+            alcance_corto.append(
+                (stem, f"el alcance del {alc['fecha']} no nombra ningún slug "
+                       f"(`temas: [...]` / `estrellas: [...]`) → no se puede re-contar el "
+                       f"universo, así que el veredicto no se puede pesar: declaralos"))
+        elif _est == "sin_n":
+            # AUD-171, la otra puerta: con slugs pero sin `· N papers` no hay contra qué
+            # comparar el conteo de hoy, y el detector de «quedó corto» queda mudo.
+            alcance_corto.append(
+                (stem, f"el alcance del {alc['fecha']} no declara `· N papers` → no hay contra "
+                       f"qué comparar (hoy esos slugs tienen {vigente}); completá la línea"))
+        elif _est == "slug_fantasma":
+            # No se puede contar lo que no existe: se DICE cuál falta en vez de comparar
+            # contra un universo recortado en silencio (que daría "quedó corto" al revés).
+            alcance_corto.append(
+                (stem, f"el alcance nombra slug(s) sin fulltext en disco "
+                       f"({', '.join(faltan)}) → ¿typo, o entidad borrada/renombrada?"))
+        elif _est == "quedo_corto":
+            alcance_corto.append(
+                (stem, f"alcance del {alc['fecha']} declarado sobre {alc['n_papers']} "
+                       f"papers y hoy esos slugs tienen {vigente} (+"
+                       f"{vigente - alc['n_papers']}) → el veredicto se testeó contra un "
+                       f"universo que ya no es el vigente: re-correr el test sobre lo nuevo "
+                       f"y re-estampar la línea de alcance"))
+    return alcance_corto, alcance_wikilink, bad_status, status_vs_evidencia
+
+
+def check_star_note(stem: str, fm: dict, text: str, tags, names, alias_idx_cached) -> tuple:
+    """`(incomplete, indicador_sin_destino)` — lo propio de una ficha de `stars/`.
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. The indicator's destination is resolved by normalised key and by the concept's
+    `aliases` (#245/#348), the same rule `is_dangling` uses for the other two dangling categories.
+    """
+    incomplete: list = []
+    indicador_sin_destino: list = []
+    if "star" in tags:
+        # `solo_prosa`: los proxies de autosuficiencia miden lo que alguien ESCRIBIÓ. Las
+        # tablas estampadas (planetas, papers, métodos, excluidos, verificación) son metadata
+        # materializada y satisfacen los patrones por construcción.
+        body = solo_prosa(text.split("---", 2)[-1] if text.startswith("---") else text)
+        # `P_rot_days` nulo NO es de por sí un campo incompleto (#70): el frontmatter es espejo
+        # de NEA y NEA muchas veces no lo tiene — pedir que se "complete" ahí es pedir que se
+        # rellene con literatura, justo lo que rompe la capa auditable. Lo accionable es otra
+        # cosa: que el P_rot esté DOCUMENTADO en la prosa, con su cita (o marcado `inferencia`
+        # si es lectura propia). Antes esto se reportaba para siempre, sin arreglo posible.
+        if fm.get("P_rot_days") in (None, "") and not prot_documentado(body):
+            incomplete.append((stem, "sin P_rot: NEA no lo trae y el cuerpo no documenta uno "
+                                     "citado → buscarlo en la literatura y dejarlo en la prosa "
+                                     "con su `[[bibcode]]` (el frontmatter NO se rellena)"))
+        if not fm.get("activity_indicators_expected"):
+            incomplete.append((stem, "activity_indicators_expected vacío"))
+        # #250 — el ÚNICO campo-lista de `stars/` sin destino chequeado ni link: `thesis_links`
+        # bloquea, `methods` es backlog, y éste no tenía ninguno de los dos, así que la ficha
+        # nombra cinco indicadores y el lector no tiene cómo llegar al concepto que explica
+        # ninguno. Backlog por la misma asimetría que `methods`: la nota del indicador la crea
+        # `ingest-theme`, que es otra operación. ⚠ Se compara con `indicator_key`, que saca la
+        # glosa final entre paréntesis: el campo es prosa para un humano (`BIS (bisector de la
+        # CCF)`), y comparar crudo haría dangling al 100 % — un backlog que nace todo falso es
+        # uno que nadie vuelve a mirar.
+        for _ind in cfg.as_list(fm.get("activity_indicators_expected")):
+            _clave = cfg.indicator_key(_ind)
+            # ⛔ El índice se construye UNA vez por corrida (`_alias_idx_cached`): llamar
+            # `method_target` sin índice re-lee TODAS las notas de `concepts/` por cada
+            # indicador de cada ficha, y el tier `poblada` lo cazó como salto de 2,0x a 2,4x en
+            # parseos de YAML por nota.
+            if _clave and not cfg.method_target(_clave, alias_idx_cached()) and _clave not in {
+                    cfg.method_key(n) for n in names}:
+                indicador_sin_destino.append(
+                    (stem, f"`{_ind}` no tiene nota en `concepts/` (ni por `aliases`): ingerí "
+                           f"el tema, o declaralo como alias del concepto que lo denota"))
+        # autosuficiencia (proxy estructural): cada planeta del frontmatter debe discutirse en
+        # la prosa (la ficha tiene que alcanzar sola; ver "estándar de la ficha" en CLAUDE.md).
+        for pl in fm.get("planets") or []:
+            l = str(pl.get("letter", "")).strip()
+            if not l:
+                continue
+            # `[^*\n]*`, no `[^*]*`: sin el `\n` el patrón no matchea UNA negrita sino todo
+            # el texto ENTRE dos negritas cualesquiera. Con el texto que #72 agregó al template
+            # ("11.5 d es el armónico de 34 d", entre dos negritas), el planeta **d** —de las
+            # letras más frecuentes del corpus— quedaba "discutido" en una ficha con CERO
+            # líneas de prosa: falso limpio permanente en el único proxy estructural de
+            # autosuficiencia que la doc publicita.
+            pats = [rf"\*\*[^*\n]*\b{re.escape(l)}\b[^*\n]*\*\*",  # negrita (incl. **b/c/d**)
+                    rf"\|\s*{re.escape(l)}\s*\|",               # celda de tabla
+                    rf"_{re.escape(l)}\b",                       # subíndice $M_b$/$K_b$
+                    rf"\b{re.escape(l)}\s*\("]                   # "b (P=...)"
+            if not any(re.search(p, body) for p in pats):
+                incomplete.append((stem, f"planeta {l} en frontmatter pero no discutido en prosa"))
+    return incomplete, indicador_sin_destino
+
+
+def check_gaps_scope(stem: str, f, text: str, n_huecos: list) -> tuple:
+    """`(huecos_sin_alcance, alcance_wikilink)` — un `## Huecos` que no declara su ALCANCE (#342).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. A gap is a NEGATIVE claim and by construction carries no `[[bibcode]]`, so no layer
+    looks at it: `verify-citations` goes claim↔its source and `find-contradictions` claim↔claim, and
+    both start from a citation. Measured: 6 false gaps in two themes, all six caught by chance.
+
+    `n_huecos` comes in as the one-element list that counts the population (INV-40): the category
+    declares how many notes actually have a `## Huecos` written, and a `(0)` over a population
+    nobody measured reads as a verdict.
+
+    @inv INV-40
+    """
+    huecos_sin_alcance: list = []
+    alcance_wikilink: list = []
+    if in_dir(f, "stars") or in_dir(f, "concepts"):
+        _sec_h = gaps_section(text)
+        _bul_h = gaps_bullets(_sec_h) if _sec_h else []
+        if _bul_h:
+            n_huecos[0] += 1
+            # El blockquote se busca DENTRO de la sección: el de nivel de nota de una hipótesis
+            # (D-34) declara el alcance del veredicto, que es otra afirmación.
+            _est_h, _alc_h, _vig_h, _falt_h = scope_state(_sec_h)
+            for _wl in scope_wikilinks(_sec_h):
+                alcance_wikilink.append(
+                    (stem, f"`[[{_wl}]]` dentro del blockquote de alcance de `## Huecos`: es "
+                           f"contabilidad del corpus, no una cita, y el fan-out lo toma como "
+                           f"par que ningún PDF puede respaldar → reemplazalo por el nombre "
+                           f"del paper (#368)"))
+            if _est_h == "sin_declarar":
+                huecos_sin_alcance.append(
+                    (stem, f"`## Huecos` con {len(_bul_h)} afirmación(es) negativa(s) y sin "
+                           f"`> Alcance <fecha> · temas: [...] / estrellas: [...] · N papers`: "
+                           f"«esto falta» sin alcance se lee como «no existe en la "
+                           f"literatura», y ninguna otra capa lo mira (un hueco no tiene "
+                           f"`[[bibcode]]` por construcción) → declaralo"))
+            elif _est_h == "sin_slugs":
+                huecos_sin_alcance.append(
+                    (stem, f"el alcance de `## Huecos` ({_alc_h['fecha']}) no nombra ningún "
+                           f"slug → no se puede re-contar el universo, así que los huecos "
+                           f"siguen leyéndose como universales: declaralos"))
+            elif _est_h == "sin_n":
+                huecos_sin_alcance.append(
+                    (stem, f"el alcance de `## Huecos` ({_alc_h['fecha']}) no declara "
+                           f"`· N papers` → no hay contra qué comparar (hoy esos slugs tienen "
+                           f"{_vig_h}); completá la línea"))
+            elif _est_h == "slug_fantasma":
+                huecos_sin_alcance.append(
+                    (stem, f"el alcance de `## Huecos` nombra slug(s) sin fulltext en disco "
+                           f"({', '.join(_falt_h)}) → ¿typo, o entidad borrada/renombrada?"))
+            elif _est_h == "quedo_corto":
+                huecos_sin_alcance.append(
+                    (stem, f"los {len(_bul_h)} hueco(s) se declararon sobre "
+                           f"{_alc_h['n_papers']} papers ({_alc_h['fecha']}) y hoy esos slugs "
+                           f"tienen {_vig_h} (+{_vig_h - _alc_h['n_papers']}) → el corpus "
+                           f"creció debajo: re-mirar los huecos sobre lo nuevo y re-estampar "
+                           f"la línea"))
+    return huecos_sin_alcance, alcance_wikilink
+
+
+def check_table_shape(stem: str, body_full: str, offset: int) -> tuple:
+    """`(forma_rota, forma_sospechosa)` — table rows with more cells than their header (#227).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. The artifact is what travels, and until 1.82.3 nobody looked at whether it rendered:
+    an unescaped `|` splits the row, and a claim that was cited and verified becomes invisible to
+    the reader while the lint keeps counting its row.
+    """
+    forma_rota: list = []
+    forma_sospechosa: list = []
+    if stem not in NON_ORPHAN:
+        for _ln, _got, _want in cfg.table_shape_issues(body_full):
+            # @inv INV-149
+            forma_rota.append(
+                (stem, f"L{_ln + offset}: fila de tabla con {_got} celda(s) y su encabezado "
+                       f"tiene {_want} → las de más NO se renderizan (¿dos filas empalmadas en "
+                       f"una línea?)"))
+        # AUD-227 — las SECCIONES ESTAMPADAS quedan fuera del chequeo de marcadores, mismo
+        # criterio que el detector de fuga (#214): `## Abstract` es copia **verbatim** de
+        # catálogo, y ADS devuelve comillas tipo LaTeX (``cleaning'`` con un solo backtick) que
+        # la bóveda **no puede editar** —el verbatim es la capa auditable—. Reportarlo era pedir
+        # que se arregle algo que el contrato prohíbe tocar: backlog permanente sobre una nota
+        # correcta, que es el falso positivo que erosiona la categoría entera.
+        _cuerpo_forma = "\n".join(
+            ln if not cfg.is_stamped_section(_sec) else ""
+            for ln, _sec in _lines_with_section(body_full))
+        for _ln, _marca, _impar in cfg.unclosed_markers(_cuerpo_forma):
+            # #309 — las DOS líneas: el párrafo que queda abierto y aquella donde el conteo se
+            # vuelve impar. Con párrafos de seis bullets, mandar al arranque es hacerle buscar
+            # a mano al operador lo que el detector ya sabe.
+            _donde = (f"L{_ln + offset}" if _impar == _ln else
+                      f"L{_ln + offset} (el impar cae en L{_impar + offset})")
+            forma_sospechosa.append(
+                (stem, f"{_donde}: el párrafo deja un `{_marca}` sin cerrar — se traga el "
+                       f"texto que sigue. Un literal se escribe escapado (`\\{_marca}`), y así "
+                       f"escrito ya no cuenta (#309)"))
+        for _ln, _txt in cfg.duplicate_paragraphs(body_full):
+            forma_sospechosa.append(
+                (stem, f"L{_ln + offset}: párrafo repetido en la misma nota — «{_txt}…»"))
+        # #260 — el encabezado pegado a una fila de tabla. Mismo eje que la fila mal formada,
+        # otro mecanismo: GFM corta bien y Obsidian no lo muestra, pero Python-Markdown lo
+        # absorbe COMO UNA CELDA y el `##` desaparece del outline junto con la población que
+        # D-10/INV-81 obligan a publicar en el título. Lo producía `_reemplazar_seccion`
+        # (arreglado en el mismo cambio); esto es la red para el próximo call site.
+        for _ln, _head in cfg.headings_glued_to_table(body_full):
+            forma_sospechosa.append(
+                (stem, f"L{_ln + offset}: «{_head[:60]}» arranca pegado a una fila de tabla, "
+                       f"sin línea en blanco → Python-Markdown lo absorbe como una celda más y "
+                       f"el encabezado desaparece (GFM/Obsidian lo tolera, por eso no se ve)"))
+    return forma_rota, forma_sospechosa
+
+
+def check_paper_salvedades(stem: str, f, text: str) -> tuple:
+    """`(salv_decidible, salv_sin_marca)` — las salvedades de una nota de paper (#213/#234).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
+    accumulates. A caveat about the ARTIFACT («the `.txt` lost this symbol») carries no
+    `[[bibcode]]` —it is about the file, not the paper— so `verify-citations` leaves it out BY
+    CONSTRUCTION: either it is decidable and a script checks it, or it is published marked NOT
+    VERIFIED.
+    """
+    salv_decidible: list = []
+    salv_sin_marca: list = []
+    if in_dir(f, "papers") and "**Salvedades" in text:
+        if "NO VERIFICADAS" not in text and "verificadas contra el archivo" not in text:
+            salv_sin_marca.append(
+                (stem, "publica `**Salvedades:**` sin la marca de #213: no se distingue la "
+                       "chequeada contra el archivo de la que es juicio del extractor → "
+                       "re-correr `harvest_views.py <slug>`"))
+        # ⛔ #253 — el barrido va SÓLO sobre el bloque de las NO verificadas, que es la
+        # población que #234 describe: juicio del extractor que podría haberse mecanizado. El
+        # bloque «verificadas contra el archivo» lo escribe el COSECHADOR, y sus líneas dicen,
+        # literalmente, que la salvedad se emitió estructurada y se chequeó — marcarlas es
+        # pedir que se estructure lo que ya está estructurado. Medido en `hd_40307` tras una
+        # tanda de extracción bien hecha: 12 de 17 hallazgos eran líneas del propio cosechador,
+        # y el número CRECE con cada salvedad correctamente estructurada. Misma exención y
+        # mismo argumento que #214 para las `SECCIONES_ESTAMPADAS`: un detector no mira lo que
+        # la máquina escribe, porque si no la categoría de alta señal se vuelve ruido.
+        _en_juicio = False
+        for _ln in text.split("\n"):
+            _b = _ln.strip()
+            if _b.startswith("**Salvedades"):
+                # ⚠ El bloque PELADO (`**Salvedades:**`, schema anterior a #213) SÍ entra: es
+                # justo donde se coló la salvedad falsa que #213 midió. Lo único exento es el
+                # bloque que escribe el cosechador.
+                _en_juicio = "verificadas contra el archivo" not in _b
+                continue
+            if _b.startswith("## "):
+                _en_juicio = False
+            if _en_juicio and _b.startswith(("- ", "* ")) and cfg.looks_decidable(_b):
+                salv_decidible.append(
+                    (stem, f"salvedad en prosa que un script podría decidir: «{_b[2:82]}…» → "
+                           f"emitila estructurada (`SALVEDAD_TIPOS`) y el cosechador la chequea"))
+    return salv_decidible, salv_sin_marca
+
+
+def check_log_quotes(stem: str, body_full: str, sources_for) -> list:
+    """`cita_log` — la cita textual afirmada en `log.md` (#220/#391).
+
+    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
+    accumulates. The bitácora is the ONLY place in `vault/wiki/` no verification layer audits —
+    `verify-citations` goes note by note and does not read it— and measured, one entry published as
+    a verbatim quote WITH a page a sentence that INVERTS what the paper says.
+
+    The blockquote exemption is STRUCTURAL (`Block.kind`, never sniffing a string) and one single
+    function decides it (`lib_quotes.log_quote_exempt`), shared with the other check (INV-141).
+    """
+    cita_log: list = []
+    if stem == "log":
+        for _b in lb.split_blocks(body_full):
+            # #386/#387 — la MISMA función que usa `contrast.validar`, no un `in` propio: la
+            # marca y la mención en blockquote son la misma regla para los dos consumidores.
+            if cfg.log_quote_exempt(stem, _b.text, _b.kind):
+                continue           # marcada, o mención: visible, no es deuda
+            _bibs_log = lb._bibcodes(_b.text)
+            for _c in cfg.quotes_in(_b.text):
+                # #337 — el DUEÑO de la cita, igual que la rama gemela de la prosa que sigue
+                # abajo: #316/#325 se arregló en un camino y quedó vivo en el hermano. Sin esto
+                # la cita se probaba contra CADA bibcode de la entrada, así que una cita
+                # correcta y verbatim en un párrafo que nombra ocho papers producía ocho
+                # hallazgos —uno por bibcode— y partir el párrafo en dos los bajaba.
+                _duenio_log = lb.quote_owner(_b.text, _c, _bibs_log)
+                _bibs_c = [_duenio_log] if _duenio_log else _bibs_log
+                _fuentes_log, _ = sources_for(_bibs_c)
+                if not _fuentes_log:
+                    continue       # sin `.txt` chequeable: no evaluable, no es hallazgo
+                if any(cfg.quote_found(_c, _s)
+                       for _ss in _fuentes_log.values() for _s in _ss):
+                    continue
+                cita_log.append(
+                    (stem, f"L{_b.first_line}: la bitácora entrecomilla «"
+                           f"{_c[:70]}{'…' if len(_c) > 70 else ''}» y esa cadena no "
+                           f"está en el `.txt` de {', '.join(sorted(_fuentes_log))} — el `log` "
+                           f"no afirma citas textuales (#391): llevala a su nota, donde "
+                           f"`verify-citations` la cubre, o dejala como MENCIÓN dentro de un "
+                           f"blockquote `>` si la entrada necesita mostrarla para explicarla"))
+    return cita_log
+
+
 def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     """Barre la bóveda entera y devuelve lo que encontró, **sin renderizar nada**.
 
@@ -4131,36 +4477,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # estructurada, ninguna nota llevaba la marca de #213, y una salvedad FALSA volvió a
         # colarse — publicada bajo `**Salvedades:**` pelado, al mismo nivel visual que tendría una
         # chequeada. Los dos hallazgos son backlog: son deuda de re-corrida, no violación.
-        if in_dir(f, "papers") and "**Salvedades" in text:
-            if "NO VERIFICADAS" not in text and "verificadas contra el archivo" not in text:
-                salv_sin_marca.append(
-                    (stem, "publica `**Salvedades:**` sin la marca de #213: no se distingue la "
-                           "chequeada contra el archivo de la que es juicio del extractor → "
-                           "re-correr `harvest_views.py <slug>`"))
-            # ⛔ #253 — el barrido va SÓLO sobre el bloque de las NO verificadas, que es la
-            # población que #234 describe: juicio del extractor que podría haberse mecanizado. El
-            # bloque «verificadas contra el archivo» lo escribe el COSECHADOR, y sus líneas dicen,
-            # literalmente, que la salvedad se emitió estructurada y se chequeó — marcarlas es
-            # pedir que se estructure lo que ya está estructurado. Medido en `hd_40307` tras una
-            # tanda de extracción bien hecha: 12 de 17 hallazgos eran líneas del propio cosechador,
-            # y el número CRECE con cada salvedad correctamente estructurada. Misma exención y
-            # mismo argumento que #214 para las `SECCIONES_ESTAMPADAS`: un detector no mira lo que
-            # la máquina escribe, porque si no la categoría de alta señal se vuelve ruido.
-            _en_juicio = False
-            for _ln in text.split("\n"):
-                _b = _ln.strip()
-                if _b.startswith("**Salvedades"):
-                    # ⚠ El bloque PELADO (`**Salvedades:**`, schema anterior a #213) SÍ entra: es
-                    # justo donde se coló la salvedad falsa que #213 midió. Lo único exento es el
-                    # bloque que escribe el cosechador.
-                    _en_juicio = "verificadas contra el archivo" not in _b
-                    continue
-                if _b.startswith("## "):
-                    _en_juicio = False
-                if _en_juicio and _b.startswith(("- ", "* ")) and cfg.looks_decidable(_b):
-                    salv_decidible.append(
-                        (stem, f"salvedad en prosa que un script podría decidir: «{_b[2:82]}…» → "
-                               f"emitila estructurada (`SALVEDAD_TIPOS`) y el cosechador la chequea"))
+        # Las salvedades de una nota de paper viven en `check_paper_salvedades` (#396).
+        _sv1, _sv2 = check_paper_salvedades(stem, f, text)
+        salv_decidible += _sv1
+        salv_sin_marca += _sv2
 
         # #225 — la cuarta marca en línea. Una afirmación marcada para ir al PDF es deuda ABIERTA:
         # se reporta hasta que alguien la verifique y la saque. Backlog, nunca bloqueante — la
@@ -4195,34 +4515,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # **no va en el log**: va a su nota, o se muestra como MENCIÓN dentro de un blockquote. Eso
         # saca el motivo de la marca en vez de sacar la marca sola, y con él la convención en texto
         # libre que cada consumidor nuevo tenía que aprender.
-        if stem == "log":
-            for _b in lb.split_blocks(body_full):
-                # #386/#387 — la MISMA función que usa `contrast.validar`, no un `in` propio: la
-                # marca y la mención en blockquote son la misma regla para los dos consumidores.
-                if cfg.log_quote_exempt(stem, _b.text, _b.kind):
-                    continue           # marcada, o mención: visible, no es deuda
-                _bibs_log = lb._bibcodes(_b.text)
-                for _c in cfg.quotes_in(_b.text):
-                    # #337 — el DUEÑO de la cita, igual que la rama gemela de la prosa que sigue
-                    # abajo: #316/#325 se arregló en un camino y quedó vivo en el hermano. Sin esto
-                    # la cita se probaba contra CADA bibcode de la entrada, así que una cita
-                    # correcta y verbatim en un párrafo que nombra ocho papers producía ocho
-                    # hallazgos —uno por bibcode— y partir el párrafo en dos los bajaba.
-                    _duenio_log = lb.quote_owner(_b.text, _c, _bibs_log)
-                    _bibs_c = [_duenio_log] if _duenio_log else _bibs_log
-                    _fuentes_log, _ = _sources_for(_bibs_c)
-                    if not _fuentes_log:
-                        continue       # sin `.txt` chequeable: no evaluable, no es hallazgo
-                    if any(cfg.quote_found(_c, _s)
-                           for _ss in _fuentes_log.values() for _s in _ss):
-                        continue
-                    cita_log.append(
-                        (stem, f"L{_b.first_line}: la bitácora entrecomilla «"
-                               f"{_c[:70]}{'…' if len(_c) > 70 else ''}» y esa cadena no "
-                               f"está en el `.txt` de {', '.join(sorted(_fuentes_log))} — el `log` "
-                               f"no afirma citas textuales (#391): llevala a su nota, donde "
-                               f"`verify-citations` la cubre, o dejala como MENCIÓN dentro de un "
-                               f"blockquote `>` si la entrada necesita mostrarla para explicarla"))
+        # La cita textual del `log` vive en `check_log_quotes` (#396).
+        cita_log += check_log_quotes(stem, body_full, _sources_for)
 
         if stem not in NON_ORPHAN:
             _por_bloque: dict = {}
@@ -4352,45 +4646,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # La fila mal formada BLOQUEA: no es «se ve feo», es contenido que el lector no ve mientras
         # toda herramienta que parsea el archivo sí lo ve — y puede estar certificado como
         # verificado. Las otras dos son backlog: molestan, no ocultan.
-        if stem not in NON_ORPHAN:
-            for _ln, _got, _want in cfg.table_shape_issues(body_full):
-                # @inv INV-149
-                forma_rota.append(
-                    (stem, f"L{_ln + _offset}: fila de tabla con {_got} celda(s) y su encabezado "
-                           f"tiene {_want} → las de más NO se renderizan (¿dos filas empalmadas en "
-                           f"una línea?)"))
-            # AUD-227 — las SECCIONES ESTAMPADAS quedan fuera del chequeo de marcadores, mismo
-            # criterio que el detector de fuga (#214): `## Abstract` es copia **verbatim** de
-            # catálogo, y ADS devuelve comillas tipo LaTeX (``cleaning'`` con un solo backtick) que
-            # la bóveda **no puede editar** —el verbatim es la capa auditable—. Reportarlo era pedir
-            # que se arregle algo que el contrato prohíbe tocar: backlog permanente sobre una nota
-            # correcta, que es el falso positivo que erosiona la categoría entera.
-            _cuerpo_forma = "\n".join(
-                ln if not cfg.is_stamped_section(_sec) else ""
-                for ln, _sec in _lines_with_section(body_full))
-            for _ln, _marca, _impar in cfg.unclosed_markers(_cuerpo_forma):
-                # #309 — las DOS líneas: el párrafo que queda abierto y aquella donde el conteo se
-                # vuelve impar. Con párrafos de seis bullets, mandar al arranque es hacerle buscar
-                # a mano al operador lo que el detector ya sabe.
-                _donde = (f"L{_ln + _offset}" if _impar == _ln else
-                          f"L{_ln + _offset} (el impar cae en L{_impar + _offset})")
-                forma_sospechosa.append(
-                    (stem, f"{_donde}: el párrafo deja un `{_marca}` sin cerrar — se traga el "
-                           f"texto que sigue. Un literal se escribe escapado (`\\{_marca}`), y así "
-                           f"escrito ya no cuenta (#309)"))
-            for _ln, _txt in cfg.duplicate_paragraphs(body_full):
-                forma_sospechosa.append(
-                    (stem, f"L{_ln + _offset}: párrafo repetido en la misma nota — «{_txt}…»"))
-            # #260 — el encabezado pegado a una fila de tabla. Mismo eje que la fila mal formada,
-            # otro mecanismo: GFM corta bien y Obsidian no lo muestra, pero Python-Markdown lo
-            # absorbe COMO UNA CELDA y el `##` desaparece del outline junto con la población que
-            # D-10/INV-81 obligan a publicar en el título. Lo producía `_reemplazar_seccion`
-            # (arreglado en el mismo cambio); esto es la red para el próximo call site.
-            for _ln, _head in cfg.headings_glued_to_table(body_full):
-                forma_sospechosa.append(
-                    (stem, f"L{_ln + _offset}: «{_head[:60]}» arranca pegado a una fila de tabla, "
-                           f"sin línea en blanco → Python-Markdown lo absorbe como una celda más y "
-                           f"el encabezado desaparece (GFM/Obsidian lo tolera, por eso no se ve)"))
+        # La forma del artefacto vive en `check_table_shape` (#396).
+        _f1, _f2 = check_table_shape(stem, body_full, _offset)
+        forma_rota += _f1
+        forma_sospechosa += _f2
 
         # Cabecera no estampable (#69, backlog): una ficha/concepto sin la línea
         # `> _Generado con Almagesto v…_` deja SIN EFECTO a todos los estampadores de cabecera
@@ -4546,72 +4805,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             if not any(fm.get(k) for k in ("stars", "thesis_links", "methods")):
                 sin_destino.append((stem, "sin destino: ni `stars`, ni `thesis_links`, ni `methods` "
                                           "— no entra en ningún roll-up ni lo alcanza ninguna síntesis"))
-        if in_dir(f, "hypotheses") and not err:
-            st = fm.get("status")
-            if st is not None and st not in HYP_STATUS:
-                # @inv INV-46
-                bad_status.append((stem, f"`status: {st}` fuera del vocabulario "
-                                         f"({' | '.join(HYP_STATUS)})"))
-            # D-37 · #177: `status` se DERIVA de la tabla de evidencia. `CLAUDE.md` promete que una
-            # `sostenida` con filas `desafía` se marca, y no lo hacía nadie: el único chequeo era la
-            # pertenencia al vocabulario, así que la contradicción tabla↔status pasaba muda. Es lo
-            # único que impide que `status` sea un campo que el agente elige — y el consumidor lo lee
-            # justamente para decidir si se apoya en la hipótesis.
-            if (n_desafia := challenging_rows(text)) and st == "sostenida":
-                status_vs_evidencia.append(
-                    (stem, f"`status: sostenida` con {n_desafia} fila(s) `desafía` en la tabla de "
-                           f"evidencia: el status se DERIVA de la tabla (D-37). Si la evidencia está "
-                           f"repartida, el status es `disputada`"))
-            # #368 — el mismo razonamiento vale para el alcance del VEREDICTO (D-34 lo comparte
-            # con `## Huecos`): un `[[bibcode]]` ahí es contabilidad, no cita. No se midió acá; se
-            # cubre porque la regla es la misma y dejarla en un solo sitio es escribirla a medias.
-            for _wl in scope_wikilinks(text):
-                alcance_wikilink.append(
-                    (stem, f"`[[{_wl}]]` dentro del blockquote de alcance de la hipótesis: es "
-                           f"contabilidad del corpus, no una cita, y el fan-out lo toma como par "
-                           f"que ningún PDF puede respaldar → reemplazalo por el nombre del paper "
-                           f"(#368)"))
-            # D-34 — el ALCANCE define qué significa el veredicto. Sin él, "no hay evidencia" se lee
-            # como "no existe evidencia": el mismo *afirmar de más* que la bóveda persigue en todos
-            # lados, pero aplicado a una conclusión. Y con él, el alcance CRECE: sumar un tema (o
-            # refrescar uno) deja el veredicto testeado contra un universo que ya no es el vigente —
-            # misma familia de staleness que los pares de verificación. Backlog: la nota no es
-            # inválida, quedó atrás. Se cierra re-corriendo el test y re-estampando la línea.
-            # La escalera es `scope_state` (una sola implementación, #342); la prosa del
-            # reproche no, que la salida de una hipótesis no es la de un `## Huecos`.
-            _est, alc, vigente, faltan = scope_state(text)
-            if _est == "sin_declarar":
-                alcance_corto.append(
-                    (stem, "sin blockquote `> Alcance <fecha> · …`: un veredicto negativo sin "
-                           "alcance declarado se lee como universal → declararlo (skill "
-                           "`test-hypothesis`, paso 0)"))
-            elif _est == "sin_slugs":
-                # AUD-171 / INV-92 — un blockquote SIN slugs apagaba el chequeo entero en silencio:
-                # la nota tiene la línea, así que pasa el primer caso, y el `elif` no entra. El
-                # veredicto sigue leyéndose como universal y encima ahora parece declarado.
-                alcance_corto.append(
-                    (stem, f"el alcance del {alc['fecha']} no nombra ningún slug "
-                           f"(`temas: [...]` / `estrellas: [...]`) → no se puede re-contar el "
-                           f"universo, así que el veredicto no se puede pesar: declaralos"))
-            elif _est == "sin_n":
-                # AUD-171, la otra puerta: con slugs pero sin `· N papers` no hay contra qué
-                # comparar el conteo de hoy, y el detector de «quedó corto» queda mudo.
-                alcance_corto.append(
-                    (stem, f"el alcance del {alc['fecha']} no declara `· N papers` → no hay contra "
-                           f"qué comparar (hoy esos slugs tienen {vigente}); completá la línea"))
-            elif _est == "slug_fantasma":
-                # No se puede contar lo que no existe: se DICE cuál falta en vez de comparar
-                # contra un universo recortado en silencio (que daría "quedó corto" al revés).
-                alcance_corto.append(
-                    (stem, f"el alcance nombra slug(s) sin fulltext en disco "
-                           f"({', '.join(faltan)}) → ¿typo, o entidad borrada/renombrada?"))
-            elif _est == "quedo_corto":
-                alcance_corto.append(
-                    (stem, f"alcance del {alc['fecha']} declarado sobre {alc['n_papers']} "
-                           f"papers y hoy esos slugs tienen {vigente} (+"
-                           f"{vigente - alc['n_papers']}) → el veredicto se testeó contra un "
-                           f"universo que ya no es el vigente: re-correr el test sobre lo nuevo "
-                           f"y re-estampar la línea de alcance"))
+        # Lo propio de una hipótesis vive en `check_hypothesis_note` (#396).
+        _h1, _h2, _h3, _h4 = check_hypothesis_note(stem, f, fm, text, err)
+        alcance_corto += _h1
+        alcance_wikilink += _h2
+        bad_status += _h3
+        status_vs_evidencia += _h4
 
         # #342 — el ALCANCE de un `## Huecos`. Un hueco es una afirmación NEGATIVA —«nadie da un
         # criterio para elegir $n$», «X no aparece en ninguna fuente»— y por construcción no tiene
@@ -4623,106 +4822,19 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # acotada verdadera, y eso alcanzaba: los seis habrían sido correctos escritos así.
         # ⛔ Esto NO verifica la negativa (preguntarle a cada fuente «¿tu paper dice algo de X?» es
         # un fan-out por hueco): sólo exige que declare su alcance y lo cruza contra el disco.
-        if in_dir(f, "stars") or in_dir(f, "concepts"):
-            _sec_h = gaps_section(text)
-            _bul_h = gaps_bullets(_sec_h) if _sec_h else []
-            if _bul_h:
-                _n_huecos[0] += 1
-                # El blockquote se busca DENTRO de la sección: el de nivel de nota de una hipótesis
-                # (D-34) declara el alcance del veredicto, que es otra afirmación.
-                _est_h, _alc_h, _vig_h, _falt_h = scope_state(_sec_h)
-                for _wl in scope_wikilinks(_sec_h):
-                    alcance_wikilink.append(
-                        (stem, f"`[[{_wl}]]` dentro del blockquote de alcance de `## Huecos`: es "
-                               f"contabilidad del corpus, no una cita, y el fan-out lo toma como "
-                               f"par que ningún PDF puede respaldar → reemplazalo por el nombre "
-                               f"del paper (#368)"))
-                if _est_h == "sin_declarar":
-                    huecos_sin_alcance.append(
-                        (stem, f"`## Huecos` con {len(_bul_h)} afirmación(es) negativa(s) y sin "
-                               f"`> Alcance <fecha> · temas: [...] / estrellas: [...] · N papers`: "
-                               f"«esto falta» sin alcance se lee como «no existe en la "
-                               f"literatura», y ninguna otra capa lo mira (un hueco no tiene "
-                               f"`[[bibcode]]` por construcción) → declaralo"))
-                elif _est_h == "sin_slugs":
-                    huecos_sin_alcance.append(
-                        (stem, f"el alcance de `## Huecos` ({_alc_h['fecha']}) no nombra ningún "
-                               f"slug → no se puede re-contar el universo, así que los huecos "
-                               f"siguen leyéndose como universales: declaralos"))
-                elif _est_h == "sin_n":
-                    huecos_sin_alcance.append(
-                        (stem, f"el alcance de `## Huecos` ({_alc_h['fecha']}) no declara "
-                               f"`· N papers` → no hay contra qué comparar (hoy esos slugs tienen "
-                               f"{_vig_h}); completá la línea"))
-                elif _est_h == "slug_fantasma":
-                    huecos_sin_alcance.append(
-                        (stem, f"el alcance de `## Huecos` nombra slug(s) sin fulltext en disco "
-                               f"({', '.join(_falt_h)}) → ¿typo, o entidad borrada/renombrada?"))
-                elif _est_h == "quedo_corto":
-                    huecos_sin_alcance.append(
-                        (stem, f"los {len(_bul_h)} hueco(s) se declararon sobre "
-                               f"{_alc_h['n_papers']} papers ({_alc_h['fecha']}) y hoy esos slugs "
-                               f"tienen {_vig_h} (+{_vig_h - _alc_h['n_papers']}) → el corpus "
-                               f"creció debajo: re-mirar los huecos sobre lo nuevo y re-estampar "
-                               f"la línea"))
+        # El alcance de un `## Huecos` vive en `check_gaps_scope` (#396).
+        _g1, _g2 = check_gaps_scope(stem, f, text, _n_huecos)
+        huecos_sin_alcance += _g1
+        alcance_wikilink += _g2
         cuerpo_nota = text.split("---", 2)[-1] if text.startswith("---") else text
         for marca in inferencias_sin_premisas(cuerpo_nota):
             infer_sin_premisas.append(
                 (stem, f"`{marca}` sin premisas — una inferencia nombra al menos un `[[bibcode]]`: "
                        "`(inferencia de [[bibcode]])`. Sin eso es una afirmación sin respaldo"))
-        if "star" in tags:
-            # `solo_prosa`: los proxies de autosuficiencia miden lo que alguien ESCRIBIÓ. Las
-            # tablas estampadas (planetas, papers, métodos, excluidos, verificación) son metadata
-            # materializada y satisfacen los patrones por construcción.
-            body = solo_prosa(text.split("---", 2)[-1] if text.startswith("---") else text)
-            # `P_rot_days` nulo NO es de por sí un campo incompleto (#70): el frontmatter es espejo
-            # de NEA y NEA muchas veces no lo tiene — pedir que se "complete" ahí es pedir que se
-            # rellene con literatura, justo lo que rompe la capa auditable. Lo accionable es otra
-            # cosa: que el P_rot esté DOCUMENTADO en la prosa, con su cita (o marcado `inferencia`
-            # si es lectura propia). Antes esto se reportaba para siempre, sin arreglo posible.
-            if fm.get("P_rot_days") in (None, "") and not prot_documentado(body):
-                incomplete.append((stem, "sin P_rot: NEA no lo trae y el cuerpo no documenta uno "
-                                         "citado → buscarlo en la literatura y dejarlo en la prosa "
-                                         "con su `[[bibcode]]` (el frontmatter NO se rellena)"))
-            if not fm.get("activity_indicators_expected"):
-                incomplete.append((stem, "activity_indicators_expected vacío"))
-            # #250 — el ÚNICO campo-lista de `stars/` sin destino chequeado ni link: `thesis_links`
-            # bloquea, `methods` es backlog, y éste no tenía ninguno de los dos, así que la ficha
-            # nombra cinco indicadores y el lector no tiene cómo llegar al concepto que explica
-            # ninguno. Backlog por la misma asimetría que `methods`: la nota del indicador la crea
-            # `ingest-theme`, que es otra operación. ⚠ Se compara con `indicator_key`, que saca la
-            # glosa final entre paréntesis: el campo es prosa para un humano (`BIS (bisector de la
-            # CCF)`), y comparar crudo haría dangling al 100 % — un backlog que nace todo falso es
-            # uno que nadie vuelve a mirar.
-            for _ind in cfg.as_list(fm.get("activity_indicators_expected")):
-                _clave = cfg.indicator_key(_ind)
-                # ⛔ El índice se construye UNA vez por corrida (`_alias_idx_cached`): llamar
-                # `method_target` sin índice re-lee TODAS las notas de `concepts/` por cada
-                # indicador de cada ficha, y el tier `poblada` lo cazó como salto de 2,0x a 2,4x en
-                # parseos de YAML por nota.
-                if _clave and not cfg.method_target(_clave, _alias_idx_cached()) and _clave not in {
-                        cfg.method_key(n) for n in names}:
-                    indicador_sin_destino.append(
-                        (stem, f"`{_ind}` no tiene nota en `concepts/` (ni por `aliases`): ingerí "
-                               f"el tema, o declaralo como alias del concepto que lo denota"))
-            # autosuficiencia (proxy estructural): cada planeta del frontmatter debe discutirse en
-            # la prosa (la ficha tiene que alcanzar sola; ver "estándar de la ficha" en CLAUDE.md).
-            for pl in fm.get("planets") or []:
-                l = str(pl.get("letter", "")).strip()
-                if not l:
-                    continue
-                # `[^*\n]*`, no `[^*]*`: sin el `\n` el patrón no matchea UNA negrita sino todo
-                # el texto ENTRE dos negritas cualesquiera. Con el texto que #72 agregó al template
-                # ("11.5 d es el armónico de 34 d", entre dos negritas), el planeta **d** —de las
-                # letras más frecuentes del corpus— quedaba "discutido" en una ficha con CERO
-                # líneas de prosa: falso limpio permanente en el único proxy estructural de
-                # autosuficiencia que la doc publicita.
-                pats = [rf"\*\*[^*\n]*\b{re.escape(l)}\b[^*\n]*\*\*",  # negrita (incl. **b/c/d**)
-                        rf"\|\s*{re.escape(l)}\s*\|",               # celda de tabla
-                        rf"_{re.escape(l)}\b",                       # subíndice $M_b$/$K_b$
-                        rf"\b{re.escape(l)}\s*\("]                   # "b (P=...)"
-                if not any(re.search(p, body) for p in pats):
-                    incomplete.append((stem, f"planeta {l} en frontmatter pero no discutido en prosa"))
+        # Lo propio de una ficha de estrella vive en `check_star_note` (#396).
+        _s1, _s2 = check_star_note(stem, fm, text, tags, names, _alias_idx_cached)
+        incomplete += _s1
+        indicador_sin_destino += _s2
         if "paper" in tags:
             # retracción (bloqueante): el flag lo estampa check_retractions.py (red); acá se surface
             # offline. Una fuente retractada citada viola el contrato de la bóveda (todo respaldado
