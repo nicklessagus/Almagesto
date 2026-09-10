@@ -180,3 +180,16 @@ decidí si los querés como issue aparte.
 correr `check_sources.py <slug>` → esa fuente sale `[bib]`; una fuente `url:` con snapshot sale
 `[web]`. Un `.bib` que contradiga el autor declarado → `fuente_metadata_falsa` (bloquea); el carril
 web nunca bloquea. **Devolver si** el parser no lee tu `.bib` real (mandame la entrada que falla).
+
+---
+
+## #430 · v1.250.0 — guía §2m
+
+La prosa del triage de las tres sub-secciones se perdía en silencio al re-escribir el bloque.
+**Validar:** `write_verif_sidecar.py --restamp-section --todo --dry-run` primero (declara población
+y nombra lo que rehúsa), después sin `--dry-run`; `git diff vault/wiki` → las 2 líneas con
+fragmento duplicado quedan con **uno solo** y su prosa intacta, y las sub-secciones adornadas
+conservan su texto; segunda corrida = 0 cambios (red 6); `lint.py` rc 0 y sin *«no publica el
+conteo»* sobre sub-secciones correctas. **Devolver si** alguna nota pierde prosa, si el comando
+rehúsa sobre una línea que a ojo está bien formada, o si el lint sigue reportando la sub-sección en
+negrita. **Al cerrar:** cuántas secciones se re-estamparon y sobre cuántas notas con hermano.

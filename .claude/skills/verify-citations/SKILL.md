@@ -591,6 +591,25 @@ contra la tabla del hermano (INV-148: INV-81 cruzando archivos). El puntero lo d
 `lib_blocks.verif_pointer(nota)`; es un link markdown, **nunca** un `[[wikilink]]` (el hermano no es
 una nota y el link se reportaría roto).
 
+⛔ **El texto libre de las tres sub-secciones —el triage de la corrida— lo escribís vos, y el
+escritor lo PRESERVA (#280/#430).** Su línea se lee **normalizada** (adorno, paréntesis aclaratorio,
+espaciado) y el fragmento de conteo se reconoce por la **misma plantilla que lo escribe**: crudo, el
+lector no reconocía la sub-sección adornada y el placeholder se estampaba **encima del triage** —10
+sub-secciones en 4 notas, y 2 ya publicando dos conteos contradictorios en la misma línea—. La red
+es que **ninguna prosa de la sección vieja desaparece**: el escritor compara la sección vieja contra
+la nueva y **rehúsa nombrando** lo que se perdería. Va por **sección y no por sub-sección** a
+propósito — una guarda que pasa por el lector sólo ve lo que el lector reconoce, así que el nombre
+mal escrito, o un párrafo que la plantilla no contempla, la evadía. ⚠ Si rehúsa, esa línea es el
+hallazgo: mirala, no la borres.
+
+**Migrador** — re-estampa la sección de la nota desde el hermano que ya existe, sin fan-out y sin
+tocar la tabla (conserva la fecha del bloque, que re-fechar sería re-verificar):
+
+```bash
+python scripts/write_verif_sidecar.py <nota.md> --restamp-section        # una nota
+python scripts/write_verif_sidecar.py --restamp-section --todo           # toda la bóveda
+```
+
 **En el HERMANO `<nota>.verif.md`** — lo arma `lib_blocks.render_verif_sidecar(nota, tabla)`:
 
 ```markdown

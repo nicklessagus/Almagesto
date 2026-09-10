@@ -51,6 +51,7 @@ benchmark, y el equivalente determinista del skill `verify-citations`.
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import re
@@ -703,6 +704,161 @@ def split_row(line: str) -> list[str]:
 VERIF_SUBSECCIONES = ("Inferencias declaradas", "Omisiones en transcripciones",
                       "Condiciones perdidas")
 
+_ADORNO_MD = re.compile(r"[*_`]+")
+
+
+def _plain_line(s: str) -> str:
+    """One line, whitespace collapsed and markdown emphasis removed."""
+    return normalize_ws(_ADORNO_MD.sub("", s))
+
+
+def _plain_with_map(s: str) -> tuple:
+    """`(_plain_line(s), map)` where `map[i]` is the offset in `s` of the plain string's `i`-th char.
+
+    ⛔ Normalising is for COMPARING, never for what gets written back (#243's rule, one layer down).
+    A reader that returns its own normalised slice would silently strip the agent's markdown from
+    the triage prose it preserves — so the match runs on the plain text and the slice is taken from
+    the ORIGINAL. `map` has one extra entry at the end so a match's `end()` can be sliced too."""
+    plano, idx, espacio = [], [], True                 # `espacio`: arrancamos comiendo el sangrado
+    for i, ch in enumerate(s):
+        if _ADORNO_MD.match(ch):
+            continue
+        if ch.isspace():
+            if not espacio:
+                plano.append(" ")
+                idx.append(i)
+                espacio = True
+            continue
+        espacio = False
+        plano.append(ch)
+        idx.append(i)
+    while plano and plano[-1] == " ":                  # `.strip()` de `normalize_ws`
+        plano.pop()
+        idx.pop()
+    idx.append(len(s))
+    return "".join(plano), idx
+
+
+#: #280/#430 · el fragmento de conteo de cada sub-sección, como PLANTILLA: se renderiza desde acá
+#: (`verif_subsection_lines`) y se reconoce desde acá (`subsection_fragment_re`). Escrito dos veces
+#: —una para producir, otra como lista de cierres literales— el lector se quedó atrás del productor
+#: y dejó de reconocer el fragmento que él mismo había escrito: medido, dos notas reales publican
+#: DOS conteos contradictorios en la misma línea, el segundo todo ceros.
+#: `Omisiones en transcripciones` no tiene fragmento a propósito (la completitud no está en la
+#: tabla y un número ahí sería el cero inventado que D-43 prohíbe).
+_SUBSECTION_TEMPLATES = {
+    "Inferencias declaradas": "— {n} marcas en el cuerpo",
+    "Condiciones perdidas": ("— {cc} con condición: {a} `acota` ({ar} resueltas) / "
+                             "{c} `contextualiza` / {s} sin clasificar"),
+}
+
+#: Lo que puede seguir al nombre de la sub-sección antes del fragmento: un paréntesis aclaratorio
+#: («(sin cita, por diseño)», «(afirmaciones sobre-generalizadas)»), que es como el propio skill la
+#: publica en su plantilla.
+_SUB_ACLARACION = r"(?:\s*\([^)]*\))?"
+
+
+@functools.lru_cache(maxsize=None)
+def subsection_fragment_re(sub: str) -> "re.Pattern | None":
+    """The regex that recognises the generated count fragment of one sub-section (#430).
+
+    Derived from the SAME template `verif_subsection_lines` renders, so producer and reader cannot
+    drift: every `{placeholder}` becomes `\\d+` and everything else is escaped. `None` for a
+    sub-section that has no fragment.
+
+    ⚠ The template is normalised (`_plain_line`) BEFORE being escaped, because the line it will be
+    matched against is normalised too: the template's own backticks around `acota` are adornment,
+    and a regex that still carries them matches nothing."""
+    plantilla = _SUBSECTION_TEMPLATES.get(sub)
+    if plantilla is None:
+        return None
+    partes = re.split(r"\{[a-z]+\}", _plain_line(plantilla).lstrip("— "))
+    # el guión de apertura es opcional: la SEGUNDA copia de un fragmento duplicado no lo lleva
+    # (queda pegada al `:` del primero), y es justo la que hay que reconocer para colapsarla.
+    return re.compile(r"(?:—\s*)?" + r"\d+".join(re.escape(p) for p in partes))
+
+
+def subsection_split(line: str, sub: str) -> tuple:
+    """`(is_this_subsection, free_text)` for one line of the verification section (#430).
+
+    The free text is the round's **triage** —the only place that records what was decided— and the
+    caller rewrites the line around it. Reading it wrong loses it silently, which is what happened:
+    `startswith` on the RAW line missed `**Inferencias declaradas (sin cita, por diseño)** — …`, and
+    the placeholder was written on top. Measured on a real vault: 10 sub-sections in 4 notes.
+
+    Three things this reads that the raw comparison did not (regla de método nº 4, fifth time —
+    #168, #276, #283, #309): markdown **adornment** around the name, a parenthetical after it, and a
+    fragment closed with `.` instead of `: `. And when the fragment appears MORE THAN ONCE —the
+    damage a previous run already did— the prose is what follows the **last** one, which is what
+    makes the migration collapse the duplicate instead of preserving it."""
+    corte = _subsection_prose_start(line, sub)
+    return (False, "") if corte is None else (True, line[corte:].strip())
+
+
+def _subsection_prose_start(line: str, sub: str) -> int | None:
+    """Offset in the ORIGINAL line where this sub-section's free text starts, or `None` (#430).
+
+    ⛔ Where the prose starts depends on whether the count fragment is there:
+
+    · **with a fragment** the prose is what follows the LAST one — the last, because a run that
+      failed to recognise the old fragment prepended a new one, and that damage is what the
+      migration collapses — and the terminator may be `: ` **or** `.` (both are in the corpus);
+    ⚠ The name is matched case-INSENSITIVELY: it is fixed vocabulary, so a different capital is a
+    typo and not another meaning — and an unmatched name loses the line **with the guard watching**,
+    because the guard reads the residual through this same prefix.
+
+    · **without one** —`Omisiones en transcripciones`, or a line whose fragment was rewritten by
+      hand— the prose is what follows the first colon, and a line with **no colon** has no free
+      text at all. That last clause is a contract, not an oversight: `Omisiones en transcripciones
+      sin dos puntos` is a heading with nothing after it."""
+    plano, idx = _plain_with_map(line)
+    m = re.match(re.escape(sub) + _SUB_ACLARACION, plano, re.I)
+    if not m:
+        return None
+    fin = m.end()
+    frag = subsection_fragment_re(sub)
+    ultimo = None
+    for m2 in (frag.finditer(plano, fin) if frag is not None else ()):
+        ultimo = m2
+    if ultimo is not None:
+        fin = ultimo.end()
+        while fin < len(plano) and plano[fin] in " .:—-":
+            fin += 1
+    else:
+        sep = re.compile(r"[:—–-]").search(plano, fin)
+        if sep is None:
+            return len(line)                     # sin separador no hay texto libre
+        fin = sep.end()
+    return idx[min(fin, len(idx) - 1)]
+
+
+def fragment_stated(line: str, frag: str) -> bool:
+    """Does this sub-section line publish `frag` as its count fragment? (#280/#430)
+
+    The reader half of INV-81 one level down, and it goes through the SAME normalisation the
+    writer does: comparing `frag not in text` raw is the adornment blindness of regla de método
+    nº 4 —a sub-section whose fragment a fan-out bolded reads as drift that no edit can fix— and
+    it is the very check that exists to mechanise «header and rows come from one code»."""
+    return _plain_line(frag) in _plain_line(line)
+
+
+def subsection_residual(line: str, sub: str) -> str:
+    """Everything left on a sub-section's line once name, parenthetical and count fragment go (#430).
+
+    The other half of `subsection_split`, and the one that makes the loss detectable: the writer
+    cannot tell «no triage was written» from «the reader did not recognise it», and only the second
+    destroys something. This answers, without the reader's help, whether that line carried anything
+    at all — so the caller can refuse instead of stamping the placeholder over it (#222)."""
+    plano, _idx = _plain_with_map(line)
+    m = re.match(re.escape(sub) + _SUB_ACLARACION, plano, re.I)
+    if not m:
+        return ""
+    resto = plano[m.end():]
+    frag = subsection_fragment_re(sub)
+    if frag is not None:
+        resto = frag.sub(" ", resto)
+    return resto.strip(" .:—-").strip()
+
 
 def verif_counts(rows: list) -> dict:
     """The four numbers the block's header must publish, computed from the rows themselves (#232).
@@ -791,12 +947,15 @@ def verif_subsection_lines(rows: list, prose: str) -> dict:
     ⚠ `prose` must be the note's prose **without stamped sections** (`cfg.solo_prosa`): the
     sub-section itself enumerates the marks, and counting them there counts them twice."""
     c = verif_counts(rows)
-    return {"Inferencias declaradas": f"— {len(inference_marks(prose))} marcas en el cuerpo",
+    # #430 — se renderiza desde `_SUBSECTION_TEMPLATES`, la misma plantilla de la que
+    # `subsection_fragment_re` deriva su regex: productor y lector no pueden divergir.
+    return {"Inferencias declaradas":
+            _SUBSECTION_TEMPLATES["Inferencias declaradas"].format(n=len(inference_marks(prose))),
             "Omisiones en transcripciones": None,
-            "Condiciones perdidas": (f"— {c['con_condicion']} con condición: {c['cond_acota']} "
-                                     f"`acota` ({c['cond_acota_resueltas']} resueltas) / "
-                                     f"{c['cond_contextualiza']} `contextualiza` / "
-                                     f"{c['cond_sin_clase']} sin clasificar")}
+            "Condiciones perdidas":
+            _SUBSECTION_TEMPLATES["Condiciones perdidas"].format(
+                cc=c["con_condicion"], a=c["cond_acota"], ar=c["cond_acota_resueltas"],
+                c=c["cond_contextualiza"], s=c["cond_sin_clase"])}
 
 
 def verif_section(text: str) -> str:
@@ -823,9 +982,6 @@ def inline_verif_rows(text: str) -> list[str]:
     return [ln.strip() for ln in verif_section(text).split("\n") if ln.strip().startswith("|")]
 
 
-_ADORNO_MD = re.compile(r"[*_`]+")
-
-
 def verif_summary_stated(text: str, rows: list) -> bool:
     """Does the note publish the header line **its own sidecar's table** gives? (INV-148)
 
@@ -834,11 +990,6 @@ def verif_summary_stated(text: str, rows: list) -> bool:
     with the note, and the table it describes is in another file. Compared with the markdown
     stripped (regla de método nº4): a fan-out that bolds the numbers must not read as a mismatch."""
     return _plain_line(verif_summary(rows)) in _plain_line(verif_section(text))
-
-
-def _plain_line(s: str) -> str:
-    """One line, whitespace collapsed and markdown emphasis removed."""
-    return normalize_ws(_ADORNO_MD.sub("", s))
 
 
 def verif_rows(note) -> list[Row] | None:

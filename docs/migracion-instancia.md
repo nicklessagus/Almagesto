@@ -520,6 +520,36 @@ carpeta donde está el `pdf:` cuando lo declarás. Si después repuntás `pdf:` 
 `.bib` al lado de los PDFs, los `no-evaluable` de arXiv pasan a `[bib]`. `.csv`/`.xlsx` no se
 leen (decidido: demasiado específico); ésos los lee el agente antes de declarar (§2k).
 
+## 2m · v1.250.0 (#430) — la prosa del triage que se perdía en silencio
+
+`write_verif_sidecar` re-escribe la sección `## Verificación de citas` de la nota en cada corrida y
+**preservaba** el texto libre de las tres sub-secciones —el triage de la corrida— comparando el
+arranque de la línea **sin normalizar**. Una sub-sección escrita `**Inferencias declaradas (sin
+cita, por diseño)** — …`, o con el fragmento cerrado en `.` en vez de `: `, no se reconocía: el
+placeholder `⚠ triage de la corrida pendiente` se estampaba **encima**, sin aviso. Medido en esta
+bóveda el 2026-09-09: **10 sub-secciones en 4 notas** perdibles (`ica` 3, `hd_40307` 3, la query
+`blanqueo-…` 3, `icasso` 1) y **2 notas** ya publicando dos conteos contradictorios en la misma
+línea, el segundo todo ceros.
+
+Qué cambia: la línea se lee normalizada (adorno, paréntesis aclaratorio, espaciado), el fragmento
+se reconoce por la **misma plantilla que lo escribe**, el nombre se matchea plegando la caja, y
+—la red que no pasa por el lector— **ninguna prosa de la sección vieja desaparece**: el escritor
+compara vieja contra nueva y rehúsa nombrando lo que se perdería. El lint compara el fragmento igual de
+normalizado, así que la sub-sección en negrita deja de reportarse como deuda incerrable.
+
+**Migración** (una vez, y es idempotente):
+
+```bash
+python scripts/write_verif_sidecar.py --restamp-section --todo    # dry-run con --dry-run
+python scripts/lint.py                                            # rc 0
+```
+
+Colapsa el fragmento duplicado (queda uno, con el conteo que la tabla da hoy) y conserva la prosa
+que sigue al último. **No toca el hermano** ni la fecha del bloque. ⚠ Si rehúsa sobre alguna nota,
+esa línea lleva algo que el lector no reconoció: mirala a mano antes de re-correr — es el hallazgo,
+no un error del comando. **Devolver si** alguna nota pierde prosa igual, o si el lint sigue
+reportando *«no publica el conteo»* sobre una sub-sección cuyo número es el correcto.
+
 ## 3 · Cierre
 
 ```bash

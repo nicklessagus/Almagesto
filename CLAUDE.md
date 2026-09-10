@@ -1385,6 +1385,10 @@ de `entity.py`.
   INV-81): los **cuatro** veredictos —que particionan— y, tras un **`—`**, `con_condicion` (eje
   ortogonal). Las **tres sub-secciones** van **aunque digan «ninguna»**: son el único rastro del
   triage de la corrida.
+  ⛔ Su línea se lee **normalizada** y el fragmento, por la **plantilla que lo escribe** (#430):
+  cruda, la adornada estampaba el placeholder **encima del triage** (10 en 4 notas). Red **por
+  SECCIÓN** —la del lector no ve el nombre mal escrito—: nada escrito ahí desaparece sin que rehúse
+  nombrándolo. Migrador `--restamp-section`.
 
 **Los dos hashes (el ancla, D-4/D-20)** responden preguntas distintas: el **ancla** hashea el
 **bloque markdown normalizado** que contiene la cita —reflowear no la mueve, cambiar un número sí; un

@@ -574,3 +574,28 @@ portadores:
         motivo: >-
           `stamp_fulltext` lo estampa junto a `pdf_source`/`eprint_version`, add-only y entre
           comillas (sin ellas YAML lo parsea como FLOAT y deja de ser un identificador).
+
+  - issue: 430
+    regla: >-
+      La línea de una sub-sección del bloque de verificación se lee NORMALIZADA (adorno markdown,
+      paréntesis aclaratorio, espaciado) y su fragmento de conteo se reconoce por la MISMA plantilla
+      que lo escribe. Cruda, la comparación pierde la línea que un fan-out adornó: el escritor
+      estampaba el placeholder encima del triage de la corrida —10 sub-secciones en 4 notas, y 2 ya
+      publicando dos conteos contradictorios— y el lint reportaba como desincronizada una
+      sub-sección cuyo conteo es el correcto. Quinta vez que el repo paga la ceguera al adorno
+      (#168, #276, #283, #309).
+    funcion: lib_blocks.subsection_split
+    patron: 'VERIF_SUBSECCIONES|verif_subsection_lines'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: >-
+          Preserva con ella el texto libre de cada sub-sección al re-escribir la sección de la nota,
+          y `subsection_residual` —su otra mitad— es la que le permite REHUSAR cuando la línea
+          llevaba prosa que el lector no reconoció (#222).
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          Ubica con ella la línea de cada sub-sección antes de comparar su fragmento con
+          `fragment_stated`. Comparaba `frag not in texto` crudo: el fragmento en negrita se
+          reportaba como deuda que ninguna edición podía cerrar.

@@ -1445,3 +1445,64 @@ def test_un_re_anclaje_de_una_fila_SANA_no_inventa_cadena():
     assert lb.chained_verdict("soportada", "soportada") == "soportada"
     assert lb.chained_verdict("contradice", "no-soportada") == "no-soportada", \
         "si la nueva ronda tampoco respalda, no hay corrección que anotar"
+
+
+# ── #430 · productor y lector del fragmento salen de la MISMA plantilla ─────────────────────────
+
+@pytest.mark.parametrize("sub", lb.VERIF_SUBSECCIONES)
+def test_subsection_fragment_re_reconoce_lo_que_verif_subsection_lines_ESCRIBE(sub):
+    """Regla de método nº 2 — el lector deriva del productor o hay test de paridad. Escritos por
+    separado (una plantilla f-string y una lista de tres cierres literales) el lector se quedó
+    atrás y dejó de reconocer el fragmento que el productor escribía: medido, dos notas reales
+    publican DOS conteos contradictorios en la misma línea."""
+    filas = [lb.Row(n="1", claim="c", bibcode="2020A", verdict="soportada", anchor="a" * 10,
+                    source_hash="b" * 10, condition=cond, source_kind="pdf")
+             for cond in ("acota: x", "acota→resuelta: y", "contextualiza: z", "—")]
+    frag = lb.verif_subsection_lines(filas, "texto (inferencia de [[2020A]]) más")[sub]
+    regex = lb.subsection_fragment_re(sub)
+    if frag is None:
+        assert regex is None, "sin fragmento no hay regex que derivar"
+        return
+    assert regex.search(lb._plain_line(frag)), f"el lector no reconoce «{frag}»"
+    linea = f"**{sub} (aclaración)** {frag}: el triage de la corrida"
+    assert lb.subsection_split(linea, sub) == (True, "el triage de la corrida")
+
+
+def test_la_prosa_devuelta_conserva_su_MARKDOWN(toy_vault):
+    """#430/#243 — se normaliza al COMPARAR, nunca al escribir: la prosa vuelve a la nota, así que
+    devolver la versión normalizada le comería los backticks y las negritas del agente."""
+    linea = ("Condiciones perdidas — 3 con condición: 1 `acota` (1 resueltas) / 2 `contextualiza` "
+             "/ 0 sin clasificar: la **`acota`** era `SNR > 50`, resuelta acotando la frase")
+    assert lb.subsection_split(linea, "Condiciones perdidas") == \
+        (True, "la **`acota`** era `SNR > 50`, resuelta acotando la frase")
+
+
+def test_subsection_residual_ve_la_prosa_que_el_lector_NO_reconocio():
+    """#430/#222 — la red barata: contesta «¿esa línea llevaba algo?» sin pasar por el lector, que
+    es lo que permite REHUSAR en vez de estampar el placeholder encima del triage."""
+    assert lb.subsection_residual("**Inferencias declaradas** — 3 marcas en el cuerpo: la prosa",
+                                  "Inferencias declaradas") == "la prosa"
+    assert lb.subsection_residual("Inferencias declaradas — 3 marcas en el cuerpo:",
+                                  "Inferencias declaradas") == ""
+    assert lb.subsection_residual("**Inferencias declaradas (sin cita, por diseño)**",
+                                  "Inferencias declaradas") == ""
+    assert lb.subsection_residual("Otra sub-sección: x", "Inferencias declaradas") == ""
+
+
+def test_subsection_split_sin_fragmento_pide_DOS_PUNTOS_y_colapsa_el_espaciado():
+    """#430 — las tres decisiones que `_subsection_prose_start` toma y que ningún caso feliz ejerce:
+
+    · la línea que **no es** esta sub-sección no devuelve prosa (ni revienta);
+    · sin fragmento de conteo, la prosa es lo que sigue a los dos puntos — y una línea **sin** dos
+      puntos no tiene texto libre, que es contrato y no olvido (`Omisiones en transcripciones sin
+      dos puntos` es un encabezado con nada atrás);
+    · el espaciado se colapsa al COMPARAR (el nombre puede llegar hard-wrapped con dos espacios),
+      y la prosa vuelve con su espaciado original."""
+    sub = "Omisiones en transcripciones"
+    assert lb.subsection_split("Otra sub-sección: x", sub) == (False, "")
+    assert lb.subsection_split(f"{sub} sin separador alguno", sub) == (True, "")
+    assert lb.subsection_split(f"{sub} — la tabla 2, corregida", sub) == (True, "la tabla 2, corregida")
+    assert lb.subsection_split(f"{sub}: la tabla 2: fila c omitida", sub) == \
+        (True, "la tabla 2: fila c omitida")
+    assert lb.subsection_split(f"  **{sub}**   (aclaración) :  la  tabla   2", sub) == \
+        (True, "la  tabla   2")

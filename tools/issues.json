@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-06",
+ "fetched": "2026-09-09",
  "issues": [
   {
    "number": 2,
@@ -2089,36 +2089,61 @@
   {
    "number": 420,
    "title": "harvest_views: --force no llega a upsert_view (se llama sin force=), y no hay --paper — la ruta abstract → PDF de #207 no se puede ejecutar sin pisar las vistas verificadas del slug",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 421,
    "title": "El default de `noise_doctypes` nombra `catalog` (0 VizieR en ADS) y omite `dataset` (los 23.351): cada estrella ingesta las tablas de VizieR como si fueran papers",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 422,
    "title": "`_norm_alias`/`_norm_id` no sacan el prefijo de tipo de SIMBAD (`V*`, `NAME`): el MISMO identificador sale a la vez como faltante (backlog) y como ajeno (WARN), y lo que el backlog propone devuelve 0 en ADS",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 423,
    "title": "`fetch_bibtex` no estampa `cadena` cuando no hay nada que bajar: un sujeto con todo el BibTeX puesto queda con «la cadena se cortó en fetch_bibtex» para siempre",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 424,
    "title": "Propuesta: que la ficha registre canónicamente DÓNDE están los datos públicos de cada paper (VizieR/CDS) — hoy no hay campo ni sección, y `data_local` es machine-local",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 425,
    "title": "`## Datos públicos` (#424) no está en `SECCIONES_ESTAMPADAS`: su `[[bibcode]]` estampado hace que `_estado_paper` reporte `sintetizado` sin una línea de prosa, y `make_notes` deja de converger en una pasada",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 426,
    "title": "`arxiv_stamp` captura el id de arXiv y devuelve SÓLO la versión: la lectura que puebla `pdf_source: eprint` tira el `arxiv_id` que tiene en la mano (14 de 176 notas)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 427,
+   "title": "La celda `Condición` la compone `condition_cell` sin usar el lector de su propio vocabulario: prefijo duplicado que deja el `acota` IRRESOLUBLE, y nadie escribe `acota→resuelta:`",
+   "state": "OPEN"
+  },
+  {
+   "number": 428,
+   "title": "`write_verif_sidecar` toma UN solo `--from` y rechaza la ronda entera por un ancla muerta: un fan-out multi-ronda ya corrido no se puede ensamblar",
+   "state": "OPEN"
+  },
+  {
+   "number": 429,
+   "title": "`matrices/method_star.md` no es derivable: `methods_applied.literature` y `methods` son dos vocabularios sin clave de join, y llenarla publica huecos FALSOS",
+   "state": "OPEN"
+  },
+  {
+   "number": 430,
+   "title": "`free_text_of` compara el arranque de la sub-sección SIN normalizar el markdown: la prosa del triage se pierde en silencio en la próxima corrida (y el fragmento generado se duplica)",
+   "state": "OPEN"
+  },
+  {
+   "number": 431,
+   "title": "`check_stale_verif` compara la fecha del ARCHIVO: una edición dentro de `## Verificación de citas` —sección estampada, que por construcción no puede cambiar una afirmación— marca la nota como stale",
    "state": "OPEN"
   }
  ]

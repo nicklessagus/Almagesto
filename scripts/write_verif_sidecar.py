@@ -1,6 +1,7 @@
 """Write a note's `<nota>.verif.md` sibling from a finished verify fan-out (#403).
 
     python scripts/write_verif_sidecar.py <nota.md> --from build/<slug>/verif/<ronda> [--fecha AAAA-MM-DD] [--dry-run]
+    python scripts/write_verif_sidecar.py [<nota.md> | --todo] --restamp-section    # #430
 
 The missing link of the `verify-citations` chain. It had a generator (`verify_fanout.py`, #369), a
 barrier (`check_verify_fanout.py`, #259) and a re-anchoring proposer (`reverify_subset.py`, #257),
@@ -26,17 +27,33 @@ What it does, in order, and every step is a `lib_blocks` function the lint also 
   6. renders the table through `render_verif_table` (escaped, round-trip checked, #284), the sibling
      through `render_verif_sidecar`, and the note's header line through `verif_summary` (INV-81) with
      the three sub-sections carrying their generated count fragment (#280) and whatever free text the
-     agent already wrote after the colon.
+     agent already wrote after it.
 
 It does NOT judge: the verdicts are the fan-out's. And it does not write the three sub-sections'
 free text: that is the round's triage, which only the agent that read the sources can write — the
 placeholder it leaves is visible on purpose.
+
+⛔ **Preserving that triage is a READING, and it is done normalised (#430).** The sub-section line
+is matched with markdown adornment, a parenthetical after the name and the spacing folded, and its
+count fragment is recognised through the SAME template that writes it (`subsection_fragment_re`).
+Compared raw, an adorned sub-section came back empty and the placeholder was stamped **over** the
+only record of what the round decided — measured on a real vault: 10 sub-sections in 4 notes, and 2
+already publishing two contradictory counts on one line. Two nets of #222 close it, and the second
+exists because the first was not enough: per sub-section, prose that goes in cannot come out empty;
+and **per SECTION** (`_lost_prose`), nothing anybody typed in there disappears without this refusing
+and naming it — measured writing this fix, a sub-section name in a different case, or a paragraph
+the template does not contemplate, evaporated **with the first guard watching**, because that one
+goes through the reader and only ever sees what the reader recognises.
+
+`--restamp-section` is the migration half: it re-stamps the note's section from the sibling that
+already exists, with no fan-out, keeping the block's date and the table byte for byte.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -184,33 +201,151 @@ def note_section(note: Path, text: str, rows: list, fecha: str) -> str:
               lb.verif_pointer(note), ""]
     for sub in lb.VERIF_SUBSECCIONES:
         frag = frags.get(sub)
-        texto = free_text_of(vieja, sub) or PENDIENTE
-        lineas.append(f"{sub} {frag}: {texto}" if frag else f"{sub}: {texto}")
+        texto = free_text_of(vieja, sub)
+        # #430/#222 — la red barata: si la línea vieja llevaba algo y el lector volvió con las manos
+        # vacías, no se escribe. Un triage que desaparece no puede pasar en silencio: es el único
+        # registro de qué se decidió en la ronda, y la pérdida es invisible en el diff siguiente.
+        if not texto and (residual := _residual_prose(vieja, sub)):
+            raise SidecarError(
+                f"la prosa de «{sub}» se perdería: la línea lleva texto que el lector no reconoció "
+                f"como triage — «{residual[:120]}». No se escribe nada. Revisá la forma de esa "
+                f"sub-sección en la nota (el nombre, su fragmento de conteo) o reportá el caso")
+        lineas.append(f"{sub} {frag}: {texto or PENDIENTE}" if frag
+                      else f"{sub}: {texto or PENDIENTE}")
         lineas.append("")
     return "\n".join(lineas).rstrip() + "\n"
 
 
 def free_text_of(seccion: str, sub: str) -> str:
-    """What the agent wrote after the count fragment of one sub-section, or `""` (#280).
+    """What the agent wrote after the count fragment of one sub-section, or `""` (#280/#430).
 
     ⛔ The generated fragment carries colons of its own («— 0 con condición: 0 `acota` …»), so
-    splitting on the FIRST `:` re-captures half the fragment and the line grows on every run —
-    measured writing this: the second run appended the counts twice. The free text is what follows
-    the LAST `: ` that closes the fragment, which for every sub-section is the one before the
-    agent's prose; a line with no colon has no free text."""
+    splitting on the FIRST `:` re-captures half the fragment and the line grows on every run.
+    #430 — and the line is read NORMALISED (`lb.subsection_split`), which is what makes an adorned
+    or parenthesised sub-section name still be recognised as its own; comparing the raw line
+    returned `""` and the caller wrote the placeholder on top of the round's triage."""
     for ln in seccion.split("\n"):
-        s = ln.strip()
-        if not s.startswith(sub) or ":" not in s:
-            continue
-        cabeza, _, cola = s.rpartition(": ")
-        # el fragmento generado termina en `sin clasificar` / `en el cuerpo`; lo que sigue al ÚLTIMO
-        # `: ` es la prosa. Si la prosa misma trae `: `, `rpartition` la partiría: se reconstruye
-        # buscando el cierre del fragmento conocido.
-        for cierre in (" sin clasificar: ", " en el cuerpo: ", f"{sub}: "):
-            if cierre in s:
-                return s.split(cierre, 1)[1].strip()
-        return cola.strip()
+        es_esta, prosa = lb.subsection_split(ln.strip(), sub)
+        if es_esta:
+            return prosa
     return ""
+
+
+def _residual_prose(seccion: str, sub: str) -> str:
+    """What the sub-section's line carried besides its name, fragment and placeholder (#430/#222).
+
+    The cheap net: the writer cannot tell «the agent wrote no triage» from «the reader failed to
+    recognise it», and only the second destroys something. `lb.subsection_residual` answers it
+    without going through the reader, so a reader that stops recognising a form makes the writer
+    REFUSE instead of stamping the placeholder over the round's triage."""
+    for ln in seccion.split("\n"):
+        resto = lb.subsection_residual(ln.strip(), sub)
+        if resto:
+            return resto.replace(lb._plain_line(PENDIENTE), " ").strip(" .:—-").strip()
+    return ""
+
+
+#: Debajo de esto el residuo de una línea no es prosa de nadie: signos sueltos que quedan al pelar
+#: lo estampado. ⚠ Bajo a propósito — **«ninguna» tiene 7 caracteres** y es la respuesta de triage
+#: más común de las tres sub-secciones, así que un umbral cómodo descarta en silencio justo el caso
+#: frecuente. Es más barato rehusar de más (se mira una línea) que perder un triage.
+_NO_ES_PROSA = 3
+
+
+def _lost_prose(vieja: str, nueva: str) -> list:
+    """Content lines of the old section that the new one does not carry (#430/#222).
+
+    The net that does NOT go through the reader, and the reason it has to exist: the per-sub-section
+    guard only sees what the reader recognises, so a line whose NAME is misspelled —or a paragraph
+    the agent wrote that the template does not contemplate— evaporated with the guard watching.
+    Measured writing this, on the very fix for #430.
+
+    Everything generated is stripped before comparing (the header, the intro, the pointer, each
+    sub-section's count fragment and the placeholder), because those legitimately change on every
+    run; what is left is what somebody typed, and it has to still be there. Same shape as #222's
+    cheap net —count before and after, refuse if it dropped— one level up from the pairs."""
+    def _contenido(linea: str) -> str:
+        """What somebody TYPED on this line: everything the script re-stamps, removed."""
+        s = lb._plain_line(linea)
+        # la línea de cabecera es ENTERA generada (`verif_summary`): sus conteos cambian en cada
+        # corrida a propósito, así que no es prosa de nadie y compararla daría un falso positivo
+        # en toda ronda que mueva un número — que es el caso normal.
+        if s.startswith(lb._plain_line(INTRO)):
+            return ""
+        # la sub-sección que el lector SÍ reconoce se pela con el mismo lector (nombre, paréntesis
+        # aclaratorio y fragmento afuera: los tres los re-escribe el script); la que no reconoce
+        # entra entera, y ésa es justamente la que esta red existe para ver.
+        for sub in lb.VERIF_SUBSECCIONES:
+            if lb.subsection_split(linea, sub)[0]:
+                s = lb.subsection_residual(linea, sub)
+                break
+        s = s.replace(lb._plain_line(PENDIENTE), " ")
+        return re.sub(r"\s+", " ", s).strip(" .:—-()")
+
+    nueva_plana = " ".join(_contenido(ln) for ln in nueva.split("\n"))
+    perdidas = []
+    for ln in vieja.split("\n"):
+        s = ln.strip()
+        if s.startswith(("#", ">", "|")):       # encabezado, puntero y tabla: los estampa el script
+            continue
+        c = _contenido(s)
+        if len(c) >= _NO_ES_PROSA and c not in nueva_plana:
+            perdidas.append(c)
+    return perdidas
+
+
+def emit(note: Path, text: str, rows: list, fecha: str, *, dry_run: bool = False,
+         solo_seccion: bool = False) -> None:
+    """Render the sibling and the note's section from `rows`, and (unless `dry_run`) write them.
+
+    The single writing point of this module — every mode that produces rows goes through here, so
+    the round-trip guard (#284), the header line (INV-81) and the triage guard (#430) apply to all
+    of them and cannot be forgotten by a mode added later. `solo_seccion` keeps the sibling
+    untouched: that is the re-stamping mode, which reads the rows FROM the sibling."""
+    seccion = note_section(note, text, rows, fecha)            # #430: rehúsa antes de escribir nada
+    vieja = lb.verif_section(text)
+    if perdida := _lost_prose(vieja, seccion):
+        raise SidecarError(
+            "prosa de la sección vieja que se perdería al re-escribirla — no se escribe nada:\n  "
+            + "\n  ".join(f"«{x[:120]}»" for x in perdida)
+            + "\n  Si es triage, ponelo en una de las tres sub-secciones "
+              f"({', '.join(lb.VERIF_SUBSECCIONES)}); si no lo es, no va en esta sección "
+              "(la re-escribe el script en cada corrida)")
+    nuevo = text.replace(vieja, seccion, 1) if vieja else text.rstrip("\n") + "\n\n" + seccion
+    hermano = None if solo_seccion else lb.render_verif_sidecar(
+        note, lb.render_verif_table(rows))                     # #284: round-trip o rehúsa
+    if dry_run:
+        return
+    if hermano is not None:
+        cfg.write_text_atomic(cfg.verif_sidecar(note), hermano)
+    cfg.write_text_atomic(note, nuevo)
+
+
+def restamp_section(note: Path, fecha: str | None = None, dry_run: bool = False) -> dict:
+    """Re-stamp the NOTE's `## Verificación de citas` section from its existing sibling (#430).
+
+    The migrator half. It needs no fan-out —the rows are already written— and touches only the
+    note: the sibling's table, with its anchors and source hashes, is left byte for byte. Two
+    things it repairs on the inherited corpus: the count fragment a previous run duplicated (one is
+    rendered, and the prose kept is the one after the LAST fragment) and the sub-section whose
+    adorned name made the placeholder land on top of the triage — that one now refuses instead.
+
+    ⚠ The block's date is PRESERVED (`cfg.verification_date`): re-stamping is not re-verifying, and
+    moving the date forward would make untouched pairs read as freshly checked (D-4, and the same
+    argument INV-82 makes for the three dates of a note's header)."""
+    text = note.read_text(encoding="utf-8")
+    rows = lb.verif_rows(note)
+    if not rows:
+        raise SidecarError(f"{note.name}: no hay hermano `.verif.md` con filas que leer — "
+                           f"esta modalidad re-estampa la sección desde la tabla ya escrita")
+    d = fecha or cfg.verification_date(text)[1]
+    if not d:
+        raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado y no se pasó "
+                           f"`--fecha`: re-fechar es una decisión, no un default")
+    antes = text
+    emit(note, text, rows, d, dry_run=dry_run, solo_seccion=True)
+    return {"nota": note.name, "filas": len(rows), "fecha": d,
+            "cambio": dry_run or note.read_text(encoding="utf-8") != antes}
 
 
 def write(note: Path, fanout_dir: Path, fecha: str | None = None, dry_run: bool = False) -> dict:
@@ -221,14 +356,7 @@ def write(note: Path, fanout_dir: Path, fecha: str | None = None, dry_run: bool 
     rows = build_rows(note, text, fanout, previas)
     if not rows:
         raise SidecarError("el fan-out no juzgó ningún par del cuerpo: no hay tabla que escribir")
-    tabla = lb.render_verif_table(rows)                       # #284: round-trip o rehúsa
-    hermano = lb.render_verif_sidecar(note, tabla)
-    seccion = note_section(note, text, rows, fecha or dt.date.today().isoformat())
-    vieja = lb.verif_section(text)
-    nuevo = text.replace(vieja, seccion, 1) if vieja else text.rstrip("\n") + "\n\n" + seccion
-    if not dry_run:
-        cfg.write_text_atomic(cfg.verif_sidecar(note), hermano)
-        cfg.write_text_atomic(note, nuevo)
+    emit(note, text, rows, fecha or dt.date.today().isoformat(), dry_run=dry_run)
     c = lb.verif_counts(rows)
     juzgados = sum(len(ps) for ps in fanout.values())
     return {"filas": len(rows), "pares_cuerpo": len(lb.pairs_of(text)), "juzgadas": juzgados,
@@ -236,14 +364,58 @@ def write(note: Path, fanout_dir: Path, fecha: str | None = None, dry_run: bool 
             "encadenadas": c["cadenas"], "hermano": cfg.verif_sidecar(note).name}
 
 
+def _main_restamp(args) -> int:
+    """`--restamp-section` for one note or for the whole vault (#430).
+
+    Declares its population (INV-40) and, on a sweep, does NOT stop at the first refusal: a note
+    whose triage the reader cannot recognise is exactly the finding, and stopping would hide the
+    rest of the corpus behind it. Every refusal is named; the exit code is non-zero if any."""
+    if args.todo:
+        # el universo se enumera por los HERMANOS: la modalidad lee las filas de ahí, así que una
+        # nota sin hermano no tiene nada que re-estampar (y `note_paths` los excluye por #344)
+        notas = sorted(s.with_name(s.name[:-len(cfg.VERIF_SUFFIX)] + ".md")
+                       for s in cfg.WIKI.rglob("*" + cfg.VERIF_SUFFIX)) if cfg.WIKI.exists() else []
+    elif args.nota:
+        notas = [Path(args.nota)]
+    else:
+        cfg.print_seguro("⛔ `--restamp-section` necesita una nota o `--todo`")
+        return 2
+    cambiadas, fallas = 0, []
+    for n in notas:
+        if not n.exists() or cfg.is_verif_sidecar(n):
+            fallas.append((n.name, "no es una nota"))
+            continue
+        try:
+            r = restamp_section(n, fecha=args.fecha, dry_run=args.dry_run)
+        except SidecarError as exc:
+            fallas.append((n.name, str(exc)))
+            continue
+        cambiadas += bool(r["cambio"])
+    verbo = "se re-estamparía(n)" if args.dry_run else "re-estampada(s)"
+    cfg.print_seguro(f"{cambiadas} sección(es) {verbo} sobre {len(notas)} nota(s) con hermano")
+    for nombre, motivo in fallas:
+        cfg.print_seguro(f"⛔ {nombre}: {motivo}")
+    return 1 if fallas else 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("nota", help="la nota (`vault/wiki/.../<x>.md`)")
-    ap.add_argument("--from", dest="fanout", required=True,
+    ap.add_argument("nota", nargs="?", help="la nota (`vault/wiki/.../<x>.md`)")
+    ap.add_argument("--from", dest="fanout", default=None,
                     help="directorio de la ronda (p. ej. build/<slug>/verif/r1)")
+    ap.add_argument("--restamp-section", action="store_true", dest="restamp",
+                    help="#430: re-estampa la SECCIÓN de la nota desde su hermano (sin fan-out); "
+                         "conserva la fecha del bloque y no toca la tabla")
+    ap.add_argument("--todo", action="store_true",
+                    help="con --restamp-section: barre toda la bóveda (notas con hermano)")
     ap.add_argument("--fecha", default=None, help="fecha del bloque (default: hoy)")
     ap.add_argument("--dry-run", action="store_true", help="no escribe: dice qué haría")
     args = ap.parse_args(argv)
+    if args.restamp:
+        return _main_restamp(args)
+    if not args.nota or not args.fanout:
+        cfg.print_seguro("⛔ hace falta la nota y `--from <dir>` (o `--restamp-section`)")
+        return 2
     nota, fanout = Path(args.nota), Path(args.fanout)
     if not nota.exists() or cfg.is_verif_sidecar(nota):
         cfg.print_seguro(f"⛔ {nota} no es una nota")

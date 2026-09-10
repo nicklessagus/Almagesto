@@ -10029,3 +10029,27 @@ def test_check_data_availability_pide_lo_que_hace_al_puntero_USABLE(toy_vault):
         assert len(filas) == 1 and (falta if falta != "doi" else "doi|url") in filas[0][1], (falta, filas)
     filas = lint.check_data_availability("b", {"data_availability": ["10.1/a"]})
     assert len(filas) == 1 and "no es un mapa" in filas[0][1], "el escalar no se lee como entrada"
+
+
+def test_check_verif_structure_lee_el_fragmento_NORMALIZADO(toy_vault):
+    """#430 — el chequeo que mecaniza INV-81 un nivel abajo comparaba el fragmento como substring
+    CRUDO, así que una sub-sección cuyo fragmento un fan-out puso en negrita se reportaba como
+    desincronizada para siempre: ninguna edición la cierra, porque el conteo ES el correcto. Regla
+    de método nº 4 (cf. #168, #276, #283, #309)."""
+    filas = [lb.Row(n="1", claim="c", bibcode="2020A", verdict="soportada",
+                     anchor="a" * 10, source_hash="b" * 10, condition="acota: x",
+                     source_kind="pdf")]
+    frag = lb.verif_subsection_lines(filas, "")["Condiciones perdidas"]
+    base = ("## Verificación de citas (2026-03-01)\n\nInferencias declaradas — 0 marcas en el "
+            "cuerpo: ninguna.\n\nOmisiones en transcripciones: ninguna.\n\n")
+    plano = base + f"Condiciones perdidas {frag}: la `acota` se resolvió.\n"
+    adornado = base + (f"**Condiciones perdidas (afirmaciones sobre-generalizadas)** "
+                       f"{frag.replace('`acota`', '**`acota`**')}: la `acota` se resolvió.\n")
+    for texto in (plano, adornado):
+        estructura, _cab = lint.check_verif_structure("n", texto, Path("n.md"), filas)
+        assert not [m for _s, m in estructura if "no publica el conteo" in m], texto[-90:]
+    # y el conteo que SÍ derivó sigue reportándose
+    malo = base + "Condiciones perdidas — 9 con condición: 9 `acota` (0 resueltas) / 0 " \
+                  "`contextualiza` / 0 sin clasificar: derivado.\n"
+    estructura, _cab = lint.check_verif_structure("n", malo, Path("n.md"), filas)
+    assert [m for _s, m in estructura if "no publica el conteo" in m]

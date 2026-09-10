@@ -3164,8 +3164,15 @@ def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
     # nota que publicaba SU número correcto quedaba reportada como deuda para siempre.
     _fm_v = cfg.frontmatter_span(texto)
     _frags = lb.verif_subsection_lines(filas, cfg.solo_prosa(_fm_v[1] if _fm_v else texto))
+    # ⛔ #430 — la comparación va NORMALIZADA (`subsection_split` + `fragment_stated`), como la de la
+    # cabecera dos bloques más arriba: cruda, la sub-sección cuyo fragmento un fan-out puso en
+    # negrita se reportaba como desincronizada y ninguna edición la podía cerrar. Es la regla de
+    # método nº 4 en el chequeo que mecaniza INV-81, y el lector es el mismo que el escritor usa.
     for _sub, _frag in _frags.items():
-        if _frag and _sub in texto and _frag not in texto:
+        if not _frag or _sub not in texto:
+            continue
+        _linea = next((ln for ln in texto.split("\n") if lb.subsection_split(ln, _sub)[0]), "")
+        if not lb.fragment_stated(_linea, _frag):
             verif_estructura.append(
                 (stem, f"la sub-sección «{_sub}» no publica el conteo que su propia tabla da → "
                        f"línea canónica: «{_sub} {_frag}: …»"))

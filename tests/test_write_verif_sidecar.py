@@ -251,3 +251,209 @@ def test_la_ronda_ACOTADA_arrastra_los_pares_de_afuera_con_el_ancla_recalculada(
     assert filas["2019Txt"].anchor != ancla_vieja, "…y el ancla se RECALCULA sobre el texto nuevo"
     assert lint.collect().por_clave("stale_pairs").items == (), \
         "ni vencido por edición ni huérfano: la partición de #282 cerró"
+
+
+# ── #430 · la prosa del triage se pierde en silencio ────────────────────────────────────────────
+# `free_text_of` comparaba el arranque de la sub-sección SIN normalizar el markdown (regla de
+# método nº 4, quinta vez: #168, #276, #283, #309). Una sub-sección adornada o con paréntesis
+# aclaratorio devolvía `""`, y `note_section` escribía el placeholder ENCIMA del triage de la
+# corrida — lo único que registra qué se decidió en esa ronda. Medido en una bóveda real: 10
+# sub-secciones en 4 notas perdibles, y 2 con el fragmento de conteo YA duplicado.
+
+def _con_triage(nota: Path, linea_vieja: str, linea_nueva: str) -> None:
+    """Reemplaza una línea de sub-sección por la forma que el agente escribió a mano."""
+    t = nota.read_text(encoding="utf-8")
+    assert linea_vieja in t, linea_vieja
+    nota.write_text(t.replace(linea_vieja, linea_nueva), encoding="utf-8")
+
+
+@pytest.mark.parametrize("linea, esperado", [
+    # adorno + paréntesis aclaratorio: la forma que el skill mismo publica en su plantilla
+    ("**Inferencias declaradas (sin cita, por diseño)** — 0 marcas en el cuerpo: "
+     "las tres del apartado 6", "las tres del apartado 6"),
+    # terminador `.` en vez de `: ` — los tres `cierre` literales no lo cubrían
+    ("**Inferencias declaradas — 0 marcas en el cuerpo.** Cada una nombra sus premisas",
+     "Cada una nombra sus premisas"),
+    # sólo adorno
+    ("**Inferencias declaradas** — 0 marcas en el cuerpo: la comparación", "la comparación"),
+])
+def test_la_prosa_del_triage_SOBREVIVE_al_adorno_y_al_parentesis(toy_vault, linea, esperado):
+    """#430 — `s.startswith(sub)` sobre la línea CRUDA: con `**` adelante devuelve `""` y el
+    placeholder pisa el triage. Sin aviso, sin error."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    _con_triage(nota, "Inferencias declaradas — 0 marcas en el cuerpo: " + ws.PENDIENTE, linea)
+    ws.write(nota, d, fecha="2026-03-01")
+    nuevo = nota.read_text(encoding="utf-8")
+    assert esperado in nuevo, "el triage de la corrida desapareció"
+    assert nuevo.count(ws.PENDIENTE) == 2, "sólo las otras dos sub-secciones siguen pendientes"
+
+
+def test_el_fragmento_DUPLICADO_se_colapsa_y_la_prosa_es_la_del_ULTIMO(toy_vault):
+    """#430 — el síntoma ya materializado en dos notas reales: una corrida anterior no reconoció el
+    fragmento viejo y le antepuso uno nuevo, así que la línea publica DOS conteos contradictorios y
+    el segundo es todo ceros."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    _con_triage(nota, "Condiciones perdidas — 0 con condición: 0 `acota` (0 resueltas) / "
+                      "0 `contextualiza` / 0 sin clasificar: " + ws.PENDIENTE,
+                "Condiciones perdidas — 9 con condición: 1 `acota` (0 resueltas) / "
+                "8 `contextualiza` / 0 sin clasificar: 0 con condición: 0 `acota` (0 resueltas) / "
+                "0 `contextualiza` / 0 sin clasificar. Las **`acota`** se resolvieron en la 3.")
+    ws.write(nota, d, fecha="2026-03-01")
+    linea = next(l for l in nota.read_text(encoding="utf-8").split("\n")
+                 if l.startswith("Condiciones perdidas"))
+    assert linea.count("con condición") == 1, f"fragmento duplicado: {linea}"
+    assert linea.endswith("Las **`acota`** se resolvieron en la 3.")
+
+
+def test_si_la_prosa_ENTRA_y_SALE_vacia_se_ABORTA_en_vez_de_escribir(toy_vault, monkeypatch):
+    """#430/#222 — la red barata: un triage que desaparece no puede pasar en silencio. Si el lector
+    no reconoce la prosa que la línea vieja tenía, se rehúsa; no se escribe el placeholder."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    _con_triage(nota, "Omisiones en transcripciones: " + ws.PENDIENTE,
+                "Omisiones en transcripciones: la tabla 2 omitía la fila c")
+    monkeypatch.setattr(lb, "subsection_split", lambda linea, sub: (True, ""))
+    antes = nota.read_bytes()
+    with pytest.raises(ws.SidecarError, match="Omisiones en transcripciones"):
+        ws.write(nota, d, fecha="2026-03-01")
+    assert nota.read_bytes() == antes, "rehusó y NO escribió"
+
+
+def test_restamp_section_regenera_la_seccion_sin_fanout_y_es_idempotente(toy_vault):
+    """#430 — el migrador: re-escribe la sección de la nota desde el hermano que ya existe,
+    conservando la fecha del bloque. Es lo que colapsa el fragmento duplicado del corpus heredado."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    _con_triage(nota, "Inferencias declaradas — 0 marcas en el cuerpo: " + ws.PENDIENTE,
+                "**Inferencias declaradas (sin cita, por diseño)** — 4 marcas en el cuerpo: "
+                "0 marcas en el cuerpo: las cuatro nombran sus premisas")
+    hermano_antes = cfg.verif_sidecar(nota).read_bytes()
+    r = ws.restamp_section(nota)
+    t1 = nota.read_text(encoding="utf-8")
+    linea = next(l for l in t1.split("\n") if l.startswith("Inferencias declaradas"))
+    # lo que el migrador ARREGLA: un solo fragmento, con el conteo que la tabla da hoy, y la prosa
+    assert linea == "Inferencias declaradas — 0 marcas en el cuerpo: las cuatro nombran sus premisas"
+    assert r["cambio"] and r["filas"] == 2 and r["fecha"] == "2026-03-01"
+    assert "## Verificación de citas (2026-03-01)" in t1, "la fecha del bloque se conserva"
+    assert cfg.verif_sidecar(nota).read_bytes() == hermano_antes, "no toca el hermano"
+    assert ws.restamp_section(nota)["cambio"] is False
+    assert nota.read_text(encoding="utf-8") == t1, "idempotente"
+
+
+def test_restamp_section_REHUSA_sin_hermano_y_sin_fecha(toy_vault):
+    """#430/D-43 — las dos cosas que no se inventan: la tabla (no hay de dónde leer las filas) y la
+    fecha del bloque (re-fechar es re-verificar, y esto no re-verifica nada)."""
+    nota = _escena(toy_vault)
+    with pytest.raises(ws.SidecarError, match="hermano"):
+        ws.restamp_section(nota)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "## Verificación de citas (2026-03-01)", "## Verificación de citas"), encoding="utf-8")
+    with pytest.raises(ws.SidecarError, match="fecha"):
+        ws.restamp_section(nota)
+
+
+def test_el_cli_de_restamp_barre_declarando_su_poblacion_y_no_se_frena_en_la_primera(toy_vault, capsys):
+    """#430 — `--restamp-section --todo`: declara su población (INV-40) y NO para en la primera
+    rehusada, porque la nota cuyo triage el lector no reconoce ES el hallazgo y frenar taparía el
+    resto del corpus detrás de ella."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    otra = mk_note(cfg.CONCEPTS / "methods", "otro", {"tags": ["methods"]},
+                   "# Otro\n\nDato [[2020Pdf]].\n")
+    toy_vault.LOG.write_text("# log\n\n- [[concepto]]\n- [[otro]]\n", encoding="utf-8")
+    ws.write(otra, _fanout(toy_vault, otra, {}, ronda="r_otro"), fecha="2026-03-02")
+    # una de las dos queda con la fecha borrada: rehúsa, y la otra igual se re-estampa
+    otra.write_text(otra.read_text(encoding="utf-8").replace(
+        "## Verificación de citas (2026-03-02)", "## Verificación de citas"), encoding="utf-8")
+    rc = ws.main(["--restamp-section", "--todo"])
+    salida = capsys.readouterr().out
+    assert rc == 1, "una rehusada → exit ≠ 0"
+    assert "sobre 2 nota(s) con hermano" in salida, "declara su población"
+    assert "otro.md" in salida and "fecha" in salida, "nombra la que rehusó y por qué"
+
+
+def test_el_cli_de_restamp_toma_UNA_nota_y_RECHAZA_que_le_pasen_el_hermano(toy_vault, capsys):
+    """#430 — las dos entradas de un solo archivo: la nota (se re-estampa) y el HERMANO, que es el
+    error de tipeo natural de esta modalidad (el nombre difiere en un sufijo) y no es una nota
+    (#344): re-estamparlo escribiría una sección de verificación adentro del rastro."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}), fecha="2026-03-01")
+    assert ws.main(["--restamp-section", str(nota)]) == 0
+    assert "sobre 1 nota(s) con hermano" in capsys.readouterr().out
+    assert ws.main(["--restamp-section", str(cfg.verif_sidecar(nota))]) == 1
+    assert "no es una nota" in capsys.readouterr().out
+
+
+def test_el_cli_de_restamp_nombra_la_nota_QUE_NO_EXISTE_en_vez_de_reventar(toy_vault, capsys):
+    """#430 — el hermano huérfano (la nota borrada, que el lint ya bloquea por #344) llega igual a
+    esta modalidad porque el universo se enumera POR HERMANOS. Se nombra y se sigue; reventar
+    dejaría el resto del corpus sin re-estampar detrás de un caso que el lint ya reporta."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}), fecha="2026-03-01")
+    hermano = cfg.verif_sidecar(nota)
+    nota.unlink()
+    assert hermano.exists()
+    assert ws.main(["--restamp-section", "--todo"]) == 1
+    salida = capsys.readouterr().out
+    assert "sobre 1 nota(s) con hermano" in salida and "no es una nota" in salida
+
+
+def test_el_cli_sin_from_ni_restamp_rehusa(toy_vault, capsys):
+    """#430 — `--from` dejó de ser `required` para que exista `--restamp-section`: la combinación
+    vacía tiene que seguir rehusando, no caer en un modo por default."""
+    nota = _escena(toy_vault)
+    assert ws.main([str(nota)]) == 2
+    assert "--from" in capsys.readouterr().out
+
+
+def test_la_prosa_se_preserva_con_el_nombre_en_OTRA_CAPITALIZACION(toy_vault):
+    """#430 — el nombre de la sub-sección es vocabulario fijo, así que una mayúscula distinta es un
+    tipeo, no otro significado. Sin plegar la caja, `Omisiones en TRANSCRIPCIONES` no matcheaba y la
+    prosa se perdía con la guarda mirando: el residual sale del mismo prefijo que el lector."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    _con_triage(nota, "Omisiones en transcripciones: " + ws.PENDIENTE,
+                "Omisiones en TRANSCRIPCIONES: la tabla 2 omitía la fila c, corregida")
+    ws.write(nota, d, fecha="2026-03-01")
+    assert "la tabla 2 omitía la fila c, corregida" in nota.read_text(encoding="utf-8")
+
+
+def test_NINGUNA_prosa_de_la_seccion_vieja_desaparece_sin_aviso(toy_vault):
+    """#430/#222 — la red que NO depende del lector, y la razón de que exista: la guarda por
+    sub-sección sólo ve lo que el lector reconoce, así que una línea con el nombre mal escrito —o un
+    párrafo que el agente agregó y que la plantilla no contempla— se evaporaba con la guarda
+    mirando. Ésta compara la sección vieja contra la nueva y rehúsa nombrando lo que se perdería:
+    contar antes y después es la red barata de #222, un nivel más arriba."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    t = nota.read_text(encoding="utf-8")
+    nota.write_text(t.replace("Omisiones en transcripciones: " + ws.PENDIENTE,
+                              "Omisiones en transcripciones: " + ws.PENDIENTE
+                              + "\n\nOtra cosa que el agente anotó y la plantilla no contempla."),
+                    encoding="utf-8")
+    antes = nota.read_bytes()
+    with pytest.raises(ws.SidecarError, match="se perdería"):
+        ws.write(nota, d, fecha="2026-03-01")
+    assert nota.read_bytes() == antes, "rehusó y NO escribió"
+
+
+def test_el_triage_mas_corto_que_existe_TAMBIEN_esta_protegido(toy_vault):
+    """#430 — «ninguna» tiene 7 caracteres y es la respuesta más común de las tres sub-secciones:
+    un umbral cómodo para «esto no es prosa» descarta en silencio justo el caso frecuente. Debajo
+    del umbral quedan sólo signos sueltos, que sí son residuo de pelar lo estampado."""
+    assert ws._lost_prose("Omisiones en transcripciones: ninguna", "Omisiones en transcripciones: "
+                          + ws.PENDIENTE) == ["ninguna"]
+    assert ws._lost_prose("Omisiones en transcripciones: xy",
+                          "Omisiones en transcripciones: " + ws.PENDIENTE) == [], \
+        "un residuo de dos caracteres es signo suelto, no triage"

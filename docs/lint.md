@@ -286,7 +286,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   marcadas `acota`» sobre una tabla con **3**. Los fragmentos los genera
   `lib_blocks.verif_subsection_lines`, el mismo código que lee la tabla; *Omisiones* no lleva número
   (es juicio, no está en la tabla). Sólo se reporta la sub-sección **presente**: la ausente ya la
-  reporta el chequeo de #232.
+  reporta el chequeo de #232. ⛔ **La comparación va normalizada** (`lb.subsection_split` ubica la
+  línea, `lb.fragment_stated` compara, #430): cruda, la sub-sección cuyo fragmento un fan-out puso
+  en negrita se reportaba desincronizada y **ninguna edición la cerraba** —el conteo ES el
+  correcto—. Regla de método nº 4, quinta vez (#168, #276, #283, #309).
 - **Cabecera del bloque desincronizada de la tabla de su hermano** (#344/INV-148, **R-1**: backlog
   en la pasada periódica, **bloquea con `--cierre`**). INV-81 cruzando archivos: los conteos los da
   `lib_blocks.verif_summary`, el mismo código que lee la tabla, y desde #344 la tabla vive en OTRO
