@@ -25,6 +25,38 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 431
+    regla: >-
+      Una garantía fechada sobre una nota se compara contra la PROSA fuera de
+      `cfg.SECCIONES_ESTAMPADAS`, nunca contra la fecha del archivo: editar una sección estampada no
+      puede cambiar ninguna afirmación ni ningún ancla —`pairs_of` no la mira—, así que el archivo
+      es la granularidad equivocada y el detector se ensucia solo cada vez que alguien cierra bien
+      una nota (medido: 4 de 8 hallazgos de `stale_verif`).
+    funcion: lint.prose_changed_since
+    patron: 'last_change_dates|solo_prosa'
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Es donde VIVE `solo_prosa` (y `SECCIONES_ESTAMPADAS`): la implementación de la mitad
+          «qué es prosa», no un portador de la regla «con qué se compara una garantía fechada».
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Sólo NOMBRA `solo_prosa` en el contrato de `verif_subsection_lines` (su input tiene que
+          venir ya descontado). Recibe la prosa; no decide de qué versión ni contra qué compararla.
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Su `_prosa = cfg.solo_prosa` acota las citas que cuenta `_estado_paper` dentro de UNA
+          versión de la nota. No hay garantía fechada ni versión anterior: no hay dos fechas que
+          comparar, así que la regla no tiene dónde aplicarse.
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Usa `solo_prosa` para no contar dos veces las marcas de `inferencia` al escribir el
+          bloque. Su eje de caducidad es el ANCLA por par (D-4/D-20), que ya es la granularidad
+          fina que esta regla persigue: no mira fechas de archivo.
   - issue: 405
     regla: >-
       Resolver el `.txt` de un bibcode entre TODOS los slugs, no sólo bajo el del sujeto: el paper

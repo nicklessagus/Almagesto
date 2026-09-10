@@ -196,7 +196,7 @@ negrita. **Al cerrar:** cuántas secciones se re-estamparon y sobre cuántas not
 
 ---
 
-## #427 · v1.251.0 — guía §2n
+## #427 · v1.252.0 — guía §2n
 
 **Validar:** `lint.py` → la categoría *Condición sin clasificar* nombra las celdas con la clase
 DOS veces (esperado ~41 sobre las notas verificadas, 7 `acota`); correr
@@ -207,7 +207,7 @@ la cabecera de *Condiciones perdidas* cambia el `(N resueltas)` y la fecha del b
 mueve**. **Devolver si** una celda migrada pierde texto, o si `--resolver` rehúsa sobre un `acota`
 legítimo. **Al cerrar:** cuántas celdas se migraron por nota y el delta de `cond_acota_resueltas`.
 
-## #428 · v1.253.0 — guía §2ñ
+## #428 · v1.252.0 — guía §2ñ
 
 **Validar:** sobre `build/gj_581/verif/` (las tres rondas que motivaron el issue), un solo comando
 con `--from a1 --from a2 --from a3` → el hermano sale igual que el que se armó a mano; y sobre una
@@ -215,3 +215,14 @@ ronda con anclas muertas, `--descartar-anclas-muertas` escribe los vivos **nombr
 descartados. Sin el flag el mensaje tiene que ofrecer los dos caminos. **Devolver si** el encadenado
 no reproduce el resultado serial, o si el mensaje de rehúse no dice cómo salir. **Al cerrar:**
 cuántos pares se recuperaron sin re-pagar fan-out.
+## #431 · v1.253.0 — guía §2o
+
+**Validar:** `python scripts/lint.py` y comparar la categoría *Verificación stale* contra la
+corrida anterior — los cuatro falsos medidos (`ica`, `icasso`, `hd_40307` y la query de blanqueo,
+cuya única edición fue dentro de `## Verificación de citas`) tienen que **desaparecer**, y los que
+queden tienen que decir qué bloque cambió. Segundo chequeo, barato: editar a mano una sub-sección
+del bloque de una nota cualquiera (sin commitear) y re-correr el lint → esa nota **no** aparece;
+tocarle un párrafo con cita → aparece, con el extracto del párrafo. **Devolver si** desaparece un
+hallazgo cuya edición SÍ tocó la prosa (sub-disparo: es la dirección prohibida), o si una nota
+sana empieza a salir con la salvedad «no se pudo aislar la prosa».
+

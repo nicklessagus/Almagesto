@@ -550,7 +550,7 @@ esa línea lleva algo que el lector no reconoció: mirala a mano antes de re-cor
 no un error del comando. **Devolver si** alguna nota pierde prosa igual, o si el lint sigue
 reportando *«no publica el conteo»* sobre una sub-sección cuyo número es el correcto.
 
-## 2n · v1.251.0 (#427) — la clase de la condición escrita dos veces, y quién resuelve un `acota`
+## 2n · v1.252.0 (#427) — la clase de la condición escrita dos veces, y quién resuelve un `acota`
 
 Dos puntas de la misma pieza. `write_verif_sidecar.condition_cell` es el único productor de la
 celda `Condición` y **no usaba** ninguna de las dos funciones que definen su vocabulario, así que
@@ -581,7 +581,7 @@ conserva la condición original detrás de un `·`, y rehúsa el ancla que no es
 `acota` y el texto **distinto** sobre una fila ya resuelta. **Devolver si** el lint sigue
 reportando «clase DOS veces» después del migrador, o si `--resolver` rehúsa sobre un `acota` legítimo.
 
-## 2ñ · v1.253.0 (#428) — la ronda que no se podía ensamblar
+## 2ñ · v1.252.0 (#428) — la ronda que no se podía ensamblar
 
 `--from` tomaba **un** directorio y `build_rows` rechazaba la ronda **entera** si un solo par tenía
 el ancla muerta. Como el ciclo *corregir → re-verificar* no converge solo (#282), en cuanto una nota
@@ -601,6 +601,26 @@ flujo normal un ancla muerta ES el error. ⚠ Lo que **no** arregla: el manifies
 completa» sobre una corrida de subconjunto — ése es un manifiesto falso y la barrera tiene razón;
 regeneralo con `verify_fanout … --fuentes <lista>`. **Devolver si** encadenar N rondas no da lo
 mismo que correrlas de a una, o si el descarte se lleva un par cuya ancla sí está en el cuerpo.
+## 2o · v1.253.0 (#431) — `stale_verif` mira la PROSA, no el archivo
+
+**Nada que correr: es el propio lint.** La categoría *Verificación stale* comparaba la fecha del
+**archivo** contra la del encabezado del bloque, y `## Verificación de citas` es una sección
+estampada: `pairs_of` no la mira, así que editarla no puede cambiar ninguna afirmación ni ningún
+ancla — pero cambiaba el archivo y disparaba igual. Medido acá: **4 de 8** hallazgos eran eso, los
+cuatro dejados por el mantenimiento que el framework pide (escribir el triage de la corrida, marcar
+una `acota` como resuelta, re-anclar).
+
+Desde esta versión la fecha del archivo es sólo el **disparador**: lo que se reporta lo decide
+`lint.prose_changed_since`, que compara la prosa fuera de `cfg.SECCIONES_ESTAMPADAS` entre la
+versión committeada hasta la fecha del bloque y el **working tree** (así también se exonera la
+edición todavía sin commitear, que es el caso medido: los migradores corren antes del commit). El
+hallazgo que queda dice además **qué** cambió; y si no hay commit hasta esa fecha, cae al
+comportamiento viejo **declarándolo** («no se pudo aislar la prosa: se compara la fecha del
+archivo»), que es D-43.
+
+**Efecto esperado en la instancia:** `python scripts/lint.py` con la categoría más chica y cada
+hallazgo restante nombrando el bloque. Los que digan *«no se pudo aislar la prosa»* son notas sin
+commit anterior a la fecha de su bloque: ésas se miran a mano, como antes.
 
 ## 3 · Cierre
 

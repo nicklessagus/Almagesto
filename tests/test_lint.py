@@ -1899,16 +1899,24 @@ def test_verificacion_stale_por_edicion_sin_commitear(toy_vault, capsys):
 
 
 def test_verificacion_stale_por_commit_posterior(toy_vault, capsys):
-    """La otra rama: la edición ya está committeada — la fecha sale de `git log -1 --format=%cs`.  @inv INV-31"""
+    """La otra rama: la edición ya está committeada — la fecha sale de `git log -1 --format=%cs`.
+
+    ⚠ Desde #431 el párrafo nuevo se inserta **antes** del bloque, no al final de la nota: el
+    `## Verificación de citas` es la última sección, así que appendear al archivo escribía DENTRO
+    de una sección estampada — que es exactamente el falso positivo que #431 mide, no una
+    ampliación de la prosa.  @inv INV-31"""
     cuerpo = "Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n|---|---|---|---|---|---|---|\n"
     _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
     p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    p.write_text(p.read_text(encoding="utf-8") + "\nPárrafo agregado después.\n", encoding="utf-8")
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "## Verificación de citas", "Párrafo agregado después.\n\n## Verificación de citas"),
+        encoding="utf-8")
     _git(toy_vault.ROOT, "add", "-A")
     _git(toy_vault.ROOT, "commit", "-q", "-m", "amplía", fecha="2020-06-01")
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "la nota se editó el 2020-06-01 y su último verify es del 2020-01-01" in out
+    assert "Párrafo agregado después" in out, "el hallazgo NOMBRA el bloque que cambió (#431)"
 
 
 def test_verificacion_al_dia_no_se_marca(toy_vault, capsys):
@@ -1918,6 +1926,102 @@ def test_verificacion_al_dia_no_se_marca(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 0
     assert SIN_STALE in out
+
+
+CUERPO_VERIF = ("Afirmación [[2020citC...1..1C]].\n\n## Verificación de citas (2020-01-01)\n\n"
+                "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n"
+                "|---|---|---|---|---|---|---|\n")
+
+
+def _stale(toy_vault, fecha_bloque="2020-01-01", hoy="2020-06-01"):
+    """`check_stale_verif` sobre la nota del repo de juguete, con la fecha de edición ya resuelta.
+
+    Se le pasa la ruta REAL (es lo que `collect` le pasa): `prose_changed_since` la necesita para
+    resolverla contra `cfg.ROOT` y para leer el working tree."""
+    f = str(toy_vault.CONCEPTS / "methods" / "nota-verif.md")
+    return lint.check_stale_verif([(f, fecha_bloque)], {f: hoy})
+
+
+def test_stale_verif_exonera_la_edicion_de_la_SECCION_ESTAMPADA(toy_vault):
+    """#431 — `## Verificación de citas` está en `cfg.SECCIONES_ESTAMPADAS`: `pairs_of` no la mira,
+    así que editarla no puede cambiar ninguna afirmación ni ningún ancla. Pero cambia el ARCHIVO, y
+    la categoría comparaba la fecha del archivo — medido en una instancia, **4 de 8** hallazgos
+    eran eso, y los cuatro los dejó el mantenimiento que el propio framework pide.
+
+    ⚠ La edición va SIN commitear a propósito: es el caso medido (los migradores corren antes del
+    commit), y `last_change_dates` la fecha como HOY. La exoneración tiene que venir de comparar la
+    versión vieja contra el **working tree**, no de git."""
+    _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "## Verificación de citas (2020-01-01)",
+        "## Verificación de citas (2020-01-01)\n\n### Con condición `acota` (1)\n\n- la #3, resuelta."),
+        encoding="utf-8")
+    assert _stale(toy_vault) == [], (
+        "sólo se tocó la sección estampada: no hay nada que `verify-citations` pueda chequear")
+
+
+def test_stale_verif_reporta_la_prosa_que_cambio_y_NOMBRA_el_bloque(toy_vault):
+    """#431 — la otra mitad: cuando la prosa sí cambió, el hallazgo dice **qué** cambió. Hoy mandaba
+    re-verificar sin decir sobre qué, que es lo que el issue pide arreglar aunque el disparo sea
+    correcto."""
+    _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "Afirmación [[2020citC...1..1C]].",
+        "Afirmación [[2020citC...1..1C]].\n\nEl período es de 34 días [[2020citC...1..1C]]."),
+        encoding="utf-8")
+    filas = _stale(toy_vault)
+    assert len(filas) == 1
+    assert "la prosa cambió" in filas[0][1] and "1 bloque(s) distintos" in filas[0][1]
+    assert "El período es de 34 días" in filas[0][1], "el extracto nombra el bloque que cambió"
+    assert "verify-citations" in filas[0][1]
+
+
+def test_stale_verif_sin_commit_hasta_la_fecha_declara_la_salvedad(toy_vault):
+    """D-43 — con el bloque fechado ANTES del primer commit de la nota no hay versión contra la cual
+    aislar la prosa. Cae al comportamiento de siempre (la fecha del archivo) y **lo dice**: un
+    silencio ahí sería un veredicto que nadie midió."""
+    _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
+    filas = _stale(toy_vault, fecha_bloque="2019-01-01")
+    assert len(filas) == 1 and "no se pudo aislar la prosa" in filas[0][1]
+    assert "fecha del archivo" in filas[0][1]
+
+
+def test_stale_verif_declara_el_cambio_que_NO_cae_en_un_bloque_citable(toy_vault):
+    """`solo_prosa` mira todo el texto no estampado; `lb.split_blocks` sólo los bloques citables
+    (excluye los ```fences``` y los encabezados). Un cambio ahí es real y no tiene bloque que
+    nombrar: se declara así, en vez de publicar «0 bloque(s) distintos»."""
+    _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "Afirmación [[2020citC...1..1C]].",
+        "## Síntesis nueva\n\nAfirmación [[2020citC...1..1C]]."), encoding="utf-8")
+    filas = _stale(toy_vault)
+    assert len(filas) == 1 and "fuera de los bloques citables" in filas[0][1]
+
+
+def test_prose_changed_since_devuelve_None_si_el_commit_no_TIENE_la_nota(toy_vault):
+    """El commit más reciente hasta la fecha puede ser el que BORRÓ la nota (un `entity rename`, una
+    nota movida y restaurada): ahí `git show <sha>:<ruta>` no devuelve nada. Sin la guarda se
+    compararía `None` contra el working tree — o sea, se afirmaría que la prosa cambió sobre una
+    versión que nunca se leyó."""
+    _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    guardado = p.read_text(encoding="utf-8")
+    _git(toy_vault.ROOT, "rm", "-q", str(p.relative_to(toy_vault.ROOT)))
+    _git(toy_vault.ROOT, "commit", "-q", "-m", "borra la nota", fecha="2020-02-01")
+    p.write_text(guardado, encoding="utf-8")          # restaurada, todavía sin commitear
+    assert lint.prose_changed_since(str(p), "2020-03-01") is None
+    filas = _stale(toy_vault, fecha_bloque="2020-03-01")
+    assert len(filas) == 1 and "no se pudo aislar la prosa" in filas[0][1]
+
+
+def test_prose_changed_since_devuelve_None_fuera_del_repo(toy_vault):
+    """La ruta que no resuelve contra `cfg.ROOT` no se puede preguntar a git: `None`, no `False` —
+    es la misma doctrina que el gate sin git (INV-87)."""
+    _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
+    assert lint.prose_changed_since("/no/existe/afuera.md", "2020-01-01") is None
 
 
 def test_bloque_sin_fecha_se_marca(toy_vault, capsys):
