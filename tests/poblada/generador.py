@@ -240,6 +240,29 @@ def _sellar_alcances(paths, star_slugs) -> None:
             f.write_text(texto.replace(ALCANCE_PLACEHOLDER, linea), encoding="utf-8")
 
 
+def _sellar_matriz(paths) -> None:
+    """Estampa `matrices/method_star.md` con el estampador REAL (#429).
+
+    Se hace al final por lo mismo que `_sellar_alcances`: la matriz se deriva de los `methods` de
+    los papers, que recién existen después de escribirlos. Y se llama a `make_notes.restamp_matrix`
+    en vez de fabricar la tabla acá porque un doble escrito a ojo esconde el bug en la diferencia
+    (regla de método 2): el corpus "limpio" tiene que dar cero en *matriz desactualizada*, y sólo lo
+    da si lo estampa el mismo código que el lint usa para juzgarlo.
+
+    ⚠ El generador no monkeypatchea `lib_config` (es session-scoped y escribe por `paths`), así que
+    las constantes se re-apuntan a mano y se restauran en el `finally` — sin eso el estampador
+    leería la bóveda REAL del repo."""
+    attrs = ("WIKI", "STARS", "PAPERS", "CONCEPTS", "MATRICES", "STARS_YAML")
+    saved = [(k, getattr(cfg, k)) for k in attrs]
+    try:
+        for k in attrs:
+            setattr(cfg, k, getattr(paths, k))
+        make_notes.restamp_matrix()
+    finally:
+        for k, v in saved:
+            setattr(cfg, k, v)
+
+
 def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int = 20,
                    seed: int = 0, vintage: str = cfg.ALMAGESTO_VERSION,
                    anomalias: dict | None = None) -> Censo:
@@ -884,6 +907,7 @@ _(ninguno relevante — corpus sintético)_
     anomalias_censo.update(anom_extra)
 
     _sellar_alcances(paths, star_slugs)
+    _sellar_matriz(paths)
 
     return Censo(
         seed=seed, vintage=vintage, n_papers=n_papers, n_stars=n_stars, n_concepts=n_concepts,

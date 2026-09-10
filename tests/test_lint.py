@@ -10029,3 +10029,85 @@ def test_check_data_availability_pide_lo_que_hace_al_puntero_USABLE(toy_vault):
         assert len(filas) == 1 and (falta if falta != "doi" else "doi|url") in filas[0][1], (falta, filas)
     filas = lint.check_data_availability("b", {"data_availability": ["10.1/a"]})
     assert len(filas) == 1 and "no es un mapa" in filas[0][1], "el escalar no se lee como entrada"
+
+
+# ── #429 · la matriz método × estrella desactualizada ────────────────────────────────────────────
+
+def _matriz_y_dos_papers(toy_vault):
+    """Una bóveda con matriz, dos estrellas y dos papers que declaran métodos."""
+    write_yaml(toy_vault.STARS_YAML, {
+        "Estrella Test": {"slug": "test_star", "simbad": "tst Star", "ads_object": "Test Star",
+                          "aliases": [], "data_local": None},
+        "Otra Test": {"slug": "otra_star", "simbad": "otr Star", "ads_object": "Otra Star",
+                      "aliases": [], "data_local": None}})
+    for slug, name in (("test_star", "Estrella Test"), ("otra_star", "Otra Test")):
+        mk_note(toy_vault.STARS, slug, {"tags": ["star"], "name": name, "slug": slug}, "")
+    mk_note(toy_vault.PAPERS, "2020aaa...1..1A",
+            {"tags": ["paper"], "bibcode": "2020aaa...1..1A", "stars": ["Estrella Test"],
+             "methods": ["gp"]}, "")
+    mk_note(toy_vault.PAPERS, "2021bbb...2..2B",
+            {"tags": ["paper"], "bibcode": "2021bbb...2..2B", "stars": ["Otra Test"],
+             "methods": ["mcmc"]}, "")
+    dest = toy_vault.MATRICES / "method_star.md"
+    dest.write_text("---\ntags: [matrix]\n---\n\n# Matriz\n\nprosa\n", encoding="utf-8")
+    return dest
+
+
+def test_la_matriz_desactualizada_es_backlog_y_NOMBRA_el_metodo_que_falta(toy_vault):
+    """#429 — mismo criterio que las otras tres tablas estampadas (D-10): la matriz que no refleja
+    su universo es **backlog**, y el reporte **nombra** lo que falta en vez de una diferencia de
+    conteos. Sin esto, el paso de bookkeeping de `ingest-star` mandaba «tocar la matriz» sobre un
+    artefacto que nadie podía escribir y ningún chequeo miraba — la misma familia que el `index.md`
+    100 % Dataview de #237."""
+    dest = _matriz_y_dos_papers(toy_vault)
+    cat = lint.collect().por_clave("matriz_vieja")
+    assert cat is not None and cat.severidad == lint.SEV_BACKLOG
+    assert len(cat) == 1, f"la matriz sin estampar tiene que reportar: {cat.items}"
+    assert "--restamp-matrix" in cat.items[0][1], "el hallazgo no dice cómo se cierra"
+
+    # estampada: el hallazgo se cierra
+    mn.restamp_matrix()
+    assert lint.collect().por_clave("matriz_vieja").items == (), \
+        "la matriz recién estampada sigue reportando: el detector no compara contra lo mismo"
+
+    # llega un paper nuevo con un método que la matriz no tiene → vuelve a reportar, NOMBRÁNDOLO
+    mk_note(toy_vault.PAPERS, "2022ccc...3..3C",
+            {"tags": ["paper"], "bibcode": "2022ccc...3..3C", "stars": ["Estrella Test"],
+             "methods": ["sysrem"]}, "")
+    cat = lint.collect().por_clave("matriz_vieja")
+    assert len(cat) == 1, "el método nuevo no movió la matriz"
+    assert "sysrem" in cat.items[0][1], \
+        f"el hallazgo no nombra el método que falta: {cat.items[0][1]}"
+
+    # y la fecha del alcance NO cuenta como desactualización (se mueve sola)
+    texto = dest.read_text(encoding="utf-8")
+    dest.write_text(texto.replace("> Alcance 2", "> Alcance 1999-01-01 · viejo · 2"),
+                    encoding="utf-8")
+    cat = lint.collect().por_clave("matriz_vieja")
+    assert "sysrem" in cat.items[0][1], "cambiar la línea de alcance cambió el veredicto"
+
+
+def test_sin_archivo_de_matriz_el_detector_calla(toy_vault):
+    """Una bóveda que no tiene matriz no tiene nada que pueda estar desactualizado: reportarla sería
+    inventar deuda sobre un artefacto que la instancia decidió no llevar.
+
+    ⛔ Llama a `lint.check_matrix_stale` POR SU NOMBRE (paso 5 del protocolo de #396): que la nota
+    entera pase por `collect` no es lo mismo que tener un test que le hable a ella."""
+    _matriz_y_dos_papers(toy_vault)
+    assert len(lint.check_matrix_stale({})) == 1, "con matriz sin estampar tiene que reportar"
+    (toy_vault.MATRICES / "method_star.md").unlink()
+    assert lint.check_matrix_stale({}) == []
+    assert lint.collect().por_clave("matriz_vieja").items == ()
+
+
+def test_la_matriz_estampada_no_cuenta_como_link_entrante(toy_vault):
+    """#249 aplicado a la matriz: desde que se ESTAMPA por verdad de disco linkea todo método que
+    tenga nota, así que un concepto **huérfano** dejaría de serlo por metadata derivada — y
+    `orphans` BLOQUEA. Metadata derivada no es evidencia de que alguien catalogó la nota."""
+    _matriz_y_dos_papers(toy_vault)
+    mk_note(toy_vault.CONCEPTS / "methods", "gp", {"tags": ["concept"], "name": "gp"}, "")
+    mn.restamp_matrix()
+    assert "[[gp]]" in (toy_vault.MATRICES / "method_star.md").read_text(encoding="utf-8"), \
+        "la matriz no llegó a linkear el concepto: el test no prueba lo que dice"
+    assert "gp" in [s for s, _ in lint.collect().por_clave("orphans").items], \
+        "la matriz estampada tapó un huérfano — metadata derivada no es un link entrante (#249)"

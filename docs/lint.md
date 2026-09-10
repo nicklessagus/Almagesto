@@ -585,6 +585,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   tabla estampada del índice se compara, por `[[wikilink]]`, contra lo que `make_notes.index_tables`
   daría hoy, y el hallazgo **nombra los stems** que faltan y que sobran (no la diferencia de
   conteos) → `python scripts/make_notes.py --restamp-index`.
+- **Matriz método × estrella desactualizada contra la extracción** (#429, `matriz_vieja`,
+  backlog): la sección estampada de `vault/wiki/matrices/method_star.md` se compara contra lo que
+  `make_notes.matrix_table` daría hoy —sin la línea `> Alcance`, que lleva la fecha y se mueve
+  sola— y el hallazgo **nombra los métodos** que faltan y que sobran →
+  `python scripts/make_notes.py --restamp-matrix`. Mismo criterio que las otras tres tablas
+  (D-10). ⚠ Una bóveda **sin** el archivo no reporta: la matriz es un archivo de instancia y no
+  llevarla es una decisión. ⚠ Lo que la matriz publica es `methods` (la extracción), **no**
+  `methods_applied.literature` (la curación de la ficha): no hay clave de join entre los dos y
+  cruzarlos publicaría huecos falsos.
 - **Entradas de `## Verificación de citas` sin las tres sub-secciones** o con cabecera derivada a
   mano (INV-81): los conteos los genera `lib_blocks.verif_summary`, el mismo código que lee la
   tabla.

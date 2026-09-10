@@ -520,6 +520,26 @@ carpeta donde está el `pdf:` cuando lo declarás. Si después repuntás `pdf:` 
 `.bib` al lado de los PDFs, los `no-evaluable` de arXiv pasan a `[bib]`. `.csv`/`.xlsx` no se
 leen (decidido: demasiado específico); ésos los lee el agente antes de declarar (§2k).
 
+## 2o · v1.254.0 (#429) — la matriz método × estrella se ESTAMPA
+
+`vault/wiki/matrices/method_star.md` deja de ser curación del agente y pasa a ser el **cuarto
+roll-up derivado**. Prometía en su encabezado que «la mantiene el LLM en cada `ingest-star`» y que
+espeja `methods_applied.literature`, y eso no era cumplible: ese campo lo cura el agente al
+sintetizar la ficha y `methods` lo puebla la extracción con vocabulario abierto — **no hay clave de
+join** (medido acá mismo: 23 de 42 métodos declarados sin ningún paper del sujeto que matchee por
+`method_key`, y el eje de filas mezclando idiomas entre fichas). Llenarla a mano publicaba **huecos
+falsos**, y un `—` falso no lo mira ninguna capa de verificación.
+
+```bash
+python scripts/make_notes.py --restamp-matrix    # idempotente; crea la sección si falta
+python scripts/lint.py                           # `matriz_vieja` en 0
+```
+
+⚠ El archivo sigue en `.gitattributes` como `merge=ours`: su **contenido** depende del corpus de la
+instancia, no del template, y regenerarlo es un comando. La prosa de arriba del encabezado
+`## Matriz método × estrella` **no se toca** (cirugía), así que si le escribiste algo se queda; lo
+que conviene sí es revisar que el encabezado viejo no siga prometiendo la versión curada.
+
 ## 3 · Cierre
 
 ```bash

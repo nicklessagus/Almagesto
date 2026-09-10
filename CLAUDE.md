@@ -28,9 +28,8 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > **semilla** que una instancia nueva clona, no un estado— el handoff del desarrollo del framework
 > vive en `docs/internal/HANDOFF.md`, que no se versiona.)* ⛔ **`index.md` se ESTAMPA
 > (`python scripts/make_notes.py --restamp-index`, #237), no se edita a mano.** Era el único
-> artefacto **100 % Dataview** —lo que #60 prohibió para los roll-ups, y con más fuerza acá: el
-> catálogo es lo primero que un agente abre, y un bloque ```dataview``` le muestra **la query, no
-> sus resultados**, con el plugin sin versionar—. El efecto medido: el bookkeeping de los skills
+> artefacto **100 % Dataview** —lo que #60 prohibió para los roll-ups (el porqué, abajo), y con más
+> fuerza acá: el catálogo es lo primero que un agente abre—. El efecto medido: el bookkeeping
 > mandaba *«agregar la estrella a `index.md`»* sobre un archivo **sin una sola línea estática**, así
 > que no se podía cumplir. Hoy las tres tablas se materializan por verdad de frontmatter, el
 > Dataview queda **debajo** como comodidad, y el lint reporta el índice desactualizado **nombrando los
@@ -260,7 +259,7 @@ genérica, dinámica, ausencia de tránsito, debris, astrosismología, habitabil
 paper y se consulta por la tabla `## Papers`. No re-narrar en la ficha lo que ya está en la
 extracción.
 
-#### Los tres roll-ups se ESTAMPAN, no son Dataview (D-10/D-11)
+#### Los cuatro roll-ups se ESTAMPAN, no son Dataview (D-10/D-11)
 
 `## Papers`, `## Planetas` y `## Métodos aplicados a esta estrella` los regenera
 `python scripts/make_notes.py <slug>` (idempotente, cirugía: no toca la prosa); el lint reporta como
@@ -274,6 +273,12 @@ síntesis de 8. El **estado** dice cuán lejos llegó cada paper (`fuera del fil
 `thesis_links`, con la columna *Entró por* (D-24: esas dos llaves viven en papers distintos), y
 lleva **las mismas dos garantías** (#300): se habían aplicado sólo a `stars/` y el defecto seguía
 vivo acá (un concepto cerrado prometía 89 arriba de una síntesis de 30, 57 reclamados sin leer).
+
+⛔ **El cuarto es la MATRIZ método × estrella** (`--restamp-matrix`, #429): fila = método por clave
+normalizada, columna = ficha, celda = los `[[bibcode]]` de los papers **de esa estrella** que lo
+declaran en `methods`; `—` = *ninguno en este corpus lo declara*, afirmación **negativa**, así que la
+sección declara su alcance (D-34). ⚠ **No** espeja `methods_applied.literature` —sin clave de join
+con `methods`—: llenarla a mano publicaba **huecos falsos**.
 
 El motivo (#60): un bloque ```dataview``` le muestra a un agente que abre el `.md` **la query, no
 sus resultados**, y el plugin ni está versionado. El equivalente determinista parsea el frontmatter

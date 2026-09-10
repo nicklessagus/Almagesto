@@ -179,6 +179,9 @@
 ## 🗂 `index.md` desactualizado contra la verdad de disco (#237, backlog) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## 🗂 Matriz método × estrella desactualizada contra la extracción (#429, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## 🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
