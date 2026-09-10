@@ -2061,6 +2061,46 @@ def check_index_stale(todos_fm: dict) -> list:
     return indice_viejo
 
 
+def check_matrix_stale(todos_fm: dict) -> list:
+    """`matriz_vieja` — the stamped method × star matrix against the extraction on disk (#429).
+
+    Same criterion as the other three roll-ups (D-10): a materialised table that no longer reflects
+    its universe is backlog, and the report **names what is missing** instead of a count difference.
+    The matrix used to promise «la mantiene el LLM en cada `ingest-star`» over something that was
+    not derivable —`methods_applied.literature` is curated by the agent and `methods` is populated
+    by the extraction, with no join key— so the bookkeeping step could not be carried out and the
+    file kept its empty-vault text after two closed stars. Same family as the 100 % Dataview
+    `index.md` of #237.
+
+    ⚠ The `> Alcance` line is excluded from the comparison by `mn.matrix_seen`: it carries the date.
+    """
+    matriz_vieja: list = []
+    dest = cfg.MATRICES / f"{mn.MATRIX_STEM}.md"
+    if not dest.exists():
+        return matriz_vieja           # una bóveda sin matriz no tiene nada que estar desactualizado
+    texto = dest.read_text(encoding="utf-8")
+    esperado = mn.matrix_table(mn.matrix_rows(fms=todos_fm))
+    cuerpo_e, etq_e = mn.matrix_seen(esperado)
+    span = cfg.section_span(texto, mn.MATRIX_HEADER)
+    if span is None:
+        matriz_vieja.append((mn.MATRIX_STEM, f"sin la sección `{mn.MATRIX_HEADER}`: la matriz no "
+                                             "se estampó nunca → `python scripts/make_notes.py "
+                                             "--restamp-matrix`"))
+        return matriz_vieja
+    cuerpo_v, etq_v = mn.matrix_seen(texto[span[0]:span[1]])
+    if cuerpo_v == cuerpo_e:
+        return matriz_vieja
+    faltan, sobran = sorted(etq_e - etq_v), sorted(etq_v - etq_e)
+    detalle = ((f" — faltan: {', '.join(faltan[:8])}" if faltan else "")
+               + (f" — sobran: {', '.join(sobran[:8])}" if sobran else "")
+               # Mismas filas y celdas distintas: el universo no cambió de métodos pero sí de
+               # papers. Decirlo evita el mensaje mudo «desactualizada» sin nada que mirar.
+               or " — las mismas filas con celdas distintas")
+    matriz_vieja.append((mn.MATRIX_STEM, "matriz método × estrella desactualizada" + detalle
+                         + " → `python scripts/make_notes.py --restamp-matrix`"))
+    return matriz_vieja
+
+
 def check_lens_broken(obj_err) -> list:
     """`lente_rota` — the objective parses, has a real name, and classifies NOTHING (AUD-56).
 
@@ -5160,7 +5200,7 @@ def check_note_links(stem: str, f, text: str, names, fulltext: dict, incoming: d
         # ser huérfano y el detector —que BLOQUEA— quedaba en 0 permanente. Mismo criterio con
         # que las secciones estampadas quedan fuera del fan-out y del detector de fuga (#214):
         # metadata derivada no es evidencia. Lo cazó el corpus sintético al mover el golden.
-        if tgt in incoming and stem != "index":
+        if tgt in incoming and stem not in ("index", mn.MATRIX_STEM):
             incoming[tgt] += 1
         elif tgt not in names:
             # @inv INV-02
@@ -5799,6 +5839,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     fuente_metadata_dudosa: list = []  # (key, motivo) — #353: título ≠, primera página no confirma, no evaluable o sin cruzar
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     indice_viejo: list = []            # (stem, motivo) — #237: index.md contra la verdad de disco
+    matriz_vieja: list = []            # (stem, motivo) — #429: la matriz contra la extracción
     radio_sin_link: list = []          # (stem, motivo) — #235: hub que nombra un radio sin wikilink
     sin_abstract: list = []            # (stem, motivo) — #277: nota de paper sin `## Abstract`
     sin_conclusiones: list = []        # (stem, motivo) — #277: sin `## Conclusiones` ni exención
@@ -6539,6 +6580,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # El índice desactualizado vive en `check_index_stale` (#396).
     indice_viejo += check_index_stale(todos_fm)
 
+    # La matriz método × estrella desactualizada vive en `check_matrix_stale` (#429).
+    matriz_vieja += check_matrix_stale(todos_fm)
+
     # La colisión de clave sintética vive en `check_source_key_collision` (#396) y la
     # procedencia de `sources:`, en `check_sources_provenance`.
     bad_sources += check_source_key_collision()
@@ -6679,6 +6723,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('verif_truncada', '✂ Celda del bloque de verificación truncada: se tiró lo que el fan-out encontró (#226, backlog)', SEV_BACKLOG, tuple(verif_truncada), poblacion='entidades'),
         Categoria('verif_sin_localizador', '✂ Evidencia sin localizador: el cruce de #122 NO se pudo evaluar en esa fila (#226, backlog)', SEV_BACKLOG, tuple(verif_sin_localizador), poblacion='entidades'),
         Categoria('indice_viejo', '🗂 `index.md` desactualizado contra la verdad de disco (#237, backlog)', SEV_BACKLOG, tuple(indice_viejo), poblacion='notas'),
+        Categoria('matriz_vieja', '🗂 Matriz método × estrella desactualizada contra la extracción (#429, backlog)', SEV_BACKLOG, tuple(matriz_vieja), poblacion='papers'),
         Categoria('radio_sin_link', '🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog)', SEV_BACKLOG, tuple(radio_sin_link), poblacion='entidades'),
         Categoria('cita_log', '❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog)', SEV_BACKLOG, tuple(cita_log), poblacion='notas'),
         Categoria('cita_inventada', '❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318, BLOQUEA con `--cierre`)', SEV_CIERRE, tuple(cita_inventada), poblacion='citas'),

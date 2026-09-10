@@ -2922,6 +2922,35 @@ def note_names() -> set:
 TOPE_METODOS = 40
 
 
+def method_label(variantes: list, names: set, idx: dict) -> str:
+    """The cell that NAMES a method group: its destination link plus the spellings that add info.
+
+    ⛔ ONE implementation for the two roll-ups that publish a method — `metodos_table` (D-11) and
+    `matrix_table` (#429) — because "how does a method name resolve to a page" is exactly the rule
+    that grows a second, subtly different copy at the second call site (#222/#324/#409).
+
+    ⚠ The link is stamped **only if the note exists** —by stem or by the concept's `aliases`
+    (#245)—; otherwise the spelling goes as code. `methods` is populated by the EXTRACTION and the
+    notes of `concepts/methods/` are created by `ingest-theme`, another operation: an unconditional
+    link left dozens of broken wikilinks —blocking— that could not be closed inside the operation
+    that created them.
+
+    ⛔ The extractor's spelling is never rewritten: the group is keyed by `method_key` and the
+    variants are shown next to the link (#243 — normalise when COMPARING, never when writing).
+    ⚠ The alias-link `[[stem|texto]]` is NOT used: a `|` inside a cell has to be escaped
+    (#240/#227) and one escape too many splits the row.
+    """
+    principal = variantes[0]
+    destino = principal if principal in names else cfg.method_target(principal, idx)
+    etiqueta = (f"[[{principal}]]" if destino == principal else
+                f"[[{destino}]]" if destino else "")
+    # Las variantes se muestran sólo cuando AGREGAN algo: si la única es el nombre del destino,
+    # repetirla es ruido en una tabla que #273 existe para achicar.
+    extras = [v for v in variantes if v != destino]
+    variantes_txt = " · ".join(f"`{cfg.escape_cell(v)}`" for v in extras)
+    return " · ".join(x for x in (etiqueta, variantes_txt) if x)
+
+
 def metodos_table(rows: list, names: set | None = None, tope: int = TOPE_METODOS) -> str:
     """`## Métodos aplicados a esta estrella` materializada (D-11 / INV-81), **agrupada** (#273).
 
@@ -2962,18 +2991,7 @@ def metodos_table(rows: list, names: set | None = None, tope: int = TOPE_METODOS
     def _fila(clave: str) -> str:
         """One row: the destination link, the spellings the extractors used, and the two counts."""
         g = grupos[clave]
-        principal = g["variantes"][0]
-        destino = principal if principal in names else cfg.method_target(principal, idx)
-        # ⚠ El alias-link `[[stem|texto]]` NO se usa: el `|` dentro de una celda hay que escaparlo
-        # (#240/#227) y un escape de más parte la fila. Se linkea el destino y las variantes van al
-        # lado como código — que además deja ver POR QUÉ resolvió ahí.
-        etiqueta = (f"[[{principal}]]" if destino == principal else
-                    f"[[{destino}]]" if destino else "")
-        # Las variantes se muestran sólo cuando AGREGAN algo: si la única es el nombre del
-        # destino, repetirla es ruido en una tabla que este issue existe para achicar.
-        extras = [v for v in g["variantes"] if v != destino]
-        variantes = " · ".join(f"`{cfg.escape_cell(v)}`" for v in extras)
-        celda = " · ".join(x for x in (etiqueta, variantes) if x)
+        celda = method_label(g["variantes"], names, idx)
         anios = sorted(g["anios"])
         rango = "—" if not anios else (anios[0] if anios[0] == anios[-1]
                                        else f"{anios[0]}-{anios[-1]}")
@@ -3118,6 +3136,187 @@ def _ensure_section(dest, header: str, antes: str) -> bool:
         return False
     cfg.write_text_atomic(dest, text[:i] + f"{header}\n_(se estampa determinista.)_\n\n" + text[i:])
     return True
+
+
+#: #429 · el CUARTO roll-up estampado. Vive en `vault/wiki/matrices/method_star.md`, que es un
+#: archivo de instancia (`merge=ours`): su contenido depende del corpus, no del template.
+MATRIX_STEM = "method_star"
+MATRIX_HEADER = "## Matriz método × estrella"
+
+
+def matrix_rows(fms: dict | None = None) -> dict:
+    """The matrix's two axes, from ONE sweep of `papers/` (#429).
+
+    Returns `{"estrellas": [(slug, name, n_con_methods)], "metodos": {clave: {"variantes": [...],
+    "estrellas": {slug: [stem, ...]}}}}` — the columns (star notes on disk, with how many of their
+    papers declare `methods` at all) and the rows (one per `cfg.method_key`, with the spellings the
+    extractors used and, per star, the papers that declare it).
+
+    ⛔ It is derived from the EXTRACTION (`methods` of each paper), never from
+    `methods_applied.literature`: those two fields are populated by different people —the curating
+    agent and one LLM per paper, open vocabulary (#243)— and there is no join key between them.
+    Measured on an instance with two closed stars: **23 of 42** declared methods match no paper of
+    their subject by `method_key`, and the row axis mixes languages across fichas
+    (`GLS periodogram` ↔ `periodograma GLS`). Filling the matrix from the ficha published FALSE
+    holes, and a false `—` is looked at by no verification layer.
+
+    ⚠ `fms` is the `{stem: frontmatter}` cache the caller already parsed (same contract as
+    `index_tables`): without it the lint re-parses the whole vault on every run.
+    """
+    def _fm(f):
+        """El frontmatter de esa nota: el que el llamador ya parseó, o uno recién leído."""
+        if fms is not None and f.stem in fms:
+            return fms[f.stem]
+        return cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+
+    # Las columnas son las fichas EN DISCO (mismo criterio que `index_tables`), no las claves de
+    # `stars.yaml`: una estrella declarada y sin ficha no tiene a dónde linkear la columna.
+    por_nombre: dict = {}
+    estrellas: list = []
+    for f in cfg.note_paths(cfg.STARS):
+        fm = _fm(f)
+        try:
+            nombre, _meta = cfg.star_by_slug(f.stem)
+        except (KeyError, RuntimeError, OSError, yaml.YAMLError):
+            nombre = fm.get("name") or f.stem
+        estrellas.append([f.stem, nombre, 0])
+        por_nombre.setdefault(nombre, []).append(f.stem)
+    n_con_methods: dict = {}
+    metodos: dict = {}
+    for f in cfg.note_paths(cfg.PAPERS):
+        fm = _fm(f)
+        slugs = sorted({s for n in cfg.as_list(fm.get("stars"))
+                        for s in por_nombre.get(str(n), [])})
+        nombres = [str(m) for m in cfg.as_list(fm.get("methods")) if cfg.method_key(m)]
+        for s in slugs:
+            if nombres:
+                n_con_methods[s] = n_con_methods.get(s, 0) + 1
+        for m in nombres:
+            g = metodos.setdefault(cfg.method_key(m), {"variantes": [], "estrellas": {}})
+            if m not in g["variantes"]:
+                g["variantes"].append(m)
+            for s in slugs:
+                g["estrellas"].setdefault(s, set()).add(f.stem)
+    for g in metodos.values():
+        g["estrellas"] = {s: sorted(v) for s, v in sorted(g["estrellas"].items())}
+    for fila in estrellas:
+        fila[2] = n_con_methods.get(fila[0], 0)
+    return {"estrellas": [tuple(e) for e in estrellas], "metodos": metodos}
+
+
+def matrix_scope(estrellas: list, fecha: str) -> str:
+    """The `> Alcance …` line of the matrix — what its `—` is allowed to mean (#429, D-34/#342).
+
+    A `—` is a NEGATIVE claim, and a negative claim without declared scope reads as universal: «this
+    method was never applied to this star». What the matrix can actually say is «no paper of this
+    star **in this corpus, at this date** declares it in its `methods`». Nothing else checks it —
+    `verify-citations` goes claim↔source and `find-contradictions` claim↔claim, and both start from
+    a citation, which a `—` does not have."""
+    por_estrella = (" · ".join(f"`{s}` {c}" for s, _n, c in estrellas) if estrellas
+                    else "sin fichas de estrella")
+    return (f"> Alcance {fecha} · papers con `methods` poblado: {por_estrella}. "
+            f"`—` = ningún paper de esa estrella **en este corpus** lo declara en su `methods`; "
+            f"NO significa «no se aplicó nunca» (#429).")
+
+
+def matrix_seen(texto: str) -> tuple:
+    """What a stamped matrix section SAYS: `(cuerpo sin la línea de alcance, etiquetas de fila)`.
+
+    ⛔ ONE implementation, read by the lint on BOTH sides —the section on disk and what
+    `matrix_table` produces today— so «what is a row of the matrix» does not grow a second, subtly
+    different copy at the reader (#222/#324/#409).
+
+    ⚠ The `> Alcance …` line is dropped before comparing: it carries the DATE, which moves on its
+    own, so comparing it would report every matrix as stale the day after it was stamped. What the
+    date documents is the scope of the `—`, not the table's freshness."""
+    lineas = [ln for ln in str(texto or "").split("\n") if not ln.lstrip().startswith("> Alcance ")]
+    etiquetas = set()
+    for ln in lineas:
+        if not ln.startswith("|"):
+            continue
+        etiqueta = ln.split("|")[1].strip()
+        # Lo que NO es una fila de método: el encabezado y todo lo que sólo tenga guiones, dos
+        # puntos o espacios — el separador en cualquiera de sus grafías (`|---|`, `| --- |`) y la
+        # primera celda VACÍA, que cae en el mismo test porque el conjunto vacío es subconjunto de
+        # todo. Nombrar cualquiera de ellas como «método que falta» mandaría a estampar contra un
+        # fantasma y el hallazgo del lint dejaría de ser accionable.
+        if etiqueta == "Método" or set(etiqueta) <= set("-: "):
+            continue
+        etiquetas.add(etiqueta)
+    return "\n".join(lineas).strip(), etiquetas
+
+
+def matrix_table(datos: dict, names: set | None = None, tope: int = TOPE_METODOS,
+                 fecha: str | None = None, idx: dict | None = None) -> str:
+    """`## Matriz método × estrella` materialised from the extraction (#429, D-10/D-11).
+
+    Row = method by `cfg.method_key`, column = star, cell = the `[[bibcode]]` of the papers OF THAT
+    STAR whose extraction declares the method. The header carries the two counts and the scope line
+    (`matrix_scope`), and the tail beyond `tope` collapses into a `<details>` that **declares how
+    many are inside** (#273/#107: the cut is declared, never silent).
+
+    Until #429 the file promised «la mantiene el LLM en cada `ingest-star`» over an artefact that
+    could not be written: the same family as the 100 % Dataview `index.md` of #237 — a bookkeeping
+    step nobody could carry out, and the matrix still carried its empty-vault text after two closed
+    stars."""
+    names = note_names() if names is None else names
+    idx = cfg.concept_alias_index() if idx is None else idx
+    fecha = fecha or _dt.date.today().isoformat()
+    estrellas, metodos = datos.get("estrellas") or [], datos.get("metodos") or {}
+    out = [f"{MATRIX_HEADER} ({len(metodos)} método(s) · {len(estrellas)} estrella(s))", "",
+           matrix_scope(estrellas, fecha), ""]
+    if not estrellas or not metodos:
+        # ⛔ El vacío se DECLARA con su motivo: los dos ceros piden acciones opuestas (ingestar una
+        # estrella / extraer los papers), y salían idénticos como una tabla en blanco.
+        out += ["_(sin filas: " + ("no hay fichas de estrella en `vault/wiki/stars/`"
+                                   if not estrellas else
+                                   "ningún paper de esas estrellas declara `methods` todavía")
+                + ".)_", ""]
+        return "\n".join(out)
+
+    cab = "| Método | " + " | ".join(f"[[{s}]]" for s, _n, _c in estrellas) + " |"
+    sep = "|---|" + "---|" * len(estrellas)
+
+    def _fila(clave: str) -> str:
+        """One row: the method label plus, per star, the papers of that star that declare it."""
+        g = metodos[clave]
+        celdas = []
+        for s, _n, _c in estrellas:
+            stems = g["estrellas"].get(s) or []
+            celdas.append(" · ".join(f"[[{b}]]" for b in stems) if stems else "—")
+        return f"| {method_label(g['variantes'], names, idx)} | " + " | ".join(celdas) + " |"
+
+    orden = sorted(metodos, key=lambda k: (-sum(len(v) for v in metodos[k]["estrellas"].values()), k))
+    cabeza, cola = orden[:tope], orden[tope:]
+    out += [cab, sep] + [_fila(k) for k in cabeza] + [""]
+    if cola:
+        out += [f"<details><summary>{len(cola)} método(s) más, con menos papers</summary>", "",
+                cab, sep] + [_fila(k) for k in cola] + ["", "</details>", ""]
+    return "\n".join(out)
+
+
+def restamp_matrix() -> int:
+    """Materialise the method × star matrix from disk (#429). Idempotent, surgical.
+
+    Creates the section if the note does not have it —same reason as `restamp_index`: this is a
+    machine-stamped catalogue, so a vault whose matrix never had the heading could not recover it
+    with the stamper and the lint would report it forever with a manual-only fix. The prose above it
+    is not touched."""
+    dest = cfg.MATRICES / f"{MATRIX_STEM}.md"
+    if not dest.exists():
+        cfg.print_seguro(f"no hay {dest} — nada que estampar")
+        return 0
+    texto = dest.read_text(encoding="utf-8")
+    if cfg.section_start(texto, MATRIX_HEADER) < 0:
+        cfg.write_text_atomic(dest, texto.rstrip("\n")
+                              + f"\n\n{MATRIX_HEADER}\n\n_(pendiente de estampar)_\n")
+        cfg.print_seguro(f"{MATRIX_STEM}.md: sección `{MATRIX_HEADER}` creada")
+    datos = matrix_rows()
+    cambio = _reemplazar_seccion(dest, MATRIX_HEADER, matrix_table(datos))
+    cfg.print_seguro(f"{MATRIX_STEM}.md: {len(datos['metodos'])} método(s) × "
+                     f"{len(datos['estrellas'])} estrella(s) — "
+                     f"{'actualizada' if cambio else 'ya estaba al día'}")
+    return 0
 
 
 def stamp_star_rollups(slug: str, dest) -> bool:
@@ -4352,6 +4551,14 @@ def main() -> int:
                          "de bookkeeping mandaba «agregar el concepto» a un archivo sin una sola "
                          "línea estática. Idempotente, cirugía: no toca `## Matrices` ni la prosa. "
                          "No requiere slug.")
+    ap.add_argument("--restamp-matrix", action="store_true", dest="restamp_matrix",
+                    help="#429: materializa `vault/wiki/matrices/method_star.md` desde la "
+                         "EXTRACCIÓN (fila = método por clave normalizada, columna = estrella, "
+                         "celda = los papers de esa estrella que lo declaran en `methods`). La "
+                         "matriz prometía «la mantiene el LLM» y no era derivable: "
+                         "`methods_applied.literature` y `methods` son dos vocabularios sin clave "
+                         "de join, y llenarla publicaba huecos FALSOS. Idempotente, cirugía. "
+                         "No requiere slug.")
     ap.add_argument("--fix-header-order", action="store_true", dest="fix_header_order",
                     help="migrador #378: en las notas de paper donde el aviso de capa LLM quedó "
                          "ENTRE el H1 y la línea de cabecera, lo baja debajo de ella. Idempotente; "
@@ -4477,6 +4684,8 @@ def main() -> int:
         return restamp_keywords()
     if args.restamp_index:
         return restamp_index()
+    if args.restamp_matrix:
+        return restamp_matrix()
     if args.fix_header_order:
         fix_header_order()
         return 0
@@ -4568,6 +4777,7 @@ def main() -> int:
         return 0
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
+                 "--restamp-index, --restamp-matrix, "
                  "--restamp-headers, --restamp-abstracts, --fill-abstracts, --restamp-vista-stub, "
                  "--restamp-transcribed-note, "
                  "--restamp-alcance, --restamp-lente, --clean-catalog-markup, "

@@ -226,3 +226,18 @@ tocarle un párrafo con cita → aparece, con el extracto del párrafo. **Devolv
 hallazgo cuya edición SÍ tocó la prosa (sub-disparo: es la dirección prohibida), o si una nota
 sana empieza a salir con la salvedad «no se pudo aislar la prosa».
 
+## #429 · v1.254.0 — guía §2o
+
+La instancia tiene **dos estrellas cerradas** (`gj_581`, `hd_40307`), que es el corpus donde se midió
+el defecto. **Validar:** `python scripts/lint.py` ANTES → *Matriz método × estrella desactualizada*
+con 1 hallazgo (la matriz sigue con el texto de bóveda vacía y sin la sección estampada);
+`python scripts/make_notes.py --restamp-matrix` → una tabla con **dos columnas** (`[[gj_581]]`,
+`[[hd_40307]]`), una fila por `method_key` de los `methods` de sus papers, la línea `> Alcance …`
+con el N de papers con `methods` poblado por estrella, y la cola colapsada en un `<details>` que
+declara cuántos métodos quedaron adentro; correrlo **dos veces** → la segunda no cambia un byte
+(red 6); `lint.py` DESPUÉS → la categoría en 0 y **sin wikilinks rotos nuevos** (el método sin nota
+destino tiene que salir como código, no como `[[link]]`). **Devolver si** aparece una fila cuyo
+método viene de `methods_applied.literature` y no de la extracción (sería el hueco falso de vuelta),
+si un `—` sale sin la línea de alcance que lo acota, o si un concepto que era huérfano deja de
+reportarse (la matriz estampada **no** cuenta como link entrante, #249). **Al cerrar:** cuántas filas
+y columnas quedaron, y cuántos métodos salieron como código por no tener nota destino.

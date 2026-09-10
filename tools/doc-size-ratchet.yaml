@@ -29,9 +29,9 @@
 # `crecimientos` con fecha, ancla y motivo. Lo que sigue prohibido es que el archivo crezca sin que
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
-medido_en: "2026-09-06"
-techo_lineas: 1783
-techo_bytes: 143800
+medido_en: "2026-09-09"
+techo_lineas: 1788
+techo_bytes: 144200
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -344,3 +344,25 @@ crecimientos:
       con el error ya identificado y anotado en el `log`.
     techo_lineas: 1783
     techo_bytes: 143800
+  - fecha: "2026-09-09"
+    ancla: "#429"
+    motivo: >-
+      La matriz método × estrella pasa a ser el CUARTO roll-up estampado, y eso cambia una regla de
+      escritura: dejó de ser curación del agente y no espeja `methods_applied.literature` (los dos
+      campos no tienen clave de join — medido, 23 de 42 métodos declarados sin ningún paper que
+      matchee), así que llenarla a mano publicaba huecos FALSOS y el `—` necesita alcance declarado
+      (D-34). Cinco líneas. Se comprimió primero: el porqué de #60 estaba duplicado en el
+      blockquote de `index.md` y en la sección de roll-ups, que es su casa — quedó el puntero
+      (-3 líneas). El caso medido vive en el issue.
+    techo_lineas: 1781
+    techo_bytes: 143443
+  - fecha: "2026-09-09"
+    ancla: "#429"
+    motivo: >-
+      Ajuste del MERGE, no una regla nueva: #427/#428/#430 y #429 subieron el techo cada uno por su
+      cuenta en ramas paralelas —el segundo midió contra una base que no tenía las líneas del
+      primero— y al integrarlas conviven las cuatro reglas. El archivo queda en 1788/144109 contra
+      el techo de 1783 de #428, que no había visto la línea de #429. Suba mínima para que las
+      cuatro entren. (Mismo caso que el ajuste de #344 del 2026-08-31.)
+    techo_lineas: 1788
+    techo_bytes: 144200

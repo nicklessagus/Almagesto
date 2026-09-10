@@ -5612,3 +5612,239 @@ def test_el_estampado_del_eprint_se_queda_con_el_ARXIV_ID_que_leyo(toy_vault):
              header="arXiv:2306.11263v2 [astro-ph.EP] 5 Jan 2023\n")
     mn.stamp_fulltext(otro, "2021arx....9..9Y", "test_star")
     assert read_fm(otro)["arxiv_id"] == "2101.00001", "no pisa el que ya estaba"
+
+
+# ── #429 · la matriz método × estrella se ESTAMPA ────────────────────────────────────────────────
+#
+# La matriz prometía en su encabezado que «la mantiene el LLM en cada `ingest-star`» y que espeja
+# `methods_applied.literature`. No era cumplible: ese campo lo cura el agente al sintetizar la ficha
+# y `methods` lo puebla la extracción con vocabulario abierto — no hay clave de join (medido: 23 de
+# 42 métodos declarados sin ningún paper que matchee por `method_key`, y el eje de filas mezclando
+# idiomas entre fichas). Llenarla mecánicamente publicaba huecos FALSOS, y un `—` falso no lo mira
+# ninguna capa de verificación. Misma familia que el `index.md` 100 % Dataview de #237.
+
+def _matriz_semilla(toy_vault, cuerpo: str = "# Matriz\n\nprosa a mano que no se toca\n"):
+    """El archivo de la matriz como lo trae la semilla del template: prosa y sin la sección."""
+    dest = toy_vault.MATRICES / "method_star.md"
+    dest.write_text(f"---\ntags: [matrix]\n---\n\n{cuerpo}", encoding="utf-8")
+    return dest
+
+
+def _celda_matriz(tabla: str, metodo: str, slug: str) -> str:
+    """La celda `(método, estrella)` de la matriz estampada — leída por el ENCABEZADO, no por
+    posición: las columnas van en orden alfabético de slug y un test que la cuente a mano se rompe
+    al agregar una estrella (y peor: podría pasar mirando la columna equivocada)."""
+    cab = [l for l in tabla.splitlines() if l.startswith("| Método |")][0]
+    col = [c.strip() for c in cab.strip("|").split("|")].index(f"[[{slug}]]")
+    fila = [l for l in tabla.splitlines() if l.startswith(f"| {metodo} |")][0]
+    return [c.strip() for c in fila.strip("|").split("|")][col]
+
+
+def _dos_estrellas(toy_vault):
+    """Dos fichas de estrella con su entrada en `stars.yaml` — las dos columnas de la matriz."""
+    write_yaml(toy_vault.STARS_YAML, {
+        "Estrella Test": {"slug": "test_star", "simbad": "tst Star", "ads_object": "Test Star",
+                          "aliases": [], "data_local": None},
+        "Otra Test": {"slug": "otra_star", "simbad": "otr Star", "ads_object": "Otra Star",
+                      "aliases": [], "data_local": None}})
+    for slug, name in (("test_star", "Estrella Test"), ("otra_star", "Otra Test")):
+        mk_note(toy_vault.STARS, slug, {"tags": ["star"], "name": name, "slug": slug}, "")
+
+
+def test_la_matriz_cruza_metodo_por_estrella_desde_la_extraccion(toy_vault):
+    """(1) Dos papers de dos estrellas con `methods` solapados → UNA fila y las dos columnas
+    pobladas. Es lo que la matriz existe para publicar: qué papers respaldan el método en cada
+    estrella, derivado de la extracción y no de la curación de la ficha."""
+    _dos_estrellas(toy_vault)
+    _paper("2020aaa...1..1A", stars=("Estrella Test",), methods=["gp", "mcmc"])
+    _paper("2021bbb...2..2B", stars=("Otra Test",), methods=["gp"])
+    tabla = mn.matrix_table(mn.matrix_rows(), names=set(), fecha="2026-01-01")
+    filas = [l for l in tabla.splitlines() if l.startswith("| `gp`")]
+    assert len(filas) == 1, f"`gp` tiene que dar UNA fila, no {len(filas)}: {filas}"
+    assert "[[2020aaa...1..1A]]" in filas[0] and "[[2021bbb...2..2B]]" in filas[0], \
+        f"la fila de `gp` no puebla las dos columnas: {filas[0]}"
+    assert _celda_matriz(tabla, "`mcmc`", "otra_star") == "—", \
+        "`mcmc` sólo lo declara un paper de test_star"
+    assert _celda_matriz(tabla, "`mcmc`", "test_star") == "[[2020aaa...1..1A]]"
+
+
+def test_la_matriz_agrupa_por_clave_y_conserva_las_dos_grafias(toy_vault):
+    """(2) `PCA` y `pca` son el MISMO método: una fila con las dos variantes al lado.
+
+    ⛔ Se normaliza al COMPARAR, nunca al escribir (#243): la grafía que eligió cada extractor es
+    información sobre cómo lo nombra el paper. Comparando el string crudo la matriz subdeclararía su
+    propio universo en silencio, que es justo lo que D-10 existe para evitar."""
+    _dos_estrellas(toy_vault)
+    _paper("2020aaa...1..1A", stars=("Estrella Test",), methods=["PCA"])
+    _paper("2021bbb...2..2B", stars=("Otra Test",), methods=["pca"])
+    tabla = mn.matrix_table(mn.matrix_rows(), names=set(), fecha="2026-01-01")
+    filas = [l for l in tabla.splitlines() if "PCA" in l or "pca" in l]
+    assert len(filas) == 1, f"`PCA`/`pca` se contaron como dos métodos: {filas}"
+    assert "`PCA`" in filas[0] and "`pca`" in filas[0], \
+        f"se normalizó al escribir y se perdió una grafía: {filas[0]}"
+    assert "(1 método(s)" in tabla, "el encabezado cuenta grafías y no métodos"
+
+
+def test_el_metodo_sin_nota_destino_va_como_codigo_y_no_como_wikilink_roto(toy_vault):
+    """(3) `methods` lo puebla la extracción y las notas de `concepts/methods/` las crea
+    `ingest-theme`, que es OTRA operación (#245). Con el link incondicional, seguir `ingest-star` al
+    pie de la letra dejaba wikilinks rotos —bloqueantes— imposibles de cerrar dentro de la operación
+    que los creó. El que SÍ tiene nota se linkea."""
+    _dos_estrellas(toy_vault)
+    mk_note(toy_vault.CONCEPTS / "methods", "gp",
+            {"tags": ["concept"], "name": "gp", "aliases": ["proceso gaussiano"]}, "")
+    _paper("2020aaa...1..1A", stars=("Estrella Test",),
+           methods=["gp", "metodo-sin-nota", "proceso gaussiano"])
+    tabla = mn.matrix_table(mn.matrix_rows(), fecha="2026-01-01")
+    assert "| [[gp]] |" in tabla, "el método con nota propia tiene que ir linkeado"
+    assert "[[proceso gaussiano]]" not in tabla, "el alias resuelve al stem, no inventa una página"
+    assert "[[gp]] · `proceso gaussiano`" in tabla, "el alias resuelve por `aliases` del concepto"
+    assert "| `metodo-sin-nota` |" in tabla, "el método sin destino tiene que ir como código"
+    assert "[[metodo-sin-nota]]" not in tabla, "wikilink roto: la nota destino no existe"
+
+
+def test_el_guion_de_la_matriz_declara_su_alcance(toy_vault):
+    """(4) La estrella sin ningún paper que declare el método da `—`, y la cabecera declara su N.
+
+    Un `—` es una afirmación NEGATIVA y no lleva `[[bibcode]]`, así que no la mira ninguna capa
+    (D-34/#342). Sin el alcance se lee como «no se aplicó nunca», que es el hueco falso que #429
+    midió: lo que la matriz puede afirmar es «ningún paper de esta estrella EN ESTE CORPUS lo
+    declara en su `methods`»."""
+    _dos_estrellas(toy_vault)
+    _paper("2020aaa...1..1A", stars=("Estrella Test",), methods=["gp"])
+    _paper("2021bbb...2..2B", stars=("Otra Test",))          # sin `methods`: no cuenta en el N
+    tabla = mn.matrix_table(mn.matrix_rows(), names=set(), fecha="2026-01-01")
+    assert _celda_matriz(tabla, "`gp`", "otra_star") == "—", \
+        "otra_star no tiene ningún paper que declare `gp`"
+    alcance = [l for l in tabla.splitlines() if l.startswith("> Alcance ")][0]
+    assert "2026-01-01" in alcance, "el alcance sin fecha no acota nada"
+    assert "`otra_star` 0" in alcance and "`test_star` 1" in alcance, \
+        f"el alcance no nombra el N de cada estrella: {alcance}"
+    assert "NO significa" in alcance, "el alcance no dice qué NO significa el `—`"
+
+
+def test_restamp_matrix_crea_la_seccion_es_idempotente_y_no_toca_la_prosa(toy_vault, monkeypatch):
+    """(5) Red 6 — cirugía: crea la sección si falta (como `restamp_index`), no toca la prosa de
+    arriba, y la segunda corrida no cambia un byte."""
+    _dos_estrellas(toy_vault)
+    _paper("2020aaa...1..1A", stars=("Estrella Test",), methods=["gp"])
+    dest = _matriz_semilla(toy_vault)
+    assert run_main(monkeypatch, ["--restamp-matrix"]) == 0
+    texto = dest.read_text(encoding="utf-8")
+    assert "prosa a mano que no se toca" in texto, "la cirugía pisó la prosa de arriba"
+    assert mn.MATRIX_HEADER in texto and "[[2020aaa...1..1A]]" in texto
+    antes = dest.read_bytes()
+    assert run_main(monkeypatch, ["--restamp-matrix"]) == 0
+    assert dest.read_bytes() == antes, "no es idempotente: la segunda corrida reescribió el archivo"
+
+
+def test_la_matriz_declara_el_corte_de_su_cola(toy_vault):
+    """#273/#107 — el tope de filas es DECLARADO, nunca silencioso: un corte que nadie anuncia es
+    cómo se saca una conclusión estructural de un truncamiento."""
+    _dos_estrellas(toy_vault)
+    _paper("2020aaa...1..1A", stars=("Estrella Test",), methods=[f"m{i:02d}" for i in range(5)])
+    tabla = mn.matrix_table(mn.matrix_rows(), names=set(), tope=2, fecha="2026-01-01")
+    assert "<details><summary>3 método(s) más" in tabla, \
+        "la cola quedó cortada sin declarar cuántos hay adentro"
+    assert sum(1 for l in tabla.splitlines() if l.startswith("| `m")) == 5, \
+        "el `<details>` se comió filas en vez de colapsarlas"
+
+
+def test_la_matriz_no_se_apoya_en_methods_applied_de_la_ficha(toy_vault):
+    """El hecho que abrió #429: `methods_applied.literature` y `methods` son dos vocabularios sin
+    clave de join. La matriz publica el SEGUNDO y no cruza el primero — si lo cruzara, los 23 de 42
+    que no matchean saldrían como huecos falsos."""
+    _dos_estrellas(toy_vault)
+    dest = toy_vault.STARS / "test_star.md"
+    fm = dest.read_text(encoding="utf-8").replace(
+        "slug: test_star", "slug: test_star\nmethods_applied:\n  literature: [periodograma GLS]\n"
+                           "  ours: []")
+    dest.write_text(fm, encoding="utf-8")
+    _paper("2020aaa...1..1A", stars=("Estrella Test",), methods=["gp"])
+    tabla = mn.matrix_table(mn.matrix_rows(), names=set(), fecha="2026-01-01")
+    assert "periodograma GLS" not in tabla, \
+        "la matriz volvió a espejar la curación de la ficha: eso publica huecos falsos"
+    assert "`gp`" in tabla, "la matriz tiene que publicar lo que declara la extracción"
+
+
+def test_matrix_seen_ignora_la_fecha_y_devuelve_las_etiquetas_de_fila():
+    """`matrix_seen` es el lector que el lint usa de LOS DOS LADOS (#222/#324): una sola definición
+    de «qué es una fila de la matriz», o el comparador y el estampador divergen.
+
+    ⛔ La línea `> Alcance …` queda AFUERA de la comparación: lleva la fecha, que se mueve sola, así
+    que compararla reportaría toda matriz como desactualizada al día siguiente de estamparla."""
+    tabla = ("## Matriz método × estrella (2 método(s) · 1 estrella(s))\n\n"
+             "> Alcance 2026-01-01 · papers con `methods` poblado: `s` 3.\n\n"
+             "| Método | [[s]] |\n|---|---|\n"
+             "| [[gp]] · `GP` | [[2020aaa...1..1A]] |\n"
+             "| `mcmc` | — |\n")
+    cuerpo, etiquetas = mn.matrix_seen(tabla)
+    assert etiquetas == {"[[gp]] · `GP`", "`mcmc`"}, \
+        "las etiquetas de fila salen de la PRIMERA celda, sin el encabezado ni el separador"
+    assert "> Alcance" not in cuerpo, "la fecha entró en la comparación"
+    otra_fecha = tabla.replace("2026-01-01", "1999-12-31")
+    assert mn.matrix_seen(otra_fecha)[0] == cuerpo, "cambiar la fecha cambió el cuerpo comparado"
+    assert mn.matrix_seen(tabla.replace("[[2020aaa...1..1A]]", "—"))[0] != cuerpo, \
+        "cambiar una CELDA no cambió el cuerpo: el comparador no vería la matriz desactualizada"
+
+
+def test_matrix_seen_no_confunde_el_separador_ni_una_celda_vacia_con_un_metodo():
+    """Las tres cosas que NO son una fila de método: el encabezado, el separador —en sus dos
+    grafías— y la primera celda vacía. Nombrar cualquiera como «método que falta» mandaría a
+    estampar contra un fantasma, y el hallazgo del lint dejaría de ser accionable."""
+    tabla = ("| Método | [[s]] |\n|---|---|\n| --- | --- |\n"
+             "|  | [[2020aaa...1..1A]] |\n| `gp` | — |\n")
+    assert mn.matrix_seen(tabla)[1] == {"`gp`"}
+
+
+def test_la_matriz_vacia_DECLARA_cual_de_los_dos_ceros_es(toy_vault):
+    """Los dos ceros piden acciones OPUESTAS —ingestar una estrella / extraer los papers— y como
+    tabla en blanco salían idénticos. `_es_estampada` no distingue: lo tiene que decir la prosa."""
+    dest = toy_vault.MATRICES / "method_star.md"
+    dest.write_text("---\ntags: [matrix]\n---\n\n# Matriz\n", encoding="utf-8")
+
+    sin_estrellas = mn.matrix_table(mn.matrix_rows(), names=set(), fecha="2026-01-01")
+    assert "no hay fichas de estrella" in sin_estrellas
+    assert "sin fichas de estrella" in sin_estrellas, "el alcance sin columnas no dice de qué habla"
+
+    # ⛔ Los dos ceros se prueban por SEPARADO, y el de «sin columnas» hace falta pasarle los datos
+    # a mano: sin fichas de estrella `matrix_rows` no puede acumular ningún método (un paper sólo
+    # entra a una fila por la estrella que lo reclama), así que la rama nunca se alcanzaría desde el
+    # productor y quedaría sin test — verde por inalcanzable, que es lo que #429 no quiere.
+    solo_metodos = mn.matrix_table({"estrellas": [], "metodos": {"gp": {
+        "variantes": ["gp"], "estrellas": {}}}}, names=set(), fecha="2026-01-01")
+    assert "no hay fichas de estrella" in solo_metodos, \
+        "con métodos y sin columnas publicó el mensaje del otro cero"
+    assert "| Método |" not in solo_metodos, "una tabla sin una sola columna de estrella no dice nada"
+
+    _dos_estrellas(toy_vault)
+    _paper("2020aaa...1..1A", stars=("Estrella Test",))          # sin `methods`
+    sin_metodos = mn.matrix_table(mn.matrix_rows(), names=set(), fecha="2026-01-01")
+    assert "declara `methods` todavía" in sin_metodos, \
+        "con estrellas y sin métodos publica el mensaje del otro cero"
+    assert "`test_star` 0" in sin_metodos, "el alcance tiene que declarar el N igual"
+
+
+def test_restamp_matrix_sin_archivo_no_lo_inventa(toy_vault, monkeypatch, capsys):
+    """Una bóveda sin `matrices/method_star.md` no recibe uno nuevo: la matriz es un archivo de
+    instancia (`merge=ours`) y crearla desde el estampador decidiría por quien no la quiere. Sale
+    con rc 0 y lo DICE — un silencio se leería como «la estampé»."""
+    (toy_vault.MATRICES / "method_star.md").unlink(missing_ok=True)
+    assert run_main(monkeypatch, ["--restamp-matrix"]) == 0
+    assert "nada que estampar" in capsys.readouterr().out
+    assert not (toy_vault.MATRICES / "method_star.md").exists()
+
+
+def test_la_columna_sale_de_la_ficha_aunque_stars_yaml_no_la_declare(toy_vault):
+    """El nombre con el que un paper reclama la estrella lo dice `stars.yaml`, pero las COLUMNAS son
+    las fichas en disco: si el YAML perdió la entrada, la ficha sigue siendo una columna y su
+    `name:` sigue resolviendo los papers. Degradar a «no hay columna» borraría de la matriz una
+    estrella que la bóveda sí tiene — y sin ruido, porque la celda saldría `—`."""
+    write_yaml(toy_vault.STARS_YAML, {})
+    mk_note(toy_vault.STARS, "test_star",
+            {"tags": ["star"], "name": "Estrella Test", "slug": "test_star"}, "")
+    _paper("2020aaa...1..1A", stars=("Estrella Test",), methods=["gp"])
+    datos = mn.matrix_rows()
+    assert [e[:2] for e in datos["estrellas"]] == [("test_star", "Estrella Test")]
+    assert datos["metodos"]["gp"]["estrellas"] == {"test_star": ["2020aaa...1..1A"]}, \
+        "sin la entrada del YAML el paper dejó de enganchar con su ficha"

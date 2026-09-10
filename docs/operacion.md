@@ -44,7 +44,7 @@ para ingestar. En Windows, los comandos de shell corren en Git Bash o WSL.
 | `vault/wiki/papers/<bibcode>.md` | Una nota por paper (metadata ADS + abstract + **una VISTA por sujeto**: `vistas[]` en el frontmatter + `## Vista — <sujeto>` en el cuerpo, #188). |
 | `vault/wiki/concepts/<área>/` | Notas transversales. Áreas **abiertas** (cualquiera); `concept_areas` (objective.yaml) es referencia para el typo-check, no restricción — `methods`/`hypotheses` reservadas. |
 | `vault/wiki/queries/` | Preguntas contestadas contra el corpus. |
-| `vault/wiki/matrices/method_star.md` | Matriz método × estrella = huecos + backlog. |
+| `vault/wiki/matrices/method_star.md` | Matriz método × estrella — **estampada** desde la extracción (`make_notes.py --restamp-matrix`, #429; no se edita a mano). Fila = método por clave normalizada, columna = ficha de `stars/`, celda = los `[[bibcode]]` de los papers de esa estrella que lo declaran en `methods`. El `—` significa «ningún paper de esa estrella **en este corpus** lo declara», y por eso la sección declara su alcance: es una afirmación negativa (D-34). ⚠ **No** espeja `methods_applied.literature` (ese campo lo cura el agente y no tiene clave de join con `methods`). |
 | `vault/wiki/index.md` | Catálogo de la wiki (se actualiza en cada operación). |
 | `vault/wiki/log.md` | Registro append-only de operaciones. |
 | `vault/config/stars.yaml` · `vault/config/themes.yaml` | Estrellas / temas de la bóveda (nombres canónicos + alias). |

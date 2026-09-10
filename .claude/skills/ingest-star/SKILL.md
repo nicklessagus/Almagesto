@@ -351,9 +351,11 @@ Progreso del ingest de <estrella>:
 
 5. **Bookkeeping.** Re-estampar el índice —`python scripts/make_notes.py --restamp-index`, #237:
    `index.md` era 100 % Dataview, o sea que no había dónde «agregar la estrella» y el paso no se
-   podía cumplir como estaba escrito—, appendear a `vault/wiki/log.md`,
-   tocar `vault/wiki/matrices/method_star.md` (qué métodos se aplicaron en la literatura) y `vault/STATUS.md`
-   si cambió el estado. Y **declarar la fecha de síntesis** —la tercera de la cabecera (INV-82)—:
+   podía cumplir como estaba escrito— **y la matriz** —`python scripts/make_notes.py
+   --restamp-matrix`, #429: misma familia, la matriz prometía que «la mantiene el LLM» sobre algo
+   que no era derivable (`methods_applied.literature` y `methods` son dos vocabularios sin clave de
+   join, medido 23 de 42), así que llenarla a mano publicaba huecos FALSOS—, appendear a
+   `vault/wiki/log.md` y actualizar `vault/STATUS.md` si cambió el estado. Y **declarar la fecha de síntesis** —la tercera de la cabecera (INV-82)—:
    ```bash
    python scripts/triage.py <slug> --sintesis --n-papers <N>
    python scripts/make_notes.py <slug>          # la estampa en la ficha (cirugía, no toca la prosa)

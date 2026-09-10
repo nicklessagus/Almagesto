@@ -2145,6 +2145,16 @@
    "number": 431,
    "title": "`check_stale_verif` compara la fecha del ARCHIVO: una edición dentro de `## Verificación de citas` —sección estampada, que por construcción no puede cambiar una afirmación— marca la nota como stale",
    "state": "OPEN"
+  },
+  {
+   "number": 432,
+   "title": "`lb.split_blocks` y `cfg.solo_prosa` no implementan la misma regla de «sección estampada»: un `###` adentro reactiva los bloques citables",
+   "state": "OPEN"
+  },
+  {
+   "number": 433,
+   "title": "El detector de SEGUNDA MANO (#279/#350) no tiene salida: el 73 % de sus hallazgos sigue listado después de revisarlos uno por uno",
+   "state": "OPEN"
   }
  ]
 }

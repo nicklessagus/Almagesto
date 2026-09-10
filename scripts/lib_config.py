@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.253.0"
+ALMAGESTO_VERSION = "1.254.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -239,6 +239,13 @@ SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a est
                         # población; además cada fila pedía verificación propia en la ficha, con un
                         # ancla que se vence en cada re-estampado.
                         "## Datos públicos",
+                        # #429 — el CUARTO roll-up estampado: la matriz método × estrella, que hasta
+                        # ahora prometía «la mantiene el LLM» sobre algo que no era derivable. Cada
+                        # celda es un `[[bibcode]]` que escribió la máquina desde `methods`, no una
+                        # afirmación de la bóveda: fuera de la tupla, sus filas pedirían un par de
+                        # verificación cada una —con un ancla que se vence en cada re-estampado— y
+                        # el scan de fuga las miraría (#214).
+                        "## Matriz método × estrella",
                         # #124 · las ayudas de lectura de una nota de paper: el original de la
                         # fuente y su traducción. Ninguna es una afirmación de la bóveda, así que el
                         # fan-out no tiene qué contrastar. ⛔ La regla que las acompaña: **son ayuda

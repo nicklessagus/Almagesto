@@ -659,3 +659,41 @@ portadores:
         motivo: >-
           Matchea sólo por un COMENTARIO que cita #283 al explicar la doctrina de normalizar el
           markdown; no lee ninguna celda de condición.
+  - issue: 429
+    regla: >-
+      Un roll-up que la máquina ESTAMPA se deriva de lo que produjo la extracción, nunca de la
+      curación del agente — y cuando los dos campos no tienen clave de join, el que se publica es
+      el derivable y el artefacto declara CUÁL publica. La matriz método × estrella prometía
+      espejar `methods_applied.literature` (curación del agente, sin bibcode) llenándose desde
+      `methods` (extracción, vocabulario abierto, #243): medido, 23 de 42 métodos declarados sin
+      ningún paper del sujeto que matchee por `method_key`, con el eje de filas mezclando idiomas
+      entre fichas. Llenarla igual publicaba huecos FALSOS, y un `—` falso no lo mira ninguna capa
+      (`verify-citations` va claim↔fuente y `find-contradictions` claim↔claim: las dos parten de
+      una cita). ⚠ Dentro de `make_notes` la regla tiene un segundo portador que este gate no ve
+      por ser del mismo módulo: `metodos_table` y `matrix_table` comparten `method_label` —una sola
+      definición de cómo un nombre de método resuelve a página (stem o alias, #245) y de que la
+      grafía del extractor no se reescribe—.
+    funcion: make_notes.matrix_rows
+    patron: 'method_key|methods_applied'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          `check_matrix_stale` compara la sección estampada contra lo que `matrix_rows` +
+          `matrix_table` dan hoy; si derivara su propia versión, el detector y el estampador
+          divergirían y el backlog nunca cerraría.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Es donde vive `method_key`, la transformación que la regla usa para comparar; no publica
+          ningún roll-up.
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Nombra `method_key` para declarar que NO lo usa (#410: la pertenencia de una vista se
+          compara por igualdad literal contra el slug del sujeto); no arma roll-ups.
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Usa `method_key` como normalizador de TÍTULOS para cruzar la exportación contra el
+          frontmatter (#397); nada que ver con métodos ni con roll-ups.
