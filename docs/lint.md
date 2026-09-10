@@ -278,6 +278,17 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   bloque y sin tabla parseable (las anclas son el mecanismo principal). Se mide por `git`; fuera de
   un repo cae a **⛔ No evaluado**, nunca a silencio (D-43). La rama "bloque sin fecha" corre
   siempre.
+  ⛔ **La fecha del archivo es sólo el DISPARADOR (#431):** lo que se reporta es lo que dice
+  `lint.prose_changed_since` sobre la prosa **fuera de `cfg.SECCIONES_ESTAMPADAS`** —la versión
+  committeada hasta la fecha del bloque contra el **working tree**, así que la edición todavía sin
+  commitear también se exonera—. `## Verificación de citas` es una sección estampada: `pairs_of` no
+  la mira, así que editarla no puede cambiar ninguna afirmación ni ningún ancla, y sin embargo
+  cambiaba el archivo (medido: **4 de 8** hallazgos de la categoría, los cuatro dejados por el
+  mantenimiento que el propio framework pide — escribir el triage de la corrida, marcar una `acota`
+  resuelta, re-anclar). El hallazgo dice además **qué** cambió (cuántos bloques citables difieren y
+  un extracto del primero); si no hay commit hasta esa fecha o `git` falla, se cae al comportamiento
+  viejo **declarándolo** («no se pudo aislar la prosa: se compara la fecha del archivo»). Cuesta dos
+  llamadas a `git` por nota **disparada**, no por nota.
 - **Celda truncada que no puede truncarse** (#226): sólo `Afirmación (extracto)` admite `…`;
   `Evidencia` (con su localizador al final, completo) y `Condición` no. Y la fila donde el cruce de
   localizadores **no se pudo evaluar** se reporta como *no evaluable*, no como ok.

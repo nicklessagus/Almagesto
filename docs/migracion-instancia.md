@@ -520,6 +520,27 @@ carpeta donde está el `pdf:` cuando lo declarás. Si después repuntás `pdf:` 
 `.bib` al lado de los PDFs, los `no-evaluable` de arXiv pasan a `[bib]`. `.csv`/`.xlsx` no se
 leen (decidido: demasiado específico); ésos los lee el agente antes de declarar (§2k).
 
+## 2n · v1.252.0 (#431) — `stale_verif` mira la PROSA, no el archivo
+
+**Nada que correr: es el propio lint.** La categoría *Verificación stale* comparaba la fecha del
+**archivo** contra la del encabezado del bloque, y `## Verificación de citas` es una sección
+estampada: `pairs_of` no la mira, así que editarla no puede cambiar ninguna afirmación ni ningún
+ancla — pero cambiaba el archivo y disparaba igual. Medido acá: **4 de 8** hallazgos eran eso, los
+cuatro dejados por el mantenimiento que el framework pide (escribir el triage de la corrida, marcar
+una `acota` como resuelta, re-anclar).
+
+Desde esta versión la fecha del archivo es sólo el **disparador**: lo que se reporta lo decide
+`lint.prose_changed_since`, que compara la prosa fuera de `cfg.SECCIONES_ESTAMPADAS` entre la
+versión committeada hasta la fecha del bloque y el **working tree** (así también se exonera la
+edición todavía sin commitear, que es el caso medido: los migradores corren antes del commit). El
+hallazgo que queda dice además **qué** cambió; y si no hay commit hasta esa fecha, cae al
+comportamiento viejo **declarándolo** («no se pudo aislar la prosa: se compara la fecha del
+archivo»), que es D-43.
+
+**Efecto esperado en la instancia:** `python scripts/lint.py` con la categoría más chica y cada
+hallazgo restante nombrando el bloque. Los que digan *«no se pudo aislar la prosa»* son notas sin
+commit anterior a la fecha de su bloque: ésas se miran a mano, como antes.
+
 ## 3 · Cierre
 
 ```bash

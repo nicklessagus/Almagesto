@@ -180,3 +180,17 @@ decidí si los querés como issue aparte.
 correr `check_sources.py <slug>` → esa fuente sale `[bib]`; una fuente `url:` con snapshot sale
 `[web]`. Un `.bib` que contradiga el autor declarado → `fuente_metadata_falsa` (bloquea); el carril
 web nunca bloquea. **Devolver si** el parser no lee tu `.bib` real (mandame la entrada que falla).
+
+---
+
+## #431 · v1.252.0 — guía §2n
+
+**Validar:** `python scripts/lint.py` y comparar la categoría *Verificación stale* contra la
+corrida anterior — los cuatro falsos medidos (`ica`, `icasso`, `hd_40307` y la query de blanqueo,
+cuya única edición fue dentro de `## Verificación de citas`) tienen que **desaparecer**, y los que
+queden tienen que decir qué bloque cambió. Segundo chequeo, barato: editar a mano una sub-sección
+del bloque de una nota cualquiera (sin commitear) y re-correr el lint → esa nota **no** aparece;
+tocarle un párrafo con cita → aparece, con el extracto del párrafo. **Devolver si** desaparece un
+hallazgo cuya edición SÍ tocó la prosa (sub-disparo: es la dirección prohibida), o si una nota
+sana empieza a salir con la salvedad «no se pudo aislar la prosa».
+

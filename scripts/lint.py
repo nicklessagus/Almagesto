@@ -5271,12 +5271,80 @@ def check_simbad_aliases() -> tuple:
     return alias_faltantes, alias_rechazados, alias_ajenos
 
 
+def prose_changed_since(f: str, date: str, detail: list | None = None) -> bool | None:
+    """Did the note's PROSE change after `date`? `None` when it cannot be told (#431).
+
+    `check_stale_verif` compared the date of the FILE, and `## Verificación de citas` is one of
+    `cfg.SECCIONES_ESTAMPADAS`: `pairs_of` never looks at it, so editing it cannot change a single
+    claim or a single anchor — and yet it changed the file and fired the category. Measured on an
+    instance: **4 of 8** findings were that, all of them left by the maintenance the framework
+    itself prescribes (writing the round's triage, marking an `acota` resolved, re-anchoring).
+
+    The committed version at `date` is compared against the **working tree**, so the uncommitted
+    migration that only touched the stamped block is exonerated too — which is the measured case,
+    because the lint runs as a closing step, BEFORE the commit.
+
+    The **body** is what follows the frontmatter (`cfg.frontmatter_span`): `make_notes` re-stamps
+    the frontmatter, and a re-stamped field is not a claim.
+
+    `detail` is an optional sink: when the prose did change, the citable blocks that differ (by
+    anchor, `lb.split_blocks`) are described into it, so the caller can say WHAT changed instead of
+    ordering a re-verification of nothing.
+
+    Returns `None` —and the caller declares it (D-43)— when there is no commit at or before `date`
+    (a note newer than its own block) or git refuses: with nothing to diff against, answering
+    `False` would be a verdict nobody measured.
+    """
+    def prose(text: str) -> str:
+        """The note's body without the stamped sections — what somebody actually wrote."""
+        partes = cfg.frontmatter_span(text)
+        return cfg.solo_prosa(partes[1] if partes else text)
+
+    try:
+        rel = Path(f).resolve().relative_to(cfg.ROOT.resolve()).as_posix()
+    except (ValueError, OSError):
+        return None
+    sha = (git_out("log", "-1", f"--until={date}T23:59:59", "--format=%H", "--", rel) or "").strip()
+    if not sha:
+        return None                        # nota sin commit hasta esa fecha → no hay contra qué
+    antes = git_out("show", f"{sha}:{rel}")
+    if antes is None:
+        return None                        # el archivo no existía en ese commit (o git falló)
+    try:
+        ahora = Path(f).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    if prose(antes) == prose(ahora):
+        return False
+    if detail is not None:
+        # Los bloques se parten sobre `prose(...)`, no sobre el texto completo: `split_blocks`
+        # reevalúa «sección estampada» en CADA encabezado, así que un `###` de adentro del bloque
+        # de verificación —las tres sub-secciones que #344 deja en la nota— le apaga la exclusión y
+        # sus ítems vuelven como bloques. Sobre la prosa ya descontada eso no puede pasar, y las dos
+        # mitades de esta función (el veredicto y el extracto) miran exactamente el mismo texto.
+        viejas = {lb.block_anchor(b.text, b.intro) for b in lb.split_blocks(prose(antes))}
+        nuevos = [b for b in lb.split_blocks(prose(ahora))
+                  if lb.block_anchor(b.text, b.intro) not in viejas]
+        if nuevos:
+            detail.append(f"{len(nuevos)} bloque(s) distintos, el primero: "
+                          f"«{lb.truncate_claim(nuevos[0].text, 60)}»")
+        else:
+            # `solo_prosa` mira TODO el texto no estampado y `split_blocks` sólo los bloques
+            # citables (excluye fences y encabezados): el cambio existe y no hay bloque que nombrar.
+            detail.append("fuera de los bloques citables (un fence, un encabezado)")
+    return True
+
+
 def check_stale_verif(verif_blocks, changed: dict) -> list:
     """`stale_verif` — the note edited after its own verification block (D-4).
 
     Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Editing a
     note after the fan-out ran leaves the header claiming pairs that were never checked against what
     the note says TODAY.
+
+    ⛔ The file's date is only the TRIGGER (#431): what is reported is what `prose_changed_since`
+    says about the prose outside `cfg.SECCIONES_ESTAMPADAS`, because editing a stamped section
+    cannot change a claim. Two git calls per FIRED note, not per note — the lint is cheap by design.
     """
     stale_verif: list = []
     for f, d in sorted(verif_blocks):
@@ -5286,8 +5354,14 @@ def check_stale_verif(verif_blocks, changed: dict) -> list:
                                       "(`## Verificación de citas (AAAA-MM-DD)`): sin fecha no hay "
                                       "forma de saber si sigue vigente"))
         elif (c := changed.get(f)) and c > d:
-            stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d} → "
-                                      f"correr `verify-citations` sobre lo agregado"))
+            que: list = []
+            cambio = prose_changed_since(f, d, que)
+            if cambio is False:
+                continue                   # sólo se tocó una sección estampada: no hay qué verificar
+            salvedad = (f"la prosa cambió ({que[0]})" if cambio
+                        else "no se pudo aislar la prosa: se compara la fecha del archivo")
+            stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d} "
+                                      f"— {salvedad} → correr `verify-citations` sobre lo agregado"))
     return stale_verif
 
 

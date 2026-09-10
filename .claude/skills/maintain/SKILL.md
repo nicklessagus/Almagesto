@@ -311,6 +311,12 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   encabezado que se lee como vigente: la nota no afirma falso, afirma **de menos** sobre lo que
   chequeó. Si el hallazgo es "bloque sin fecha en el encabezado", re-fechalo
   (`## Verificación de citas (AAAA-MM-DD)`): sin fecha el chequeo no puede saber si sigue vigente.
+  ⛔ **El hallazgo ya viene filtrado y dice qué cambió (#431):** la fecha del archivo es sólo el
+  disparador y lo que se compara es la **prosa fuera de las secciones estampadas**, así que una
+  edición confinada a `## Verificación de citas` —el triage de la corrida, una `acota` marcada como
+  resuelta, un re-anclaje— **no** se reporta. Si el mensaje dice *«no se pudo aislar la prosa: se
+  compara la fecha del archivo»*, no hay commit anterior a la fecha del bloque: ahí sí hay que
+  mirar la nota a mano.
 - **Corpus truncado** (y su hermano `truncated_glyph`) → a la query directa le faltó cola. El
   orquestador **no** acepta `--rows`: se corre la pieza suelta y después la cadena —
   `python scripts/query_ads.py <slug> --rows 2000  # ⚠ el cliente NO pagina: 2000 es ≈ el máximo de una request ADS, pedir más no trae más` y luego `python scripts/ingest_star.py <slug>`. Mientras tanto, la ficha afirma sobre un universo recortado.
