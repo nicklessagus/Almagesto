@@ -55,6 +55,7 @@ import datetime as dt
 import json
 import re
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -115,13 +116,81 @@ def source_ref_for(bibcode: str, verdict: str, prefiere: str | None = None) -> s
                        f"es `no verificable por extracción` (#223)")
 
 
-def condition_cell(par: dict) -> str:
-    """`acota: …` / `contextualiza: …` from `cond_tipo` + `condicion` (#221); `—` when none."""
+def condition_cell(par: dict, bibcode: str = "") -> str:
+    """`acota: …` / `contextualiza: …` from `cond_tipo` + `condicion` (#221); `—` when none.
+
+    ⛔ It goes through `lb.condition_split`, the reader that will read this cell back (#427). It
+    used to prefix `cond_tipo` without looking at whether `condicion` already started with its
+    class — and the prompt did not forbid writing it there, so several fan-out subagents did. The
+    result, `acota: acota→resuelta: …`, is not cosmetic: `condition_resolved` takes the token after
+    the FIRST separator, finds the class instead of the resolution, and the row stays counted as
+    pending **forever** while the cell says it is resolved. Measured on a real vault: 41 of 957
+    cells doubled, 7 of them `acota`, i.e. irresolvable. The header then publishes a false number
+    about the note itself, which is what INV-81/#280 exist to prevent.
+
+    ⛔ And when the two DISAGREE —`cond_tipo: acota` over `condicion: contextualiza: …`— it
+    REFUSES naming the pair: the producer is contradicting itself, and picking one would be
+    inventing the class (D-43). The fix goes in the round's JSON, which is where the error is."""
     cond = str(par.get("condicion") or "").strip()
     if not cond:
         return "—"
     tipo = str(par.get("cond_tipo") or "").strip().lower()
-    return f"{tipo}: {cond}" if tipo else cond
+    clase, resto = lb.condition_split(cond)
+    if clase is None:
+        return f"{tipo}: {cond}" if tipo else cond
+    if tipo and clase != tipo:
+        raise SidecarError(
+            f"{bibcode or '(sin bibcode)'} · ancla {par.get('ancla') or '?'}: el fan-out se "
+            f"contradice sobre la clase de la condición — `cond_tipo: {tipo}` y la condición "
+            f"arranca con `{clase}`. Elegir una sería inventarla: corregí el JSON de la ronda")
+    return f"{clase}: {resto}" if resto else clase
+
+
+def chained_condition(previous: str | None, new: str) -> str:
+    """The condition cell for a pair that may already have a row: a RESOLUTION is never undone.
+
+    #427/#232, the same doctrine as `chained_verdict` on the column next door. A later round
+    recomputes this cell from the fan-out's JSON, which knows nothing about the resolution somebody
+    wrote with `--resolver`; without this, marking an `acota` as resolved and re-running the writer
+    silently un-marked it — and a resolution is a decision somebody signed, in the one category
+    whose pending count the note publishes about itself."""
+    # ⚠ Sin un `previous and` adelante, a propósito: `condition_resolved(None)` ya es `False`, así
+    # que esa cláusula no decidía nada (#319 — el condicional cuyas ramas valen lo mismo es una
+    # regla escrita a medias, y ningún otro gate la ve porque no cambia comportamiento).
+    if lb.condition_resolved(previous) \
+            and lb.condition_split(previous)[0] == lb.condition_split(new)[0]:
+        return previous
+    return new
+
+
+def collapse_condition(cond: str) -> str:
+    """A condition cell with its class written TWICE, collapsed to one (#427).
+
+    The migration half. It drops the outer duplicate head and keeps the inner text **verbatim** —
+    which is exactly the canonical form, `acota: acota→resuelta: x` → `acota→resuelta: x` — instead
+    of re-writing the condition, which is the extractor's prose (#243: normalise to compare, never
+    to write).
+
+    ⛔ Two DIFFERENT classes are not a duplication: that is the contradiction `condition_cell`
+    refuses, and it is not something a migrator can decide.
+
+    ⚠ The loop is BOUNDED by the string it consumes, not by its guard. Found running `--guardas` on
+    this very function: with `while True` and the only exit inside the condition, neutralising that
+    guard **hangs the mutation run** instead of reporting a survivor — and a net that cannot be
+    measured is not a net (INV-101's shape, one level down). Each turn strictly shortens `cond`, so
+    the bound is arithmetic, not a magic number.
+
+    ⚠ Sin un `clase is None` adelante, a propósito: cuando la celda no declara clase,
+    `condition_split` devuelve `(None, cond)` y la desigualdad de abajo compara `None` contra
+    `None`, así que la función es la identidad por el mismo camino. Como atajo no decidía nada
+    —la mutación de esa cláusula sobrevivía, que es como se vio (#319)— y una guarda que no
+    decide se lee como si protegiera algo."""
+    for _ in range(len(cond) + 1):
+        clase, resto = lb.condition_split(cond)
+        if lb.condition_split(resto)[0] != clase:
+            break
+        cond = resto
+    return cond
 
 
 def chained_verdict(previous: str | None, new: str) -> str:
@@ -137,14 +206,25 @@ def chained_verdict(previous: str | None, new: str) -> str:
     return previous if ultimo == lb._bare_verdict(new) else f"{previous}→{new}"
 
 
-def build_rows(note: Path, text: str, fanout: dict, previous: list | None) -> list:
+def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
+               descartar_muertas: bool = False, descartadas: list | None = None) -> list:
     """One `Row` per body pair that the fan-out judged, in body order (#403).
 
     Matching is by `(bibcode, ancla)`, the two keys the fan-out schema carries at file and pair
     level. A fan-out pair whose anchor is not in the body is REFUSED and named: the note changed
     after the prompts were generated, and a row with no pair behind it is exactly the orphan the
     lint reports (D-4). A body pair the fan-out did not judge is left out — the lint reports it as
-    «sin verificar», which is true."""
+    «sin verificar», which is true.
+
+    ⛔ `descartar_muertas` (#428) drops those pairs instead of refusing the WHOLE round, and
+    appends them to `descartadas` so the caller can declare them. The anchor is per BLOCK, so a
+    pair whose anchor still matches is demonstrably about untouched text: refusing the round is a
+    file-level decision about a pair-level property, and it collides head-on with #282 —the
+    correct → re-verify cycle does not converge on its own, so as soon as a note is corrected
+    between rounds the earlier rounds carry dead anchors mixed with live ones. Measured on an
+    instance: 3 rounds, 77 pairs, 72 with a live verdict, and no way to write any of them.
+    It is **opt-in and declared** (D-43): dropping in silence would be the tolerant reader this
+    repo does not carry; declaring it lets the operator see what stayed out and decide."""
     pares = lb.pairs_of(text)
     por_clave = {(p.bibcode, p.anchor): p for p in pares}
     # #407/#282 — la fila previa de cada par se resuelve como `reverify_subset`: ancla exacta
@@ -153,11 +233,19 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None) -> li
     asignado = lb.match_rows_to_pairs(pares, previous or [])[0] if previous else {}
     sobrantes = [(b, str(par.get("ancla") or "")) for b, ps in fanout.items() for par in ps
                  if (b, str(par.get("ancla") or "")) not in por_clave]
-    if sobrantes:
-        raise SidecarError("pares del fan-out que NO están en el cuerpo de la nota (¿se editó "
-                           "después de generar los prompts?) — no se arma nada:\n  "
-                           + "\n  ".join(f"{b} · ancla {a}" for b, a in sobrantes))
-    juzgados = {(b, str(par.get("ancla") or "")): par for b, ps in fanout.items() for par in ps}
+    if sobrantes and not descartar_muertas:
+        raise SidecarError(
+            "pares del fan-out que NO están en el cuerpo de la nota (¿se editó después de generar "
+            "los prompts?) — no se arma nada:\n  "
+            + "\n  ".join(f"{b} · ancla {a}" for b, a in sobrantes)
+            + "\n  Dos salidas: `--descartar-anclas-muertas` escribe los pares VIVOS declarando "
+              "cuáles quedaron afuera (#428), o `python scripts/reverify_subset.py <nota>` te dice "
+              "cuáles hay que re-anclar y cuáles re-verificar (#257)")
+    if descartadas is not None:
+        descartadas.extend(sobrantes)
+    muertas = set(sobrantes)
+    juzgados = {(b, a): par for b, ps in fanout.items() for par in ps
+                if (a := str(par.get("ancla") or "")) and (b, a) not in muertas}
     rows, n = [], 0
     for p in pares:
         par = juzgados.get((p.bibcode, p.anchor))
@@ -181,7 +269,9 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None) -> li
         # celda: con `""` el round-trip de `render_verif_table` rehúsa, y con razón
         rows.append(lb.Row(n=str(n), claim=lb.truncate_claim(lb.normalize_ws(p.block.text)),
                            bibcode=p.bibcode, verdict=celda, anchor=p.anchor, source_hash=h or "—",
-                           condition=condition_cell(par), source_kind=kind,
+                           condition=chained_condition(previa.condition if previa else None,
+                                                      condition_cell(par, p.bibcode)),
+                           source_kind=kind,
                            evidence=str(par.get("evidencia") or "").strip()))
     return rows
 
@@ -321,6 +411,84 @@ def emit(note: Path, text: str, rows: list, fecha: str, *, dry_run: bool = False
     cfg.write_text_atomic(note, nuevo)
 
 
+def _rewrite_rows(note: Path, cambios: dict, fecha: str | None, dry_run: bool) -> dict:
+    """Rewrite the sibling's rows through `emit`, with `cambios: {anchor: new condition cell}`.
+
+    The one writing path both `--resolver` and `--migrate-condition-prefix` take, so the round-trip
+    guard (#284), the header line (INV-81) and the triage guard (#430) apply to them as they do to a
+    fan-out round. ⚠ The block's DATE is preserved: neither resolving a condition nor collapsing a
+    duplicated class is re-verifying anything (D-4)."""
+    text = note.read_text(encoding="utf-8")
+    filas = lb.verif_rows(note)
+    if not filas:
+        raise SidecarError(f"{note.name}: no hay hermano `.verif.md` con filas que leer")
+    d = fecha or cfg.verification_date(text)[1]
+    if not d:
+        raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado y no se pasó "
+                           f"`--fecha`: re-fechar es una decisión, no un default")
+    nuevas = [replace(f, condition=cambios[f.anchor]) if f.anchor in cambios else f for f in filas]
+    emit(note, text, nuevas, d, dry_run=dry_run)
+    return {"filas": len(filas), "fecha": d}
+
+
+def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
+                       dry_run: bool = False) -> dict:
+    """Mark `acota` conditions as resolved: `acota→resuelta: <dónde> · <condición> ` (#427).
+
+    ⛔ `lb.condition_resolved` defined this notation and `verif_counts` publishes its count, and
+    **no script wrote it**: the agent edited the sibling by hand, against that file's own banner and
+    against #403 — parsing, `dataclasses.replace` and re-rendering, by hand, over the artefact the
+    lint reads. This is that step, and it validates with the reader before writing.
+
+    Three refusals, each one a decision that is not this function's to make: an anchor that is not
+    in the table (the note changed — re-anchor first, #257), a row that is not `acota`
+    (`contextualiza` goes to the report by definition, #221), and a row that already declares a
+    DIFFERENT resolution — annotate, never overwrite (#232). Re-running with the same text is a
+    no-op, which is what makes it safe in a chain."""
+    filas = lb.verif_rows(note) or []
+    por_ancla = {f.anchor: f for f in filas}
+    cambios: dict = {}
+    for ancla, donde in resoluciones.items():
+        fila = por_ancla.get(ancla)
+        if fila is None:
+            raise SidecarError(f"el ancla {ancla} no está en la tabla de {note.name} — ¿se editó la "
+                               f"nota después de verificar? Re-anclá primero "
+                               f"(`python scripts/reverify_subset.py {note}`)")
+        clase, resto = lb.condition_split(fila.condition)
+        if clase != "acota":
+            raise SidecarError(
+                f"el par de ancla {ancla} tiene condición `{clase or 'sin clase'}`, no `acota`: "
+                f"sólo la `acota` se resuelve (la `contextualiza` va al reporte, #221)")
+        if lb.condition_resolved(fila.condition):
+            ya = lb.condition_resolution(fila.condition)
+            if ya == str(donde).strip():
+                continue                          # misma resolución: no-op (idempotente)
+            raise SidecarError(f"el par de ancla {ancla} ya declara una resolución («{ya}») — se "
+                               f"anota, no se pisa (#232). Si cambió, editá el hermano a mano y "
+                               f"decí por qué en el `log`")
+        celda = (f"acota→resuelta: {str(donde).strip()}"
+                 + (f"{lb.COND_RESOLUTION_SEP}{resto}" if resto else ""))
+        if not lb.condition_resolved(celda):      # el lector, antes de escribir
+            raise SidecarError(f"la celda que se iba a escribir no se lee como resuelta: «{celda}»")
+        cambios[ancla] = celda
+    if not cambios:
+        return {"resueltas": 0, "filas": len(filas)}
+    return {"resueltas": len(cambios), **_rewrite_rows(note, cambios, fecha, dry_run)}
+
+
+def migrate_condition_prefix(note: Path, fecha: str | None = None, dry_run: bool = False) -> dict:
+    """Collapse the doubled class of every condition cell in this note's sibling (#427).
+
+    The migrator for the 41 cells measured on a real vault — 7 of them `acota`, i.e. rows that are
+    resolved, whose cell says so, and that `condition_resolved` counts as pending forever."""
+    filas = lb.verif_rows(note) or []
+    cambios = {f.anchor: c for f in filas
+               if (c := collapse_condition(f.condition)) != f.condition}
+    if not cambios:
+        return {"migradas": 0, "filas": len(filas)}
+    return {"migradas": len(cambios), **_rewrite_rows(note, cambios, fecha, dry_run)}
+
+
 def restamp_section(note: Path, fecha: str | None = None, dry_run: bool = False) -> dict:
     """Re-stamp the NOTE's `## Verificación de citas` section from its existing sibling (#430).
 
@@ -348,20 +516,82 @@ def restamp_section(note: Path, fecha: str | None = None, dry_run: bool = False)
             "cambio": dry_run or note.read_text(encoding="utf-8") != antes}
 
 
-def write(note: Path, fanout_dir: Path, fecha: str | None = None, dry_run: bool = False) -> dict:
-    """Build and (unless `dry_run`) write the sibling and the note's section. Returns the counts."""
+def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = False,
+          descartar_muertas: bool = False) -> dict:
+    """Build and (unless `dry_run`) write the sibling and the note's section. Returns the counts.
+
+    ⛔ `fanout_dir` takes ONE directory or a LIST of them, chained **in order** (#428). Each round
+    passes its own barrier and feeds the next as `previous`, so N directories give byte for byte
+    what N successive runs give — but without falsifying a manifest, which is what the operator had
+    to do by hand when a round could not be passed on its own. The fan-out is the expensive step;
+    an artefact already paid for has to be consumable."""
+    dirs = [fanout_dir] if isinstance(fanout_dir, (str, Path)) else list(fanout_dir)
     text = note.read_text(encoding="utf-8")
-    fanout = load_fanout(fanout_dir)
-    previas = lb.verif_rows(note) if cfg.verif_sidecar(note).exists() else None
-    rows = build_rows(note, text, fanout, previas)
+    rows = lb.verif_rows(note) if cfg.verif_sidecar(note).exists() else None
+    juzgados, descartadas = 0, []
+    for d in dirs:
+        fanout = load_fanout(Path(d))
+        rows = build_rows(note, text, fanout, rows, descartar_muertas, descartadas)
+        juzgados += sum(len(ps) for ps in fanout.values())
+    juzgados -= len(descartadas)
     if not rows:
         raise SidecarError("el fan-out no juzgó ningún par del cuerpo: no hay tabla que escribir")
     emit(note, text, rows, fecha or dt.date.today().isoformat(), dry_run=dry_run)
     c = lb.verif_counts(rows)
-    juzgados = sum(len(ps) for ps in fanout.values())
     return {"filas": len(rows), "pares_cuerpo": len(lb.pairs_of(text)), "juzgadas": juzgados,
-            "arrastradas": len(rows) - juzgados,
+            "arrastradas": max(0, len(rows) - juzgados), "rondas": len(dirs),
+            "descartadas": descartadas,
             "encadenadas": c["cadenas"], "hermano": cfg.verif_sidecar(note).name}
+
+
+def _parse_resoluciones(args) -> dict:
+    """`{ancla: dónde}` from `--resolver A=texto` (repeatable) and/or `--resoluciones <json>`.
+
+    Refuses the malformed pair instead of guessing: an anchor with no `=` would silently resolve
+    nothing, and this writes into the artefact the lint reads."""
+    out: dict = {}
+    if args.resoluciones:
+        datos = json.loads(Path(args.resoluciones).read_text(encoding="utf-8"))
+        if not isinstance(datos, dict):
+            raise SidecarError(f"{args.resoluciones}: se esperaba un objeto `{{ancla: dónde}}`")
+        out.update({str(k): str(v) for k, v in datos.items()})
+    for item in args.resolver or []:
+        if "=" not in item:
+            raise SidecarError(f"`--resolver {item}`: falta el `=` — la forma es "
+                               f"`--resolver <ancla>=<dónde se resolvió>`")
+        ancla, _, donde = item.partition("=")
+        out[ancla.strip()] = donde.strip()
+    return out
+
+
+def _main_condiciones(args) -> int:
+    """`--resolver` / `--resoluciones` / `--migrate-condition-prefix`: the `Condición` cell (#427).
+
+    The two write through `_rewrite_rows`, so they get the round-trip guard, the generated header
+    and the triage guard for free; neither moves the block's date."""
+    if not args.nota:
+        cfg.print_seguro("⛔ estas modalidades toman UNA nota (no hay `--todo`: resolver una "
+                         "condición es una decisión por par)")
+        return 2
+    nota = Path(args.nota)
+    if not nota.exists() or cfg.is_verif_sidecar(nota):
+        cfg.print_seguro(f"⛔ {nota} no es una nota")
+        return 2
+    try:
+        if args.migrate_cond:
+            r = migrate_condition_prefix(nota, fecha=args.fecha, dry_run=args.dry_run)
+            cfg.print_seguro(f"{r['migradas']} celda(s) con la clase duplicada colapsada(s) sobre "
+                             f"{r.get('filas', 0)} fila(s)"
+                             + (" (dry-run: no se escribió)" if args.dry_run else ""))
+        if resoluciones := _parse_resoluciones(args):
+            r = resolve_conditions(nota, resoluciones, fecha=args.fecha, dry_run=args.dry_run)
+            cfg.print_seguro(f"{r['resueltas']} condición(es) `acota` marcada(s) resuelta(s) sobre "
+                             f"{r.get('filas', 0)} fila(s)"
+                             + (" (dry-run: no se escribió)" if args.dry_run else ""))
+    except SidecarError as exc:
+        cfg.print_seguro(f"⛔ {exc}")
+        return 1
+    return 0
 
 
 def _main_restamp(args) -> int:
@@ -401,8 +631,19 @@ def _main_restamp(args) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("nota", nargs="?", help="la nota (`vault/wiki/.../<x>.md`)")
-    ap.add_argument("--from", dest="fanout", default=None,
-                    help="directorio de la ronda (p. ej. build/<slug>/verif/r1)")
+    ap.add_argument("--from", dest="fanout", action="append", default=None,
+                    help="directorio de la ronda (p. ej. build/<slug>/verif/r1). #428: repetible — "
+                         "las rondas se encadenan EN ORDEN, como N corridas sucesivas")
+    ap.add_argument("--descartar-anclas-muertas", action="store_true", dest="descartar",
+                    help="#428: escribe los pares VIVOS declarando cuáles quedaron afuera, en vez "
+                         "de rehusar la ronda entera por un ancla que ya no está en el cuerpo")
+    ap.add_argument("--resolver", action="append", metavar="ANCLA=DÓNDE", default=None,
+                    help="#427: marca una condición `acota` como resuelta "
+                         "(`acota→resuelta: <dónde>`); repetible")
+    ap.add_argument("--resoluciones", metavar="JSON", default=None,
+                    help="#427: archivo JSON `{ancla: dónde}` — el mismo trabajo en lote")
+    ap.add_argument("--migrate-condition-prefix", action="store_true", dest="migrate_cond",
+                    help="#427: colapsa la clase escrita DOS veces en la celda `Condición`")
     ap.add_argument("--restamp-section", action="store_true", dest="restamp",
                     help="#430: re-estampa la SECCIÓN de la nota desde su hermano (sin fan-out); "
                          "conserva la fecha del bloque y no toca la tabla")
@@ -413,24 +654,34 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     if args.restamp:
         return _main_restamp(args)
+    if args.resolver or args.resoluciones or args.migrate_cond:
+        return _main_condiciones(args)
     if not args.nota or not args.fanout:
         cfg.print_seguro("⛔ hace falta la nota y `--from <dir>` (o `--restamp-section`)")
         return 2
-    nota, fanout = Path(args.nota), Path(args.fanout)
+    nota, fanouts = Path(args.nota), [Path(x) for x in args.fanout]
     if not nota.exists() or cfg.is_verif_sidecar(nota):
         cfg.print_seguro(f"⛔ {nota} no es una nota")
         return 2
-    if not fanout.is_dir():
-        cfg.print_seguro(f"⛔ {fanout} no es un directorio de fan-out")
-        return 2
+    for f in fanouts:
+        if not f.is_dir():
+            cfg.print_seguro(f"⛔ {f} no es un directorio de fan-out")
+            return 2
     try:
-        r = write(nota, fanout, fecha=args.fecha, dry_run=args.dry_run)
+        r = write(nota, fanouts, fecha=args.fecha, dry_run=args.dry_run,
+                  descartar_muertas=args.descartar)
     except SidecarError as exc:
         cfg.print_seguro(f"⛔ {exc}")
         return 1
     accion = "se escribiría" if args.dry_run else "escrito"
+    if args.descartar:
+        # D-43 — el CERO se declara: «no se evaluó» y «se evaluó y no hubo» piden acciones
+        # distintas, y acá el operador pidió el descarte explícitamente.
+        cfg.print_seguro(f"{len(r['descartadas'])} par(es) descartado(s) por ancla muerta (#428)"
+                         + "".join(f"\n  {b} · ancla {a}" for b, a in r["descartadas"]))
     cfg.print_seguro(f"{accion} {r['hermano']}: {r['filas']} fila(s) sobre {r['pares_cuerpo']} "
-                     f"par(es) del cuerpo — {r['juzgadas']} juzgada(s) en esta ronda"
+                     f"par(es) del cuerpo — {r['juzgadas']} juzgada(s) en "
+                     + (f"{r['rondas']} ronda(s)" if r["rondas"] > 1 else "esta ronda")
                      + (f", {r['arrastradas']} arrastrada(s) re-ancladas de la anterior (#407)"
                         if r["arrastradas"] else "")
                      + (f", {r['encadenadas']} encadenada(s)" if r["encadenadas"] else "")

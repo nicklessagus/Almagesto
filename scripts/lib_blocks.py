@@ -218,11 +218,16 @@ CONDITION_RESOLUTIONS = ("resuelta",)
 _COND_SEP = re.compile(r"\s*(?:→|->|—|–|--|-|:)\s*")
 
 
-def condition_kind(condicion: str) -> str | None:
-    """The declared kind of a condition cell (`acota` / `contextualiza` head), or `None`.
+def condition_split(condicion: str) -> tuple:
+    """`(kind | None, rest)` — the ONE function that splits a `Condición` cell (#427).
 
-    `None` covers both «the cell is empty» (nothing to classify) and «it has prose but no kind» —
-    the caller separates them, because only the second is a finding.
+    `condition_kind`, `condition_resolved` and the cell's producer (`write_verif_sidecar.
+    condition_cell`) all go through here. Written three times they diverged in the direction that
+    matters: the producer prefixed `cond_tipo` without looking at whether the text already started
+    with its class, so a fan-out that wrote the class inside `condicion` too —which the prompt did
+    not forbid— yielded `acota: acota→resuelta: …`, and from there `condition_resolved` reads the
+    cell as UNRESOLVED forever. Measured on a real vault: 41 of 957 cells doubled, 7 of them
+    `acota`, i.e. rows that are resolved, say so, and the header keeps counting as pending.
 
     #283 — the head is read **normalised**: markdown emphasis and the separator that follows it are
     dropped, the same way `_bare_verdict` reads the cell next door. Comparing the raw string made
@@ -233,8 +238,19 @@ def condition_kind(condicion: str) -> str | None:
     """
     # (#221 no tiene invariante propio: la clase de la condición es una categoría de backlog del
     # lint, no una promesa P0/P1 del contrato — la red es el test de paridad con `verdict_valido`.)
-    cabeza = _COND_SEP.split(str(condicion or "").strip().lower(), maxsplit=1)[0].strip(_ADORNO).strip()
-    return cabeza if cabeza in CONDITION_KINDS else None
+    partes = _COND_SEP.split(str(condicion or "").strip(), maxsplit=1)
+    cabeza = partes[0].strip(_ADORNO).strip().lower()
+    if cabeza not in CONDITION_KINDS:
+        return None, str(condicion or "").strip()
+    return cabeza, (partes[1].strip() if len(partes) > 1 else "")
+
+
+def condition_kind(condicion: str) -> str | None:
+    """The declared kind of a condition cell (`acota` / `contextualiza` head), or `None`.
+
+    `None` covers both «the cell is empty» (nothing to classify) and «it has prose but no kind» —
+    the caller separates them, because only the second is a finding."""
+    return condition_split(condicion)[0]
 
 
 def condition_resolved(condicion: str) -> bool:
@@ -243,11 +259,39 @@ def condition_resolved(condicion: str) -> bool:
     ⛔ It does NOT reuse `resueltos()`: there, anything after the separator means «resolved», and in
     a condition cell what follows the separator is **the condition's own prose** — every cell would
     come back resolved. The token right after the first separator must be one of
-    `CONDITION_RESOLUTIONS`, whole (the lesson of #276: `resueltamente` is not `resuelta`)."""
-    partes = _COND_SEP.split(str(condicion or "").strip().lower(), maxsplit=2)
-    if len(partes) < 2:
+    `CONDITION_RESOLUTIONS`, whole (the lesson of #276: `resueltamente` is not `resuelta`).
+
+    ⛔ And it stays a STRICT reader: the doubled-class cell (`acota: acota→resuelta: …`) reads as
+    UNRESOLVED (#427). This repo carries no compatibility layers — the way out is the migrator
+    (`write_verif_sidecar.py --migrate-condition-prefix`), because a tolerant reader would leave two
+    valid spellings for one thing and the defect comes back through the other one."""
+    kind, resto = condition_split(condicion)
+    if kind is None:
         return False
-    return partes[1].strip(_ADORNO).strip() in CONDITION_RESOLUTIONS
+    primero = _COND_SEP.split(resto, maxsplit=1)[0].strip(_ADORNO).strip().lower()
+    return primero in CONDITION_RESOLUTIONS
+
+
+#: #427 · lo que separa la resolución de la condición original dentro de la misma celda:
+#: `acota→resuelta: <dónde> · <condición original>`. La condición NO se tira al resolverla — es lo
+#: que dice bajo qué régimen vale la afirmación, y sigue haciendo falta para leer la fila.
+COND_RESOLUTION_SEP = " · "
+
+
+def condition_resolution(condicion: str) -> str | None:
+    """Where an `acota` was resolved, or `None` if this cell records no resolution (#427).
+
+    The notation is defined here (`CONDITION_RESOLUTIONS`, `condition_resolved`), so reading it back
+    belongs here too — the whole point of #427 being that a cell with a closed vocabulary is written
+    and read by the same code. Parsed by hand at the call site it came back with the resolution
+    token still glued to the front, and the idempotence check compared it against the caller's text
+    and refused a no-op re-run."""
+    if not condition_resolved(condicion):
+        return None
+    _clase, resto = condition_split(condicion)
+    partes = _COND_SEP.split(resto, maxsplit=1)
+    texto = partes[1] if len(partes) > 1 else ""
+    return texto.split(COND_RESOLUTION_SEP)[0].strip()
 
 
 def locator_kinds(evidencia: str) -> set:
@@ -1597,7 +1641,8 @@ _FANOUT_PLACEHOLDERS = {
     "ancla": "<las 10 hex de la columna `Ancla` del par que se juzga>",
     "veredicto": " | ".join(VERDICTS_FANOUT),
     "evidencia": "«cita textual del PDF» (p. 7)",
-    "condicion": "<la condición que la nota no dice, citada con su página — o \"\">",
+    "condicion": ("<la condición que la nota no dice, citada con su página — SIN la clase adelante"
+                  " (ésa va en `cond_tipo`, y repetirla acá deja la fila irresoluble) — o \"\">"),
     "cond_tipo": " | ".join(CONDITION_KINDS) + " | \"\"",
     "completitud": "<filas/ítems de la tabla o lista de la fuente que la nota omite — o \"\">",
     "nota": "<una línea de por qué; en `no-soportada`, qué dice el paper en cambio>",

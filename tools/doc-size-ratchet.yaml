@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-06"
-techo_lineas: 1780
-techo_bytes: 143500
+techo_lineas: 1783
+techo_bytes: 143800
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -324,3 +324,23 @@ crecimientos:
       lector no ve el nombre mal escrito — y eso cambia lo que un agente tiene que saber.
     techo_lineas: 1780
     techo_bytes: 143500
+  - fecha: "2026-09-09"
+    ancla: "#427"
+    motivo: >-
+      Dos líneas: la clase de la condición va UNA vez y la resolución la escribe un script. Es
+      regla de escritura —el agente que cierra una nota decide ahí si edita la celda a mano— y su
+      consecuencia no es cosmética: duplicada, la fila queda irresoluble y el conteo que la nota
+      publica sobre sí misma miente para siempre (41 de 957 celdas medidas, 7 de ellas `acota`).
+      Se comprimió dos veces antes de firmar; el caso medido vive en el issue.
+    techo_lineas: 1782
+    techo_bytes: 143700
+  - fecha: "2026-09-09"
+    ancla: "#428"
+    motivo: >-
+      Una línea, dentro del mapa «el camino del texto de punta a punta»: `--from` es repetible y el
+      ancla muerta se descarta sólo DECLARADA. Va acá porque ese mapa es lo que un agente lee antes
+      de armar el bloque de verificación, y el caso medido es que la herramienta admitía UN solo
+      orden y no tenía salida cuando ese orden se rompió — le pasó dos veces en la misma sesión,
+      con el error ya identificado y anotado en el `log`.
+    techo_lineas: 1783
+    techo_bytes: 143800

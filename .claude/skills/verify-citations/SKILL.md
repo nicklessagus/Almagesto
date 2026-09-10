@@ -230,7 +230,7 @@ describas en prosa:
       "ancla": "<las 10 hex de la columna `Ancla` del par que se juzga>",
       "veredicto": "soportada | no-soportada | contradice",
       "evidencia": "«cita textual del PDF» (p. 7)",
-      "condicion": "<la condición que la nota no dice, citada con su página — o \"\">",
+      "condicion": "<la condición que la nota no dice, citada con su página — SIN la clase adelante (ésa va en `cond_tipo`, y repetirla acá deja la fila irresoluble) — o \"\">",
       "cond_tipo": "acota | contextualiza | \"\"",
       "completitud": "<filas/ítems de la tabla o lista de la fuente que la nota omite — o \"\">",
       "nota": "<una línea de por qué; en `no-soportada`, qué dice el paper en cambio>"
@@ -464,6 +464,26 @@ completitud es la mitad de juicio del fan-out y no está en la tabla, así que u
 inventado. Y la condición `acota` ya resuelta se anota en su celda: `acota→resuelta: <dónde>`,
 misma notación que el veredicto de al lado (#232: la segunda ronda anota, no pisa).
 
+⛔ **Esa celda NO se edita a mano: la escribe el mismo módulo que arma la tabla (#427).**
+
+```bash
+python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde se resolvió>   # repetible
+python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json                  # `{ancla: dónde}`
+```
+
+Valida con el lector antes de escribir, conserva la condición original detrás de un `·` —sigue
+diciendo bajo qué régimen vale la afirmación—, **no mueve la fecha del bloque** (resolver no es
+re-verificar) y re-correrlo con el mismo texto es un no-op. Rehúsa el ancla que no está en la tabla,
+la fila que no es `acota` (una `contextualiza` va al reporte, no a `## Régimen de validez`) y el
+texto **distinto** sobre una fila ya resuelta: se anota, no se pisa.
+
+⚠ Y la clase va **una sola vez**: el fan-out la declara en `cond_tipo` y **no** la repite dentro de
+`condicion`. Escrita dos veces (`acota: acota→resuelta: …`) la fila queda **irresoluble** —el lector
+toma el token que sigue al primer separador y ahí encuentra la clase, no la resolución— así que se
+resuelve, la celda lo dice, y el conteo la sigue contando como pendiente para siempre. El escritor
+ya no la duplica y el lint la levanta; para el corpus heredado:
+`python scripts/write_verif_sidecar.py <nota.md> --migrate-condition-prefix`.
+
 ⛔ **Corregir es ESCRIBIR, y lo escrito se verifica: la operación cierra en corregir → RE-VERIFICAR
 lo tocado (#203).** No cierra en *corregir*. Después de aplicar, los pares que tocaste están **sin
 verificar** —el ancla cambió— y las citas que la corrección haya agregado son **pares nuevos**. Hay
@@ -558,6 +578,28 @@ veredicto») y hasheó un PDF como texto (117 «vencidos por fuente» sobre PDFs
 Lo que **no** escribe es el texto libre de las tres sub-secciones: ése es el triage de la corrida y
 queda marcado `⚠ triage de la corrida pendiente` hasta que lo completes. Correrlo dos veces sobre el
 mismo fan-out no cambia un byte.
+
+⛔ **`--from` es REPETIBLE, y el ancla muerta no tira la ronda entera (#428).** El fan-out es el
+paso caro: un artefacto ya pagado tiene que poder consumirse.
+
+```bash
+python scripts/write_verif_sidecar.py <nota.md> --from build/<slug>/verif/r1 --from …/r2 --from …/r3
+python scripts/write_verif_sidecar.py <nota.md> --from …/r1 --descartar-anclas-muertas
+```
+
+Varias rondas se **encadenan en orden** —cada una pasa su propia barrera y alimenta a la siguiente—
+y dan byte a byte lo mismo que N corridas sucesivas, sin falsificar ningún manifiesto. Y con
+`--descartar-anclas-muertas` se escriben los pares **vivos** **declarando** cuáles quedaron afuera:
+el ancla es de **bloque**, así que un par cuya ancla sigue en el cuerpo es demostrablemente sobre
+texto intacto, y rechazar la ronda entera era una decisión a nivel archivo sobre una propiedad que
+es a nivel par. Medido: 3 rondas, 77 pares, 72 con veredicto vivo, y ninguna forma de escribirlos.
+⚠ Es **opt-in**: sin el flag sigue rehusando, porque en el flujo normal un ancla muerta ES el error
+que #403 nombra. Y el descarte se **declara** —también el cero—, que es lo que lo distingue de un
+lector tolerante.
+
+⚠ Lo que esto **no** arregla: una ronda cuyo manifiesto dice «ronda completa» y se corrió como
+subconjunto. Ése es un manifiesto **falso**, no un ancla muerta, y la barrera tiene razón en
+frenarlo: regeneralo con `verify_fanout … --fuentes <lista>`.
 
 Lo que sigue describe **qué** produce, para que sepas leerlo y corregirlo:
 

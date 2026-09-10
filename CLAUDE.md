@@ -975,8 +975,9 @@ verificable:
                          Estampa la vista (fecha · txt · lente) y la sección de la nota.
                          ⛔ Y cruza cada cita del JSON contra el `.txt` (#359): avisa.
 
-6. verify-citations   →  un subagente por fuente (`verify_fanout.py`, #369) lee el PDF; DOS hashes por
-                         par, y el hermano `.verif.md` lo escribe `write_verif_sidecar.py` (#403).
+6. verify-citations   →  un subagente por fuente (`verify_fanout.py`, #369) lee el PDF; DOS hashes
+                         por par; el hermano lo escribe `write_verif_sidecar.py` (#403 — `--from`
+                         repetible, y el ancla muerta se descarta sólo DECLARADA, #428).
 ```
 
 ⛔ **La fuente es el PDF; el `.txt` es el ÍNDICE (#205).** La rama vieja —leer el `.txt` y escalar
@@ -1338,7 +1339,9 @@ fan-out la puebla en casi todos los pares, así que *«resolvé cada condición�
 Test operativo: ***¿la afirmación queda falsa si se saca la condición?*** → **`acota`** (se resuelve
 sí o sí: fila de `## Régimen de validez`) / **`contextualiza`** (va al reporte). Y es **columna, no
 prosa**: el juez es estable en el eje textual y no exhaustivo en el de régimen, así que absorberla
-sin rastro borra lo que hay que poder re-auditar.
+sin rastro borra lo que hay que poder re-auditar. ⛔ **Clase UNA vez; la resolución la escribe
+`write_verif_sidecar --resolver <ancla>=<dónde>` (#427):** duplicada, la fila es **irresoluble** y
+su conteo miente para siempre (41 de 957) — migrador `--migrate-condition-prefix`.
 
 El subagente contesta además la **sobre-generalización** (#74: la fuente afirma bajo condiciones
 que la nota no dice — no afirma falso, afirma **de más**) y, en transcripciones, la **completitud**

@@ -10053,3 +10053,24 @@ def test_check_verif_structure_lee_el_fragmento_NORMALIZADO(toy_vault):
                   "`contextualiza` / 0 sin clasificar: derivado.\n"
     estructura, _cab = lint.check_verif_structure("n", malo, Path("n.md"), filas)
     assert [m for _s, m in estructura if "no publica el conteo" in m]
+
+
+def test_check_verif_row_pairs_reporta_la_clase_DUPLICADA_de_la_condicion():
+    """#427 — la celda con la clase escrita dos veces cae en `cond_sin_clasificar` por el mismo
+    motivo que la que no la declara: para `condition_resolved` es igual de muda, así que la fila se
+    resuelve, la celda lo dice, y el conteo la sigue contando como pendiente para siempre. Hasta
+    1.250.0 tenía clase, así que ningún detector la miraba."""
+    texto = "cuerpo con una afirmación [[2020A]]\n"
+    par = lb.pairs_of(texto)[0]
+
+    def _fila(cond):
+        return lb.Row(n="1", claim="c", bibcode=par.bibcode, verdict="soportada",
+                      anchor=par.anchor, source_hash="b" * 10, condition=cond,
+                      source_kind="pdf", evidence="«x» (p. 1)")
+    for cond, espera in (("acota: acota→resuelta: x", "DOS veces"),
+                         ("contextualiza: contextualiza: y", "DOS veces"),
+                         ("la muestra es de 12", "no declara si")):
+        _r = lint.check_verif_row_pairs("n", texto, [_fila(cond)], lambda *_a: None)
+        assert [m for _s, m in _r[6] if espera in m], f"{cond}: {_r[6]}"
+    for cond in ("acota: SNR > 50", "acota→resuelta: fila", "acota: contextualiza: x", "—"):
+        assert lint.check_verif_row_pairs("n", texto, [_fila(cond)], lambda *_a: None)[6] == [], cond

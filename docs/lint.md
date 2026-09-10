@@ -278,6 +278,11 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   bloque y sin tabla parseable (las anclas son el mecanismo principal). Se mide por `git`; fuera de
   un repo cae a **⛔ No evaluado**, nunca a silencio (D-43). La rama "bloque sin fecha" corre
   siempre.
+- **Condición con su clase escrita DOS veces** (#427, dentro de *Condición sin clasificar*): para
+  `condition_resolved` esa celda es igual de muda —lee el token que sigue al **primer** separador y
+  ahí encuentra la clase, no la resolución— así que la fila se resuelve, la celda lo dice, y el
+  conteo la sigue contando como pendiente para siempre. Medido: 41 de 957 celdas, 7 de ellas
+  `acota`. Se cierra con `write_verif_sidecar.py <nota> --migrate-condition-prefix`.
 - **Celda truncada que no puede truncarse** (#226): sólo `Afirmación (extracto)` admite `…`;
   `Evidencia` (con su localizador al final, completo) y `Condición` no. Y la fila donde el cruce de
   localizadores **no se pudo evaluar** se reporta como *no evaluable*, no como ok.

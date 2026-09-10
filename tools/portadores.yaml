@@ -599,3 +599,31 @@ portadores:
           Ubica con ella la línea de cada sub-sección antes de comparar su fragmento con
           `fragment_stated`. Comparaba `frag not in texto` crudo: el fragmento en negrita se
           reportaba como deuda que ninguna edición podía cerrar.
+
+  - issue: 427
+    regla: >-
+      La celda `Condición` la parte UNA función, y el que la ESCRIBE usa el mismo lector que la va a
+      leer. Escrita por un lado (`condition_cell` anteponiendo `cond_tipo` a ciegas) y leída por
+      otro (`condition_kind` / `condition_resolved`), la clase terminaba duplicada — `acota:
+      acota→resuelta: …` — y ahí el lector toma el token que sigue al PRIMER separador, encuentra la
+      clase en vez de la resolución, y la fila queda IRRESOLUBLE: se resuelve, la celda lo dice, y
+      el conteo la publica como pendiente para siempre. Medido: 41 de 957 celdas, 7 de ellas
+      `acota`. Familia de #283/#168/#276/#309 (normalizar al comparar, una sola implementación).
+    funcion: lib_blocks.condition_split
+    patron: 'cond_tipo|CONDITION_KINDS|condition_kind|condition_resolved'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: >-
+          Es el ÚNICO productor de la celda (`condition_cell`) y ahora también quien escribe la
+          resolución (`--resolver`) y colapsa la clase duplicada (`--migrate-condition-prefix`).
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          Reporta las dos formas de celda muda en la misma categoría: la que no declara clase y la
+          que la escribe dos veces. Para `condition_resolved` son igual de ilegibles.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea sólo por un COMENTARIO que cita #283 al explicar la doctrina de normalizar el
+          markdown; no lee ninguna celda de condición.

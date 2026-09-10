@@ -3271,11 +3271,23 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tu
             # sólo agrega procedencia (`contextualiza`). Es el diagnóstico de #198 un eje más
             # allá: acotar la pregunta, no eliminarla.
             _cond = str(fila.condition or "").strip()
-            if _cond and _cond not in ("—", "-", "–") and lb.condition_kind(_cond) is None:
+            _clase, _resto = lb.condition_split(_cond)
+            if _cond and _cond not in ("—", "-", "–") and _clase is None:
                 cond_sin_clasificar.append(
                     (stem, f"[[{fila.bibcode}]] par {fila.n}: la condición no declara si "
                            f"`acota:` (la afirmación es falsa fuera de ella → hay que resolverla) "
                            f"o `contextualiza:` (agrega procedencia → va al reporte)"))
+            # #427 — la clase escrita DOS veces (`acota: acota→resuelta: …`) cae en la misma
+            # categoría, y por el mismo motivo: para `condition_resolved` esa celda es igual de
+            # muda —lee el token que sigue al PRIMER separador y ahí encuentra la clase, no la
+            # resolución—, así que la fila se resuelve, la celda lo dice, y el conteo la sigue
+            # contando como pendiente para siempre. Medido: 41 de 957 celdas, 7 de ellas `acota`.
+            elif _clase is not None and lb.condition_split(_resto)[0] == _clase:
+                cond_sin_clasificar.append(
+                    (stem, f"[[{fila.bibcode}]] par {fila.n}: la condición escribe su clase "
+                           f"`{_clase}` DOS veces, así que `condition_resolved` la lee como no "
+                           f"resuelta para siempre → `python scripts/write_verif_sidecar.py "
+                           f"<nota> --migrate-condition-prefix`"))
             _locs = lb.locator_kinds(fila.evidence)
             # #226 — `_locs` vacío NO puede ser silencio: es NO EVALUABLE, y acá eso se declara
             # (D-43) en vez de resolverse a favor. Medido: al truncar `Evidencia` se va el `p. N`

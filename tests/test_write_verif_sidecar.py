@@ -457,3 +457,293 @@ def test_el_triage_mas_corto_que_existe_TAMBIEN_esta_protegido(toy_vault):
     assert ws._lost_prose("Omisiones en transcripciones: xy",
                           "Omisiones en transcripciones: " + ws.PENDIENTE) == [], \
         "un residuo de dos caracteres es signo suelto, no triage"
+
+
+# ── #427 · la celda `Condición` no duplica su clase, y hay quien escribe `acota→resuelta:` ──────
+
+def test_condition_cell_NO_duplica_la_clase_que_el_fanout_ya_escribio(toy_vault):
+    """#427 — `condition_cell` anteponía `cond_tipo` sin mirar si `condicion` ya arrancaba con su
+    clase, y el prompt no lo prohibía. El resultado, `acota: acota→…`, deja la fila IRRESOLUBLE:
+    `condition_resolved` lee el segundo token y ahí encuentra la clase, no la resolución."""
+    assert ws.condition_cell({"condicion": "SNR > 50", "cond_tipo": "acota"}) == "acota: SNR > 50"
+    assert ws.condition_cell({"condicion": "acota: SNR > 50", "cond_tipo": "acota"}) == \
+        "acota: SNR > 50", "la clase ya estaba: no se duplica"
+    assert ws.condition_cell({"condicion": "**acota** — SNR > 50", "cond_tipo": "acota"}) == \
+        "acota: SNR > 50", "adornada, sigue siendo la misma clase (#283)"
+    assert ws.condition_cell({"condicion": "acota: SNR > 50", "cond_tipo": ""}) == "acota: SNR > 50"
+    assert ws.condition_cell({"condicion": "", "cond_tipo": "acota"}) == "—"
+
+
+def test_condition_cell_REHUSA_cuando_el_extractor_se_contradice(toy_vault):
+    """#427/D-43 — `cond_tipo: acota` con `condicion: contextualiza: …` es el productor
+    contradiciéndose, y elegir uno sería inventar la clase. Se rehúsa nombrando el par: el arreglo
+    va en el JSON de la ronda, que es donde está el error."""
+    with pytest.raises(ws.SidecarError, match="contextualiza"):
+        ws.condition_cell({"condicion": "contextualiza: la muestra es de 12", "cond_tipo": "acota",
+                           "ancla": "abc1234567"}, bibcode="2020Pdf")
+
+
+def test_la_resolucion_de_un_acota_SOBREVIVE_a_la_ronda_siguiente(toy_vault):
+    """#427/#232 — una ronda posterior recalcula la celda desde el JSON del fan-out, que no sabe
+    nada de la resolución: sin esto, marcar un `acota` como resuelto y volver a correr el escritor
+    lo desmarcaba en silencio. Una resolución es una decisión que alguien firmó."""
+    assert ws.chained_condition(None, "acota: SNR > 50") == "acota: SNR > 50"
+    assert ws.chained_condition("acota: SNR > 50", "acota: SNR > 50") == "acota: SNR > 50"
+    assert ws.chained_condition("acota→resuelta: fila en el régimen", "acota: SNR > 50") == \
+        "acota→resuelta: fila en el régimen", "la resolución manda sobre el recálculo"
+    assert ws.chained_condition("contextualiza: x", "acota: SNR > 50") == "acota: SNR > 50"
+    # las dos mitades de la guarda, cada una por su lado: previa NO resuelta (aunque sea la misma
+    # clase) y previa resuelta de OTRA clase. En los dos casos manda el recálculo del fan-out.
+    assert ws.chained_condition("acota: SNR > 30", "acota: SNR > 50") == "acota: SNR > 50"
+    assert ws.chained_condition("contextualiza→resuelta: y", "acota: SNR > 50") == "acota: SNR > 50"
+
+
+def test_resolver_escribe_la_notacion_QUE_EL_LECTOR_SABE_LEER(toy_vault):
+    """#427 — `condition_resolved` definía el formato y `verif_counts` publicaba el conteo, pero
+    NINGÚN script lo escribía: el agente editaba el hermano a mano, contra el banner del propio
+    archivo y contra #403. Ahora lo escribe el mismo módulo que arma la tabla, y valida con el
+    lector antes de escribir."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota")
+    ws.write(nota, d, fecha="2026-03-01")
+    filas = lb.verif_rows(nota)
+    assert lb.verif_counts(filas)["cond_acota_resueltas"] == 0
+    ancla = filas[0].anchor
+    r = ws.resolve_conditions(nota, {ancla: "fila en `## Régimen de validez`"})
+    assert r["resueltas"] == 1
+    fila = next(f for f in lb.verif_rows(nota) if f.anchor == ancla)
+    assert lb.condition_resolved(fila.condition), fila.condition
+    assert "SNR > 50" in fila.condition, "la condición original se conserva detrás del `·`"
+    assert "2 `acota` (1 resueltas)" in nota.read_text(encoding="utf-8"), \
+        "la cabecera de la sub-sección se re-genera con el conteo nuevo (#280)"
+    assert "## Verificación de citas (2026-03-01)" in nota.read_text(encoding="utf-8"), \
+        "resolver no es re-verificar: la fecha del bloque no se mueve"
+    assert ws.resolve_conditions(nota, {ancla: "fila en `## Régimen de validez`"})["resueltas"] == 0
+
+
+def test_resolver_REHUSA_el_ancla_que_no_esta_la_fila_que_no_es_acota_y_el_texto_DISTINTO(toy_vault):
+    """#427/#232 — anotar, nunca pisar. Y las dos formas de pedirlo sobre la fila equivocada: un
+    ancla que no existe (¿se editó la nota?) y una `contextualiza`, que por definición no se
+    resuelve — va al reporte, no a `## Régimen de validez`."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {}, condicion="la muestra es de 12", cond_tipo="contextualiza")
+    ws.write(nota, d, fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    with pytest.raises(ws.SidecarError, match="no está"):
+        ws.resolve_conditions(nota, {"0" * 10: "x"})
+    with pytest.raises(ws.SidecarError, match="contextualiza"):
+        ws.resolve_conditions(nota, {ancla: "x"})
+    d2 = _fanout(toy_vault, nota, {}, ronda="r2", condicion="SNR > 50", cond_tipo="acota")
+    ws.write(nota, d2, fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    ws.resolve_conditions(nota, {ancla: "fila A"})
+    with pytest.raises(ws.SidecarError, match="ya declara"):
+        ws.resolve_conditions(nota, {ancla: "fila B"})
+
+
+def test_migrate_condition_prefix_colapsa_la_clase_DOBLE_y_es_idempotente(toy_vault):
+    """#427 — el migrador de las 41 celdas medidas. Colapsa la cabeza repetida dejando el texto de
+    adentro VERBATIM, que es justo la forma canónica; no re-escribe la condición."""
+    assert ws.collapse_condition("acota: acota→resuelta: fila") == "acota→resuelta: fila"
+    assert ws.collapse_condition("acota: acota: SNR > 50") == "acota: SNR > 50"
+    assert ws.collapse_condition("contextualiza: contextualiza: x") == "contextualiza: x"
+    assert ws.collapse_condition("acota: SNR > 50") == "acota: SNR > 50", "sin doble, no toca"
+    assert ws.collapse_condition("acota: contextualiza: x") == "acota: contextualiza: x", \
+        "clases DISTINTAS no son una duplicación: eso es una contradicción y no se resuelve sola"
+    assert ws.collapse_condition("—") == "—"
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota")
+    ws.write(nota, d, fecha="2026-03-01")
+    herm = cfg.verif_sidecar(nota)
+    herm.write_text(herm.read_text(encoding="utf-8")
+                    .replace("acota: SNR > 50", "acota: acota→resuelta: fila A", 1), encoding="utf-8")
+    assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == 0, "irresoluble hoy"
+    assert ws.migrate_condition_prefix(nota)["migradas"] == 1
+    assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == 1
+    t1 = nota.read_bytes(), herm.read_bytes()
+    assert ws.migrate_condition_prefix(nota)["migradas"] == 0
+    assert (nota.read_bytes(), herm.read_bytes()) == t1, "idempotente"
+
+
+def test_el_cli_de_condiciones_toma_una_nota_y_rehusa_el_par_MAL_FORMADO(toy_vault, capsys):
+    """#427 — `--resolver <ancla>=<dónde>`: sin el `=` no resolvería nada y esto escribe en el
+    artefacto que el lint lee, así que se rehúsa en vez de adivinar. Y no hay `--todo`: resolver una
+    condición es una decisión POR PAR."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota")
+    ws.write(nota, d, fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    assert ws.main(["--resolver", f"{ancla}=fila A", str(nota)]) == 0
+    assert "1 condición(es)" in capsys.readouterr().out
+    assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == 1
+    assert ws.main(["--resolver", "sin-igual", str(nota)]) == 1
+    assert "falta el `=`" in capsys.readouterr().out
+    assert ws.main(["--migrate-condition-prefix"]) == 2
+    assert "UNA nota" in capsys.readouterr().out
+    assert ws.main(["--migrate-condition-prefix", str(cfg.verif_sidecar(nota))]) == 2
+
+
+def test_el_cli_de_condiciones_acepta_el_LOTE_por_json(toy_vault, capsys):
+    """#427 — `--resoluciones <json>`: el mismo trabajo para una nota con muchas `acota`, que es el
+    caso medido (20 en una nota real). Un JSON que no es un objeto se rehúsa."""
+    import json as _json
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota")
+    ws.write(nota, d, fecha="2026-03-01")
+    anclas = [f.anchor for f in lb.verif_rows(nota)]
+    j = toy_vault.ROOT / "build" / "res.json"
+    j.write_text(_json.dumps({a: f"fila {i}" for i, a in enumerate(anclas)}), encoding="utf-8")
+    assert ws.main(["--resoluciones", str(j), str(nota)]) == 0
+    assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == len(anclas)
+    j.write_text(_json.dumps(["no", "es", "objeto"]), encoding="utf-8")
+    assert ws.main(["--resoluciones", str(j), str(nota)]) == 1
+    assert "objeto" in capsys.readouterr().out
+
+
+# ── #428 · un artefacto ya pagado tiene que poder consumirse ────────────────────────────────────
+
+def test_from_acepta_VARIAS_rondas_y_encadena(toy_vault):
+    """#428 — el fan-out es el paso caro (N subagentes leyendo PDFs). Con un solo `--from` había
+    que encadenar N invocaciones a mano, y cuando una ronda no se podía pasar sola la única salida
+    era re-pagarla o escribir el ensamblador a mano — que es lo que #403 existe para eliminar.
+    Encadenar en memoria da byte a byte lo mismo que las N corridas sucesivas."""
+    nota = _escena(toy_vault)
+    r1 = _fanout(toy_vault, nota, {"2020Pdf": "no-soportada"}, ronda="r1")
+    r2 = _fanout(toy_vault, nota, {"2020Pdf": "corregida"}, ronda="r2")
+    ws.write(nota, r1, fecha="2026-03-01")
+    ws.write(nota, r2, fecha="2026-03-02")
+    serial = (nota.read_text(encoding="utf-8"), cfg.verif_sidecar(nota).read_text(encoding="utf-8"))
+
+    cfg.verif_sidecar(nota).unlink()
+    nota.write_text("---\ntags:\n- methods\n---\n" + CUERPO, encoding="utf-8")
+    r = ws.write(nota, [r1, r2], fecha="2026-03-02")
+    assert (nota.read_text(encoding="utf-8"),
+            cfg.verif_sidecar(nota).read_text(encoding="utf-8")) == serial, \
+        "dos `--from` encadenados == dos corridas sucesivas"
+    assert r["rondas"] == 2
+    assert "no-soportada→corregida" in serial[1], "la ronda 2 ANOTÓ sobre la 1 (#232)"
+
+
+def test_from_DECLARA_las_anclas_muertas_en_vez_de_rechazar_la_ronda_entera(toy_vault):
+    """#428 — el ancla es de BLOQUE: un par cuya ancla no cambió es demostrablemente sobre texto
+    intacto, así que rechazar la ronda ENTERA es una decisión a nivel archivo sobre una propiedad
+    que es a nivel par. Medido en una instancia: 3 rondas, 77 pares con veredicto vivo en 72 casos,
+    y ninguna forma de escribirlos. ⛔ Es opt-in y DECLARADO (D-43): el descarte silencioso sería un
+    lector tolerante; el operador ve qué quedó afuera y decide si re-verificarlo."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    datos = json.loads((d / "2020Pdf.json").read_text(encoding="utf-8"))
+    datos["pares"].append({"ancla": "dead0dead0", "veredicto": "soportada",
+                           "evidencia": '"otra cita" (p. 9)'})
+    (d / "2020Pdf.json").write_text(json.dumps(datos), encoding="utf-8")
+    (d / "_esperado.json").write_text(json.dumps(
+        {"nota": nota.as_posix(), "fuentes": {"2020Pdf": 2, "2019Txt": 1}, "pares": 3}),
+        encoding="utf-8")
+
+    with pytest.raises(ws.SidecarError, match="dead0dead0"):
+        ws.write(nota, d, fecha="2026-03-01")              # sin el flag: rehúsa, como hoy
+    r = ws.write(nota, d, fecha="2026-03-01", descartar_muertas=True)
+    assert r["descartadas"] == [("2020Pdf", "dead0dead0")]
+    assert r["filas"] == 2, "los pares vivos SÍ se escriben"
+
+
+def test_el_cli_de_from_multiple_declara_las_descartadas_y_el_mensaje_ofrece_la_salida(toy_vault, capsys):
+    """#428 — sin el flag el mensaje de rehúse tiene que NOMBRAR los dos caminos, o el operador
+    queda igual de trabado que antes (le pasó dos veces en una sesión, con el error ya anotado)."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    datos = json.loads((d / "2020Pdf.json").read_text(encoding="utf-8"))
+    datos["pares"].append({"ancla": "dead0dead0", "veredicto": "soportada", "evidencia": '"x" (p. 9)'})
+    (d / "2020Pdf.json").write_text(json.dumps(datos), encoding="utf-8")
+    (d / "_esperado.json").write_text(json.dumps(
+        {"nota": nota.as_posix(), "fuentes": {"2020Pdf": 2, "2019Txt": 1}, "pares": 3}),
+        encoding="utf-8")
+    assert ws.main([str(nota), "--from", str(d), "--fecha", "2026-03-01"]) == 1
+    salida = capsys.readouterr().out
+    assert "--descartar-anclas-muertas" in salida and "reverify_subset" in salida
+    assert ws.main([str(nota), "--from", str(d), "--descartar-anclas-muertas",
+                    "--fecha", "2026-03-01"]) == 0
+    salida = capsys.readouterr().out
+    assert "1 par(es) descartado(s)" in salida and "dead0dead0" in salida
+
+
+def test_el_flag_con_CERO_muertas_declara_el_cero(toy_vault, capsys):
+    """#428/D-43 — «0 descartadas» se declara: lo no evaluado y lo evaluado-en-cero piden acciones
+    distintas, y acá el operador pidió explícitamente el descarte."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    assert ws.main([str(nota), "--from", str(d), "--descartar-anclas-muertas",
+                    "--fecha", "2026-03-01"]) == 0
+    assert "0 par(es) descartado(s)" in capsys.readouterr().out
+
+
+def test_las_guardas_de__rewrite_rows_son_PRECONDICIONES_del_que_lo_llame(toy_vault):
+    """#427 — `_rewrite_rows` es el punto de escritura de las dos modalidades de condición, y sus
+    dos guardas son precondiciones para cualquier llamador futuro: sin hermano no hay filas que
+    reescribir, y sin fecha en el encabezado re-fechar sería una decisión (D-4: resolver una
+    condición no es re-verificar). Hoy ningún camino las alcanza —las dos modalidades salen antes
+    si no hay cambios— así que se ejercen desde acá, que es lo que las mantiene medibles."""
+    nota = _escena(toy_vault)
+    with pytest.raises(ws.SidecarError, match="hermano"):
+        ws._rewrite_rows(nota, {"a" * 10: "acota: x"}, None, False)
+    ws.write(nota, _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota"),
+             fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "## Verificación de citas (2026-03-01)", "## Verificación de citas"), encoding="utf-8")
+    with pytest.raises(ws.SidecarError, match="fecha"):
+        ws._rewrite_rows(nota, {ancla: "acota: y"}, None, False)
+
+
+def test_resolver_NO_escribe_si_el_lector_deja_de_reconocer_lo_que_escribe(toy_vault, monkeypatch):
+    """#427 — «valida con el lector antes de escribir» es una guarda, no una frase: si la notación y
+    su lector se separan otra vez (que es EXACTAMENTE el defecto que este issue arregla), esto
+    rehúsa en vez de escribir una celda que después nadie va a poder contar."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota"),
+             fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    antes = nota.read_bytes()
+    monkeypatch.setattr(lb, "condition_resolved", lambda c: False)
+    with pytest.raises(ws.SidecarError, match="no se lee como resuelta"):
+        ws.resolve_conditions(nota, {ancla: "fila A"})
+    assert nota.read_bytes() == antes
+
+
+def test_el_no_op_de_las_dos_modalidades_NO_pasa_por_el_escritor(toy_vault):
+    """#427 — sin cambios no se toca el artefacto: la corrida vacía devuelve su conteo y sale, en
+    vez de re-renderizar la tabla para escribir lo mismo. Es lo que hace barato encadenar el
+    migrador sobre toda la bóveda (y lo que el dict de retorno declara: sin `fecha` no hubo
+    escritura)."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota"),
+             fecha="2026-03-01")
+    assert ws.migrate_condition_prefix(nota) == {"migradas": 0, "filas": 2}
+    ancla = lb.verif_rows(nota)[0].anchor
+    ws.resolve_conditions(nota, {ancla: "fila A"})
+    assert ws.resolve_conditions(nota, {ancla: "fila A"}) == {"resueltas": 0, "filas": 2}
+
+
+def test_el_cli_migra_de_verdad_y_el_dry_run_NO_escribe(toy_vault, capsys):
+    """#427 — la modalidad `--migrate-condition-prefix` por CLI, con efecto: hasta acá el CLI sólo
+    estaba probado por sus rehúses, así que saltearse la migración entera pasaba limpio. Y el
+    `--dry-run` dice qué haría sin tocar el artefacto, que es como se corre sobre una bóveda ajena."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota"),
+             fecha="2026-03-01")
+    herm = cfg.verif_sidecar(nota)
+    herm.write_text(herm.read_text(encoding="utf-8")
+                    .replace("acota: SNR > 50", "acota: acota→resuelta: fila A", 1), encoding="utf-8")
+    antes = herm.read_bytes()
+    assert ws.main(["--migrate-condition-prefix", "--dry-run", str(nota)]) == 0
+    assert "dry-run" in capsys.readouterr().out and herm.read_bytes() == antes
+    assert ws.main(["--migrate-condition-prefix", str(nota)]) == 0
+    assert "1 celda(s)" in capsys.readouterr().out
+    assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == 1
+
+
+def test_el_cli_de_condiciones_rehusa_la_nota_QUE_NO_EXISTE(toy_vault, capsys):
+    """#427 — la ruta inexistente (un tipeo, o la nota que se renombró) se nombra; sin esto el
+    error saldría desde adentro, sobre un archivo que nadie abrió."""
+    assert ws.main(["--migrate-condition-prefix", str(cfg.WIKI / "no-existe.md")]) == 2
+    assert "no es una nota" in capsys.readouterr().out

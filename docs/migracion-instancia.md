@@ -550,6 +550,58 @@ esa línea lleva algo que el lector no reconoció: mirala a mano antes de re-cor
 no un error del comando. **Devolver si** alguna nota pierde prosa igual, o si el lint sigue
 reportando *«no publica el conteo»* sobre una sub-sección cuyo número es el correcto.
 
+## 2n · v1.251.0 (#427) — la clase de la condición escrita dos veces, y quién resuelve un `acota`
+
+Dos puntas de la misma pieza. `write_verif_sidecar.condition_cell` es el único productor de la
+celda `Condición` y **no usaba** ninguna de las dos funciones que definen su vocabulario, así que
+anteponía `cond_tipo` sin mirar si el texto ya arrancaba con su clase — y varios verificadores del
+fan-out la escribían también adentro de `condicion`, porque el prompt no lo prohibía. El resultado
+es `acota: acota: …`, y ahí `condition_resolved` toma el token que sigue al **primer** separador,
+encuentra la clase en vez de la resolución, y la fila queda **irresoluble**: se resuelve, la celda
+lo dice, y el conteo la publica como pendiente para siempre. Medido en esta bóveda: **41 de 957**
+celdas con condición tenían el prefijo duplicado (22 en `ica`, 12 en `gj_581`, 7 en `hd_40307`) y
+**7 de ellas eran `acota`**.
+
+La otra punta: `condition_resolved` definía la notación `acota→resuelta: …` y `verif_counts`
+publicaba su conteo, pero **ningún script la escribía** — el agente editaba el hermano a mano,
+contra el banner del propio archivo y contra #403.
+
+**Migración y uso** (idempotentes, no mueven la fecha del bloque):
+
+```bash
+python scripts/write_verif_sidecar.py <nota.md> --migrate-condition-prefix
+python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde se resolvió>
+python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json     # `{ancla: dónde}` en lote
+python scripts/lint.py                                                      # rc 0
+```
+
+El migrador colapsa la clase repetida dejando el texto de adentro **verbatim** (que es la forma
+canónica) y no re-escribe la condición. `--resolver` valida con el lector antes de escribir,
+conserva la condición original detrás de un `·`, y rehúsa el ancla que no está, la fila que no es
+`acota` y el texto **distinto** sobre una fila ya resuelta. **Devolver si** el lint sigue
+reportando «clase DOS veces» después del migrador, o si `--resolver` rehúsa sobre un `acota` legítimo.
+
+## 2ñ · v1.253.0 (#428) — la ronda que no se podía ensamblar
+
+`--from` tomaba **un** directorio y `build_rows` rechazaba la ronda **entera** si un solo par tenía
+el ancla muerta. Como el ciclo *corregir → re-verificar* no converge solo (#282), en cuanto una nota
+se corrige entre rondas las anteriores quedan con anclas muertas mezcladas con vivas — y ahí no hay
+camino de vuelta: `write_verif_sidecar` no puede consumirlas y `reverify_subset` necesita un hermano
+que todavía no existe. Medido acá: 3 rondas, 77 pares, **72 con veredicto vivo**, y ninguna forma de
+escribirlos; la salida fue partir las rondas por fuente a mano y falsificar los manifiestos.
+
+```bash
+python scripts/write_verif_sidecar.py <nota.md> --from …/r1 --from …/r2 --from …/r3
+python scripts/write_verif_sidecar.py <nota.md> --from …/r1 --descartar-anclas-muertas
+```
+
+Las rondas se encadenan **en orden** y dan byte a byte lo mismo que N corridas sucesivas. El
+descarte es **opt-in y declarado** (también el cero): sin el flag sigue rehusando, porque en el
+flujo normal un ancla muerta ES el error. ⚠ Lo que **no** arregla: el manifiesto que dice «ronda
+completa» sobre una corrida de subconjunto — ése es un manifiesto falso y la barrera tiene razón;
+regeneralo con `verify_fanout … --fuentes <lista>`. **Devolver si** encadenar N rondas no da lo
+mismo que correrlas de a una, o si el descarte se lleva un par cuya ancla sí está en el cuerpo.
+
 ## 3 · Cierre
 
 ```bash

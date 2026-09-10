@@ -1506,3 +1506,46 @@ def test_subsection_split_sin_fragmento_pide_DOS_PUNTOS_y_colapsa_el_espaciado()
         (True, "la tabla 2: fila c omitida")
     assert lb.subsection_split(f"  **{sub}**   (aclaración) :  la  tabla   2", sub) == \
         (True, "la  tabla   2")
+
+
+# ── #427 · una sola función parte la celda `Condición` ───────────────────────────────────────────
+
+def test_condition_split_es_la_UNICA_que_parte_la_celda():
+    """#427 — `condition_kind` y `condition_resolved` leían la celda cada una por su lado, y el
+    productor (`write_verif_sidecar.condition_cell`) no usaba ninguna de las dos. Ahora las tres
+    salen de acá, así que la clase que el escritor antepone es la misma que el lector reconoce."""
+    assert lb.condition_split("acota: SNR > 50") == ("acota", "SNR > 50")
+    assert lb.condition_split("**contextualiza** — la muestra es de 12") == \
+        ("contextualiza", "la muestra es de 12")
+    assert lb.condition_split("acota→resuelta: fila en el régimen") == \
+        ("acota", "resuelta: fila en el régimen")
+    assert lb.condition_split("la muestra es de 12") == (None, "la muestra es de 12")
+    assert lb.condition_split("") == (None, "")
+    # paridad con los dos lectores que ahora derivan de ella
+    for c in ("acota: x", "**contextualiza** — x", "acota→resuelta: y", "z", "", "—"):
+        assert lb.condition_kind(c) == lb.condition_split(c)[0]
+
+
+def test_condition_resolved_NO_se_vuelve_un_lector_tolerante():
+    """#427 — la celda con la clase DUPLICADA (`acota: acota→resuelta: …`) se sigue leyendo como NO
+    resuelta, a propósito: este repo no lleva capas de compatibilidad. La salida es el migrador
+    (`--migrate-condition-prefix`), no un lector que adivine — un lector tolerante deja dos formas
+    válidas para lo mismo y el defecto vuelve por la otra."""
+    assert lb.condition_resolved("acota→resuelta: fila en el régimen") is True
+    assert lb.condition_resolved("acota: acota→resuelta: fila en el régimen") is False
+    assert lb.condition_resolved("acota: SNR > 50") is False
+    assert lb.condition_resolved("acota→resueltamente: x") is False   # #276: entera, no prefijo
+    # sin CLASE no hay resolución: `resuelta` suelta no dice qué se resolvió, y una celda que
+    # empieza con la palabra no declara que su `acota` esté cerrada — no la declara `acota` siquiera
+    assert lb.condition_resolved("resuelta: fila en el régimen") is False
+
+
+def test_condition_resolution_lee_la_notacion_QUE_condition_resolved_DEFINE():
+    """#427 — la notación vive en un solo lado. Parseada a mano en el llamador volvía con el token
+    `resuelta:` pegado adelante, así que el chequeo de idempotencia comparaba contra otra cosa y
+    rehusaba una re-corrida que era un no-op."""
+    assert lb.condition_resolution("acota→resuelta: fila en el régimen · SNR > 50") == \
+        "fila en el régimen"
+    assert lb.condition_resolution("acota→resuelta: fila en el régimen") == "fila en el régimen"
+    assert lb.condition_resolution("acota: SNR > 50") is None
+    assert lb.condition_resolution("acota: acota→resuelta: x") is None, "duplicada: no es resuelta"

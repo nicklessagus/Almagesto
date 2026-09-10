@@ -193,3 +193,25 @@ conservan su texto; segunda corrida = 0 cambios (red 6); `lint.py` rc 0 y sin *�
 conteo»* sobre sub-secciones correctas. **Devolver si** alguna nota pierde prosa, si el comando
 rehúsa sobre una línea que a ojo está bien formada, o si el lint sigue reportando la sub-sección en
 negrita. **Al cerrar:** cuántas secciones se re-estamparon y sobre cuántas notas con hermano.
+
+---
+
+## #427 · v1.251.0 — guía §2n
+
+**Validar:** `lint.py` → la categoría *Condición sin clasificar* nombra las celdas con la clase
+DOS veces (esperado ~41 sobre las notas verificadas, 7 `acota`); correr
+`--migrate-condition-prefix` nota por nota → el lint baja a 0 en esa mitad y
+`cond_acota_resueltas` de la cabecera **sube** en las 7 que ya estaban resueltas y no se contaban;
+segunda corrida = 0 migradas (idempotente); `--resolver <ancla>=<dónde>` sobre un `acota` abierto →
+la cabecera de *Condiciones perdidas* cambia el `(N resueltas)` y la fecha del bloque **no se
+mueve**. **Devolver si** una celda migrada pierde texto, o si `--resolver` rehúsa sobre un `acota`
+legítimo. **Al cerrar:** cuántas celdas se migraron por nota y el delta de `cond_acota_resueltas`.
+
+## #428 · v1.253.0 — guía §2ñ
+
+**Validar:** sobre `build/gj_581/verif/` (las tres rondas que motivaron el issue), un solo comando
+con `--from a1 --from a2 --from a3` → el hermano sale igual que el que se armó a mano; y sobre una
+ronda con anclas muertas, `--descartar-anclas-muertas` escribe los vivos **nombrando** los
+descartados. Sin el flag el mensaje tiene que ofrecer los dos caminos. **Devolver si** el encadenado
+no reproduce el resultado serial, o si el mensaje de rehúse no dice cómo salir. **Al cerrar:**
+cuántos pares se recuperaron sin re-pagar fan-out.
