@@ -325,3 +325,16 @@ lista para pegar y *«PDF REEMPLAZADO»* en el motivo; y una cita deliberadament
 nuevo (arranque igual, cola inventada) → rc 1 nombrando *«`.txt` NUEVO»*. **Devolver si** una cita
 correcta contra el PDF nuevo sigue bloqueando, o si una alterada contra el PDF nuevo pasa.
 
+## #440 · v1.258.1 — el backfill de los 15 reemplazos a mano
+
+Medido acá: 15 notas con `pdf_source: publisher` y nada más, `extraccion_despaginada` = `(0)`.
+**Validar:** `replace_pdf.py <bibcode> --backfill --source publisher --reason "…" --dry-run` sobre
+uno → no cambia un byte; sin `--dry-run` → la nota gana `pdf_reemplazo` con `sha_anterior: "?"`,
+`sha` del PDF en disco y `paginas: "? → N"`, y **cada** extracción del bibcode gana `_paginacion`;
+repetirlo → rehúsa (*«ya declara `pdf_reemplazo`»*). Sobre los 15: `lint.py` →
+`extraccion_despaginada` = **15** (y sin *«NO lo declara»*), y sobre uno de los 23 pares de
+copyedición `contrast --validar` deja de acusar con la lectura del preprint (o marca, o bloquea
+contra el `.txt` nuevo — #437 ítem 3). **Devolver si** el backfill toca un PDF o un `.txt`, si
+inventa un `sha_anterior`, o si después del backfill la categoría sigue en 0. **Al cerrar:**
+cuántos de los 15 quedaron con `sha_anterior` real y cuántos con `?`.
+

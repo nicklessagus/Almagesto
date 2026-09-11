@@ -194,6 +194,67 @@ def stamp_depagination(bibcode: str, sha_viejo: str, sha_nuevo: str, motivo: str
     return tocadas
 
 
+def sign_note(nota: Path, *, source: str, sha_anterior: str, sha: str, paginas: str,
+              reason: str) -> None:
+    """Append one entry to the note's `pdf_reemplazo` history and set the scalars it implies (#437).
+
+    ONE writer for the two paths that leave the trace —the replacement itself and the backfill of
+    a replacement done by hand before the command existed (#440)—: `pdf_sha`, `pdf_source`,
+    `eprint_version: null` when the new copy is not an eprint, and the add-only list."""
+    cfg.set_fm_scalar(nota, "pdf_sha", sha)
+    cfg.set_fm_scalar(nota, "pdf_source", source)
+    if source != "eprint":
+        cfg.set_fm_scalar(nota, "eprint_version", "null", crear=False)
+    previos = cfg.as_list((cfg.split_fm(nota.read_text(encoding="utf-8")) or {}).get("pdf_reemplazo"))
+    mn._set_lista_de_mapas(nota, "pdf_reemplazo", [x for x in previos if isinstance(x, dict)] + [
+        {"fecha": _dt.date.today().isoformat(), "source": source, "sha_anterior": sha_anterior,
+         "sha": sha, "paginas": paginas, "motivo": reason}])
+
+
+def backfill(bibcode: str, source: str, reason: str, sha_anterior: str = "?",
+             dry_run: bool = False) -> dict:
+    """Stamp BOTH halves of a replacement that was done by hand before the command existed (#440).
+
+    Measured on the instance that motivated #437: **15** notes replaced by hand on 2026-09-10 with
+    `pdf_source: publisher` and nothing else — `pdf_reemplazo` on **0**, `_paginacion` on **0 of
+    288** extractions, `extraccion_despaginada` = `(0)`. Both halves of #437 key off `_paginacion`
+    in the EXTRACTION, and the migration guide told the operator to backfill the note: the half no
+    check reads. The fix was correct and inert exactly where it was measured (D-43: a zero nobody
+    measured, read as a verdict).
+
+    Touches no PDF and re-extracts nothing: the document on disk IS the new one. What it stamps is
+    what the command would have stamped: `_paginacion` on every extraction of the bibcode and the
+    signed `pdf_reemplazo` on the note. `sha_anterior` is `"?"` unless the operator still has it —
+    the guide already admits it: it is not invented. ⚠ With `?` the mark is still decidable for
+    both readers: the lint keys off its presence and `quote_verdict` off the same; what is lost is
+    only the «which document was it» that a real sha would let you check later."""
+    stem = cfg.note_stem(bibcode)
+    nota = cfg.PAPERS / f"{stem}.md"
+    if not nota.exists():
+        raise ReplaceError(f"⛔ no hay nota `{nota.name}`: el backfill firma la nota, y sin ella no "
+                           f"hay dónde")
+    copias = pdf_copies(bibcode)
+    if not copias:
+        raise ReplaceError(f"⛔ no hay ningún PDF de {bibcode} en `vault/raw/pdfs/**`: el backfill "
+                           f"declara que el PDF en disco ES el reemplazo, y no hay ninguno")
+    if source not in cfg.PDF_SOURCE_OK:
+        raise ReplaceError(f"⛔ `--source {source}` no está en el vocabulario cerrado (#296): "
+                           f"{' | '.join(cfg.PDF_SOURCE_OK)}")
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
+    if cfg.as_list(fm.get("pdf_reemplazo")):
+        raise ReplaceError(f"⛔ {nota.name} ya declara `pdf_reemplazo`: el backfill es para el "
+                           f"reemplazo hecho ANTES del comando, y éste ya está firmado")
+    sha = lb.sha10(copias[0].read_bytes())
+    n_pag = cfg.pdf_page_count(copias[0])[0]
+    paginas = f"? → {n_pag if n_pag is not None else '?'}"
+    if not dry_run:
+        sign_note(nota, source=source, sha_anterior=sha_anterior, sha=sha, paginas=paginas,
+                  reason=reason)
+    extracciones = stamp_depagination(bibcode, sha_anterior, sha, reason, dry_run=dry_run)
+    return {"bibcode": bibcode, "sha": sha, "sha_anterior": sha_anterior, "paginas": paginas,
+            "extracciones": [str(e) for e in extracciones], "slugs": [c.parent.name for c in copias]}
+
+
 def replace(bibcode: str, nuevo: Path, source: str, reason: str,
             dry_run: bool = False) -> dict:
     """Install `nuevo` as this paper's PDF under every slug, and leave the trace (#436).
@@ -248,22 +309,12 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
                             slug, "--bibcode", cfg.note_stem(bibcode), "--force"], check=False)
     nota = cfg.PAPERS / f"{cfg.note_stem(bibcode)}.md"
     if nota.exists() and not dry_run:
-        cfg.set_fm_scalar(nota, "pdf_sha", sha_nuevo)
-        cfg.set_fm_scalar(nota, "pdf_source", source)
-        # #383 bloquea `pdf_source` de editor con `eprint_version`: el valor viejo describía el
-        # documento que acabamos de sacar de disco.
-        if source != "eprint":
-            cfg.set_fm_scalar(nota, "eprint_version", "null", crear=False)
-        # #437 — el rastro FIRMADO, add-only: la historia de reemplazos de este PDF, en la nota que
-        # viaja. Se escribe con el mismo escritor de listas de mapas que usa el resto del framework.
-        previos = cfg.as_list((cfg.split_fm(nota.read_text(encoding="utf-8")) or {})
-                              .get("pdf_reemplazo"))
-        mn._set_lista_de_mapas(nota, "pdf_reemplazo", [x for x in previos if isinstance(x, dict)] + [
-            {"fecha": _dt.date.today().isoformat(), "source": source,
-             "sha_anterior": sha_viejo, "sha": sha_nuevo,
-             "paginas": f"{paginas[0] if paginas[0] is not None else '?'} → "
-                        f"{paginas[1] if paginas[1] is not None else '?'}",
-             "motivo": reason}])
+        # #383 bloquea `pdf_source` de editor con `eprint_version` (el valor viejo describía el
+        # documento que acabamos de sacar de disco); #437 — el rastro FIRMADO, add-only, en la
+        # nota que viaja. Un solo escritor con el backfill de #440.
+        sign_note(nota, source=source, sha_anterior=sha_viejo, sha=sha_nuevo,
+                  paginas=f"{paginas[0] if paginas[0] is not None else '?'} → "
+                          f"{paginas[1] if paginas[1] is not None else '?'}", reason=reason)
     elif not nota.exists():
         cfg.print_seguro(f"  ⚠ no hay nota `{nota.name}`: el PDF se reemplazó y el frontmatter no "
                          f"se pudo estampar (¿`make_notes.py` todavía no la creó?)")
@@ -302,7 +353,15 @@ def main(argv=()) -> int:
     """CLI. Refusals come back as exit 2 with their reason; nothing is written on a refusal."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("bibcode")
-    ap.add_argument("pdf", help="el archivo entrante (el que trajo el usuario)")
+    ap.add_argument("pdf", nargs="?", default=None,
+                    help="el archivo entrante (el que trajo el usuario); se omite con `--backfill`")
+    ap.add_argument("--backfill", action="store_true",
+                    help="#440 · el reemplazo se hizo A MANO antes de que existiera el comando: "
+                         "estampa las DOS mitades (`_paginacion` en las extracciones y "
+                         "`pdf_reemplazo` en la nota) sin tocar el PDF ni re-extraer")
+    ap.add_argument("--sha-anterior", default="?", dest="sha_anterior",
+                    help="con `--backfill`: el sha10 del PDF que se sacó, si todavía se tiene; "
+                         "`?` (default) si se perdió — no se inventa")
     ap.add_argument("--source", required=True, metavar="|".join(cfg.PDF_SOURCE_OK),
                     help="procedencia del documento NUEVO (vocabulario cerrado, #296). ⛔ Se "
                          "rehúsa `publisher`/`ads` sobre un PDF que lleva la marca de arXiv.")
@@ -314,6 +373,19 @@ def main(argv=()) -> int:
                          "escribir nada")
     args = ap.parse_args(list(argv))
     try:
+        if args.backfill:
+            r = backfill(args.bibcode, args.source, args.reason, sha_anterior=args.sha_anterior,
+                         dry_run=args.dry_run)
+            cfg.print_seguro(
+                f"{'(dry-run) ' if args.dry_run else ''}{r['bibcode']}: backfill del reemplazo a "
+                f"mano — `pdf_reemplazo` firmado en la nota (sha_anterior {r['sha_anterior']}, sha "
+                f"{r['sha']}, páginas {r['paginas']}) y `_paginacion` en {len(r['extracciones'])} "
+                f"extracción(es). El lint lo levanta en `extraccion_despaginada` y `quote_verdict` "
+                f"deja de juzgar con la lectura vieja (#440)")
+            return 0
+        if not args.pdf:
+            cfg.print_seguro("⛔ falta el PDF entrante (o `--backfill` para el reemplazo hecho a mano)")
+            return 2
         r = replace(args.bibcode, Path(args.pdf), args.source, args.reason, dry_run=args.dry_run)
     except ReplaceError as e:
         cfg.print_seguro(str(e))

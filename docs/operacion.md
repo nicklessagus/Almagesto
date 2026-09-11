@@ -132,6 +132,8 @@ python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason "
                                     #   documento anterior; #311 no se reescribe) y EMITE el alcance
                                     #   de la re-verificación. Rehúsa el archivo idéntico y el
                                     #   preprint declarado `publisher`. `--dry-run` para verlo antes
+                                    #   `--backfill` (#440): el reemplazo hecho A MANO antes del
+                                    #   comando — estampa las dos mitades sin tocar el PDF
 python scripts/proposals.py [<slug>]
                                     # #328/#435 · las PROPUESTAS que esperan una firma (no es la
                                     #   deuda del lint). Cada categoría declara dónde aterriza su

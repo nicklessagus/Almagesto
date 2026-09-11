@@ -350,3 +350,54 @@ def test_AVISA_si_el_entrante_tiene_menos_paginas_y_no_rehusa(toy_vault, tmp_pat
         assert aviso and "no se pudieron comparar" in aviso and "pdfinfo" in aviso, \
             "sin conteo de CUALQUIERA de los dos NO es «no es más corto»: no evaluable con motivo"
 
+
+# ── #440 · el backfill estampa las DOS mitades ───────────────────────────────────────────────────
+
+def test_backfill_estampa_las_DOS_mitades_sin_tocar_el_pdf(toy_vault, tmp_path, monkeypatch, capsys):
+    """⛔ #440 — los 15 reemplazos hechos a mano ANTES del comando quedaron con `pdf_source: publisher`
+    y nada más: `pdf_reemplazo` en 0, `_paginacion` en 0 de 288, la categoría en `(0)` sobre una
+    bóveda con 15 papers cuyos localizadores sí son del documento anterior. Las dos mitades de #437
+    se disparan por `_paginacion` en la EXTRACCIÓN, y la guía mandaba backfillear la nota: la mitad
+    que ningún chequeo mira. El fix era correcto e inerte justo donde se midió."""
+    _copia("gj_581", "2010D", EDITOR); nota = _nota("2010D", pdf_source="publisher")
+    (cfg.EXTRACCION / "gj_581").mkdir(parents=True, exist_ok=True)
+    ext = cfg.EXTRACCION / "gj_581" / "2010D.json"
+    ext.write_text(json.dumps({"bibcode": "2010D", "ground_truth": [{"que": "P", "linea": "p. 5"}]}),
+                   encoding="utf-8")
+    _paginas(monkeypatch, saliente=7, entrante=7)
+    antes_pdf = (cfg.PDFS / "gj_581" / "2010D.pdf").read_bytes()
+    assert rp.main(["2010D", "--backfill", "--source", "publisher",
+                    "--reason", "reemplazado a mano el 2026-09-10"]) == 0
+    assert (cfg.PDFS / "gj_581" / "2010D.pdf").read_bytes() == antes_pdf, "no toca el PDF"
+    (r,) = cfg.split_fm(nota.read_text(encoding="utf-8"))["pdf_reemplazo"]
+    assert r["sha_anterior"] == "?" and r["sha"] == lb.sha10(EDITOR) and r["paginas"] == "? → 7"
+    assert r["motivo"] == "reemplazado a mano el 2026-09-10"
+    marca = json.loads(ext.read_text(encoding="utf-8"))["_paginacion"]
+    assert marca["pdf_sha_anterior"] == "?" and marca["pdf_sha"] == lb.sha10(EDITOR)
+    assert "backfill" in capsys.readouterr().out
+    # y las dos mitades ya son las que los dos lectores miran: el lint la levanta…
+    assert cfg.extraction_depaginated("2010D")
+    # …y firmada, el backfill rehúsa repetirse: es para el reemplazo ANTERIOR al comando
+    assert rp.main(["2010D", "--backfill", "--source", "publisher", "--reason", "otra vez"]) == 2
+    assert "ya declara `pdf_reemplazo`" in capsys.readouterr().out
+
+
+def test_backfill_rehusa_sin_nota_sin_pdf_y_con_source_fuera_de_vocabulario(toy_vault, monkeypatch,
+                                                                              capsys):
+    """Las tres rehusadas del backfill, cada una con su motivo: firma una nota (sin ella no hay
+    dónde), declara que el PDF en disco ES el reemplazo (sin PDF no hay qué declarar), y el
+    vocabulario de `pdf_source` es cerrado (#296)."""
+    _paginas(monkeypatch)
+    with pytest.raises(rp.ReplaceError, match="no hay nota"):
+        rp.backfill("2010D", "publisher", "m")
+    _nota("2010D", pdf_source="publisher")
+    with pytest.raises(rp.ReplaceError, match="no hay ningún PDF"):
+        rp.backfill("2010D", "publisher", "m")
+    _copia("gj_581", "2010D", EDITOR)
+    with pytest.raises(rp.ReplaceError, match="vocabulario"):
+        rp.backfill("2010D", "revista", "m")
+    r = rp.backfill("2010D", "publisher", "m", sha_anterior="abc1234567", dry_run=True)
+    assert r["sha_anterior"] == "abc1234567" and "pdf_reemplazo" not in _nota("2010D").read_text(encoding="utf-8")
+    assert rp.main(["2010D", "--source", "publisher", "--reason", "m"]) == 2, "sin PDF ni --backfill"
+    assert "falta el PDF" in capsys.readouterr().out
+

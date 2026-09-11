@@ -726,19 +726,22 @@ imprime no coincide con las filas que citan ese bibcode.
 
 ## 2t · v1.257.0 (#437) — `replace_pdf` firma la nota y mira lo que saca
 
-Sin migración: los reemplazos ya hechos (11 en la instancia) quedaron sin `pdf_reemplazo` y el lint
-lo dice en `extraccion_despaginada` (*«la nota del paper NO lo declara»*). Se cierra a mano —es la
-historia de un reemplazo que ya ocurrió, y el motivo lo tiene quien lo hizo—:
+⛔ **Los reemplazos hechos a mano ANTES del comando se backfillean con el comando, no con un
+snippet (#440).** Las dos mitades de #437 se disparan por `_paginacion` en la **extracción**; esta
+guía mandaba backfillear la nota, que es la mitad que ningún chequeo mira — medido en la instancia:
+15 notas con `pdf_source: publisher`, `pdf_reemplazo` en 0, `_paginacion` en 0 de 288, la
+categoría en `(0)`. Un `(0)` que nadie midió y se lee como veredicto (D-43).
 
-```yaml
-pdf_reemplazo:
-  - fecha: 2026-09-10
-    source: publisher
-    sha_anterior: <sha10 del preprint>     # si no se guardó, "?": no se inventa
-    sha: <sha10 del PDF actual>
-    paginas: "33 → 7"                      # o "? → ?"
-    motivo: <por qué se reemplazó>
+```bash
+python scripts/replace_pdf.py <bibcode> --backfill --source publisher --reason "reemplazado a mano el 2026-09-10"
+python scripts/replace_pdf.py <bibcode> --backfill --source publisher --reason "…" --sha-anterior <sha10>   # si lo tenés
 ```
+
+No toca el PDF ni re-extrae: declara que el PDF en disco ES el reemplazo, firma `pdf_reemplazo`
+(`sha_anterior: "?"` si se perdió — no se inventa) y marca `_paginacion` en cada extracción del
+bibcode. Rehúsa la nota que ya está firmada. Después, `python scripts/lint.py` →
+`extraccion_despaginada` con las N, y `contrast --validar` deja de juzgar esas citas con la lectura
+del preprint.
 
 Los reemplazos nuevos lo escriben solos, y antes de copiar comparan páginas: `⚠ PÁGINAS: el PDF
 entrante tiene N página(s) MENOS…` es aviso, no rehúse. **Devolver si** un reemplazo nuevo deja la

@@ -1953,3 +1953,22 @@ ejecutadas: el verde no decía nada sobre si sus tests las distinguen.
 quedó vivo; y un gate de tier 0 con ratchet (`tests/test_tests_en_su_archivo.py`,
 `tools/tests-ratchet.yaml`) mecaniza la regla: el conteo sólo baja, y una función NUEVA testeada
 desde otro archivo pone el test en rojo aunque el total no suba.
+
+## 2026-09-11 · El backfill de #437 escribía la mitad que ningún chequeo mira (#440)
+
+**Medido en la instancia al validar v1.257.1:** los **15** reemplazos preprint→publicado hechos a
+mano el 2026-09-10 (el comando no existía) quedaron con `pdf_source: publisher` y nada más —
+`pdf_reemplazo` en **0**, `_paginacion` en **0 de 288** extracciones, `extraccion_despaginada` =
+`(0)`. Las dos mitades de #437 se disparan por `_paginacion` en la **extracción**, y la guía de
+migración mandaba backfillear la **nota**. El fix era correcto e **inerte** justo donde se midió el
+problema: los 23 pares de copyedición seguían juzgados por la lectura del preprint.
+
+**La regla:** una marca que un chequeo usa para decidir tiene que existir también en los casos
+anteriores al comando que la estampa, o el chequeo declara que no los mira. La llevan
+`_paginacion`, `_cambios` del ground-truth (AUD-42) y `versions_disponible` (#298).
+
+**Qué cambió (1.258.1).** `replace_pdf.py --backfill`: estampa las dos mitades sin tocar el PDF ni
+re-extraer, con `sha_anterior: "?"` donde se perdió (no se inventa: con `?` la marca sigue siendo
+decidible para los dos lectores, lo que se pierde es sólo el «cuál documento era»). Un solo
+escritor de la firma (`sign_note`) para el reemplazo y el backfill.
+

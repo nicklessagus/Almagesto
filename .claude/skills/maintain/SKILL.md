@@ -372,7 +372,9 @@ al re-leer esas páginas se actualizan los localizadores y se saca la marca. Med
 ⛔ **Y mirá el aviso de PÁGINAS del `--dry-run` (#437):** la copia del editor puede ser peor que el
 preprint (medido: 7 páginas sin Supplementary contra 33, con la ficha citando §S1.1). Es aviso, no
 rehúse — el que decide es quien mira. El reemplazo queda **firmado** en la nota
-(`pdf_reemplazo`, add-only) con el motivo: es lo que hace falta si hay que revertirlo.
+(`pdf_reemplazo`, add-only) con el motivo: es lo que hace falta si hay que revertirlo. Un reemplazo hecho **a mano** antes del comando se backfillea con
+`replace_pdf.py <bibcode> --backfill --source publisher --reason "…"` (#440): sin eso las dos
+mitades quedan sin estampar y el lint no lo ve.
 
 La caducidad queda **versionada** en `vault/config/registro/_red.yaml` — cuándo se miró afuera es
 información de la bóveda, no de la máquina. Un detector que no pudo correr **no** entra en `cubrio`.
