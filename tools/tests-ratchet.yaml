@@ -1,0 +1,53 @@
+# Techo de funciones de `scripts/` + `tools/` testeadas SÓLO desde el archivo de OTRO módulo (#439).
+#
+# Sólo puede BAJAR. Se mide con `pytest tests/test_tests_en_su_archivo.py`.
+#
+# LA REGLA. Un test vive en `tests/test_<módulo>.py`, o las redes que miran POR MÓDULO no lo ven:
+# `mutar --dirigida` y `--guardas` (AUD-213) corren sólo ese archivo —a propósito, es lo que las hace
+# baratas—, así que una función testeada desde otro archivo sale «sin test propio que la mate»
+# aunque tenga diez. Es INV-101 (la red que no mira el código nuevo no es una red) aplicado a
+# DÓNDE vive el test.
+#
+# MEDIDO el 2026-09-11 cerrando #437: `--guardas scripts/lib_quotes.py` reportó 9 guardas vivas de
+# `quote_verdict` —el juez del gate de cierre (#324)— con doce tests escritos… en
+# `tests/test_lib_config.py`, donde la función se re-exporta. La medición «las guardas mueren» de
+# #324/#333 se había hecho contra un archivo que no las ejercita. Al enumerar por AST: 36 funciones
+# en 11 módulos en la misma situación; las de `lib_quotes` se mudaron en la misma tanda y quedan
+# las de abajo como deuda declarada.
+#
+#   - conteo por ENCIMA del techo → el test falla: alguien testeó una función nueva desde otro archivo.
+#   - un NOMBRE que no esté en `conocidos` → rojo aunque el total no suba (la deuda no rota).
+#   - conteo por DEBAJO → pasa y avisa que hay que bajar el techo acá (AUD-07).
+#   - el techo NUNCA se sube. Si una función nueva lo necesita, su test está en el archivo equivocado.
+medido_en: "2026-09-11"
+techo: 29
+conocidos:
+  - bench_verify.py::flush
+  - extract_fulltext.py::tesseract_version
+  - fetch_arxiv.py::drop_filter
+  - fetch_ground_truth.py::unresolved_aliases
+  - lib_blocks.py::flush
+  - lib_blocks.py::inference_marks
+  - lib_config.py::combination_rule
+  - lib_config.py::frontmatter_span
+  - lib_config.py::get_mailto
+  - lib_config.py::legacy_triage_path
+  - lib_config.py::missing_schema_fields
+  - lib_config.py::ratchet_raises
+  - lib_config.py::record_pdf_source
+  - lib_config.py::save_sintesis
+  - lib_config.py::section_start
+  - lib_config.py::snapshot_retrieved
+  - lib_config.py::table_shape_issues
+  - lib_config.py::themes_error
+  - lib_quotes.py::deinterleave_columns
+  - lint.py::check
+  - lint.py::inventario_sin_llenar
+  - lint.py::merge_ours_driver_risk
+  - make_notes.py::index_tables
+  - make_notes.py::restamp_index
+  - make_notes.py::restamp_matrix
+  - refresh_issues.py::fetch
+  - refresh_issues.py::main
+  - trace_invariants.py::lineas_declarativas
+  - triage.py::report

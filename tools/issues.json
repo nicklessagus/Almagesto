@@ -2174,11 +2174,21 @@
   {
    "number": 437,
    "title": "replace_pdf (#436): el docstring promete un `pdf_reemplazo` que no escribe, y no compara el PDF entrante con el que saca (la copia del editor puede ser PEOR)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 438,
    "title": "Los dos artefactos que TODA categoría nueva del lint mueve sólo los mira el tier deseleccionado: el CI se rompe 11 minutos después del push, y el chequeo no necesita el corpus",
+   "state": "CLOSED"
+  },
+  {
+   "number": 439,
+   "title": "Los tests de `quote_verdict` viven en `test_lib_config.py`, así que `mutar --guardas scripts/lib_quotes.py` no los ve: 9 guardas del juez del gate de cierre reportadas vivas, y 36 funciones en 11 módulos en la misma situación",
+   "state": "OPEN"
+  },
+  {
+   "number": 440,
+   "title": "El backfill de #437 escribe la mitad que ningún chequeo mira: los 15 reemplazos anteriores al comando quedan invisibles (`extraccion_despaginada` = 0 sobre 288) y la regla de v1.257.1 no los alcanza",
    "state": "OPEN"
   }
  ]

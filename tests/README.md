@@ -483,3 +483,15 @@ regresión; un test que él propuso, sí. (Sin decidir todavía; anotado.)
   los tres tests de `apply_fixes.py` sobrevivieron a mutar la guarda que decían proteger, porque el
   flujo caía en otra guarda que también abortaba la escritura. La pregunta es *¿murió por la línea
   que estoy probando?* y se contesta con `python tools/mutar.py --dirigida scripts/<módulo>.py`.
+
+## Un test vive en el archivo del módulo que prueba (#439)
+
+`mutar --dirigida` y `--guardas` corren **sólo** `tests/test_<módulo>.py` —a propósito, es lo que las
+hace baratas—, así que una función testeada desde *otro* archivo sale «sin test propio que la mate»
+aunque tenga diez. Medido cerrando #437: **9 guardas vivas** de `quote_verdict` —el juez del gate de
+cierre— con doce tests escritos en `tests/test_lib_config.py`, donde la función se re-exporta; la
+medición «las guardas mueren» de #324/#333 se había hecho contra un archivo que no las ejercita.
+Por AST eran **36 funciones en 11 módulos**. `tests/test_tests_en_su_archivo.py` lo mecaniza con
+ratchet (`tools/tests-ratchet.yaml`): el conteo sólo baja, y un nombre nuevo fuera de `conocidos`
+pone el test en rojo aunque el total no suba. Las de `lib_quotes` se mudaron en la misma tanda.
+

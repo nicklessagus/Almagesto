@@ -709,12 +709,15 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
         # es su `.txt`: si TRAE el arranque y sigue distinto, la cita sí está alterada contra lo que
         # hay en disco y bloquea; si calla, la marca `⚠verificar en el PDF` — nunca «pasa». La
         # atribución movida (`otro`) no depende del documento y bloquea igual.
-        if prefijo and not otro:
+        # (acá `otro or prefijo` ya es verdad, así que `not otro` implica `prefijo`; y como
+        # `prefijo` se midió sobre ESTAS extracciones, `viejas ∪ vigentes` no puede ser vacío —
+        # dos condiciones que no deciden nada, #319)
+        if not otro:
             viejas = [b for b in cited or [] if extraction_depaginated(b)
                       and any(quote_found(quote[:CITA_PREFIJO], t) for t in extracciones.get(b, []))]
             vigentes = [b for b in cited or [] if b not in viejas
                         and any(quote_found(quote[:CITA_PREFIJO], t) for t in extracciones.get(b, []))]
-            if viejas and not vigentes:
+            if not vigentes:
                 for b in viejas:
                     acusa = txt_accuses(quote, fuentes.get(b) or [])
                     if acusa:

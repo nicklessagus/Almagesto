@@ -1701,7 +1701,7 @@ y `icasso.md`, la nota donde los cuatro casos se habían verificado abriendo el 
 interferences» donde el PDF dice «artifact»— ya se había corregido en la nota y en el JSON el
 2026-08-31, así que **no está en el corpus**. Sobre esta bóveda se mide *cuánto ruido se saca*, y la
 *sensibilidad* la sostiene sólo el test unitario que reconstruye ese caso
-(`tests/test_lib_config.py::test_el_borde_de_palabra_sigue_acusando_lo_que_DEBE`). Un lector que
+(`tests/test_lib_quotes.py::test_el_borde_de_palabra_sigue_acusando_lo_que_DEBE`). Un lector que
 tome el 231 → 155 como evidencia de que el detector sigue cazando lo que debe estaría leyendo de
 más.
 
@@ -1923,8 +1923,33 @@ silencio → `extraccion_vieja`, la marca `⚠verificar en el PDF`, nunca «pasa
 bloquea igual. Lo que NO se hizo: degradar siempre (el gate no mordería nunca en esas fuentes) ni
 re-leer (es el paso caro, y el alcance que imprime `replace_pdf` ya es esa lista).
 
-⚠ **Discrepancia de medición, declarada (regla 5):** `mutar --guardas` reporta viva la guarda
-`page_warning::if@L141` (`n_in < n_out → False`) y la misma mutación aplicada a mano sobre el
-árbol la mata (`test_AVISA_si_el_entrante_tiene_menos_paginas_y_no_rehusa` falla). No se pudo
-reconciliar en la sesión; se anota en vez de elegir.
+⚠ **Discrepancia de medición, declarada y después NO reproducida (regla 5 → #439):** en la
+sesión, `mutar --guardas` reportó viva `page_warning::if@L141` y la misma mutación a mano la mataba.
+Re-medido el mismo día con el árbol quieto: las 4 guardas de `page_warning` **mueren**. Queda como
+*no reproducido*, no como bug del tooling. Lo que sí era real —y parecía lo mismo— está en #439.
 
+## 2026-09-11 · Los tests de `quote_verdict` vivían donde `--guardas` no mira (#439)
+
+**Cómo se encontró.** Cerrando #437, `mutar --guardas` sobre `lib_quotes` acotado a `quote_verdict`
+reportó **9 guardas vivas** del juez de citas (#324). Primero lo anoté como discrepancia del tooling:
+dos mutadas a mano mataban un test. **No era el tooling** — esos tests vivían en
+`tests/test_lib_config.py` (donde `quote_verdict` se re-exporta) y `--guardas` mira
+`tests/test_lib_quotes.py`, que no tenía ninguno. La medición de #333/#324 «las guardas mueren» se
+hizo contra un archivo que no las ejercita.
+
+**La regla:** un test vive en el archivo del módulo que prueba, o las redes que miran por módulo
+(dirigida, guardas) no lo ven — INV-101 aplicado a dónde vive el test. Enumerado por AST (función
+pública de `scripts/<mod>.py` que algún `tests/test_*.py` llama y `tests/test_<mod>.py` no):
+
+| | |
+|---|---|
+| módulos | **11** |
+| funciones | **36** (`lib_config` 12, `lib_quotes` 10, `lint` 3, `make_notes` 3, siete con 1) |
+
+Para las 36, la red 1 y la de guardas estaban ciegas y la de cobertura (red 4) las daba por
+ejecutadas: el verde no decía nada sobre si sus tests las distinguen.
+
+**Qué cambió (1.258.0).** Los tests de `lib_quotes` se mudaron a su archivo y se cubrió lo que
+quedó vivo; y un gate de tier 0 con ratchet (`tests/test_tests_en_su_archivo.py`,
+`tools/tests-ratchet.yaml`) mecaniza la regla: el conteo sólo baja, y una función NUEVA testeada
+desde otro archivo pone el test en rojo aunque el total no suba.
