@@ -25,6 +25,55 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 435
+    regla: >-
+      La clave de `stars.yaml` es el NOMBRE canónico y el slug es un campo (`themes.yaml` sí está
+      indexado por slug). Quien recorre `load_stars().items()` trata la clave como nombre y saca el
+      slug de `meta["slug"]`; buscar UNA estrella por slug es `star_by_slug`, la implementación
+      canónica. Devuelto por la instancia: `subject_slug('GJ 581')` daba `'GJ 581'`, y la firma
+      del registro `gj_581.yaml` no se encontraba nunca (60 de 62 propuestas seguían permanentes).
+    funcion: lib_config.star_by_slug
+    patron: 'load_stars\(\)\s*(or \{\})?\)?\.items\(\)'
+    consumidores:
+      - modulo: scripts/extraction_prompt.py
+        estado: usa
+        motivo: resuelve la estrella del sujeto por slug al armar el prompt.
+      - modulo: scripts/fetch_ground_truth.py
+        estado: usa
+        motivo: el slug del CLI → la entrada de la estrella.
+      - modulo: scripts/ingest_star.py
+        estado: usa
+        motivo: ídem, al arrancar la cadena.
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: ídem, al estampar la ficha.
+      - modulo: scripts/query_ads.py
+        estado: usa
+        motivo: ídem, al armar la query.
+      - modulo: scripts/triage.py
+        estado: usa
+        motivo: "`subject_name` (la inversa) delega en `star_by_slug`."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Es donde VIVE `star_by_slug`; `subject_slug` y `declared_scopes` recorren TODAS las
+          estrellas (no buscan una por slug) y tratan la clave como nombre desde 1.258.2.
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Recorre todas para encontrar la del slug pedido y trata la clave como nombre (correcto);
+          no delega porque devuelve además el TIPO (`star`/`theme`) en el mismo recorrido.
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Tres recorridos que ya comparan `m.get("slug") == slug` y usan la clave como nombre —
+          la regla cumplida inline; delegar cambiaría el `KeyError` de `star_by_slug` por `None`
+          en tres sitios que hoy reportan.
+      - modulo: scripts/sweep_external.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Recorre TODAS las estrellas para el barrido de ground-truth y saca el slug de
+          `meta["slug"]`: la regla cumplida, y no busca una sola.
   - issue: 437
     regla: >-
       Contar las páginas de un PDF es UNA función (`pdfinfo`, la misma dependencia de sistema que

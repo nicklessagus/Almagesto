@@ -2892,9 +2892,13 @@ def test_subject_slug_resuelve_el_NOMBRE_con_el_que_una_nota_reclama(monkeypatch
     (`stars[]`, `thesis_links[]`, `vistas[].sujeto`, `refuta`) y el registro, la clave de config y
     `--drop-core` van por SLUG. Cruzar un reclamo contra la curación exige saltar esa brecha, y
     saltarla a mano es lo que hacía que `refuta: ["GJ 581"]` no encontrara la firma de `gj_581`."""
+    # ⛔ el doble con la forma REAL de `stars.yaml` (la de `conftest.STARS`): la CLAVE es el nombre
+    # canónico y el slug es un campo. Indexado por slug y con `name` —la forma de `themes.yaml`—
+    # el test pasaba con la función devolviendo el nombre (regla de método nº 2: el doble con
+    # otro contrato esconde el bug en la diferencia; #435 devuelto por la instancia por esto).
     monkeypatch.setattr(cfg, "load_stars", lambda: {
-        "gj_581": {"name": "GJ 581", "aliases": ["HO Lib", "Gl 581"]},
-        "tau_cet": {"name": "tau Cet"}})
+        "GJ 581": {"slug": "gj_581", "aliases": ["HO Lib", "Gl 581"]},
+        "tau Cet": {"slug": "tau_cet"}})
     monkeypatch.setattr(cfg, "load_themes", lambda: {
         "ica-ruido": {"concept": "ICA con ruido", "title": "Noisy ICA"}})
     assert cfg.subject_slug("GJ 581") == "gj_581"
@@ -2928,13 +2932,15 @@ def test_declared_scopes_enumera_los_DOS_legs_de_la_autoridad(monkeypatch):
                 "extra_core": [{"bibcode": "2011Naik", "via": "usuario", "motivo": "m",
                                 "alcance": "§2", "unidad_cita": "seccion"}]},
         "vacio": {}})
-    monkeypatch.setattr(cfg, "load_stars", lambda: {
-        "gj_581": {"extra_core": [{"bibcode": "2009M", "via": "usuario", "motivo": "m",
+    monkeypatch.setattr(cfg, "load_stars", lambda: {          # clave = NOMBRE, slug adentro (#435)
+        "GJ 581": {"slug": "gj_581",
+                   "extra_core": [{"bibcode": "2009M", "via": "usuario", "motivo": "m",
                                    "unidad_cita": "pagina", "alcance": "cap. 4"}]}})
     d = cfg.declared_scopes()
     assert d["2010CJ"][:2] == ("caps. 1-3", "pagina") and "sources[]" in d["2010CJ"][2]
     assert d["2011Naik"][:2] == ("§2", "seccion") and "themes.yaml" in d["2011Naik"][2]
     assert d["2009M"][:2] == ("cap. 4", "pagina") and "stars.yaml" in d["2009M"][2]
+    assert "`gj_581`" in d["2009M"][2], "la procedencia lleva el SLUG, no la clave (#435)"
     assert "" not in d, "sin `key` no hay a qué nota apuntar"
     monkeypatch.setattr(cfg, "load_themes", lambda: {})
     monkeypatch.setattr(cfg, "load_stars", lambda: {})

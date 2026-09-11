@@ -338,3 +338,17 @@ contra el `.txt` nuevo — #437 ítem 3). **Devolver si** el backfill toca un PD
 inventa un `sha_anterior`, o si después del backfill la categoría sigue en 0. **Al cerrar:**
 cuántos de los 15 quedaron con `sha_anterior` real y cuántos con `?`.
 
+## #430 (3ª vuelta) y #435 (devuelto) · v1.258.2
+
+**#430:** el repro del comentario —`lb.subsection_split("Inferencias declaradas — 3 marcas en el
+cuerpo: \`(inferencia de [[b1]], [[b2]])\`.", "Inferencias declaradas")`— tiene que devolver la prosa
+**con** el backtick de apertura. Después, sobre `ica-ruido.md` (con la línea 665 reparada a mano):
+`write_verif_sidecar.py vault/wiki/concepts/methods/ica-ruido.md --restamp-section --dry-run` y la
+corrida real → la línea 665 queda byte a byte; segunda corrida → 0 (red 6). **Devolver si** vuelve a
+perder el backtick o cualquier otro adorno de apertura de la prosa.
+
+**#435:** `cfg.subject_slug('GJ 581')` → `'gj_581'`; `python scripts/proposals.py` → la refutación
+de `2012ApJS..200...15A` sale de lo pendiente y aparece como *«ya FIRMADA»* con el motivo del
+registro; el conteo de permanentes baja de 60. **Devolver si** sigue en pendiente, o si una estrella
+con alias sólo resuelve por el nombre canónico.
+

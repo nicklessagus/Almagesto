@@ -1660,3 +1660,21 @@ def test_paridad_split_blocks_solo_prosa_sobre_la_seccion_estampada():
     for b in lb.split_blocks(NOTA_SUB):
         for bib in cfg.LINK_RE.findall(b.text):
             assert bib in prosa, (bib, b)
+
+
+def test_subsection_split_conserva_el_ADORNO_de_apertura_de_la_prosa():
+    """⛔ #430, tercera vuelta — con el fix de v1.250.0 adentro, el escritor volvió a comerse el
+    backtick de apertura de `ica-ruido.md:665`, dos veces en vivo: el mapa plano→original apunta al
+    primer carácter NO adorno de la prosa (`(`), y el adorno que lo precede en el original quedaba
+    fuera del corte. La prosa se conserva byte a byte, adorno incluido; la de cierre ya entraba."""
+    linea = ("Inferencias declaradas — 3 marcas en el cuerpo: "
+             "`(inferencia de [[2004ISPL...11..470D]], [[1998Hyvarinen]])`.")
+    es, prosa = lb.subsection_split(linea, "Inferencias declaradas")
+    assert es and prosa == "`(inferencia de [[2004ISPL...11..470D]], [[1998Hyvarinen]])`.", prosa
+    # negrita de apertura, y el adorno de CIERRE de un token anterior no se arrastra
+    es, prosa = lb.subsection_split("**Inferencias declaradas** — 1 marcas en el cuerpo: **ojo** con esto.",
+                                    "Inferencias declaradas")
+    assert es and prosa == "**ojo** con esto.", prosa
+    es, prosa = lb.subsection_split("Omisiones en transcripciones: `nada`", "Omisiones en transcripciones")
+    assert es and prosa == "`nada`", prosa
+

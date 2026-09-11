@@ -1972,3 +1972,25 @@ re-extraer, con `sha_anterior: "?"` donde se perdió (no se inventa: con `?` la 
 decidible para los dos lectores, lo que se pierde es sólo el «cuál documento era»). Un solo
 escritor de la firma (`sign_note`) para el reemplazo y el backfill.
 
+## 2026-09-11 · Dos devueltos por la instancia con el fix instalado (#430, #435)
+
+**#430, tercera vuelta.** Con el fix de v1.250.0 adentro, `--restamp-section` volvió a comerse el
+backtick de apertura de `ica-ruido.md:665` **dos veces en vivo** (`c8d1eec` bajo v1.254.0, y otra
+vez a mano bajo v1.256.0). Repro: `lb.subsection_split("… cuerpo: \`(inferencia de [[b1]], [[b2]])\`.",
+"Inferencias declaradas")` → `'(inferencia de …)\`.'`. Mecanismo: el mapa plano→original apunta al
+primer carácter **no adorno** de la prosa (`(`), y el adorno que lo precede en el original —que la
+normalización se comió— quedaba fuera del corte. Fix (1.258.2): el offset retrocede sobre el adorno
+pegado al arranque; el de cierre de un token anterior no entra porque siempre hay un separador entre
+medio. Test con la línea exacta de la instancia.
+
+**#435, devuelto.** `cfg.subject_slug('GJ 581')` → `'GJ 581'`: la clave de `stars.yaml` es el
+**nombre** canónico y el slug es un campo (`themes.yaml` sí está indexado por slug), y la función
+devolvía la clave. `dropped_signature` buscaba `registro/GJ 581.yaml`, no encontraba nada, y la
+propuesta firmada el 09-10 seguía pendiente: **60 de 62 seguían permanentes** — el número del issue
+no se había movido. El test no lo vio porque su doble estaba indexado por slug y con `name`, la
+forma de `themes.yaml` (regla de método nº 2: el doble con otro contrato esconde el bug en la
+diferencia). Fix (1.258.2): `subject_slug` y `declared_scopes` (el segundo portador, nombrado por la
+instancia) tratan la clave como nombre y sacan el slug del campo; los dobles se derivan de la forma
+real (`conftest.STARS`); regla firmada en `tools/portadores.yaml` con `star_by_slug` como
+implementación canónica y nueve portadores enumerados.
+

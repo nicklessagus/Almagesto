@@ -204,7 +204,7 @@ def test_la_refutacion_FIRMADA_deja_de_estar_pendiente(toy_vault, capsys):
     comando hizo lo suyo, y `proposals.py` seguía listando la misma propuesta con el mismo `→`."""
     _refuta("2012ApJS", "GJ 581")
     (cfg.CONFIG).mkdir(parents=True, exist_ok=True)
-    (cfg.CONFIG / "stars.yaml").write_text("gj_581:\n  name: GJ 581\n", encoding="utf-8")
+    (cfg.CONFIG / "stars.yaml").write_text("GJ 581:\n  slug: gj_581\n", encoding="utf-8")   # forma real (#435)
     cfg.load_stars.cache_clear() if hasattr(cfg.load_stars, "cache_clear") else None
     filas, poblacion, firmadas = pr.refutations()
     assert poblacion == 1 and len(filas) == 1 and firmadas == [], "sin firmar, está pendiente"
@@ -225,7 +225,7 @@ def test_acotar_por_slug_resuelve_el_NOMBRE_del_reclamo(toy_vault):
     firma no se cruzara— y el reporte acotado salía en cero sobre una propuesta que existe."""
     _refuta("2012ApJS", "GJ 581")
     (cfg.CONFIG).mkdir(parents=True, exist_ok=True)
-    (cfg.CONFIG / "stars.yaml").write_text("gj_581:\n  name: GJ 581\n", encoding="utf-8")
+    (cfg.CONFIG / "stars.yaml").write_text("GJ 581:\n  slug: gj_581\n", encoding="utf-8")   # forma real (#435)
     assert len(pr.refutations("gj_581")[0]) == 1, "por slug"
     assert len(pr.refutations("GJ 581")[0]) == 1, "y por nombre, como lo escribe la vista"
     assert pr.refutations("otra_estrella")[0] == []

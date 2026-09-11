@@ -876,7 +876,16 @@ def _subsection_prose_start(line: str, sub: str) -> int | None:
         if sep is None:
             return len(line)                     # sin separador no hay texto libre
         fin = sep.end()
-    return idx[min(fin, len(idx) - 1)]
+    orig = idx[min(fin, len(idx) - 1)]
+    # ⛔ #430 (tercera vuelta) — el mapa apunta al primer carácter PLANO de la prosa, y la
+    # normalización se comió el adorno que lo precede en el ORIGINAL: en `cuerpo: \`(inferencia …)\`.`
+    # el offset caía en `(` y el corte dejaba el backtick de apertura afuera. Medido en vivo: la
+    # línea quedó `(inferencia de …)\`.` con el fix de v1.250.0 adentro, dos veces. Se retrocede
+    # sobre los caracteres de adorno pegados al arranque — el cierre de un token anterior no entra
+    # porque entre medio siempre hay un separador o un espacio.
+    while orig > 0 and _ADORNO_MD.match(line[orig - 1]):
+        orig -= 1
+    return orig
 
 
 def fragment_stated(line: str, frag: str) -> bool:

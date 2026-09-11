@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.258.1"
+ALMAGESTO_VERSION = "1.258.2"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2722,9 +2722,16 @@ def subject_slug(nombre: str) -> str | None:
     n = " ".join(str(nombre or "").split()).casefold()
     if not n:
         return None
-    for slug, meta in (load_stars() or {}).items():
+    # ⛔ #435 (devuelto por la instancia) — la clave de `stars.yaml` es el NOMBRE canónico y el slug
+    # es un CAMPO (`star_by_slug` es la implementación canónica de «clave ≠ slug»); `themes.yaml`
+    # sí está indexado por slug. Devolver la clave hacía que `subject_slug('GJ 581')` diera
+    # `'GJ 581'`, `dropped_signature` buscara `registro/GJ 581.yaml`, y la propuesta firmada el
+    # 09-10 siguiera pendiente: el mismo estado permanente que el issue vino a cerrar. El test no lo
+    # vio porque su doble estaba indexado por slug — regla de método nº 2.
+    for nombre_clave, meta in (load_stars() or {}).items():
         m = as_map(meta)
-        nombres = [slug, m.get("name")] + list(as_list(m.get("aliases")))
+        slug = str(m.get("slug") or nombre_clave)
+        nombres = [nombre_clave, slug, m.get("name")] + list(as_list(m.get("aliases")))
         if n in {" ".join(str(x or "").split()).casefold() for x in nombres if x}:
             return slug
     for slug, meta in (load_themes() or {}).items():
@@ -2750,7 +2757,10 @@ def declared_scopes() -> dict:
                                                  f"sources[] de `{slug}`")
     for archivo, sujetos in (("themes.yaml", load_themes() or {}),
                              ("stars.yaml", load_stars() or {})):
-        for slug, meta in sujetos.items():
+        for clave, meta in sujetos.items():
+            # #435 — en `stars.yaml` la clave es el nombre y el slug un campo (segundo portador,
+            # nombrado por la instancia): la procedencia se escribe con el slug, como en el tema.
+            slug = str(as_map(meta).get("slug") or clave) if archivo == "stars.yaml" else clave
             for bib, (alc, uni) in extra_core_scope(as_map(meta), entry=slug).items():
                 out[str(bib)] = (alc, uni, f"extra_core de `{slug}` ({archivo})")
     return out
