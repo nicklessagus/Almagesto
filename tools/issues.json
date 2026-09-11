@@ -2194,17 +2194,17 @@
   {
    "number": 441,
    "title": "replace_pdf --backfill: el sha del PDF que se sacó está en git (pointer de git-lfs → sha10) y se le pide al operador como si se hubiera perdido",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 442,
    "title": "La regla de #440 tiene otros portadores: `_cambios` (ground-truth) y `versions_disponible` deciden chequeos y no tienen camino de backfill ni declaran a quién no miran",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 443,
    "title": "`--migrate-verif-archivo` prefija el placeholder `—` de las filas `no verificable por extracción` (exentas por #223) y reemplaza en toda la fila, no en la celda: sobre una bóveda ya migrada deja un bloqueante",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 444,
