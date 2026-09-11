@@ -415,6 +415,15 @@
 ## 🔁 Valor de SEGUNDA MANO levantado sin la marca: la atribución se pierde en la síntesis (#103/#279, backlog) (0)
 > sobre 0 pares (bloque citante, bibcode) que citan una fuente con valores de segunda mano
 
+## Cruce de segunda mano REVISADO y rechazado con motivo (#433: visible, no es deuda) (0)
+> sobre 0 pares (bloque citante, bibcode) que citan una fuente con valores de segunda mano
+
+## Extracción con los localizadores del documento ANTERIOR: el PDF se reemplazó y la paginación cambió (#436, backlog) (0)
+> sobre 0 extracciones de `raw/extraccion/` (#311)
+
+## `segunda_mano_revisada` que no corresponde a ningún hallazgo: la escotilla no exime nada (#433/#256, backlog) (0)
+> sobre 0 pares (bloque citante, bibcode) que citan una fuente con valores de segunda mano
+
 ## Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda) (0)
 > sobre 60 notas de `papers/`
 
