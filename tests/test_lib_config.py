@@ -1481,6 +1481,49 @@ def test_no_vista_normaliza_y_no_muta(toy_vault):
     assert meta["no_vista"][0]["sujeto"] == " s_index "
 
 
+# ── #433 · `segunda_mano_revisada`: la escotilla del NO del detector de segunda mano ────────────
+
+def test_load_reviewed_second_hand_forma_canonica_y_no_muta(toy_vault):
+    r = [{"ref": " 2010A....2A ", "que": " m_V ", "motivo": " coincidencia numérica "}]
+    meta = {"segunda_mano_revisada": r}
+    assert cfg.load_reviewed_second_hand(meta, entry="X") == [
+        {"ref": "2010A....2A", "que": "m_V", "motivo": "coincidencia numérica"}]
+    assert meta["segunda_mano_revisada"][0]["que"] == " m_V ", "no muta el frontmatter del llamador"
+    assert cfg.load_reviewed_second_hand({}, entry="X") == []
+    assert cfg.load_reviewed_second_hand({"segunda_mano_revisada": None}, entry="X") == []
+
+
+def test_reviewed_second_hand_sin_motivo_o_sin_par_detectado(toy_vault):
+    """Forma dura como `extra_core` (D-58): el escalar y la lista de strings abortan. Sin `ref`/`que`
+    la escotilla no dice QUÉ cruce se revisó —apagaría todos los de la nota, que es el `noqa` de
+    archivo que `no_vista` evitó pidiendo el sujeto— y sin `motivo` no dice si alguien lo miró."""
+    # ⚠ el `3` no es decorativo: es el único valor que distingue la cláusula «no es una lista» de
+    # la otra mitad del `or` —sobre un string, `any(… for x in v)` recorre los caracteres y también
+    # aborta— y sin él la guarda sobrevive a la mutación (#393).
+    for malo in ("es una coincidencia", 3, ["2010A....2A"], [{"ref": "b", "que": "m_V"}],
+                 [{"ref": "b", "motivo": "m"}], [{"que": "m_V", "motivo": "m"}]):
+        with pytest.raises(cfg.VistasError) as exc:
+            cfg.load_reviewed_second_hand({"segunda_mano_revisada": malo}, entry="X")
+        assert "segunda_mano_revisada" in str(exc.value)
+    assert "ref:" in str(exc.value) and "motivo:" in str(exc.value), "la forma canónica, pegable"
+
+
+def test_reviewed_second_hand_matchea_el_QUE_TRUNCADO_del_reporte(toy_vault):
+    """⛔ El hallazgo del lint trunca el `qué` (`_q[:80]`), y la forma canónica de firmar es pegar lo
+    que el reporte dice. Comparando exacto, el modo normal de escribir la escotilla produciría un
+    no-op silencioso — el defecto de #256 (un campo parseado y consumido por nadie)."""
+    d = [{"ref": "2010A....2A", "que": "m_V de la compilación", "motivo": "coincidencia"}]
+    assert cfg.reviewed_second_hand(d, "2010A....2A", "m_V  de la  compilación de PASTEL") \
+        == "coincidencia", "prefijo + whitespace colapsado + casefold"
+    assert cfg.reviewed_second_hand(d, "2010A....2A", "otra cosa") is None
+    assert cfg.reviewed_second_hand(d, "2011B....3B", "m_V de la compilación") is None, \
+        "el `ref` es parte de la identidad: otra fuente es otro cruce"
+    assert cfg.reviewed_second_hand([], "2010A....2A", "m_V") is None
+    assert cfg.reviewed_second_hand([{"ref": "2010A....2A", "que": "", "motivo": "m"}],
+                                    "2010A....2A", "m_V") is None, \
+        "un `que` vacío no matchea TODO: sería el noqa de nota entera"
+
+
 def test_fuente_de_una_vista_es_vocabulario_cerrado():
     """#207 — opcional (ausente = no consta, como `fecha`) pero cerrada cuando está: un typo la
     dejaría muda justo para la pregunta que existe para contestar."""
@@ -3260,6 +3303,98 @@ def test_abstract_pending_distingue_el_hueco_del_schema_viejo():
     assert not cfg.abstract_pending(cab + "## Abstract\nUn abstract de catálogo.\n")
     assert not cfg.abstract_pending(cab + "## Abstract\n" + "x" * 300 + f"\n{cfg.ABSTRACT_PLACEHOLDER}\n"), \
         "el placeholder se busca en la CABEZA: más abajo es prosa que lo menciona"
+
+
+def test_set_fm_scalar_reemplaza_agrega_y_REHUSA_romper_el_frontmatter(toy_vault, tmp_path,
+                                                                        capsys):
+    """⛔ #436 — una sola implementación de «escribir un escalar del frontmatter»: el repo ya tenía
+    `make_notes._set_campo` (reemplaza, y **no hace nada** si la clave falta) y el reemplazo-o-append
+    que `stamp_pdf` escribe a mano dos veces. La tercera copia habría sido la cuarta.
+
+    Y lleva la guarda de #244/#222: se re-parsea y **no se escribe** si el frontmatter dejó de
+    parsear — una nota así evade TODOS los chequeos de su tipo, en silencio."""
+    f = tmp_path / "n.md"
+    f.write_text("---\nbibcode: 2020X\npdf_source: eprint\n---\n\n## Abstract\n\nx\n",
+                 encoding="utf-8")
+    assert cfg.set_fm_scalar(f, "pdf_source", "publisher") is True
+    assert cfg.split_fm(f.read_text(encoding="utf-8"))["pdf_source"] == "publisher"
+    assert cfg.set_fm_scalar(f, "pdf_source", "publisher") is False, "idempotente por contenido"
+    # la clave que NO está: `crear` es lo que los dos llamadores discuten, y por eso es parámetro
+    assert cfg.set_fm_scalar(f, "pdf_sha", "abc1234567", crear=False) is False
+    assert "pdf_sha" not in f.read_text(encoding="utf-8")
+    assert cfg.set_fm_scalar(f, "pdf_sha", "abc1234567") is True
+    assert cfg.split_fm(f.read_text(encoding="utf-8"))["pdf_sha"] == "abc1234567"
+    # ⛔ la guarda: un valor que rompe el YAML no se escribe, y se dice cuál nota y cuál campo
+    antes = f.read_bytes()
+    assert cfg.set_fm_scalar(f, "title", "[sin cerrar") is False
+    assert f.read_bytes() == antes
+    assert "sin parsear" in capsys.readouterr().out
+    # ⚠ la guarda compara contra el ANTES: sobre una nota que YA no parseaba, escribir no la deja
+    # peor y no se rehúsa (el frontmatter roto lo bloquea el lint, que es su detector)
+    roto = tmp_path / "roto.md"
+    roto.write_text("---\nbibcode: 2020X\ntitle: [sin cerrar\n---\n\nx\n", encoding="utf-8")
+    assert cfg.split_fm(roto.read_text(encoding="utf-8")) == {}, "la premisa: ya estaba roto"
+    assert cfg.set_fm_scalar(roto, "pdf_sha", "abc1234567") is True
+    assert "pdf_sha: abc1234567" in roto.read_text(encoding="utf-8")
+    # sin frontmatter no hay dónde escribir (y no se inventa uno)
+    suelto = tmp_path / "suelto.md"
+    suelto.write_text("sin frontmatter\n", encoding="utf-8")
+    assert cfg.set_fm_scalar(suelto, "x", "1") is False
+    assert suelto.read_text(encoding="utf-8") == "sin frontmatter\n"
+
+
+def test_subject_slug_resuelve_el_NOMBRE_con_el_que_una_nota_reclama(monkeypatch):
+    """⛔ #435 — las dos mitades de la bóveda hablan idiomas distintos: un reclamo lleva el NOMBRE
+    (`stars[]`, `thesis_links[]`, `vistas[].sujeto`, `refuta`) y el registro, la clave de config y
+    `--drop-core` van por SLUG. Cruzar un reclamo contra la curación exige saltar esa brecha, y
+    saltarla a mano es lo que hacía que `refuta: ["GJ 581"]` no encontrara la firma de `gj_581`."""
+    monkeypatch.setattr(cfg, "load_stars", lambda: {
+        "gj_581": {"name": "GJ 581", "aliases": ["HO Lib", "Gl 581"]},
+        "tau_cet": {"name": "tau Cet"}})
+    monkeypatch.setattr(cfg, "load_themes", lambda: {
+        "ica-ruido": {"concept": "ICA con ruido", "title": "Noisy ICA"}})
+    assert cfg.subject_slug("GJ 581") == "gj_581"
+    assert cfg.subject_slug("  gj   581  ") == "gj_581", \
+        "whitespace colapsado y casefold: la vista escribe el nombre a mano"
+    assert cfg.subject_slug("gj581") is None, "pero NO se adivina: sin el espacio es otro nombre"
+    assert cfg.subject_slug("HO Lib") == "gj_581", "un alias también es un nombre de reclamo"
+    assert cfg.subject_slug("gj_581") == "gj_581", "y el slug se resuelve a sí mismo"
+    assert cfg.subject_slug("ICA con ruido") == "ica-ruido"
+    assert cfg.subject_slug("noisy ica") == "ica-ruido", "casefold: el `title` también reclama"
+    assert cfg.subject_slug("Sujeto Que No Existe") is None
+    # el nombre vacío sale ANTES de tocar la config: esto se llama por fila de una superficie que
+    # barre la bóveda, así que el early-out es la diferencia entre 0 y N lecturas de `stars.yaml`
+    def _explota():
+        raise AssertionError("no se lee la config para un nombre vacío")
+    monkeypatch.setattr(cfg, "load_stars", _explota)
+    monkeypatch.setattr(cfg, "load_themes", _explota)
+    assert cfg.subject_slug("") is None and cfg.subject_slug(None) is None
+    assert cfg.subject_slug("   ") is None
+
+
+def test_declared_scopes_enumera_los_DOS_legs_de_la_autoridad(monkeypatch):
+    """#312/#382 — el `alcance` vigente vive en `sources[]` de un tema y en el `extra_core` de temas
+    y estrellas. ⛔ #435 — se enumera UNA vez: `restamp_scope` lo hacía inline y la superficie de
+    propuestas necesita leer exactamente el mismo valor, así que dos enumeraciones de la misma
+    autoridad serían la familia de defectos que este repo mide como la más grande suya."""
+    monkeypatch.setattr(cfg, "load_themes", lambda: {
+        "ica": {"sources": [{"key": "2010CJ", "alcance": "caps. 1-3", "unidad_cita": "pagina"},
+                            {"key": "", "alcance": "sin key: no se puede apuntar"},
+                            "no soy un mapa"],
+                "extra_core": [{"bibcode": "2011Naik", "via": "usuario", "motivo": "m",
+                                "alcance": "§2", "unidad_cita": "seccion"}]},
+        "vacio": {}})
+    monkeypatch.setattr(cfg, "load_stars", lambda: {
+        "gj_581": {"extra_core": [{"bibcode": "2009M", "via": "usuario", "motivo": "m",
+                                   "unidad_cita": "pagina", "alcance": "cap. 4"}]}})
+    d = cfg.declared_scopes()
+    assert d["2010CJ"][:2] == ("caps. 1-3", "pagina") and "sources[]" in d["2010CJ"][2]
+    assert d["2011Naik"][:2] == ("§2", "seccion") and "themes.yaml" in d["2011Naik"][2]
+    assert d["2009M"][:2] == ("cap. 4", "pagina") and "stars.yaml" in d["2009M"][2]
+    assert "" not in d, "sin `key` no hay a qué nota apuntar"
+    monkeypatch.setattr(cfg, "load_themes", lambda: {})
+    monkeypatch.setattr(cfg, "load_stars", lambda: {})
+    assert cfg.declared_scopes() == {}
 
 
 def test_declared_pdf_sources_junta_lo_declarado_y_rechaza_lo_que_no_es_vocabulario(monkeypatch, capsys):

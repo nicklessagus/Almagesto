@@ -29,9 +29,9 @@
 # `crecimientos` con fecha, ancla y motivo. Lo que sigue prohibido es que el archivo crezca sin que
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
-medido_en: "2026-09-09"
-techo_lineas: 1788
-techo_bytes: 144200
+medido_en: "2026-09-11"
+techo_lineas: 1814
+techo_bytes: 146650
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -366,3 +366,23 @@ crecimientos:
       cuatro entren. (Mismo caso que el ajuste de #344 del 2026-08-31.)
     techo_lineas: 1788
     techo_bytes: 144200
+  - fecha: "2026-09-11"
+    ancla: "#433 + #434 + #435 + #436"
+    motivo: >-
+      Dos reglas de escritura nuevas, las dos medidas cerrando categorías enteras en la instancia.
+      #433: el cruce de SEGUNDA MANO se acredita nombrando al dueño o se FIRMA revisado —un detector
+      recall-only sin salida mide su tasa de disparo y no la deuda (leídos 66 hallazgos uno por uno,
+      48 seguían listados, 40 de ellos coincidencias numéricas que ninguna prosa cierra)—. #434: la
+      resolución de una condición se direcciona por el PAR `(ancla, bibcode)` y no por el ancla, que
+      hashea el bloque (5 de 20 `acota` irresolubles por compartir ancla con una `contextualiza`).
+      #435: cada categoría de la superficie de propuestas declara DÓNDE aterriza su firma y si el
+      barrido la cruza (60 de 62 propuestas eran permanentes: el productor leía un artefacto
+      versionado y no regenerable mientras la firma aterrizaba en otro lado). Quince líneas entre
+      las tres, cada una donde ya vive su tema; el caso medido y el postmortem viven en los issues
+      y en `docs/mediciones.md`. #436: el backlog más grande del repo (161 de 264 notas) gana su
+      comando —`replace_pdf.py`— y la regla que lo funda («todo backlog que el lint nombra tiene una
+      salida ejecutable»), más las dos cosas que el comando NO hace: re-verificar y re-paginar la
+      extracción. Veintiséis líneas entre las cuatro, cada una donde ya vive su tema; el caso medido
+      y el postmortem viven en los issues y en `docs/mediciones.md`.
+    techo_lineas: 1814
+    techo_bytes: 146650

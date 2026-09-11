@@ -6352,6 +6352,93 @@ def test_el_hallazgo_de_segunda_mano_NOMBRA_el_valor_que_cruza(toy_vault, capsys
     assert "toma 7.15" in seccion, seccion
 
 
+# ── #433 · la escotilla del NO para el cruce revisado ────────────────────────────────────────────
+
+def _ficha_que_cruza(revisada: object = None):
+    """La ficha del cruce de #279, con la escotilla de #433 si se la declara."""
+    fm = {"name": "Test", "slug": "test_star", "tags": ["star"], "planets": []}
+    if revisada is not None:
+        fm["segunda_mano_revisada"] = revisada
+    return mk_note(cfg.STARS, "test_star", fm,
+                   "# f\n\nLa magnitud es $V = 7{,}15$ [[2010A....2A]].\n")
+
+
+def test_el_cruce_REVISADO_con_motivo_deja_de_ser_deuda(toy_vault, capsys):
+    """⛔ #433 — medido cerrando la categoría entera, caso por caso: **48 de 66 hallazgos seguían
+    listados** después de que alguien los revisó uno a uno. 40 son coincidencias numéricas —el
+    bloque no toma ese valor de nadie, así que **no hay nada que escribir** que las saque— y la nota
+    no tenía dónde registrar que ya se las mirara.
+
+    Una categoría que no puede llegar a cero mide la tasa de disparo del detector, no la deuda de la
+    bóveda; y la primera vez que grita en falso se deja de mirar. Se cierra como sus seis hermanos:
+    **con motivo**, versionado, y en su PROPIA categoría (AUD-207).  @inv INV-142"""
+    _paper_con_segunda_mano()
+    _ficha_que_cruza([{"ref": "2010A....2A", "que": "m_V",
+                       "motivo": "coincidencia: 7,15 es la magnitud propia, no el valor de Koen"}])
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0
+    assert "test_star" not in _seccion(rep, "SEGUNDA MANO levantado"), "sale de la deuda"
+    revisados = _seccion(rep, "REVISADO y rechazado")
+    assert "test_star" in revisados and "coincidencia" in revisados, \
+        "queda VISIBLE con su motivo, en su propia categoría"
+
+
+def test_la_escotilla_de_segunda_mano_es_POR_CRUCE_no_por_nota(toy_vault, capsys):
+    """La identidad de la declaración es el par `(ref, que)`: una nota que cruza dos valores del
+    mismo paper firma uno y el otro **sigue siendo deuda**. Sin eso la escotilla sería un `noqa` de
+    nota entera, que es lo que `no_vista` evitó pidiendo el sujeto."""
+    mk_note(cfg.PAPERS, "2010A....2A",
+            {"bibcode": "2010A....2A", "tags": ["paper"], "stars": ["Test"],
+             "first_author": "Autor, A.",
+             "vistas": [{"sujeto": "Test", "tipo": "star", "fecha": "2026-08-30",
+                         "fuente": "pdf"}]},
+            "# p\n\n## Vista — Test (2026-08-30)\n\n"
+            "| Qué | Valor | Localizador | Régimen | Segunda mano |\n|---|---|---|---|---|\n"
+            "| m_V | 7,15 | p. 3 | — | Koen et al. 2010 |\n"
+            "| Teff | 4866 K | p. 5 | — | Ghezzi et al. 2010 |\n")
+    mk_note(cfg.STARS, "test_star",
+            {"name": "Test", "slug": "test_star", "tags": ["star"], "planets": [],
+             "segunda_mano_revisada": [{"ref": "2010A....2A", "que": "m_V",
+                                        "motivo": "coincidencia numérica"}]},
+            "# f\n\nLa magnitud es $V = 7{,}15$ [[2010A....2A]].\n\n"
+            "La fotosfera está a $T_{eff} = 4866$ K [[2010A....2A]].\n")
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    _rc, rep = run_lint_reporte(capsys)
+    deuda = _seccion(rep, "SEGUNDA MANO levantado")
+    assert "4866" in deuda, "el cruce NO firmado sigue siendo deuda"
+    assert "7.15" not in deuda, "y el firmado no"
+
+
+def test_la_escotilla_que_no_EXIME_nada_se_reporta(toy_vault, capsys):
+    """La declaración que no corresponde a ningún hallazgo es el modo de falla de #256 —un campo
+    parseado y consumido por nadie—: un `que` mal copiado deja la escotilla en no-op **en silencio**
+    y la deuda sigue listada sin que nadie entienda por qué."""
+    _paper_con_segunda_mano()
+    _ficha_que_cruza([{"ref": "2010A....2A", "que": "magnitud aparente",   # el `qué` es `m_V`
+                       "motivo": "coincidencia"}])
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    _rc, rep = run_lint_reporte(capsys)
+    huerfana = _seccion(rep, "no corresponde a ningún hallazgo")
+    assert "test_star" in huerfana and "magnitud aparente" in huerfana, rep
+    assert "test_star" in _seccion(rep, "SEGUNDA MANO levantado"), "y la deuda sigue ahí"
+
+
+def test_la_escotilla_de_segunda_mano_SIN_motivo_se_reporta_y_no_tumba_el_lint(toy_vault, capsys):
+    """Forma dura como `extra_core` (D-58): sin `motivo` el campo no dice si alguien lo miró, que es
+    toda la información que aporta. ⚠ Y como vive en el frontmatter de una NOTA, la forma inválida
+    se **reporta** —no mata el barrido: una nota rota no se lleva las otras 400— que es la razón por
+    la que `load_no_vista` levanta `VistasError` en vez de salir."""
+    _paper_con_segunda_mano()
+    _ficha_que_cruza([{"ref": "2010A....2A", "que": "m_V"}])            # sin motivo
+    link_from_log(toy_vault, "test_star", "2010A....2A")
+    rc, rep = run_lint_reporte(capsys)
+    assert "segunda_mano_revisada" in rep and "motivo" in rep, rep
+    assert "test_star" in _seccion(rep, "SEGUNDA MANO levantado"), \
+        "la forma inválida NO exime: el cruce sigue siendo deuda"
+    assert rc in (0, 1), "el lint termina"
+
+
 # ── #278 · la prosa que contradice su propio ground-truth ────────────────────────────────────────
 
 def test_la_prosa_que_afirma_lo_que_NEA_no_lista_es_hallazgo(toy_vault, capsys):
@@ -9842,19 +9929,66 @@ def test_check_second_hand_lifted_pide_la_marca_de_SEGUNDA_MANO(toy_vault):
     real: 4 valores la perdieron, uno usado como corroboración INDEPENDIENTE de sí mismo."""
     sm = {"2020X": [("P_rot", "34.5", "Baliunas 1995")]}
     fms = {"2020X": {"bibcode": "2020X"}}
-    hall, pares = lint.check_second_hand_lifted({}, sm, fms)
-    assert hall == [] and pares == 0, "sin prosa que lo levante no hay hallazgo"
+    hall, pares, rev, huer = lint.check_second_hand_lifted({}, sm, fms, {})
+    assert (hall, pares, rev, huer) == ([], 0, [], []), "sin prosa que lo levante no hay hallazgo"
     # ⚠ la clave es la RUTA: el chequeo sólo mira prosa de `stars/` y `concepts/`
     nota = str(cfg.STARS / "test_star.md")
     cuerpo = {nota: "El período de rotación es de 34.5 días [[2020X]].\n"}
-    hall, pares = lint.check_second_hand_lifted(cuerpo, sm, fms)
+    hall, pares, _r, _h = lint.check_second_hand_lifted(cuerpo, sm, fms, {})
     assert pares == 1 and hall, (hall, pares)
-    assert lint.check_second_hand_lifted({str(cfg.PAPERS / "2020X.md"): cuerpo[nota]}, sm, fms) \
-        == ([], 0), "en una nota de paper no aplica: el hallazgo es sobre la SÍNTESIS"
+    assert lint.check_second_hand_lifted({str(cfg.PAPERS / "2020X.md"): cuerpo[nota]},
+                                         sm, fms, {}) == ([], 0, [], []), \
+        "en una nota de paper no aplica: el hallazgo es sobre la SÍNTESIS"
     con_marca = {nota: "El período es de 34.5 días (segunda mano, cita a Baliunas 1995) "
                        "[[2020X]].\n"}
-    hall2, _p = lint.check_second_hand_lifted(con_marca, sm, fms)
+    hall2, _p, _r, _h = lint.check_second_hand_lifted(con_marca, sm, fms, {})
     assert len(hall2) < len(hall), "con la marca puesta deja de ser hallazgo"
+    # ⚠ y la marca alcanza SIN nombrar al dueño: es la mitad de la escotilla que el crédito por
+    # `attribution_terms` (#433) no cubre —ahí hace falta el nombre—, y sin este caso ningún test
+    # distingue la rama (la de arriba nombra a Baliunas, así que la acreditaría igual)
+    pelada = {nota: "El período es de 34.5 días (de segunda mano) [[2020X]].\n"}
+    assert lint.check_second_hand_lifted(pelada, sm, fms, {})[0] == [], \
+        "la nota que DICE que el valor es de segunda mano ya cumple lo que el hallazgo pide"
+    # ⚠ y `concepts/` cuenta igual que `stars/`: la síntesis de un método levanta valores de
+    # segunda mano tanto como una ficha (sin esto, la mitad `concepts` de la rama no la mata nadie)
+    en_concepto = {str(cfg.CONCEPTS / "methods" / "gls.md"): cuerpo[nota]}
+    hall_c, pares_c, _r, _h = lint.check_second_hand_lifted(en_concepto, sm, fms, {})
+    assert pares_c == 1 and hall_c, (hall_c, pares_c)
+    # #433 — la escotilla firmada sale de la deuda y entra en su propia lista, con el motivo
+    firmado = {"test_star": {"segunda_mano_revisada": [
+        {"ref": "2020X", "que": "P_rot", "motivo": "coincidencia: el valor es del propio paper"}]}}
+    hall3, _p, rev3, huer3 = lint.check_second_hand_lifted(cuerpo, sm, fms, firmado)
+    assert hall3 == [] and huer3 == [] and len(rev3) == 1 and "coincidencia" in rev3[0][1], rev3
+
+
+def test_check_depaginated_extractions_ve_la_marca_de_un_PDF_reemplazado(toy_vault):
+    """#436 — `replace_pdf` marca la extracción cuando se cambia el PDF (el preprint por el
+    publicado), porque `raw/extraccion/**` es versionado y no regenerable (#311): la cita textual
+    sigue bien —medido, 0 alteraciones en las cinco notas tocadas— y **todos los localizadores
+    apuntan a un documento que ya no está**, porque la copia del editor pagina por volumen.
+
+    ⛔ Ninguna otra capa lo ve, y es la razón de que exista: `verify-citations` chequea que la fuente
+    lo DIGA y `contrast --validar` que la cadena no esté ALTERADA; las dos cosas son ciertas con la
+    página apuntando a la nada.  @inv INV-147"""
+    import json as _j
+    (cfg.EXTRACCION / "gj_581").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "gj_581" / "2010D.json").write_text(
+        _j.dumps({"bibcode": "2010D", "ground_truth": [{"que": "P", "linea": "p. 5"}]}),
+        encoding="utf-8")
+    hall, pob = lint.check_depaginated_extractions()
+    assert (hall, pob) == ([], 1), "una extracción normal NO es hallazgo, y la población se declara"
+    (cfg.EXTRACCION / "gj_581" / "2011X.json").write_text(
+        _j.dumps({"bibcode": "2011X", "_paginacion": {"reemplazo": "2026-09-11",
+                                                      "motivo": "versión del editor"}}),
+        encoding="utf-8")
+    hall, pob = lint.check_depaginated_extractions()
+    assert pob == 2 and len(hall) == 1
+    assert hall[0][0] == "gj_581/2011X" and "versión del editor" in hall[0][1], hall
+    assert "documento ANTERIOR" in hall[0][1]
+    # el JSON ilegible y el que no es mapa tienen sus propios detectores: acá no cuentan ni suman
+    (cfg.EXTRACCION / "gj_581" / "roto.json").write_text("{no", encoding="utf-8")
+    (cfg.EXTRACCION / "gj_581" / "lista.json").write_text("[1]", encoding="utf-8")
+    assert lint.check_depaginated_extractions()[1] == 2
 
 
 def test_check_prosa_retractada_exige_la_marca_en_LINEA(toy_vault):

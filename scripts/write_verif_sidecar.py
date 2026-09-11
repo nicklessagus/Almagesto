@@ -417,7 +417,11 @@ def _rewrite_rows(note: Path, cambios: dict, fecha: str | None, dry_run: bool) -
     The one writing path both `--resolver` and `--migrate-condition-prefix` take, so the round-trip
     guard (#284), the header line (INV-81) and the triage guard (#430) apply to them as they do to a
     fan-out round. ⚠ The block's DATE is preserved: neither resolving a condition nor collapsing a
-    duplicated class is re-verifying anything (D-4)."""
+    duplicated class is re-verifying anything (D-4).
+
+    ⛔ #434 — `cambios` is keyed by `lb.row_key`, the pair `(anchor, bibcode)`. Keyed by anchor
+    alone it wrote the same cell into **every** row of a block that cites more than one source,
+    which is the other half of the same bug: one anchor, N pairs, N different conditions."""
     text = note.read_text(encoding="utf-8")
     filas = lb.verif_rows(note)
     if not filas:
@@ -426,7 +430,8 @@ def _rewrite_rows(note: Path, cambios: dict, fecha: str | None, dry_run: bool) -
     if not d:
         raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado y no se pasó "
                            f"`--fecha`: re-fechar es una decisión, no un default")
-    nuevas = [replace(f, condition=cambios[f.anchor]) if f.anchor in cambios else f for f in filas]
+    nuevas = [replace(f, condition=cambios[k]) if (k := lb.row_key(f)) in cambios else f
+              for f in filas]
     emit(note, text, nuevas, d, dry_run=dry_run)
     return {"filas": len(filas), "fecha": d}
 
@@ -444,33 +449,55 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
     in the table (the note changed — re-anchor first, #257), a row that is not `acota`
     (`contextualiza` goes to the report by definition, #221), and a row that already declares a
     DIFFERENT resolution — annotate, never overwrite (#232). Re-running with the same text is a
-    no-op, which is what makes it safe in a chain."""
+    no-op, which is what makes it safe in a chain.
+
+    ⛔ #434 — the address is the PAIR `(anchor, bibcode)` (`lb.row_key`), because an anchor hashes a
+    BLOCK: a block citing two sources has two rows under one anchor, and if their conditions are of
+    different classes the anchor-only address refused — leaving that `acota` impossible to mark
+    resolved **by any means**, with `verif_counts` lying about it forever. Measured while closing a
+    blind round of 158 pairs: 5 of 20 `acota` were unreachable, over 4 anchors. `<ancla>=<dónde>`
+    keeps working (and now resolves the block's only `acota` even if a `contextualiza` shares the
+    anchor); `<ancla>:<bibcode>=<dónde>` disambiguates when more than one `acota` shares it."""
     filas = lb.verif_rows(note) or []
-    por_ancla = {f.anchor: f for f in filas}
     cambios: dict = {}
-    for ancla, donde in resoluciones.items():
-        fila = por_ancla.get(ancla)
-        if fila is None:
-            raise SidecarError(f"el ancla {ancla} no está en la tabla de {note.name} — ¿se editó la "
-                               f"nota después de verificar? Re-anclá primero "
-                               f"(`python scripts/reverify_subset.py {note}`)")
-        clase, resto = lb.condition_split(fila.condition)
-        if clase != "acota":
+    for spec, donde in resoluciones.items():
+        ancla, bib = _split_address(spec)
+        candidatas = lb.rows_addressed(filas, ancla, bib)
+        if not candidatas:
             raise SidecarError(
-                f"el par de ancla {ancla} tiene condición `{clase or 'sin clase'}`, no `acota`: "
-                f"sólo la `acota` se resuelve (la `contextualiza` va al reporte, #221)")
+                f"la dirección {ancla}{(':' + bib) if bib else ''} no está en la tabla de "
+                f"{note.name} — ¿se editó la nota después de verificar, o el `[[bibcode]]` no es el "
+                f"de esa fila? Re-anclá primero "
+                f"(`python scripts/reverify_subset.py {note}`)")
+        # ⛔ El `acota` es lo que se resuelve, así que la ambigüedad del ancla sólo IMPORTA si más de
+        # una fila lo es: el caso medido —una `acota` y una `contextualiza` bajo el mismo ancla— se
+        # decide solo, y es el 100 % de los 5 irresolubles.
+        acotas = [f for f in candidatas if lb.condition_split(f.condition)[0] == "acota"]
+        if len(acotas) > 1:
+            raise SidecarError(
+                f"el ancla {ancla} tiene {len(acotas)} filas `acota` (el bloque cita varias "
+                f"fuentes): desambiguá con `--resolver {ancla}:<bibcode>=<dónde>` — "
+                + ", ".join(f.bibcode for f in acotas))
+        if not acotas:
+            clases = ", ".join(f"`{lb.condition_split(f.condition)[0] or 'sin clase'}`"
+                               for f in candidatas)
+            raise SidecarError(
+                f"ninguna fila de {ancla}{(':' + bib) if bib else ''} tiene condición `acota` "
+                f"({clases}): sólo la `acota` se resuelve (la `contextualiza` va al reporte, #221)")
+        fila = acotas[0]
+        _clase, resto = lb.condition_split(fila.condition)
         if lb.condition_resolved(fila.condition):
             ya = lb.condition_resolution(fila.condition)
             if ya == str(donde).strip():
                 continue                          # misma resolución: no-op (idempotente)
-            raise SidecarError(f"el par de ancla {ancla} ya declara una resolución («{ya}») — se "
-                               f"anota, no se pisa (#232). Si cambió, editá el hermano a mano y "
+            raise SidecarError(f"el par {ancla}:{fila.bibcode} ya declara una resolución («{ya}») — "
+                               f"se anota, no se pisa (#232). Si cambió, editá el hermano a mano y "
                                f"decí por qué en el `log`")
         celda = (f"acota→resuelta: {str(donde).strip()}"
                  + (f"{lb.COND_RESOLUTION_SEP}{resto}" if resto else ""))
         if not lb.condition_resolved(celda):      # el lector, antes de escribir
             raise SidecarError(f"la celda que se iba a escribir no se lee como resuelta: «{celda}»")
-        cambios[ancla] = celda
+        cambios[lb.row_key(fila)] = celda
     if not cambios:
         return {"resueltas": 0, "filas": len(filas)}
     return {"resueltas": len(cambios), **_rewrite_rows(note, cambios, fecha, dry_run)}
@@ -482,7 +509,7 @@ def migrate_condition_prefix(note: Path, fecha: str | None = None, dry_run: bool
     The migrator for the 41 cells measured on a real vault — 7 of them `acota`, i.e. rows that are
     resolved, whose cell says so, and that `condition_resolved` counts as pending forever."""
     filas = lb.verif_rows(note) or []
-    cambios = {f.anchor: c for f in filas
+    cambios = {lb.row_key(f): c for f in filas
                if (c := collapse_condition(f.condition)) != f.condition}
     if not cambios:
         return {"migradas": 0, "filas": len(filas)}
@@ -544,23 +571,35 @@ def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = Fals
             "encadenadas": c["cadenas"], "hermano": cfg.verif_sidecar(note).name}
 
 
+def _split_address(spec: str) -> tuple:
+    """`<ancla>[:<bibcode>]` → `(ancla, bibcode|"")` (#434).
+
+    Splitting on the FIRST colon is safe in both directions: an anchor is 10 hex characters and a
+    bibcode never contains a colon, so the separator cannot appear inside either half."""
+    ancla, _, bib = str(spec or "").strip().partition(":")
+    return ancla.strip(), bib.strip()
+
+
 def _parse_resoluciones(args) -> dict:
-    """`{ancla: dónde}` from `--resolver A=texto` (repeatable) and/or `--resoluciones <json>`.
+    """`{ancla[:bibcode]: dónde}` from `--resolver A[:bib]=texto` and/or `--resoluciones <json>`.
 
     Refuses the malformed pair instead of guessing: an anchor with no `=` would silently resolve
-    nothing, and this writes into the artefact the lint reads."""
+    nothing, and this writes into the artefact the lint reads. The address travels as the STRING the
+    caller wrote and `resolve_conditions` splits it (#434): that keeps one spelling for the flag,
+    for the JSON file —whose keys can only be strings— and for the function's own signature."""
     out: dict = {}
     if args.resoluciones:
         datos = json.loads(Path(args.resoluciones).read_text(encoding="utf-8"))
         if not isinstance(datos, dict):
-            raise SidecarError(f"{args.resoluciones}: se esperaba un objeto `{{ancla: dónde}}`")
-        out.update({str(k): str(v) for k, v in datos.items()})
+            raise SidecarError(f"{args.resoluciones}: se esperaba un objeto "
+                               f"`{{ancla[:bibcode]: dónde}}`")
+        out.update({str(k).strip(): str(v) for k, v in datos.items()})
     for item in args.resolver or []:
         if "=" not in item:
             raise SidecarError(f"`--resolver {item}`: falta el `=` — la forma es "
-                               f"`--resolver <ancla>=<dónde se resolvió>`")
-        ancla, _, donde = item.partition("=")
-        out[ancla.strip()] = donde.strip()
+                               f"`--resolver <ancla>[:<bibcode>]=<dónde se resolvió>`")
+        spec, _, donde = item.partition("=")
+        out[spec.strip()] = donde.strip()
     return out
 
 
@@ -637,7 +676,8 @@ def main(argv=None) -> int:
     ap.add_argument("--descartar-anclas-muertas", action="store_true", dest="descartar",
                     help="#428: escribe los pares VIVOS declarando cuáles quedaron afuera, en vez "
                          "de rehusar la ronda entera por un ancla que ya no está en el cuerpo")
-    ap.add_argument("--resolver", action="append", metavar="ANCLA=DÓNDE", default=None,
+    ap.add_argument("--resolver", action="append", metavar="ANCLA[:BIBCODE]=DÓNDE",
+                    default=None,
                     help="#427: marca una condición `acota` como resuelta "
                          "(`acota→resuelta: <dónde>`); repetible")
     ap.add_argument("--resoluciones", metavar="JSON", default=None,

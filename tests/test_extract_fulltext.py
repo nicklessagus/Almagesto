@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 import extract_fulltext as ef
+import lib_config as cfg
 
 GOOD_TEXT = "palabras normales de un paper con texto sano " * 12     # >200 chars ASCII
 MOJIBAKE = "ˆÿþ" * 150                                # >200 chars, ~0% ASCII
@@ -422,3 +423,40 @@ def test_ocr_deja_un_form_feed_POR_pagina(monkeypatch, tmp_path):
     assert texto.count("\f") == 2, "un form feed por página, como pdftotext"
     ok, motivo = ef.is_legible(texto)
     assert not ok and "marca de agua" in motivo
+
+
+# ── #436 · acotar la re-extracción a UN bibcode ──────────────────────────────────────────────────
+
+def test_bibcode_acota_la_re_extraccion_y_REHUSA_el_que_no_esta(toy_vault, monkeypatch, capsys):
+    """⛔ #436 — `--force` sobre el slug entero **vence las anclas de fuente** (D-20) de todos los
+    papers del tema: daño colateral sobre pares que nadie tocó, y era el único camino para
+    re-extraer UN archivo (el workaround —borrar el `.txt` y correr sin `--force`— no estaba
+    documentado en ningún lado).
+
+    Y rehúsa el bibcode que no está bajo ese slug en vez de degradar a «nada que hacer»: correr en
+    silencio sobre cero archivos se lee como éxito. Mismo criterio que `lint --cierre <slug>`."""
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    for bib in ("2010CJ", "2001HKO"):
+        (cfg.PDFS / "ica" / f"{bib}.pdf").write_bytes(b"%PDF-1.4\nx\n")
+    monkeypatch.setattr(ef.shutil, "which", lambda _x: "/usr/bin/pdftotext")
+    vistos = []
+
+    def _fake_run(cmd, **kw):
+        vistos.append(cmd)
+        return SimpleNamespace(returncode=0, stdout=GOOD_TEXT, stderr="")
+    monkeypatch.setattr(ef.subprocess, "run", _fake_run)
+    monkeypatch.setattr(sys, "argv", ["extract_fulltext.py", "ica", "--bibcode", "2010CJ"])
+    assert ef.main() == 0
+    pdfs_leidos = [c[2] for c in vistos if c and c[0] == "pdftotext"]
+    assert len(pdfs_leidos) == 1 and pdfs_leidos[0].endswith("2010CJ.pdf"), vistos
+    assert (cfg.FULLTEXT / "ica" / "2010CJ.txt").exists()
+    assert not (cfg.FULLTEXT / "ica" / "2001HKO.txt").exists(), "el vecino no se toca"
+    monkeypatch.setattr(sys, "argv", ["extract_fulltext.py", "ica", "--bibcode", "2099NoEsta"])
+    assert ef.main() == 2
+    assert "no hay PDF de 2099NoEsta" in capsys.readouterr().out
+    # el selector, directo: sin `--bibcode` el universo es el slug entero (comportamiento histórico)
+    pdfs, faltan = ef.select_pdfs(cfg.PDFS / "ica", None)
+    assert [f.stem for f in pdfs] == ["2001HKO", "2010CJ"] and faltan == []
+    pdfs, faltan = ef.select_pdfs(cfg.PDFS / "ica", [" 2010CJ ", "2099NoEsta"])
+    assert [f.stem for f in pdfs] == ["2010CJ"] and faltan == ["2099NoEsta"]
+

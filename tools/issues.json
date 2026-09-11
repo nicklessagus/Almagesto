@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-09",
+ "fetched": "2026-09-11",
  "issues": [
   {
    "number": 2,
@@ -2124,17 +2124,17 @@
   {
    "number": 427,
    "title": "La celda `Condición` la compone `condition_cell` sin usar el lector de su propio vocabulario: prefijo duplicado que deja el `acota` IRRESOLUBLE, y nadie escribe `acota→resuelta:`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 428,
    "title": "`write_verif_sidecar` toma UN solo `--from` y rechaza la ronda entera por un ancla muerta: un fan-out multi-ronda ya corrido no se puede ensamblar",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 429,
    "title": "`matrices/method_star.md` no es derivable: `methods_applied.literature` y `methods` son dos vocabularios sin clave de join, y llenarla publica huecos FALSOS",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 430,
@@ -2144,7 +2144,7 @@
   {
    "number": 431,
    "title": "`check_stale_verif` compara la fecha del ARCHIVO: una edición dentro de `## Verificación de citas` —sección estampada, que por construcción no puede cambiar una afirmación— marca la nota como stale",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 432,
@@ -2154,6 +2154,21 @@
   {
    "number": 433,
    "title": "El detector de SEGUNDA MANO (#279/#350) no tiene salida: el 73 % de sus hallazgos sigue listado después de revisarlos uno por uno",
+   "state": "OPEN"
+  },
+  {
+   "number": 434,
+   "title": "`--resolver` direcciona por ANCLA y un ancla identifica un BLOQUE, no un par: las `acota` de un bloque que cita dos fuentes son irresolubles",
+   "state": "OPEN"
+  },
+  {
+   "number": 435,
+   "title": "Una propuesta leída de un artefacto VERSIONADO no se puede cerrar: `proposals.py` no consulta dónde aterriza la firma (60 de 62 son permanentes)",
+   "state": "OPEN"
+  },
+  {
+   "number": 436,
+   "title": "No hay comando para REEMPLAZAR el preprint por su versión publicada (#298): el backlog más grande del repo se cierra a mano, y las tres piezas que hay que tocar se contradicen",
    "state": "OPEN"
   }
  ]

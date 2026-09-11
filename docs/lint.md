@@ -561,6 +561,28 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   la matemática** (`$P = 4{,}3115$`): sin deshacer las llaves no cruza ni un valor de una ficha
   real. Población: el **par** (bloque citante, bibcode), no la nota — con 8 de denominador, 398
   hallazgos no se pueden leer (INV-40 cumplido en la letra y no en el espíritu).
+  ⛔ **Y la categoría tiene SALIDA (#433).** *Recall-only* sin salida es ruido que se deja de
+  mirar: medido cerrando la categoría entera con un agente por nota, **48 de 66 hallazgos seguían
+  listados** después de revisarlos uno por uno —40 coincidencias numéricas, donde el bloque no toma
+  ese valor de nadie y **no hay nada que escribir** que las saque, y 8 atribuciones cuyo dueño no es
+  «apellido + año»—. Dos mitades: el crédito se lee con `attribution_terms` (el apellido, el
+  `[[bibcode]]` linkeado, el nombre propio y la sigla — alcanza a *«compilación PASTEL»*, a un
+  documento de la ESO y a personas citadas sin año), y lo que el detector no puede decidir se
+  **firma** en el frontmatter de la nota. ⚠ Lo que el crédito NO hace es acreditar por una forma
+  genérica («promedio de literatura»): la celda que no nombra a nadie no tiene término distintivo
+  que buscar, así que acreditaría al bloque por la PALABRA — esa clase la cierra la escotilla.
+- **Cruce de segunda mano REVISADO y rechazado con motivo** (#433, backlog): la escotilla del NO de
+  la categoría de arriba — `segunda_mano_revisada: [{ref, que, motivo}]` en el frontmatter de la
+  nota, forma dura como `extra_core` (D-58) e identidad **`(ref, que)`**, no el ancla (que se
+  vencería en el próximo reflow por una revisión que sigue valiendo). Va en su **propia** categoría
+  (AUD-207: lo declarado-y-resuelto no se mezcla con la deuda real), con el motivo a la vista.
+  Misma doctrina que `aliases_descartados` (#252) y que *«reclamo sin vista DECLARADO»* (#268).
+- **`segunda_mano_revisada` que no corresponde a ningún hallazgo** (#433/#256, backlog): la
+  declaración que no exime nada. Un `que` mal copiado deja la escotilla en **no-op silencioso** —el
+  modo de falla de #256, un campo parseado y consumido por nadie—, así que se reporta: o el cruce ya
+  no dispara (sacá la entrada) o el `ref`/`que` no es el que el lint nombra. El `qué` se compara
+  **normalizado y por prefijo**, porque la forma canónica de firmar es pegar lo que el reporte dice
+  y el reporte lo trunca (`_q[:80]`).
 - **Cita textual de `log.md` que su fuente no dice** (#238, `cita_log`): la bitácora es
   append-only, así que una cita fabricada ahí es **permanente** — medido, una entrada publicaba
   como cita textual **con página** una frase que invierte el sentido de lo que dice el paper.
@@ -763,6 +785,23 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   identidad), y es justo donde el framework avisa que una discrepancia numérica es diferencia de
   versión. Medido: 82 de 138 notas. ⚠ Y **no** hay agujero de verificación asociado: la exención
   del chequeo de cita textual salió en 1.111.0 (#275/#363).
+  ⛔ **Y desde #436 la categoría tiene una salida EJECUTABLE.** El `→` mandaba a
+  `fetch_pdf.py <slug> --force`, que no aplica al caso normal —la copia del editor está tras paywall
+  y la trae el usuario—, así que la categoría más grande de la bóveda (161 de 264 notas de paper) se
+  cerraba a mano: `python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason
+  "<motivo>"`. Copia a **todos** los slugs, re-extrae **sólo ese** `.txt` (`extract_fulltext
+  --bibcode`, porque el `--force` del slug entero vence las anclas de todos los papers del tema),
+  escribe `pdf_sha`/`pdf_source` y anula `eprint_version`, marca la extracción (abajo) y **emite el
+  alcance de la re-verificación** listo para `verify_fanout --fuentes`. Rehúsa el archivo idéntico y
+  el preprint declarado `publisher`. Medido: 11 reemplazos → **76 pares** vencidos en 6 notas.
+- **Extracción con los localizadores del documento ANTERIOR** (#436, backlog): `replace_pdf` marca
+  con `_paginacion` la extracción de un PDF reemplazado. `raw/extraccion/**` es versionado y **no
+  regenerable** (#311), así que no se reescribe: la cita textual sigue valiendo —medido,
+  `contrast --validar` dio **0 alteraciones** en las cinco notas tocadas— y **todos los
+  localizadores apuntan a un documento que ya no está** (la copia del editor pagina por volumen:
+  Cardoso 1998 arranca en la 2009). ⛔ Ninguna otra capa lo ve, y es la razón de que exista:
+  `verify-citations` chequea que la fuente lo **diga** y `contrast --validar` que la cadena no esté
+  **alterada**, y las dos cosas son ciertas con la página apuntando a la nada.
 - **Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió**
   (#297): el reuso D-18 (copiar el PDF que ya estaba bajo otro slug) es correcto y se conserva, pero
   importa a un sujeto nuevo un archivo cuya **antigüedad nadie chequeó**; y la salida natural —«si

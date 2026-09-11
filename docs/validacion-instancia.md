@@ -253,3 +253,55 @@ Chequeo positivo, barato: agregarle a una nota un `### Con condición \`acota\``
 <nota> --dry-run` (o el `--cierre` del lint) → ese par **no** puede aparecer. **Devolver si** un par
 de prosa real deja de contarse (sub-disparo: la dirección prohibida) o si el lint pierde hallazgos de
 fuga de implementación en una sección propia titulada con `###`.
+
+## #433 · v1.256.0 — el cruce de segunda mano tiene salida
+
+La instancia es donde se midió: **66 hallazgos leídos uno por uno con un agente por nota**
+(`rv-doppler` 21, `hd_40307` 15, `gj_581` 13, `harps-drs` 10, `ica-ruido` 6, `ica` 1), 20 reales, 6
+ya atribuidos y 40 coincidencias numéricas, y **48 seguían listados** después de arreglar los 20.
+**Validar:** `python scripts/lint.py` ANTES y DESPUÉS del merge, sin tocar ninguna nota → la
+categoría *«Valor de SEGUNDA MANO levantado sin la marca»* tiene que **bajar sola** (son los ~8 cuyo
+dueño no es «apellido + año»: `compilación PASTEL`, el design review de la ESO, `Dean, Kowalski y
+Pell`), y ninguno de los 20 reales ya arreglados puede volver. Después, firmar **una** coincidencia
+con el snippet que imprime el hallazgo y volver a correr → sale de la deuda y aparece en *«REVISADO y
+rechazado»* con su motivo. **Devolver si** un cruce real desaparece (el crédito sería demasiado
+laxo), si una declaración pegada del reporte cae en *«no corresponde a ningún hallazgo»* (el matcheo
+por prefijo no estaría funcionando), o si la categoría no baja nada (el crédito nuevo no alcanzaría a
+las formas medidas). **Al cerrar:** cuántos bajaron por crédito y cuántos hubo que firmar — ése es el
+número que dice si la mitad automática valió.
+
+## #434 · v1.256.0 — la `acota` que comparte ancla con una `contextualiza`
+
+Medido en `harps-drs` al cerrar la ronda ciega del 2026-09-10: 158 filas, 20 `acota`, **5
+irresolubles sobre 4 anclas**. **Validar:** en esas 5 (el bloque «Post-procesado en vez de
+re-reducción: dónde se engancha» cita `2023A&A...678A...2C` y `2021A&A...653A..43C`),
+`write_verif_sidecar.py <nota> --resolver <ancla>=<dónde>` ahora tiene que **resolver la `acota` y
+dejar la `contextualiza` intacta**; `lb.verif_counts` sube `cond_acota_resueltas` en 1 por cada una.
+Correrlo dos veces → no-op (red 6). **Devolver si** toca la fila de la `contextualiza`, si rehúsa
+sobre un ancla con una sola `acota`, o si con dos `acota` no nombra los bibcodes para desambiguar.
+**Al cerrar:** cuántas de las 5 quedaron resueltas y si el conteo de la cabecera dejó de mentir.
+
+## #435 · v1.256.0 — la propuesta firmada deja de estar pendiente
+
+Medido acá: **62 propuestas**, 60 permanentes. El caso reproducible es `2012ApJS..200...15A` con
+`refuta: ["GJ 581"]`, firmado con `triage.py gj_581 --drop-core … --reason …` y **seguía listado**.
+**Validar:** `python scripts/proposals.py` → esa propuesta sale de lo pendiente y aparece como *«ya
+FIRMADA»* con el motivo del registro; las 59 de `alcance` siguen pendientes (su firma es texto libre)
+pero ahora cada fila trae *«alcance vigente: …»*, que tiene que coincidir con `themes.yaml`.
+**Devolver si** una refutación **sin** firmar deja de listarse, si el alcance vigente que imprime no
+es el de la config, o si una categoría no declara su estado de firma. **Al cerrar:** cuántas de las
+62 quedaron pendientes de verdad.
+
+## #436 · v1.256.0 — el reemplazo de PDF
+
+Medido acá reemplazando **11 preprints** con un script de scratch: 76 pares vencidos en 6 notas.
+**Validar** con **uno** de los 70 de prioridad alta y con `--dry-run` primero: el alcance impreso
+tiene que coincidir con las filas del hermano que citan ese bibcode, y el dry-run no puede tocar un
+byte (red 6 con `find vault -name '*.md' | md5sum`). Después, la corrida real: el PDF queda
+reemplazado **en todos los slugs** donde vivía, `pdf_source`/`pdf_sha` coherentes, `eprint_version`
+en `null`, **un solo** `.txt` re-extraído, y `lint.py` reporta la extracción en
+`extraccion_despaginada` sin que ninguna otra categoría se mueva. **Devolver si** acepta un PDF con
+la marca de arXiv como `--source publisher`, si re-extrae el slug entero (mirá cuántos `.txt`
+cambiaron con `git status`), si deja una copia vieja en otro slug, o si el alcance impreso no
+coincide con lo que después reporta el lint como vencido. **Al cerrar:** cuántos slugs tocó, cuántos
+pares quedaron por re-verificar, y si el número del alcance fue exacto.

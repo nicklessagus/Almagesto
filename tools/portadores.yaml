@@ -25,6 +25,151 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 436
+    regla: >-
+      Escribir un ESCALAR del frontmatter es una sola función: reemplazar el bloque de la clave
+      (`fm_key_span`) o agregarla, y re-parsear antes de escribir (#244/#222). El repo ya tenía dos
+      formas —`_set_campo`, que reemplaza y NO hace nada si la clave falta, y el
+      reemplazo-o-append que `stamp_pdf` escribe a mano dos veces—, así que el reemplazo de PDF
+      habría sido la tercera.
+    funcion: lib_config.set_fm_scalar
+    patron: 'fm_key_span|_set_campo|set_fm_scalar'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: >-
+          `_set_campo` delega desde 1.256.0 (con `crear=False`: sus llamadores escriben campos que
+          el stub ya puso, y ahí una clave ausente significa que la nota es de otro tipo).
+      - modulo: scripts/replace_pdf.py
+        estado: usa
+        motivo: >-
+          Tiene que CREAR `pdf_sha`/`pdf_source` sobre notas que son anteriores a esos campos —la
+          población de 222 medida en #436—, así que usa el `crear=True` del default.
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Llama a `make_notes._set_campo` (que delega): la regla la lleva su delegado, y hacerlo
+          llamar directo duplicaría la decisión de `crear` en el llamador.
+  - issue: 435
+    regla: >-
+      Una superficie que existe para que alguien FIRME tiene que poder distinguir «pendiente» de
+      «firmada», y para eso tiene que consultar DÓNDE aterriza la firma. Cruzar un reclamo (que
+      lleva el NOMBRE del sujeto) contra la curación (que va por SLUG) pasa por una sola función:
+      sin ella, `refuta: ["GJ 581"]` no encontraba la decisión firmada en `gj_581.yaml` y la
+      propuesta quedaba pendiente para siempre (medido: 60 de 62 permanentes).
+    funcion: lib_config.subject_slug
+    patron: 'subject_slug|dropped_from_subject'
+    consumidores:
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: >-
+          `refutations` resuelve el nombre del reclamo a slug y recién entonces lee el carril
+          `sujeto` (`dropped_signature` → `cfg.dropped_from_subject`).
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Recibe el SLUG por CLI y lo usa tal cual (#329): no cruza ningún reclamo escrito por
+          nombre, así que la brecha nombre↔slug no se le presenta.
+      - modulo: scripts/query_ads.py
+        estado: fuera-de-alcance
+        motivo: Ídem — el slug del sujeto en curso viene del CLI (`excluidos_del_sujeto`).
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Sus tres llamadas al carril son sobre el slug de la ficha que está estampando. La
+          resolución nombre→sujeto que sí hace (los reclamos de `stars[]`) es por NOMBRE contra
+          NOMBRE y no toca la curación.
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: >-
+          `split_subject_slugs` matchea por el nombre de la función y hace lo contrario: parte los
+          valores declarados de UN slug conocido; no resuelve un nombre ni lee `decisiones`.
+  - issue: 435
+    regla: >-
+      El `alcance` vigente de una fuente larga tiene UNA autoridad (#312) repartida en dos legs
+      —`sources[]` de un tema y `extra_core` de temas y estrellas (#382)— y se enumeran en una sola
+      función: el re-estampado y cualquier lector de «qué alcance rige» no pueden discrepar.
+    funcion: lib_config.declared_scopes
+    patron: 'extra_core_scope|declared_scopes'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: >-
+          `restamp_scope` enumeraba los dos legs inline; desde 1.256.0 delega (era el molde del que
+          la superficie de propuestas iba a sacar su segunda copia).
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: >-
+          `scope_requests` imprime el alcance VIGENTE al lado del pedido, porque la firma de esa
+          categoría es texto libre y no se puede cruzar (se declara, #435/D-43).
+  - issue: 434
+    regla: >-
+      La unidad de resolución de una fila de verificación es el PAR `(ancla, bibcode)`, la misma que
+      la unidad de verificación: un ancla hashea un BLOQUE, así que un bloque que cita N fuentes
+      tiene N filas con el mismo ancla. Direccionar por ancla dejaba irresoluble la `acota` que lo
+      comparte con una `contextualiza` (medidas: 5 de 20, sobre 4 anclas) y, del otro lado,
+      escribía la misma celda en todas las filas del bloque.
+    funcion: lib_blocks.row_key
+    patron: 'condition_resolved|acota→resuelta|--resolver'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: >-
+          Los dos escritores del hermano (`resolve_conditions` y `migrate_condition_prefix`)
+          indexan sus cambios con `row_key`, y `_rewrite_rows` los aplica por esa misma clave;
+          `rows_addressed` resuelve la dirección `<ancla>[:<bibcode>]`.
+      - modulo: scripts/reverify_subset.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Empareja por COBERTURA DEL EXTRACTO, no por dirección, y su guarda ya es más fuerte que
+          esta regla: nunca cruza `bibcode` (#257). No escribe el hermano: propone.
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Lee la tabla y cuenta; no direcciona ninguna fila para reescribirla. Su unidad ya es la
+          fila que tiene delante.
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Lee las filas para la cabecera y el estado de un paper (`verif_rows`), agregado sobre
+          todas: no elige una fila por su clave.
+  - issue: 433
+    regla: >-
+      Todo carril de curación tiene forma de declarar el NO con motivo (INV-142), y el detector de
+      SEGUNDA MANO no la tenía: una categoría recall-only que no puede llegar a cero mide la tasa de
+      disparo del detector y no la deuda de la bóveda (medido: 48 de 66 hallazgos seguían listados
+      después de revisarlos uno por uno). Quien decide si un cruce está acreditado es
+      `lib_blocks.attribution_terms`, y la escotilla firmada la resuelve `cfg.reviewed_second_hand`.
+    funcion: lib_config.reviewed_second_hand
+    patron: 'cited_names|segunda_mano_revisada|attribution_terms'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          `check_second_hand_lifted` es el único consumidor: lee la escotilla de la nota con
+          `load_reviewed_second_hand` y pregunta por cada cruce con `reviewed_second_hand`, en vez
+          de comparar el `(ref, que)` a mano.
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Lleva la OTRA mitad de la regla —el crédito automático, `attribution_terms`, cuyo único
+          llamador es `second_hand_lifted` en el mismo módulo: es intra-módulo y no tiene
+          portadores externos—. No resuelve la firma: decide si el bloque ya nombra al dueño.
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: >-
+          PRODUCE la columna: arrastra `segunda_mano` del JSON de extracción al digest de 3b para
+          que el agente la vea. No juzga si una ficha acredita al tercero.
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Estampa la celda *Segunda mano* en la `## Vista` desde el JSON. Es el escritor del insumo;
+          el crédito se evalúa después, sobre la prosa de la ficha.
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Le PIDE al extractor que marque el valor de segunda mano (#103). Nombra el campo en el
+          schema del JSON y nada más.
   - issue: 431
     regla: >-
       Una garantía fechada sobre una nota se compara contra la PROSA fuera de
@@ -101,7 +246,12 @@ portadores:
         motivo: >-
           Cuenta los `.txt` de un DIRECTORIO de slug (el universo declarado de una hipótesis, D-34);
           no resuelve un bibcode, así que la regla no aplica.
-
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Enumera el `.txt` de TODAS las copias para reescribirlas (una por slug); `txt_slug`
+          resuelve UNA para leer, con precedencia declarada. Es la pregunta opuesta: acá elegir una
+          dejaría las otras describiendo el documento reemplazado.
   - issue: 305
     regla: >-
       Resolver el PDF de un bibcode entre TODOS los slugs — el gemelo de #405, y el que lo produjo:
@@ -606,7 +756,12 @@ portadores:
         motivo: >-
           `stamp_fulltext` lo estampa junto a `pdf_source`/`eprint_version`, add-only y entre
           comillas (sin ellas YAML lo parsea como FLOAT y deja de ser un identificador).
-
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Lee el sello con `cfg.arxiv_stamp` para contestar «¿el PDF entrante SE DECLARA
+          preprint?», que es la rehusada de #436: no estampa `arxiv_id` ni `eprint_version` —los
+          anula— así que no tiene qué hacer con el id.
   - issue: 430
     regla: >-
       La línea de una sub-sección del bloque de verificación se lee NORMALIZADA (adorno markdown,

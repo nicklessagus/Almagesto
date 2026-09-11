@@ -359,24 +359,13 @@ def restamp_scope() -> int:
     """Backfill of #312 over every declared source — `sources:` items and, since #382, the
     `extra_core` entries of themes AND stars that declare a scope: config → the note's frontmatter."""
     n = 0
-    for slug, meta in (cfg.load_themes() or {}).items():
-        for item in cfg.as_list(cfg.as_map(meta).get("sources")):
-            if not isinstance(item, dict):
-                continue
-            key = str(item.get("key") or "").strip()
-            if not key:
-                continue
-            if stamp_scope(cfg.PAPERS / f"{safe_name(key)}.md",
-                             item.get("alcance"), item.get("unidad_cita")):
-                cfg.print_seguro(f"  {key}: `alcance`/`unidad_cita` re-estampados desde themes.yaml")
-                n += 1
-    for _cfg, _subjects in (("themes.yaml", cfg.load_themes() or {}), ("stars.yaml", cfg.load_stars() or {})):
-        for slug, meta in _subjects.items():
-            for bib, (alc, uni) in cfg.extra_core_scope(cfg.as_map(meta), entry=slug).items():
-                if stamp_scope(cfg.PAPERS / f"{safe_name(bib)}.md", alc, uni):
-                    cfg.print_seguro(f"  {bib}: `alcance`/`unidad_cita` re-estampados desde `extra_core` "
-                                     f"de {_cfg} (#382)")
-                    n += 1
+    # ⛔ #435 — los dos legs se enumeran en `cfg.declared_scopes`, no acá: la superficie de
+    # propuestas necesita leer el MISMO «alcance vigente», y dos enumeraciones de la misma autoridad
+    # son la familia de defectos que este repo mide como la más grande suya.
+    for key, (alc, uni, origen) in cfg.declared_scopes().items():
+        if stamp_scope(cfg.PAPERS / f"{safe_name(key)}.md", alc, uni):
+            cfg.print_seguro(f"  {key}: `alcance`/`unidad_cita` re-estampados desde {origen}")
+            n += 1
     cfg.print_seguro(f"papers: {n} nota(s) re-sincronizadas con `sources[]`/`extra_core` (#312/#382)")
     return 0
 
@@ -3694,20 +3683,13 @@ def _set_lista_de_mapas(dest, clave: str, valor: list) -> None:
 
 
 def _set_campo(dest, clave: str, valor: str) -> None:
-    """Reemplaza un escalar del frontmatter editando el TEXTO (no re-serializa: preserva la
-    extracción LLM byte a byte, misma familia que `merge_frontmatter_list`)."""
-    text = dest.read_text(encoding="utf-8")
-    span = cfg.frontmatter_span(text)
-    if span is None:
-        return
-    yaml_block, _ = span
-    lineas = yaml_block.split("\n")
-    # #327 — la clave, no su primera línea. ⚠ Acá los valores son cortos (`bibcode`, `bibstem`), así
-    # que tampoco había defecto vivo: lo que se comparte es la definición.
-    span = cfg.fm_key_span(lineas, clave)
-    if span is not None:
-        lineas[span[0]:span[1]] = [f"{clave}: {valor}"]
-    cfg.write_text_atomic(dest, text.replace(yaml_block, "\n".join(lineas), 1))
+    """Set a frontmatter scalar of an EXISTING key — thin wrapper over `cfg.set_fm_scalar` (#436).
+
+    ⛔ Delegates, because that is the single implementation: here the key is always there (this is
+    called over fields the stub writes), and what to do when it is missing is exactly where a second
+    copy would diverge — hence `crear=False`. The name is kept because it is the one its callers
+    use, not because there are two rules."""
+    cfg.set_fm_scalar(dest, clave, valor, crear=False)
 
 
 # ── procedencia del ground-truth, EN la ficha (D-1) ──────────────────────────────────────────────

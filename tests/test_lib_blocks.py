@@ -1057,6 +1057,77 @@ def test_second_hand_lifted_calla_si_el_bloque_YA_atribuye():
     assert lb.second_hand_lifted(toma, _FILAS[:1], atribuido={"koen"}) == []
 
 
+# ── #434 · la identidad de una fila es el PAR `(ancla, bibcode)` ─────────────────────────────────
+
+def _row_434(anchor, bibcode, condition=""):
+    return lb.Row(n="1", claim="c", bibcode=bibcode, verdict="soportada", anchor=anchor,
+                  source_hash="0" * 10, condition=condition)
+
+
+def test_row_key_es_el_PAR_y_rows_addressed_lo_direcciona():
+    """⛔ #434 — un ancla hashea un BLOQUE, así que N citas en un bloque son N filas con el MISMO
+    ancla. La unidad de resolución es el par, igual que la de verificación: medido cerrando una
+    ronda ciega de 158 pares, 5 de 20 `acota` compartían ancla con una `contextualiza` y no había
+    manera de marcarlas resueltas."""
+    a, b = _row_434("abc1234567", "2020Pdf", "acota: SNR > 50"), _row_434("abc1234567", "2019Txt")
+    otra = _row_434("999aaaa000", "2020Pdf")
+    assert lb.row_key(a) == ("abc1234567", "2020Pdf") != lb.row_key(b)
+    assert lb.row_key(_row_434(None, None)) == ("", ""), "la fila sin clave no revienta: da la vacía"
+    filas = [a, b, otra]
+    assert lb.rows_addressed(filas, "abc1234567") == [a, b], "el ancla solo es AMBIGUO: devuelve N"
+    assert lb.rows_addressed(filas, "abc1234567", "2019Txt") == [b]
+    assert lb.rows_addressed(filas, " abc1234567 ", " 2020Pdf ") == [a], "la dirección se normaliza"
+    assert lb.rows_addressed(filas, "abc1234567", "2011Otro") == []
+    assert lb.rows_addressed(filas, "no-existe") == [] and lb.rows_addressed(None, "x") == []
+
+
+# ── #433 · el dueño que no es «apellido + año» ───────────────────────────────────────────────────
+
+def test_second_hand_lifted_acredita_al_dueno_que_NO_es_apellido_mas_anio():
+    """⛔ #433 — medido cerrando una categoría entera leída caso por caso: **48 de 66 hallazgos
+    seguían listados** después de revisarlos. Ocho de ellos porque el dueño del valor no es un
+    `apellido + año`, la única forma que `cited_names` acredita: una compilación (`PASTEL`), un
+    documento (`… design review (ESO)`), personas citadas sin año (`Dean, Kowalski y Pell`).
+
+    Para los tres, `cited_names` de la celda devuelve el conjunto VACÍO, así que la rama de crédito
+    era **inalcanzable por construcción** y el bloque no tenía nada que escribir para cerrarlo."""
+    compil = [("Teff", "4866 K", "compilación PASTEL")]
+    toma = "La fotosfera está a $T_{eff} = 4866$ K ([[b]])."
+    assert [ev for *_r, ev in lb.second_hand_lifted(toma, compil)] == [["4866"]]
+    assert lb.second_hand_lifted(toma + " El valor es de la compilación PASTEL.", compil) == []
+    # una sigla de tres letras también nombra al dueño, y no hay otra forma de escribirla
+    doc = [("ruido de lectura", "3,52 e-", "HARPS detector final design review (ESO)")]
+    linea = "El ruido de lectura es de 3,52 e- ([[b]])."
+    assert lb.second_hand_lifted(linea, doc) != []
+    assert lb.second_hand_lifted(linea + " Lo tabula el design review de ESO.", doc) == []
+    # personas SIN año: el apellido repetido en el bloque alcanza
+    sin_anio = [("estimador", "0,853", "Dean, Kowalski y Pell")]
+    pelada = "El estimador da 0,853 ([[b]])."
+    assert lb.second_hand_lifted(pelada, sin_anio) != []
+    assert lb.second_hand_lifted(pelada + " Es el de Kowalski.", sin_anio) == []
+
+
+def test_attribution_terms_NO_acredita_por_una_forma_generica():
+    """⛔ La celda que no nombra a nadie no tiene término distintivo que buscar, así que acreditar al
+    bloque por la PALABRA («literatura», «promedio») acreditaría al que levanta el valor en silencio
+    y habla de la literatura al pasar. Esa clase la cierra la escotilla declarada, no el detector
+    (`segunda_mano_revisada`, #433 — misma doctrina que #252)."""
+    assert lb.attribution_terms("promedio de siete valores de literatura") == set()
+    generica = [("distancia", "6,31 pc", "promedio de siete valores de literatura")]
+    toma = "La estrella está a 6,31 pc ([[b]])."
+    assert lb.second_hand_lifted(toma, generica) != []
+    assert lb.second_hand_lifted(toma + " Es un promedio de literatura.", generica) != []
+
+
+def test_attribution_terms_acredita_el_BIBCODE_del_original():
+    """«adoptado de [[bibcode]]» acredita al original por CLAVE en vez de por nombre, y es la forma
+    que usa la bóveda cuando el original tiene nota propia."""
+    filas = [("P_b", "4,3115 d", "adoptado de [[2009A&A...507..487M]]")]
+    toma = "El período es $P = 4{,}3115$ d, adoptado de [[2009A&A...507..487M]] ([[b]])."
+    assert lb.second_hand_lifted(toma, filas) == []
+    assert lb.second_hand_lifted("El período es $P = 4{,}3115$ d ([[b]]).", filas) != []
+
+
 import json as _json
 import re
 

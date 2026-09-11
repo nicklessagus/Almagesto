@@ -1057,8 +1057,13 @@ re-extraer el `.txt`.
    **diferencia de versión**. **Cómo anotar cada valor (#103):** con **la página del PDF**, **el
    régimen** en que la fuente lo afirma y —si la fuente lo atribuye a otro trabajo— la marca
    **segunda mano** con la cita a X, porque el número **no es de esta fuente** (el mecanismo de
-   error nº 1 medido). ⛔ **Nada de prosa comparativa en la nota de paper**: comparar dos papers es
-   `inferencia` y va al `## Inventario por eje` (2b).
+   error nº 1 medido). ⛔ **Y el cruce que la síntesis levanta se acredita NOMBRANDO al dueño —o se
+   FIRMA revisado (#433):** el crédito vale por apellido, `[[bibcode]]` linkeado, nombre propio o
+   sigla; lo que el detector no puede decidir va a `segunda_mano_revisada: [{ref, que, motivo}]` en
+   el frontmatter de la ficha o el concepto, que el lint lista aparte. Sin salida, la categoría
+   medía su tasa de disparo: leídos los 66 hallazgos uno por uno, **48 seguían listados** y 40 eran
+   coincidencias numéricas que ninguna prosa puede cerrar. ⛔ **Nada de prosa comparativa en la nota
+   de paper**: comparar dos papers es `inferencia` y va al `## Inventario por eje` (2b).
 
 2b. **Contraste cross-paper (#72)** ⚠ *(**3b** en `ingest-star`, **3c** en `ingest-theme`)* — **entre leer los
    papers y escribir la síntesis.** Es el paso con más apalancamiento y el que más fácil se saltea,
@@ -1345,8 +1350,11 @@ Test operativo: ***¿la afirmación queda falsa si se saca la condición?*** →
 sí o sí: fila de `## Régimen de validez`) / **`contextualiza`** (va al reporte). Y es **columna, no
 prosa**: el juez es estable en el eje textual y no exhaustivo en el de régimen, así que absorberla
 sin rastro borra lo que hay que poder re-auditar. ⛔ **Clase UNA vez; la resolución la escribe
-`write_verif_sidecar --resolver <ancla>=<dónde>` (#427):** duplicada, la fila es **irresoluble** y
-su conteo miente para siempre (41 de 957) — migrador `--migrate-condition-prefix`.
+`write_verif_sidecar --resolver <ancla>[:<bibcode>]=<dónde>` (#427):** duplicada, la fila es
+**irresoluble** y su conteo miente para siempre (41 de 957) — migrador
+`--migrate-condition-prefix`. ⛔ **Y se direcciona por el PAR, no por el ancla (#434):** el ancla
+hashea el BLOQUE, así que un bloque que cita dos fuentes tiene dos filas con la misma; con clases
+distintas la `acota` no se podía marcar resuelta por ningún medio (medidas: 5 de 20).
 
 El subagente contesta además la **sobre-generalización** (#74: la fuente afirma bajo condiciones
 que la nota no dice — no afirma falso, afirma **de más**) y, en transcripciones, la **completitud**
@@ -1475,6 +1483,16 @@ estampado en la nota** (metadata, no un valor que la prosa citó) + backlog del 
 población** (3 de 138), porque *«cubrió: versiones»* sin denominador se lee como «se miraron todas».
 ⚠ Su hueco simétrico es backlog aparte: la nota con **bibcode publicado** que igual lee el preprint
 (82 de 138) no tiene problema de identidad, así que ningún detector la ve.
+⛔ **Y ese backlog se CIERRA con un comando (#436): `python scripts/replace_pdf.py <bibcode>
+<ruta.pdf> --source publisher --reason "<motivo>"`.** Todo backlog que el lint nombra tiene que
+tener una salida ejecutable, y la de la categoría más grande del repo (161 de 264 notas) mandaba a
+`fetch_pdf --force`, que no aplica al caso normal —la copia del editor está tras paywall y la trae
+el usuario—. Copia a **todos** los slugs, re-extrae **sólo ese** `.txt` (`extract_fulltext
+--bibcode`: con el `--force` del slug entero, cambiar UN archivo vence las anclas de **todos** los
+papers del tema), anula `eprint_version` y **emite el alcance de la re-verificación** (medido: 11
+reemplazos → 76 pares). ⛔ La extracción **no se re-pagina**: queda **marcada** `_paginacion` y el
+lint la reporta — es versionada y no regenerable (#311), y sus localizadores son de un documento
+que ya no está (las citas textuales siguen bien: ninguna capa mira el localizador).
 ⛔ **Y el REUSO entre slugs (D-18) deja una pregunta hecha, no una respuesta (#297).** Copiar el
 artefacto que ya estaba bajo otro slug es correcto, pero importa a un sujeto nuevo un archivo cuya
 **antigüedad nadie chequeó** — y la salida natural («si hubiera versión nueva la búsqueda habría
@@ -1575,6 +1593,12 @@ cuando aparece** (medido: el pedido de ampliar el `alcance` de un libro quedó e
 43 JSON y lo vio alguien de casualidad). `python scripts/proposals.py [<slug>]` las junta con **su
 motivo textual** —no una categoría: en seis meses sirve el motivo—, declara su población y declara
 **lo que no puede barrer** (un eje descubierto en 3b vive en la conversación). Reporta y no aplica.
+⛔ **Y cada categoría declara DÓNDE aterriza su firma y si el barrido la cruza (#435):** *cruzada*
+(la refutación, contra `decisiones` del registro del sujeto), *no cruzable* (el `alcance` de
+`themes.yaml` es texto libre — la fila trae el vigente al lado) o *se cierra sola*. Sin eso, una
+propuesta ya firmada seguía en pantalla con el mismo `→` que alguien ya corrió —**60 de 62 eran
+permanentes**— porque el productor leía un artefacto versionado y **no regenerable** (#311) mientras
+la firma aterrizaba en otro lado. Lo firmado se lista **aparte** (AUD-207), nunca silenciado.
 
 ### Lint (chequeo de salud)
 

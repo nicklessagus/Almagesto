@@ -570,16 +570,19 @@ contra el banner del propio archivo y contra #403.
 
 ```bash
 python scripts/write_verif_sidecar.py <nota.md> --migrate-condition-prefix
-python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde se resolvió>
-python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json     # `{ancla: dónde}` en lote
+python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>[:<bibcode>]=<dónde se resolvió>
+python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json     # `{ancla[:bibcode]: dónde}`
 python scripts/lint.py                                                      # rc 0
 ```
 
 El migrador colapsa la clase repetida dejando el texto de adentro **verbatim** (que es la forma
 canónica) y no re-escribe la condición. `--resolver` valida con el lector antes de escribir,
 conserva la condición original detrás de un `·`, y rehúsa el ancla que no está, la fila que no es
-`acota` y el texto **distinto** sobre una fila ya resuelta. **Devolver si** el lint sigue
-reportando «clase DOS veces» después del migrador, o si `--resolver` rehúsa sobre un `acota` legítimo.
+`acota` y el texto **distinto** sobre una fila ya resuelta. ⛔ **Y direcciona por el PAR
+`(ancla, bibcode)` (#434):** un bloque que cita dos fuentes tiene dos filas con el mismo ancla, así
+que `<ancla>=` resuelve la única `acota` del bloque y, con dos, rehúsa pidiendo el bibcode.
+**Devolver si** el lint sigue reportando «clase DOS veces» después del migrador, o si `--resolver`
+rehúsa sobre un `acota` legítimo cuyo ancla no comparte con otra `acota`.
 
 ## 2ñ · v1.252.0 (#428) — la ronda que no se podía ensamblar
 
@@ -640,6 +643,86 @@ python scripts/lint.py                           # `matriz_vieja` en 0
 instancia, no del template, y regenerarlo es un comando. La prosa de arriba del encabezado
 `## Matriz método × estrella` **no se toca** (cirugía), así que si le escribiste algo se queda; lo
 que conviene sí es revisar que el encabezado viejo no siga prometiendo la versión curada.
+
+## 2p · v1.256.0 (#433) — el cruce de segunda mano se puede FIRMAR
+
+El detector de #279/#350 no tenía salida: medido cerrando la categoría entera caso por caso, **48 de
+66 hallazgos seguían listados** después de revisarlos uno por uno. Dos mitades, nada que migrar:
+
+- el **crédito** ahora acredita al dueño que no es «apellido + año» (una compilación, un documento,
+  personas sin año). Efecto esperado: la categoría BAJA sola, sin tocar ninguna nota;
+- lo que el detector no puede decidir se **firma** en el frontmatter de la ficha o el concepto:
+
+```yaml
+segunda_mano_revisada:
+  - ref: 2010ApJ...722..937D        # el bibcode cuya vista marcó el valor
+    que: m_V                        # el `qué` de la fila, como lo nombra el hallazgo del lint
+    motivo: coincidencia numérica — el bloque no toma ese valor de nadie
+```
+
+⚠ El hallazgo del lint **imprime el snippet** con el `ref` y el `que` ya puestos. La identidad es el
+par `(ref, que)` —no el ancla, que se vencería en el próximo reflow— y el `que` se compara
+**normalizado y por prefijo**, así que pegar lo que el reporte dice alcanza.
+
+```bash
+python scripts/lint.py    # `segunda_mano` baja · lo firmado sale en su propia categoría
+```
+
+**Devolver si** un cruce REAL deja de reportarse porque el bloque repite una palabra genérica de la
+celda *Segunda mano* (el crédito pide un término distintivo: apellido, `[[bibcode]]`, nombre propio o
+sigla), o si una declaración correcta cae en *«no corresponde a ningún hallazgo»*.
+
+## 2q · v1.256.0 (#434) — `--resolver` direcciona por el PAR
+
+Un ancla hashea un **bloque**, así que un bloque que cita N fuentes tiene N filas con el mismo ancla.
+Con clases distintas —una `acota` y una `contextualiza`— la herramienta rehusaba y esa `acota` no se
+podía marcar resuelta por ningún medio (medidas: 5 de 20, sobre 4 anclas).
+
+```bash
+python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde se resolvió>
+python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>:<bibcode>=<dónde>   # desambigua
+```
+
+Sin migración: `<ancla>=` sigue valiendo y ahora resuelve la única `acota` del bloque. **Devolver
+si** rehúsa sobre un ancla con UNA sola `acota`, o si resolver una fila cambia la celda de su vecina
+del mismo ancla (el otro lado del mismo bug).
+
+## 2r · v1.256.0 (#435) — las propuestas declaran dónde aterriza su firma
+
+`proposals.py` no consultaba dónde aterriza la decisión que contesta cada propuesta: medido, **60 de
+62 eran permanentes** —el productor lee un artefacto versionado y no regenerable (#311) mientras la
+firma aterriza en otro lado—.
+
+```bash
+python scripts/proposals.py    # cada categoría declara: firma cruzada | no cruzable | se cierra sola
+```
+
+**Efecto esperado:** las refutaciones ya firmadas con `triage --drop-core` salen de lo pendiente y
+aparecen en su propia línea («ya FIRMADA»); los pedidos de `alcance` siguen pendientes —su firma es
+texto libre y **no** se puede cruzar— pero ahora cada fila trae el **alcance vigente** al lado.
+**Devolver si** una refutación sin firmar deja de listarse (sería silenciar una propuesta), o si el
+alcance vigente que imprime no es el de `themes.yaml`.
+
+## 2s · v1.256.0 (#436) — el reemplazo de PDF tiene comando
+
+La categoría más grande de la bóveda (#298: 161 de 264 notas de paper) se cerraba a mano.
+
+```bash
+python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason "<motivo>" --dry-run
+python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason "<motivo>"
+python scripts/extract_fulltext.py <slug> --bibcode <bibcode> --force   # re-extraer UNO, a mano
+python scripts/lint.py    # `extraccion_despaginada` con las extracciones marcadas
+```
+
+Copia a **todos** los slugs, re-extrae **sólo ese** `.txt`, escribe `pdf_sha`/`pdf_source`, anula
+`eprint_version`, marca la extracción con `_paginacion` (sus localizadores son del documento
+anterior: #311 no se reescribe) y **emite el alcance de la re-verificación** listo para
+`verify_fanout --fuentes`. ⛔ **No re-verifica y no re-pagina**: 11 reemplazos vencieron **76**
+pares, y decidir cuándo pagar eso no es del script.
+
+**Devolver si** acepta un PDF con la marca de arXiv declarado `--source publisher`, si deja una copia
+sin reemplazar en otro slug, si re-extrae más `.txt` que el del bibcode pedido, o si el alcance que
+imprime no coincide con las filas que citan ese bibcode.
 
 ## 3 · Cierre
 

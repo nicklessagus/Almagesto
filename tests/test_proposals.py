@@ -39,12 +39,16 @@ def test_el_pedido_de_ampliar_el_alcance_sale_CON_SU_MOTIVO(toy_vault):
     # distinto contrato que la función real escondía el bug en la diferencia.
     _extraccion("ica", "2010CJ", hueco=motivo)
     _extraccion("ica", "2001HKO", hueco="")
-    filas, poblacion = pr.scope_requests()
+    filas, poblacion, _f = pr.scope_requests()
     assert poblacion == 2, "declara sobre cuántas extracciones miró (INV-40)"
-    assert filas == [("2010CJ", "ica", motivo)]
+    # ⛔ #435 — el motivo va VERBATIM y el alcance vigente viaja en su propia columna: la firma de
+    # esta categoría es el `alcance` de `themes.yaml` (texto libre), así que el cruce NO es decidible
+    # y lo único honesto es poner el alcance al lado para que se decida de un vistazo.
+    assert filas == [("2010CJ", "ica", motivo, "alcance vigente: NO DECLARADO")]
     # la lista se TOLERA al leer (nunca se normaliza al escribir): mismo resultado
     _extraccion("ica", "2010CJ", hueco=[motivo])
-    assert pr.scope_requests()[0] == [("2010CJ", "ica", motivo)]
+    assert pr.scope_requests()[0] == [("2010CJ", "ica", motivo,
+                                       "alcance vigente: NO DECLARADO")]
 
 
 def _nota_larga(bib: str, unidad: str = "pagina") -> None:
@@ -65,8 +69,8 @@ def test_el_pedido_de_alcance_lo_hace_el_extractor_donde_el_PROMPT_le_dice(toy_v
         "el §11.2 del manual queda fuera del alcance y el tema lo necesita",
         {"tipo": "pdf_paginas", "n": 300},
         {"nota": "ampliar a §3", "motivo": "sin tipo: es prosa"}])
-    filas, _p = pr.scope_requests()
-    textos = [m for _b, _s, m in filas]
+    filas, _p, _f = pr.scope_requests()
+    textos = [m for _b, _s, m, _c in filas]
     assert "el §11.2 del manual queda fuera del alcance y el tema lo necesita" in textos
     assert "ampliar a §3" in textos, "el mapa SIN `tipo` es prosa, y se lee su `nota`"
     assert not any("pdf_paginas" in m or "300" in m for m in textos), \
@@ -91,7 +95,7 @@ def test_el_hueco_de_una_fuente_CORTA_no_es_un_pedido_de_alcance(toy_vault):
     _extraccion("ica", "2021SinNota", hueco="tampoco")
     _nota_larga("2010CJ", unidad="linea")
     _extraccion("ica", "2010CJ", hueco="una fuente que se cita por línea no es larga")
-    filas, poblacion = pr.scope_requests()
+    filas, poblacion, _f = pr.scope_requests()
     assert (filas, poblacion) == ([], 0), "sin fuentes largas la población es CERO, y se dice"
     assert pr.is_long_source("2020Corto") is False and pr.is_long_source("2021SinNota") is False
     _nota_larga("2010CJ", unidad="seccion")
@@ -112,11 +116,11 @@ def test_la_refutacion_se_PROPONE_con_el_comando_que_la_aplicaria(toy_vault):
     (cfg.PAPERS / "2001HKO.md").write_text(
         "---\nbibcode: 2001HKO\nvistas:\n  - ica\n---\n\n## Abstract\n\nx\n",
         encoding="utf-8")
-    filas, poblacion = pr.refutations()
+    filas, poblacion, _f = pr.refutations()
     assert poblacion == 2
-    assert filas == [("2010CJ", "ica", "habla de componentes de un tensor, no de ICA")]
+    assert filas == [("2010CJ", "ica", "habla de componentes de un tensor, no de ICA", "")]
     assert pr.refutations("ica")[0] == filas, "acotar al sujeto que refuta lo conserva"
-    assert pr.refutations("otro") == ([], 2), "acotar por sujeto no cambia la población mirada"
+    assert pr.refutations("otro") == ([], 2, []), "acotar por sujeto no cambia la población mirada"
 
 
 def test_la_celda_vacia_del_inventario_ES_la_proxima_query(toy_vault):
@@ -130,9 +134,9 @@ def test_la_celda_vacia_del_inventario_ES_la_proxima_query(toy_vault):
         "| Eje | Paper | Dice | Método |\n|---|---|---|---|\n"
         "| blanqueo | [[2010CJ]] | hace falta | SVD |\n"
         "| ruido | [[2001HKO]] | — | |\n\n## Huecos\n\nx\n", encoding="utf-8")
-    filas, poblacion = pr.empty_axis_cells()
+    filas, poblacion, _f = pr.empty_axis_cells()
     assert poblacion == 1
-    assert filas == [("ica", "ruido", "[[2001HKO]]")]
+    assert filas == [("ica", "ruido", "[[2001HKO]]", "")]
 
     # el corte es hasta el próximo `## `: lo que viene después no es el inventario
     (d / "otro.md").write_text(
@@ -140,15 +144,17 @@ def test_la_celda_vacia_del_inventario_ES_la_proxima_query(toy_vault):
         "| Eje | Paper | Dice | Método |\n|---|---|---|---|\n"
         "| ruido | [[2001HKO]] | dice algo | GLS |\n\n## Huecos\n\n"
         "| falta | [[2010CJ]] | | |\n", encoding="utf-8")
-    filas, poblacion = pr.empty_axis_cells("otro")
+    filas, poblacion, _f = pr.empty_axis_cells("otro")
     assert (filas, poblacion) == ([], 1), "la tabla de otra sección no entra"
+    assert _f == [], ("#435 — esta categoría se cierra SOLA: lee la nota, así que la celda llena "
+                      "desaparece. Es el contraejemplo de qué forma tiene una propuesta cerrable")
 
     # la prosa y las filas sin celdas suficientes no son propuestas
     (d / "prosa.md").write_text(
         "---\ntags: [concept]\n---\n\n## Inventario por eje\n\n"
         "Sin desacuerdos todavía.\n\n| Eje | Paper |\n|---|---|\n| ruido | |\n",
         encoding="utf-8")
-    assert pr.empty_axis_cells("prosa") == ([], 1)
+    assert pr.empty_axis_cells("prosa") == ([], 1, [])
 
     # una nota SIN inventario no entra en la población: es lo que hace legible el «0»
     (d / "sin-inventario.md").write_text("---\ntags: [concept]\n---\n\n## Síntesis\n\nx\n",
@@ -160,13 +166,90 @@ def test_la_celda_vacia_del_inventario_ES_la_proxima_query(toy_vault):
         "---\ntags: [concept]\n---\n\n## Inventario por eje\n\n"
         "| Eje | Paper | Dice | |\n|---|---|---|---|\n"
         "| ruido | [[2001HKO]] | dice algo | GLS |\n", encoding="utf-8")
-    assert pr.empty_axis_cells("cabecera") == ([], 1)
+    assert pr.empty_axis_cells("cabecera") == ([], 1, [])
 
     # y la PROSA con barras tampoco: sin el filtro de fila, un renglón así se leía como tabla
     (d / "barras.md").write_text(
         "---\ntags: [concept]\n---\n\n## Inventario por eje\n\n"
         "Falta el eje ruido | en [[2001HKO]] |  | y en otras\n", encoding="utf-8")
-    assert pr.empty_axis_cells("barras") == ([], 1)
+    assert pr.empty_axis_cells("barras") == ([], 1, [])
+
+
+# ── #435 · una propuesta FIRMADA tiene que dejar de estar pendiente ──────────────────────────────
+
+def _refuta(bib: str, sujeto: str, motivo: str = "polisemia — no habla de ese sujeto") -> None:
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / f"{bib}.md").write_text(
+        f"---\nbibcode: {bib}\nvistas:\n  - sujeto: {sujeto}\n    tipo: star\n"
+        f"    refuta: [{sujeto}]\n    motivo: {motivo}\n---\n\n## Abstract\n\nx\n",
+        encoding="utf-8")
+
+
+def _firmar_drop_core(slug: str, bib: str, motivo: str) -> None:
+    """Lo que escribe `triage.py <slug> --drop-core <bibcode> --reason` (carril `sujeto`, #112)."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path(slug).write_text(
+        f"decisiones:\n  {bib}:\n    decision: descartado\n    origen: sujeto\n"
+        f"    motivo: {motivo}\n    fecha: 2026-09-10\n", encoding="utf-8")
+
+
+def test_la_refutacion_FIRMADA_deja_de_estar_pendiente(toy_vault, capsys):
+    """⛔ #435 — la firma de esta categoría aterriza en `decisiones` del registro del sujeto y el
+    barrido no la consultaba: `grep -nE "load_registro|decisiones" scripts/proposals.py` daba CERO.
+    Como el artefacto que lee es versionado y por #311 **no regenerable** (`refuta` no se saca sin
+    re-pagar la lectura, y `harvest_views` mergea add-only), la propuesta no tenía NINGUNA salida:
+    medido en una bóveda real, 60 de 62 eran permanentes.
+
+    El caso reproducible: se firmó el `--drop-core` que la propia propuesta imprime como `→`, el
+    comando hizo lo suyo, y `proposals.py` seguía listando la misma propuesta con el mismo `→`."""
+    _refuta("2012ApJS", "GJ 581")
+    (cfg.CONFIG).mkdir(parents=True, exist_ok=True)
+    (cfg.CONFIG / "stars.yaml").write_text("gj_581:\n  name: GJ 581\n", encoding="utf-8")
+    cfg.load_stars.cache_clear() if hasattr(cfg.load_stars, "cache_clear") else None
+    filas, poblacion, firmadas = pr.refutations()
+    assert poblacion == 1 and len(filas) == 1 and firmadas == [], "sin firmar, está pendiente"
+    _firmar_drop_core("gj_581", "2012ApJS", "la estrella aparece una sola vez, de segunda mano")
+    filas, _p, firmadas = pr.refutations()
+    assert filas == [], "firmada: sale de la cola de lo pendiente"
+    assert len(firmadas) == 1 and "gj_581" in firmadas[0][2] and "segunda mano" in firmadas[0][2]
+    # AUD-207 — queda VISIBLE y aparte, con el motivo; no se silencia
+    pr.report()
+    salida = capsys.readouterr().out
+    assert "ya FIRMADA" in salida and "segunda mano" in salida
+    assert "firma: cruzada" in salida, "la categoría declara que su firma SÍ se cruza"
+
+
+def test_acotar_por_slug_resuelve_el_NOMBRE_del_reclamo(toy_vault):
+    """El reclamo lleva el NOMBRE y el `--slug` del CLI es un slug: sin resolver el nombre, acotar a
+    `gj_581` no encontraba la refutación de `GJ 581` —la misma brecha nombre↔slug que hacía que la
+    firma no se cruzara— y el reporte acotado salía en cero sobre una propuesta que existe."""
+    _refuta("2012ApJS", "GJ 581")
+    (cfg.CONFIG).mkdir(parents=True, exist_ok=True)
+    (cfg.CONFIG / "stars.yaml").write_text("gj_581:\n  name: GJ 581\n", encoding="utf-8")
+    assert len(pr.refutations("gj_581")[0]) == 1, "por slug"
+    assert len(pr.refutations("GJ 581")[0]) == 1, "y por nombre, como lo escribe la vista"
+    assert pr.refutations("otra_estrella")[0] == []
+
+
+def test_el_reclamo_cuyo_SUJETO_no_resuelve_sigue_pendiente(toy_vault):
+    """El cruce necesita `cfg.subject_slug` porque el reclamo lleva el NOMBRE (`refuta: ["GJ 581"]`)
+    y el registro va por slug (`gj_581`): ese salto es el que hacía que la firma no se encontrara.
+    ⛔ Un nombre que no resuelve a ningún sujeto queda **pendiente**: un reclamo irresoluble no es
+    un reclamo firmado, y darlo por firmado silenciaría la propuesta sin que nadie decidiera."""
+    _refuta("2012ApJS", "Sujeto Que No Existe")
+    filas, _p, firmadas = pr.refutations()
+    assert len(filas) == 1 and firmadas == []
+
+
+def test_el_reporte_declara_LOS_TRES_estados_de_la_firma(toy_vault, capsys):
+    """D-43 aplicado a la superficie de propuestas: las dos formas de no poder cerrarse piden cosas
+    OPUESTAS —una se arregla cruzando, la otra sólo se puede declarar— y mostrarlas iguales es lo
+    que dejó 60 de 62 propuestas permanentes."""
+    assert pr.main([]) == 0
+    salida = capsys.readouterr().out
+    for estado in (pr.FIRMA_CRUZADA, pr.FIRMA_NO_CRUZABLE, pr.FIRMA_SE_CIERRA_SOLA):
+        assert f"firma: {estado}" in salida, estado
+    assert "TEXTO LIBRE" in salida, "el porqué del no-cruzable, no sólo la etiqueta"
 
 
 def test_el_reporte_declara_lo_que_NO_puede_barrer(toy_vault, capsys):

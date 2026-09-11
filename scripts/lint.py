@@ -778,7 +778,8 @@ LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "facets": False,
                "thesis_links": False, "activity_indicators_expected": False,
                "keywords": False,
                "planets": True, "disputes": True, "corrections": True,
-               "versions": True, "vistas": True, "no_vista": True}
+               "versions": True, "vistas": True, "no_vista": True,
+               "segunda_mano_revisada": True}
 
 
 def normalize_lists(fm: dict) -> list:
@@ -1263,12 +1264,20 @@ def evidence_hash_lookup(pdf_on_disk: dict, ft_hash: dict):
 
 
 def check_second_hand_lifted(anchor_bodies: dict, segunda_mano: dict,
-                             paper_fms: dict) -> tuple:
-    """`(hallazgos, pares mirados)` — prose that lifts a SECOND-HAND value without saying so.
+                             paper_fms: dict, note_fms: dict) -> tuple:
+    """`(hallazgos, pares, revisados, huerfanas)` — prose that lifts a SECOND-HAND value silently.
 
-    Fourth block out of `lint.collect` (#396). Three read-only inputs and a counter that comes
+    Fourth block out of `lint.collect` (#396). Read-only inputs and a counter that comes
     back as a return value instead of a one-element list mutated in place: the population of
     INV-40 stops being a side effect.
+
+    ⛔ #433 — three outputs instead of one, and that is the whole fix. The category was recall-only
+    with **no way out**: measured on a whole category read one by one, 48 of 66 findings stayed
+    listed after every one had been looked at. So a review can now be SIGNED in the note's
+    frontmatter (`segunda_mano_revisada`, `cfg.load_reviewed_second_hand`) and it comes back in its
+    own list —*«considerado y rechazado: visible, no es deuda»*, never mixed with real debt
+    (AUD-207)— while a declaration that matches no finding comes back in a third one, because a
+    hatch that exempts nothing is a claim about the vault that is false (#256).
     """
     # El lint ya bloquea la NOTA del paper retractado, pero no localiza QUÉ afirmación lo cita —
     # que es lo que hay que revisar. Borrar la afirmación tampoco sirve: destruye trabajo y puede
@@ -1289,10 +1298,22 @@ def check_second_hand_lifted(anchor_bodies: dict, segunda_mano: dict,
     # lo vuelve triage y no lectura.
     #
     hallazgos: list = []
+    revisados: list = []
+    huerfanas: list = []
     n_pares = 0
     for f, texto_n in anchor_bodies.items():
         if not (in_dir(f, "stars") or in_dir(f, "concepts")):
             continue
+        # #433 — la escotilla es de ESTA nota: el mismo cruce en otra nota es otra revisión. La
+        # forma inválida la reporta `fm_broken` por `normalize_lists`; acá se degrada a sin
+        # declaraciones en vez de tumbar el barrido (una nota rota no se lleva las otras 400).
+        _stem = basename(f)[:-3]
+        try:
+            _revisadas = cfg.load_reviewed_second_hand(note_fms.get(_stem) or {}, entry=_stem)
+        except cfg.VistasError as _e:
+            _revisadas = []
+            huerfanas.append((_stem, str(_e).replace("\n", " ")))
+        _usadas: set = set()
         for _par in lb.pairs_of(texto_n):
             _filas = segunda_mano.get(_par.bibcode)
             if not _filas or "segunda mano" in _par.block.text.lower():
@@ -1307,13 +1328,33 @@ def check_second_hand_lifted(anchor_bodies: dict, segunda_mano: dict,
                           if (a := str((paper_fms.get(b) or {}).get("first_author") or "").strip())}
             for _q, _v, _de, _ev in lb.second_hand_lifted(_par.block.text, _filas,
                                                           atribuido=_atribuido):
+                # #433 — la revisión firmada se lista aparte, con su motivo. La identidad es
+                # `(ref, que)` y NO el ancla: un ancla hashea el bloque, así que la firma se
+                # vencería en el próximo reflow y habría que renovarla por una revisión que sigue
+                # valiendo.
+                _motivo = cfg.reviewed_second_hand(_revisadas, _par.bibcode, _q)
+                if _motivo is not None:
+                    _usadas.add((_par.bibcode, _q))
+                    revisados.append(
+                        (_stem, f"L{_par.block.first_line}: [[{_par.bibcode}]] «{_q[:80]}» — "
+                                f"revisado y rechazado: {_motivo}"))
+                    continue
                 hallazgos.append(
-                    (basename(f)[:-3],
+                    (_stem,
                      f"L{_par.block.first_line}: la línea toma {', '.join(_ev)} de "
                      f"[[{_par.bibcode}]], y su vista marca ese valor como SEGUNDA MANO "
                      f"(«{_q[:80]}» → {_de[:120]}) → la ficha tiene que decir de quién es (#103): "
-                     f"el número no es de esta fuente"))
-    return hallazgos, n_pares
+                     f"el número no es de esta fuente. Si es una coincidencia —el bloque no toma "
+                     f"ese valor de nadie— firmalo: `segunda_mano_revisada: [{{ref: "
+                     f"{_par.bibcode}, que: {_q[:80]}, motivo: <por qué no es deuda>}}]` (#433)"))
+        for _d in _revisadas:
+            if not any(cfg.reviewed_second_hand([_d], _ref, _que) for _ref, _que in _usadas):
+                huerfanas.append(
+                    (_stem, f"`segunda_mano_revisada` declara `{str(_d.get('ref'))[:30]}` / "
+                            f"«{str(_d.get('que'))[:60]}» y ningún hallazgo corresponde → o el "
+                            f"cruce ya no dispara (sacá la entrada) o el `ref`/`que` no es el que "
+                            f"el lint nombra (la escotilla no exime nada, #256)"))
+    return hallazgos, n_pares, revisados, huerfanas
 
 
 def check_prosa_retractada(anchor_bodies: dict, paper_fms: dict) -> tuple:
@@ -1917,6 +1958,40 @@ def check_extraction_in_build() -> list:
                        f"versionan ni viajan, y una extracción no se regenera sin volver a leer el "
                        f"PDF → `python scripts/make_notes.py --migrate-extracciones`"))
     return old_registro
+
+
+def check_depaginated_extractions() -> tuple:
+    """`(hallazgos, población)` — extractions whose LOCATORS are from a replaced document (#436).
+
+    `replace_pdf` stamps `_paginacion` on the extraction when a PDF is swapped (the preprint for the
+    published version, the most common case of #298) because `raw/extraccion/**` is versioned and
+    not regenerable (#311): the quoted text stays right —measured, `contrast --validar` gave 0
+    alterations over the five notes touched— while **every locator points at a document that is no
+    longer on disk**, since the publisher's copy paginates by volume (Cardoso 1998 starts at 2009).
+
+    ⛔ No other layer sees it, and that is the whole reason this exists: `verify-citations` checks
+    that the source SAYS it, `contrast --validar` that the string was not ALTERED, and both are true
+    with the page number pointing nowhere. Backlog, not blocking: the reading happened and its
+    content is good — what is stale is the pointer, and fixing it means re-reading the pages.
+
+    @inv INV-147"""
+    out, poblacion = [], 0
+    for f in sorted(cfg.EXTRACCION.glob("*/*.json")) if cfg.EXTRACCION.exists() else []:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue                      # el JSON ilegible tiene su propio detector
+        if not isinstance(data, dict):
+            continue
+        poblacion += 1
+        marca = cfg.as_map(data.get("_paginacion"))
+        if marca:
+            out.append((f"{f.parent.name}/{f.stem}",
+                        f"los localizadores son del documento ANTERIOR (PDF reemplazado el "
+                        f"{marca.get('reemplazo') or '?'}: {marca.get('motivo') or 'sin motivo'}) "
+                        f"→ al re-leer esas páginas, actualizá `linea`/`p.` y sacá `_paginacion`; "
+                        f"la cita textual sigue valiendo (#436)"))
+    return out, poblacion
 
 
 def check_red_pass_missing() -> list:
@@ -5848,6 +5923,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     vista_ejes_faltantes: list = []    # (stem, motivo) — #270: la vista no cubre su propia lente
     segunda_mano: dict = {}            # {bibcode: [(qué, valor, de quién)]} — #279
     segunda_mano_perdida: list = []    # (stem, motivo) — #279: la ficha se apoya y no lo dice
+    segunda_mano_revisada: list = []   # (stem, motivo) — #433: revisado y rechazado, no es deuda
+    segunda_mano_huerfana: list = []   # (stem, motivo) — #433: la escotilla no exime nada
     cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
     cita_inventada: list = []          # (stem, motivo) — #318: ni en el `.txt` NI en la extracción
@@ -6439,8 +6516,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
 
     # ── #279/#350 · la prosa que levanta un valor de SEGUNDA MANO sin decirlo ────────────────
     # El bloque vive en `check_second_hand_lifted` (#396).
-    _sm_hallazgos, _sm_pares = check_second_hand_lifted(anchor_bodies, segunda_mano, paper_fms)
+    _dep_hallazgos, _dep_poblacion = check_depaginated_extractions()
+    _sm_hallazgos, _sm_pares, _sm_revisados, _sm_huerfanas = check_second_hand_lifted(
+        anchor_bodies, segunda_mano, paper_fms, todos_fm)
     segunda_mano_perdida += _sm_hallazgos
+    segunda_mano_revisada += _sm_revisados
+    segunda_mano_huerfana += _sm_huerfanas
     _n_pares_sm[0] += _sm_pares
 
     # ── D-47: la prosa que cita una fuente RETRACTADA ────────────────────────────────────────
@@ -6801,6 +6882,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vista_ejes_faltantes', '🎯 La vista no contesta los ejes de su propia lente: el silencio se lee como «se miró y no hay nada» (#254/#270, backlog)', SEV_BACKLOG, tuple(vista_ejes_faltantes), poblacion='papers'),
         Categoria('gt_prosa', '🪞 La prosa afirma sobre la autoridad algo que su ground-truth desmiente (#278, backlog)', SEV_BACKLOG, tuple(gt_prosa), poblacion='ground_truth'),
         Categoria('segunda_mano', '🔁 Valor de SEGUNDA MANO levantado sin la marca: la atribución se pierde en la síntesis (#103/#279, backlog)', SEV_BACKLOG, tuple(segunda_mano_perdida), poblacion='pares_segunda_mano'),
+        Categoria('segunda_mano_revisada', 'Cruce de segunda mano REVISADO y rechazado con motivo '
+                  '(#433: visible, no es deuda)', SEV_BACKLOG, tuple(segunda_mano_revisada),
+                  poblacion='pares_segunda_mano'),
+        Categoria('extraccion_despaginada', 'Extracción con los localizadores del documento '
+                  'ANTERIOR: el PDF se reemplazó y la paginación cambió (#436, backlog)',
+                  SEV_BACKLOG, tuple(_dep_hallazgos), poblacion='extracciones'),
+        Categoria('segunda_mano_huerfana', '`segunda_mano_revisada` que no corresponde a ningún '
+                  'hallazgo: la escotilla no exime nada (#433/#256, backlog)', SEV_BACKLOG,
+                  tuple(segunda_mano_huerfana), poblacion='pares_segunda_mano'),
         Categoria('sin_conclusiones_ok', 'Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda)', SEV_BACKLOG, tuple(sin_conclusiones_ok), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale), poblacion='registros'),
@@ -6829,6 +6919,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                       if cfg.REGISTRO.exists() else 0, "registros de sujeto"),
         "citas": (_n_citas_evaluadas[0], "citas «…» de ≥40 caracteres con fuente chequeable"),
         "huecos": (_n_huecos[0], "notas con `## Huecos` escrito"),
+        "extracciones": (_dep_poblacion, "extracciones de `raw/extraccion/` (#311)"),
         "pares_segunda_mano": (_n_pares_sm[0],
                                "pares (bloque citante, bibcode) que citan una fuente con valores "
                                "de segunda mano"),

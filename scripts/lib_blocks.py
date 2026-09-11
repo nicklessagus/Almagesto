@@ -1039,6 +1039,32 @@ def verif_summary_stated(text: str, rows: list) -> bool:
     return _plain_line(verif_summary(rows)) in _plain_line(verif_section(text))
 
 
+def row_key(row) -> tuple:
+    """The identity of a verification row: the pair **`(anchor, bibcode)`** (#434).
+
+    ⛔ The unit of resolution is the PAIR, the same one the unit of verification is: the fan-out
+    answers per pair and the `Condición` cell is per row. An ANCHOR is not that unit — it hashes a
+    BLOCK, so a block citing N sources produces N rows with the same anchor (see `Pair`). Measured
+    on a real vault while closing a blind round: of 20 `acota`, **5 shared their anchor with a
+    `contextualiza`** and could not be marked resolved by any tool, so their count lied forever.
+
+    One function because both writers of the sibling address rows this way, and addressing by anchor
+    in one of them is what produced the bug."""
+    return (str(getattr(row, "anchor", "") or ""), str(getattr(row, "bibcode", "") or ""))
+
+
+def rows_addressed(rows: list, anchor: str, bibcode: str | None = None) -> list:
+    """The rows an address `(anchor[, bibcode])` names, in table order (#434).
+
+    With no `bibcode` the address is the anchor alone, which is AMBIGUOUS when the block cites more
+    than one source — so it returns all of them and it is the caller that decides whether the
+    ambiguity matters (for `--resolver` it does not when only one of the rows is an `acota`)."""
+    a = str(anchor or "").strip()
+    b = str(bibcode or "").strip()
+    return [r for r in rows or []
+            if row_key(r)[0] == a and (not b or row_key(r)[1] == b)]
+
+
 def verif_rows(note) -> list[Row] | None:
     """The rows of this note's verification table, read from its sidecar (#344).
 
@@ -1386,6 +1412,44 @@ def quantities(text: str) -> set:
     return out
 
 
+#: Un NOMBRE PROPIO o una SIGLA en posición de origen: `Kowalski`, `Hipparcos`, `PASTEL`, `ESO`.
+#: Dos formas con umbral distinto, y la diferencia es deliberada: la sigla entra con **tres** letras
+#: (`ESO`, `ESA`, `NEA` nombran al dueño de un valor y no hay otra manera de escribirlas), la
+#: palabra capitalizada pide **cuatro**, que es lo que deja afuera el artículo y el arranque de
+#: oración. Es la mitad de `_CITED_NAME_RE` SIN el anclaje en el año: acá no hace falta, porque el
+#: término no se busca en prosa libre sino en la celda *Segunda mano*, que dice de quién es el valor
+#: y nada más. ⚠ Punto ciego declarado: una palabra castellana capitalizada y genérica en la celda
+#: (`Tabla`) acredita al bloque que la repite — la dirección segura para un detector recall-only.
+_NOMBRE_PROPIO_RE = re.compile(
+    r"\b([A-ZÁÉÍÓÚÑÜ]{3,}|[A-ZÁÉÍÓÚÑÜ][\wÁÉÍÓÚÑÜáéíóúñü'\-]{3,})\b")
+
+
+def attribution_terms(text: str) -> set:
+    """The terms by which a *Segunda mano* cell NAMES the owner of its value (#433).
+
+    Superset of `cited_names`, and the difference is what #433 measured: after fixing the 20 real
+    findings of a whole category read one by one, **8 stayed listed** because the owner is not a
+    `surname + year`. It is a compilation (`compilación PASTEL`), a document (`HARPS detector final
+    design review (ESO)`), or people quoted without a year (`Dean, Kowalski y Pell`) — for all of
+    those `cited_names` returns the empty set, so the credit branch was structurally unreachable
+    and the block had **nothing it could write** to close the finding.
+
+    So the terms are: the cited surnames, the `[[bibcodes]]` the cell links (the «adoptado de
+    [[bibcode]]» form, which credits the original by key instead of by name), and the proper nouns
+    and acronyms. Compared against the citing block, they answer the same question the year used to
+    anchor: *does this block repeat whose the value is?*
+
+    ⛔ What is deliberately NOT here: a list of generic forms («promedio de literatura», «valores de
+    literatura»). A cell that names nobody has no distinctive term to look for, so crediting it
+    would mean crediting the block for the WORD and not for the attribution — and the block that
+    silently lifts a value talks about the literature too. That class closes with the declared hatch
+    (`segunda_mano_revisada`, #433), which is the same doctrine as #252: what the detector cannot
+    decide, curation signs with a motive."""
+    t = str(text or "")
+    return (cited_names(t) | {b.casefold() for b in _bibcodes(t)}
+            | {m.group(1).casefold() for m in _NOMBRE_PROPIO_RE.finditer(t)})
+
+
 def cited_names(text: str) -> set:
     """Surnames in CITATION position — followed, nearby, by a year or an «et al.».
 
@@ -1423,12 +1487,23 @@ def second_hand_lifted(block: str, rows: list, *, atribuido: set | None = None) 
     the caller, the first authors of the bibcodes it links. A row whose *Segunda mano* cell names
     one of them is NOT a finding: the note does say whose the value is, which is the whole ask.
     Recall-only: a block naming the right author for another reason hides a real case, and that is
-    the safe direction for a category whose problem is the firing rate."""
+    the safe direction for a category whose problem is the firing rate.
+
+    ⛔ #433 — the credit is read with `attribution_terms`, not with `cited_names`: an owner that is
+    not a `surname + year` (a compilation, a document, people without a year) left the branch
+    **structurally unreachable**, so 8 of the 20 real findings stayed listed after being fixed. The
+    row is credited when the block repeats any term by which the cell names the owner — a surname,
+    a linked `[[bibcode]]`, a proper noun or an acronym."""
     nombres = (atribuido or set()) | cited_names(block)
     cantidades, citas = quantities(block), normalize_ws(block).casefold()
+    terminos_bloque = attribution_terms(block)
     out = []
     for que, valor, de in rows:
-        if cited_names(de) & nombres:
+        # #433 — dos caminos, y los dos son «el bloque dice de quién es»: el nombre que el llamador
+        # ya acreditó (primer autor de un bibcode linkeado) y el término que el bloque REPITE de la
+        # celda. El segundo es el que alcanza a la compilación y al documento.
+        terminos_celda = attribution_terms(de)
+        if terminos_celda & (nombres | terminos_bloque):
             continue
         # ⛔ UNA cifra de dos dígitos significativos (`4,5`, `0,85`) es una coincidencia tanto como
         # un valor: medida en una bóveda real, la mitad de esos cruces era colisión («4,5 años» de

@@ -353,6 +353,23 @@ existe justamente porque, repartidas, se corren cinco y la sexta nunca:
 valores **bajo los pies de la prosa que ya los citó**. El renombre preprint→publicado **nunca** es
 automático (reescribe wikilinks de toda la bóveda): se propone el comando.
 
+⛔ **El caso frecuente NO es el renombre: es que la nota tenga el bibcode publicado y lea el
+preprint** (#298 — medido, 161 de 264 notas de paper, la categoría de backlog más grande). Ahí no
+hay problema de identidad y el PDF del editor casi siempre lo trae el usuario a mano:
+
+```bash
+python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason "<motivo>" --dry-run
+python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason "<motivo>"
+```
+
+Copia a **todos** los slugs donde vive el PDF, re-extrae **sólo ese** `.txt`
+(`extract_fulltext --bibcode`: el `--force` del slug entero vencería las anclas de **todos** los
+papers del tema), escribe `pdf_sha`/`pdf_source`, anula `eprint_version` y **emite el alcance de la
+re-verificación** listo para `verify_fanout --fuentes`. ⛔ **No re-verifica ni re-pagina**: la
+extracción queda marcada `_paginacion` —es versionada y no regenerable (#311)— y el lint la reporta;
+al re-leer esas páginas se actualizan los localizadores y se saca la marca. Medido: 11 reemplazos →
+**76 pares** por re-verificar, así que el reemplazo se decide de a uno, mirando el `--dry-run`.
+
 La caducidad queda **versionada** en `vault/config/registro/_red.yaml` — cuándo se miró afuera es
 información de la bóveda, no de la máquina. Un detector que no pudo correr **no** entra en `cubrio`.
 

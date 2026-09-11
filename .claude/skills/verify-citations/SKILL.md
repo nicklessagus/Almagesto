@@ -468,8 +468,15 @@ misma notación que el veredicto de al lado (#232: la segunda ronda anota, no pi
 
 ```bash
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde se resolvió>   # repetible
-python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json                  # `{ancla: dónde}`
+python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>:<bibcode>=<dónde>     # #434
+python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json                  # `{ancla[:bibcode]: dónde}`
 ```
+
+⛔ **La dirección es el PAR, no el ancla (#434).** Un ancla hashea el **bloque**, así que un bloque
+que cita N fuentes tiene N filas con la misma: `<ancla>=` resuelve la única `acota` del bloque
+aunque una `contextualiza` comparta el ancla, y si hay **dos `acota`** rehúsa nombrando los bibcodes
+para que desambigües con `<ancla>:<bibcode>=`. Antes esas filas **no se podían marcar resueltas por
+ningún medio** y el conteo mentía para siempre (medidas: 5 de 20 `acota`, sobre 4 anclas).
 
 Valida con el lector antes de escribir, conserva la condición original detrás de un `·` —sigue
 diciendo bajo qué régimen vale la afirmación—, **no mueve la fecha del bloque** (resolver no es

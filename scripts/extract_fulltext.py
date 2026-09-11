@@ -227,6 +227,23 @@ def ocr_pdf(pdf: Path) -> str | None:
 
 
 
+def select_pdfs(srcdir: Path, bibcodes) -> tuple[list, list]:
+    """`(pdfs to extract, requested bibcodes that are NOT there)` — the `--bibcode` scope (#436).
+
+    ⛔ It REFUSES instead of degrading to «nothing to do»: a bibcode that is not under this slug is
+    an error of whoever asked for it (a typo, or the wrong slug), and running silently over zero
+    files reads as success. Same criterion as `lint --cierre <slug>` with a slug that does not
+    exist.
+
+    Without `--bibcode` the universe is the whole slug, which is the historical behaviour."""
+    todos = sorted(srcdir.glob("*.pdf"))
+    if not bibcodes:
+        return todos, []
+    pedidos = {str(b).strip() for b in bibcodes}
+    pdfs = [f for f in todos if f.stem in pedidos]
+    return pdfs, sorted(pedidos - {f.stem for f in pdfs})
+
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -240,6 +257,11 @@ def main() -> int:
     ap.add_argument("--ocr", action="store_true",
                     help="extraer por OCR (tesseract) en vez de pdftotext; sin este flag el OCR "
                          "corre solo como fallback cuando la capa de texto no es legible")
+    ap.add_argument("--bibcode", action="append", default=None, metavar="BIB",
+                    help="acotar a ESTE bibcode del slug (repetible, #436). ⛔ Es lo que hace "
+                         "usable el `--force`: sin esto re-extraer UN archivo obliga a re-extraer "
+                         "el slug entero, y eso vence las anclas de fuente (D-20) de TODOS los "
+                         "papers del tema — daño colateral sobre pares que nadie tocó.")
     args = ap.parse_args()
 
     if args.ocr and not ocr_available():
@@ -263,7 +285,11 @@ def main() -> int:
     outdir = FULLTEXT / args.slug
     outdir.mkdir(parents=True, exist_ok=True)
 
-    pdfs = sorted(srcdir.glob("*.pdf"))
+    pdfs, faltan = select_pdfs(srcdir, args.bibcode)
+    if faltan:
+        cfg.print_seguro(f"⛔ no hay PDF de {', '.join(faltan)} bajo `{args.slug}` "
+                         f"({srcdir}) — ¿el bibcode o el slug?")
+        return 2
     done = ocred = skipped = failed = illegible = backfilled = 0
     for pdf in pdfs:
         out = outdir / (pdf.stem + ".txt")

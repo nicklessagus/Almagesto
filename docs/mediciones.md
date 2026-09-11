@@ -1711,3 +1711,144 @@ medición propia: cuando el corpus no puede contestar la mitad de la pregunta, s
 ⚠ Los **155** restantes siguen **sin clasificar**: que bajen no los vuelve falsos. Junto con las
 **129** citas de extracción que el cruce de #359 acusa, son deuda de `maintain` y piden abrir PDFs
 de a uno.
+
+## 2026-09-11 · El detector de SEGUNDA MANO no podía llegar a cero (#433)
+
+**Cómo se midió.** En la instancia `Almagesto-Tesis` (2026-09-09) se cerró la categoría entera
+leyendo **los 66 hallazgos uno por uno, con un agente por nota** (`rv-doppler` 21, `hd_40307` 15,
+`gj_581` 13, `harps-drs` 10, `ica-ruido` 6, `ica` 1). Lo que había detrás:
+
+| clase | n | qué es |
+|---|---|---|
+| **real** | 20 | la ficha daba como del paper citante un valor que es de otro; se arregló nombrando al dueño |
+| **ya atribuido** | 6 | el bloque ya decía de quién es, en una forma que el detector no acreditaba |
+| **coincidencia** | 40 | el número cruzó por casualidad (6,3 de $\eta_\oplus$ contra 6,3 pc de distancia; 4000 K de $T_{eff}$ contra 4000 líneas del CCD) |
+
+Los 20 reales valieron la pasada: entre ellos, dos períodos presentados bajo Dawson & Fabrycky que
+son de Howard 2010 y McArthur 2004, y un estimador presentado como de Beckmann 2004 que es el PPCA
+de Tipping & Bishop 1999.
+
+**El número que motivó el fix:** después de arreglar los 20, **48 de 66 seguían listados**. 40 son
+coincidencias —el bloque no toma ese valor de nadie, así que **no hay nada que escribir** que las
+saque— y 8 son atribuciones cuyo dueño no es «apellido + año»: una compilación (`PASTEL`), un
+documento (`HARPS detector final design review (ESO)`), personas citadas sin año (`Dean, Kowalski y
+Pell`). Para esas tres formas `cited_names` devuelve el conjunto vacío, o sea que la rama de crédito
+era **inalcanzable por construcción**.
+
+**Qué cambió (1.256.0).** Dos mitades, cada una contra una de las dos clases: `attribution_terms`
+acredita por apellido, `[[bibcode]]` linkeado, nombre propio o sigla (cierra las 8), y
+`segunda_mano_revisada: [{ref, que, motivo}]` firma lo que el detector no puede decidir (cierra las
+40). Identidad `(ref, que)` y no el ancla: un ancla hashea el bloque, así que la firma se vencería
+en el próximo reflow por una revisión que sigue valiendo.
+
+⛔ **Lo que NO se hizo, y por qué:** acreditar por una **forma genérica** («promedio de literatura»).
+La celda que no nombra a nadie no tiene término distintivo que buscar, así que el crédito sería por
+la palabra — y el bloque que levanta un valor en silencio también habla de la literatura. Esa clase
+la cierra la escotilla, que es juicio firmado y no heurística.
+
+⚠ **Lo que esta medición no dice:** cuántos de los 48 eran coincidencia se sabe porque alguien los
+leyó. La tasa de disparo del detector **sobre un corpus nuevo** no se re-midió acá.
+
+## 2026-09-11 · `--resolver` direccionaba por ANCLA, y un ancla es un bloque (#434)
+
+**Cómo se midió.** Cerrando una **ronda ciega completa** de `harps-drs` en la instancia
+(2026-09-10): 158 pares, 22 fuentes.
+
+| | n |
+|---|---|
+| filas del hermano | 158 |
+| `acota` de la ronda | 20 |
+| resolubles con la herramienta | 15 |
+| **irresolubles** (ancla compartido con una `contextualiza`) | **5**, sobre 4 anclas |
+
+El caso: el bloque «Post-procesado en vez de re-reducción: dónde se engancha» cita
+`2023A&A...678A...2C` y `2021A&A...653A..43C`; el fan-out le dio `acota` a la primera y
+`contextualiza` a la segunda. **Mismo ancla, dos clases**, y `--resolver` rehusaba —haciendo bien:
+no podía saber a cuál—. Esas 5 `acota` no se podían marcar resueltas **por ningún medio**, así que
+`verif_counts` las contaba pendientes para siempre; en las 5 la condición **sí** estaba resuelta en
+la prosa, con cita y página.
+
+**Qué cambió (1.256.0).** La dirección es `(ancla, bibcode)` (`lb.row_key`), la clave que `Row` ya
+tenía. `<ancla>=` sigue valiendo y ahora resuelve la única `acota` del bloque aunque una
+`contextualiza` comparta el ancla (el 100 % de los 5 casos medidos); con **dos `acota`** rehúsa
+nombrando los bibcodes y se desambigua con `<ancla>:<bibcode>=`.
+
+⚠ **El otro lado del mismo bug, que la medición no vio porque nadie lo ejercitó:** `_rewrite_rows`
+indexaba los cambios por ancla, así que escribir una celda la escribía en **todas** las filas del
+bloque. `row_key` es una sola función para las dos mitades — la regla duplicada ya divergió tres
+veces en este repo (#215/#324/#335).
+
+## 2026-09-11 · Una propuesta leída de un artefacto versionado no se podía cerrar (#435)
+
+**Medido** en una bóveda real (2026-09-10), `python scripts/proposals.py` → **62 propuestas**, sobre
+275 notas y 264 notas de paper:
+
+| productor | lee | n | ¿se cerraba al firmar? |
+|---|---|---|---|
+| `scope_requests` | `raw/extraccion/**` (versionado, #311) | 59 | **no** |
+| `refutations` | `vistas[].refuta` (add-only) | 1 | **no** |
+| `empty_axis_cells` | la tabla `## Inventario por eje` de la nota | 2 | **sí** |
+
+**60 de 62 eran permanentes.** El tercero es el contraejemplo que muestra qué forma tiene una
+propuesta cerrable: lee la **nota**, y cuando la celda se llena desaparece sola.
+
+**El caso reproducible.** `2012ApJS..200...15A` tenía `refuta: ["GJ 581"]`; se firmó la decisión con
+el comando que la propia propuesta imprime como `→`
+(`triage.py gj_581 --drop-core … --reason …`), el comando hizo lo suyo y dejó el motivo en
+`vault/config/registro/gj_581.yaml`, versionado — y `proposals.py` **seguía listando la misma
+propuesta con el mismo `→`**. Mecanismo, leído en el código:
+`grep -nE "load_themes|load_registro|decisiones|registro" scripts/proposals.py` → **cero hits**.
+
+**Qué cambió (1.256.0).** `refutations` cruza contra `decisiones` del registro del sujeto, y para eso
+necesita `cfg.subject_slug`: el reclamo lleva el **nombre** (`GJ 581`) y el registro va por **slug**
+(`gj_581`) — ese salto era el que hacía que la firma no se encontrara. Lo firmado se lista **aparte**
+(AUD-207). Para `scope_requests` el cruce **no es decidible** —la firma es el `alcance` de
+`themes.yaml`, texto libre— así que la pantalla lo **declara** (D-43) y cada fila trae el alcance
+vigente al lado, leído con la misma función que el re-estampado (`cfg.declared_scopes`).
+
+⚠ **Lo que NO se hizo:** filtrar `scope_requests` por una heurística de «esto ya se concedió». Un
+filtro que adivina mal **pierde el pedido**, y un pedido que nadie lee se pierde por definición
+(#328): ahí la dirección segura es dejarlo pendiente y declarar por qué.
+
+## 2026-09-11 · El backlog más grande del repo no tenía comando (#436)
+
+**Medido** reemplazando **11 preprints** por su versión de editor en una bóveda real (2026-09-10),
+con los PDF que aportó el usuario. Todo corrió desde un script de scratch **no versionado**, porque
+el `→` de #298 manda a `fetch_pdf.py <slug> --force` y ése no aplica al caso normal: la copia del
+editor está tras paywall.
+
+| | |
+|---|---|
+| categoría #298 | **161 de 264** notas de paper (la más grande de la bóveda) |
+| papers reemplazados | 11 |
+| pares de verificación que caducan | **76** (~7 de mediana por paper) |
+| notas afectadas | 6 (`ica` 24, `ica-ruido` 15, `gj_581` 15, `rv-doppler` 14, `icasso` 6, una query 2) |
+| extrapolado a los 70 de prioridad alta | del orden de **500 pares** |
+
+**Las tres piezas que se contradecían** (leídas en el código, no supuestas):
+
+1. el PDF vive bajo **cada slug** que ingestó el paper (`2010ApJ...722..937D` bajo `gj_581` y
+   `rv-doppler`; `2023A&A...675A.187O` bajo `ica` e `ica-ruido`) y **nadie lo enumeraba**;
+2. `extract_fulltext.py` toma **slug** y su `--force` re-extrae el slug entero, lo que vence las
+   anclas de fuente (D-20) de **todos** los papers del tema. El workaround que quedó —borrar el
+   `.txt` y correr sin `--force`— no estaba documentado en ningún lado;
+3. la guarda de #383 **no puede disparar** en la mayoría de la bóveda: **247 notas con PDF y sólo 25
+   con `pdf_sha`**, así que en las otras 222 el reemplazo es invisible y la nota sigue diciendo
+   `pdf_source: eprint` sobre un PDF de editor. Falso negativo estructural, no caso borde.
+
+⛔ **Y la inconsistencia que no levantaba nadie:** `raw/extraccion/**` es versionado y no regenerable
+(#311), así que después del reemplazo la bóveda tiene una extracción que cita `p. 5` de un documento
+que ya no está, mientras el PDF nuevo pagina por volumen (Cardoso 1998 arranca en la **2009**; Dawson
+2010 en la **937**; HePPCAT en la **4819**). Las citas textuales siguen bien —`contrast --validar` dio
+**0 alteraciones** en las cinco notas tocadas— y **todos los localizadores quedan mal**:
+`verify-citations` chequea que la fuente lo **diga** y `--validar` que la cadena no esté **alterada**,
+y las dos cosas son ciertas con la página apuntando a la nada.
+
+**Qué cambió (1.256.0).** `scripts/replace_pdf.py` + `extract_fulltext --bibcode`, y el lint reporta
+la extracción marcada `_paginacion`.
+
+⚠ **Dos desvíos respecto de lo que pedía el issue, con su motivo:** el rastro va a la nota del
+**paper** y no al registro de un sujeto (un PDF es compartido por todos los slugs que lo ingestaron,
+así que el registro guardaría N copias de un solo hecho y va por sujeto; la nota es versionada y es
+lo que el consumidor lee), y la extracción **no se re-pagina**: se marca. Re-paginar exige volver a
+abrir las páginas, que es el paso caro que #205 dejó como único camino de lectura.

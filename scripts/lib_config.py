@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.255.0"
+ALMAGESTO_VERSION = "1.256.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -808,6 +808,54 @@ def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
                 j += 1
             return i, j
     return None
+
+
+def set_fm_scalar(path, field: str, value: str, *, crear: bool = True) -> bool:
+    """Set a frontmatter SCALAR, replacing the key's whole block or appending it (#436).
+
+    ⛔ One definition of «escribir un escalar del frontmatter», for the same reason `fm_key_span`
+    is one definition of «el bloque de una clave»: the repo already has `make_notes._set_campo`
+    (replaces, and **does nothing at all** when the key is absent) and the replace-or-append that
+    `stamp_pdf` open-codes twice. A third copy in the PDF replacement would be the fourth.
+
+    Edits the TEXT in place (never re-serialises) so the LLM extraction is preserved byte for byte,
+    and it carries the guard of #244/#222: the frontmatter is **re-parsed** and nothing is written
+    if it stopped parsing — a note whose YAML breaks evades every check of its type, silently.
+    Returns True when the file changed.
+
+    ⚠ `crear` is what the two callers genuinely disagree about, so it is a parameter and not a
+    second function: `_set_campo` updates fields the stub already wrote (an absent key there means
+    the note is of another kind, and appending would invent schema), while the PDF replacement has
+    to CREATE `pdf_source`/`pdf_sha` on a note that predates them."""
+    text = Path(path).read_text(encoding="utf-8")
+    lim = fm_bounds(text)
+    if lim is None:
+        return False
+    ini, end = lim
+    lines = text[ini:end].split("\n")
+    span = fm_key_span(lines, field)
+    if span is not None:
+        lines[span[0]:span[1]] = [f"{field}: {value}"]
+    elif crear:
+        while lines and not lines[-1].strip():
+            lines.pop()
+        lines.append(f"{field}: {value}")
+    else:
+        return False
+    head = "\n".join(lines)
+    if head == text[ini:end]:
+        return False                                   # idempotente por contenido
+    nuevo = text[:ini] + head + text[end:]
+    # #244/#222 — el lector, antes de escribir: una operación no puede dejar la nota PEOR de lo que
+    # la encontró. ⚠ La condición es la de #244 y no `is None`: `split_fm` devuelve `{}` tanto para
+    # «no parsea» como para «no hay», así que se compara contra el ANTES (si antes parseaba y ahora
+    # no, se rompió). Con `is None` la guarda no dispararía nunca — el falso limpio de siempre.
+    if split_fm(text) and not split_fm(nuevo):
+        print_seguro(f"  ⛔ {Path(path).name}: escribir `{field}` dejaría el frontmatter sin "
+                     f"parsear → NO se escribe (una nota así evade todos los chequeos de su tipo)")
+        return False
+    write_text_atomic(Path(path), nuevo)
+    return True
 
 
 # #271 — el markup que los catálogos meten en título y abstract. La lista original cubría seis
@@ -2633,6 +2681,55 @@ def save_registro(slug: str, data: dict) -> None:
         f, yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False))
 
 
+def subject_slug(nombre: str) -> str | None:
+    """The slug of the subject a note CLAIMS by name, or `None` (#435).
+
+    The inverse of `triage.subject_name`, and it is needed because the two halves of the vault speak
+    different languages: a claim (`stars[]`, `thesis_links[]`, `vistas[].sujeto`, `refuta`) carries
+    the NAME, while the registro, the config key and `--drop-core` take the SLUG. Anything that
+    wants to cross a claim against curation has to cross that gap, and crossing it by hand is how
+    `refuta: ["GJ 581"]` failed to find the decision signed in `gj_581.yaml`.
+
+    Resolves, casefolded: a star by `name`, by any of its `aliases` or by its slug; a theme by its
+    `concept`, its `title` or its slug. A name two subjects share resolves to the first declared —
+    the vault cannot have it both ways, and the lint reports a foreign alias (#82)."""
+    n = " ".join(str(nombre or "").split()).casefold()
+    if not n:
+        return None
+    for slug, meta in (load_stars() or {}).items():
+        m = as_map(meta)
+        nombres = [slug, m.get("name")] + list(as_list(m.get("aliases")))
+        if n in {" ".join(str(x or "").split()).casefold() for x in nombres if x}:
+            return slug
+    for slug, meta in (load_themes() or {}).items():
+        m = as_map(meta)
+        nombres = [slug, m.get("concept"), m.get("title")]
+        if n in {" ".join(str(x or "").split()).casefold() for x in nombres if x}:
+            return slug
+    return None
+
+
+def declared_scopes() -> dict:
+    """`{key: (alcance, unidad_cita, origen)}` for every source that DECLARES a scope (#312/#382).
+
+    One enumeration of the two legs the authority lives in —`sources[]` of a theme and the
+    `extra_core` entries of themes and stars— so that the re-stamp and any reader of «what scope is
+    in force» cannot disagree. `restamp_scope` enumerated them inline, and a second copy in the
+    proposals surface would be the duplicated-rule family this repo measures as its largest."""
+    out: dict = {}
+    for slug, meta in (load_themes() or {}).items():
+        for item in as_list(as_map(meta).get("sources")):
+            if isinstance(item, dict) and str(item.get("key") or "").strip():
+                out[str(item["key"]).strip()] = (item.get("alcance"), item.get("unidad_cita"),
+                                                 f"sources[] de `{slug}`")
+    for archivo, sujetos in (("themes.yaml", load_themes() or {}),
+                             ("stars.yaml", load_stars() or {})):
+        for slug, meta in sujetos.items():
+            for bib, (alc, uni) in extra_core_scope(as_map(meta), entry=slug).items():
+                out[str(bib)] = (alc, uni, f"extra_core de `{slug}` ({archivo})")
+    return out
+
+
 def load_decisiones(slug: str) -> dict:
     """Decisiones de triage del sujeto, **del registro versionado y nada más**.
 
@@ -3075,6 +3172,85 @@ def load_no_vista(meta: dict, *, entry: str = "?") -> list:
                 entry, f"a una entrada de `no_vista` le falta {', '.join(faltan)}"))
         out.append(dict(x, sujeto=sujeto, motivo=motivo))
     return out
+
+
+def load_reviewed_second_hand(meta: dict, *, entry: str = "?") -> list:
+    """`segunda_mano_revisada: [{ref, que, motivo}]` — a second-hand crossing REVIEWED AND REJECTED.
+
+    WHY IT EXISTS (#433). The second-hand detector (#279/#350) is recall-only on purpose, and that
+    was fine until someone read a whole category one by one: of **66 findings, 48 stayed listed**
+    after every single one had been looked at. 40 of those are numeric collisions — the block does
+    not take its value from anybody, so **there is nothing anyone can write to close them** («6,3»
+    of eta_Earth against 6,3 pc of distance; 4000 K against 4000 CCD lines) — and the note had no
+    way to record that someone had checked. A category that cannot reach zero measures the firing
+    rate of the detector, not the debt of the vault, and the first time it cries wolf the whole
+    category stops being read.
+
+    Same contract as its six siblings (`--drop`/`--drop-core`/`--drop-source` with `--reason`,
+    `no_vista`, `no_sintetizado`, `aliases_descartados`): **motive required**, versioned, travels in
+    git, and the lint lists it in its OWN category (*«considerado y rechazado: visible, no es
+    deuda»*), never mixed with real debt (AUD-207). Same HARD FORM as `extra_core` (D-58): a bare
+    scalar and a list of strings abort.
+
+    The identity of a declaration is the pair **`(ref, que)`** — the bibcode whose view marked the
+    value plus the row's *qué* — and NOT the anchor of the block. An anchor hashes a block, so it
+    would expire on any reflow (D-4) and the signature would have to be renewed for a review that
+    is still valid; that pair is stable under editing and is exactly what the finding names.
+    It is scoped to the note that declares it: the same crossing in another note is another review.
+
+    @inv INV-142"""
+    v = meta.get("segunda_mano_revisada")
+    if v is None:
+        return []
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        raise VistasError(_reviewed_second_hand_error(
+            entry, "`segunda_mano_revisada` no acepta un motivo suelto ni una lista de strings: sin "
+                   "`ref` y `que` la escotilla no dice QUÉ cruce se revisó, y apagaría todos los de "
+                   "la nota"))
+    out = []
+    for x in v:
+        campos = {k: str(x.get(k) or "").strip() for k in ("ref", "que", "motivo")}
+        faltan = [k for k, val in campos.items() if not val]
+        if faltan:
+            raise VistasError(_reviewed_second_hand_error(
+                entry, f"a una entrada de `segunda_mano_revisada` le falta {', '.join(faltan)}"))
+        out.append(dict(x, **campos))
+    return out
+
+
+def _reviewed_second_hand_error(entry: str, motivo: str) -> str:
+    """The detector's message, with the canonical form already written out to paste.  @inv INV-142"""
+    return (f"'{entry}': {motivo}. Forma canónica:\n\nsegunda_mano_revisada:\n"
+            f"  - ref: <el bibcode cuya vista marcó el valor de segunda mano>\n"
+            f"    que: <el `qué` de la fila, como lo nombra el hallazgo del lint>\n"
+            f"    motivo: <por qué NO es deuda: coincidencia numérica, el bloque no toma ese "
+            f"valor, …>\n")
+
+
+def reviewed_second_hand(declaraciones: list, ref: str, que: str) -> str | None:
+    """The motive with which this note declared the crossing `(ref, que)` reviewed, or `None` (#433).
+
+    ⛔ ONE function decides the match, for the same reason `method_key` does: the declaration is
+    written by a person copying the finding the lint printed, and that finding **truncates** the
+    *qué* (`_q[:80]`). So the comparison is normalised —whitespace collapsed, casefolded— and a
+    declared `que` that is a PREFIX of the row's counts: otherwise the canonical way of signing
+    (paste what the report says) would produce a hatch that silently matches nothing, which is the
+    #256 failure mode (a field parsed and consumed by nobody).
+
+    The stale declaration is not silence either: the lint reports the one that matches no finding,
+    because a hatch that exempts nothing is a claim about the vault that is false.
+
+    @inv INV-142"""
+    def _norm(t) -> str:
+        """Whitespace collapsed and casefolded — what both halves of the pair go through."""
+        return " ".join(str(t or "").split()).casefold()
+
+    ref_n, que_n = _norm(ref), _norm(que)
+    for d in declaraciones or []:
+        d_que = _norm(d.get("que"))
+        if _norm(d.get("ref")) == ref_n and d_que and que_n.startswith(d_que):
+            return str(d.get("motivo") or "").strip()
+    return None
 
 
 def _no_vista_error(entry: str, motivo: str) -> str:

@@ -123,6 +123,19 @@ python scripts/sweep_external.py    # la PASADA DE RED: los seis eventos que cad
                                     #   valor citado; enterarse tarde es peor que el diff). La
                                     #   caducidad queda en vault/config/registro/_red.yaml, junto
                                     #   con lo que NO se pudo mirar (`no_evaluados`, #172)
+python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason "<motivo>"
+                                    # #436 · REEMPLAZA el PDF (el preprint por el publicado, que es
+                                    #   el caso normal de #298: 161 de 264 notas medidas). Copia a
+                                    #   TODOS los slugs, re-extrae SÓLO ese `.txt`, escribe
+                                    #   `pdf_sha`/`pdf_source`, anula `eprint_version`, marca la
+                                    #   extracción `_paginacion` (sus localizadores son del
+                                    #   documento anterior; #311 no se reescribe) y EMITE el alcance
+                                    #   de la re-verificación. Rehúsa el archivo idéntico y el
+                                    #   preprint declarado `publisher`. `--dry-run` para verlo antes
+python scripts/proposals.py [<slug>]
+                                    # #328/#435 · las PROPUESTAS que esperan una firma (no es la
+                                    #   deuda del lint). Cada categoría declara dónde aterriza su
+                                    #   firma y si el barrido la cruza; lo ya firmado se lista aparte
 python scripts/entity.py plan   <slug>              # las ocho capas de una entidad (#344: la octava es el
                                                     #   hermano `.verif.md`) — no escribe
 python scripts/entity.py delete <slug> --yes        # borrar sin dejar nada colgado (INV-19)

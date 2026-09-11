@@ -1,0 +1,276 @@
+"""replace_pdf: el comando que faltaba para cerrar el backlog más grande del repo (#436).
+
+Qué protege este archivo, en una línea: **todo backlog que el lint nombra tiene que tener una salida
+ejecutable**, y la de #298 —161 de 264 notas de paper en una bóveda real— mandaba a
+`fetch_pdf --force`, que no aplica al caso normal (el PDF publicado está tras paywall y lo trae el
+usuario). Medido reemplazando 11 preprints a mano, desde un script de scratch no versionado.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+import lib_config as cfg
+import lib_blocks as lb
+import replace_pdf as rp
+from conftest import mk_note
+
+
+PREPRINT = b"%PDF-1.4\nel preprint, con su marca al margen\n"
+EDITOR = b"%PDF-1.5\nla copia del editor, paginada por volumen\n"
+
+
+def _copia(slug: str, bib: str, datos: bytes = PREPRINT) -> Path:
+    (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+    p = cfg.PDFS / slug / f"{bib}.pdf"
+    p.write_bytes(datos)
+    (cfg.FULLTEXT / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / slug / f"{bib}.txt").write_text("texto del preprint\n", encoding="utf-8")
+    return p
+
+
+def _nota(bib: str, **extra) -> Path:
+    fm = {"bibcode": bib, "tags": ["paper"], "stars": ["Test"],
+          "pdf": f"../../raw/pdfs/gj_581/{bib}.pdf", "pdf_source": "eprint",
+          "eprint_version": "v1", **extra}
+    return mk_note(cfg.PAPERS, bib, fm, "# p\n\n## Abstract\n\nx\n")
+
+
+def _entrante(tmp_path, datos: bytes = EDITOR) -> Path:
+    f = tmp_path / "entrante.pdf"
+    f.write_bytes(datos)
+    return f
+
+
+def test_las_copias_se_enumeran_POR_SLUG_no_por_la_que_resuelve(toy_vault, tmp_path, monkeypatch):
+    """⛔ #436 — la unidad del reemplazo es el PAPER y la de almacenamiento es el SLUG: un reemplazo
+    que escribe una copia deja las otras leyendo el documento viejo. `cfg.pdf_slug` resuelve UNA
+    (precedencia declarada, #305), que es lo correcto para leer y lo incorrecto para escribir.
+    Medido: 2 de los 11 papers reemplazados vivían bajo dos slugs."""
+    _copia("gj_581", "2010D"); _copia("rv-doppler", "2010D")
+    _nota("2010D")
+    corridas = []
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
+    assert [p.parent.name for p in rp.pdf_copies("2010D")] == ["gj_581", "rv-doppler"]
+    r = rp.replace("2010D", _entrante(tmp_path), "publisher", "el editor lo mandó por mail")
+    assert r["slugs"] == ["gj_581", "rv-doppler"]
+    for slug in ("gj_581", "rv-doppler"):
+        assert (cfg.PDFS / slug / "2010D.pdf").read_bytes() == EDITOR, slug
+    # ⛔ y el `.txt` de CADA slug se re-extrae **acotado al bibcode** (#436): sin `--bibcode`, el
+    # `--force` vencería las anclas de fuente de todos los papers del tema
+    assert len(corridas) == 2 and r["txts"] and len(r["txts"]) == 2
+    for cmd, slug in zip(corridas, ("gj_581", "rv-doppler")):
+        assert cmd[1].endswith("extract_fulltext.py") and cmd[2] == slug
+        assert cmd[3:] == ["--bibcode", "2010D", "--force"], cmd
+
+
+def test_rehusa_el_MISMO_archivo_y_el_preprint_declarado_publicado(toy_vault, tmp_path, monkeypatch):
+    """Las dos rehusadas que pasaron en la sesión medida: uno de los archivos entregados **era el
+    mismo preprint** (sha igual: no hay nada que reemplazar, y seguir vencería los pares anclados
+    por nada) y otro venía con `arXiv:astro-ph/0209466v1` impreso al margen.
+
+    ⛔ La segunda es la que importa: con `pdf_source: eprint` una discrepancia numérica es candidata
+    a **diferencia de versión** (#57), así que archivar un preprint como publicado hace que la nota
+    mande a re-verificar contra el documento equivocado."""
+    _copia("gj_581", "2010D"); _nota("2010D")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    mismo = _entrante(tmp_path, PREPRINT)
+    with pytest.raises(rp.ReplaceError, match="BYTE A BYTE"):
+        rp.replace("2010D", mismo, "publisher", "m")
+    monkeypatch.setattr(rp, "first_pages_text",
+                        lambda _p: "arXiv:astro-ph/0209466v1  12 Oct 2002")
+    with pytest.raises(rp.ReplaceError, match="marca de arXiv"):
+        rp.replace("2010D", _entrante(tmp_path), "publisher", "m")
+    # el mismo archivo declarado `eprint` NO es contradicción: es un preprint, y se dice
+    assert [e for e in rp.check_incoming("2010D", _entrante(tmp_path), "eprint")] == []
+    # y el vocabulario es cerrado (#296): un valor fuera de lista caería por el `else` de todo
+    # `== "eprint"` en silencio, y ese campo DECIDE lecturas
+    assert any("vocabulario" in e for e in
+               rp.check_incoming("2010D", _entrante(tmp_path), "revista"))
+    assert (cfg.PDFS / "gj_581" / "2010D.pdf").read_bytes() == PREPRINT, \
+        "una rehusada no escribe NADA"
+    # las dos rehusadas de ENTRADA, antes de mirar el disco de la bóveda: el archivo que no está y
+    # el que no es un PDF (AUD-161: los fetchers copiaban sin mirar el magic y propagaban un
+    # truncado a otro slug). Cada una corta ahí: no tiene sentido hashear lo que no se puede leer.
+    assert rp.check_incoming("2010D", tmp_path / "no-existe.pdf", "publisher") == \
+        [f"{tmp_path / 'no-existe.pdf'}: no existe"]
+    no_pdf = tmp_path / "cosa.pdf"
+    no_pdf.write_bytes(b"<html>paywall</html>")
+    assert len(rp.check_incoming("2010D", no_pdf, "publisher")) == 1
+    assert "%PDF" in rp.check_incoming("2010D", no_pdf, "publisher")[0]
+
+
+def test_el_frontmatter_queda_coherente_con_el_documento_nuevo(toy_vault, tmp_path, monkeypatch):
+    """⛔ La guarda de #383 (un `pdf_sha` distinto anula `pdf_source`/`eprint_version`) **no puede
+    disparar** en la mayoría de la bóveda: medido, 247 notas con PDF y sólo 25 con `pdf_sha`, así
+    que en las otras 222 el reemplazo es invisible y la nota sigue diciendo `pdf_source: eprint`
+    sobre un PDF de editor. Acá el sha se escribe SIEMPRE, y `eprint_version` se va con el
+    documento que describía (#383 bloquea editor + `eprint_version`)."""
+    _copia("gj_581", "2010D"); nota = _nota("2010D")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    rp.replace("2010D", _entrante(tmp_path), "publisher", "lo trajo el usuario")
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    assert fm["pdf_source"] == "publisher"
+    assert fm["pdf_sha"] == lb.sha10(EDITOR)
+    assert fm["eprint_version"] is None, "el valor viejo describía el documento que ya no está"
+    # y la nota que NO tenía `pdf_sha` (la población de 222) lo gana: es lo que hace que el
+    # próximo reemplazo SÍ lo detecte solo
+    assert "pdf_sha" not in _nota("2011X").read_text(encoding="utf-8")
+
+
+def test_reemplazar_por_OTRO_eprint_conserva_la_version(toy_vault, tmp_path, monkeypatch):
+    """`eprint_version` se va con el documento que describía, **salvo** que el nuevo también sea un
+    eprint: ahí el campo sigue siendo el eje correcto (qué v se leyó) y borrarlo perdería la
+    salvedad que #57 hace posible. La guarda es `source != "eprint"`, no «siempre»."""
+    _copia("gj_581", "2010D"); nota = _nota("2010D")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "arXiv:1234.5678v2")
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    rp.replace("2010D", _entrante(tmp_path), "eprint", "la v2, que corrige la tabla 3")
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    assert fm["pdf_source"] == "eprint" and fm["eprint_version"] == "v1", \
+        "no se inventa la versión nueva: la estampa el disco al re-extraer (#57)"
+
+
+def test_el_slug_SIN_txt_no_se_re_extrae_y_la_nota_que_falta_se_AVISA(toy_vault, tmp_path,
+                                                                      monkeypatch, capsys):
+    """Dos degradaciones declaradas: un slug que tiene el PDF y no el `.txt` no tiene nada que
+    re-extraer (y pedirlo haría rehusar a `extract_fulltext --bibcode`), y un PDF sin nota se
+    reemplaza igual —la verdad de disco es la verdad— pero el frontmatter no se puede estampar y
+    eso **se dice**, en vez de quedar como un reemplazo a medias silencioso."""
+    _copia("gj_581", "2010D")
+    (cfg.FULLTEXT / "gj_581" / "2010D.txt").unlink()
+    corridas = []
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
+    r = rp.replace("2010D", _entrante(tmp_path), "publisher", "m")
+    assert r["txts"] == [] and corridas == [], "sin `.txt` no se re-extrae nada"
+    assert "no hay nota" in capsys.readouterr().out
+
+
+def test_la_EXTRACCION_queda_marcada_des_paginada(toy_vault, tmp_path, monkeypatch):
+    """⛔ El hueco que no tenía forma en ninguna parte: `raw/extraccion/**` es versionado y no
+    regenerable (#311), así que después del reemplazo la bóveda tiene una extracción que cita
+    `p. 5` de un documento que ya no está, mientras el PDF nuevo pagina por volumen (Cardoso 1998
+    arranca en la 2009). Las citas textuales siguen bien —`contrast --validar` dio **0
+    alteraciones** en las cinco notas tocadas— pero **todos los localizadores quedan mal**, y eso
+    no lo levanta nadie: `verify-citations` chequea que la fuente lo diga y `--validar` que la
+    cadena no esté alterada; las dos cosas son ciertas con la página apuntando a la nada.
+
+    No se reescribe ni se borra: se MARCA, la misma forma que `sweep_external` deja como `_cambios`
+    en el JSON de ground-truth (AUD-42)."""
+    _copia("gj_581", "2010D"); _nota("2010D")
+    (cfg.EXTRACCION / "gj_581").mkdir(parents=True, exist_ok=True)
+    ext = cfg.EXTRACCION / "gj_581" / "2010D.json"
+    ext.write_text(json.dumps({"bibcode": "2010D", "ground_truth": [
+        {"que": "P_b", "valor": "5,37 d", "linea": "p. 5"}]}), encoding="utf-8")
+    lente = cfg.EXTRACCION / "gj_581" / "2010D__ruido.json"
+    lente.write_text(json.dumps({"bibcode": "2010D"}), encoding="utf-8")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    r = rp.replace("2010D", _entrante(tmp_path), "publisher", "versión del editor")
+    assert len(r["extracciones"]) == 2, "también la de la lente (#371), que es otra lectura"
+    marca = json.loads(ext.read_text(encoding="utf-8"))["_paginacion"]
+    assert marca["pdf_sha"] == lb.sha10(EDITOR) and marca["pdf_sha_anterior"] == lb.sha10(PREPRINT)
+    assert marca["motivo"] == "versión del editor", "el motivo viaja, como el `--reason` del triage"
+    assert json.loads(ext.read_text(encoding="utf-8"))["ground_truth"][0]["linea"] == "p. 5", \
+        "⛔ el localizador NO se reescribe: la extracción es versionada y no regenerable (#311)"
+    # un JSON que no es un mapa (o que no parsea) se saltea nombrándolo: marcarlo a mano es mejor
+    # que reventar en el medio de un reemplazo que ya copió archivos
+    (cfg.EXTRACCION / "gj_581" / "2010D__lista.json").write_text("[1, 2]", encoding="utf-8")
+    (cfg.EXTRACCION / "gj_581" / "2010D__roto.json").write_text("{no es json", encoding="utf-8")
+    assert len(rp.stamp_depagination("2010D", "a" * 10, "b" * 10, "m")) == 2, \
+        "sólo los dos mapas; el que no es mapa y el roto no se tocan"
+
+
+def test_emite_el_ALCANCE_de_la_re_verificacion_listo_para_pegar(toy_vault, tmp_path, monkeypatch,
+                                                                 capsys):
+    """El número que decide cuándo pagar la ronda: 11 reemplazos vencieron **76** pares en 6 notas,
+    ~7 de mediana, y extrapolado a los 70 de prioridad alta de esa bóveda es del orden de **500**.
+    Hoy nadie podía saber cuántos eran sin hacerlo. Reporta y NO re-verifica: decidir cuándo pagar
+    eso no es de este script."""
+    _copia("gj_581", "2010D"); _nota("2010D")
+    ficha = mk_note(cfg.STARS, "test_star", {"name": "Test", "slug": "test_star", "tags": ["star"]},
+                    "# f\n\nEl período es 5,37 d [[2010D]].\n")
+    filas = [lb.Row(n="1", claim="El período es 5,37 d", bibcode="2010D", verdict="soportada",
+                    anchor="abc1234567", source_hash="0123456789", source_kind="pdf",
+                    evidence='"5.37 d" (p. 5)'),
+             lb.Row(n="2", claim="otra cosa", bibcode="2011X", verdict="soportada",
+                    anchor="def1234567", source_hash="9876543210", source_kind="pdf",
+                    evidence='"x" (p. 1)')]
+    cfg.write_text_atomic(cfg.verif_sidecar(ficha), lb.render_verif_sidecar(
+        ficha, lb.render_verif_table(filas)))
+    assert rp.reverification_scope("2010D") == [(ficha, 1)]
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    assert rp.main(["2010D", str(_entrante(tmp_path)), "--source", "publisher",
+                    "--reason", "el editor"]) == 0
+    salida = capsys.readouterr().out
+    assert "ALCANCE DE LA RE-VERIFICACIÓN: 1 par" in salida
+    assert "verify_fanout.py" in salida and "--fuentes 2010D" in salida, "listo para pegar"
+    assert "2011X" not in salida, "el par de OTRA fuente no vence: su archivo no cambió"
+
+
+def test_rehusa_el_bibcode_SIN_copia_en_disco(toy_vault, tmp_path, monkeypatch):
+    """Esto REEMPLAZA: sin copia previa no hay nada que reemplazar, y la primera bajada tiene su
+    propio comando. Rehusar es lo que evita que el script se use como un `fetch_pdf` paralelo que
+    no registra nada de lo que `fetch_pdf` registra."""
+    _nota("2010D")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    with pytest.raises(rp.ReplaceError, match="no hay ningún PDF"):
+        rp.replace("2010D", _entrante(tmp_path), "publisher", "m")
+    assert rp.main(["2010D", str(_entrante(tmp_path)), "--source", "publisher",
+                    "--reason", "m"]) == 2, "la rehusada sale 2, no 0"
+
+
+def test_el_dry_run_no_escribe_NADA(toy_vault, tmp_path, monkeypatch, capsys):
+    """La red 6 en su forma más barata: la modalidad que existe para ver el alcance antes de pagarlo
+    no puede tocar el disco."""
+    _copia("gj_581", "2010D"); nota = _nota("2010D")
+    (cfg.EXTRACCION / "gj_581").mkdir(parents=True, exist_ok=True)
+    ext = cfg.EXTRACCION / "gj_581" / "2010D.json"
+    ext.write_text(json.dumps({"bibcode": "2010D"}), encoding="utf-8")
+    antes = (nota.read_bytes(), ext.read_bytes(), (cfg.PDFS / "gj_581" / "2010D.pdf").read_bytes())
+    corridas = []
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
+    assert rp.main(["2010D", str(_entrante(tmp_path)), "--source", "publisher",
+                    "--reason", "m", "--dry-run"]) == 0
+    assert (nota.read_bytes(), ext.read_bytes(),
+            (cfg.PDFS / "gj_581" / "2010D.pdf").read_bytes()) == antes
+    assert corridas == [], "⛔ tampoco re-extrae: `extract_fulltext --force` reescribe el `.txt`"
+    salida = capsys.readouterr().out
+    assert "dry-run" in salida
+    assert "(ninguno" in salida, "sin notas verificadas el alcance se DICE, no queda en blanco"
+
+
+def test_first_pages_text_lee_DOS_paginas_y_el_fallo_es_desconocido(toy_vault, tmp_path,
+                                                                    monkeypatch):
+    """El alcance son **dos páginas** (INV-29), el mismo que lee `cfg.arxiv_stamp`: la marca está en
+    el margen de TODAS, así que dos alcanzan, y leer más levantaría los `arXiv:` de la bibliografía
+    —que son de OTROS trabajos y volverían eprint a cualquier paper—.
+
+    ⛔ Y un `pdftotext` que falta o falla devuelve `""` = **desconocido**, nunca «no tiene marca»:
+    con lo segundo, un preprint se archivaría como publicado justo cuando la herramienta no está."""
+    pdf = tmp_path / "x.pdf"
+    pdf.write_bytes(PREPRINT)
+    vistos = {}
+
+    def _fake(cmd, **kw):
+        vistos["cmd"] = cmd
+        return type("R", (), {"returncode": 0, "stdout": "arXiv:1234.5678v1"})()
+    monkeypatch.setattr(rp.subprocess, "run", _fake)
+    assert rp.first_pages_text(pdf) == "arXiv:1234.5678v1"
+    assert vistos["cmd"][:6] == ["pdftotext", "-layout", "-f", "1", "-l", "2"], vistos["cmd"]
+
+    monkeypatch.setattr(rp.subprocess, "run",
+                        lambda *a, **k: type("R", (), {"returncode": 1, "stdout": "basura"})())
+    assert rp.first_pages_text(pdf) == "", "un fallo no es «no hay marca»"
+
+    def _falta(*a, **k):
+        raise FileNotFoundError("pdftotext")
+    monkeypatch.setattr(rp.subprocess, "run", _falta)
+    assert rp.first_pages_text(pdf) == ""

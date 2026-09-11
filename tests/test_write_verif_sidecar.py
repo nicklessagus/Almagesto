@@ -541,6 +541,102 @@ def test_resolver_REHUSA_el_ancla_que_no_esta_la_fila_que_no_es_acota_y_el_texto
         ws.resolve_conditions(nota, {ancla: "fila B"})
 
 
+# ── #434 · la unidad de resolución es el PAR, no el ancla ────────────────────────────────────────
+
+#: Un bloque que cita DOS fuentes: dos pares, UN ancla (así lo dice el docstring de `Pair`).
+_UN_BLOQUE_DOS_FUENTES = ("# Concepto\n\nEl post-procesado se engancha en la etapa de "
+                          "extracción [[2020Pdf]] y [[2019Txt]].\n")
+
+
+def _fanout_condiciones(toy_vault, nota: Path, condiciones: dict, ronda="r1"):
+    """Fan-out con una condición DISTINTA por fuente: `{bibcode: (condicion, cond_tipo)}`."""
+    d = toy_vault.ROOT / "build" / "concepto" / "verif" / ronda
+    d.mkdir(parents=True, exist_ok=True)
+    pares = lb.pairs_of(nota.read_text(encoding="utf-8"))
+    por_bib: dict = {}
+    for par in pares:
+        cond, tipo = condiciones[par.bibcode]
+        por_bib.setdefault(par.bibcode, []).append(
+            {"ancla": par.anchor, "veredicto": "soportada", "evidencia": '"cita textual" (p. 4)',
+             "condicion": cond, "cond_tipo": tipo})
+    for bib, ps in por_bib.items():
+        (d / f"{bib}.json").write_text(json.dumps({"bibcode": bib, "pares": ps}), encoding="utf-8")
+    (d / "_esperado.json").write_text(json.dumps(
+        {"nota": nota.as_posix(), "fuentes": {b: len(ps) for b, ps in por_bib.items()},
+         "pares": len(pares)}), encoding="utf-8")
+    return d
+
+
+def test_resolver_alcanza_el_acota_del_bloque_QUE_CITA_DOS_FUENTES(toy_vault):
+    """⛔ #434 — un ancla hashea un BLOQUE, así que un bloque que cita N fuentes tiene N filas con el
+    mismo ancla. Si sus condiciones son de clases distintas, direccionar por ancla **rehusaba** —y
+    hacía bien: no podía saber a cuál—, así que esa `acota` no se podía marcar resuelta por ningún
+    medio y su conteo mentía para siempre. Medido cerrando una ronda ciega de 158 pares: **5 de 20
+    `acota` irresolubles**, sobre 4 anclas, todas por compartir el ancla con una `contextualiza`."""
+    nota = _escena(toy_vault, _UN_BLOQUE_DOS_FUENTES)
+    d = _fanout_condiciones(toy_vault, nota, {"2020Pdf": ("SNR > 50", "acota"),
+                                              "2019Txt": ("la muestra es de 12", "contextualiza")})
+    ws.write(nota, d, fecha="2026-03-01")
+    filas = lb.verif_rows(nota)
+    assert len({f.anchor for f in filas}) == 1 and len(filas) == 2, "un ancla, dos pares"
+    ancla = filas[0].anchor
+    r = ws.resolve_conditions(nota, {ancla: "fila en `## Régimen de validez`"})
+    assert r["resueltas"] == 1
+    por_bib = {f.bibcode: f for f in lb.verif_rows(nota)}
+    assert lb.condition_resolved(por_bib["2020Pdf"].condition), por_bib["2020Pdf"].condition
+    assert not lb.condition_resolved(por_bib["2019Txt"].condition), \
+        "la `contextualiza` del MISMO ancla no se toca: va al reporte (#221)"
+
+
+def test_resolver_DESAMBIGUA_con_el_bibcode_y_rehusa_si_no_puede(toy_vault):
+    """Cuando las DOS filas del ancla son `acota` la ambigüedad es real y la herramienta no elige:
+    rehúsa nombrando los bibcodes, y `<ancla>:<bibcode>=<dónde>` la resuelve. Es la clave que
+    `Row` ya tenía y la que el fan-out usa para escribir."""
+    nota = _escena(toy_vault, _UN_BLOQUE_DOS_FUENTES)
+    d = _fanout_condiciones(toy_vault, nota, {"2020Pdf": ("SNR > 50", "acota"),
+                                              "2019Txt": ("sólo en HARPS", "acota")})
+    ws.write(nota, d, fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    with pytest.raises(ws.SidecarError, match="desambiguá"):
+        ws.resolve_conditions(nota, {ancla: "fila A"})
+    r = ws.resolve_conditions(nota, {f"{ancla}:2019Txt": "fila en el régimen"})
+    assert r["resueltas"] == 1
+    por_bib = {f.bibcode: f for f in lb.verif_rows(nota)}
+    assert lb.condition_resolved(por_bib["2019Txt"].condition)
+    assert not lb.condition_resolved(por_bib["2020Pdf"].condition), \
+        "la dirección nombra UN par: la otra `acota` del mismo ancla sigue pendiente"
+    # y el bibcode que no está en esa fila no resuelve nada por las dudas
+    with pytest.raises(ws.SidecarError, match="no está"):
+        ws.resolve_conditions(nota, {f"{ancla}:2011Otro": "fila A"})
+
+
+def test_row_key_es_el_par_y_la_reescritura_NO_pisa_las_filas_vecinas(toy_vault):
+    """El otro lado del mismo bug: `_rewrite_rows` indexaba los cambios por ancla, así que escribir
+    una celda la escribía en TODAS las filas del bloque. Una función (`lb.row_key`) para las dos
+    mitades, porque la regla duplicada ya divergió tres veces en este repo."""
+    nota = _escena(toy_vault, _UN_BLOQUE_DOS_FUENTES)
+    d = _fanout_condiciones(toy_vault, nota, {"2020Pdf": ("SNR > 50", "acota"),
+                                              "2019Txt": ("la muestra es de 12", "contextualiza")})
+    ws.write(nota, d, fecha="2026-03-01")
+    filas = lb.verif_rows(nota)
+    assert {lb.row_key(f) for f in filas} == {(filas[0].anchor, "2020Pdf"),
+                                              (filas[0].anchor, "2019Txt")}
+    assert lb.rows_addressed(filas, filas[0].anchor) == filas, "sin bibcode, la dirección es ambigua"
+    assert [f.bibcode for f in lb.rows_addressed(filas, filas[0].anchor, "2019Txt")] == ["2019Txt"]
+    assert lb.rows_addressed(filas, "0" * 10) == []
+    # el migrador de #427 escribe por la misma clave: con la clase doble en UNA de las dos filas del
+    # ancla, indexar por ancla le habría escrito la celda colapsada también a la vecina
+    herm = cfg.verif_sidecar(nota)
+    herm.write_text(herm.read_text(encoding="utf-8")
+                    .replace("acota: SNR > 50", "acota: acota: SNR > 50", 1), encoding="utf-8")
+    r = ws.migrate_condition_prefix(nota)
+    assert r["migradas"] == 1, r
+    por_bib = {f.bibcode: f for f in lb.verif_rows(nota)}
+    assert por_bib["2020Pdf"].condition == "acota: SNR > 50"
+    assert por_bib["2019Txt"].condition == "contextualiza: la muestra es de 12", \
+        "la fila vecina del MISMO ancla queda como estaba"
+
+
 def test_migrate_condition_prefix_colapsa_la_clase_DOBLE_y_es_idempotente(toy_vault):
     """#427 — el migrador de las 41 celdas medidas. Colapsa la cabeza repetida dejando el texto de
     adentro VERBATIM, que es justo la forma canónica; no re-escribe la condición."""
