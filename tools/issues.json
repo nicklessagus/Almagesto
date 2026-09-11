@@ -2139,7 +2139,7 @@
   {
    "number": 430,
    "title": "`free_text_of` compara el arranque de la sub-sección SIN normalizar el markdown: la prosa del triage se pierde en silencio en la próxima corrida (y el fragmento generado se duplica)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 431,
@@ -2164,7 +2164,7 @@
   {
    "number": 435,
    "title": "Una propuesta leída de un artefacto VERSIONADO no se puede cerrar: `proposals.py` no consulta dónde aterriza la firma (60 de 62 son permanentes)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 436,
@@ -2184,12 +2184,12 @@
   {
    "number": 439,
    "title": "Los tests de `quote_verdict` viven en `test_lib_config.py`, así que `mutar --guardas scripts/lib_quotes.py` no los ve: 9 guardas del juez del gate de cierre reportadas vivas, y 36 funciones en 11 módulos en la misma situación",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 440,
    "title": "El backfill de #437 escribe la mitad que ningún chequeo mira: los 15 reemplazos anteriores al comando quedan invisibles (`extraccion_despaginada` = 0 sobre 288) y la regla de v1.257.1 no los alcanza",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
