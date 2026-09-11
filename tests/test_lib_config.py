@@ -3343,6 +3343,33 @@ def test_set_fm_scalar_reemplaza_agrega_y_REHUSA_romper_el_frontmatter(toy_vault
     assert suelto.read_text(encoding="utf-8") == "sin frontmatter\n"
 
 
+def test_pdf_page_count_cuenta_con_pdfinfo_y_declara_los_TRES_no_evaluables(monkeypatch, tmp_path):
+    """#437 — UNA implementación del conteo de páginas: el `pdf_paginas` del cosechador lo hacía
+    inline y el reemplazo de PDF necesita el mismo número para la otra mitad de la misma pregunta
+    (la copia entrante puede ser PEOR: 7 páginas sin Supplementary contra 33). `None` es
+    desconocido —sin binario, corrida fallida, sin línea `Pages:`— nunca «cero páginas» (D-43)."""
+    import shutil, subprocess
+    from types import SimpleNamespace
+    pdf = tmp_path / "x.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(shutil, "which", lambda _c: "/usr/bin/pdfinfo")
+    monkeypatch.setattr(subprocess, "run",
+                        lambda *a, **k: SimpleNamespace(stdout="Title: x\nPages:           33\n"))
+    assert cfg.pdf_page_count(pdf) == (33, "")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="Title: x\n"))
+    n, why = cfg.pdf_page_count(pdf)
+    assert n is None and "no devolvió" in why
+    def _explota(*a, **k):
+        raise OSError("boom")
+    monkeypatch.setattr(subprocess, "run", _explota)
+    n, why = cfg.pdf_page_count(pdf)
+    assert n is None and "OSError" in why
+    monkeypatch.setattr(shutil, "which", lambda _c: None)
+    n, why = cfg.pdf_page_count(pdf)
+    assert n is None and why.startswith("sin `pdfinfo`"), \
+        "sin el binario se dice ESO (poppler-utils), no «no se pudo correr»: piden acciones distintas"
+
+
 def test_subject_slug_resuelve_el_NOMBRE_con_el_que_una_nota_reclama(monkeypatch):
     """⛔ #435 — las dos mitades de la bóveda hablan idiomas distintos: un reclamo lleva el NOMBRE
     (`stars[]`, `thesis_links[]`, `vistas[].sujeto`, `refuta`) y el registro, la clave de config y

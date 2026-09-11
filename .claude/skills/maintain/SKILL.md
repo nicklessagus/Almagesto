@@ -369,6 +369,10 @@ re-verificación** listo para `verify_fanout --fuentes`. ⛔ **No re-verifica ni
 extracción queda marcada `_paginacion` —es versionada y no regenerable (#311)— y el lint la reporta;
 al re-leer esas páginas se actualizan los localizadores y se saca la marca. Medido: 11 reemplazos →
 **76 pares** por re-verificar, así que el reemplazo se decide de a uno, mirando el `--dry-run`.
+⛔ **Y mirá el aviso de PÁGINAS del `--dry-run` (#437):** la copia del editor puede ser peor que el
+preprint (medido: 7 páginas sin Supplementary contra 33, con la ficha citando §S1.1). Es aviso, no
+rehúse — el que decide es quien mira. El reemplazo queda **firmado** en la nota
+(`pdf_reemplazo`, add-only) con el motivo: es lo que hace falta si hay que revertirlo.
 
 La caducidad queda **versionada** en `vault/config/registro/_red.yaml` — cuándo se miró afuera es
 información de la bóveda, no de la máquina. Un detector que no pudo correr **no** entra en `cubrio`.

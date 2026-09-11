@@ -305,3 +305,17 @@ la marca de arXiv como `--source publisher`, si re-extrae el slug entero (mirá 
 cambiaron con `git status`), si deja una copia vieja en otro slug, o si el alcance impreso no
 coincide con lo que después reporta el lint como vencido. **Al cerrar:** cuántos slugs tocó, cuántos
 pares quedaron por re-verificar, y si el número del alcance fue exacto.
+
+## #437 · v1.257.0 — la firma y el aviso de páginas
+
+Medido acá: el caso de `2014Sci...345..440R` (7 páginas contra 33, la ficha citando §S1.1) y las 11
+notas reemplazadas sin rastro. **Validar:** `python scripts/replace_pdf.py 2014Sci...345..440R
+<la copia de Science Express> --source publisher --reason "…" --dry-run` → tiene que imprimir
+`⚠ PÁGINAS: … 26 página(s) MENOS … (7 contra 33)` y **no** rehusar; sin `--dry-run` sobre un
+reemplazo real → la nota gana `pdf_reemplazo` con `paginas`, `sha_anterior`/`sha` y el `--reason`,
+y un segundo reemplazo del mismo paper **apila** una entrada (no pisa). `python scripts/lint.py` →
+`extraccion_despaginada` marca *«NO lo declara en `pdf_reemplazo`»* en las 11 viejas y **no** en la
+nueva. **Devolver si** el aviso falta o rehúsa, si `pdf_reemplazo` pisa la historia, o si el conteo
+de páginas discrepa con `pdfinfo` a mano. **Al cerrar:** cuántas de las 11 quedaron firmadas a
+mano y con qué `sha_anterior` (si se perdió, `?`: no se inventa).
+

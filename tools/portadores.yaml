@@ -25,6 +25,26 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 437
+    regla: >-
+      Contar las páginas de un PDF es UNA función (`pdfinfo`, la misma dependencia de sistema que
+      `pdftotext`; `None` = desconocido con motivo, nunca «cero páginas», D-43). El `pdf_paginas`
+      del cosechador lo hacía inline y el reemplazo de PDF necesita el mismo número para la otra
+      mitad de la misma pregunta —la copia entrante puede ser PEOR que la que saca (medido: 7
+      páginas sin Supplementary contra 33, con la ficha citando §S1.1)—.
+    funcion: lib_config.pdf_page_count
+    patron: 'pdfinfo|Pages:'
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: >-
+          `check_salvedad` (`pdf_paginas`, #213) contaba con `pdfinfo` inline; desde 1.257.0
+          delega — era el molde de la segunda copia.
+      - modulo: scripts/replace_pdf.py
+        estado: usa
+        motivo: >-
+          `page_warning` compara el entrante con el saliente ANTES de copiar (el saliente está en
+          disco sólo en ese instante) y avisa —no rehúsa— si pierde páginas.
   - issue: 436
     regla: >-
       Escribir un ESCALAR del frontmatter es una sola función: reemplazar el bloque de la clave

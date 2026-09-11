@@ -45,6 +45,7 @@ from pathlib import Path
 
 import lib_config as cfg
 import lib_blocks as lb
+import make_notes as mn
 
 
 class ReplaceError(RuntimeError):
@@ -118,6 +119,32 @@ def check_incoming(bibcode: str, nuevo: Path, source: str) -> list:
     return errores
 
 
+def page_warning(saliente: Path, entrante: Path) -> str | None:
+    """A WARNING —never a refusal— when the incoming PDF has fewer pages than the one it replaces (#437).
+
+    The one replacement that had to be REVERTED in the measured session passed both refusals: the
+    *Science Express* copy of `2014Sci...345..440R` has **7 pages and no Supplementary Materials**,
+    the arXiv preprint has **33**, and the note cites **§S1.1** — no arXiv stamp, different sha, and
+    the replacement would have left the note citing a section the new document does not contain,
+    with 9 expired pairs on top. `pdfinfo` says it for free, and it is the only one of the three
+    signals that cannot be reconstructed afterwards: the outgoing PDF is on disk only now.
+
+    ⚠ A warning, on purpose: a shorter publisher's copy can be legitimate (no cover letter, no
+    duplicated appendices). Who decides is whoever looks. `None` when both counts are available
+    and the incoming is not shorter; a *non-evaluable* line when either count is unknown (D-43:
+    «no se pudo contar» is not «no es más corto»)."""
+    n_out, why_out = cfg.pdf_page_count(saliente)
+    n_in, why_in = cfg.pdf_page_count(entrante)
+    if n_out is None or n_in is None:
+        return (f"no se pudieron comparar las páginas ({why_out or why_in}): revisá a mano que "
+                f"el entrante no pierda material (apéndices, Supplementary)")
+    if n_in < n_out:
+        return (f"el PDF entrante tiene {n_out - n_in} página(s) MENOS que el que reemplaza "
+                f"({n_in} contra {n_out}): si la ficha cita apéndices o Supplementary Materials, "
+                f"puede quedar citando una sección que el documento nuevo no contiene")
+    return None
+
+
 def reverification_scope(bibcode: str) -> list:
     """`[(nota, n_filas)]` — the verified pairs that cite this source, per note (#436/D-20).
 
@@ -178,7 +205,14 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
     ⚠ The trace goes in the PAPER's note and not in a subject's registro, which is where the issue
     put it: a PDF is shared by every slug that ingested it, so the registro would hold N copies of
     one fact and the registro is keyed by subject. The note is versioned, travels, and is the
-    artefact that the consumer of the claim reads."""
+    artefact that the consumer of the claim reads.
+
+    ⛔ #437 — and it is WRITTEN, not just promised: `pdf_reemplazo: [{fecha, source, sha_anterior,
+    sha, paginas, motivo}]`, add-only. The v1.256.0 docstring named that field and the code never
+    wrote it —one occurrence in the whole repo, the promise— so the `--reason` survived only in
+    `_paginacion` of the extraction and in stdout, and the note of the paper (what travels, what
+    the consumer of the claim reads) did not say the PDF had been replaced nor why. That motive is
+    exactly what was needed when a replacement had to be reverted."""
     errores = check_incoming(bibcode, nuevo, source)
     if errores:
         raise ReplaceError("\n".join(f"⛔ {e}" for e in errores))
@@ -189,6 +223,10 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
     sha_viejo, sha_nuevo = lb.sha10(copias[0].read_bytes()), lb.sha10(nuevo.read_bytes())
     alcance = reverification_scope(bibcode)         # ANTES de tocar: las filas se leen igual, pero
     slugs = [c.parent.name for c in copias]         # el orden documenta que el número es el de antes
+    # #437 — la comparación de páginas va ANTES de copiar, y por el mismo motivo que el alcance: el
+    # PDF saliente está en disco sólo ahora, y es la única señal que no se reconstruye después.
+    aviso_paginas = page_warning(copias[0], nuevo)
+    paginas = (cfg.pdf_page_count(copias[0])[0], cfg.pdf_page_count(nuevo)[0])
     for c in copias:
         cfg.print_seguro(f"  {'(dry-run) ' if dry_run else ''}→ {c}")
         if not dry_run:
@@ -216,13 +254,24 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
         # documento que acabamos de sacar de disco.
         if source != "eprint":
             cfg.set_fm_scalar(nota, "eprint_version", "null", crear=False)
+        # #437 — el rastro FIRMADO, add-only: la historia de reemplazos de este PDF, en la nota que
+        # viaja. Se escribe con el mismo escritor de listas de mapas que usa el resto del framework.
+        previos = cfg.as_list((cfg.split_fm(nota.read_text(encoding="utf-8")) or {})
+                              .get("pdf_reemplazo"))
+        mn._set_lista_de_mapas(nota, "pdf_reemplazo", [x for x in previos if isinstance(x, dict)] + [
+            {"fecha": _dt.date.today().isoformat(), "source": source,
+             "sha_anterior": sha_viejo, "sha": sha_nuevo,
+             "paginas": f"{paginas[0] if paginas[0] is not None else '?'} → "
+                        f"{paginas[1] if paginas[1] is not None else '?'}",
+             "motivo": reason}])
     elif not nota.exists():
         cfg.print_seguro(f"  ⚠ no hay nota `{nota.name}`: el PDF se reemplazó y el frontmatter no "
                          f"se pudo estampar (¿`make_notes.py` todavía no la creó?)")
     extracciones = stamp_depagination(bibcode, sha_viejo, sha_nuevo, reason, dry_run=dry_run)
     return {"bibcode": bibcode, "slugs": slugs, "sha_anterior": sha_viejo, "sha": sha_nuevo,
             "txts": [str(t) for t in txts], "extracciones": [str(e) for e in extracciones],
-            "alcance": [(str(n), k) for n, k in alcance], "pares": sum(k for _n, k in alcance)}
+            "alcance": [(str(n), k) for n, k in alcance], "pares": sum(k for _n, k in alcance),
+            "aviso_paginas": aviso_paginas, "paginas": paginas}
 
 
 def print_report(r: dict, source: str, reason: str) -> None:
@@ -231,6 +280,8 @@ def print_report(r: dict, source: str, reason: str) -> None:
         f"\n{r['bibcode']}: PDF reemplazado en {len(r['slugs'])} slug(s) "
         f"({', '.join(r['slugs'])}) · sha {r['sha_anterior']} → {r['sha']} · "
         f"`pdf_source: {source}`")
+    if r.get("aviso_paginas"):
+        cfg.print_seguro(f"  ⚠ PÁGINAS: {r['aviso_paginas']} (#437)")
     cfg.print_seguro(f"  · `.txt` re-extraídos: {len(r['txts'])} (acotado al bibcode, #436)")
     cfg.print_seguro(f"  · extracciones marcadas `_paginacion`: {len(r['extracciones'])} — sus "
                      f"localizadores son del documento ANTERIOR (#311: no se reescriben)")

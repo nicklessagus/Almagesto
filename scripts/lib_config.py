@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.256.2"
+ALMAGESTO_VERSION = "1.257.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -808,6 +808,32 @@ def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
                 j += 1
             return i, j
     return None
+
+
+def pdf_page_count(pdf) -> tuple:
+    """`(pages, motivo)` — how many pages a PDF has, by `pdfinfo`; `None` + why when it cannot say.
+
+    ONE implementation (#437): the `pdf_paginas` salvedad of the harvester counted pages inline, and
+    the PDF replacement needs the same number for the other side of the same question — the
+    incoming copy can be WORSE than the one it replaces (measured: a *Science Express* copy of
+    **7** pages without the Supplementary Materials, replacing a 33-page preprint that the note
+    cites by §S1.1; no arXiv stamp, different sha, so both refusals let it through).
+
+    `pdfinfo` (poppler) and not a new library: the same system dependency `requirements.txt`
+    already declares for `pdftotext`, so the check adds no failure mode of its own. `None` is
+    *unknown* —missing binary, failed run, no `Pages:` line— never «zero pages» (D-43)."""
+    import shutil
+    import subprocess
+    if shutil.which("pdfinfo") is None:
+        return None, "sin `pdfinfo` (poppler-utils) no se pueden contar las páginas"
+    try:
+        r = subprocess.run(["pdfinfo", str(pdf)], capture_output=True, text=True, timeout=30)
+        m = re.search(r"^Pages:\s+(\d+)", r.stdout, re.M)
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, f"no se pudo correr `pdfinfo` ({e.__class__.__name__})"
+    if not m:
+        return None, "`pdfinfo` no devolvió el número de páginas"
+    return int(m.group(1)), ""
 
 
 def set_fm_scalar(path, field: str, value: str, *, crear: bool = True) -> bool:

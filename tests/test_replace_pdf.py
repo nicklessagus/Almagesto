@@ -44,6 +44,14 @@ def _entrante(tmp_path, datos: bytes = EDITOR) -> Path:
     return f
 
 
+def _paginas(monkeypatch, saliente: int | None = 33, entrante: int | None = 33) -> None:
+    """El conteo de páginas es la frontera con `pdfinfo` (#437): se fija por archivo, no se corre."""
+    monkeypatch.setattr(rp.cfg, "pdf_page_count",
+                        lambda pdf: ((entrante if Path(pdf).name == "entrante.pdf" else saliente), "")
+                        if (entrante if Path(pdf).name == "entrante.pdf" else saliente) is not None
+                        else (None, "sin `pdfinfo`"))
+
+
 def test_las_copias_se_enumeran_POR_SLUG_no_por_la_que_resuelve(toy_vault, tmp_path, monkeypatch):
     """⛔ #436 — la unidad del reemplazo es el PAPER y la de almacenamiento es el SLUG: un reemplazo
     que escribe una copia deja las otras leyendo el documento viejo. `cfg.pdf_slug` resuelve UNA
@@ -53,6 +61,7 @@ def test_las_copias_se_enumeran_POR_SLUG_no_por_la_que_resuelve(toy_vault, tmp_p
     _nota("2010D")
     corridas = []
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
     monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
     assert [p.parent.name for p in rp.pdf_copies("2010D")] == ["gj_581", "rv-doppler"]
     r = rp.replace("2010D", _entrante(tmp_path), "publisher", "el editor lo mandó por mail")
@@ -77,6 +86,7 @@ def test_rehusa_el_MISMO_archivo_y_el_preprint_declarado_publicado(toy_vault, tm
     mande a re-verificar contra el documento equivocado."""
     _copia("gj_581", "2010D"); _nota("2010D")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
     mismo = _entrante(tmp_path, PREPRINT)
     with pytest.raises(rp.ReplaceError, match="BYTE A BYTE"):
         rp.replace("2010D", mismo, "publisher", "m")
@@ -111,6 +121,7 @@ def test_el_frontmatter_queda_coherente_con_el_documento_nuevo(toy_vault, tmp_pa
     documento que describía (#383 bloquea editor + `eprint_version`)."""
     _copia("gj_581", "2010D"); nota = _nota("2010D")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
     monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
     rp.replace("2010D", _entrante(tmp_path), "publisher", "lo trajo el usuario")
     fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
@@ -128,6 +139,7 @@ def test_reemplazar_por_OTRO_eprint_conserva_la_version(toy_vault, tmp_path, mon
     salvedad que #57 hace posible. La guarda es `source != "eprint"`, no «siempre»."""
     _copia("gj_581", "2010D"); nota = _nota("2010D")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "arXiv:1234.5678v2")
+    _paginas(monkeypatch)
     monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
     rp.replace("2010D", _entrante(tmp_path), "eprint", "la v2, que corrige la tabla 3")
     fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
@@ -145,6 +157,7 @@ def test_el_slug_SIN_txt_no_se_re_extrae_y_la_nota_que_falta_se_AVISA(toy_vault,
     (cfg.FULLTEXT / "gj_581" / "2010D.txt").unlink()
     corridas = []
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
     monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
     r = rp.replace("2010D", _entrante(tmp_path), "publisher", "m")
     assert r["txts"] == [] and corridas == [], "sin `.txt` no se re-extrae nada"
@@ -170,6 +183,7 @@ def test_la_EXTRACCION_queda_marcada_des_paginada(toy_vault, tmp_path, monkeypat
     lente = cfg.EXTRACCION / "gj_581" / "2010D__ruido.json"
     lente.write_text(json.dumps({"bibcode": "2010D"}), encoding="utf-8")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
     monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
     r = rp.replace("2010D", _entrante(tmp_path), "publisher", "versión del editor")
     assert len(r["extracciones"]) == 2, "también la de la lente (#371), que es otra lectura"
@@ -205,6 +219,7 @@ def test_emite_el_ALCANCE_de_la_re_verificacion_listo_para_pegar(toy_vault, tmp_
         ficha, lb.render_verif_table(filas)))
     assert rp.reverification_scope("2010D") == [(ficha, 1)]
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
     monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
     assert rp.main(["2010D", str(_entrante(tmp_path)), "--source", "publisher",
                     "--reason", "el editor"]) == 0
@@ -220,6 +235,7 @@ def test_rehusa_el_bibcode_SIN_copia_en_disco(toy_vault, tmp_path, monkeypatch):
     no registra nada de lo que `fetch_pdf` registra."""
     _nota("2010D")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
     with pytest.raises(rp.ReplaceError, match="no hay ningún PDF"):
         rp.replace("2010D", _entrante(tmp_path), "publisher", "m")
     assert rp.main(["2010D", str(_entrante(tmp_path)), "--source", "publisher",
@@ -236,6 +252,7 @@ def test_el_dry_run_no_escribe_NADA(toy_vault, tmp_path, monkeypatch, capsys):
     antes = (nota.read_bytes(), ext.read_bytes(), (cfg.PDFS / "gj_581" / "2010D.pdf").read_bytes())
     corridas = []
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
     monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
     assert rp.main(["2010D", str(_entrante(tmp_path)), "--source", "publisher",
                     "--reason", "m", "--dry-run"]) == 0
@@ -274,3 +291,62 @@ def test_first_pages_text_lee_DOS_paginas_y_el_fallo_es_desconocido(toy_vault, t
         raise FileNotFoundError("pdftotext")
     monkeypatch.setattr(rp.subprocess, "run", _falta)
     assert rp.first_pages_text(pdf) == ""
+
+
+# ── #437 · el rastro firmado y la copia que puede ser PEOR ───────────────────────────────────────
+
+def test_el_reemplazo_queda_FIRMADO_en_la_nota_y_es_add_only(toy_vault, tmp_path, monkeypatch):
+    """⛔ #437 — el docstring de v1.256.0 prometía `pdf_reemplazo` y el código no lo escribía: una
+    sola aparición en todo el repo, la promesa. El `--reason` sobrevivía en `_paginacion` y en stdout,
+    y la nota del paper —lo que viaja y lo que lee quien consume la afirmación— no decía que ese PDF
+    se reemplazó ni por qué. Ese motivo es justo lo que hizo falta cuando hubo que REVERTIR uno."""
+    _copia("gj_581", "2010D"); nota = _nota("2010D")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    _paginas(monkeypatch, saliente=33, entrante=33)
+    rp.replace("2010D", _entrante(tmp_path), "publisher", "lo trajo el usuario por mail")
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    (r,) = fm["pdf_reemplazo"]
+    assert r["motivo"] == "lo trajo el usuario por mail" and r["source"] == "publisher"
+    assert r["sha_anterior"] == lb.sha10(PREPRINT) and r["sha"] == lb.sha10(EDITOR)
+    assert r["paginas"] == "33 → 33"
+    # add-only: un segundo reemplazo (otra copia) se APILA, no pisa la historia
+    _paginas(monkeypatch, saliente=33, entrante=30)
+    rp.replace("2010D", _entrante(tmp_path, b"%PDF-1.7\notra copia\n"), "publisher", "la v2 del editor")
+    hist = cfg.split_fm(nota.read_text(encoding="utf-8"))["pdf_reemplazo"]
+    assert [h["motivo"] for h in hist] == ["lo trajo el usuario por mail", "la v2 del editor"]
+    assert hist[1]["sha_anterior"] == lb.sha10(EDITOR), "el segundo parte de donde quedó el primero"
+    assert hist[1]["paginas"] == "33 → 30"
+
+
+def test_AVISA_si_el_entrante_tiene_menos_paginas_y_no_rehusa(toy_vault, tmp_path, monkeypatch,
+                                                              capsys):
+    """El único reemplazo que hubo que revertir en la sesión medida: la copia de *Science Express*
+    tiene **7 páginas y no trae los Supplementary Materials**, el preprint tiene **33**, y la ficha
+    cita §S1.1. Sin marca de arXiv y con otro sha, pasaba las dos rehusadas.
+
+    ⚠ Aviso, no rehúse: una copia del editor más corta puede ser legítima (sin la carta ni los
+    apéndices duplicados); el que decide es quien mira. Y es la única de las señales que NO se puede
+    reconstruir después — el PDF saliente está en disco sólo en ese instante."""
+    _copia("gj_581", "2014R"); _nota("2014R")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    _paginas(monkeypatch, saliente=33, entrante=7)
+    assert rp.main(["2014R", str(_entrante(tmp_path)), "--source", "publisher",
+                    "--reason", "Science Express"]) == 0, "AVISA, no rehúsa"
+    salida = capsys.readouterr().out
+    assert "26 página(s) MENOS" in salida and "7 contra 33" in salida, salida
+    assert "Supplementary" in salida
+    assert (cfg.PDFS / "gj_581" / "2014R.pdf").read_bytes() == EDITOR, "el reemplazo ocurrió igual"
+    # las tres salidas de `page_warning`, directo: más corto · no más corto · no evaluable (D-43)
+    assert rp.page_warning(Path("a.pdf"), Path("entrante.pdf")) is not None
+    _paginas(monkeypatch, saliente=7, entrante=33)
+    assert rp.page_warning(Path("a.pdf"), Path("entrante.pdf")) is None, "más largo no avisa"
+    _paginas(monkeypatch, saliente=33, entrante=33)
+    assert rp.page_warning(Path("a.pdf"), Path("entrante.pdf")) is None, "igual no avisa"
+    for saliente, entrante in ((None, 33), (33, None)):
+        _paginas(monkeypatch, saliente=saliente, entrante=entrante)
+        aviso = rp.page_warning(Path("a.pdf"), Path("entrante.pdf"))
+        assert aviso and "no se pudieron comparar" in aviso and "pdfinfo" in aviso, \
+            "sin conteo de CUALQUIERA de los dos NO es «no es más corto»: no evaluable con motivo"
+

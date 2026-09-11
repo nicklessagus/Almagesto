@@ -802,6 +802,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   Cardoso 1998 arranca en la 2009). ⛔ Ninguna otra capa lo ve, y es la razón de que exista:
   `verify-citations` chequea que la fuente lo **diga** y `contrast --validar` que la cadena no esté
   **alterada**, y las dos cosas son ciertas con la página apuntando a la nada.
+  ⛔ **Y cruza las dos mitades del mismo evento (#437):** `replace_pdf` marca la extracción **y**
+  firma `pdf_reemplazo: [{fecha, source, sha_anterior, sha, paginas, motivo}]` en la nota del paper
+  (add-only: la historia). La marca sin la firma es un reemplazo hecho a mano, y la nota —lo que
+  viaja— no dice que el PDF cambió ni por qué; el hallazgo lo agrega. El campo existía en el
+  docstring de v1.256.0 y **no se escribía** (una sola aparición en el repo: la promesa), y el motivo
+  fue justo lo que hizo falta al revertir un reemplazo.
 - **Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió**
   (#297): el reuso D-18 (copiar el PDF que ya estaba bajo otro slug) es correcto y se conserva, pero
   importa a un sujeto nuevo un archivo cuya **antigüedad nadie chequeó**; y la salida natural —«si

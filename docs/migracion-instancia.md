@@ -724,6 +724,27 @@ pares, y decidir cuándo pagar eso no es del script.
 sin reemplazar en otro slug, si re-extrae más `.txt` que el del bibcode pedido, o si el alcance que
 imprime no coincide con las filas que citan ese bibcode.
 
+## 2t · v1.257.0 (#437) — `replace_pdf` firma la nota y mira lo que saca
+
+Sin migración: los reemplazos ya hechos (11 en la instancia) quedaron sin `pdf_reemplazo` y el lint
+lo dice en `extraccion_despaginada` (*«la nota del paper NO lo declara»*). Se cierra a mano —es la
+historia de un reemplazo que ya ocurrió, y el motivo lo tiene quien lo hizo—:
+
+```yaml
+pdf_reemplazo:
+  - fecha: 2026-09-10
+    source: publisher
+    sha_anterior: <sha10 del preprint>     # si no se guardó, "?": no se inventa
+    sha: <sha10 del PDF actual>
+    paginas: "33 → 7"                      # o "? → ?"
+    motivo: <por qué se reemplazó>
+```
+
+Los reemplazos nuevos lo escriben solos, y antes de copiar comparan páginas: `⚠ PÁGINAS: el PDF
+entrante tiene N página(s) MENOS…` es aviso, no rehúse. **Devolver si** un reemplazo nuevo deja la
+nota sin `pdf_reemplazo`, si el aviso no aparece sobre un entrante más corto, o si rehúsa por
+páginas (no debe).
+
 ## 3 · Cierre
 
 ```bash

@@ -127,18 +127,12 @@ def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
     pdfs = sorted(cfg.PDFS.glob(f"*/{stem}.pdf")) if cfg.PDFS.exists() else []
     if not pdfs:
         return None, "no hay PDF en disco contra el cual chequear"
-    # `pdfinfo` (poppler), no una librería nueva: es la MISMA dependencia de sistema que ya declara
-    # `requirements.txt` para `pdftotext`, así que el chequeo no agrega un modo de falla propio.
-    if shutil.which("pdfinfo") is None:
-        return None, "sin `pdfinfo` (poppler-utils) no se pueden contar las páginas"
-    try:
-        r = subprocess.run(["pdfinfo", str(pdfs[0])], capture_output=True, text=True, timeout=30)
-        m = re.search(r"^Pages:\s+(\d+)", r.stdout, re.M)
-    except (OSError, subprocess.SubprocessError) as e:
-        return None, f"no se pudo correr `pdfinfo` ({e.__class__.__name__})"
-    if not m:
-        return None, "`pdfinfo` no devolvió el número de páginas"
-    n_real = int(m.group(1))
+    # #437 — UNA implementación del conteo (`cfg.pdf_page_count`): el reemplazo de PDF necesita el
+    # mismo número para la otra mitad de la misma pregunta, y la copia inline acá era el molde de
+    # la segunda.
+    n_real, motivo = cfg.pdf_page_count(pdfs[0])
+    if n_real is None:
+        return None, motivo
     return n_dicho == n_real, f"el PDF tiene {n_real} página(s) (la salvedad dice {n_dicho})"
 
 

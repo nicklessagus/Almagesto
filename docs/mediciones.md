@@ -1893,3 +1893,34 @@ nombrando la categoría.
 ⚠ **Lo que NO se movió, a propósito:** el golden **completo** (mensajes, conteos por categoría,
 poblaciones) sigue en `poblada` — esa mitad es la que caza una regresión de comportamiento y depende
 del corpus sembrado.
+
+## 2026-09-11 · `replace_pdf` prometía un rastro que no escribía, y no miraba lo que sacaba (#437)
+
+**Medido en la instancia al validar #436** (v1.256.0). Dos huecos del mismo comando:
+
+1. **La promesa vacía.** El docstring de `replace()` decía *«and the signed `pdf_reemplazo`»* y
+   `grep -rn pdf_reemplazo scripts/ tests/ docs/` daba **una** aparición: esa. El `--reason`
+   sobrevivía en `_paginacion` y en stdout; la nota del paper —lo que viaja y lo que lee quien
+   consume la afirmación— no decía que el PDF se reemplazó ni por qué. Regla de método nº 4 con el
+   docstring de contrato: un mapa que atribuye mal es peor que uno vacío.
+2. **La copia del editor puede ser PEOR.** El único reemplazo que hubo que **revertir** el
+   2026-09-10 fue `2014Sci...345..440R`: la copia de *Science Express* tiene **7 páginas y no trae
+   los Supplementary Materials**; el preprint tiene **33** y la ficha cita **§S1.1**. Sin marca de
+   arXiv y con otro sha, pasaba las dos rehusadas — y habría dejado la ficha citando una sección
+   que el documento nuevo no contiene, con 9 pares vencidos de yapa.
+
+**Qué cambió (1.257.0).** `pdf_reemplazo` se **escribe** (add-only, con `paginas: 33 → 7`) y el lint
+cruza la marca de la extracción contra la firma de la nota; `page_warning` compara páginas **antes
+de copiar** —el saliente está en disco sólo en ese instante— y **avisa, no rehúsa**: una copia del
+editor más corta puede ser legítima, y el que decide es quien mira. El conteo es UNA función
+(`cfg.pdf_page_count`): el `pdf_paginas` del cosechador lo hacía inline.
+
+⚠ **Declarado, no resuelto:** el tercer hueco de #437 —`contrast --validar` lee como alterada la
+cita corregida a la redacción publicada, porque compara contra la extracción del preprint— es una
+decisión de diseño y queda abierto en el issue.
+
+⚠ **Discrepancia de medición, declarada (regla 5):** `mutar --guardas` reporta viva la guarda
+`page_warning::if@L141` (`n_in < n_out → False`) y la misma mutación aplicada a mano sobre el
+árbol la mata (`test_AVISA_si_el_entrante_tiene_menos_paginas_y_no_rehusa` falla). No se pudo
+reconciliar en la sesión; se anota en vez de elegir.
+

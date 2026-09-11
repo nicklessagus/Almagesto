@@ -779,7 +779,7 @@ LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "facets": False,
                "keywords": False,
                "planets": True, "disputes": True, "corrections": True,
                "versions": True, "vistas": True, "no_vista": True,
-               "segunda_mano_revisada": True}
+               "segunda_mano_revisada": True, "pdf_reemplazo": True}
 
 
 def normalize_lists(fm: dict) -> list:
@@ -1986,11 +1986,19 @@ def check_depaginated_extractions() -> tuple:
         poblacion += 1
         marca = cfg.as_map(data.get("_paginacion"))
         if marca:
+            # #437 — las dos mitades del mismo evento: `replace_pdf` marca la extracción Y firma
+            # `pdf_reemplazo` en la nota. Una sin la otra es un reemplazo hecho a mano, y la nota
+            # —lo que viaja— no dice que ese PDF cambió ni por qué.
+            bib = str(data.get("bibcode") or "").strip()
+            nota = cfg.PAPERS / f"{cfg.note_stem(bib)}.md" if bib else None
+            fm_nota = cfg.split_fm(nota.read_text(encoding="utf-8")) if nota and nota.exists() else {}
+            sin_firma = ("" if cfg.as_list((fm_nota or {}).get("pdf_reemplazo"))
+                         else " ⚠ y la nota del paper NO lo declara en `pdf_reemplazo` (#437)")
             out.append((f"{f.parent.name}/{f.stem}",
                         f"los localizadores son del documento ANTERIOR (PDF reemplazado el "
                         f"{marca.get('reemplazo') or '?'}: {marca.get('motivo') or 'sin motivo'}) "
                         f"→ al re-leer esas páginas, actualizá `linea`/`p.` y sacá `_paginacion`; "
-                        f"la cita textual sigue valiendo (#436)"))
+                        f"la cita textual sigue valiendo (#436){sin_firma}"))
     return out, poblacion
 
 

@@ -9985,6 +9985,16 @@ def test_check_depaginated_extractions_ve_la_marca_de_un_PDF_reemplazado(toy_vau
     assert pob == 2 and len(hall) == 1
     assert hall[0][0] == "gj_581/2011X" and "versión del editor" in hall[0][1], hall
     assert "documento ANTERIOR" in hall[0][1]
+    # #437 — las dos mitades del mismo evento: sin `pdf_reemplazo` en la nota, el reemplazo se hizo
+    # a mano y la nota (lo que viaja) no dice que el PDF cambió ni por qué
+    assert "NO lo declara en `pdf_reemplazo`" in hall[0][1]
+    mk_note(cfg.PAPERS, "2011X", {"bibcode": "2011X", "tags": ["paper"],
+                                  "pdf_reemplazo": [{"fecha": "2026-09-11", "source": "publisher",
+                                                     "sha_anterior": "a" * 10, "sha": "b" * 10,
+                                                     "motivo": "versión del editor"}]},
+            "# p\n\n## Abstract\n\nx\n")
+    hall, _p = lint.check_depaginated_extractions()
+    assert len(hall) == 1 and "pdf_reemplazo" not in hall[0][1], "firmado: la mitad de la nota cierra"
     # el JSON ilegible y el que no es mapa tienen sus propios detectores: acá no cuentan ni suman
     (cfg.EXTRACCION / "gj_581" / "roto.json").write_text("{no", encoding="utf-8")
     (cfg.EXTRACCION / "gj_581" / "lista.json").write_text("[1]", encoding="utf-8")
