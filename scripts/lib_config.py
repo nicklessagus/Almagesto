@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.259.1"
+ALMAGESTO_VERSION = "1.259.2"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -883,10 +883,24 @@ def pdf_page_count(pdf) -> tuple:
 #: escribe `make_notes` y lo reconocen sus cirugías Y el lint. Vive acá porque `make_notes` importa
 #: `lib_config` y no al revés, y la definición tiene que ser UNA (#444).
 GENERATOR_LINE = "> _Generado con Almagesto v"
+#: Los OTROS textos que `make_notes` estampa en la cabecera, y por los que también se la reconoce
+#: (#444, devuelto): el aviso de capa LLM, la línea de estado (D-12) y la de ground-truth (D-1). Una
+#: nota anterior al backfill de #247 tiene el aviso y NO el generador — y `header_block` anclado
+#: sólo en `GENERATOR_LINE` devolvía `None` de ese lado, así que `prose_changed_since` eximía la
+#: cabecera nueva y no la vieja, y el diff era el blockquote entero: 4 «stale» falsos, otra vez.
+AVISO_LLM_MARCA = "Capa LLM"
+HEADER_MARKS = (GENERATOR_LINE, "> ⚠ **" + AVISO_LLM_MARCA, "> _Estado — ", "> _Ground-truth — ")
 
 
 def header_block(text: str) -> tuple | None:
-    """`(inicio, fin)` of the stamped header blockquote — the one holding `GENERATOR_LINE` (#444).
+    """`(inicio, fin)` of the stamped header blockquote — the one holding ANY of `HEADER_MARKS` (#444).
+
+    ⛔ Anchored on any stamped line, not on `GENERATOR_LINE` alone: a note from before the #247
+    backfill carries the LLM-layer warning and no generator line, and a recogniser that needs the
+    generator says «no header» on that side. `prose_changed_since` then exempts the new header and
+    not the old one, and the diff it sees is the whole blockquote — the shape of #440 (a mark that
+    exists after the command that stamps it, used over a version from before). Measured: the 4
+    false «stale» of #444 survived the first fix for exactly this.
 
     ONE definition of «this is the stamped header» for its two consumers: the header surgeries of
     `make_notes` (`stamp_estado`, `stamp_ground_truth_line`, INV-15) and `lint.prose_changed_since`
@@ -895,11 +909,10 @@ def header_block(text: str) -> tuple | None:
     having changed. The header is a blockquote with no `[[bibcode]]`: surgery on it cannot move any
     claim or any anchor, so it is exactly what `SECCIONES_ESTAMPADAS` exempts, only that it is not a
     section. The block is the run of contiguous `>` lines around the anchor."""
-    i = text.find(GENERATOR_LINE)
-    if i < 0:
-        return None
     lineas = text.split("\n")
-    n = text[:i].count("\n")                       # índice de la línea del ancla
+    n = next((k for k, ln in enumerate(lineas) if any(ln.startswith(m) for m in HEADER_MARKS)), None)
+    if n is None:
+        return None
     ini = n
     while ini > 0 and lineas[ini - 1].startswith(">"):
         ini -= 1

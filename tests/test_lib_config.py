@@ -3110,6 +3110,13 @@ def test_header_block_es_UNA_definicion_de_la_cabecera_estampada():
     texto = f"# T\n\n{cfg.GENERATOR_LINE}1._\n\n> otro blockquote suelto\n"
     ini, fin = cfg.header_block(texto)
     assert texto[ini:fin] == f"{cfg.GENERATOR_LINE}1._\n", "sólo las contiguas: el blockquote de después no"
+    # #444 devuelto — la cabecera de ANTES del backfill de #247: aviso de capa LLM sin generador.
+    # Anclado sólo en `GENERATOR_LINE` daba None de ese lado, y el diff era el blockquote entero.
+    vieja = "> ⚠ **Capa LLM — revisar antes de citar.** La prosa es síntesis.\n\n## Síntesis\n"
+    assert cfg.header_block(vieja) == (0, len(vieja.split("\n")[0]) + 1)
+    assert cfg.header_block("> _Estado — búsqueda 2026-01-01_\n") is not None
+    assert cfg.header_block("> _Ground-truth — NEA_\n") is not None
+    assert cfg.header_block("> un blockquote cualquiera\n") is None, "sin marca estampada no es cabecera"
 
 
 def test_fm_bounds_devuelve_los_offsets_del_bloque_YAML():

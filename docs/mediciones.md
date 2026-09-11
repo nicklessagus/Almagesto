@@ -2044,3 +2044,12 @@ ninguna afirmación cambiara: la cabecera la estampa `make_notes` pero no es una
 `solo_prosa` la conservaba. Fix (1.259.1): `cfg.header_block` —UNA definición, la que ya usaban las
 cirugías de cabecera (INV-15)— y `prose_changed_since` la saca antes de comparar.
 
+**#444, devuelto (1.259.2).** Las 4 notas seguían «stale», ahora con *«fuera de los bloques
+citables»*: `header_block` se anclaba en `GENERATOR_LINE`, que es **justo la línea que el backfill
+agregó** — la versión a la fecha del bloque tenía el aviso `⚠ Capa LLM` sin generador, así que de
+ese lado devolvía `None`, eximía sólo la cabecera nueva y el diff era el blockquote entero. La
+forma de #440 otra vez: la marca existe después del comando que la estampa y el chequeo la usa
+sobre una versión anterior. Hoy la cabecera se reconoce por **cualquiera** de sus líneas estampadas
+(`HEADER_MARKS`: generador, aviso de capa LLM, `_Estado —`, `_Ground-truth —`, constantes de
+`lib_config`), con test sobre la versión vieja sin generador.
+

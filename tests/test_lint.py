@@ -1998,8 +1998,23 @@ def test_stale_verif_NO_cuenta_la_cabecera_estampada_como_prosa(toy_vault):
     filas = _stale(toy_vault)
     assert len(filas) == 1 and "la prosa cambió" in filas[0][1]
     assert cfg.header_block("sin cabecera") is None
-    assert cfg.header_block(f"> uno\n{cfg.GENERATOR_LINE}1._\n> tres\n\nprosa") == (0, 44), \
-        "las tres líneas `>` contiguas alrededor del ancla, con sus saltos de línea"
+
+
+def test_stale_verif_444_la_cabecera_VIEJA_sin_generador_tambien_es_cabecera(toy_vault):
+    """⛔ #444, devuelto — la versión a la fecha del bloque tenía el aviso `⚠ Capa LLM` y NO la línea
+    del generador (que agregó el backfill del 09-11): `header_block` anclado en `GENERATOR_LINE`
+    daba `None` de ese lado, eximía sólo la cabecera nueva, y el diff era el blockquote entero: las
+    4 notas seguían «stale» con «fuera de los bloques citables». Es la forma de #440: la marca
+    existe después del comando que la estampa y el chequeo la usa sobre una versión anterior."""
+    cabecera_vieja = "> ⚠ **Capa LLM — revisar antes de citar.** La prosa es síntesis.\n"
+    _skip_sin_git(_repo_con_nota(toy_vault, cabecera_vieja + "\n" + CUERPO_VERIF, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        cabecera_vieja, cabecera_vieja + f"{cfg.GENERATOR_LINE}9.9.9._\n"), encoding="utf-8")
+    assert _stale(toy_vault) == [], "el backfill de #247 no cambia ninguna afirmación"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "Afirmación [[2020citC...1..1C]].", "Otra afirmación [[2020citC...1..1C]]."), encoding="utf-8")
+    assert len(_stale(toy_vault)) == 1, "y el control: la prosa que sí cambió sigue disparando"
 
 
 def test_stale_verif_sin_commit_hasta_la_fecha_declara_la_salvedad(toy_vault):

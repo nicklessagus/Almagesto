@@ -378,3 +378,7 @@ notas de paper (`2001LevineDomany`, `2008A&A...479..277B`, `2012embc.conf..101A`
 `2013IJBHI..17..629H`); tocar un párrafo con cita en una de ellas → vuelve a aparecer nombrando el
 bloque. **Devolver si** alguna sigue «stale» por la cabecera o si un cambio real deja de verse.
 
+**#444 (devuelto) · v1.259.2:** mismo chequeo que arriba — las 4 notas salen de *Verificación stale*
+sin tocar nada; la cabecera se reconoce por el aviso `⚠ Capa LLM` aunque la versión vieja no tenga
+la línea del generador. **Devolver si** alguna sigue con *«fuera de los bloques citables»*.
+

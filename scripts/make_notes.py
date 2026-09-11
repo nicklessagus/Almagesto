@@ -987,7 +987,7 @@ def restamp_headers() -> int:
 #: #277 · la marca por la que se reconoce el aviso de capa LLM en el cuerpo. La miden el lint y
 #: `stamp_header`, así que vive una sola vez: con dos literales, el detector y el reparador pueden
 #: dejar de hablar del mismo texto sin que nadie se entere.
-AVISO_LLM_MARCA = "Capa LLM"
+AVISO_LLM_MARCA = cfg.AVISO_LLM_MARCA         # #444: UNA definición, en lib_config
 
 
 #: #269 · el bullet de anotación ANTERIOR a 1.117.0, embebido sólo para que el migrador reconozca
