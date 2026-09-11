@@ -318,4 +318,10 @@ y un segundo reemplazo del mismo paper **apila** una entrada (no pisa). `python 
 nueva. **Devolver si** el aviso falta o rehúsa, si `pdf_reemplazo` pisa la historia, o si el conteo
 de páginas discrepa con `pdfinfo` a mano. **Al cerrar:** cuántas de las 11 quedaron firmadas a
 mano y con qué `sha_anterior` (si se perdió, `?`: no se inventa).
+**Y el ítem 3 (v1.257.1):** sobre los 23 pares de copyedición que salieron por #389, volver a poner
+la redacción publicada en UNA y correr `contrast.py <slug> --validar`: si el `.txt` re-extraído la
+tiene verbatim → rc 0 sin hallazgo; si no la encuentra → rc 0 con la marca `⚠verificar en el PDF`
+lista para pegar y *«PDF REEMPLAZADO»* en el motivo; y una cita deliberadamente mal contra el PDF
+nuevo (arranque igual, cola inventada) → rc 1 nombrando *«`.txt` NUEVO»*. **Devolver si** una cita
+correcta contra el PDF nuevo sigue bloqueando, o si una alterada contra el PDF nuevo pasa.
 

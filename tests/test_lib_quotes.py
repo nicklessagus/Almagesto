@@ -94,3 +94,103 @@ def test_log_quote_exempt_deja_UNA_exencion_y_es_estructural():
     assert lq.log_quote_exempt("log", "algo", "blockquote")
     assert lq.log_quote_exempt("log", "algo", "parrafo") is None
     assert lq.log_quote_exempt("tau_cet", "algo", "blockquote") is None, "sólo en `log.md`"
+
+# ── #437 · la extracción de un PDF REEMPLAZADO no es juez del documento en disco ─────────────────
+# Los helpers `_extr_324`/`_txt_324`/`CITA_324` son los de `tests/test_lib_config.py` (donde viven los
+# tests de #324); acá se importan para que estos cinco vivan en el archivo del módulo que prueban —
+# es lo que `mutar --dirigida scripts/lib_quotes.py` mira.
+from test_lib_config import _extr_324, _txt_324, CITA_324  # noqa: E402
+
+
+def _extr_vieja(bib: str, valor: str, slug: str = "tema"):
+    """Una extracción marcada `_paginacion`: describe un PDF que se REEMPLAZÓ (#436)."""
+    import json
+    (cfg.EXTRACCION / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / slug / f"{bib}.json").write_text(json.dumps(
+        {"bibcode": bib, "ground_truth": [{"que": "x", "valor": valor}],
+         "_paginacion": {"reemplazo": "2026-09-10", "motivo": "versión del editor"}}),
+        encoding="utf-8")
+
+
+#: #437 — la cita como la escribió el preprint y como la corrigió el editor (copyedición)
+_PREPRINT_437 = CITA_324 + " under gaussian noise of known covariance"
+_PUBLICADA_437 = CITA_324 + " under Gaussian noise whose covariance is known"
+
+
+def _ver_437(bibs: tuple = ("citado",)) -> tuple:
+    return cfg.quote_verdict(_PUBLICADA_437, ["citado"], set(bibs),
+                             {b: cfg.fulltext_readings(b) for b in bibs})
+
+
+# ⚠ Cuatro tests y no uno: `fulltext_readings` y el índice de extracciones se memoizan por ruta,
+# así que reescribir el `.txt` o el JSON dentro del mismo test lee la versión vieja. Cada test
+# arranca con un `toy_vault` nuevo, o sea caché nueva.
+
+def test_quote_verdict_437_la_cita_corregida_verbatim_en_el_txt_NUEVO_pasa(toy_vault):
+    """⛔ #437 — después de reemplazar el preprint por el publicado, corregir la cita a la redacción
+    publicada la hacía «alterada»: el gate comparaba contra la extracción, que es la lectura del
+    PREPRINT, así que la nota correcta bloqueaba y la incorrecta pasaba (medido: 23 pares de
+    copyedición). La regla: «cambiada» se mide contra el PDF que está en disco, no contra la
+    lectura vieja. Primera salida: la cita está verbatim en el `.txt` re-extraído → pasa (paso 1,
+    que ya existía y que el reemplazo acotado de #436 hace posible)."""
+    _txt_324("citado", f"prosa. {_PUBLICADA_437}. más prosa.")
+    _extr_vieja("citado", _PREPRINT_437)
+    assert _ver_437()[0] == "en_su_txt"
+
+
+def test_quote_verdict_437_el_txt_nuevo_CALLA_y_la_extraccion_vieja_no_acusa_sola(toy_vault):
+    """Segunda salida: el `.txt` nuevo no la encuentra y la extracción VIEJA trae el prefijo con
+    otra cola. Esa cola es la redacción del preprint, no evidencia contra el documento en disco:
+    no bloquea, sale con la marca `⚠verificar en el PDF` — y nunca «pasa»."""
+    _txt_324("citado", "prosa que no dice la cita")
+    _extr_vieja("citado", _PREPRINT_437)
+    ver, det = _ver_437()
+    assert ver == "extraccion_vieja" and det["bibs"] == ["citado"], (ver, det)
+    assert cfg.extraction_depaginated("citado")
+
+
+def test_quote_verdict_437_sin_la_marca_la_regla_de_321_sigue_INTACTA(toy_vault):
+    """El control: la misma extracción SIN `_paginacion` sigue siendo el juez y bloquea (#321). La
+    regla nueva está acotada a la población marcada, que es la única donde la extracción describe
+    un documento que ya no está."""
+    _txt_324("citado", "prosa que no dice la cita")
+    _extr_324("citado", _PREPRINT_437)
+    ver, det = _ver_437()
+    assert ver == "alterada" and det["prefijo"] and not det.get("txt_nuevo"), (ver, det)
+    assert not cfg.extraction_depaginated("citado")
+
+
+def test_quote_verdict_437_el_txt_NUEVO_que_sigue_distinto_BLOQUEA(toy_vault):
+    """Tercera salida: el `.txt` del PDF nuevo trae el arranque y sigue distinto → contra el
+    documento en disco la cita SÍ está alterada, y bloquea. El testigo es el `.txt` nuevo
+    (`txt_nuevo`), no la extracción — que sólo puede hablar del documento viejo."""
+    _txt_324("citado", f"prosa. {CITA_324} under Gaussian noise of unknown covariance. y sigue.")
+    _extr_vieja("citado", _PREPRINT_437)
+    ver, det = _ver_437()
+    assert ver == "alterada" and det.get("txt_nuevo") == "citado" and "cola_txt" in det, (ver, det)
+
+
+def test_quote_verdict_437_la_atribucion_movida_bloquea_AUNQUE_el_pdf_se_haya_reemplazado(toy_vault):
+    """La frase verbatim en la extracción de OTRA fuente no depende de qué documento describa la
+    de la fuente citada: es atribución equivocada y bloquea igual (#318), con o sin marca."""
+    _txt_324("citado", "prosa que no dice la cita")
+    _extr_vieja("citado", _PREPRINT_437)
+    _txt_324("ajeno", "otra prosa")
+    _extr_324("ajeno", _PUBLICADA_437)
+    ver, det = _ver_437(("citado", "ajeno"))
+    assert ver == "alterada" and det["otro_bib"] == ["ajeno"], (ver, det)
+
+
+def test_quote_verdict_437_una_extraccion_VIGENTE_con_el_prefijo_sigue_siendo_juez(toy_vault):
+    """La regla está acotada a «el prefijo viene SÓLO de extracciones marcadas»: si un bloque cita dos
+    fuentes y la NO marcada también trae el arranque con otra cola, ésa describe un documento que
+    sí está en disco y su acusación vale (#321): bloquea."""
+    _txt_324("citado", "prosa que no dice la cita")
+    _extr_vieja("citado", _PREPRINT_437)
+    _txt_324("vigente", "otra prosa")
+    _extr_324("vigente", _PREPRINT_437)
+    ver, det = cfg.quote_verdict(_PUBLICADA_437, ["citado", "vigente"], {"citado", "vigente"},
+                                 {"citado": cfg.fulltext_readings("citado"),
+                                  "vigente": cfg.fulltext_readings("vigente")})
+    assert ver == "alterada" and det["prefijo"] and not det.get("txt_nuevo"), (ver, det)
+

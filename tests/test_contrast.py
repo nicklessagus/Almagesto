@@ -155,6 +155,39 @@ def test_el_SILENCIO_de_la_extraccion_no_bloquea(toy_vault, capsys):
     assert "la transcripción es SELECTIVA" in out and "1 no evaluable" in out
 
 
+def test_validar_437_la_extraccion_de_un_PDF_REEMPLAZADO_marca_y_no_bloquea(toy_vault, capsys):
+    """⛔ #437 — después de reemplazar el preprint por el publicado, la cita corregida a la redacción
+    publicada era «alterada»: el gate comparaba contra la extracción, que es la lectura del
+    PREPRINT (23 pares medidos, la nota correcta bloqueaba). Con `_paginacion` la extracción no es
+    juez del documento en disco: si el `.txt` nuevo calla, sale con la marca `⚠verificar en el PDF`
+    (rc 0); si el `.txt` nuevo trae el arranque y sigue distinto, sí bloquea (rc 1)."""
+    _extraccion("ica_ruido", "2013Voss", _paginacion={"reemplazo": "2026-09-10", "motivo": "editor"})
+    _txt("ica_ruido", "2013Voss")
+    nota = cfg.CONCEPTS / "methods" / "ica-ruido.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
+                    f"Dice «{LARGA[:80]} y por lo tanto el problema es mucho más difícil» "
+                    f"[[2013Voss]].\n", encoding="utf-8")
+    assert ct.main(["--validar", str(nota)]) == 0, "la lectura vieja no acusa sola"
+    out = capsys.readouterr().out
+    assert "PDF REEMPLAZADO" in out and cfg.VERIFICAR_PDF_MARK.split("(")[0].strip() in out, out
+    assert "1 de ellas con el `.txt` en contra" in out or "discrepan" in out.lower() or "⚠" in out
+
+
+def test_validar_437_el_txt_NUEVO_que_sigue_distinto_BLOQUEA(toy_vault, capsys):
+    """La otra mitad de #437: el `.txt` del PDF nuevo trae el arranque y sigue distinto → contra el
+    documento en disco la cita SÍ está alterada. Bloquea, y el mensaje nombra al testigo nuevo."""
+    _extraccion("ica_ruido", "2013Voss", _paginacion={"reemplazo": "2026-09-10", "motivo": "editor"})
+    _txt("ica_ruido", "2013Voss", f"prosa. {LARGA[:80]} and the published wording goes elsewhere. fin.")
+    nota = cfg.CONCEPTS / "methods" / "ica-ruido.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [concept]\n---\n\n# ICA ruidosa\n\n"
+                    f"Dice «{LARGA[:80]} y por lo tanto el problema es mucho más difícil» "
+                    f"[[2013Voss]].\n", encoding="utf-8")
+    assert ct.main(["--validar", str(nota)]) == 1
+    assert "`.txt` NUEVO" in capsys.readouterr().out
+
+
 def test_validar_calla_cuando_la_nota_es_FIEL_a_la_extraccion(toy_vault, capsys):
     """El control, y la diferencia con #220: la cita puede no estar en el `.txt` (degradado) y estar
     en la extracción — ahí la nota está bien y no hay nada que reportar."""

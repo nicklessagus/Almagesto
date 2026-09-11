@@ -418,6 +418,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   LLM—, así que lo único cierto es *andá a mirar esta página*. Existe porque una cita alterada que
   nace **en la extracción** es invisible para `contrast --validar` por construcción: su juez **es**
   la extracción (#315/#317), y hasta 1.161.0 el `.txt` sólo podía absolver.
+  ⛔ **Y la extracción de un PDF REEMPLAZADO no acusa sola (#437):** con `_paginacion`, su cola
+  distinta es la redacción del preprint contra la del publicado (medido: 23 pares de copyedición,
+  la nota correcta bloqueaba y la incorrecta pasaba). Ahí «cambiada» se mide contra el PDF que está
+  en disco: la cita verbatim en el `.txt` nuevo pasa; el `.txt` nuevo que trae el arranque y sigue
+  distinto **bloquea** (`cita_inventada`, nombrando al testigo nuevo); y el `.txt` nuevo que calla
+  cae acá, con la marca — nunca «pasa». La atribución movida bloquea igual: no depende del documento.
   Lo que vuelve admisible la acusación es una asimetría medida: **cuando el `.txt` falla la cadena
   está AUSENTE, no distinta** (matemática, corte de columnas, salto de línea). De ahí las tres
   guardas, y la del medio es la que compró la re-medición: la divergencia arranca en un **borde de

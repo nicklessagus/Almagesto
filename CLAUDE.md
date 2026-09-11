@@ -1112,6 +1112,9 @@ re-extraer el `.txt`.
    índice degradado) y la salida es la **marca `⚠verificar en el PDF`**, que `contrast --validar`
    deja **lista para pegar** y no aplica (#341): cuál lectura gana lo decide quien abra la página, y
    corregir solo iría en la dirección equivocada.
+   ⛔ **Y la extracción de un PDF REEMPLAZADO no acusa sola (#437):** «cambiada» se mide contra el
+   PDF en disco — verbatim en el `.txt` nuevo pasa, arranque igual y cola distinta en el `.txt`
+   nuevo bloquea, silencio marca `⚠verificar en el PDF`.
    ⛔ **Y alcanza `## Vista` sumando el bibcode de la NOTA a los adyacentes (#373):** ahí el bibcode es
 la nota y no un link, así que 3838 transcripciones del PDF no las miraba nadie. ⛔ **El LINT usa esa
 regla y esa función (#394), y el bibcode propio SUMA, nunca reemplaza** (`cfg.with_own_bibcode`):

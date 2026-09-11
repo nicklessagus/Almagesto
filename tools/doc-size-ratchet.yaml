@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-11"
-techo_lineas: 1815
-techo_bytes: 146800
+techo_lineas: 1818
+techo_bytes: 147150
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -392,6 +392,8 @@ crecimientos:
       Tres líneas en el párrafo de #436: el reemplazo de PDF FIRMA `pdf_reemplazo` en la nota
       (el docstring lo prometía y no se escribía) y AVISA si el entrante tiene menos páginas
       (medido en la instancia: 7 sin Supplementary contra 33, con la ficha citando §S1.1). Es la
-      regla que cambia lo que el agente hace al reemplazar, y va donde ya vive el comando.
-    techo_lineas: 1815
-    techo_bytes: 146800
+      regla que cambia lo que el agente hace al reemplazar, y va donde ya vive el comando. Y tres
+      más en el párrafo de `contrast --validar`: la extracción de un PDF reemplazado no acusa sola
+      («cambiada» se mide contra el PDF en disco), decidido con el usuario.
+    techo_lineas: 1818
+    techo_bytes: 147150

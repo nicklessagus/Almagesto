@@ -1915,9 +1915,13 @@ de copiar** —el saliente está en disco sólo en ese instante— y **avisa, no
 editor más corta puede ser legítima, y el que decide es quien mira. El conteo es UNA función
 (`cfg.pdf_page_count`): el `pdf_paginas` del cosechador lo hacía inline.
 
-⚠ **Declarado, no resuelto:** el tercer hueco de #437 —`contrast --validar` lee como alterada la
-cita corregida a la redacción publicada, porque compara contra la extracción del preprint— es una
-decisión de diseño y queda abierto en el issue.
+**El tercer hueco, decidido con el usuario (1.257.1):** «cambiada» se mide contra el PDF que está
+en disco, no contra la lectura vieja. En `quote_verdict` —la única implementación, #324— cuando el
+prefijo viene SÓLO de extracciones marcadas `_paginacion`, el juez pasa a ser el `.txt` del
+documento nuevo: verbatim → pasa; arranque igual y cola distinta → **bloquea** (`txt_nuevo`);
+silencio → `extraccion_vieja`, la marca `⚠verificar en el PDF`, nunca «pasa». La atribución movida
+bloquea igual. Lo que NO se hizo: degradar siempre (el gate no mordería nunca en esas fuentes) ni
+re-leer (es el paso caro, y el alcance que imprime `replace_pdf` ya es esa lista).
 
 ⚠ **Discrepancia de medición, declarada (regla 5):** `mutar --guardas` reporta viva la guarda
 `page_warning::if@L141` (`n_in < n_out → False`) y la misma mutación aplicada a mano sobre el

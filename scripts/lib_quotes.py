@@ -665,6 +665,10 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
       3. the source says it and the `.txt` breaks it apart → `txt_parte` (#288).
       4. positive evidence that it moved or was completed → `alterada` (blocking, #321).
       5. sources on disk and nothing else → `no_verbatim`; no sources → `no_evaluable` (D-43).
+      4b. (#437) the prefix evidence comes ONLY from extractions marked `_paginacion` —they
+         describe a document that was replaced— → the `.txt` of the new document is the judge:
+         `alterada` if it carries the opening and continues differently (`txt_nuevo`), else
+         `extraccion_vieja` (mark, never «passes»). The old reading cannot accuse the new PDF.
 
     `txt_texts` is injected —`{bibcode: [readings]}`— because each caller obtains it differently;
     `ambiguo` reproduces #316 (a quote with no adjacent `[[bibcode]]` was tested against every
@@ -698,10 +702,39 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
     # implica `fuentes` no vacío, así que agregarlo sería una condición que no decide nada, #319.)
     con_extraccion = any(extracciones.get(b) for b in fuentes)
     if con_extraccion and not ambiguo and (otro or prefijo):
+        # #437 — la extracción que lleva el prefijo describe un documento que YA NO ESTÁ (el PDF se
+        # reemplazó: `_paginacion`). Su cola distinta no es evidencia contra el documento en disco:
+        # es la redacción del preprint contra la del publicado (medido: 23 pares de copyedición, la
+        # nota correcta bloqueaba y la incorrecta pasaba). Ahí el único testigo del documento nuevo
+        # es su `.txt`: si TRAE el arranque y sigue distinto, la cita sí está alterada contra lo que
+        # hay en disco y bloquea; si calla, la marca `⚠verificar en el PDF` — nunca «pasa». La
+        # atribución movida (`otro`) no depende del documento y bloquea igual.
+        if prefijo and not otro:
+            viejas = [b for b in cited or [] if extraction_depaginated(b)
+                      and any(quote_found(quote[:CITA_PREFIJO], t) for t in extracciones.get(b, []))]
+            vigentes = [b for b in cited or [] if b not in viejas
+                        and any(quote_found(quote[:CITA_PREFIJO], t) for t in extracciones.get(b, []))]
+            if viejas and not vigentes:
+                for b in viejas:
+                    acusa = txt_accuses(quote, fuentes.get(b) or [])
+                    if acusa:
+                        return "alterada", {"otro_bib": [], "prefijo": True, "txt_nuevo": b, **acusa}
+                return "extraccion_vieja", {"bibs": viejas}
         return "alterada", {"otro_bib": otro, "prefijo": prefijo}
     if fuentes:
         return "no_verbatim", {}
     return "no_evaluable", {}
+
+
+def extraction_depaginated(bibcode: str) -> bool:
+    """Does any extraction of this bibcode carry `_paginacion` — i.e. describe a REPLACED PDF? (#437)
+
+    `replace_pdf` stamps it (#436) because `raw/extraccion/**` is versioned and not regenerable
+    (#311): the reading stays, the document it read is gone. For `quote_verdict` that means the
+    extraction can still prove a quote is in that paper, but its divergent tail cannot accuse the
+    document on disk — the tail may be the preprint's wording against the publisher's."""
+    return any(cfg.as_map(d.get("_paginacion")) for d in _extraction_index().get(bibcode, [])
+               if isinstance(d, dict))
 
 
 def quote_found(quote: str, source_norm: str) -> bool:

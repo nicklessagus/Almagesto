@@ -4160,6 +4160,15 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                                f"«…{_det['cola_txt'][:70]}» donde la extracción dice "
                                f"«…{_det['cola_cita'][:70]}». Confirmala en el PDF y, si no "
                                f"podés, marcala `{VERIFICAR_PDF_MARK}`{_amb}"))
+                elif _ver == "extraccion_vieja":
+                    # #437 — la extracción describe un PDF reemplazado (`_paginacion`): su cola
+                    # distinta es la redacción del preprint, no evidencia contra el documento en
+                    # disco, y el `.txt` nuevo calla. Backlog con la marca, nunca «pasa».
+                    cita_txt_discrepa.append(
+                        (stem, f"L{_ln}: «{_corte}» — la extracción de "
+                               f"{', '.join(_det['bibs'])} es de un PDF REEMPLAZADO y el `.txt` "
+                               f"del nuevo no la encuentra: confirmala en el PDF nuevo y, si no "
+                               f"podés, marcala `{VERIFICAR_PDF_MARK}`{_amb}"))
                 elif _ver == "txt_parte":
                     # #288 — la fuente SÍ la dice: lo que la rompió es la EXTRACCIÓN del `.txt`
                     # (números de línea de un preprint a dos columnas metidos en medio de la
@@ -4181,6 +4190,10 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                                f"**{', '.join(_det['otro_bib'])}**, no en la de "
                                f"{', '.join(sorted(_fuentes))}: la cita está atribuida a la "
                                f"fuente equivocada" if _det["otro_bib"] else
+                               f"el PDF de {_det['txt_nuevo']} se reemplazó y su `.txt` NUEVO "
+                               f"trae el arranque y sigue distinto («…{_det['cola_txt'][:60]}»): "
+                               f"la cita no es la del documento en disco (#437)"
+                               if _det.get("txt_nuevo") else
                                "el arranque coincide con la extracción y la cola diverge: la "
                                "cita se completó al copiar (el patrón de #314)")
                     cita_inventada.append(

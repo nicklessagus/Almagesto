@@ -348,13 +348,32 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                      cfg.verificar_pdf_mark(
                          f"el `.txt` de {det['bib']} sigue «…{det['cola_txt'][:40]}» y la "
                          f"extracción «…{det['cola_cita'][:40]}»")))
-            if ver in ("en_su_txt", "txt_degradado", "txt_acusa", "txt_parte"):
+            if ver == "extraccion_vieja":
+                # #437 — la extracción describe un PDF reemplazado: su cola distinta es la redacción
+                # del preprint, no evidencia contra el documento en disco. Y el `.txt` nuevo calla,
+                # así que no «pasa»: sale con la marca, como el `txt_acusa` de #341.
+                out["discrepan"].append(
+                    (b.first_line, f"«{corte}» — la extracción de {', '.join(det['bibs'])} es de un "
+                                   f"PDF REEMPLAZADO (`_paginacion`) y el `.txt` del nuevo no la "
+                                   f"encuentra: no se puede decidir desde acá. Abrí el PDF nuevo "
+                                   f"(#437)",
+                     cfg.verificar_pdf_mark(
+                         f"la extracción de {', '.join(det['bibs'])} es del PDF anterior y el "
+                         f"nuevo no la trae verbatim")))
+            if ver in ("en_su_txt", "txt_degradado", "txt_acusa", "txt_parte", "extraccion_vieja"):
                 continue
             if ver == "alterada" and det["otro_bib"]:
                 out["alteradas"].append(
                     (b.first_line, f"«{corte}» está verbatim en la extracción de "
                                    f"**{', '.join(det['otro_bib'])}**, no en la de {quienes}: la "
                                    f"cita está atribuida a la fuente equivocada"))
+            elif ver == "alterada" and det.get("txt_nuevo"):
+                out["alteradas"].append(
+                    (b.first_line, f"«{corte}» — el PDF de {det['txt_nuevo']} se reemplazó y su "
+                                   f"`.txt` NUEVO trae el mismo arranque y sigue distinto: dice "
+                                   f"«…{det['cola_txt'][:70]}» donde la nota dice "
+                                   f"«…{det['cola_cita'][:70]}». La cita no es la del documento en "
+                                   f"disco (#437)"))
             elif ver == "alterada":
                 out["alteradas"].append(
                     (b.first_line, f"«{corte}» — el arranque coincide con la extracción de "

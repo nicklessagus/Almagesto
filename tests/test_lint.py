@@ -7134,6 +7134,50 @@ def test_las_dos_lecturas_del_MISMO_pdf_que_no_coinciden_tienen_categoria(toy_va
                for m in discrepa)
 
 
+def test_437_la_extraccion_de_un_PDF_REEMPLAZADO_no_bloquea_sola_y_el_txt_nuevo_si(toy_vault):
+    """⛔ #437 — con `_paginacion` la extracción describe un documento que ya no está: su cola
+    distinta es la redacción del preprint, no evidencia contra el PDF en disco. El `.txt` nuevo
+    que calla → backlog con la marca (no `cita_inventada`); el `.txt` nuevo que trae el arranque y
+    sigue distinto → bloquea, nombrando al testigo nuevo."""
+    paper_extraido(toy_vault, "1998Hyvarinen")
+    comun = "The noise in the model is assumed to be Gaussian with a covariance matrix that is "
+    preprint, publicada = comun + "known in advance", comun + "assumed to be known"
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "1998Hyvarinen.txt").write_text("prosa que no la dice.", encoding="utf-8")
+    (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "ica" / "1998Hyvarinen.json").write_text(json.dumps(
+        {"bibcode": "1998Hyvarinen", "ejes": {}, "ground_truth": [{"que": "ruido", "valor": preprint}],
+         "_paginacion": {"reemplazo": "2026-09-10", "motivo": "versión del editor"}}), encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        f"---\ntags: [concept]\n---\n\n# ICA\n\nDice «{publicada}» [[1998Hyvarinen]].\n",
+        encoding="utf-8")
+    rep = lint.collect()
+    assert rep.por_clave("cita_inventada").items == (), "la lectura vieja no acusa sola"
+    discrepa = [m for _s, m in rep.por_clave("cita_txt_discrepa").items]
+    assert any("PDF REEMPLAZADO" in m and lint.VERIFICAR_PDF_MARK in m for m in discrepa), discrepa
+
+
+def test_437_el_txt_NUEVO_que_sigue_distinto_BLOQUEA(toy_vault):
+    """La mitad que bloquea: «cambiada» se mide contra el PDF que está en disco."""
+    paper_extraido(toy_vault, "1998Hyvarinen")
+    comun = "The noise in the model is assumed to be Gaussian with a covariance matrix that is "
+    preprint, publicada = comun + "known in advance", comun + "assumed to be known"
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "1998Hyvarinen.txt").write_text(
+        "prosa. " + comun + "estimated from the residuals of the fit. más prosa.", encoding="utf-8")
+    (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "ica" / "1998Hyvarinen.json").write_text(json.dumps(
+        {"bibcode": "1998Hyvarinen", "ejes": {}, "ground_truth": [{"que": "ruido", "valor": preprint}],
+         "_paginacion": {"reemplazo": "2026-09-10", "motivo": "versión del editor"}}), encoding="utf-8")
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text(
+        f"---\ntags: [concept]\n---\n\n# ICA\n\nDice «{publicada}» [[1998Hyvarinen]].\n",
+        encoding="utf-8")
+    inventada = [m for _s, m in lint.collect().por_clave("cita_inventada").items]
+    assert any("`.txt` NUEVO" in m and "1998Hyvarinen" in m for m in inventada), inventada
+
+
 def test_el_silencio_de_la_extraccion_NO_es_fabricacion(toy_vault):
     """#321 — la premisa de #317 §5 («si no está en el JSON, la fabricó el sintetizador») sólo
     valdría si la extracción contuviera toda frase citable del paper. Es una transcripción
