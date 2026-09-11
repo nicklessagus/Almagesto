@@ -421,7 +421,10 @@ def split_blocks(body: str) -> list[Block]:
             # que INV-98 arregló dentro de `_es_estampada` y que nunca llegó acá, así que
             # `## Papers relevantes para el método` —una sección PROPIA— se saltaba entera y sus
             # pares no se verificaban nunca. Una sola implementación.
-            en_verificacion = cfg.is_stamped_section(s)
+            # #432 — la exclusión se reevalúa sólo en un `## `: un `###` ADENTRO de una sección
+            # estampada la apagaba, y sus ítems volvían como bloques citables (pares fantasma
+            # dentro del bloque que los juzga). Una sola implementación: `cfg.stamped_scope`.
+            en_verificacion = cfg.stamped_scope(s, en_verificacion)
             intro_actual = None if en_verificacion else s.lstrip("# ").strip()
             continue
         if en_verificacion or not s:

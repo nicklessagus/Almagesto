@@ -1549,3 +1549,43 @@ def test_condition_resolution_lee_la_notacion_QUE_condition_resolved_DEFINE():
     assert lb.condition_resolution("acota→resuelta: fila en el régimen") == "fila en el régimen"
     assert lb.condition_resolution("acota: SNR > 50") is None
     assert lb.condition_resolution("acota: acota→resuelta: x") is None, "duplicada: no es resuelta"
+
+
+# ── #432 · la sección estampada termina en el próximo `## `, no en cualquier `#` ─────────────────
+
+NOTA_SUB = """---
+tags: [x]
+---
+
+## Síntesis
+
+Prosa con cita [[2020aaaA...1..1A]].
+
+## Verificación de citas (2026-01-01)
+
+### Con condición `acota` (1)
+
+- la #2, contra [[2020bbbB...2..2B]], acotada a SNR alto.
+"""
+
+
+def test_un_sub_encabezado_no_reactiva_los_bloques_dentro_de_una_seccion_estampada():
+    """#432 — `split_blocks` reevaluaba la exclusión en CADA `#`, así que un `###` adentro de
+    `## Verificación de citas` le apagaba la exclusión y sus ítems volvían como bloques citables:
+    `pairs_of` emitía un par **desde adentro del bloque que lo juzga**, imposible de resolver.
+    `cfg.solo_prosa` nunca tuvo el bug (saltea hasta el próximo `## `): dos implementaciones de la
+    misma regla con semánticas distintas, la familia de #214."""
+    textos = [b.text for b in lb.split_blocks(NOTA_SUB)]
+    assert any("Prosa con cita" in t for t in textos)
+    assert not any("2020bbbB" in t for t in textos), textos
+
+
+def test_paridad_split_blocks_solo_prosa_sobre_la_seccion_estampada():
+    """Regla de método nº 2: las dos mitades de la regla miran el mismo texto. Ningún `[[bibcode]]`
+    que `solo_prosa` sacó del cuerpo puede volver como bloque citable — es el eje que importa,
+    porque un bibcode en un bloque es un PAR que alguien va a tener que resolver."""
+    import lib_config as cfg
+    prosa = cfg.solo_prosa(NOTA_SUB)
+    for b in lb.split_blocks(NOTA_SUB):
+        for bib in cfg.LINK_RE.findall(b.text):
+            assert bib in prosa, (bib, b)

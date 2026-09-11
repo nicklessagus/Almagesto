@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.254.0"
+ALMAGESTO_VERSION = "1.255.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1054,6 +1054,23 @@ def is_stamped_section(heading: str) -> bool:
     return _es_estampada(heading)
 
 
+def stamped_scope(line: str, dentro: bool) -> bool:
+    """Am I inside a stamped section after reading `line`? The ONE implementation of that rule.
+
+    ⛔ #432 — the scope of a stamped section ends at the **next `## `**, never at any `#`. It had
+    two implementations with different semantics: `solo_prosa` skipped to the next `## `, while
+    `lib_blocks.split_blocks` re-evaluated on EVERY heading, so a `###` **inside**
+    `## Verificación de citas` turned the exclusion off and its items came back as citable blocks —
+    `pairs_of` would emit a pair from inside the very block that judges it, the self-referential
+    loop this module's docstring says it avoids, and a pair nobody can resolve.
+
+    Latent when measured (the #344 template writes the three sub-sections as paragraphs, not
+    `###`), and nothing forbids titling one with `###`: the failure mode is phantom pairs inside
+    the block that audits them. Same family as #214 — one rule, one function."""
+    s = line.strip()
+    return is_stamped_section(s) if s.startswith("## ") else dentro
+
+
 # ── Note-shape regexes: ONE definition each (AUD-277/AUD-278) ──────────────────────────────────
 # Method rule nº 4: every check that looks at note text normalizes the markdown first — and with
 # the same regex living in two modules the next fix (#176/#224-style) lands on one copy. These
@@ -1170,8 +1187,7 @@ def solo_prosa(body: str) -> str:
     """El cuerpo SIN las secciones que estampa la máquina — lo que alguien escribió de verdad."""
     out, saltando = [], False
     for ln in body.split("\n"):
-        if ln.startswith("## "):
-            saltando = _es_estampada(ln)
+        saltando = stamped_scope(ln, saltando)      # #432 — una sola implementación de la regla
         if not saltando:
             out.append(ln)
     return "\n".join(out)

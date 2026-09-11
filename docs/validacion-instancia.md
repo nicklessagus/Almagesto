@@ -241,3 +241,15 @@ método viene de `methods_applied.literature` y no de la extracción (sería el 
 si un `—` sale sin la línea de alcance que lo acota, o si un concepto que era huérfano deja de
 reportarse (la matriz estampada **no** cuenta como link entrante, #249). **Al cerrar:** cuántas filas
 y columnas quedaron, y cuántos métodos salieron como código por no tener nota destino.
+
+## #432 · v1.255.0 — sin guía de migración (no cambia ningún artefacto)
+
+Latente al medirlo: la plantilla de #344 escribe las tres sub-secciones del bloque como **párrafos**,
+así que hoy la población es cero y no hay nada que migrar. **Validar:** `python scripts/lint.py` tiene
+que dar **exactamente el mismo reporte** que antes del merge (si cambia algún conteo, la bóveda tenía
+un `###` dentro de una sección estampada y esos pares eran fantasmas: mirar cuáles desaparecieron).
+Chequeo positivo, barato: agregarle a una nota un `### Con condición \`acota\`` dentro de
+`## Verificación de citas` con un `[[bibcode]]` adentro y correr `python scripts/verify_fanout.py
+<nota> --dry-run` (o el `--cierre` del lint) → ese par **no** puede aparecer. **Devolver si** un par
+de prosa real deja de contarse (sub-disparo: la dirección prohibida) o si el lint pierde hallazgos de
+fuga de implementación en una sección propia titulada con `###`.

@@ -5033,8 +5033,7 @@ def check_impl_leaks(stem: str, body_full: str, offset: int, leak_patterns, scan
     impl_leaks: list = []
     _en_estampada = False
     for i, line in enumerate(body_full.split("\n"), 1 + offset) if scan else []:
-        if line.startswith("## "):
-            _en_estampada = cfg.is_stamped_section(line)
+        _en_estampada = cfg.stamped_scope(line, _en_estampada)   # #432 — una sola implementación
         if _en_estampada:
             continue
         if line.lstrip().startswith(">"):

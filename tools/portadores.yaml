@@ -697,3 +697,38 @@ portadores:
         motivo: >-
           Usa `method_key` como normalizador de TÍTULOS para cruzar la exportación contra el
           frontmatter (#397); nada que ver con métodos ni con roll-ups.
+  - issue: 432
+    regla: >-
+      El ALCANCE de una sección estampada termina en el próximo `## `, nunca en cualquier `#`: un
+      `###` adentro NO reabre los bloques citables. La regla tenía dos implementaciones con
+      semánticas distintas — `solo_prosa` salteaba hasta el próximo `## `, `lib_blocks.split_blocks`
+      reevaluaba en CADA encabezado —, así que un sub-encabezado dentro de `## Verificación de
+      citas` apagaba la exclusión y sus ítems volvían como bloques citables: `pairs_of` emitía un
+      par desde adentro del propio bloque que lo juzga (el lazo autorreferencial que el docstring de
+      `lib_blocks` dice evitar, y un par que nadie puede resolver). Latente al medirlo —la plantilla
+      de #344 escribe las tres sub-secciones como párrafos— y nada prohíbe titular una con `###`.
+      Misma familia que #214.
+    funcion: lib_config.stamped_scope
+    patron: 'SECCIONES_ESTAMPADAS|is_stamped_section'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: usa
+        motivo: >-
+          `split_blocks` decide qué es un bloque citable; es la mitad que tenía la semántica
+          divergente y la que produce los pares.
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          `check_impl_leaks` barre línea por línea con el mismo estado; `_lines_with_section`
+          empareja cada línea con su `## ` y delega el veredicto en `is_stamped_section`, así que
+          ya cortaba por `## ` (no reimplementa el alcance).
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea sólo por un DOCSTRING que declara que las cuatro secciones de lectura van en
+          `SECCIONES_ESTAMPADAS`; no barre el cuerpo de ninguna nota.
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea sólo por un COMENTARIO que cita la doctrina al explicar la exención del `log.md`
+          (#391); su exención sale de `Block.kind`, no de recorrer encabezados.
