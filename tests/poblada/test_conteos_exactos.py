@@ -438,30 +438,23 @@ def test_el_corpus_limpio_da_cero_en_TODAS_las_categorias(boveda_poblada):
 
 
 def test_los_numeros_que_la_doc_publica_salen_del_codigo(boveda_poblada):
-    """`tests/README.md` publica tres números —categorías del lint, anomalías que el generador sabe
-    sembrar, y ruido declarado del corpus limpio—. Escritos a mano envejecen solos, y el que más
-    importa es el **desbalance**: es el que dice cuánto del lint vigila realmente el corpus. Acá se
-    atan al código, así que agregar una categoría sin sembrarla mueve el número publicado en vez de
-    esconderse."""
+    """Los números del README que dependen de ESTE tier: las anomalías que el generador sabe sembrar
+    y el ruido declarado del corpus limpio. Escritos a mano envejecen solos, y el que más importa es
+    el **desbalance**: es el que dice cuánto del lint vigila realmente el corpus.
+
+    ⛔ #438 — los tres conteos de CATEGORÍAS se movieron a tier 0
+    (`tests/test_conteos_publicados.py`): no necesitan el corpus —la lista de categorías es
+    independiente de él, medido 135·41·4 sobre el template, sobre un `toy_vault` y sobre el corpus
+    sembrado— y mirarlos sólo acá dejaba el CI en rojo 11 minutos después del push cada vez que una
+    tanda agregaba una categoría. Se **movieron**, no se copiaron: acá quedan los que sólo este tier
+    conoce, así que cada número lo afirma UN solo test."""
     from generador import SOPORTADAS
     readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
-    n_cat = len(lint.collect().categorias)
     n_anom = len(SOPORTADAS)
-    assert f"**{n_cat} categorías**" in readme, f"el lint tiene {n_cat} categorías y el README dice otra cosa"
     assert f"**{n_anom} anomalías**" in readme, f"el generador siembra {n_anom} y el README dice otra cosa"
-    assert f"({n_cat} categorías, {n_anom} anomalías, {len(_RUIDO_DELIBERADO)} de ruido declarado)" in readme
-    # #145: `docs/contrato.md` (INV-41) afirmaba estar atado a ESTE test y no lo estaba — publicaba
-    # «48 categorías, 22 bloqueantes, 23 con --cierre» con 64/27/29 en el código. Una fila que dice
-    # salir del código y no sale es peor que una sin número: se lee como verificada.
-    n_bloq = sum(1 for c in lint.collect().categorias if c.severidad == lint.SEV_BLOQUEANTE)
-    n_cierre = sum(1 for c in lint.collect().categorias if c.severidad == lint.SEV_CIERRE)
-    contrato = (Path(__file__).resolve().parents[2] / "docs" / "contrato.md").read_text(encoding="utf-8")
-    assert f"({n_cat} categorías, {n_bloq} bloqueantes, {n_bloq + n_cierre} con `--cierre`)" in contrato, (
-        f"INV-41 publica un conteo que ya no es el del código: hoy son {n_cat} categorías, "
-        f"{n_bloq} bloqueantes y {n_bloq + n_cierre} con `--cierre`")
-    # el denominador del desbalance (`**cero en las N**`, con la negrita abarcando la frase).
-    assert f"cero en las {n_cat}**" in readme, (
-        f"`tests/README.md` publica el denominador viejo: hoy el lint tiene {n_cat} categorías")
+    assert f"{n_anom} anomalías, {len(_RUIDO_DELIBERADO)} de ruido declarado)" in readme, (
+        f"la cola del triple del README no es la de este tier: el generador siembra {n_anom} "
+        f"anomalías y el corpus limpio declara {len(_RUIDO_DELIBERADO)} categorías de ruido")
     assert set(_CATEGORIAS_SOPORTADAS) == set(SOPORTADAS), (
         "el mapeo categoría→título y las anomalías del generador se desincronizaron: "
         f"de más {set(_CATEGORIAS_SOPORTADAS) - set(SOPORTADAS)}, "

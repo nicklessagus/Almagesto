@@ -2149,17 +2149,17 @@
   {
    "number": 432,
    "title": "`lb.split_blocks` y `cfg.solo_prosa` no implementan la misma regla de «sección estampada»: un `###` adentro reactiva los bloques citables",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 433,
    "title": "El detector de SEGUNDA MANO (#279/#350) no tiene salida: el 73 % de sus hallazgos sigue listado después de revisarlos uno por uno",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 434,
    "title": "`--resolver` direcciona por ANCLA y un ancla identifica un BLOQUE, no un par: las `acota` de un bloque que cita dos fuentes son irresolubles",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 435,
@@ -2169,6 +2169,16 @@
   {
    "number": 436,
    "title": "No hay comando para REEMPLAZAR el preprint por su versión publicada (#298): el backlog más grande del repo se cierra a mano, y las tres piezas que hay que tocar se contradicen",
+   "state": "CLOSED"
+  },
+  {
+   "number": 437,
+   "title": "replace_pdf (#436): el docstring promete un `pdf_reemplazo` que no escribe, y no compara el PDF entrante con el que saca (la copia del editor puede ser PEOR)",
+   "state": "OPEN"
+  },
+  {
+   "number": 438,
+   "title": "Los dos artefactos que TODA categoría nueva del lint mueve sólo los mira el tier deseleccionado: el CI se rompe 11 minutos después del push, y el chequeo no necesita el corpus",
    "state": "OPEN"
   }
  ]

@@ -1852,3 +1852,44 @@ la extracción marcada `_paginacion`.
 así que el registro guardaría N copias de un solo hecho y va por sujeto; la nota es versionada y es
 lo que el consumidor lee), y la extracción **no se re-pagina**: se marca. Re-paginar exige volver a
 abrir las páginas, que es el paso caro que #205 dejó como único camino de lectura.
+
+## 2026-09-11 · El gate que podía correr en 0,2 s costaba 11 minutos de CI (#438)
+
+**Cómo se midió.** Al cerrar la tanda #433-#436, que agrega tres categorías al lint:
+
+| | |
+|---|---|
+| tier 0 (`pytest tests/`) | **2890 passed**, ~2 min — verde |
+| job `poblada` del CI | **failure** en **11 min 5 s** |
+| qué falló | el golden del lint (le faltaban las 3 categorías nuevas) y los conteos publicados (132 contra 135) |
+
+`pytest.ini` deselecciona `poblada` a propósito, así que el loop de desarrollo **no puede ver** esos
+dos artefactos y el tier completo se corre al cerrar la tanda — en la práctica, después del push.
+No era la primera vez: el handoff de la tanda #420-#426 anota *«golden regenerado UNA vez en la
+tanda»* como paso a mano.
+
+**La medición que decidió el fix** — la lista de categorías del lint es **independiente del corpus**:
+
+```
+lint.collect() sobre el vault del template : 135 categorías · 41 bloqueantes · 4 SEV_CIERRE
+lint.collect() sobre un toy_vault (tier 0) : 135 · 41 · 4
+lint.collect() sobre el corpus sembrado    : 135 · 41 · 4
+```
+
+y de las 135 categorías, las que **no** aparecen por título en `golden/lint_seed42.md` son **0**. O
+sea que las dos mitades que rompen el CI son decidibles sin sembrar nada.
+
+**Qué cambió (1.256.2).** `tests/test_conteos_publicados.py` en tier 0: los tres conteos publicados
+(`tests/README.md`, `docs/contrato.md` INV-41) y la **cobertura de títulos** del golden, en **0,2 s**.
+Los asserts se **movieron**, no se copiaron: en `tests/poblada/test_conteos_exactos.py` quedan los
+números que sólo ese tier conoce (las anomalías del generador y el ruido declarado), así que cada
+número lo afirma un solo test.
+
+**Visto morir por la línea que prueba** (regla de método 3): agregando una categoría de prueba a
+`lint.collect()`, tier 0 falla en 0,2 s con *«el lint tiene 136 categorías y `tests/README.md` dice
+otra cosa»* y *«1 categoría(s) del lint NO están en el golden — regeneralo con `UPDATE_GOLDEN=1 …`»*,
+nombrando la categoría.
+
+⚠ **Lo que NO se movió, a propósito:** el golden **completo** (mensajes, conteos por categoría,
+poblaciones) sigue en `poblada` — esa mitad es la que caza una regresión de comportamiento y depende
+del corpus sembrado.

@@ -194,9 +194,20 @@ alcance, tres fichas con la tabla `## Papers` desactualizada, tres registros sin
 porque el generador no emitía el schema vigente, y sobre ese ruido de fondo **ninguna anomalía
 sembrada era distinguible**.
 
-Los tres números (135 categorías, 16 anomalías, 4 de ruido declarado) **salen del código, no de acá**:
-los cruza `test_conteos_exactos`, así que agregar una categoría al lint sin sembrarla deja el
-desbalance a la vista en vez de esconderlo.
+Los tres números (135 categorías, 16 anomalías, 4 de ruido declarado) **salen del código, no de acá**,
+así que agregar una categoría al lint sin sembrarla deja el desbalance a la vista en vez de
+esconderlo. ⛔ **Y se cruzan en DOS tiers, partidos por lo que cada uno puede decidir (#438):** el
+conteo de categorías en **tier 0** (`tests/test_conteos_publicados.py`, ~0,2 s) porque la lista de
+categorías es independiente del corpus —medido: 135·41·4 sobre el vault del template, sobre un
+`toy_vault` y sobre el corpus sembrado—, y las anomalías del generador más el ruido declarado en
+`poblada`, que es quien los conoce. El mismo test de tier 0 chequea que **el título de cada
+categoría esté en el golden**: el golden completo (mensajes, conteos, poblaciones) sigue en
+`poblada`, pero *«agregué una categoría y no lo regeneré»* se decide leyendo el archivo.
+
+⚠ **El motivo es medido, y es el costo de enterarse tarde:** en la tanda #433-#436 tier 0 dio
+**2890 passed** en verde y el job `poblada` del CI falló a los **11 min 5 s** por esas dos cosas —
+el tier que las miraba es el que `pytest.ini` deselecciona, así que el loop de desarrollo no podía
+verlas. Los chequeos se **movieron**, no se copiaron: cada número lo afirma un solo test.
 
 Emitir el schema vigente destapó además un bug real del lint: la tabla `## Papers` materializada
 lista **todo** paper del sujeto con su `[[stem]]`, así que satisfacía sola el proxy de *extraído
