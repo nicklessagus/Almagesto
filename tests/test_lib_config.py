@@ -3099,3 +3099,26 @@ def test_previous_blob_sha10_lee_el_POINTER_del_padre(toy_vault, monkeypatch):
     sha, why = cfg.previous_blob_sha10(pdf)
     assert sha is None and "no se pudo leer la versión anterior" in why
 
+
+def test_header_block_es_UNA_definicion_de_la_cabecera_estampada():
+    """#444 — el blockquote que contiene `GENERATOR_LINE`, con las líneas `>` contiguas alrededor:
+    lo reconocen las cirugías de cabecera de `make_notes` (INV-15) y `lint.prose_changed_since`,
+    que hasta #444 contaba la cabecera estampada como prosa cambiada (4 «stale» falsos por correr
+    el backfill de #247)."""
+    assert cfg.header_block("sin cabecera") is None
+    assert cfg.header_block(f"> uno\n{cfg.GENERATOR_LINE}1._\n> tres\n\nprosa") == (0, 44)
+    texto = f"# T\n\n{cfg.GENERATOR_LINE}1._\n\n> otro blockquote suelto\n"
+    ini, fin = cfg.header_block(texto)
+    assert texto[ini:fin] == f"{cfg.GENERATOR_LINE}1._\n", "sólo las contiguas: el blockquote de después no"
+
+
+def test_fm_bounds_devuelve_los_offsets_del_bloque_YAML():
+    """AUD-147 — el par `(ini, fin)` del bloque YAML para una cirugía `text[:ini] + head + text[fin:]`;
+    `None` sin frontmatter. (Testeada desde acá porque #439 lo pide: la primera llamada desde un
+    test vivía en `test_lint.py`, y `--dirigida scripts/lib_config.py` no la veía.)"""
+    t = "---\nbibcode: x\n---\n\ncuerpo\n"
+    assert cfg.fm_bounds(t) == (4, 14) and t[4:14] == "bibcode: x"
+    assert cfg.fm_bounds("sin frontmatter") is None
+    assert cfg.fm_bounds("---\nbibcode: x\n--- \n\ncuerpo\n") == (4, 14), \
+        "el delimitador de cierre con espacio final es una LÍNEA `---`, como para `split_fm`"
+

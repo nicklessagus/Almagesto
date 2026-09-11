@@ -2023,3 +2023,24 @@ antes no está en el repo), así que las categorías **declaran a quién no mira
 `versions_disponible`; las demás se deciden por `pdf_source`»*. Un `(0)` deja de leerse como
 veredicto sobre lo que no se miró (D-43).
 
+## 2026-09-11 · Dos hallazgos del barrido de conformidad de la instancia (#443, #444)
+
+La instancia corrió **todos** los migradores y re-estampadores con hash antes/después (red 6) sobre
+una bóveda con `lint` rc 0. Nueve pasaron con 0 bytes; dos no.
+
+**#443 — `--migrate-verif-archivo` no era no-op sobre lo migrado.** Tocó **10 filas** de dos
+hermanos: todas `no verificable por extracción` con `Hash fuente` = `—` —la fila que #223 exime
+porque no hay archivo— y las escribió como `txt:—`; en una fila lo hizo **tres veces**, porque el
+`replace` buscaba `| — |` donde estuviera (Condición incluida). Dejó un **bloqueante** (#117) más
+un #221 y un #226. Fix (1.259.1): la columna se localiza por el encabezado y se reemplaza sólo
+esa celda contando barras no escapadas; la fila con placeholder se saltea; dos guardas que no
+decidían nada (`source_kind is not None`, `fila.source_hash and …`) salieron. ⚠ Tres guardas de
+identificación de fila (`dest.exists()`, `startswith("|")`, `anchor in ln`) quedan vivas en
+`--guardas` por construcción: su mutación deja el mismo estado final.
+
+**#444 — `stale_verif` contaba la cabecera estampada como prosa.** `--restamp-headers` estampó la
+cabecera en **127 de 271** notas de paper y **4** salieron «stale» pidiendo re-verificar sin que
+ninguna afirmación cambiara: la cabecera la estampa `make_notes` pero no es una sección, así que
+`solo_prosa` la conservaba. Fix (1.259.1): `cfg.header_block` —UNA definición, la que ya usaban las
+cirugías de cabecera (INV-15)— y `prose_changed_since` la saca antes de comparar.
+

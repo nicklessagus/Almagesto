@@ -1347,19 +1347,28 @@ def migrate_verif_archivo(dest) -> int:
     dest = cfg.verif_sidecar(dest)
     text = dest.read_text(encoding="utf-8")
     cambios, lineas = 0, text.split("\n")
+    # ⛔ #443 — la celda, no la fila. `ln.replace("| — |", …)` reemplazaba el placeholder DONDE LO
+    # ENCONTRARA (Condición, Evidencia…), tres veces en una misma fila medida, y prefijaba `txt:`
+    # a un `—` que no es un hash: la fila `no verificable por extracción` que #223 exime porque no
+    # hay archivo. Sobre una bóveda ya migrada dejaba un bloqueante. La columna se localiza por el
+    # ENCABEZADO y se reemplaza sólo esa celda, contando barras no escapadas.
+    col = _verif_column(lineas, "Hash fuente")
     for fila in filas:
-        if fila.source_kind is not None:
-            continue                                  # ya migrada
-        if not fila.source_hash:
-            cfg.print_seguro(f"  ⚠ {dest.name}: la fila de {fila.bibcode} no tiene hash de fuente — "
-                             f"no hay archivo que identificar; re-verificar el par")
+        # (la fila ya migrada no necesita guarda propia: su celda dice `txt:<hash>`, que no es
+        # igual a `<hash>`, y la comparación por celda de abajo la deja como está — red 8)
+        if not fila.source_hash or fila.source_hash == "—":
+            # #223: la fila sin archivo (`no verificable por extracción`) NO declara ninguno — es
+            # el caso exento, no un hash que falta; se saltea sin aviso porque es lo correcto
+            if fila.source_hash != "—":
+                cfg.print_seguro(f"  ⚠ {dest.name}: la fila de {fila.bibcode} no tiene hash de "
+                                 f"fuente — no hay archivo que identificar; re-verificar el par")
             continue
         bib = fila.bibcode
         h_txt = next((lb.source_hash(f) for f in cfg.FULLTEXT.glob(f"**/{safe_name(bib)}.txt")), None)
         h_pdf = next((lb.bytes_hash(f) for f in cfg.PDFS.glob(f"**/{safe_name(bib)}.pdf")), None)
-        if fila.source_hash and fila.source_hash == h_pdf:
+        if fila.source_hash == h_pdf:
             kind = "pdf"
-        elif fila.source_hash and fila.source_hash == h_txt:
+        elif fila.source_hash == h_txt:
             kind = "txt"
         else:
             # ninguno coincide ⇒ el par ya está vencido. Se declara `txt:`, que es de donde se
@@ -1369,15 +1378,61 @@ def migrate_verif_archivo(dest) -> int:
             cfg.print_seguro(f"  ⚠ {dest.name}: la fila de {bib} no coincide con ningún archivo en "
                              f"disco — se declara `txt:` (el default de cuando se escribió) y hay "
                              f"que re-verificar el par")
-        viejo = f"| {fila.source_hash} |"
         for i, ln in enumerate(lineas):
-            if ln.lstrip().startswith("|") and viejo in ln and fila.anchor in ln:
-                lineas[i] = ln.replace(viejo, f"| {kind}:{fila.source_hash} |", 1)
+            # (`col` no puede ser None acá: `verif_rows` sólo parsea la tabla con el encabezado
+            # canónico, que es el que `_verif_column` lee — red 8)
+            if (ln.lstrip().startswith("|") and fila.anchor in ln
+                    and _cell_of(ln, col).strip() == fila.source_hash):
+                lineas[i] = _replace_cell(ln, col, f" {kind}:{fila.source_hash} ")
                 cambios += 1
                 break
     if cambios:
         cfg.write_text_atomic(dest, "\n".join(lineas))
     return cambios
+
+
+def _verif_column(lineas: list, titulo: str) -> int | None:
+    """Index of the column titled `titulo` in the first table header of `lineas`, or `None` (#443)."""
+    for ln in lineas:
+        if ln.lstrip().startswith("|") and titulo in ln:
+            celdas = [c.strip() for c in _raw_cells(ln)]
+            return celdas.index(titulo) if titulo in celdas else None
+    return None
+
+
+def _raw_cells(line: str) -> list:
+    """The cells of a table line as RAW text (escapes kept), split on unescaped bars (#443).
+
+    Not `lb.split_row`: that one unescapes for reading, and this is for writing one cell back
+    without touching the others — a `\\|` inside a quote has to survive the round trip."""
+    cells, cur, i = [], "", 0
+    s = line.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|") and not s.endswith("\\|"):
+        s = s[:-1]
+    while i < len(s):
+        ch = s[i]
+        if ch == "\\":
+            cur += s[i:i + 2]; i += 2; continue       # el slice tolera la barra suelta al final
+        if ch == "|":
+            cells.append(cur); cur = ""; i += 1; continue
+        cur += ch; i += 1
+    cells.append(cur)
+    return cells
+
+
+def _cell_of(line: str, k: int) -> str:
+    """Raw text of the `k`-th cell of a table line (`""` when the line is shorter)."""
+    celdas = _raw_cells(line)
+    return celdas[k] if k < len(celdas) else ""
+
+
+def _replace_cell(line: str, k: int, nuevo: str) -> str:
+    """The table line with ONLY its `k`-th cell replaced; every other byte stays (#443)."""
+    celdas = _raw_cells(line)
+    celdas[k] = nuevo
+    return "|" + "|".join(celdas) + "|"
 
 
 def migrate_all_verif_archivo() -> int:
@@ -2217,7 +2272,7 @@ def stamp_excluded(slug: str, dest) -> bool:
     return True
 
 
-GENERATOR_LINE = "> _Generado con Almagesto v"
+GENERATOR_LINE = cfg.GENERATOR_LINE          # #444: UNA definición, en lib_config
 # Aviso de capa LLM de la cabecera. Vive acá y NO inline en los templates de cuerpo porque lo
 # escriben dos caminos —la creación de la nota y el backfill `stamp_header` (#69)— y si divergen, el
 # backfill estampa un texto distinto del que promete el README. Un solo lugar de verdad.
@@ -3700,32 +3755,15 @@ def _set_campo(dest, clave: str, valor: str) -> None:
 # en el blockquote de cabecera donde ya vive el disclaimer de capa-LLM, porque es lo primero que se
 # lee y no se pierde al scrollear.
 def _header_block(text: str) -> tuple[int, int] | None:
-    """`(inicio, fin)` del blockquote de cabecera — el que contiene `_Generado con Almagesto…_`.
+    """`(inicio, fin)` del blockquote de cabecera — delega en `cfg.header_block` (#444).
 
     Las cirugías de cabecera (`stamp_estado`, `stamp_ground_truth_line`) borraban su línea vieja con
     un `sub(count=1)` sobre el **texto entero**, así que se llevaban puesta la primera línea del
-    CUERPO que empezara igual. Medido el 2026-08-28: una nota con
-    `> _Estado del arte: la señal de 13.9 d sigue disputada_ [[2020smith]].` en `## Síntesis` perdía
-    esa línea —prosa con cita— en una corrida **normal**, sin `--force` y sin aviso. Es la negación
-    literal de INV-15: *«destruir prosa exige una acción explícita distinta de la corrida normal»*.
-
-    El ancla ya existía y se usaba para **insertar**; lo que faltaba era usarla para **borrar**. El
-    bloque son las líneas contiguas que empiezan con `>` alrededor del ancla.
-    """
+    CUERPO que empezara igual (INV-15, medido el 2026-08-28). El ancla ya existía y se usaba para
+    **insertar**; lo que faltaba era usarla para **borrar**. Desde #444 la definición vive en
+    `lib_config`, porque el lint también la necesita (#431 contaba la cabecera como prosa)."""
     #  @inv INV-15
-    i = text.find(GENERATOR_LINE)
-    if i < 0:
-        return None
-    lineas = text.split("\n")
-    n = text[:i].count("\n")                       # índice de la línea del ancla
-    ini = n
-    while ini > 0 and lineas[ini - 1].startswith(">"):
-        ini -= 1
-    fin = n
-    while fin + 1 < len(lineas) and lineas[fin + 1].startswith(">"):
-        fin += 1
-    return (sum(len(x) + 1 for x in lineas[:ini]),
-            sum(len(x) + 1 for x in lineas[:fin + 1]))
+    return cfg.header_block(text)
 
 
 def _sub_en_cabecera(text: str, patron) -> str:

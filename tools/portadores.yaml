@@ -25,6 +25,22 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 444
+    regla: >-
+      «Esto es la cabecera estampada» es UNA función: el blockquote que contiene `GENERATOR_LINE`
+      con sus líneas `>` contiguas. La estampa `make_notes` y no es una sección, así que
+      `SECCIONES_ESTAMPADAS` no la exime — y `prose_changed_since` (#431) la contaba como prosa:
+      correr `--restamp-headers` (127 de 271 notas) produjo 4 «stale» sin que ninguna afirmación
+      cambiara.
+    funcion: lib_config.header_block
+    patron: 'GENERATOR_LINE'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`_header_block` (las cirugías de cabecera, INV-15) delega desde 1.259.1."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`prose_changed_since` saca el bloque de cabecera antes de comparar la prosa."
   - issue: 435
     regla: >-
       La clave de `stars.yaml` es el NOMBRE canónico y el slug es un campo (`themes.yaml` sí está

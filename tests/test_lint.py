@@ -1978,6 +1978,30 @@ def test_stale_verif_reporta_la_prosa_que_cambio_y_NOMBRA_el_bloque(toy_vault):
     assert "verify-citations" in filas[0][1]
 
 
+def test_stale_verif_NO_cuenta_la_cabecera_estampada_como_prosa(toy_vault):
+    """⛔ #444 — `--restamp-headers` estampó la cabecera (aviso de capa LLM + `_Generado con…_`) en
+    127 de 271 notas de paper de una instancia, y 4 salieron «stale»: la cabecera la estampa
+    `make_notes` pero no es una SECCIÓN, así que `prose_changed_since` la contaba como bloque de
+    prosa distinto. Es la forma que #431 cerró para las sub-secciones del triage. Una sola función
+    (`cfg.header_block`) para las cirugías de cabecera y para el lint."""
+    _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    texto = p.read_text(encoding="utf-8")
+    lim = cfg.fm_bounds(texto)
+    cabecera = ("\n> ⚠ **Capa LLM — revisar antes de citar.** La prosa es síntesis.\n"
+                f"{cfg.GENERATOR_LINE}9.9.9._\n")
+    p.write_text(texto[:lim[1]] + cabecera + texto[lim[1]:], encoding="utf-8")
+    assert _stale(toy_vault) == [], "estampar la cabecera no es cambiar una afirmación"
+    # y el control: tocar un párrafo con cita SÍ es stale, con la cabecera puesta
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "Afirmación [[2020citC...1..1C]].", "Otra afirmación [[2020citC...1..1C]]."), encoding="utf-8")
+    filas = _stale(toy_vault)
+    assert len(filas) == 1 and "la prosa cambió" in filas[0][1]
+    assert cfg.header_block("sin cabecera") is None
+    assert cfg.header_block(f"> uno\n{cfg.GENERATOR_LINE}1._\n> tres\n\nprosa") == (0, 44), \
+        "las tres líneas `>` contiguas alrededor del ancla, con sus saltos de línea"
+
+
 def test_stale_verif_sin_commit_hasta_la_fecha_declara_la_salvedad(toy_vault):
     """D-43 — con el bloque fechado ANTES del primer commit de la nota no hay versión contra la cual
     aislar la prosa. Cae al comportamiento de siempre (la fecha del archivo) y **lo dice**: un

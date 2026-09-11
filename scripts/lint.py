@@ -88,7 +88,7 @@ from extract_fulltext import is_legible      # umbral determinista de legibilida
 from fetch_ground_truth import msini_earth   # verificación de masa (m·sini implícita)
 from make_notes import find_header_line      # contrato de la cabecera (mismo que stamp_pdf_link, #48)
 import make_notes as mn                     # #380: `header_line_anywhere`, la FORMA sin el contrato
-from make_notes import GENERATOR_LINE        # ancla de la cabecera de fichas/concepts (#69)
+GENERATOR_LINE = cfg.GENERATOR_LINE          # #444: UNA definición, en lib_config (ancla de la cabecera)
 
 #: Prefijo de la línea de estado de la cabecera (#233). Vive acá y no en un literal suelto porque lo
 #: comparan dos lados: el que la escribe (`make_notes.estado_line`) y el que verifica que se haya
@@ -5457,9 +5457,18 @@ def prose_changed_since(f: str, date: str, detail: list | None = None) -> bool |
     `False` would be a verdict nobody measured.
     """
     def prose(text: str) -> str:
-        """The note's body without the stamped sections — what somebody actually wrote."""
+        """The note's body without the stamped sections NOR the stamped header — what somebody wrote.
+
+        #444 — the header blockquote (LLM-layer warning, `_Generado con…_`, `_Estado —_`) is stamped
+        by `make_notes` too, and it is not a section, so `solo_prosa` kept it: the #247 backfill
+        (`--restamp-headers`, 127 of 271 notes) fired 4 false «stale». ONE recogniser,
+        `cfg.header_block`, shared with the header surgeries of `make_notes`."""
         partes = cfg.frontmatter_span(text)
-        return cfg.solo_prosa(partes[1] if partes else text)
+        cuerpo = partes[1] if partes else text
+        span = cfg.header_block(cuerpo)
+        if span is not None:
+            cuerpo = cuerpo[:span[0]] + cuerpo[span[1]:]
+        return cfg.solo_prosa(cuerpo)
 
     try:
         rel = Path(f).resolve().relative_to(cfg.ROOT.resolve()).as_posix()

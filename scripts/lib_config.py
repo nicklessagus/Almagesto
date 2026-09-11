@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.259.0"
+ALMAGESTO_VERSION = "1.259.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -877,6 +877,37 @@ def pdf_page_count(pdf) -> tuple:
     if not m:
         return None, "`pdfinfo` no devolvió el número de páginas"
     return int(m.group(1)), ""
+
+
+#: El ancla de la cabecera estampada de toda nota (#69/#247): el blockquote que la contiene lo
+#: escribe `make_notes` y lo reconocen sus cirugías Y el lint. Vive acá porque `make_notes` importa
+#: `lib_config` y no al revés, y la definición tiene que ser UNA (#444).
+GENERATOR_LINE = "> _Generado con Almagesto v"
+
+
+def header_block(text: str) -> tuple | None:
+    """`(inicio, fin)` of the stamped header blockquote — the one holding `GENERATOR_LINE` (#444).
+
+    ONE definition of «this is the stamped header» for its two consumers: the header surgeries of
+    `make_notes` (`stamp_estado`, `stamp_ground_truth_line`, INV-15) and `lint.prose_changed_since`
+    (#431), which used to count the header as prose: `--restamp-headers` stamped it on 127 of 271
+    paper notes of an instance and 4 notes came out «stale» —re-verify!— without a single claim
+    having changed. The header is a blockquote with no `[[bibcode]]`: surgery on it cannot move any
+    claim or any anchor, so it is exactly what `SECCIONES_ESTAMPADAS` exempts, only that it is not a
+    section. The block is the run of contiguous `>` lines around the anchor."""
+    i = text.find(GENERATOR_LINE)
+    if i < 0:
+        return None
+    lineas = text.split("\n")
+    n = text[:i].count("\n")                       # índice de la línea del ancla
+    ini = n
+    while ini > 0 and lineas[ini - 1].startswith(">"):
+        ini -= 1
+    fin = n
+    while fin + 1 < len(lineas) and lineas[fin + 1].startswith(">"):
+        fin += 1
+    return (sum(len(x) + 1 for x in lineas[:ini]),
+            sum(len(x) + 1 for x in lineas[:fin + 1]))
 
 
 def set_fm_scalar(path, field: str, value: str, *, crear: bool = True) -> bool:

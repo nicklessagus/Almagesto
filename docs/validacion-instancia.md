@@ -366,3 +366,15 @@ PREPRINT* declaran en su línea `> sobre …` cuántos artefactos llevan la marc
 miran; con los dos JSON de ground-truth sin `_cambios` tiene que decir *«sobre 0 … — los 2 sin la
 marca NO se miran»*. **Devolver si** la población sigue contando los sin marca como mirados.
 
+## #443 y #444 · v1.259.1
+
+**#443:** repetir el barrido: `make_notes.py --migrate-verif-archivo` sobre la bóveda ya migrada →
+**0 filas** y hash de `vault/**` sin moverse; `lint.py` sin el bloqueante #117. **Devolver si**
+cambia un byte o si una fila con hash sin prefijo deja de migrarse (la celda del hash tiene que
+cambiar, y sólo ésa).
+
+**#444:** `make_notes.py --restamp-headers` ya corrió; `lint.py` → *Verificación stale* sin las 4
+notas de paper (`2001LevineDomany`, `2008A&A...479..277B`, `2012embc.conf..101A`,
+`2013IJBHI..17..629H`); tocar un párrafo con cita en una de ellas → vuelve a aparecer nombrando el
+bloque. **Devolver si** alguna sigue «stale» por la cabecera o si un cambio real deja de verse.
+

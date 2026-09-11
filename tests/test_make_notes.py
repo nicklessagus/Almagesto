@@ -3344,8 +3344,67 @@ def test_migrar_verif_deduce_el_archivo_del_hash_no_del_frontmatter(toy_vault, c
                                    if (toy_vault.FULLTEXT / "slug" / "2021txtC...1..1D.txt").exists()
                                    else "")
     _fila(nota2, "|  | — |", f"| {lb.source_hash(ft2)} | — |")
+    capsys.readouterr()
     assert mn.migrate_verif_archivo(nota2) == 1
     assert f"| txt:{lb.source_hash(ft2)} |" in _tabla(nota2)
+    assert "no coincide" not in capsys.readouterr().out, \
+        "coincide con el `.txt`: es identificación, no el default con aviso"
+
+
+def test_migrar_verif_NO_toca_la_fila_sin_archivo_ni_las_otras_celdas(toy_vault, capsys):
+    """⛔ #443 — sobre una bóveda YA migrada (`lint` rc 0), el migrador cambió 10 filas: las de
+    veredicto `no verificable por extracción` con `Hash fuente` = `—` —la fila que #223 exime porque
+    no hay archivo— y las escribió como `txt:—`, y en una fila lo hizo TRES veces porque el
+    `replace` buscaba el placeholder donde estuviera (Condición incluida). Dejó un bloqueante. Un
+    migrador es no-op sobre lo migrado (red 6) y escribe una CELDA, no una fila."""
+    import lib_blocks as lb
+    nota, ft, _ = _nota_con_fila(toy_vault)
+    # la fila exenta (#223): veredicto sin archivo y `—` en el hash — y `—` también en Condición
+    _fila(nota, "| soportada |", "| no verificable por extracción |")
+    _fila(nota, "|  | — |", "| — | — |")
+    antes = cfg.verif_sidecar(nota).read_bytes()
+    assert mn.migrate_verif_archivo(nota) == 0, "no hay archivo que declarar: no se toca"
+    assert cfg.verif_sidecar(nota).read_bytes() == antes, "ni un byte (red 6)"
+    # y la fila normal con `—` en Condición: cambia UNA celda, la del hash; Condición sigue `—`
+    nota2, ft2, _ = _nota_con_fila(toy_vault, bib="2021txtC...1..1D")
+    _fila(nota2, "|  | — |", f"| {lb.source_hash(ft2)} | — |")
+    assert mn.migrate_verif_archivo(nota2) == 1
+    tabla = _tabla(nota2)
+    assert f"| txt:{lb.source_hash(ft2)} | — |" in tabla, tabla
+    assert "txt:—" not in tabla
+    # la cirugía por celda respeta una barra ESCAPADA en otra celda
+    assert mn._replace_cell("| 1 | dice \\| esto | [[b]] | — |", 3, " x ") == "| 1 | dice \\| esto | [[b]] | x |"
+    assert mn._cell_of("| 1 | dice \\| esto | [[b]] | — |", 1) == " dice \\| esto "
+    assert mn._verif_column(["| # | Ancla | Hash fuente | Condición |"], "Hash fuente") == 2
+    assert mn._verif_column(["sin tabla"], "Hash fuente") is None
+    assert mn._verif_column(["prosa que menciona Hash fuente", "| # | Hash fuente |"], "Hash fuente") == 1, \
+        "la columna sale de una línea de TABLA, no de la prosa que nombra el título"
+    assert mn._verif_column(["| otra tabla |", "| # | Hash fuente |"], "Hash fuente") == 1, \
+        "y de la línea de tabla que TRAE el título, no de la primera que haya"
+    assert mn._raw_cells("| a | b \\|") == [" a ", " b \\|"], "la barra escapada al final no cierra"
+    assert mn._raw_cells("| a\\") == [" a\\"], "una barra invertida suelta al final no explota"
+    # la fila con hash VACÍO no se migra (no hay archivo que identificar) y se avisa
+    nota3, _, _ = _nota_con_fila(toy_vault, bib="2022vacC...1..1E", hash_fila="")
+    antes3 = cfg.verif_sidecar(nota3).read_bytes()
+    assert mn.migrate_verif_archivo(nota3) == 0
+    assert cfg.verif_sidecar(nota3).read_bytes() == antes3
+    assert "no tiene hash de fuente" in capsys.readouterr().out
+    # una tabla SIN columna `Hash fuente` no se migra ni explota
+    nota4, ft4, _ = _nota_con_fila(toy_vault, bib="2023sinC...1..1F")
+    herm4 = cfg.verif_sidecar(nota4)
+    herm4.write_text(herm4.read_text(encoding="utf-8").replace("Hash fuente", "Huella"), encoding="utf-8")
+    _fila(nota4, "|  | — |", f"| {lb.source_hash(ft4)} | — |")
+    assert mn.migrate_verif_archivo(nota4) == 0
+    assert "txt:" not in _tabla(nota4)
+    # dos filas con el MISMO hash y distinta ancla: cambia la fila de la ancla, no la primera que lo lleve
+    nota5, ft5, _ = _nota_con_fila(toy_vault, bib="2024dosC...1..1G")
+    _fila(nota5, "|  | — |", f"| {lb.source_hash(ft5)} | — |")
+    herm5 = cfg.verif_sidecar(nota5); texto5 = herm5.read_text(encoding="utf-8")
+    fila_real = next(l for l in texto5.split("\n") if l.startswith("| 1 |"))
+    herm5.write_text(texto5.replace(fila_real, fila_real.replace("| 1 |", "| 0 |").replace(
+        lb.verif_rows(nota5)[0].anchor, "ffffffffff") + "\n" + fila_real, 1), encoding="utf-8")
+    assert mn.migrate_verif_archivo(nota5) == 2
+    assert _tabla(nota5).count(f"txt:{lb.source_hash(ft5)}") == 2
 
 
 def test_migrar_verif_es_idempotente(toy_vault):
