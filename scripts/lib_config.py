@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.258.2"
+ALMAGESTO_VERSION = "1.259.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -808,6 +808,49 @@ def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
                 j += 1
             return i, j
     return None
+
+
+def previous_blob_sha10(path) -> tuple:
+    """`(sha10, motivo)` of the version of `path` BEFORE its last modification in git (#441).
+
+    A replacement of an immutable `raw/` artefact is a commit that modifies the file, so «what was
+    there before» is in the repo and is not asked of the operator. With git-lfs the blob is a
+    pointer and the framework's `sha10` is the **prefix of its `oid`** —both are sha256 of the
+    content—, so the pointer alone answers, even when the LFS object is not local; a plain blob is
+    hashed. Measured on the instance: 15 of 15 hand-made replacements recovered this way, none `?`.
+
+    The three `None`s are distinct and say so: no modification history (the file was ADDED as it
+    is now — that is not a replacement, and the caller must not sign one), `git` unavailable or
+    the path outside the repo, and a parent blob that is neither a pointer nor readable."""
+    import subprocess
+    try:
+        rel = Path(path).resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return None, f"{path}: fuera del repo, no hay historia que consultar"
+    def _git(*args, binario=False):
+        """stdout of one `git` call at the repo root, or `None` on a non-zero exit."""
+        r = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, timeout=30,
+                           **({} if binario else {"text": True, "encoding": "utf-8",
+                                                   "errors": "replace"}))
+        return r.stdout if r.returncode == 0 else None
+    try:
+        commit = (_git("log", "-1", "--diff-filter=M", "--format=%H", "--", rel) or "").strip()
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, f"no se pudo consultar `git` ({e.__class__.__name__})"
+    if not commit:
+        return None, (f"`{rel}` no tiene ninguna modificación en git: se agregó como está ahora, "
+                      f"o sea que NO hubo reemplazo que firmar")
+    try:
+        anterior = _git("show", f"{commit}^:{rel}", binario=True)
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, f"no se pudo leer la versión anterior ({e.__class__.__name__})"
+    if anterior is None:
+        return None, f"`git show {commit[:10]}^:{rel}` falló: no se pudo leer la versión anterior"
+    m = re.search(rb"^oid sha256:([0-9a-f]{64})", anterior, re.M)
+    if m:
+        return m.group(1)[:10].decode(), ""
+    import hashlib
+    return hashlib.sha256(anterior).hexdigest()[:10], ""
 
 
 def pdf_page_count(pdf) -> tuple:

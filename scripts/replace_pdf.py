@@ -211,7 +211,7 @@ def sign_note(nota: Path, *, source: str, sha_anterior: str, sha: str, paginas: 
          "sha": sha, "paginas": paginas, "motivo": reason}])
 
 
-def backfill(bibcode: str, source: str, reason: str, sha_anterior: str = "?",
+def backfill(bibcode: str, source: str, reason: str, sha_anterior: str = "auto",
              dry_run: bool = False) -> dict:
     """Stamp BOTH halves of a replacement that was done by hand before the command existed (#440).
 
@@ -245,6 +245,30 @@ def backfill(bibcode: str, source: str, reason: str, sha_anterior: str = "?",
         raise ReplaceError(f"⛔ {nota.name} ya declara `pdf_reemplazo`: el backfill es para el "
                            f"reemplazo hecho ANTES del comando, y éste ya está firmado")
     sha = lb.sha10(copias[0].read_bytes())
+    if sha_anterior == "auto":
+        # #441 — un dato que el repo ya tiene no se le pide al operador: `raw/` es inmutable y
+        # versionado, así que el reemplazo es un commit que modificó el archivo y el padre tiene el
+        # pointer de git-lfs (su `oid` es el sha256 del contenido: `sha10` es su prefijo). Medido: 15
+        # de 15 recuperados. Y si NO hay modificación en la historia, no hubo reemplazo: se rehúsa
+        # en vez de firmar `?`.
+        previos = {c.parent.name: cfg.previous_blob_sha10(c) for c in copias}
+        fallas = {slug: why for slug, (sh, why) in previos.items() if sh is None}
+        if fallas:
+            raise ReplaceError("⛔ no se pudo recuperar el sha anterior de git — "
+                               + "; ".join(f"{slug}: {why}" for slug, why in fallas.items())
+                               + ". Si lo tenés, pasalo con `--sha-anterior <sha10>`; si de "
+                                 "verdad se perdió, `--sha-anterior ?`")
+        distintos = {sh for sh, _w in previos.values()}
+        if len(distintos) > 1:
+            raise ReplaceError("⛔ las copias por slug tenían shas DISTINTOS antes del reemplazo ("
+                               + ", ".join(f"{slug}: {sh}" for slug, (sh, _w) in previos.items())
+                               + "): D-18 vigila que hoy sean iguales, ayer podían no serlo — "
+                                 "elegí cuál firmar con `--sha-anterior <sha10>`")
+        sha_anterior = distintos.pop()
+        if sha_anterior == sha:
+            raise ReplaceError(f"⛔ la versión anterior en git tiene el MISMO sha que el PDF actual "
+                               f"({sha}): la última modificación no cambió el contenido, no hay "
+                               f"reemplazo que firmar")
     n_pag = cfg.pdf_page_count(copias[0])[0]
     paginas = f"? → {n_pag if n_pag is not None else '?'}"
     if not dry_run:
@@ -359,9 +383,10 @@ def main(argv=()) -> int:
                     help="#440 · el reemplazo se hizo A MANO antes de que existiera el comando: "
                          "estampa las DOS mitades (`_paginacion` en las extracciones y "
                          "`pdf_reemplazo` en la nota) sin tocar el PDF ni re-extraer")
-    ap.add_argument("--sha-anterior", default="?", dest="sha_anterior",
-                    help="con `--backfill`: el sha10 del PDF que se sacó, si todavía se tiene; "
-                         "`?` (default) si se perdió — no se inventa")
+    ap.add_argument("--sha-anterior", default="auto", dest="sha_anterior",
+                    help="con `--backfill`: `auto` (default, #441) lo lee de git —el padre del "
+                         "último commit que modificó el PDF, pointer de git-lfs o blob—; un "
+                         "sha10 explícito si lo tenés; `?` sólo si de verdad se perdió")
     ap.add_argument("--source", required=True, metavar="|".join(cfg.PDF_SOURCE_OK),
                     help="procedencia del documento NUEVO (vocabulario cerrado, #296). ⛔ Se "
                          "rehúsa `publisher`/`ads` sobre un PDF que lleva la marca de arXiv.")

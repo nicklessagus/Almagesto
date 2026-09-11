@@ -352,3 +352,17 @@ de `2012ApJS..200...15A` sale de lo pendiente y aparece como *«ya FIRMADA»* co
 registro; el conteo de permanentes baja de 60. **Devolver si** sigue en pendiente, o si una estrella
 con alias sólo resuelve por el nombre canónico.
 
+## #441 y #442 · v1.259.0
+
+**#441:** sobre uno de los 15 ya firmados a mano (`9d3083d`), des-firmar en un worktree descartable y
+correr `replace_pdf.py <bibcode> --backfill --source publisher --reason "…"` sin `--sha-anterior` →
+el `sha_anterior` firmado tiene que coincidir con el que recuperaste con tu script (prefijo del `oid`
+del pointer padre). Sobre un PDF agregado ya publicado (sin modificación en git) → rehúsa con *«NO
+hubo reemplazo»*. **Devolver si** firma `?` teniendo historia, o si firma un sha que no es el del
+padre del último commit que modificó el archivo.
+
+**#442:** `python scripts/lint.py` → las categorías *Ground-truth que cambió* y *apoya en el
+PREPRINT* declaran en su línea `> sobre …` cuántos artefactos llevan la marca y cuántos no se
+miran; con los dos JSON de ground-truth sin `_cambios` tiene que decir *«sobre 0 … — los 2 sin la
+marca NO se miran»*. **Devolver si** la población sigue contando los sin marca como mirados.
+

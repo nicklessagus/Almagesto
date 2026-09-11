@@ -13,10 +13,10 @@
 > sobre 60 notas de `papers/`
 
 ## Ground-truth que cambió bajo la prosa, sin marcar (backlog) (0)
-> sobre 3 ground-truth de `raw/ground_truth/`
+> sobre 0 ground-truth con `_cambios` estampado por `sweep_external` — los 3 sin la marca NO se miran (#442: un snapshot re-bajado a mano no la lleva; `sweep_external` la estampa)
 
 ## Ground-truth cambiado, prosa marcada con `⚠desactualizado` (visible, no destruida) (0)
-> sobre 3 ground-truth de `raw/ground_truth/`
+> sobre 0 ground-truth con `_cambios` estampado por `sweep_external` — los 3 sin la marca NO se miran (#442: un snapshot re-bajado a mano no la lleva; `sweep_external` la estampa)
 
 ## ⛔ Prosa que cita una fuente RETRACTADA sin marcar (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
@@ -350,7 +350,7 @@
 > sobre 60 notas de `papers/`
 
 ## 🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog) (0)
-> sobre 60 notas de `papers/`
+> sobre 60 notas de `papers/` — 0 con `versions_disponible` (la estampa `sweep_external`); las demás se deciden por `pdf_source` (#442)
 
 ## 🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog) (0)
 > sobre 1 archivo de configuración

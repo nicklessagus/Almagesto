@@ -1663,6 +1663,7 @@ def check_ground_truth_movido() -> tuple:
     # marca, igual que con una fuente retractada (D-47). Con la marca puesta baja a informativo.
     gt_cambiado: list = []
     gt_cambiado_marcado: list = []
+    con_marca = sin_marca = 0
     for gt in sorted(glob.glob(str(cfg.GROUND_TRUTH / "*.json"))):
         slug_gt = basename(gt)[:-5]
         try:
@@ -1673,8 +1674,14 @@ def check_ground_truth_movido() -> tuple:
         # `isinstance` y no truthiness: `_cambios: 5` haría reventar el `for` de abajo y tiraría el
         # lint entero. La lista VACÍA no necesita cláusula propia —el `for` no itera— y agregarla
         # sería una guarda que no decide nada (red 8).
+        # ⛔ #442 — `_cambios` la estampa SÓLO `sweep_external` al aplicar un diff: un snapshot
+        # re-bajado a mano (`fetch_ground_truth --force`) o editado no la lleva, y desde el
+        # artefacto no se distingue «NEA no cambió» de «nadie comparó». Este chequeo no mira esos,
+        # y la población lo DICE en vez de contarlos como limpios (D-43).
         if not isinstance(cambios_gt, list):
+            sin_marca += 1
             continue
+        con_marca += 1
         nota_gt = cfg.STARS / f"{slug_gt}.md"
         if not nota_gt.exists():
             continue                      # ficha faltante: ya la reporta el hermano simétrico
@@ -1696,7 +1703,7 @@ def check_ground_truth_movido() -> tuple:
                                      if marcada else
                                      f"; la prosa que lo citaba NO se actualizó sola — actualizala "
                                      f"o marcala con `{GT_STALE_MARK}`")))
-    return gt_cambiado, gt_cambiado_marcado
+    return gt_cambiado, gt_cambiado_marcado, (con_marca, sin_marca)
 
 
 def subject_log_names(slug: str) -> set:
@@ -6552,7 +6559,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # ── ground-truth que se movió bajo la prosa (AUD-42) ─────────────────────────────────────
     # El bloque vive en `check_ground_truth_movido` (#396): una función por bloque, para que
     # la mutación dirigida pueda aislarlo y el mapa `@inv` no se lo adjudique a `collect`.
-    gt_cambiado, gt_cambiado_marcado = check_ground_truth_movido()
+    gt_cambiado, gt_cambiado_marcado, _gt_marca = check_ground_truth_movido()
+    # #442 — las notas de paper con `versions_disponible`: la marca la estampa sólo
+    # `sweep_external.sweep_versiones`; las demás se deciden por `pdf_source` y la población lo dice.
+    _papers_con_version = sum(1 for _fm in paper_fms.values()
+                              if str((_fm or {}).get("versions_disponible") or "").strip())
     # ── identidad duplicada (D-19 / INV-84) ──────────────────────────────────────────────────
     # El bloque vive en `check_identidad_duplicada` (#396); su `incomplete` vuelve como lista y
     # se acumula acá — el bloque calcula, el llamador acumula.
@@ -6756,8 +6767,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('broken', 'Wikilinks rotos (página faltante)', SEV_BLOQUEANTE, tuple(broken), poblacion='notas'),
         Categoria('fm_broken', '⛔ Frontmatter no parseable o con forma inválida (la nota evade los chequeos de su tipo)', SEV_BLOQUEANTE, tuple(fm_broken), poblacion='notas'),
         Categoria('retracted', '⛔ Papers RETRACTADOS citados (frontera dura: fuente no válida)', SEV_BLOQUEANTE, tuple(retracted), poblacion='papers'),
-        Categoria('gt_cambiado', 'Ground-truth que cambió bajo la prosa, sin marcar (backlog)', SEV_BACKLOG, tuple(gt_cambiado), poblacion='ground_truth'),
-        Categoria('gt_cambiado_marcado', f'Ground-truth cambiado, prosa marcada con `{GT_STALE_MARK}` (visible, no destruida)', SEV_BACKLOG, tuple(gt_cambiado_marcado), poblacion='ground_truth'),
+        Categoria('gt_cambiado', 'Ground-truth que cambió bajo la prosa, sin marcar (backlog)', SEV_BACKLOG, tuple(gt_cambiado), poblacion='ground_truth_cambios'),
+        Categoria('gt_cambiado_marcado', f'Ground-truth cambiado, prosa marcada con `{GT_STALE_MARK}` (visible, no destruida)', SEV_BACKLOG, tuple(gt_cambiado_marcado), poblacion='ground_truth_cambios'),
         Categoria('prosa_retractada', '⛔ Prosa que cita una fuente RETRACTADA sin marcar', SEV_BLOQUEANTE, tuple(prosa_retractada), poblacion='entidades'),
         Categoria('prosa_retractada_marcada', 'Prosa sostenida por fuente retractada, marcada (visible, no destruida)', SEV_BACKLOG, tuple(prosa_retractada_marcada), poblacion='entidades'),
         Categoria('orphans', 'Notas huérfanas (sin links entrantes)', SEV_BLOQUEANTE, tuple([(o, '') for o in orphans]), poblacion='notas'),
@@ -6879,7 +6890,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('faceta_sin_frontera', '🕳 Faceta con token corto sin `\\b`: matchea DENTRO de otra palabra (#236, backlog)', SEV_BACKLOG, tuple(faceta_sin_frontera), poblacion='config'),
         Categoria('faceta_muerta', '🕳 Alternativa de faceta con POBLACIÓN CERO o duplicada (#291, backlog)', SEV_BACKLOG, tuple(faceta_muerta), poblacion='config'),
         Categoria('reuso_sin_chequear', '🕳 Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió (#297, backlog)', SEV_BACKLOG, tuple(reuso_sin_chequear), poblacion='papers'),
-        Categoria('version_publicada', '🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog)', SEV_BACKLOG, tuple(version_publicada), poblacion='papers'),
+        Categoria('version_publicada', '🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog)', SEV_BACKLOG, tuple(version_publicada), poblacion='papers_version'),
         Categoria('status_apilado', '🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog)', SEV_BACKLOG, tuple(status_apilado), poblacion='config'),
         Categoria('alcance_desfasado', '🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog)', SEV_BACKLOG, tuple(alcance_desfasado), poblacion='papers'),
         Categoria('fuente_metadata_falsa', '⛔ `sources:` declara un autor o un año que Crossref DESMIENTE para ese `doi` (#353): atribución falsa publicada', SEV_BLOQUEANTE, tuple(fuente_metadata_falsa), poblacion='temas'),
@@ -6933,6 +6944,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         "entidades": (len(anchor_bodies), "notas de entidad (fichas, conceptos, queries)"),
         "fulltext": (len(fulltext_files), "`.txt` de `raw/fulltext/`"),
         "ground_truth": (len(vistos_gt), "ground-truth de `raw/ground_truth/`"),
+        # #442 — la población que el chequeo MIRA, y la que no: `_cambios` la estampa sólo
+        # `sweep_external`; un snapshot re-bajado a mano no la lleva y desde el artefacto no se
+        # distingue «NEA no cambió» de «nadie comparó».
+        "ground_truth_cambios": (_gt_marca[0],
+                                 f"ground-truth con `_cambios` estampado por `sweep_external` — los "
+                                 f"{_gt_marca[1]} sin la marca NO se miran (#442: un snapshot "
+                                 f"re-bajado a mano no la lleva; `sweep_external` la estampa)"),
+        "papers_version": (len(paper_fms),
+                           f"notas de `papers/` — {_papers_con_version} con `versions_disponible` "
+                           f"(la estampa `sweep_external`); las demás se deciden por `pdf_source` "
+                           f"(#442)"),
         # #297 — `_red.yaml` es de la bóveda entera (D-46), no de un sujeto: contarlo infla el
         # denominador de las siete categorías que declaran esta población, y un denominador que
         # incluye lo que el barrido no mira es exactamente lo que INV-40 existe para evitar.

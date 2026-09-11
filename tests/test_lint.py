@@ -7922,7 +7922,7 @@ def test_check_ground_truth_movido_pide_la_marca_y_con_la_marca_baja(toy_vault):
     (cfg.STARS / "test_star.md").write_text(
         f"---\nname: Estrella Test\n---\n\n# x\n\nEl P_rot es 34 d {lint.GT_STALE_MARK}\n",
         encoding="utf-8")
-    sin_marca, con_marca = lint.check_ground_truth_movido()
+    sin_marca, con_marca, _pob = lint.check_ground_truth_movido()
     assert [s for s, _ in con_marca] == ["test_star"] and "P_rot" in con_marca[0][1]
     assert [s for s, _ in sin_marca] == ["test_star"] and "teff" in sin_marca[0][1]
 
@@ -7931,7 +7931,7 @@ def test_check_ground_truth_movido_pide_la_marca_y_con_la_marca_baja(toy_vault):
     # al lint sin reportar las que sí están bien.
     (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps(
         {"_cambios": ["basura", {"campo": "P_rot", "viejo": 34, "nuevo": 41}]}), encoding="utf-8")
-    sin_marca, con_marca = lint.check_ground_truth_movido()
+    sin_marca, con_marca, _pob = lint.check_ground_truth_movido()
     assert len(sin_marca) + len(con_marca) == 1
 
     # Los tres silencios legítimos, que antes de #396 no tenían cómo probarse por separado: el
@@ -7940,10 +7940,10 @@ def test_check_ground_truth_movido_pide_la_marca_y_con_la_marca_baja(toy_vault):
     for datos in ({"nombre": "x"}, {"_cambios": []}, {"_cambios": "no es una lista"},
                   {"_cambios": 5}):        # ⛔ un escalar haría reventar el `for` y tiraría el lint
         (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps(datos), encoding="utf-8")
-        assert lint.check_ground_truth_movido() == ([], []), datos
+        assert lint.check_ground_truth_movido()[:2] == ([], []), datos
     (cfg.GROUND_TRUTH / "sin_ficha.json").write_text(json.dumps(
         {"_cambios": [{"campo": "P_rot", "viejo": 34, "nuevo": 41}]}), encoding="utf-8")
-    assert lint.check_ground_truth_movido() == ([], []), "sin ficha no es hallazgo de esta categoría"
+    assert lint.check_ground_truth_movido()[:2] == ([], []), "sin ficha no es hallazgo de esta categoría"
 
 
 def test_check_duplicate_without_id_agrupa_por_abstract_y_no_por_titulo(toy_vault):

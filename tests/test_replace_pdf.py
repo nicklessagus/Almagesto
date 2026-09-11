@@ -366,7 +366,7 @@ def test_backfill_estampa_las_DOS_mitades_sin_tocar_el_pdf(toy_vault, tmp_path, 
                    encoding="utf-8")
     _paginas(monkeypatch, saliente=7, entrante=7)
     antes_pdf = (cfg.PDFS / "gj_581" / "2010D.pdf").read_bytes()
-    assert rp.main(["2010D", "--backfill", "--source", "publisher",
+    assert rp.main(["2010D", "--backfill", "--source", "publisher", "--sha-anterior", "?",
                     "--reason", "reemplazado a mano el 2026-09-10"]) == 0
     assert (cfg.PDFS / "gj_581" / "2010D.pdf").read_bytes() == antes_pdf, "no toca el PDF"
     (r,) = cfg.split_fm(nota.read_text(encoding="utf-8"))["pdf_reemplazo"]
@@ -378,7 +378,8 @@ def test_backfill_estampa_las_DOS_mitades_sin_tocar_el_pdf(toy_vault, tmp_path, 
     # y las dos mitades ya son las que los dos lectores miran: el lint la levanta…
     assert cfg.extraction_depaginated("2010D")
     # …y firmada, el backfill rehúsa repetirse: es para el reemplazo ANTERIOR al comando
-    assert rp.main(["2010D", "--backfill", "--source", "publisher", "--reason", "otra vez"]) == 2
+    assert rp.main(["2010D", "--backfill", "--source", "publisher", "--sha-anterior", "?",
+                    "--reason", "otra vez"]) == 2
     assert "ya declara `pdf_reemplazo`" in capsys.readouterr().out
 
 
@@ -397,7 +398,62 @@ def test_backfill_rehusa_sin_nota_sin_pdf_y_con_source_fuera_de_vocabulario(toy_
     with pytest.raises(rp.ReplaceError, match="vocabulario"):
         rp.backfill("2010D", "revista", "m")
     r = rp.backfill("2010D", "publisher", "m", sha_anterior="abc1234567", dry_run=True)
+    # sin git en el toy_vault, `auto` (el default, #441) rehúsa nombrando el motivo: no firma `?` solo
+    with pytest.raises(rp.ReplaceError, match="no se pudo recuperar el sha anterior de git"):
+        rp.backfill("2010D", "publisher", "m")
     assert r["sha_anterior"] == "abc1234567" and "pdf_reemplazo" not in _nota("2010D").read_text(encoding="utf-8")
     assert rp.main(["2010D", "--source", "publisher", "--reason", "m"]) == 2, "sin PDF ni --backfill"
     assert "falta el PDF" in capsys.readouterr().out
+
+
+# ── #441 · el sha anterior está en git ───────────────────────────────────────────────────────────
+
+from test_lib_config import _git, _repo_con_reemplazo  # noqa: E402 — fixtures git compartidas (#441)
+
+
+def test_backfill_AUTO_firma_el_sha_de_git_y_rehusa_sin_historia(toy_vault, monkeypatch, capsys):
+    """El default es `auto`: el backfill firma `sha_anterior` real sin que el operador lo busque, y
+    si el archivo se agregó ya publicado (sin modificación) REHÚSA en vez de firmar `?` — no hubo
+    reemplazo. Y si las copias por slug tenían shas distintos, lo declara y pide elegir."""
+    pdf = _repo_con_reemplazo(toy_vault)
+    nota = _nota("1998Cardoso", pdf_source="publisher")
+    _paginas(monkeypatch, saliente=12, entrante=12)
+    assert rp.main(["1998Cardoso", "--backfill", "--source", "publisher", "--reason", "editor"]) == 0
+    (r,) = cfg.split_fm(nota.read_text(encoding="utf-8"))["pdf_reemplazo"]
+    assert r["sha_anterior"] == "2b" * 5 and r["sha"] == lb.sha10(pdf.read_bytes())
+    assert "sha_anterior 2b2b2b2b2b" in capsys.readouterr().out
+    # agregado ya publicado: sin historia de modificación → rehúsa nombrando el motivo
+    root = toy_vault.ROOT
+    solo = cfg.PDFS / "ica" / "2005Solo.pdf"
+    solo.write_bytes(b"%PDF-1.4\nunico\n"); _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "c")
+    _nota("2005Solo", pdf_source="publisher")
+    with pytest.raises(rp.ReplaceError, match="NO hubo reemplazo"):
+        rp.backfill("2005Solo", "publisher", "m")
+    # dos copias con shas anteriores DISTINTOS → declara y pide elegir
+    otra = cfg.PDFS / "gj_581" / "1998Cardoso.pdf"; otra.parent.mkdir(parents=True, exist_ok=True)
+    otra.write_text("version https://git-lfs.github.com/spec/v1\noid sha256:" + "aa" * 32 + "\nsize 1\n")
+    _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "d")
+    otra.write_text(pdf.read_text()); _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "e")
+    cfg.set_fm_scalar(nota, "pdf_reemplazo", "null")   # des-firmar para poder volver a probar
+    with pytest.raises(rp.ReplaceError, match="shas DISTINTOS"):
+        rp.backfill("1998Cardoso", "publisher", "m")
+
+
+def test_backfill_AUTO_rehusa_si_el_padre_tiene_el_MISMO_sha_que_el_pdf_actual(toy_vault, monkeypatch):
+    """La última modificación en git dejó un contenido que después se revirtió en el árbol de
+    trabajo: el padre del último `M` es igual al archivo actual, o sea que no hay reemplazo que
+    firmar, y decirlo es mejor que firmar `sha_anterior == sha`."""
+    # blobs planos (no pointers): en un checkout real el archivo es el PDF y su sha256 ES el `oid`;
+    # en el toy repo con pointers el archivo es el pointer, así que la igualdad sólo se puede
+    # ejercitar con contenido plano
+    _repo_con_reemplazo(toy_vault)
+    root = toy_vault.ROOT
+    pdf = cfg.PDFS / "ica" / "2007Plano.pdf"
+    pdf.write_bytes(PREPRINT); _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "v1")
+    pdf.write_bytes(EDITOR); _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "v2")
+    pdf.write_bytes(PREPRINT)                     # el árbol vuelve a v1, sin commit
+    _nota("2007Plano", pdf_source="publisher")
+    _paginas(monkeypatch, 10, 10)
+    with pytest.raises(rp.ReplaceError, match="MISMO sha"):
+        rp.backfill("2007Plano", "publisher", "m")
 

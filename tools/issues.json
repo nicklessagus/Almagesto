@@ -2190,6 +2190,26 @@
    "number": 440,
    "title": "El backfill de #437 escribe la mitad que ningún chequeo mira: los 15 reemplazos anteriores al comando quedan invisibles (`extraccion_despaginada` = 0 sobre 288) y la regla de v1.257.1 no los alcanza",
    "state": "CLOSED"
+  },
+  {
+   "number": 441,
+   "title": "replace_pdf --backfill: el sha del PDF que se sacó está en git (pointer de git-lfs → sha10) y se le pide al operador como si se hubiera perdido",
+   "state": "OPEN"
+  },
+  {
+   "number": 442,
+   "title": "La regla de #440 tiene otros portadores: `_cambios` (ground-truth) y `versions_disponible` deciden chequeos y no tienen camino de backfill ni declaran a quién no miran",
+   "state": "OPEN"
+  },
+  {
+   "number": 443,
+   "title": "`--migrate-verif-archivo` prefija el placeholder `—` de las filas `no verificable por extracción` (exentas por #223) y reemplaza en toda la fila, no en la celda: sobre una bóveda ya migrada deja un bloqueante",
+   "state": "OPEN"
+  },
+  {
+   "number": 444,
+   "title": "`stale_verif` (#431) cuenta la CABECERA estampada por `--restamp-headers` como prosa cambiada: 4 falsos «stale» por correr el backfill de #247",
+   "state": "OPEN"
   }
  ]
 }

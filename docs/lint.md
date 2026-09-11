@@ -614,6 +614,11 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   una sola marca en cualquier parte silenciaba todos los cambios de la estrella). Con la marca
   puesta pasa a `gt_cambiado_marcado` (*visible, no destruida*): revisá la prosa, actualizala y
   sacá la marca. Población: `raw/ground_truth/`.
+  ⚠ **La población declara a quién NO mira (#442):** `_cambios` la estampa sólo `sweep_external`
+  al aplicar un diff de NEA; un snapshot re-bajado a mano (`fetch_ground_truth --force`) o editado
+  no la lleva, y desde el artefacto no se distingue «NEA no cambió» de «nadie comparó». La línea
+  `> sobre N ground-truth con _cambios — los M sin la marca NO se miran` es la salida (b) del issue:
+  no hay backfill posible (lo que había antes en NEA no está en el repo), así que se declara.
 - **Contraste cross-paper (3b) sin rastro** (#101, `contrast_missing`, backlog): la ficha o el
   concepto tiene `## Inventario por eje` con la **fila vacía de la plantilla** y ≥2 papers
   extraídos citados. Ausencia de la sección = declarado; presente-y-vacío = el paso se salteó —
@@ -791,6 +796,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   identidad), y es justo donde el framework avisa que una discrepancia numérica es diferencia de
   versión. Medido: 82 de 138 notas. ⚠ Y **no** hay agujero de verificación asociado: la exención
   del chequeo de cita textual salió en 1.111.0 (#275/#363).
+  ⚠ **La población declara a quién NO mira (#442):** `versions_disponible` la estampa sólo
+  `sweep_external.sweep_versiones`; una nota cuyo bibcode publicado se conoció por otra vía no la
+  lleva, y se decide por `pdf_source`. La línea `> sobre N notas — K con la marca; las demás se
+  deciden por pdf_source` es lo que distingue «se miró» de «no había marca».
   ⛔ **Y desde #436 la categoría tiene una salida EJECUTABLE.** El `→` mandaba a
   `fetch_pdf.py <slug> --force`, que no aplica al caso normal —la copia del editor está tras paywall
   y la trae el usuario—, así que la categoría más grande de la bóveda (161 de 264 notas de paper) se

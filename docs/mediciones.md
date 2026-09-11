@@ -1994,3 +1994,32 @@ instancia) tratan la clave como nombre y sacan el slug del campo; los dobles se 
 real (`conftest.STARS`); regla firmada en `tools/portadores.yaml` con `star_by_slug` como
 implementación canónica y nueve portadores enumerados.
 
+## 2026-09-11 · Un dato que el repo ya tiene no se le pide al operador (#441)
+
+**Medido en la instancia** al cerrar #440: `--backfill` sobre los 15 reemplazos a mano y **los 15
+salieron con `sha_anterior` real, ninguno `?`** — pero el sha lo recuperó el validador con un script
+aparte, mientras la guía y el comando asumían que se había perdido. Mecanismo: `raw/` es inmutable y
+versionado, así que el reemplazo es un commit que modificó el archivo; con git-lfs el blob es un
+pointer y el `sha10` del framework es el **prefijo del `oid`** (los dos son sha256 del contenido).
+Alcanza el pointer, aunque el objeto LFS no esté en local.
+
+**Qué cambió (1.259.0).** `cfg.previous_blob_sha10(path)`: el padre del último commit que MODIFICÓ
+el archivo, pointer o blob. `--sha-anterior auto` es el default; sin modificación en la historia
+**no hubo reemplazo** y el backfill rehúsa en vez de firmar `?`; copias por slug con shas distintos
+→ declara y pide elegir. Test contra un repo git real en el `toy_vault`.
+
+## 2026-09-11 · La regla de #440 sobre sus otros portadores (#442)
+
+`_cambios` del ground-truth (AUD-42) y `versions_disponible` (#298) también son marcas que un
+chequeo usa para decidir y que sólo estampa `sweep_external`. Un snapshot re-bajado a mano o una
+nota cuyo bibcode publicado se conoció por otra vía **no las llevan**, y desde el artefacto no se
+distingue «no cambió» de «nadie comparó» — la ambigüedad de #440. Medido en la instancia: `_red.yaml`
+registra la pasada, los dos JSON de ground-truth no tienen `_cambios`, y los 11 que #440 destapó no
+tenían `versions_disponible`.
+
+**Qué cambió (1.259.0) — la salida (b):** no hay backfill posible para `_cambios` (lo que NEA tenía
+antes no está en el repo), así que las categorías **declaran a quién no miran** en su población:
+*«sobre N ground-truth con `_cambios` — los M sin la marca NO se miran»* y *«sobre N notas — K con
+`versions_disponible`; las demás se deciden por `pdf_source`»*. Un `(0)` deja de leerse como
+veredicto sobre lo que no se miró (D-43).
+

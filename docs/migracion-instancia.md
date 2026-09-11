@@ -734,12 +734,16 @@ categoría en `(0)`. Un `(0)` que nadie midió y se lee como veredicto (D-43).
 
 ```bash
 python scripts/replace_pdf.py <bibcode> --backfill --source publisher --reason "reemplazado a mano el 2026-09-10"
-python scripts/replace_pdf.py <bibcode> --backfill --source publisher --reason "…" --sha-anterior <sha10>   # si lo tenés
+python scripts/replace_pdf.py <bibcode> --backfill --source publisher --reason "…" --sha-anterior ?   # sólo si git no lo tiene
 ```
 
-No toca el PDF ni re-extrae: declara que el PDF en disco ES el reemplazo, firma `pdf_reemplazo`
-(`sha_anterior: "?"` si se perdió — no se inventa) y marca `_paginacion` en cada extracción del
-bibcode. Rehúsa la nota que ya está firmada. Después, `python scripts/lint.py` →
+No toca el PDF ni re-extrae: declara que el PDF en disco ES el reemplazo, firma `pdf_reemplazo` y
+marca `_paginacion` en cada extracción del bibcode. ⛔ **El `sha_anterior` sale de git (#441):**
+`raw/` es inmutable y versionado, así que el reemplazo es un commit que modificó el PDF y el padre
+tiene el pointer de git-lfs, cuyo `oid` es el sha256 del contenido (`sha10` es su prefijo) — medido,
+15 de 15 recuperados. Si el archivo **no tiene** modificación en la historia, no hubo reemplazo y
+el comando lo dice en vez de firmar `?`; si las copias por slug tenían shas distintos, lo declara y
+pide elegir. Rehúsa la nota que ya está firmada. Después, `python scripts/lint.py` →
 `extraccion_despaginada` con las N, y `contrast --validar` deja de juzgar esas citas con la lectura
 del preprint.
 

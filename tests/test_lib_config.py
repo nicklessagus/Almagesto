@@ -6,6 +6,7 @@ import re
 import pytest
 
 import lib_config as cfg
+import lib_blocks as lb
 from conftest import mk_note, write_yaml
 
 
@@ -3043,3 +3044,58 @@ def test_arxiv_stamp_id_sale_del_MISMO_match_que_la_version():
     # ⛔ el mismo alcance acotado: un `arXiv:` de la bibliografía, tres páginas más abajo, NO cuenta
     lejos = "portada\n" + "x" * 5000 + "\f" + "p2\n" + "y" * 5000 + "\f" + "arXiv:9999.99999v1\n"
     assert cfg.arxiv_stamp_id(lejos) is None and cfg.arxiv_stamp(lejos) is None
+
+
+# ── #441 · el sha anterior de un artefacto de `raw/` está en git ─────────────────────────────────
+
+def _git(root, *args):
+    import subprocess
+    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=True)
+
+
+def _repo_con_reemplazo(toy_vault, bib="1998Cardoso", slug="ica", oid_viejo="2b" * 32, oid_nuevo="9d" * 32):
+    """Un repo con el PDF como POINTER de git-lfs, commiteado dos veces: el reemplazo del 09-10."""
+    root = toy_vault.ROOT
+    _git(root, "init", "-q"); _git(root, "config", "user.email", "t@t"); _git(root, "config", "user.name", "t")
+    (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+    pdf = cfg.PDFS / slug / f"{bib}.pdf"
+    pdf.write_text(f"version https://git-lfs.github.com/spec/v1\noid sha256:{oid_viejo}\nsize 10\n")
+    rel = pdf.relative_to(root).as_posix()
+    _git(root, "add", rel); _git(root, "commit", "-q", "-m", "preprint")
+    pdf.write_text(f"version https://git-lfs.github.com/spec/v1\noid sha256:{oid_nuevo}\nsize 12\n")
+    _git(root, "add", rel); _git(root, "commit", "-q", "-m", "publicado")
+    return pdf
+
+
+def test_previous_blob_sha10_lee_el_POINTER_del_padre(toy_vault, monkeypatch):
+    """⛔ #441 — un dato que el repo ya tiene no se le pide al operador: `raw/` es inmutable y
+    versionado, así que el reemplazo es un commit que modificó el archivo. Con git-lfs el blob es un
+    pointer y `sha10` es el PREFIJO de su `oid` (los dos son sha256 del contenido): alcanza el
+    pointer, aunque el objeto LFS no esté en local. Medido: 15 de 15 recuperados, ninguno `?`."""
+    pdf = _repo_con_reemplazo(toy_vault)
+    sha, why = cfg.previous_blob_sha10(pdf)
+    assert (sha, why) == ("2b" * 5, "")
+    # un blob que NO es pointer se hashea: mismo `sha10` que el framework usa en `pdf_sha`
+    root = toy_vault.ROOT
+    otro = cfg.PDFS / "ica" / "2001Otro.pdf"
+    otro.write_bytes(b"%PDF-1.4\nviejo\n"); _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "a")
+    otro.write_bytes(b"%PDF-1.4\nnuevo\n"); _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "b")
+    assert cfg.previous_blob_sha10(otro) == (lb.sha10(b"%PDF-1.4\nviejo\n"), "")
+    # sin modificación en la historia NO hubo reemplazo, y se dice (no es «se perdió»)
+    solo = cfg.PDFS / "ica" / "2005Solo.pdf"
+    solo.write_bytes(b"%PDF-1.4\nunico\n"); _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "c")
+    sha, why = cfg.previous_blob_sha10(solo)
+    assert sha is None and "NO hubo reemplazo" in why
+    sha, why = cfg.previous_blob_sha10(Path("/tmp") / "afuera.pdf")
+    assert sha is None and "fuera del repo" in why
+    # `git show` que falla en el padre (p. ej. objeto ausente): no evaluable con motivo, nunca «?»
+    import subprocess as _sp
+    real = _sp.run
+    def _falla_show(cmd, **kw):
+        if "show" in cmd:
+            return type("R", (), {"returncode": 128, "stdout": b""})()
+        return real(cmd, **kw)
+    monkeypatch.setattr(_sp, "run", _falla_show)
+    sha, why = cfg.previous_blob_sha10(pdf)
+    assert sha is None and "no se pudo leer la versión anterior" in why
+
