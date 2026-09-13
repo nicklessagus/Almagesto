@@ -594,7 +594,10 @@ porque un script las chequea.** Vocabulario cerrado, tres formas:
 
 ⛔ **La del documento leído va SIEMPRE que el PDF sea un preprint** (`documento`: `eprint` |
 `publisher` | `ads` | `web`, el mismo vocabulario que `pdf_source`), y lleva `"bibcode":"<otro>"`
-si hablás del PDF de **otra** fuente. Los tres testigos del disco la deciden sola. En prosa no:
+si hablás del PDF de **otra** fuente. ⚠ Son DOS ejes (#456): `documento` es **qué hay en disco** y
+`leido` —opcional, mismo vocabulario— **de qué se construyó tu vista**. Normalmente coinciden y
+alcanza con el primero; si el PDF fue reemplazado después de la lectura, los dos son ciertos y
+distintos, y declarar los dos es lo único que deja escribir la salvedad entera. Los tres testigos del disco la deciden sola. En prosa no:
 ahí hay que adivinar de quién habla la oración, y el detector que lo intentaba midió 5 hallazgos
 con precisión **0/5** sobre 268 notas.
 

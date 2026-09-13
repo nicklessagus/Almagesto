@@ -729,3 +729,93 @@ print([r['bibcode'] for r in d['records'] if r['relevant'] and not r.get('puerta
 core queda con `puertas: []`, si la re-clasificación revierte un `--drop-core`, o si toca un
 `extra_core`.
 
+## #457 · v1.267.1
+
+**Qué entró.** (1) La sección de una vista **sin** `enfasis` termina en su primer `### `, así que la
+vista con lente se puede direccionar. (2) `cfg.escape_dollars`: el `$` suelto se escapa, el span
+`$…$` y el ya escapado no.
+
+**Validar** — son las tres notas del issue:
+
+```bash
+python scripts/harvest_views.py <slug> --restamp-salvedades --dry-run
+```
+
+- `2001HyvarinenKarhunenOja` y `2011PLoSO...627594P` **dejan de rehusarse**, y sus propuestas de
+  `--propose-pdf-leido` se pueden cobrar; el bloque de la lente **no se toca**;
+- `2004ISPL...11..470D` **deja de aparecer** (el render ya emite el escape que la nota tiene);
+- el re-estampado converge: segunda pasada en 0 notas.
+
+**Devolver si** alguna de las tres sigue sin converger, si el re-estampado de la vista toca el bloque
+de una lente, o si un `$…$` legítimo queda escapado (cambiaría la fórmula).
+
+## #458 · v1.268.0
+
+**Qué entró.** `query_ads` pagina con `start` (tope `ADS_PAGE_MAX`); el corte se mide contra lo que
+volvió; `busquedas[]` guarda `rows` **y** `traidos`; el aviso y el lint prescriben un remedio que
+puede funcionar.
+
+**Validar** — es la corrida que produjo el issue:
+
+```bash
+python scripts/query_ads.py ica-ruido --theme --rows 7000
+python -c "import yaml;b=yaml.safe_load(open('vault/config/registro/ica-ruido.yaml'))['busquedas'][-1];print(b['rows'], b['traidos'], b['n_found'])"
+```
+
+- con `--rows 7000` tienen que volver **más de 2000** papers (antes daba 2000 con cualquier valor);
+- `busquedas[]` guarda los dos números, y `traidos` es el largo real;
+- el aviso dice *«se trajeron N (pedidas M)»*, nunca M como si fuera N;
+- y cuando ADS ya dio todo lo que la query puede dar, el remedio que imprime es **acotá la query**,
+  no *«subí --rows»*.
+
+⚠ Ojo con el costo: paginar 6964 son ~4 requests más por corrida. Si preferís un tope declarado por
+sujeto, eso es un issue aparte (lo ofrecí como tercera opción y quedó afuera).
+
+**Devolver si** con `--rows` alto siguen volviendo 2000, si `traidos` no coincide con el largo real,
+si el aviso vuelve a reportar lo pedido como traído, o si la paginación pide páginas de más
+(`start` más allá de `num_found`).
+
+## #456 · v1.268.1
+
+**Qué entró.** `pdf_leido` acepta un segundo eje **`leido`** (opcional, vocabulario de `pdf_source`):
+`documento` = qué hay en disco (lo que se verifica), `leido` = de qué se construyó la vista (su
+testigo es `pdf_reemplazo`). `--propose-pdf-leido` propone los dos cuando no coinciden y la nota
+declara el reemplazo; sin firma sigue siendo *«quedó VIEJA»*.
+
+**Validar** — son las 27 que dejaste en prosa:
+
+```bash
+python scripts/harvest_views.py <slug> --propose-pdf-leido | grep -A2 "leido"
+```
+
+- las 27 tienen que salir ahora con los **dos** ejes (`documento: publisher`, `leido: eprint`) en vez
+  de como corrección sin entrada;
+- al estructurar una, el chequeo la da **verificada** y el detalle dice *«la vista se leyó del
+  eprint, o sea ANTES del reemplazo del <fecha>: sus localizadores son del documento viejo»*;
+- una salvedad sin `leido` sigue funcionando igual que antes (el eje es opcional).
+
+**Devolver si** alguna de las 27 sigue sin poder escribirse, si el chequeo rechaza una salvedad con
+los dos ejes bien puestos, o si el detalle afirma una caducidad sobre una nota que no declara
+`pdf_reemplazo`.
+
+## #459 · v1.268.2
+
+**Qué entró.** `fold_tex` pliega **cualquier** comando TeX (no una lista corta) y resuelve el acento
+de BibTeX. La comparación de `title` **se conserva**: el ruido se cierra plegando, no eximiendo.
+
+**Validar:**
+
+```bash
+python scripts/lint.py | grep -A12 "exportación oficial dicen cosas distintas"
+```
+
+- de los 10, tienen que quedar **2**: el `year` de `2008Yang` (el real, que pide una decisión de
+  convención: año impreso contra el online de Crossref) y `2006Tichavsky`, cuyo escape de IEEE
+  (`Crame/spl acute/r`) no es TeX y no se pliega;
+- los otros 8 desaparecen;
+- y el acierto de #392 —un paper con el título de OTRO— tiene que seguir saliendo (probalo
+  inyectando un `title` ajeno en una nota).
+
+**Devolver si** alguno de los 8 vuelve, si el acierto de #392 deja de salir, o si un `&` escapado
+(`H\&K`) deja de coincidir con su par del catálogo.
+

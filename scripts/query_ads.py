@@ -427,6 +427,46 @@ CITES_SORT = "citation_count desc"     # el histórico: top por citas
 RECENT_SORT = "date desc"              # la segunda pasada de #79: la cola reciente
 
 
+#: #458 · el tope de filas por request de ADS. Por encima hay que PAGINAR (`start`): pedir más en
+#: una sola request devuelve el tope igual, así que sin el bucle el universo por encima de este
+#: número es inalcanzable y «subí --rows» es un no-op.
+ADS_PAGE_MAX = 2000
+
+
+def _ads_page(q: str, fq: str | None, sort: str, *, start: int, rows: int,
+              expect_hits: bool) -> tuple[list, int]:
+    """One page of an ADS query: `(docs, num_found)`, with the retry policy of `query_ads` (#458).
+
+    Split out so the pagination loop has something to call. The retries live here because both
+    conditions they cover are per REQUEST: the 429/5xx backoff, and the spurious `numFound == 0`
+    with HTTP 200 of #27 — which `expect_hits` turns into a retry instead of an empty corpus."""
+    headers = {"Authorization": f"Bearer {cfg.get_ads_token()}"}
+    params = {"q": q, "fl": FIELDS, "rows": rows, "start": start, "sort": sort}
+    if fq:
+        params["fq"] = fq
+    for wait in (*RETRY_WAITS_S, None):
+        resp = requests.get(API, headers=headers, params=params, timeout=60)
+        if resp.status_code in RETRY_STATUS and wait is not None:
+            cfg.print_seguro(f"  ADS HTTP {resp.status_code} — reintento en {wait} s")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        try:
+            response = resp.json()["response"]
+            docs = response["docs"]
+        except (ValueError, KeyError) as exc:   # cuerpo de error con 200 / formato inesperado
+            raise RuntimeError(
+                f"Respuesta inesperada de ADS (sin response.docs): {resp.text[:200]}") from exc
+        num_found = response.get("numFound", len(docs))
+        if expect_hits and num_found == 0 and wait is not None:
+            cfg.print_seguro(f"  ADS devolvió 0 resultados con HTTP 200 (cero espurio) — "
+                             f"reintento en {wait} s")
+            time.sleep(wait)
+            continue
+        return docs, num_found
+    return [], 0
+
+
 def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
               meta: dict | None = None, expect_hits: bool = False,
               fq: str | None = _FQ_DEFAULT, sort: str = CITES_SORT) -> list[dict]:
@@ -456,34 +496,31 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
     punto. `fq=None` la apaga, y es lo que corresponde cuando el universo de búsqueda ya lo fijó el
     usuario —una lista explícita de bibcodes— porque entonces el filtro no puede sacar ruido, sólo
     sacar de más (#68)."""
-    token = cfg.get_ads_token()
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {"q": q, "fl": FIELDS, "rows": rows, "sort": sort}
     # #85: el centinela distingue «no pasaron `fq`» (usar la lente declarada en el objetivo) de
     # «pasaron `None` a propósito» (no acotar: el universo ya lo fijó el usuario con bibcodes).
     if fq is _FQ_DEFAULT:
         fq = search_fq()
-    if fq:
-        params["fq"] = fq
-    for wait in (*RETRY_WAITS_S, None):
-        resp = requests.get(API, headers=headers, params=params, timeout=60)
-        if resp.status_code in RETRY_STATUS and wait is not None:
-            cfg.print_seguro(f"  ADS HTTP {resp.status_code} — reintento en {wait} s")
-            time.sleep(wait)
-            continue
-        resp.raise_for_status()
-        try:
-            response = resp.json()["response"]
-            docs = response["docs"]
-        except (ValueError, KeyError) as exc:   # cuerpo de error con 200 / formato inesperado
-            raise RuntimeError(
-                f"Respuesta inesperada de ADS (sin response.docs): {resp.text[:200]}") from exc
-        num_found = response.get("numFound", len(docs))
-        if expect_hits and num_found == 0 and wait is not None:
-            cfg.print_seguro(f"  ADS devolvió 0 resultados con HTTP 200 (cero espurio) — reintento en {wait} s")
-            time.sleep(wait)
-            continue
-        break
+    # ⛔ #458 — ADS topea en `ADS_PAGE_MAX` filas por request, y esto pedía `rows` de una: todo lo
+    # que pasara del tope era INALCANZABLE, así que el remedio que prescribían el aviso y el lint
+    # («subí --rows») era un no-op. Medido sobre un tema con universo de 6964: `--rows 2000`,
+    # `3000` y `7000` devolvían los mismos 2000 papers y los mismos 3 core. Es el defecto que #294
+    # ya había arreglado un nivel más allá, en el slice por término de OpenAlex.
+    docs: list = []
+    num_found = 0
+    # ⚠ El bucle está ACOTADO por aritmética y no por su guarda (la lección de #427): cada vuelta
+    # pide como mucho `ADS_PAGE_MAX`, así que cubrir `rows` no puede llevar más páginas que ésas
+    # —y con el `while True` la mutación de la guarda COLGABA la corrida en vez de reportar un
+    # sobreviviente, que es una red que no se puede medir (la forma de INV-101, un nivel más abajo).
+    for _ in range(-(-max(rows, 1) // max(ADS_PAGE_MAX, 1))):
+        pedido = min(rows - len(docs), ADS_PAGE_MAX)
+        pagina, num_found = _ads_page(q, fq, sort, start=len(docs), rows=pedido,
+                                      expect_hits=expect_hits)
+        docs += pagina
+        # Tres cortes, y los tres son necesarios: se juntó lo pedido (o se agotó el universo), y
+        # una página CORTA — menos filas de las pedidas significa que ADS no tiene más para dar, y
+        # sin ese corte un tope que el servidor no declara sería un bucle infinito.
+        if len(docs) >= min(rows, num_found) or len(pagina) < pedido:
+            break
     if expect_hits and num_found == 0:
         raise EmptyResultError(
             "ADS devolvió 0 resultados (HTTP 200) en todos los reintentos para la query directa:\n"
@@ -491,16 +528,27 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
             "Si el sujeto existe en ADS es el cero espurio de #27 (intermitente): re-corré, la "
             "cadena es idempotente. Si se repite, revisá el nombre/alias del sujeto en "
             "vault/config/stars.yaml (`ads_object`, `aliases`) o la `query` en themes.yaml.")
-    truncated = num_found > rows
+    # ⛔ #458 — el corte se mide contra lo que VOLVIÓ, no contra lo que se pidió, y el registro
+    # guarda los dos: `rows` es la perilla y `traidos` el universo real sobre el que la ficha
+    # afirma (#51/D-28). Con `--rows 3000` sobre 2000 traídos, el aviso decía «se trajeron 3000» y
+    # eso quedaba escrito **para siempre** en `busquedas[]`, que es versionado.
+    truncated = num_found > len(docs)
     if meta is not None:
-        meta.update(num_found=num_found, rows=rows, truncated=truncated)
+        meta.update(num_found=num_found, rows=rows, traidos=len(docs), truncated=truncated)
     if truncated and not quiet_truncate:
         # la coletilla sólo vale si alguien PERSISTE la marca: con `meta=None` (--sweep, --probe)
         # el aviso prometía un backlog que nadie escribe (mismo defecto que #43 arregló en el glifo).
         marca = " (queda marcado en ads.json → lint)" if meta is not None else \
                 " (esta query NO deja marca en ads.json: el corte no queda registrado)"
-        cfg.print_seguro(f"  ⚠ truncado: ADS reporta {num_found} resultados y sólo se trajeron {rows} "
-              f"(top por citas) — subí --rows para cubrir todo{marca}")
+        # ⛔ Y el remedio que se prescribe tiene que PODER funcionar: por encima de `ADS_PAGE_MAX`
+        # subir `--rows` sí sirve (se pagina), pero si lo pedido ya se trajo entero el corte es del
+        # universo y lo que falta no se alcanza pidiendo más filas de la misma query — ahí lo que
+        # corresponde es acotar la query, no subir la perilla.
+        remedio = ("subí --rows para cubrir todo" if len(docs) >= rows
+                   else "subir --rows NO alcanza: ADS ya devolvió todo lo que esta query puede dar "
+                        "— acotá la query")
+        cfg.print_seguro(f"  ⚠ truncado: ADS reporta {num_found} resultados y se trajeron "
+                         f"{len(docs)} (pedidas {rows}, top por citas) — {remedio}{marca}")
     return [to_record(d) for d in docs]
 
 
@@ -1957,7 +2005,13 @@ def main() -> int:
         # clave ausente, que es una corrida anterior a este campo. #295: el RESUELTO (el del tema
         # si lo declara), no el global — si no, el registro vuelve a mentir sobre la corrida.
         "fq": fq_run,
-        "rows": args.rows,
+        "rows": args.rows,                            # la PERILLA (lo pedido)
+        # ⛔ #458 — y lo que VOLVIÓ, que es el universo real sobre el que la ficha afirma. `rows`
+        # solo dejaba escrito para siempre «se trajeron 3000» sobre una corrida que trajo 2000,
+        # porque ADS topea por request; y este registro es versionado y es la pieza que responde
+        # «sobre qué universo de papers afirma esta ficha» (#51/D-28). Clave ausente = corrida
+        # anterior a este campo (no «trajo cero»).
+        "traidos": qmeta.get("traidos"),
         "n_found": qmeta.get("num_found"),            # lo que ADS dice que hay (None sin query directa)
         "n_total": len(recs),                         # lo que se trajo (query + extra_core + chaining)
         # D-28: los bibcodes de ESTA corrida. Es lo que permite que el universo del sujeto sea una

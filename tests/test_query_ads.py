@@ -488,7 +488,9 @@ def test_query_ads_avisa_truncado(toy_classifier, ads_token, no_sleep, monkeypat
     m = {}
     qa.query_ads("q", rows=10, meta=m)
     assert "truncado" in capsys.readouterr().out
-    assert m == {"num_found": 500, "rows": 10, "truncated": True}   # marca persistible (#17)
+    # #458 — `traidos` es el universo REAL sobre el que la ficha afirma; `rows` sigue siendo la
+    # perilla. Con los dos, «pedí 3000 y llegaron 2000» deja de escribirse como «se trajeron 3000».
+    assert m == {"num_found": 500, "rows": 10, "traidos": 0, "truncated": True}
     monkeypatch.setattr(qa, "requests", SimpleNamespace(
         get=fake_get_seq([FakeResp(200, payload([], num_found=500))])))
     qa.query_ads("q", rows=10, quiet_truncate=True)
@@ -552,13 +554,16 @@ def test_main_query_directa_espera_hits(toy_vault, toy_classifier, no_sleep, mon
     assert seen["expect_hits"] is True
 
 
-def test_query_ads_meta_sin_truncar(toy_classifier, ads_token, no_sleep, monkeypatch):
+def test_query_ads_meta_sin_truncar(toy_classifier, ads_token, no_sleep, monkeypatch, capsys):
     """meta reporta truncated=False cuando numFound ≤ rows (así el caller escribe `truncated: null`)."""
+    uno = [{"bibcode": "2020uno.....1U", "title": ["t"], "abstract": "radial velocity",
+            "doctype": "article"}]
     monkeypatch.setattr(qa, "requests", SimpleNamespace(
-        get=fake_get_seq([FakeResp(200, payload([], num_found=1))])))
+        get=fake_get_seq([FakeResp(200, payload(uno, num_found=1))])))
     m = {}
     qa.query_ads("q", rows=2000, meta=m)
-    assert m["truncated"] is False and m["num_found"] == 1
+    assert m["truncated"] is False and m["num_found"] == 1 and m["traidos"] == 1
+    assert "truncado" not in capsys.readouterr().out, "sin corte no se avisa de un corte"
 
 
 # ── chaining / extra_core ────────────────────────────────────────────────────
@@ -2739,3 +2744,54 @@ def test_455_core_sin_puerta_es_el_estado_IMPOSIBLE_y_solo_con_faceta_propia():
     assert qa.core_without_gate(recs, {"facet": "independent component"}) == ["2024mal.....1M"]
     assert qa.core_without_gate(recs, {}) == [], "sin faceta propia no hay regla del tema que violar"
     assert qa.core_without_gate([], {"facet": "x"}) == []
+
+
+def test_458_query_ads_PAGINA_y_registra_lo_que_VOLVIO(toy_classifier, ads_token, no_sleep,
+                                                       monkeypatch, capsys):
+    """⛔ #458 — ADS topea en `ADS_PAGE_MAX` filas por request y esto pedía `rows` de una sola vez,
+    así que todo lo que pasara del tope era INALCANZABLE y el remedio que prescribían el aviso y el
+    lint («subí --rows») era un no-op. Medido sobre un tema con universo de 6964: `--rows 2000`,
+    `3000` y `7000` devolvían los mismos 2000 papers y los mismos 3 core.
+
+    Y la otra mitad: el aviso reportaba las filas PEDIDAS como traídas —«se trajeron 3000» con 2000
+    en la mano— y ese número entraba en `busquedas[]`, que es versionado y es la pieza que responde
+    *«sobre qué universo afirma esta ficha»* (#51/D-28)."""
+    monkeypatch.setattr(qa, "ADS_PAGE_MAX", 2)
+    pedidos = []
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        pedidos.append((params["start"], params["rows"]))
+        docs = [{"bibcode": f"2020p{params['start'] + i}....1X", "title": ["t"],
+                 "abstract": "radial velocity", "doctype": "article"}
+                for i in range(min(params["rows"], 5 - params["start"]))]
+        return FakeResp(200, payload(docs, num_found=9))
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(get=fake_get))
+    m = {}
+    out = qa.query_ads("q", rows=8, meta=m)
+    assert pedidos == [(0, 2), (2, 2), (4, 2)], \
+        "pagina con `start` y para en la página CORTA: ADS no tiene más para dar"
+    assert len(out) == 5, "se juntó todo lo que ADS tenía para esta query"
+    assert m["traidos"] == 5 and m["rows"] == 8, "lo VUELTO y la perilla, los dos"
+    assert m["truncated"] is True and m["num_found"] == 9
+    salida = capsys.readouterr().out
+    assert "se trajeron 5 (pedidas 8" in salida, "no reporta lo pedido como traído"
+    assert "subir --rows NO alcanza" in salida, \
+        "⛔ el remedio prescrito tiene que PODER funcionar: acá ADS ya dio todo lo que la query da"
+    # y el corte por `rows`: se juntó lo pedido y NO se pide una página de más
+    pedidos.clear()
+    qa.query_ads("q", rows=4)
+    assert pedidos == [(0, 2), (2, 2)], "para en cuanto junta lo pedido"
+    # ni una de más cuando el UNIVERSO se agota antes que la perilla
+    pedidos.clear()
+
+    def fake_corto(url, headers=None, params=None, timeout=None):
+        pedidos.append((params["start"], params["rows"]))
+        docs = [{"bibcode": f"2020c{params['start'] + i}....1X", "title": ["t"],
+                 "abstract": "radial velocity", "doctype": "article"}
+                for i in range(min(params["rows"], 4 - params["start"]))]
+        return FakeResp(200, payload(docs, num_found=4))
+    monkeypatch.setattr(qa, "requests", SimpleNamespace(get=fake_corto))
+    m2 = {}
+    qa.query_ads("q", rows=6, meta=m2)
+    assert pedidos == [(0, 2), (2, 2)], "se agotó `num_found`: no se pide una página vacía"
+    assert m2["truncated"] is False and m2["traidos"] == 4

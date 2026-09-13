@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.267.0"
+ALMAGESTO_VERSION = "1.268.2"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1032,6 +1032,34 @@ def escape_cell(texto: str) -> str:
     return re.sub(r"\\vert\s+", r"\\vert ", "".join(out))
 
 
+def escape_dollars(texto: str) -> str:
+    r"""Prose safe to put in a note: every `$` that is NOT a math delimiter neutralised (#457).
+
+    Sibling of `escape_cell` (#240) one character over, and the same failure: Obsidian reads `$` as
+    the opening of inline math, so a lone one pairs up with the next `$` in the note and drags
+    everything in between into math mode. Measured: the IEEE copyright line of a real caveat
+    (`1070-9908/04$20.00 © 2004 IEEE`) in a note carrying **31** more `$`.
+
+    ⛔ A well-formed `$…$` span is NOT touched —that one IS math, and escaping it would silently
+    change the formula, the same argument `escape_cell` makes for `\vert`— and neither is a `$`
+    that already comes escaped: re-escaping it would render a literal backslash."""
+    # ⚠ Sin un `if "$" not in texto` adelante, a propósito: sin ningún `$` el bucle no itera y
+    # `_escape_dollar_run` devuelve el trozo intacto, así que ese atajo no decidía nada (#319 — su
+    # mutación sobrevivía). A diferencia de `escape_cell`, devuelve SIEMPRE `str`.
+    texto, out, i = str(texto or ""), [], 0
+    for m in _MATH_SPAN_RE.finditer(texto):
+        out.append(_escape_dollar_run(texto[i:m.start()]))
+        out.append(m.group(0))
+        i = m.end()
+    out.append(_escape_dollar_run(texto[i:]))
+    return "".join(out)
+
+
+def _escape_dollar_run(trozo: str) -> str:
+    r"""The `$` of a fragment with no math span, escaped once — never twice (#457)."""
+    return re.sub(r"(?<!\\)\$", r"\\$", trozo)
+
+
 def method_key(nombre) -> str:
     r"""A method name reduced to its comparison key: casefold, NFKD, non-alphanumerics to `-` (#243).
 
@@ -1954,7 +1982,17 @@ def fm_bounds(text: str) -> tuple[int, int] | None:
 ADS_BIBCODE_LEN = 19
 
 
-_TEX_CMD_RE = re.compile(r"\\(?:ensuremath|text|mathrm|mbox|emph|textit|textbf)\b")
+#: #459 · CUALQUIER comando TeX, no una lista corta. Con la lista, `\ensuremath` se iba y el
+#: `\alpha` de adentro quedaba como la palabra «alpha» contra la `α` del catálogo, que `method_key`
+#: descarta por no ser alfanumérica ASCII: el mismo título en dos codificaciones salía como
+#: desacuerdo. Medido: **9 de 10** hallazgos de la categoría eran eso.
+_TEX_CMD_RE = re.compile(r"\\[a-zA-Z]+\b")
+#: #459 · el acento de BibTeX (`{\'e}`, `\"o`, `\~n`): la barra y el diacrítico se van y queda la
+#: letra, que es lo que `method_key` normaliza igual del lado del catálogo. ⛔ La lista de
+#: diacríticos es CERRADA y no «cualquier no-alfanumérico»: `\&` es un ESCAPE, no un acento, y con
+#: el set abierto `H\&K` perdía el `&` junto con la barra. Los acentos que son COMANDO (`\c{c}`,
+#: `\v{s}`) los resuelve `_TEX_CMD_RE`.
+_TEX_ACENTO_RE = re.compile(r"""\\(['"~^`=.])\s*\{?([a-zA-Z])\}?""")
 _TEX_ESC_RE = re.compile(r"\\([&%$#_{}])")
 
 
@@ -1975,7 +2013,8 @@ def fold_tex(s: str) -> str:
     # guarda que no decide nada (red 8).
     if not isinstance(s, str):
         return s
-    out = _TEX_CMD_RE.sub("", s)
+    out = _TEX_ACENTO_RE.sub(r"\2", s)
+    out = _TEX_CMD_RE.sub("", out)
     out = re.sub(r"\$([_^])\{?([^${}]*)\}?\$", r"\2", out)      # $_2$ · $^{-1}$ → 2 · -1
     out = re.sub(r"[_^]\{([^{}]*)\}", r"\1", out)                # _{2} → 2
     out = _TEX_ESC_RE.sub(r"\1", out)                            # \& → &
@@ -3183,6 +3222,14 @@ SALVEDAD_TIPOS = {
     # el bibcode va adentro y no hay nada que adivinar.
     "pdf_leido": "documento",
 }
+
+#: #456 · el SEGUNDO eje de `pdf_leido`, opcional: de qué documento se construyó la VISTA. No lo
+#: decide el disco —lo declara la lectura— y su testigo es la firma del reemplazo
+#: (`pdf_reemplazo.sha_anterior`/`fecha`, #441). Existe porque en un PDF reemplazado las dos cosas
+#: NO coinciden y entonces el tipo de una sola pregunta no tiene valor correcto: medido, **27
+#: salvedades** cuyo campo diría `publisher` (lo que hay en disco) y cuya propia evidencia dice
+#: *preprint* (lo que se leyó). Las dos mitades son ciertas sobre cosas distintas.
+SALVEDAD_CAMPO_LEIDO = "leido"
 
 
 class VistasError(RuntimeError):

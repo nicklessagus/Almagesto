@@ -888,7 +888,7 @@ def test_452_el_migrador_PROPONE_y_no_toca_la_extraccion(toy_vault):
     sembrar(toy_vault, d)
     antes = (cfg.EXTRACCION / "test_star" / f"{BIB}.json").read_text(encoding="utf-8")
     props = hv.propose_pdf_leido("test_star")
-    assert [(b, doc) for _j, b, _t, doc, _m in props] == [(BIB, "eprint")], \
+    assert [(b, doc) for _j, b, _t, doc, _m, _l in props] == [(BIB, "eprint")], \
         "la prosa que no habla del documento en disco NO entra"
     assert (cfg.EXTRACCION / "test_star" / f"{BIB}.json").read_text(encoding="utf-8") == antes
     # ⚠ la salvedad YA estructurada y la cadena vacía no son candidatas: la primera ya está, y la
@@ -909,16 +909,17 @@ def test_452b_el_migrador_CRUZA_EL_DISCO_antes_de_proponer(toy_vault):
     d["salvedades"] = ["El PDF en disco es el PREPRINT de arXiv (marca al margen)."]
     sembrar(toy_vault, d, fm_extra={"pdf_source": "publisher"})
     props = hv.propose_pdf_leido("test_star")
-    assert [(doc, m.startswith("la salvedad quedó VIEJA")) for _j, _b, _t, doc, m in props] == \
+    assert [(doc, m.startswith("la salvedad quedó VIEJA"))
+            for _j, _b, _t, doc, m, _l in props] == \
         [("", True)], "no se propone el valor viejo: se reporta que la salvedad caducó"
     # ⚠ y el testigo que CONFIRMA la prosa no es una caducidad: la propuesta sale con su valor
     sembrar(toy_vault, d, fm_extra={"pdf_source": "eprint"})
-    assert [(doc, m) for _j, _b, _t, doc, m in hv.propose_pdf_leido("test_star")] == \
+    assert [(doc, m) for _j, _b, _t, doc, m, _l in hv.propose_pdf_leido("test_star")] == \
         [("eprint", "")]
     # ⛔ ni lo es `web`: NINGÚN testigo del disco lo decide, así que no puede contradecir a nadie
     d["salvedades"] = ["El PDF en disco es el MANUSCRITO del autor, no el tipografiado del editor."]
     sembrar(toy_vault, d, fm_extra={"pdf_source": "publisher"})
-    assert [(doc, m) for _j, _b, _t, doc, m in hv.propose_pdf_leido("test_star")] == [("web", "")]
+    assert [(doc, m) for _j, _b, _t, doc, m, _l in hv.propose_pdf_leido("test_star")] == [("web", "")]
 
 
 def test_452b_el_migrador_SALTEA_la_nota_sin_PDF(toy_vault):
@@ -939,16 +940,16 @@ def test_452_la_propuesta_declara_su_poblacion_y_no_inventa_el_valor(toy_vault, 
     assert "0 salvedad(es)" in capsys.readouterr().out, "el cero se declara (D-43)"
     j = cfg.EXTRACCION / "s" / "x.json"
     hv.print_pdf_leido([(j, "2020X", "El PDF en disco es …", "",
-                         "la nota no declara `pdf_source`: elegí vos cuál")])
+                         "la nota no declara `pdf_source`: elegí vos cuál", "")])
     out = capsys.readouterr().out
     assert "publisher|ads" in out and "elegí vos" in out
     # y el que SÍ se puede decidir sale listo para pegar, con su valor
-    hv.print_pdf_leido([(j, "2020X", "El PDF …", "eprint", "")])
+    hv.print_pdf_leido([(j, "2020X", "El PDF …", "eprint", "", "")])
     out = capsys.readouterr().out
     assert '"documento": "eprint"' in out and "elegí vos" not in out
     # la caducidad NO sale como entrada para pegar: sale como corrección
     hv.print_pdf_leido([(j, "2020X", "El PDF …", "",
-                         "la salvedad quedó VIEJA: en disco está el publicado (`pdf_source`)")])
+                         "la salvedad quedó VIEJA: en disco está el publicado (`pdf_source`)", "")])
     out = capsys.readouterr().out
     assert "quedó VIEJA" in out and "no la estructures tal cual" in out
     assert '"tipo": "pdf_leido"' not in out
@@ -1700,3 +1701,129 @@ def test_453e_la_escotilla_de_la_estructurada_es_por_TEXTO_y_no_por_forma(toy_va
     # `SALVEDAD_TIPOS` es abierto en sus valores (la prosa del extractor entra por cualquier clave)
     assert not hv._estructurada("- 17", {"salvedades": [{"tipo": "pdf_paginas", "n": 17}]})
     assert not hv._estructurada("- algo", {}), "sin salvedades no hay contraparte"
+
+
+def test_457_la_vista_CON_LENTE_se_puede_re_estampar_sin_enfasis(toy_vault):
+    """⛔ #457 — `section_span` devuelve hasta el próximo `## `, así que la sección de la vista
+    incluía su `### Lente` y `salvedades_span` encontraba **dos** bloques: devolvía `None`, había
+    marcas, y el re-estampado rehusaba la nota culpando a «prosa que no escribió el cosechador» —
+    que sí la había escrito él. Medido: 2 notas (`2001HyvarinenKarhunenOja`, `2011PLoSO...627594P`),
+    las dos únicas propuestas de `--propose-pdf-leido` que no se podían cobrar por ningún camino.
+
+    Es el simétrico de #239: con `enfasis` la unidad es la sub-sección, así que sin él la unidad es
+    la vista MENOS sus lentes."""
+    _con_txt(toy_vault, "sin el simbolo")
+    base = extraccion()
+    base["salvedades"] = ["prosa de la vista"]
+    dest = sembrar(toy_vault, base)
+    hv.harvest("test_star")
+    # la sub-sección de la segunda lectura, con su propio bloque (#239): la nota queda con DOS
+    dest.write_text(dest.read_text(encoding="utf-8").rstrip("\n")
+                    + f"\n\n### Lente — ruido\n\n{cfg.SALVEDAD_MARCAS[1]}\n\n"
+                      "- prosa de la lente\n", encoding="utf-8")
+    assert dest.read_text(encoding="utf-8").count(cfg.SALVEDAD_MARCAS[1]) == 2, "dos bloques"
+
+    # el re-estampado de la vista SIN enfasis ya no rehúsa, y no toca el bloque de la lente
+    base["salvedades"] = ["prosa de la vista", "una salvedad nueva de la vista"]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(base), encoding="utf-8")
+    r = hv.restamp_salvedades("test_star", paper=BIB)
+    body = dest.read_text(encoding="utf-8")
+    assert r["rehusadas"] == [] and r["tocadas"] == [BIB]
+    assert "una salvedad nueva de la vista" in body
+    assert "prosa de la lente" in body, "el bloque de la lente no se toca"
+    assert body.count(cfg.SALVEDAD_MARCAS[1]) == 2, "y sigue habiendo dos bloques, cada uno el suyo"
+
+
+def test_457_el_dolar_suelto_se_ESCAPA_y_la_matematica_no(toy_vault):
+    """⛔ #457 — el `$` de Obsidian es el `|` de una celda (#240): abre matemática y se empareja con
+    el siguiente `$` de la nota. Medido: la línea de copyright de IEEE en `2004ISPL...11..470D`, una
+    nota con **31** `$` más; el re-estampado proponía QUITAR el escape que la nota ya tenía, y era la
+    única diferencia entre esa nota y su render."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = ["copyright: 1070-9908/04$20.00 © 2004 IEEE",
+                       "la amplitud es $K = 2.5$ m/s"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert r"1070-9908/04\$20.00" in body, "el `$` suelto va escapado"
+    assert "$K = 2.5$" in body, "⛔ y la matemática NO se toca: escaparla cambiaría la fórmula"
+
+
+def test_457_la_seccion_de_una_vista_SIN_enfasis_termina_en_su_primera_lente():
+    """#457 — el simétrico de #239, aislado: con `enfasis` la unidad es la sub-sección, así que sin
+    él la unidad es la vista MENOS sus lentes. Sin esto la misma vista tiene dos bloques de
+    salvedades y no se puede direccionar ninguno."""
+    con = "## Vista — X\n\ncuerpo\n\n### Lente — ruido\n\notra cosa\n"
+    assert hv._view_without_lenses(con) == con.index("### Lente")
+    sin = "## Vista — X\n\ncuerpo\n"
+    assert hv._view_without_lenses(sin) == len(sin), "sin lentes, la sección entera"
+
+
+
+def test_456_los_DOS_EJES_de_pdf_leido_en_un_PDF_reemplazado(toy_vault):
+    """⛔ #456 — `pdf_leido` conflagaba «qué se leyó» con «qué hay en disco», y en un PDF REEMPLAZADO
+    —la población que creó #436— las dos cosas no coinciden, así que **no había valor correcto**:
+    medido, **27 salvedades** cuyo campo diría `publisher` (lo que hay en disco) y cuya propia
+    evidencia dice *preprint* (lo que se leyó), y declarar `eprint` hacía que el chequeo la
+    RECHAZARA. El hecho verdadero «esta vista se leyó del preprint» no era expresable en el tipo.
+
+    Con los dos ejes se escribe entera, y el chequeo dice lo que `_paginacion` (#436) ya marca del
+    lado de la extracción: **la vista es anterior al reemplazo, sus localizadores son del documento
+    viejo.**"""
+    _con_pdf(toy_vault)
+    firma = [{"fecha": "2026-09-12", "source": "publisher", "sha": "a", "sha_anterior": "b"}]
+    sembrar(toy_vault, extraccion(), fm_extra={"pdf_source": "publisher", "pdf_reemplazo": firma})
+    ok, det = hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "publisher",
+                                      "leido": "eprint",
+                                      "evidencia": "marca de agua «arXiv:0704.3841v1 …»"})
+    assert ok is True, "el eje del disco es el que se verifica, y coincide"
+    assert "ANTES del reemplazo del 2026-09-12" in det and "documento viejo" in det
+    # el mismo documento en los dos ejes: se dice, sin inventar una caducidad
+    assert "ese mismo documento" in hv.check_salvedad(
+        BIB, {"tipo": "pdf_leido", "documento": "publisher", "leido": "publisher"})[1]
+    # sin firma del reemplazo no consta cuándo cambió (#441), y eso se declara
+    sembrar(toy_vault, extraccion(), fm_extra={"pdf_source": "publisher"})
+    assert "no declara `pdf_reemplazo`" in hv.check_salvedad(
+        BIB, {"tipo": "pdf_leido", "documento": "publisher", "leido": "eprint"})[1]
+    # y el eje nuevo es vocabulario CERRADO, como el otro (#296)
+    assert hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "publisher",
+                                   "leido": "preprint"})[0] is None
+    # ⚠ y es OPCIONAL: sin declararlo, el detalle no dice nada de la vista (no la inventa)
+    _ok, sin_eje = hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "publisher"})
+    assert "vista" not in sin_eje
+
+
+def test_456_la_propuesta_emite_LOS_DOS_EJES_cuando_no_coinciden(toy_vault):
+    """#456 — antes esta población salía como «la salvedad quedó VIEJA» y sin entrada para pegar,
+    porque no había forma de escribirla; ahora se propone entera. ⚠ Sólo con `pdf_reemplazo`: sin la
+    firma no consta cuándo cambió el documento, así que sigue siendo una corrección, no un valor."""
+    _con_pdf(toy_vault)
+    d = extraccion()
+    d["salvedades"] = ["El PDF en disco es el PREPRINT de arXiv (marca al margen)."]
+    firma = [{"fecha": "2026-09-12", "source": "publisher", "sha": "a", "sha_anterior": "b"}]
+    sembrar(toy_vault, d, fm_extra={"pdf_source": "publisher", "pdf_reemplazo": firma})
+    assert [(doc, leido) for _j, _b, _t, doc, _m, leido in hv.propose_pdf_leido("test_star")] == \
+        [("publisher", "eprint")], "los dos ejes, cada uno con su verdad"
+    # sin la firma, sigue siendo «quedó VIEJA»
+    sembrar(toy_vault, d, fm_extra={"pdf_source": "publisher"})
+    props = hv.propose_pdf_leido("test_star")
+    assert props[0][3] == "" and "quedó VIEJA" in props[0][4]
+    # ⚠ y al revés —la prosa dice *publicado* y en disco está el preprint— tampoco hay segundo eje
+    # que proponer: `publicado` no distingue `publisher` de `ads`, así que sigue siendo corrección
+    d["salvedades"] = ["El PDF en disco es la copia del editor."]
+    sembrar(toy_vault, d, fm_extra={"pdf_source": "eprint", "pdf_reemplazo": firma})
+    (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "test_star" / f"{BIB}.txt").write_text(
+        "arXiv:2001.00001v1 [astro-ph.EP] 1 Jan 2020\n", encoding="utf-8")
+    props = hv.propose_pdf_leido("test_star")
+    assert props and props[0][5] == "" and "quedó VIEJA" in props[0][4]
+
+
+def test_456_el_printer_emite_el_segundo_eje_aunque_el_primero_no_se_pueda_decidir(toy_vault, capsys):
+    """#456 — entre `publisher` y `ads` no elige un script (#296), pero eso no es razón para perder
+    el eje que SÍ se sabe: la propuesta sale con `leido` puesto y el otro a elección."""
+    j = cfg.EXTRACCION / "s" / "x.json"
+    hv.print_pdf_leido([(j, "2020X", "El PDF …", "", "", "eprint")])
+    out = capsys.readouterr().out
+    assert '"leido": "eprint"' in out and "publisher|ads" in out and "elegí vos" in out

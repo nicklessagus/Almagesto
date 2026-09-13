@@ -2775,8 +2775,13 @@ def test_fold_tex_no_es_un_renderizador_y_deja_lo_que_no_entiende():
     assert cfg.fold_tex("H$_2$O") == "H2O"
     assert cfg.fold_tex(r"m s$^{-1}$") == "m s-1"
     assert cfg.fold_tex(r"Ca II H\&K") == "Ca II H&K"
-    # Macro desconocida: se queda como está, y entonces la comparación dice «distinto».
-    assert cfg.fold_tex(r"9.2 M$_{{\ensuremath{\oplus}}}$") == r"9.2 M_\oplus"
+    # ⛔ #459 — TODO comando TeX se pliega, no una lista corta: con la lista, `\ensuremath` se iba
+    # y el `\alpha`/`\oplus` de adentro quedaba como PALABRA contra el `α`/`⊕` del catálogo, que
+    # `method_key` descarta por no ser alfanumérico ASCII. Medido: 9 de 10 hallazgos de la
+    # categoría eran el mismo título en dos codificaciones.
+    assert cfg.fold_tex(r"9.2 M$_{{\ensuremath{\oplus}}}$") == "9.2 M_"
+    assert cfg.fold_tex(r"Cram{\'e}r-Rao") == "Cramer-Rao", "el acento deja la letra"
+    assert cfg.fold_tex(r"H\&K") == "H&K", r"⛔ `\&` es un ESCAPE, no un acento: el `&` se conserva"
     assert cfg.fold_tex("") == "" and cfg.fold_tex(None) is None
     assert cfg.fold_tex(2020) == 2020, "lo que no es un string vuelve como está"
 
@@ -3338,4 +3343,39 @@ def test_452b_la_clase_la_decide_la_CLAUSULA_con_negacion_simetrica(toy_vault):
     # ⛔ y `web` NO contradice a ningún testigo: ninguno lo decide (`pdf_source: web` es un snapshot)
     assert cfg.disk_doc_conflict(
         "El PDF en disco es el MANUSCRITO del autor.", {"pdf_source": "publisher"}, "2099Y") is None
+
+
+def test_457_escape_dollars_neutraliza_el_suelto_y_NO_la_matematica(toy_vault):
+    """⛔ #457 — el `$` de Obsidian es el `|` de una celda (#240): abre matemática y se empareja con
+    el siguiente `$` de la nota. Medido: la línea de copyright de IEEE
+    (`1070-9908/04$20.00 © 2004 IEEE`) en una nota con **31** `$` más.
+
+    ⛔ El span `$…$` bien formado NO se toca —ése SÍ es matemática, y escaparlo cambiaría la fórmula
+    en silencio, el mismo argumento que `escape_cell` hace para `\vert`— y el que ya viene escapado
+    tampoco, o renderizaría una barra invertida literal."""
+    assert cfg.escape_dollars("1070-9908/04$20.00 © 2004 IEEE") == \
+        r"1070-9908/04\$20.00 © 2004 IEEE"
+    assert cfg.escape_dollars("la amplitud es $K = 2.5$ m/s") == "la amplitud es $K = 2.5$ m/s", \
+        "la matemática no se toca"
+    assert cfg.escape_dollars("$K$ cuesta $20") == r"$K$ cuesta \$20", "las dos cosas a la vez"
+    assert cfg.escape_dollars(r"ya escapado \$20") == r"ya escapado \$20", "no se escapa dos veces"
+    assert cfg.escape_dollars("sin nada") == "sin nada"
+    assert cfg.escape_dollars("") == ""
+
+
+def test_459_el_titulo_en_DOS_CODIFICACIONES_deja_de_ser_desacuerdo(toy_vault):
+    """⛔ #459 — el detector de #397 comparaba un título BibTeX (con escapes LaTeX) contra el texto
+    plano del catálogo, así que toda diferencia de CODIFICACIÓN salía como si las dos fuentes
+    dijeran cosas distintas del mismo paper. Medido: **10 hallazgos sobre 270 notas**, de los cuales
+    **9 eran la misma cadena escrita de dos maneras** — y el décimo, el que la categoría existe para
+    encontrar, era un `year` (2008 contra 2007) que se perdía entre los nueve. Es el argumento de
+    #433 sobre la tasa de disparo."""
+    pares = [("Hα Activity of Old M Dwarfs", r"H{\ensuremath{\alpha}} Activity of Old M Dwarfs"),
+             ("Comment on “Stellar activity", r"Comment on {\textquotedblleft}Stellar activity"),
+             ("(4.2, 6.9, and 9.2 M⊕)", r"(4.2, 6.9, and 9.2 M\ensuremath{\oplus})"),
+             ("Cramér-Rao Bounds", r"Cram{\'e}r-Rao Bounds")]
+    for plano, tex in pares:
+        assert cfg.catalog_compare_key(plano) == cfg.catalog_compare_key(tex), (plano, tex)
+    # y lo que NO es codificación sigue siendo distinto
+    assert cfg.catalog_compare_key("un título") != cfg.catalog_compare_key("otro título")
 

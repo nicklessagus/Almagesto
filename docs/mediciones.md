@@ -2461,3 +2461,108 @@ matchea»*—, y por ahí entraron dos casos de polisemia pura que la regla admi
 de corrientes marinas medidas por radar HF; artefactos oculares en EEG vía componentes
 independientes). Eso es diseño, no bug, y queda dicho.
 
+## #457 · los dos residuos del re-estampado acotado (2026-09-13)
+
+Con #453 cerrado, quedaban tres notas sobre las que el re-estampado **no converge**: una rehúsa para
+siempre y la otra propone un cambio que no hay que aceptar.
+
+**1 · La vista con `### Lente` tiene DOS bloques y no se puede direccionar.** `section_span` devuelve
+hasta el próximo `## `, así que la sección de la vista incluía su sub-sección de lente y
+`salvedades_span` encontraba **dos** bloques: devolvía `None`, había marcas, y el re-estampado
+rehusaba la nota con *«tiene prosa que no escribió el cosechador»* — un mensaje que además apunta a
+la causa equivocada, porque esa prosa la escribió él. Medido, 2 notas con la misma forma
+(`2001HyvarinenKarhunenOja` con `## Vista — ica` en L121 y su lente en L198;
+`2011PLoSO...627594P`, ídem), y son **las dos únicas** propuestas de `--propose-pdf-leido` que no se
+podían cobrar por ningún camino. Es el simétrico de #239: con `enfasis` la unidad es la sub-sección,
+así que **sin** él la unidad es la vista **menos** sus lentes.
+
+**2 · `render_salvedades` escapaba `|` pero no `$`.** `2004ISPL...11..470D` lleva en su salvedad la
+línea de copyright de IEEE, y la nota la tiene escapada (`1070-9908/04\$20.00 © 2004 IEEE`); el
+render emitía `$20.00` **sin** el escape, así que el re-estampado proponía quitarlo — y esa nota
+tiene **31** `$` más, o sea que un delimitador suelto tiene con qué emparejarse y arrastrar media
+nota a modo matemático. Era, además, la única diferencia entre esa nota y su render.
+
+**Qué cambió (1.267.1).** `_view_without_lenses` recorta la sección de la vista en su primer `### ` y
+`cfg.escape_dollars` neutraliza el `$` que no es delimitador —hermano de `escape_cell` (#240) un
+carácter más allá—, sin tocar el span `$…$` bien formado ni el que ya venía escapado.
+
+## #458 · `query_ads` no paginaba y el remedio prescrito era un no-op (2026-09-13)
+
+Tema `ica-ruido`, que declara `search_fq: null` (#351) y por eso tiene un universo grande: ADS
+reporta **6964**.
+
+```
+rows=2000 →   2000 papers · 3 CORE
+rows=3000 →   2000 papers · 3 CORE
+rows=7000 →   2000 papers · 3 CORE
+```
+
+La request se armaba **una sola vez** —sin `start` ni bucle— así que todo lo que pasara de 2000 era
+inalcanzable, y tanto el aviso del corte como la categoría *Corpus truncado* del lint mandaban a
+*«subí `--rows`»*: sobre ese tema, eso no cambia **nada**. Es el defecto que #294 ya había arreglado
+un nivel más allá, en el slice por término de OpenAlex.
+
+Y la segunda mitad: con `--rows 3000` el aviso decía *«sólo se trajeron 3000»* cuando llegaron
+**2000**, y ese número entraba en `busquedas[]` — que es **versionado** y es la pieza que responde
+*«sobre qué universo de papers afirma esta ficha»* (#51/D-28). Una corrida dejaba escrito para
+siempre que trajo 3000.
+
+**Qué cambió (1.268.0).** `query_ads` **pagina** (`_ads_page` + bucle con `start`, tope
+`ADS_PAGE_MAX`), con tres cortes: se juntó lo pedido, se agotó el universo, o la página volvió
+**corta** —menos filas de las pedidas significa que ADS no tiene más para dar, y sin ese corte un
+tope que el servidor no declara sería un bucle infinito—. El corte se mide contra lo que **volvió**
+(`num_found > len(docs)`), el registro guarda `rows` (la perilla) **y** `traidos` (el universo real),
+y el remedio que se prescribe puede funcionar: mientras quede universo por pedir, *«subí --rows»*;
+cuando lo pedido ya volvió entero, *«subir --rows NO alcanza: acotá la query»*. El lint dice lo
+mismo, y `traidos` ausente = corrida anterior al fix (no «trajo cero»).
+
+## #456 · `pdf_leido` conflagaba dos ejes y en un PDF reemplazado no había valor correcto (2026-09-13)
+
+`pdf_leido` se documentó como *«qué documento se leyó»* (#452) pero su chequeo lo cruza contra **lo
+que hay en disco HOY** (`cfg.doc_on_disk`). Mientras las dos cosas coinciden —el caso normal— el tipo
+funciona; cuando no, **no hay valor correcto**. Y no es un caso raro: es exactamente la población que
+creó #436, un PDF **reemplazado**.
+
+Medido en `Almagesto-Tesis`: **27 salvedades** donde el texto dice *«Esta vista se leyó del preprint
+de arXiv (marca de agua …)»* —verdadero, y es el hecho que #449 pide conservar—, `doc_on_disk` dice
+**publicado** (`pdf_reemplazo` firma `publisher`), y `--propose-pdf-leido` proponía `documento:
+publisher` con ese mismo texto como `evidencia`. El chequeo la daba por **verificada** y la nota
+publicaba una línea cuyo campo dice *publisher* y cuya evidencia dice *preprint*. ⚠ Y la otra salida
+tampoco existía: declarar `eprint` —lo que de verdad se leyó— lo **rechazaba** el chequeo. El hecho
+verdadero no era expresable en el tipo.
+
+**Qué cambió (1.268.1).** Campo `leido` (opcional, mismo vocabulario cerrado, `SALVEDAD_CAMPO_LEIDO`)
+junto a `documento`: el primero lo declara la lectura y su testigo es la firma del reemplazo
+(`pdf_reemplazo`, #441); el segundo lo deciden los tres testigos del disco y es el que se verifica.
+Con los dos, el chequeo dice lo que `_paginacion` (#436) ya marca del lado de la extracción —**la
+vista es anterior al reemplazo, sus localizadores son del documento viejo**— y
+`--propose-pdf-leido` propone la salvedad **entera** en vez de reportar sólo *«quedó vieja»*. ⚠ Sólo
+cuando la nota declara `pdf_reemplazo`: sin la firma no consta cuándo cambió el documento, así que
+sigue siendo una corrección y no un valor.
+
+## #459 · el desacuerdo frontmatter ↔ exportación comparaba dos codificaciones (2026-09-13)
+
+La categoría de #397 reporta **10 hallazgos sobre 270 notas**. Leídos uno por uno, **9 son la misma
+cadena escrita de dos maneras**: `Hα` contra `H{\ensuremath{\alpha}}`, `“` contra
+`{\textquotedblleft}`, `M⊕` contra `M\ensuremath{\oplus}`, `Cramér` contra `Cram{\'e}r`, más
+comillas tipográficas y *title case* contra *sentence case*. **El décimo sí es real** —`2008Yang`,
+`year` 2008 en el frontmatter contra 2007 en la exportación: el año impreso contra el de publicación
+online de Crossref— y es exactamente lo que la categoría existe para encontrar: un **año**, que es lo
+que termina impreso en una cita.
+
+Es la quinta superficie de la misma ceguera (#168, #276, #283, #309): todo chequeo que mire texto
+normaliza primero. #400 ya había plegado los dos marcados, pero con una **lista corta** de comandos
+TeX: `\ensuremath` se iba y el `\alpha` de adentro quedaba como la palabra «alpha» contra la `α` del
+catálogo, que `method_key` descarta por no ser alfanumérica ASCII.
+
+**Qué cambió (1.268.2).** `_TEX_CMD_RE` pliega **cualquier** `\comando` y `_TEX_ACENTO_RE` resuelve
+el acento de BibTeX (`{\'e}`, `\"o`, `\~n`) dejando la letra. ⛔ La lista de diacríticos es
+**cerrada** y no «cualquier no-alfanumérico»: `\&` es un **escape**, no un acento, y con el set
+abierto `H\&K` perdía el `&` junto con la barra.
+
+⚠ **Lo que NO se hizo, y es una decisión:** el issue ofrecía saltear el `title` y comparar sólo los
+campos sin tipografía. No se tomó porque el único acierto duro que tuvo esta categoría fue un paper
+con el título de **otro** (#392, un título declarado de memoria): saltearlo para bajar el ruido
+costaría justo ese hallazgo. El ruido se cierra plegando, no eximiendo. Queda **1 falso** de los 10
+—el escape de IEEE `Crame/spl acute/r`, que es basura del catálogo y no TeX—, contra 9 antes.
+

@@ -2558,9 +2558,19 @@ def check_truncated_corpus(slug: str, data: dict) -> list:
         pasada = ("" if rec_n is None else
                   f" + {rec_n} de la segunda pasada por fecha (la cola RECIENTE ya está "
                   f"cubierta; falta el medio)")
+        # ⛔ #458 — se reporta lo que VOLVIÓ (`traidos`), no lo que se pidió (`rows`), y el remedio
+        # tiene que poder funcionar: desde que `query_ads` pagina, subir `--rows` sirve mientras
+        # quede universo por pedir; si lo pedido ya volvió entero, lo que falta no se alcanza con
+        # más filas de la MISMA query. `traidos` ausente = corrida anterior al fix.
+        _traidos = t.get("traidos")
+        _cuantos = t.get("rows") if _traidos is None else _traidos
+        _remedio = ("re-ingestá con --rows mayor para cubrir el resto"
+                    if _traidos is None or _traidos >= (t.get("rows") or 0)
+                    else "subir --rows NO alcanza (ADS ya devolvió todo lo que esta query da): "
+                         "acotá la query")
         truncated_corpora.append(
-            (slug, f"ADS reporta {t.get('num_found')} y se trajeron {t.get('rows')}{pasada} → "
-                   f"corpus incompleto; re-ingestá con --rows mayor (o paginá) para cubrir el resto"))
+            (slug, f"ADS reporta {t.get('num_found')} y se trajeron {_cuantos}{pasada} → "
+                   f"corpus incompleto; {_remedio}"))
     return truncated_corpora
 
 
@@ -2825,8 +2835,9 @@ def check_registro_fallback(slug: str, reg: dict) -> tuple:
     if b.get("truncated"):
         truncated_corpora.append(
             (slug, f"corpus truncado según el registro del {fecha} (ADS reporta "
-                   f"{b.get('n_found')} y se pidieron {b.get('rows')}) → re-ingestá con --rows "
-                   f"mayor para cubrir la cola"))
+                   f"{b.get('n_found')} y se trajeron "
+                   f"{b.get('traidos') if b.get('traidos') is not None else b.get('rows')}, "
+                   f"pedidas {b.get('rows')}) → re-ingestá con --rows mayor para cubrir la cola"))
     # AUD-148: la marca hermana también cae al registro sin `build/`. Antes vivía SÓLO en
     # scratch gitignored, así que post-clone el rescate por glifo incompleto desaparecía y la
     # bóveda se leía como si hubiera visto todo el superset de la constelación.
@@ -4625,6 +4636,11 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                            f"{_oficial[len(_nota):][:60]}» → re-estampalo desde el catálogo "
                            f"(#400)"))
                 continue
+            # ⚠ #459 — el `title` se SIGUE comparando, y es una decisión: 9 de los 10 hallazgos
+            # medidos eran la misma cadena en dos codificaciones (y los cierra el plegado de
+            # `fold_tex`, no una exención), pero el único acierto duro que tuvo esta categoría fue
+            # un paper con el título de OTRO (#392, declarado de memoria). Saltear el título para
+            # bajar el ruido costaría justo ese hallazgo.
             bibtex_drift.append(
                 (stem, f"`{_c}` del frontmatter dice «{_nota[:60]}» y la exportación "
                        f"oficial dice «{_oficial[:60]}» — uno de los dos está mal, y el "

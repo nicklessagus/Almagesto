@@ -402,6 +402,14 @@ no sobre el paper—, así que `verify-citations` la deja afuera **por construcc
   extractor»*: publicarlo al mismo nivel visual que una fila chequeada es lo que dejó leer un
   defecto inventado como un hecho medido.
 
+⛔ **`pdf_leido` son DOS EJES (#456): `documento` = qué hay en disco (lo verifican los tres
+testigos) y `leido` = de qué se construyó la VISTA** (opcional, mismo vocabulario; su testigo es la
+firma `pdf_reemplazo`, #441). Normalmente coinciden; en un PDF **reemplazado** no, y con un solo eje
+**no había valor correcto** —medido, 27 salvedades cuyo campo diría `publisher` y cuya evidencia dice
+*preprint*, y declarar `eprint` hacía que el chequeo la rechazara—. Con los dos, el chequeo dice lo
+que `_paginacion` (#436) ya marca del otro lado: **la vista es anterior al reemplazo, sus
+localizadores son del documento viejo.**
+
 ⛔ **Y la que dice QUÉ DOCUMENTO hay en disco se cruza contra el disco (#449).** *«El PDF en disco
 es el PREPRINT»* es la salvedad más decidible que hay —la marca de arXiv del `.txt`, la firma
 `pdf_reemplazo` y `pdf_source` son **tres** testigos máquina-legibles— y quedó en prosa libre, así
@@ -1095,7 +1103,11 @@ casos:
 Por eso la columna de la vista se llama **`Localizador`** y no `Línea`: lleva `L1234`, `p. 271` o
 `Fig. 3, p. 7` según de dónde salga el dato (la clave del JSON sigue siendo `linea`).
 
-⛔ **La prosa que va a una CELDA se escapa: `\|` fuera de la matemática, `\vert` adentro (#240).**
+⛔ **La prosa que va a una CELDA se escapa: `\|` fuera de la matemática, `\vert` adentro (#240);
+y el `$` suelto de cualquier prosa que va a una nota, también (`escape_dollars`, #457)** — Obsidian lo
+lee como apertura de matemática y se empareja con el siguiente `$` de la nota (medido: la línea de
+copyright de IEEE en una nota con 31 `$` más). El span `$…$` bien formado **no se toca**: escaparlo
+cambiaría la fórmula.
 Un `|` crudo parte la fila y una afirmación citada y verificada queda **invisible para el lector**
 mientras el lint cuenta su fila. ⚠ Dentro de `$…$` el escape es `\vert` (en LaTeX `\|` es ‖):
 escapar a ciegas cambia filas invisibles por fórmulas equivocadas. Lo hace `escape_cell` en el
@@ -1298,7 +1310,9 @@ por flag** (D-48: `--no-triage` se eliminó); su política es `chain_autoaccept`
 —en una estrella la arma `build_query` y antes se tiraba—, **`fq`** (#238/#295: el **resuelto**, o
 sea el del tema si lo declara — es la mitad más restrictiva del filtro, y sin él un «0 encontrados»
 **no es una medición reproducible**; ⛔ y la pantalla lo imprime SIEMPRE con procedencia, #354),
-`rows`, `n_found`, `n_total`, `n_core`,
+`rows` (la perilla) y **`traidos`** (lo que VOLVIÓ — #458: ADS topea en 2000 por request, así que
+`query_ads` **pagina** con `start`, y sin los dos números el registro dejaba escrito para siempre
+«se trajeron 3000» sobre una corrida que trajo 2000), `n_found`, `n_total`, `n_core`,
 `n_candidates`, `n_dropped`, `truncated`, `almagesto_version`, **`bibcodes`** —lo que hace posible
 la unión de D-28— y **`lente`** —facetas/`require`/`min_facets` vigentes al correr, contra lo que
 se detecta la lente desincronizada—) y **`decisiones`** (el juicio de

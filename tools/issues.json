@@ -2264,6 +2264,26 @@
   {
    "number": 455,
    "title": "La segunda pasada por fecha (`recent_pass`) clasifica con la lente GLOBAL, no con la del tema: 7 de 10 papers entraron core con `puertas: []` sin matchear la faceta propia — radar, EEG, motores",
+   "state": "CLOSED"
+  },
+  {
+   "number": 456,
+   "title": "`pdf_leido` conflaga «qué se leyó» con «qué hay en disco»: en un PDF reemplazado no hay valor correcto — medido, 27 salvedades donde el campo diría `publisher` y su propia evidencia dice `preprint`",
+   "state": "OPEN"
+  },
+  {
+   "number": 457,
+   "title": "El re-estampado de salvedades no converge en tres notas: la vista con `### Lente` tiene DOS bloques y el span rehúsa, y `render_salvedades` escapa `|` pero no `$`",
+   "state": "OPEN"
+  },
+  {
+   "number": 458,
+   "title": "`query_ads` no pagina y ADS topea en 2000: el remedio que prescriben el aviso y el lint (`subí --rows`) es un no-op — y el aviso registra las filas PEDIDAS como traídas",
+   "state": "OPEN"
+  },
+  {
+   "number": 459,
+   "title": "El desacuerdo frontmatter ↔ exportación (#397) compara títulos con escapes LaTeX contra texto plano: 9 de 10 hallazgos son la misma cadena escrita de dos maneras",
    "state": "OPEN"
   }
  ]

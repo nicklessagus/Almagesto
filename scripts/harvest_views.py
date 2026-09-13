@@ -94,6 +94,32 @@ def pdf_on_disk(bibcode: str) -> bool:
 _DOC_DE_FUENTE = {"eprint": "preprint", "ads": "publicado", "publisher": "publicado"}
 
 
+def _leido_detalle(leido: str, doc: str, fm: dict) -> str:
+    """What the caveat's SECOND axis adds to the detail: which document the VIEW was built from (#456).
+
+    ⛔ The two axes are not the same question, and in a REPLACED PDF they do not coincide — that is
+    the population #436 created. `documento` is decided by the three witnesses on disk;
+    `leido` is declared by the reading and its witness is the replacement's signature
+    (`pdf_reemplazo`, #441). Without it there was **no correct value**: measured, 27 caveats whose
+    field would say `publisher` (what is on disk) and whose own evidence says *preprint* (what was
+    read) — and declaring `eprint` got the caveat REJECTED, so the true fact «this view was read
+    from the preprint» was not expressible in the type at all.
+
+    The useful thing it lets the check say is the one `_paginacion` (#436) already marks on the
+    extraction side: **the view predates the replacement, so its locators are of the old document.**"""
+    if not leido:
+        return ""
+    if leido == doc:
+        return f"; y la vista se leyó de ese mismo documento (`{leido}`)"
+    firmas = [x for x in cfg.as_list((fm or {}).get("pdf_reemplazo")) if isinstance(x, dict)]
+    cuando = f" del {firmas[-1].get('fecha')}" if firmas and firmas[-1].get("fecha") else ""
+    if firmas:
+        return (f"; la vista se leyó del **{leido}**, o sea ANTES del reemplazo{cuando}: sus "
+                f"localizadores son del documento viejo (#456)")
+    return (f"; la vista se leyó del **{leido}** y en disco hay otro documento, pero la nota no "
+            f"declara `pdf_reemplazo` — no consta cuándo cambió (#441)")
+
+
 def _check_pdf_leido(stem: str, item: dict) -> tuple[bool | None, str]:
     """Check the caveat that says WHICH DOCUMENT was read, against the disk (#452).
 
@@ -110,6 +136,10 @@ def _check_pdf_leido(stem: str, item: dict) -> tuple[bool | None, str]:
     if doc not in cfg.PDF_SOURCE_OK:
         return None, (f"`documento: {doc or '(vacío)'}` fuera del vocabulario "
                       f"({'|'.join(cfg.PDF_SOURCE_OK)}, #296)")
+    leido = str(item.get(cfg.SALVEDAD_CAMPO_LEIDO) or "").strip().lower()
+    if leido and leido not in cfg.PDF_SOURCE_OK:
+        return None, (f"`{cfg.SALVEDAD_CAMPO_LEIDO}: {leido}` fuera del vocabulario "
+                      f"({'|'.join(cfg.PDF_SOURCE_OK)}, #296)")
     de = mn.safe_name(str(item.get("bibcode") or "").strip() or stem)
     dicho = _DOC_DE_FUENTE.get(doc)
     if dicho is None:
@@ -120,8 +150,9 @@ def _check_pdf_leido(stem: str, item: dict) -> tuple[bool | None, str]:
     if disco is None:
         return None, f"ningún testigo dice qué documento hay en disco para `{de}`: {porque}"
     de_otro = f" (el PDF de `{de}`)" if de != stem else ""
-    return dicho == disco, (f"en disco está el **{disco}**{de_otro} ({porque}); la salvedad "
-                            f"declara `{doc}`")
+    detalle = (f"en disco está el **{disco}**{de_otro} ({porque}); la salvedad declara `{doc}`"
+               + _leido_detalle(leido, doc, fm))
+    return dicho == disco, detalle
 
 
 def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
@@ -301,10 +332,16 @@ def render_salvedades(data: dict) -> list:
     drift into the note the lint reads."""
     verificadas, prosa, _falsas = split_salvedades(str(data.get("bibcode") or ""), data)
     out = []
+    # #457 — el `$` suelto se escapa, como el `|` de una celda (#240): Obsidian lo lee como apertura
+    # de matemática y se empareja con el siguiente `$` de la nota. Medido: la línea de copyright de
+    # IEEE (`1070-9908/04$20.00 © 2004 IEEE`) en una nota con 31 `$` más.
+    def _bullet(x):
+        """One caveat as a list item, with its links kept and its stray `$` escaped (#457)."""
+        return f"- {cfg.escape_dollars(_safe_links(x))}"
     if verificadas:
-        out += [SALVEDAD_MARCAS[0], ""] + [f"- {_safe_links(s)}" for s in verificadas] + [""]
+        out += [SALVEDAD_MARCAS[0], ""] + [_bullet(s) for s in verificadas] + [""]
     if prosa:
-        out += [SALVEDAD_MARCAS[1], ""] + [f"- {_safe_links(s)}" for s in prosa] + [""]
+        out += [SALVEDAD_MARCAS[1], ""] + [_bullet(s) for s in prosa] + [""]
     return out
 
 
@@ -927,6 +964,16 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
 _VALOR_DE_CLASE = {"preprint": "eprint", "web": "web"}
 
 
+def _view_without_lenses(seccion: str) -> int:
+    """Where a view section ends if its `### Lente` sub-sections are left out (#457).
+
+    The symmetric of #239: with `enfasis` the unit is the sub-section, so without it the unit has to
+    be the view MINUS them — otherwise the same view has two caveat blocks and nothing can address
+    either."""
+    i = seccion.find("\n### ")
+    return len(seccion) if i < 0 else i + 1
+
+
 def salvedades_span(scope: str) -> tuple | None:
     """Span of the caveat blocks inside a view scope, or `None` if it has none (#453).
 
@@ -1036,6 +1083,15 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
                 sin_bloque.append((bib, f"la vista no tiene `### Lente — {enf}`"))
                 continue
             off, seccion = sub[0], seccion[sub[0]:sub[1]]
+        else:
+            # ⛔ #457 — el simétrico de #239: SIN `enfasis`, la sección de la vista es la vista
+            # **menos** sus sub-secciones de lente. `section_span` devuelve hasta el próximo `## `,
+            # así que incluía el `### Lente` y `salvedades_span` encontraba DOS bloques: devolvía
+            # `None`, había marcas, y el re-estampado rehusaba la nota culpando a una «prosa que no
+            # escribió el cosechador» que sí había escrito él. Medido: 2 notas, las dos con la misma
+            # forma, y son las dos únicas propuestas de `--propose-pdf-leido` que no se podían
+            # cobrar por ningún camino.
+            seccion = seccion[:_view_without_lenses(seccion)]
         bloque = "\n".join(render_salvedades(data)).rstrip("\n")
         # ⚠ Sin repetir `dentro is None` en las dos ramas, a propósito: «hay marcas» ya implica
         # que `salvedades_span` no devolvió `None` por ausencia, así que un `and dentro is None`
@@ -1186,22 +1242,36 @@ def propose_pdf_leido(slug: str | None = None) -> list:
                 # es el 77 % del costo del lint que #449 ya midió.
                 disco, porque = cfg.doc_on_disk(fm, stem)
                 if disco is not None and clase in ("preprint", "publicado") and clase != disco:
+                    # ⛔ #456 — la prosa dice de qué se LEYÓ y el disco qué hay HOY: en un PDF
+                    # reemplazado los dos son ciertos y distintos, y ahí la salvedad se escribe
+                    # ENTERA (los dos ejes) en vez de quedar sin valor correcto. Sólo cuando la
+                    # nota declara el reemplazo: sin firma no consta cuándo cambió.
+                    leido = _VALOR_DE_CLASE.get(clase) or ""
+                    if leido and cfg.as_list(fm.get("pdf_reemplazo")):
+                        doc = campo if campo in ("publisher", "ads") else ""
+                        out.append((j, bib, item.strip(), doc, "", leido))
+                        continue
                     out.append((j, bib, item.strip(), "",
-                                f"la salvedad quedó VIEJA: en disco está el {disco} ({porque})"))
+                                f"la salvedad quedó VIEJA: en disco está el {disco} ({porque})", ""))
                     continue
                 doc = _VALOR_DE_CLASE.get(clase) or (campo if campo in ("publisher", "ads") else "")
                 out.append((j, bib, item.strip(), doc,
-                            "" if doc else "la nota no declara `pdf_source`: elegí vos cuál"))
+                            "" if doc else "la nota no declara `pdf_source`: elegí vos cuál", ""))
     return out
 
 
 def print_pdf_leido(props: list) -> None:
     """The proposal, with its population declared and the entry ready to paste (D-43)."""
     cfg.print_seguro(f"{len(props)} salvedad(es) en prosa que dicen QUÉ DOCUMENTO se leyó (#452)")
-    for j, bib, texto, doc, motivo in props:
+    for j, bib, texto, doc, motivo, leido in props:
         cfg.print_seguro(f"\n  {j.parent.name}/{j.name} · {bib}\n    «{texto[:120]}»")
+        # #456 — los DOS ejes cuando no coinciden: qué hay en disco y de qué se leyó la vista.
+        _eje2 = f', "{cfg.SALVEDAD_CAMPO_LEIDO}": "{leido}"' if leido else ""
         if doc:
-            cfg.print_seguro(f'    → {{"tipo": "pdf_leido", "documento": "{doc}"}}')
+            cfg.print_seguro(f'    → {{"tipo": "pdf_leido", "documento": "{doc}"{_eje2}}}')
+        elif leido:
+            cfg.print_seguro(f'    → {{"tipo": "pdf_leido", "documento": "publisher|ads"'
+                             f'{_eje2}}} — la nota no declara `pdf_source`: elegí vos cuál')
         elif motivo.startswith("la salvedad quedó VIEJA"):
             # ⛔ Los testigos desmienten la prosa del JSON, que es inmutable (#311) y puede ser
             # anterior a un `replace_pdf`: proponer el valor viejo daría una entrada que el propio
