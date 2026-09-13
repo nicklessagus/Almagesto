@@ -674,3 +674,31 @@ python scripts/lint.py | grep -E "Salvedades sin la marca|párrafo duplicado"
 **Devolver si** una nota queda con el contenido repetido, si *«párrafo duplicado»* sube, o si migrar
 pisa una corrección a mano que vivía en el bloque viejo.
 
+### #453 (5ª vuelta) · v1.266.1 — la regla se simetriza: perder una prosa se rehúsa
+
+**Qué falló.** La duplicación se fue, pero el barrido dio **−41 bullets / +0** sobre 29 notas: al
+migrar el bloque pelado, todo bullet que la nota tenía y el JSON no, desaparecía — entre ellos 2
+registros de curación (#112) y 5 correcciones de #449.
+
+**Qué entró.** Agregar pasa · reescribir se rehúsa · **borrar un bullet de prosa se rehúsa** ·
+borrar una `⚙ verificada` pasa avisando. Escotilla: el bullet que se va porque se **estructuró** no
+es un borrado (su texto sigue en la nota, dentro de `evidencia`). Y el mensaje de #454 nombra la
+nota en vez del literal *«sin fuente adyacente»*.
+
+**Validar** — el mismo barrido:
+
+```bash
+python scripts/harvest_views.py <slug> --restamp-salvedades
+git diff --stat vault/wiki/papers/   # ningún `-` de bullet de prosa
+```
+
+- **0 bullets de prosa borrados** (era −41): las 29 notas tienen que salir rehusadas con
+  *«BORRARÍA N salvedad(es)»*;
+- los 2 registros de curación y las 5 correcciones de #449 **intactos**;
+- cobrar una propuesta de #452 tiene que **seguir pasando** si la prosa vieja viaja en `evidencia`
+  —y rehusarse si no, que es lo que conserva el registro de la lectura—;
+- `párrafo duplicado` sigue en 0.
+
+**Devolver si** algún bullet de prosa desaparece, si el cobro de #452 con `evidencia` queda
+rehusado, o si la escotilla amnistía un borrado que no tiene contraparte en la nota.
+

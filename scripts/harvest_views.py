@@ -967,6 +967,27 @@ def _bullets_prosa(scope: str) -> set:
     return {ln.strip() for ln in cola.splitlines() if ln.strip().startswith("- ")}
 
 
+def _estructurada(bullet: str, data: dict) -> bool:
+    """Did this prose bullet go away because it was STRUCTURED, rather than deleted? (#453)
+
+    ⛔ The hatch that keeps #452 payable. Cobrar a proposal is exactly *quitar la prosa y agregar la
+    estructurada*, so a rule that refuses every deletion would refuse the one operation the command
+    exists for. What tells the two apart is decidable and has nothing to do with semantics: the
+    text is still in the note, inside the structured caveat (`evidencia`, `nota`, `cadena`). What
+    has no counterpart anywhere is a deletion — measured, −41 bullets over 29 notes, among them two
+    curation records #112 wants visible and five corrections of #449."""
+    texto = lb.normalize_ws(bullet.lstrip("-* ")).strip().lower()
+    if not texto:
+        return False
+    for item in cfg.as_list((data or {}).get("salvedades")):
+        if not isinstance(item, dict):
+            continue
+        for v in item.values():
+            if isinstance(v, str) and texto in lb.normalize_ws(v).strip().lower():
+                return True
+    return False
+
+
 def _n_verificadas(scope: str) -> int:
     """How many `⚙ verificada` lines this scope publishes (#453)."""
     return sum(1 for ln in scope.splitlines() if ln.strip().startswith("- ⚙ verificada"))
@@ -1051,19 +1072,32 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
         # `[[bibcode]]`, o sea el agujero de #213 que este módulo existe para tapar).
         #
         # La regla es ESTRUCTURAL, no semántica, y por eso no depende de ningún ancla: **una
-        # salvedad en prosa que ya está escrita NO se reescribe**. Agregar y quitar son seguros
-        # —cobrar una propuesta de #452 es justamente quitar la prosa y agregar la estructurada—;
-        # lo que se rehúsa es el cambio de TEXTO de una que sigue ahí, que es donde vive la
-        # corrección a mano. Medido: deja pasar 43 de 65 y frena las 22.
+        # salvedad en prosa que ya está escrita NO SE PIERDE**. Agregar pasa; reescribirla y
+        # BORRARLA se rehúsan; borrar una `⚙ verificada` pasa avisando (abajo).
+        #
+        # ⛔ #453, devuelto por CUARTA vez — el simétrico, y salía de esta misma regla: con el
+        # bloque marcado, la corrección a mano queda como línea distinta → reescritura → se rehúsa
+        # (anduvo 56 veces); con el bloque PELADO no tiene contraparte en el render, así que no hay
+        # par similar, no es reescritura, y **se borraba**. Medido en el barrido: **−41 bullets /
+        # +0** sobre 29 notas, entre ellos 2 registros de curación que #112 pide visibles
+        # («⚠ ARTEFACTOS BORRADOS … triage.py --drop-core») y 5 correcciones de #449 —las mismas
+        # que la vuelta anterior protegía—. Y el bloque pelado es por definición anterior a #213,
+        # o sea la población con MÁS prosa que nadie volvió a escribir en ningún JSON: justo donde
+        # borrar duele más.
         #
         # ⚠ Sólo el bloque de PROSA: el de `⚙ verificada` lo re-deriva `check_salvedad` del disco,
         # así que ahí un texto distinto es la respuesta nueva del chequeo, no una edición de nadie
         # (y su pérdida ya se avisa abajo).
         viejos, nuevos = _bullets_prosa(seccion), _bullets_prosa(nueva)
-        if (se_van := viejos - nuevos) and nuevos - viejos:
-            rehusadas.append((bib, f"el re-estampado REESCRIBIRÍA {len(se_van)} salvedad(es) en "
-                                   f"prosa ya escritas → agregar y quitar son seguros, reescribir "
-                                   f"no: si la corrección es de la nota, pasala al JSON"))
+        # ⛔ La escotilla, y es la que mantiene vivo el cobro de #452: el bullet que se va PORQUE se
+        # estructuró no es un borrado — su texto sigue en la nota, adentro de la salvedad
+        # estructurada (`evidencia`). Lo que no tiene contraparte en ninguna parte, sí lo es.
+        se_van = {x for x in viejos - nuevos if not _estructurada(x, data)}
+        if se_van:
+            verbo = "REESCRIBIRÍA" if nuevos - viejos else "BORRARÍA"
+            rehusadas.append((bib, f"el re-estampado {verbo} {len(se_van)} salvedad(es) en prosa "
+                                   f"ya escritas → agregar pasa, perderlas no: si el texto es de la "
+                                   f"nota, pasalo al JSON (o a `evidencia` de su estructurada)"))
             continue
         fm = cfg.split_fm(text)
         if (conf := cfg.disk_doc_conflict(texto_nuevo, fm, mn.safe_name(bib))):

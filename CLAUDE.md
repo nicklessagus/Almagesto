@@ -446,9 +446,10 @@ dejó **27 afirmando lo que sus propios testigos desmienten** (la corrección de
 **50 `⚙ verificada` desaparecidas** sin que nada lo dijera. Hoy rehúsa la nota nombrándola, avisa
 la chequeada que dejó de serlo y **migra** el bloque pelado pre-#213 en vez de agregar el marcado
 abajo (medido: **25 notas duplicadas**, con el lint en lockstep — *«sin la marca»* 25→0 y *«párrafo
-duplicado»* 0→25). ⛔ **Y la regla que de verdad la protege es ESTRUCTURAL: una
-salvedad en prosa ya escrita NO se reescribe** —agregar y quitar son seguros (cobrar una propuesta
-es justo eso)—, porque aquel cruce comparte **ancla** con el detector de #449 y por lo tanto sólo
+duplicado»* 0→25). ⛔ **Y la regla que de verdad la protege es ESTRUCTURAL y SIMÉTRICA: una
+salvedad en prosa ya escrita NO SE PIERDE** —agregar pasa; reescribirla y **borrarla** se rehúsan;
+borrar una `⚙ verificada` pasa avisando. La escotilla que mantiene vivo el cobro de #452: el bullet
+que se va porque se **estructuró** no es un borrado (su texto sigue en la nota, en `evidencia`)—, porque aquel cruce comparte **ancla** con el detector de #449 y por lo tanto sólo
 mira las frases que ese detector sabe mirar: la corrección real se redacta *«esta vista se leyó
 del…»*, que no ancla, así que pasaba limpia y el texto falso quedaba **invisible**. Medido: **28
 salvedades reescritas** en un barrido de 65 notas —22 correcciones y una **cita textual** cambiada

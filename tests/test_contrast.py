@@ -1005,6 +1005,10 @@ def test_454_la_cita_de_una_SALVEDAD_no_se_aprueba_contra_su_propia_extraccion(t
     out = capsys.readouterr().out
     assert r["copiadas"] == 1, "la población se declara aparte de `solo_extraccion`"
     assert r["discrepan"] and "no es testigo" in r["discrepan"][0][1]
+    # ⚠ y nombra LA NOTA: el bloque de salvedades no lleva `[[bibcode]]`, así que el mensaje caía
+    # en el literal por defecto y decía «la extracción de sin fuente adyacente»
+    assert "extracción de 2013Voss" in r["discrepan"][0][1]
+    assert "sin fuente adyacente" not in r["discrepan"][0][1]
     assert cfg.VERIFICAR_PDF_MARK in out, "sale con la marca de #225/#341, no en silencio"
     assert not r["alteradas"], "no bloquea: la evidencia es la AUSENCIA de testigo (#205)"
 

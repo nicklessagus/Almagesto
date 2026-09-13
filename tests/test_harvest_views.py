@@ -1493,13 +1493,15 @@ def test_453_la_lente_se_re_estampa_SIN_tocar_la_vista_del_sujeto(toy_vault):
     (cfg.EXTRACCION / "test_star" / f"{BIB}__ruido.json").write_text(json.dumps(d2),
                                                                     encoding="utf-8")
     hv.harvest("test_star")
-    d2["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}]
+    d2["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ",
+                         "evidencia": "prosa de la segunda"}]
     (cfg.EXTRACCION / "test_star" / f"{BIB}__ruido.json").write_text(json.dumps(d2),
                                                                      encoding="utf-8")
     hv.restamp_salvedades("test_star", paper=BIB)
     body = dest.read_text(encoding="utf-8")
     assert "prosa de la primera lectura" in body, "la vista del sujeto no se toca"
-    assert "prosa de la segunda" not in body and "⚙ verificada" in body
+    assert "⚙ verificada" in body and "prosa de la segunda" in body, \
+        "estructurada: el texto sigue en la nota (#453), dentro de `evidencia`"
 
 
 def test_453b_el_restamp_REHUSA_si_revertiria_una_correccion(toy_vault, capsys):
@@ -1576,10 +1578,15 @@ def test_453c_el_restamp_REHUSA_reescribir_una_salvedad_en_prosa(toy_vault):
     assert "REESCRIBIRÍA 1 salvedad(es)" in r["rehusadas"][0][1]
 
 
-def test_453c_agregar_y_quitar_SIGUEN_siendo_seguros(toy_vault):
-    """#453 — la regla frena la reescritura y **no** el trabajo: cobrar una propuesta de #452 es
-    quitar la prosa y agregar la estructurada, y eso tiene que seguir pasando (43 de 65 en el
-    barrido medido)."""
+def test_453c_agregar_pasa_y_PERDER_una_prosa_se_rehusa(toy_vault):
+    """⛔ #453, cuarta devolución — la regla es simétrica: agregar pasa, **reescribir y BORRAR se
+    rehúsan**. Con el bloque marcado la corrección a mano quedaba como línea distinta → reescritura
+    → rehusada (56 veces); con el bloque pelado no tenía contraparte en el render, así que no era
+    reescritura y **se borraba**: −41 bullets sobre 29 notas, entre ellos 2 registros de curación
+    que #112 pide visibles y 5 correcciones de #449.
+
+    ⚠ Y la escotilla que mantiene vivo el cobro de #452: el bullet que se va porque se ESTRUCTURÓ no
+    es un borrado — su texto sigue en la nota, dentro de la estructurada (`evidencia`)."""
     _con_txt(toy_vault, "sin el simbolo")
     d = extraccion()
     d["salvedades"] = ["la Fig. 3 es difícil de leer"]
@@ -1590,14 +1597,20 @@ def test_453c_agregar_y_quitar_SIGUEN_siendo_seguros(toy_vault):
     (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
     assert hv.restamp_salvedades("test_star")["tocadas"] == [BIB]
     assert "la Tabla 2" in dest.read_text(encoding="utf-8")
-    # QUITAR una y estructurar la otra: el caso de #452, que es el que hay que dejar pasar
-    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"},
+    # PERDER una prosa sin contraparte: se rehúsa (la vuelta 4)
+    d["salvedades"] = ["la Tabla 2 está partida en dos páginas"]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert r["tocadas"] == [] and "BORRARÍA 1 salvedad(es)" in r["rehusadas"][0][1]
+    # ESTRUCTURARLA: el texto sigue en la nota, dentro de `evidencia` → es el cobro de #452, pasa
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ",
+                        "evidencia": "la Fig. 3 es difícil de leer"},
                        "la Tabla 2 está partida en dos páginas"]
     (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
     r = hv.restamp_salvedades("test_star")
     assert r["tocadas"] == [BIB] and r["rehusadas"] == []
     body = dest.read_text(encoding="utf-8")
-    assert "⚙ verificada" in body and "la Fig. 3" not in body
+    assert "⚙ verificada" in body and "la Fig. 3 es difícil de leer" in body
 
 
 def test_453d_el_bloque_LEGACY_se_MIGRA_en_vez_de_duplicarse(toy_vault):
@@ -1627,6 +1640,30 @@ def test_453d_el_bloque_LEGACY_se_MIGRA_en_vez_de_duplicarse(toy_vault):
     assert hv.restamp_salvedades("test_star")["tocadas"] == []
 
 
+def test_453e_el_legacy_NO_PIERDE_los_bullets_que_el_JSON_no_tiene(toy_vault):
+    """⛔ #453, cuarta devolución — el caso medido: migrar el bloque pelado lo reemplaza por el
+    render, y todo bullet que la nota tenía y el JSON no, **desaparecía**. Medido: −41 bullets / +0
+    sobre 29 notas, entre ellos **2 registros de curación** que #112 pide visibles («⚠ ARTEFACTOS
+    BORRADOS … `triage.py --drop-core`») y **5 correcciones de #449**. El bloque pelado es por
+    definición anterior a #213, o sea la población con más prosa que nadie volvió a escribir en
+    ningún JSON: justo donde borrar duele más."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = ["la Fig. 3 es difícil de leer"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    dest.write_text(dest.read_text(encoding="utf-8")
+                    .replace(cfg.SALVEDAD_MARCAS[1], cfg.SALVEDAD_MARCA_LEGACY)
+                    .replace("- la Fig. 3 es difícil de leer",
+                             "- la Fig. 3 es difícil de leer\n- ⚠ ARTEFACTOS BORRADOS por "
+                             "`triage.py --drop-core`"), encoding="utf-8")
+    antes = dest.read_text(encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert dest.read_text(encoding="utf-8") == antes, "⛔ el registro de curación NO se pierde"
+    assert [b for b, _m in r["rehusadas"]] == [BIB]
+    assert "BORRARÍA 1 salvedad(es)" in r["rehusadas"][0][1]
+
+
 def test_453d_el_legacy_con_una_CORRECCION_A_MANO_se_rehusa_igual(toy_vault):
     """#453 — migrar no puede ser un agujero en la guarda de reescritura: el bloque pelado es TODO
     juicio del extractor (no había chequeo), así que sus bullets cuentan como los de prosa y una
@@ -1644,3 +1681,22 @@ def test_453d_el_legacy_con_una_CORRECCION_A_MANO_se_rehusa_igual(toy_vault):
     r = hv.restamp_salvedades("test_star")
     assert dest.read_text(encoding="utf-8") == antes
     assert [b for b, _m in r["rehusadas"]] == [BIB] and "REESCRIBIRÍA" in r["rehusadas"][0][1]
+
+
+def test_453e_la_escotilla_de_la_estructurada_es_por_TEXTO_y_no_por_forma(toy_vault):
+    """#453 — el bullet que se va PORQUE se estructuró no es un borrado: su texto sigue en la nota,
+    dentro de la estructurada. Lo decide el TEXTO, no la forma — una estructurada cualquiera no
+    amnistía cualquier prosa, y un bullet vacío no amnistía nada."""
+    d = {"salvedades": [{"tipo": "txt_pierde", "cadena": "ζ",
+                         "evidencia": "la Fig. 3 es difícil de leer en la copia del editor"},
+                        "otra prosa suelta"]}
+    assert hv._estructurada("- la Fig. 3 es difícil de leer", d), "el texto vive en `evidencia`"
+    assert hv._estructurada("- ζ", d), "y en cualquier campo string de la estructurada"
+    assert not hv._estructurada("- una prosa que nadie estructuró", d)
+    assert not hv._estructurada("- otra prosa suelta", {"salvedades": ["otra prosa suelta"]}), \
+        "una salvedad en PROSA no amnistía: la que se estructuró es un dict"
+    assert not hv._estructurada("-   ", d), "el bullet vacío no amnistía nada"
+    # ⚠ y el campo que NO es string se saltea: `pdf_paginas` lleva un entero, y el vocabulario de
+    # `SALVEDAD_TIPOS` es abierto en sus valores (la prosa del extractor entra por cualquier clave)
+    assert not hv._estructurada("- 17", {"salvedades": [{"tipo": "pdf_paginas", "n": 17}]})
+    assert not hv._estructurada("- algo", {}), "sin salvedades no hay contraparte"

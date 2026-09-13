@@ -2409,3 +2409,25 @@ es el `.txt` (paso 1, que sigue mandando). El predicado es **uno solo** para los
 real el gate decía «no llama» (nadie importa `lib_quotes`: los consumidores usan `cfg.`) y por el de
 la fachada, «no existe»—. `lib_config` re-exporta a propósito (AUD-306); hoy el `ImportFrom` cuenta.
 
+**Devuelto por cuarta vez y corregido (1.266.1).** La duplicación se fue (*«párrafo duplicado»* en 0,
+`2007AN....328.1043C` con un solo bloque y el contenido una sola vez), pero el barrido dio **−41
+bullets / +0 sobre 29 notas**: migrar el bloque pelado lo reemplaza por el render, y **todo bullet
+que la nota tenía y el JSON no, desaparece**. Entre los 41: **2 registros de curación**
+(*«⚠ ARTEFACTOS BORRADOS … `triage.py --drop-core`»*, que #112 pide visibles), **5 correcciones de
+#449** y el resto salvedades escritas a mano de alto valor.
+
+El mecanismo es el **simétrico** del de la vuelta anterior, y salía de la propia regla: con el bloque
+marcado, la corrección a mano queda como línea distinta → reescritura → se rehúsa (anduvo **56**
+veces); con el bloque pelado **no tiene contraparte en el render**, así que no hay par similar, no es
+reescritura, y se borra. Las 5 correcciones de #449 lo muestran: en la 3ª vuelta las protegía la
+guarda, en la 4ª desaparecen. Y el bloque pelado es por definición anterior a #213, o sea **la
+población con más prosa que nadie volvió a escribir en ningún JSON**: justo donde borrar duele más.
+
+**Qué cambió (1.266.1).** La regla se simetriza: **agregar pasa · reescribir se rehúsa · borrar un
+bullet de prosa se rehúsa · borrar una `⚙ verificada` pasa avisando** (como ya hacía). Con una
+escotilla decidible que mantiene vivo el cobro de #452: el bullet que se va **porque se estructuró**
+no es un borrado —su texto sigue en la nota, dentro de la salvedad estructurada (`evidencia`)—, y lo
+que no tiene contraparte en ninguna parte, sí lo es. ⚠ Menor de la misma vuelta: el mensaje de #454
+interpolaba el literal *«sin fuente adyacente»* donde va el bibcode — el bloque de salvedades no
+lleva `[[bibcode]]`, así que ahí el dueño es **la nota**.
+

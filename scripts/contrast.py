@@ -391,11 +391,14 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                 # es el `.txt`, y no la tiene. Sale con la marca de #225/#341, que no destruye la
                 # afirmación, es visible y se saca con evidencia.
                 out["copiadas"] += 1
+                # ⚠ Acá el dueño es LA NOTA, no un candidato adyacente: el bloque de salvedades
+                # no lleva `[[bibcode]]`, así que `quienes` caía en su literal por defecto y el
+                # mensaje decía «la extracción de sin fuente adyacente».
                 out["discrepan"].append(
                     (b.first_line,
-                     f"«{corte}» — la escribió la máquina DESDE la extracción de {quienes}, así que "
-                     f"esa extracción no es testigo (#454), y el `.txt` no la dice: nadie la "
-                     f"verificó nunca",
+                     f"«{corte}» — la escribió la máquina DESDE la extracción de "
+                     f"{propio or quienes}, así que esa extracción no es testigo (#454), y el "
+                     f"`.txt` no la dice: nadie la verificó nunca",
                      cfg.verificar_pdf_mark("la cita de una salvedad, sin testigo independiente")))
             elif ver == "no_evaluable":
                 out["no_evaluables"].append(
