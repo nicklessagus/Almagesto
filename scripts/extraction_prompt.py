@@ -530,7 +530,8 @@ da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vi
   resultado descriptivo no se convierte en recomendación.
 - Si la fuente **atribuye el valor a otro trabajo** («according to X», «(X et al.)»), marcalo
   **segunda mano** con la cita a X: el número **no es de esta fuente**.
-- Mirá si el `.txt` es un **preprint** de arXiv (marca de agua): si lo es, decilo en `salvedades`,
+- Mirá si el PDF es un **preprint** de arXiv (marca de agua al margen): si lo es, decilo en
+  `salvedades` **estructurada** —`{{"tipo":"pdf_leido","documento":"eprint"}}` (#452), ver abajo—,
   porque un valor que discrepa del publicado es candidato a diferencia de versión.
 - ⛔ **Nada de prosa comparativa con otros papers.** Comparar dos fuentes es tarea del
   orquestador y va al `## Inventario por eje`, no a esta nota.
@@ -585,10 +586,17 @@ paper, preferí describirlas en palabras: una fila partida deja la afirmación *
 lector** aunque el lint la siga contando como verificada.
 
 ⛔ **Las `salvedades` que afirman algo DECIDIBLE sobre un archivo van ESTRUCTURADAS (#213),
-porque un script las chequea.** Vocabulario cerrado, dos formas:
+porque un script las chequea.** Vocabulario cerrado, tres formas:
 
     {{"tipo":"txt_pierde","cadena":"ζ_{{×+×}}"}}     → el `.txt` NO contiene esa cadena
     {{"tipo":"pdf_paginas","n":17}}                 → el PDF tiene N páginas
+    {{"tipo":"pdf_leido","documento":"eprint"}}     → QUÉ documento leíste (#452)
+
+⛔ **La del documento leído va SIEMPRE que el PDF sea un preprint** (`documento`: `eprint` |
+`publisher` | `ads` | `web`, el mismo vocabulario que `pdf_source`), y lleva `"bibcode":"<otro>"`
+si hablás del PDF de **otra** fuente. Los tres testigos del disco la deciden sola. En prosa no:
+ahí hay que adivinar de quién habla la oración, y el detector que lo intentaba midió 5 hallazgos
+con precisión **0/5** sobre 268 notas.
 
 Todo lo demás va como **string**, y la nota lo publica marcado **⚠ NO VERIFICADA — juicio del
 extractor**, en su propio bloque. La razón: una salvedad sobre el **artefacto** no lleva

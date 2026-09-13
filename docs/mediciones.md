@@ -2225,3 +2225,34 @@ es la de la **fila previa** de un par vivo —igualdad exacta, nunca cruzando `b
 mismo par re-anclado, y ya no lo descarta; y el escritor **declara** la condición de la ronda que no
 quedó vigente, con su motivo. El único caso que queda es benigno (la ronda no declara condición
 sobre una fila resuelta), y declararlo es lo que lo mantiene benigno.
+
+## #452 · la salvedad que dice QUÉ DOCUMENTO se leyó, estructurada (punto 3 de #449)
+
+No es una medición nueva: es la salida de la que ya está arriba. El detector de #449 leía prosa
+libre y dio **5 hallazgos sobre 268 notas de `papers/`, precisión 0/5**; v1.262.1 lo angostó a
+cuatro condiciones y bajó el ruido, pero el problema de fondo quedó — **el detector tiene que
+adivinar de quién habla la oración**. El caso 4 lo muestra entero: *«la comparación es contra la
+copia publicada de Udry (en disco desde el 2026-09-12)»* es **verdadera** y es sobre el PDF de otro
+bibcode. Ninguna heurística sobre prosa castellana decide eso, y la quinta angostura que proponía la
+instancia —«un apellido que no es el de la nota»— se descartó por lo mismo: no es decidible desde la
+nota, y adivinarlo cambia estos falsos positivos por otros nuevos.
+
+**Qué cambió (1.264.0).** Tercer tipo en `cfg.SALVEDAD_TIPOS`: `pdf_leido` + `documento`
+(vocabulario de `PDF_SOURCE_OK`, #296) + `bibcode` opcional. Lo chequea
+`harvest_views._check_pdf_leido` contra los **tres testigos** que ya resuelve `cfg.doc_on_disk` —los
+llama, no los reimplementa—, con las tres respuestas de siempre: verdadera se publica con su
+evidencia, falsa **no se publica** y el cosechador la grita, y `web` (que ningún testigo del disco
+decide) sale **no evaluable con su motivo** (D-43). `extraction_prompt` lo pide en las dos líneas
+donde antes decía «decilo en `salvedades`» sin decir cómo — que es por qué venía en prosa (#213
+midió 0 de 43 extracciones emitiendo una estructurada). `cfg.looks_decidable` pasa a cubrir la
+tercera decidible **por el mismo ancla** que el detector de #449 (`_DOC_EN_DISCO_RE`: una segunda
+implementación de «qué documento afirma esta oración» es la regla de método nº 2 otra vez). Y la
+categoría `doc_en_disco` del lint queda como **residuo**, con la salida nombrada.
+
+⛔ **El migrador PROPONE y no escribe** (`harvest_views.py <slug> --propose-pdf-leido`): la salvedad
+vive en `raw/extraccion/<slug>/<bib>.json`, que es versionado y **no regenerable sin volver a leer
+el PDF** (#311) — el mismo motivo por el que `split_subject_slugs` filtra en la nota y deja el JSON
+quieto. Y hay un caso que un script no puede cerrar: *publicado* no distingue `publisher` de `ads`,
+así que cuando la nota no declara `pdf_source` emite el hallazgo **sin valor** en vez de inventar la
+procedencia que #296 cerró.
+

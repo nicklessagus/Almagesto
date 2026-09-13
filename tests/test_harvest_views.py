@@ -812,6 +812,107 @@ def test_salvedad_no_evaluable_no_es_verificada_ni_falsa(toy_vault, capsys):
     assert "salvedad FALSA" not in capsys.readouterr().out
 
 
+def test_452_pdf_leido_se_chequea_contra_LOS_TRES_TESTIGOS(toy_vault):
+    """⛔ #452 — la salvedad más decidible que escribe el extractor («el PDF en disco es el
+    preprint») era la única que quedaba en PROSA, y sobre prosa el detector de #449 tiene que
+    ADIVINAR de quién habla la oración: midió 5 hallazgos con precisión 0/5 sobre 268 notas.
+    Estructurada la deciden los tres testigos de `doc_on_disk`, en su precedencia."""
+    _con_txt(toy_vault, "arXiv:2001.00001v2 [astro-ph.EP] 1 Jan 2020\nel cuerpo del paper\n")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "pdf_leido", "documento": "eprint"}]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert "⚙ verificada" in body and "preprint" in body, \
+        "la marca de arXiv en el `.txt` es verdad del artefacto y manda (#57)"
+
+
+def test_452_pdf_leido_FALSA_no_se_publica_y_se_grita(toy_vault, capsys):
+    """#452 — el caso que produjo el issue: `replace_pdf` cambia los tres testigos y la salvedad
+    sigue diciendo preprint. Medido al cerrar #436: 43 salvedades en 31 notas, con `lint` rc 0."""
+    _con_txt(toy_vault, "el cuerpo del paper, sin marca de arXiv\n")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "pdf_leido", "documento": "eprint"}]
+    dest = sembrar(toy_vault, d, fm_extra={"pdf_source": "publisher"})
+    hv.harvest("test_star")
+    assert "⚙ verificada" not in dest.read_text(encoding="utf-8")
+    assert "salvedad FALSA" in capsys.readouterr().out
+
+
+def test_452_pdf_leido_declara_el_bibcode_de_OTRA_fuente(toy_vault):
+    """⛔ #452 — es el falso positivo nº 4 de #449, el que ninguna heurística sobre prosa puede
+    cerrar: «la comparación es contra la copia publicada de [otro] (en disco desde …)» es VERDADERA
+    y habla del PDF de otro bibcode. Declarado, no hay nada que adivinar."""
+    mn_nota = mn  # el otro paper, con su propio testigo
+    otra = cfg.PAPERS / "2007otro....1U.md"
+    otra.write_text("---\nbibcode: 2007otro....1U\npdf_source: publisher\ntags: [paper]\n---\n\n"
+                    "## Abstract\n\nx\n", encoding="utf-8")
+    assert mn_nota.safe_name("2007otro....1U")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "pdf_leido", "documento": "publisher",
+                        "bibcode": "2007otro....1U"}]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert "⚙ verificada" in body and "2007otro....1U" in body, \
+        "se chequea contra los testigos de ESE bibcode, no contra los de la nota"
+
+
+def test_452_documento_fuera_del_vocabulario_o_sin_testigo_es_NO_EVALUABLE(toy_vault):
+    """#452 / D-43 — el tercer estado. `web` es un valor legítimo de `PDF_SOURCE_OK` que **ningún
+    testigo del disco decide** (un snapshot no lleva marca de arXiv ni firma de reemplazo), y un
+    valor fuera de vocabulario cae por el `else` de todo `== "eprint"` en silencio (#296)."""
+    assert hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "web"})[0] is None
+    ok, det = hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "preprint"})
+    assert ok is None and "fuera del vocabulario" in det, "`preprint` no es un valor de pdf_source"
+    assert hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": ""})[0] is None
+    assert hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "eprint"})[0] is None, \
+        "sin testigos no hay contra qué cruzar"
+    # con testigo Y `web`: el no-evaluable es del VALOR, no de la falta de testigos — los dos
+    # caminos llegan a `None` y hay que poder distinguirlos (D-43)
+    _con_txt(toy_vault, "arXiv:2001.00001v2 [astro-ph.EP] 1 Jan 2020\n")
+    ok, det = hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "web"})
+    assert ok is None and "no lo deciden los testigos" in det
+    assert hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "eprint"})[0] is True
+
+
+def test_452_el_migrador_PROPONE_y_no_toca_la_extraccion(toy_vault):
+    """⛔ #452 — la extracción es versionada y NO regenerable sin volver a leer el PDF (#311), así
+    que el migrador propone la entrada lista para pegar y no escribe. Y cuando la prosa dice
+    *publicado* sin que la nota declare `pdf_source`, emite el hallazgo SIN valor: entre `publisher`
+    y `ads` no elige un script (#296)."""
+    d = extraccion()
+    d["salvedades"] = ["El PDF en disco es el PREPRINT de arXiv (marca al margen).",
+                       "la Fig. 3 es difícil de leer"]
+    sembrar(toy_vault, d)
+    antes = (cfg.EXTRACCION / "test_star" / f"{BIB}.json").read_text(encoding="utf-8")
+    props = hv.propose_pdf_leido("test_star")
+    assert [(b, doc) for _j, b, _t, doc in props] == [(BIB, "eprint")], \
+        "la prosa que no habla del documento en disco NO entra"
+    assert (cfg.EXTRACCION / "test_star" / f"{BIB}.json").read_text(encoding="utf-8") == antes
+    # ⚠ la salvedad YA estructurada y la cadena vacía no son candidatas: la primera ya está, y la
+    # segunda no dice nada. Con cualquiera de las dos adentro, la propuesta sigue siendo una sola.
+    d["salvedades"] = [{"tipo": "pdf_leido", "documento": "eprint"}, "",
+                       "El PDF en disco es el PREPRINT de arXiv (marca al margen)."]
+    sembrar(toy_vault, d)
+    assert len(hv.propose_pdf_leido("test_star")) == 1
+
+
+def test_452_la_propuesta_declara_su_poblacion_y_no_inventa_el_valor(toy_vault, capsys):
+    """#452 / D-43 — el CERO se declara, y el caso que un script no puede decidir sale marcado en
+    vez de con un valor inventado: entre `publisher` y `ads` no elige nadie automáticamente (#296)."""
+    hv.print_pdf_leido([])
+    assert "0 salvedad(es)" in capsys.readouterr().out, "el cero se declara (D-43)"
+    hv.print_pdf_leido([(cfg.EXTRACCION / "s" / "x.json", "2020X", "El PDF en disco es …", "")])
+    out = capsys.readouterr().out
+    assert "publisher|ads" in out and "elegí vos" in out
+    # y el que SÍ se puede decidir sale listo para pegar, con su valor
+    hv.print_pdf_leido([(cfg.EXTRACCION / "s" / "x.json", "2020X", "El PDF …", "eprint")])
+    out = capsys.readouterr().out
+    assert '"documento": "eprint"' in out and "elegí vos" not in out
+    assert "Se PROPONE y no se escribe" in out, "la extracción es versionada y no regenerable (#311)"
+
+
 def test_tipo_fuera_del_vocabulario_no_se_da_por_verificado(toy_vault):
     """#213 — vocabulario CERRADO: un typo no puede producir una salvedad que se lea como
     chequeada. Cae a no evaluable, con el motivo."""

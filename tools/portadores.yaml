@@ -524,6 +524,11 @@ portadores:
         estado: fuera-de-alcance
         motivo: ESCRIBE la firma (`sign_note`); la lectura es del estampador.
 
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea porque el chequeo de `pdf_leido` (#452) delega los tres testigos —firma incluida—
+          en `cfg.doc_on_disk`, que es donde vive la precedencia; no la vuelve a resolver.
   - issue: 448
     regla: >-
       Los slugs de un bibcode son la UNIÓN de sus copias de PDF y de `.txt` (D-18 trae el `.txt`
@@ -569,6 +574,49 @@ portadores:
       - modulo: scripts/search_arxiv.py
         estado: fuera-de-alcance
         motivo: Ídem — backend de descubrimiento, misma paridad de schema que `to_record`.
+
+  - issue: 452
+    regla: >-
+      Toda afirmación de una nota sobre el ARTEFACTO que una máquina puede decidir se emite
+      ESTRUCTURADA y la chequea el cosechador, nunca un LLM ni una heurística sobre prosa (#213).
+      La que dice QUÉ DOCUMENTO se leyó es la más decidible de todas —tres testigos
+      máquina-legibles— y era la única que quedaba libre: sobre prosa hay que ADIVINAR de quién
+      habla la oración, y el detector que lo intentaba midió 5 hallazgos con precisión 0/5 sobre
+      268 notas (#449). Estructurada (`pdf_leido` + `documento` + `bibcode` opcional) el bibcode va
+      adentro y no hay nada que adivinar.
+    funcion: harvest_views.check_salvedad
+    patron: 'SALVEDAD_TIPOS|check_salvedad\(|looks_decidable\('
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Está del otro lado: define el vocabulario (`SALVEDAD_TIPOS`) y las dos piezas que el
+          chequeo llama en vez de reimplementar —`doc_on_disk` (los tres testigos en su
+          precedencia) y `_DOC_EN_DISCO_RE` (el ancla de #449), que es también por donde
+          `looks_decidable` propone estructurarla—. No chequea ninguna salvedad.
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Las dos mitades: `looks_decidable` propone estructurar la salvedad en prosa, y la
+          categoría `doc_en_disco` (#449) es el residuo — lo que no se pudo estructurar. Su mensaje
+          nombra la salida (`pdf_leido`), que es la regla de que todo backlog tiene salida
+          ejecutable.
+      - modulo: scripts/proposals.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Sólo distingue la salvedad en PROSA de la estructurada para no barrer las que ya tienen
+          `tipo`; no chequea ninguna ni lee el vocabulario.
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Es el único que le PIDE la salvedad al extractor, así que el tipo nuevo se nombra ahí o
+          nadie lo emite (el modo de falla de #213: 0 de 43 extracciones emitieron una
+          estructurada). Nombra el vocabulario en prosa del prompt, no lo importa.
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Cambia los tres testigos y avisa por `cfg.doc_claims_on_disk` cuántas líneas de PROSA
+          quedaron diciendo preprint (#449); no lee ni escribe salvedades estructuradas.
 
   - issue: 451
     regla: >-
@@ -639,6 +687,13 @@ portadores:
         estado: fuera-de-alcance
         motivo: "Usa `arxiv_stamp` para RESOLVER `pdf_source` (la precedencia de #446); no lee prosa."
 
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Comparte los TESTIGOS y no el cruce: el chequeo de la salvedad `pdf_leido` (#452) llama a
+          `doc_on_disk` en vez de releerlos, pero no cruza prosa contra disco — su afirmación viene
+          estructurada, con el bibcode adentro, que es justo lo que `disk_doc_conflict` tiene que
+          adivinar.
   - issue: 416
     regla: >-
       La línea sobre un `## Abstract` transcrito del PDF afirma DOS cosas y sólo una vale siempre:

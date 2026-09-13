@@ -3291,3 +3291,19 @@ def test_449_la_prosa_sobre_QUE_DOCUMENTO_hay_en_disco_se_cruza_contra_el_disco(
     assert cfg.disk_doc_conflict(pub, {"pdf_source": "publisher"}, "2099Y") is None
     assert cfg.disk_doc_conflict(pre, {}, "2099Y") is None, "sin testigos no hay contra qué cruzar"
     assert cfg.disk_doc_conflict("nada", {"pdf_source": "publisher"}, "2099Y") is None
+
+
+def test_452_looks_decidable_cubre_la_TERCERA_salvedad_decidible(toy_vault):
+    """⛔ #452 — `looks_decidable` es la heurística que manda estructurar una salvedad sobre el
+    artefacto (#213), y le faltaba la más decidible de todas: qué documento se leyó. Va por el MISMO
+    ancla que el detector de #449 (`_DOC_EN_DISCO_RE`) — una segunda implementación de «qué
+    documento afirma esta oración» es la regla de método nº 2 otra vez, y esa regla ya volvió del
+    campo con 5 falsos positivos sobre 5."""
+    assert cfg.looks_decidable("El PDF en disco es el PREPRINT de arXiv (marca al margen).")
+    assert cfg.looks_decidable("El documento en disco es la versión publicada del editor.")
+    assert cfg.looks_decidable("el `.txt` no contiene la fórmula"), "las dos viejas siguen"
+    assert cfg.looks_decidable("el PDF tiene 17 páginas")
+    assert not cfg.looks_decidable("la muestra es de 12 estrellas del disco delgado"), \
+        "«disco» es palabra de dominio: el ancla es el documento, no la palabra (#449)"
+    assert not cfg.looks_decidable("")
+

@@ -392,7 +392,8 @@ VERIFICADAS (#213).** *«El `.txt` perdió este símbolo»* no lleva `[[bibcode]
 no sobre el paper—, así que `verify-citations` la deja afuera **por construcción**. Dos mitades:
 
 - La salvedad **decidible sobre un archivo** se emite **estructurada**, con vocabulario cerrado
-  (`lib_config.SALVEDAD_TIPOS`: `txt_pierde` + `cadena`, `pdf_paginas` + `n`), y la chequea el
+  (`lib_config.SALVEDAD_TIPOS`: `txt_pierde` + `cadena`, `pdf_paginas` + `n`, **`pdf_leido` +
+  `documento`** —#452, con `bibcode` opcional si habla del PDF de OTRA fuente—), y la chequea el
   **cosechador** con `grep` o `pdfinfo` — máquina, no LLM. La **falsa NO se publica** y el cosechador
   la grita con su archivo; ⚠ pero **no tira la extracción** (a diferencia de #207: aquello es una
   contradicción sobre *qué se abrió*). El chequeo que **no pudo correr** sale **no evaluable con su
@@ -414,7 +415,14 @@ sueltos miden vocabulario de dominio (disco de debris, disco delgado de la Galax
 publicados») y dieron **5 hallazgos con precisión 0/5** sobre 268 notas; la frase tiene que predicar
 sobre el archivo, y el frontmatter, las `SECCIONES_ESTAMPADAS` (#214) y el bloque que nombra otro
 `[[bibcode]]` —habla del PDF de otro paper— quedan afuera. La unidad es el **bloque** (#224): en el
-peor de los cinco la negación vivía en las líneas vecinas.
+peor de los cinco la negación vivía en las líneas vecinas. ⛔ **Y la salida es emitirla
+ESTRUCTURADA (`pdf_leido`, #452):** la prosa obliga a este detector a **adivinar de quién habla la
+oración** —el falso positivo nº 4 era verdadero y sobre el PDF de otro bibcode—, y adivinar un
+apellido ajeno cambiaría estos falsos por otros. Estructurada, el bibcode va adentro, la deciden los
+mismos tres testigos y la falsa **no se publica**; la categoría del lint queda como **residuo**: lo
+que no se pudo estructurar. Propuesta lista para pegar:
+`harvest_views.py <slug> --propose-pdf-leido` — **propone y no escribe** (la extracción es versionada
+y no regenerable, #311), y entre `publisher` y `ads` **no elige** (#296).
 
 ⛔ **La lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el único
 canal en esa dirección: `stars`/`thesis_links` se siembran **antes** de leer y `harvest_views` mergea

@@ -851,7 +851,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   bóveda astro ésa es palabra de dominio —disco de debris, disco delgado de la Galaxia— y el primer
   detector dio **5 hallazgos, precisión 0/5** sobre 268 notas. Fuera de la población: el
   frontmatter, las `SECCIONES_ESTAMPADAS` (#214), y la línea leída sola —la unidad es el **bloque**
-  (#224), porque la negación puede vivir en la línea vecina.
+  (#224), porque la negación puede vivir en la línea vecina. ⛔ **Desde #452 esta categoría es el
+  RESIDUO:** la salvedad se emite estructurada (`pdf_leido` + `documento`, con `bibcode` si habla
+  del PDF de otra fuente) y la chequea el cosechador contra los mismos tres testigos; lo que queda
+  acá es lo que no se pudo estructurar. La propuesta lista para pegar sale de
+  `harvest_views.py <slug> --propose-pdf-leido`, que **propone y no escribe** (la extracción es
+  versionada y no regenerable, #311).
 - **Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió**
   (#297): el reuso D-18 (copiar el PDF que ya estaba bajo otro slug) es correcto y se conserva, pero
   importa a un sujeto nuevo un archivo cuya **antigüedad nadie chequeó**; y la salida natural —«si

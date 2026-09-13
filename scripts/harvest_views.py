@@ -88,6 +88,42 @@ def pdf_on_disk(bibcode: str) -> bool:
     return cfg.pdf_slug(mn.safe_name(bibcode)) is not None   # #305: una sola resolución
 
 
+#: #452 · qué documento declara cada valor de `PDF_SOURCE_OK` en el eje que los TESTIGOS deciden.
+#: `web` no tiene testigo (un snapshot no lleva marca de arXiv ni firma de reemplazo), así que sale
+#: **no evaluable con su motivo** — que es la tercera respuesta, no la segunda (D-43).
+_DOC_DE_FUENTE = {"eprint": "preprint", "ads": "publicado", "publisher": "publicado"}
+
+
+def _check_pdf_leido(stem: str, item: dict) -> tuple[bool | None, str]:
+    """Check the caveat that says WHICH DOCUMENT was read, against the disk (#452).
+
+    ⛔ The three witnesses are `cfg.doc_on_disk`'s, in its declared precedence (the arXiv mark in
+    the `.txt` → the `pdf_reemplazo` signature → the `pdf_source` field): this branch calls it, it
+    does not re-implement it. That is the whole reason the structured caveat is worth having — the
+    prose version of the same claim forced the #449 detector to GUESS whose PDF a sentence was
+    talking about, and it scored 5 findings at 0/5 precision over 268 notes.
+
+    ⚠ `bibcode` is the field that closes the measured false positive: «the comparison is against
+    the published copy of [another paper] (on disk since …)» is TRUE and is about somebody else's
+    PDF. Declared, there is nothing to guess; absent, the caveat is about this note's own PDF."""
+    doc = str(item.get("documento") or "").strip().lower()
+    if doc not in cfg.PDF_SOURCE_OK:
+        return None, (f"`documento: {doc or '(vacío)'}` fuera del vocabulario "
+                      f"({'|'.join(cfg.PDF_SOURCE_OK)}, #296)")
+    de = mn.safe_name(str(item.get("bibcode") or "").strip() or stem)
+    dicho = _DOC_DE_FUENTE.get(doc)
+    if dicho is None:
+        return None, f"`documento: {doc}` no lo deciden los testigos del disco (#452)"
+    nota = cfg.PAPERS / f"{de}.md"
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8")) if nota.exists() else {}
+    disco, porque = cfg.doc_on_disk(fm, de)
+    if disco is None:
+        return None, f"ningún testigo dice qué documento hay en disco para `{de}`: {porque}"
+    de_otro = f" (el PDF de `{de}`)" if de != stem else ""
+    return dicho == disco, (f"en disco está el **{disco}**{de_otro} ({porque}); la salvedad "
+                            f"declara `{doc}`")
+
+
 def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
     """Check one STRUCTURED caveat against the file it talks about (#213).
 
@@ -108,6 +144,8 @@ def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
     if tipo not in cfg.SALVEDAD_TIPOS:
         return None, f"`tipo: {tipo}` fuera del vocabulario ({' | '.join(cfg.SALVEDAD_TIPOS)})"
     stem = mn.safe_name(bibcode)
+    if tipo == "pdf_leido":
+        return _check_pdf_leido(stem, item)
     if tipo == "txt_pierde":
         cadena = str(item.get("cadena") or "")
         if not cadena:
@@ -863,6 +901,64 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
     return n
 
 
+def propose_pdf_leido(slug: str | None = None) -> list:
+    """The prose caveats that could be `pdf_leido`, with the entry ready to paste (#452).
+
+    ⛔ **Proposes, never rewrites.** The caveat lives in `raw/extraccion/<slug>/<bib>.json`, which
+    is versioned and NOT regenerable without re-reading the PDF (#311) — the same reason
+    `split_subject_slugs` filters at the note and leaves the JSON alone. And the conversion is a
+    judgement in one case the parser cannot settle: *publicado* maps to `publisher` OR `ads`, so
+    when the note's own `pdf_source` does not say which, this emits the finding WITHOUT a value
+    rather than guessing it.
+
+    ⛔ The parse goes through `cfg.doc_claims_on_disk`, the ONE anchor of #449 (method rule nº 2):
+    a second reader of «which document does this sentence claim» is exactly how that rule ends up
+    with two semantics. What the anchor rejects stays prose, which is the correct answer for it."""
+    out = []
+    dirs = sorted(cfg.EXTRACCION.glob(f"{slug or '*'}")) if cfg.EXTRACCION.exists() else []
+    for d in dirs:
+        for j in sorted(d.glob("*.json")):
+            try:
+                data = json.loads(j.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            bib = str(data.get("bibcode") or j.stem).strip()
+            nota = cfg.PAPERS / f"{mn.safe_name(bib)}.md"
+            campo = str(cfg.split_fm(nota.read_text(encoding="utf-8")).get("pdf_source")
+                        or "").strip().lower() if nota.exists() else ""
+            for item in cfg.as_list(data.get("salvedades")):
+                # ⚠ Sólo el `isinstance`, a propósito: la estructurada ya está, y un string vacío
+                # o en blanco cae igual por el `len(clases) != 1` de abajo, así que un
+                # `or not item.strip()` no decidía nada (#319; su mutación sobrevivía).
+                if not isinstance(item, str):
+                    continue
+                clases = {c for c, _ln in cfg.doc_claims_on_disk(item)}
+                if len(clases) != 1:
+                    continue
+                clase = clases.pop()
+                doc = ("eprint" if clase == "preprint"
+                       else campo if campo in ("publisher", "ads") else "")
+                out.append((j, bib, item.strip(), doc))
+    return out
+
+
+def print_pdf_leido(props: list) -> None:
+    """The proposal, with its population declared and the entry ready to paste (D-43)."""
+    cfg.print_seguro(f"{len(props)} salvedad(es) en prosa que dicen QUÉ DOCUMENTO se leyó (#452)")
+    for j, bib, texto, doc in props:
+        cfg.print_seguro(f"\n  {j.parent.name}/{j.name} · {bib}\n    «{texto[:120]}»")
+        if doc:
+            cfg.print_seguro(f'    → {{"tipo": "pdf_leido", "documento": "{doc}"}}')
+        else:
+            # ⛔ `publicado` no distingue `publisher` de `ads` y la nota tampoco lo dice: el valor
+            # lo pone quien sepa. Proponer uno sería inventar la procedencia que #296 cerró.
+            cfg.print_seguro('    → {"tipo": "pdf_leido", "documento": "publisher|ads"} — '
+                             'la nota no declara `pdf_source`: elegí vos cuál')
+    if props:
+        cfg.print_seguro("\n⚠ Se PROPONE y no se escribe: la extracción es versionada y no "
+                         "regenerable sin volver a leer el PDF (#311).")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug")
@@ -873,7 +969,13 @@ def main() -> int:
     ap.add_argument("--paper", default=None, metavar="BIBCODE",
                     help="acota la cosecha a esa extracción — el alcance por unidad que `--force` "
                          "necesita para no re-estampar las vistas ya verificadas del slug (#420)")
+    ap.add_argument("--propose-pdf-leido", action="store_true",
+                    help="lista las salvedades en PROSA que dicen qué documento se leyó, con la "
+                         "entrada estructurada lista para pegar (#452). No escribe nada.")
     args = ap.parse_args()
+    if args.propose_pdf_leido:
+        print_pdf_leido(propose_pdf_leido(None if args.slug == "*" else args.slug))
+        return 0
     if args.force and not args.paper:
         # `--force` reemplaza la `fecha` de una lectura que OCURRIÓ (D-18/#188), así que a nivel
         # slug falsifica la procedencia de todo lo demás. No se prohíbe: se pide el alcance.

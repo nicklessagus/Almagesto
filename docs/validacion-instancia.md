@@ -487,3 +487,26 @@ condición que dice que la nota se contradice consigo misma.
 **Devolver si** una condición de la ronda sigue sin llegar a su celda, si re-correr el escritor sobre
 el mismo fan-out **colapsa** la cadena (tiene que ser un no-op), si una resolución firmada
 desaparece, o si el escritor lista como «no entró» una condición que sí quedó vigente.
+
+## #452 · v1.264.0
+
+**Qué entró.** `pdf_leido` en `SALVEDAD_TIPOS` (`documento` del vocabulario de `pdf_source`, más
+`bibcode` opcional), su chequeo determinista contra los tres testigos de `cfg.doc_on_disk`, las dos
+líneas del prompt que ahora lo piden estructurado, `looks_decidable` cubriendo la tercera decidible
+por el mismo ancla de #449, y `--propose-pdf-leido` (propone, no escribe).
+
+**Validar.** Acá están las 43 salvedades que midieron #449, ya reescritas a mano:
+
+```bash
+python scripts/harvest_views.py <slug> --propose-pdf-leido   # las que siguen en prosa, con la
+                                                             # entrada lista para pegar
+python scripts/lint.py | grep -A6 "salvedad en prosa que un script podría decidir"
+# y el chequeo en vivo: poné `{"tipo":"pdf_leido","documento":"eprint"}` en la extracción de un
+# paper cuyo PDF sea la copia del editor → el cosechador la GRITA y NO la publica.
+```
+
+**Devolver si** una salvedad `pdf_leido` verdadera no se publica verificada, si una falsa se
+publica, si `--propose-pdf-leido` propone sobre una salvedad que no habla del documento en disco
+(mismo criterio que #449: dispara sobre una nota coherente), si propone un `documento` que la nota
+no respalda, o si **escribe** en algún JSON de `raw/extraccion/`.
+

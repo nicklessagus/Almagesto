@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.263.0"
+ALMAGESTO_VERSION = "1.264.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1201,8 +1201,15 @@ def looks_decidable(salvedad: str) -> bool:
     extractions emitted a structured caveat, and one false one slipped through again.
 
     High-signal heuristic, same contract as the implementation-leak detector: it points at caveats
-    worth restating as `SALVEDAD_TIPOS`, it does not judge them."""
-    return bool(_SALVEDAD_DECIDIBLE.search(str(salvedad or "")))
+    worth restating as `SALVEDAD_TIPOS`, it does not judge them.
+
+    ⛔ #452 — the THIRD decidable one is «which document was read», and it goes through the SAME
+    anchor as the #449 detector (`_DOC_EN_DISCO_RE`, one implementation): the three witnesses of
+    `doc_on_disk` settle it, so in prose it is debt. Structured (`pdf_leido`) the bibcode is inside
+    the caveat and nothing has to be guessed about whose PDF the sentence is about — which is the
+    whole reason #449 came back at 0/5 precision."""
+    texto = str(salvedad or "")
+    return bool(_SALVEDAD_DECIDIBLE.search(texto) or _DOC_EN_DISCO_RE.search(texto))
 
 
 def is_stamped_section(heading: str) -> bool:
@@ -3162,6 +3169,13 @@ VISTA_FUENTES = ("pdf", "abstract")
 SALVEDAD_TIPOS = {
     "txt_pierde": "cadena",      # el `.txt` NO contiene `cadena` (la fuente sí): un grep lo decide
     "pdf_paginas": "n",          # el PDF tiene `n` páginas: lo decide el propio PDF
+    # #452 · QUÉ DOCUMENTO se leyó (`documento`, vocabulario de `PDF_SOURCE_OK`, #296), con
+    # `bibcode` opcional cuando la salvedad habla del PDF de OTRA fuente. Lo deciden los tres
+    # testigos de `doc_on_disk`, así que es la más decidible que escribe el extractor — y era la
+    # única que quedaba en prosa libre: sobre prosa, el detector de #449 tiene que ADIVINAR de
+    # quién habla la oración, y midió 5 hallazgos con precisión 0/5 sobre 268 notas. Estructurada,
+    # el bibcode va adentro y no hay nada que adivinar.
+    "pdf_leido": "documento",
 }
 
 
@@ -3661,7 +3675,10 @@ def disk_doc_conflict(text: str, fm: dict, stem: str) -> str | None:
     return (f"la prosa dice que el PDF en disco es el **{'/'.join(sorted(dicho))}** y los testigos "
             f"dicen **{disco}** ({porque}) — corregí la mitad equivocada: la salvedad conserva el "
             f"hecho verdadero («esta vista se leyó del …») y el campo se arregla con "
-            f"`replace_pdf.py {stem} --backfill` o `extract_fulltext.py <slug> --bibcode {stem}`")
+            f"`replace_pdf.py {stem} --backfill` o `extract_fulltext.py <slug> --bibcode {stem}`. "
+            f"⛔ Y emitila ESTRUCTURADA (#452): `{{tipo: pdf_leido, documento: …}}` en las "
+            f"`salvedades` de la extracción — en prosa este detector tiene que adivinar de quién "
+            f"habla la oración, y ése es su modo de falla medido")
 
 
 def bibcode_slugs(stem: str) -> dict:
