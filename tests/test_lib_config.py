@@ -3268,9 +3268,10 @@ def test_449_la_prosa_sobre_QUE_DOCUMENTO_hay_en_disco_se_cruza_contra_el_disco(
         == [("publicado", "El PDF en disco es la VERSIÓN PUBLICADA del editor")], \
         "la negación hard-wrapped una línea abajo cuenta: la unidad es el bloque (#224)"
     assert cfg.doc_claims_on_disk(
-        "El PDF en disco es el PREPRINT de arXiv.\n\nAparte: los valores publicados por el "
-        "editor coinciden.") == [("preprint", "El PDF en disco es el PREPRINT de arXiv.")], \
-        "la línea EN BLANCO cierra el bloque: un párrafo vecino no vuelve ambigua la afirmación"
+        "El PDF en disco es el PREPRINT de arXiv.\n\nEl documento en disco es la copia del "
+        "editor.") == [("preprint", "El PDF en disco es el PREPRINT de arXiv."),
+                       ("publicado", "El documento en disco es la copia del editor.")], \
+        "la línea EN BLANCO cierra el bloque: dos párrafos son dos afirmaciones, no una ambigua"
     # los testigos, en su orden de precedencia
     firma = [{"fecha": "2026-09-11", "source": "publisher", "sha": "a", "sha_anterior": "b"}]
     assert cfg.doc_on_disk({"pdf_source": "eprint", "pdf_reemplazo": firma}, "2020X")[0] == "publicado", \
@@ -3306,4 +3307,35 @@ def test_452_looks_decidable_cubre_la_TERCERA_salvedad_decidible(toy_vault):
     assert not cfg.looks_decidable("la muestra es de 12 estrellas del disco delgado"), \
         "«disco» es palabra de dominio: el ancla es el documento, no la palabra (#449)"
     assert not cfg.looks_decidable("")
+
+
+def test_452b_la_clase_la_decide_la_CLAUSULA_con_negacion_simetrica(toy_vault):
+    """⛔ #452 devuelto — el migrador propuso mal en 4 de 6 casos reales, y tres mecanismos salían de
+    acá. (1) La clase se decidía sobre el BLOQUE unido: en una salvedad real la decidió una mención
+    de la paginación de la revista **300 caracteres más adelante**, sobre una cláusula que dice
+    literalmente lo contrario. (2) La negación era asimétrica —existía `_NO_PREPRINT_RE` y no su
+    gemela—, lo que INVERTÍA la salvedad del manuscrito del autor y hacía perder **47 de 51** de la
+    forma más común del corpus. (3) `web` no estaba en la clasificación, y llamarlo *publicado* es
+    la inversión."""
+    # (1) la cláusula manda: la mención de la paginación publicada, dos oraciones después, no decide
+    assert cfg.doc_claims_on_disk(
+        "El PDF en disco NO es la version tipografiada de IEEE SPL, sino el MANUSCRITO del autor. "
+        "Las páginas no mapean a la paginacion publicada 145-147.")[0][0] == "web"
+    # (2) la forma más común del corpus: nombra las dos, y la negación la desambigua
+    assert cfg.doc_claims_on_disk(
+        "El PDF en disco es el PREPRINT de arXiv, no la versión publicada en A&A.")[0][0] \
+        == "preprint"
+    # (3) `web`, y su simétrico del lado publicado (el caso de #224 sigue andando)
+    assert cfg.doc_claims_on_disk(
+        "El PDF en disco es la versión de los autores para la web, NO el tipografiado del "
+        "editor.")[0][0] == "web"
+    assert cfg.doc_claims_on_disk(
+        "El PDF en disco es la VERSIÓN PUBLICADA del editor (A&A 696, A141) — NO el "
+        "preprint.")[0][0] == "publicado"
+    # dos cláusulas que se contradicen siguen siendo ambiguas
+    assert cfg.doc_claims_on_disk(
+        "El PDF en disco es el preprint. El documento en disco es la copia del editor.") == []
+    # ⛔ y `web` NO contradice a ningún testigo: ninguno lo decide (`pdf_source: web` es un snapshot)
+    assert cfg.disk_doc_conflict(
+        "El PDF en disco es el MANUSCRITO del autor.", {"pdf_source": "publisher"}, "2099Y") is None
 

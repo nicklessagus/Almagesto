@@ -881,13 +881,14 @@ def test_452_el_migrador_PROPONE_y_no_toca_la_extraccion(toy_vault):
     que el migrador propone la entrada lista para pegar y no escribe. Y cuando la prosa dice
     *publicado* sin que la nota declare `pdf_source`, emite el hallazgo SIN valor: entre `publisher`
     y `ads` no elige un script (#296)."""
+    _con_pdf(toy_vault)
     d = extraccion()
     d["salvedades"] = ["El PDF en disco es el PREPRINT de arXiv (marca al margen).",
                        "la Fig. 3 es difícil de leer"]
     sembrar(toy_vault, d)
     antes = (cfg.EXTRACCION / "test_star" / f"{BIB}.json").read_text(encoding="utf-8")
     props = hv.propose_pdf_leido("test_star")
-    assert [(b, doc) for _j, b, _t, doc in props] == [(BIB, "eprint")], \
+    assert [(b, doc) for _j, b, _t, doc, _m in props] == [(BIB, "eprint")], \
         "la prosa que no habla del documento en disco NO entra"
     assert (cfg.EXTRACCION / "test_star" / f"{BIB}.json").read_text(encoding="utf-8") == antes
     # ⚠ la salvedad YA estructurada y la cadena vacía no son candidatas: la primera ya está, y la
@@ -898,18 +899,59 @@ def test_452_el_migrador_PROPONE_y_no_toca_la_extraccion(toy_vault):
     assert len(hv.propose_pdf_leido("test_star")) == 1
 
 
+def test_452b_el_migrador_CRUZA_EL_DISCO_antes_de_proponer(toy_vault):
+    """⛔ #452, devuelto — el JSON es inmutable por diseño (#311), así que puede ser ANTERIOR a un
+    `replace_pdf`: la salvedad dice preprint y en disco está la copia del editor. Medido en la
+    instancia: 1 de 6 propuestas salía `eprint` sobre una nota con `pdf_reemplazo: publisher`, y el
+    chequeo de la MISMA corrida la rechazaba. El hallazgo útil es la caducidad."""
+    _con_pdf(toy_vault)
+    d = extraccion()
+    d["salvedades"] = ["El PDF en disco es el PREPRINT de arXiv (marca al margen)."]
+    sembrar(toy_vault, d, fm_extra={"pdf_source": "publisher"})
+    props = hv.propose_pdf_leido("test_star")
+    assert [(doc, m.startswith("la salvedad quedó VIEJA")) for _j, _b, _t, doc, m in props] == \
+        [("", True)], "no se propone el valor viejo: se reporta que la salvedad caducó"
+    # ⚠ y el testigo que CONFIRMA la prosa no es una caducidad: la propuesta sale con su valor
+    sembrar(toy_vault, d, fm_extra={"pdf_source": "eprint"})
+    assert [(doc, m) for _j, _b, _t, doc, m in hv.propose_pdf_leido("test_star")] == \
+        [("eprint", "")]
+    # ⛔ ni lo es `web`: NINGÚN testigo del disco lo decide, así que no puede contradecir a nadie
+    d["salvedades"] = ["El PDF en disco es el MANUSCRITO del autor, no el tipografiado del editor."]
+    sembrar(toy_vault, d, fm_extra={"pdf_source": "publisher"})
+    assert [(doc, m) for _j, _b, _t, doc, m in hv.propose_pdf_leido("test_star")] == [("web", "")]
+
+
+def test_452b_el_migrador_SALTEA_la_nota_sin_PDF(toy_vault):
+    """⛔ #452, devuelto — «no hay archivo en disco donde buscar una marca de agua» es una afirmación
+    de NO-existencia, y el ancla la matchea (`archivo` está en `_DOC_NOMBRE`). Proponer ahí afirma un
+    documento que no existe. Medido: 1 de 6, con `pdf: null`."""
+    d = extraccion()
+    d["salvedades"] = ["No se pudo chequear si la fuente es un preprint: no hay archivo en disco "
+                       "donde buscar una marca de agua."]
+    sembrar(toy_vault, d)
+    assert hv.propose_pdf_leido("test_star") == [], "sin PDF no hay documento del que hablar"
+
+
 def test_452_la_propuesta_declara_su_poblacion_y_no_inventa_el_valor(toy_vault, capsys):
     """#452 / D-43 — el CERO se declara, y el caso que un script no puede decidir sale marcado en
     vez de con un valor inventado: entre `publisher` y `ads` no elige nadie automáticamente (#296)."""
     hv.print_pdf_leido([])
     assert "0 salvedad(es)" in capsys.readouterr().out, "el cero se declara (D-43)"
-    hv.print_pdf_leido([(cfg.EXTRACCION / "s" / "x.json", "2020X", "El PDF en disco es …", "")])
+    j = cfg.EXTRACCION / "s" / "x.json"
+    hv.print_pdf_leido([(j, "2020X", "El PDF en disco es …", "",
+                         "la nota no declara `pdf_source`: elegí vos cuál")])
     out = capsys.readouterr().out
     assert "publisher|ads" in out and "elegí vos" in out
     # y el que SÍ se puede decidir sale listo para pegar, con su valor
-    hv.print_pdf_leido([(cfg.EXTRACCION / "s" / "x.json", "2020X", "El PDF …", "eprint")])
+    hv.print_pdf_leido([(j, "2020X", "El PDF …", "eprint", "")])
     out = capsys.readouterr().out
     assert '"documento": "eprint"' in out and "elegí vos" not in out
+    # la caducidad NO sale como entrada para pegar: sale como corrección
+    hv.print_pdf_leido([(j, "2020X", "El PDF …", "",
+                         "la salvedad quedó VIEJA: en disco está el publicado (`pdf_source`)")])
+    out = capsys.readouterr().out
+    assert "quedó VIEJA" in out and "no la estructures tal cual" in out
+    assert '"tipo": "pdf_leido"' not in out
     assert "Se PROPONE y no se escribe" in out, "la extracción es versionada y no regenerable (#311)"
 
 

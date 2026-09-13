@@ -901,19 +901,33 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
     return n
 
 
+#: #452 · de la clase que lee la prosa al valor de `pdf_source` que declara la salvedad. `publicado`
+#: NO tiene valor único —`publisher` o `ads`— y ahí el proponente no elige (#296).
+_VALOR_DE_CLASE = {"preprint": "eprint", "web": "web"}
+
+
 def propose_pdf_leido(slug: str | None = None) -> list:
-    """The prose caveats that could be `pdf_leido`, with the entry ready to paste (#452).
+    """`[(json, bibcode, prosa, documento, motivo)]` — the prose caveats that could be `pdf_leido`,
+    with the entry ready to paste, or the reason there is none (#452).
 
     ⛔ **Proposes, never rewrites.** The caveat lives in `raw/extraccion/<slug>/<bib>.json`, which
     is versioned and NOT regenerable without re-reading the PDF (#311) — the same reason
-    `split_subject_slugs` filters at the note and leaves the JSON alone. And the conversion is a
-    judgement in one case the parser cannot settle: *publicado* maps to `publisher` OR `ads`, so
-    when the note's own `pdf_source` does not say which, this emits the finding WITHOUT a value
-    rather than guessing it.
+    `split_subject_slugs` filters at the note and leaves the JSON alone.
 
-    ⛔ The parse goes through `cfg.doc_claims_on_disk`, the ONE anchor of #449 (method rule nº 2):
-    a second reader of «which document does this sentence claim» is exactly how that rule ends up
-    with two semantics. What the anchor rejects stays prose, which is the correct answer for it."""
+    ⛔ **It crosses the disk before proposing** (`cfg.doc_on_disk`), and that is not belt and
+    braces: the JSON is immutable by design, so it can predate a `replace_pdf`. Measured on the
+    instance, 1 of 6 proposals was an `eprint` over a note whose `pdf_reemplazo` signs `publisher`
+    — its own check rejected it in the same run. When the witnesses contradict the JSON's prose the
+    finding is *«the caveat went stale: the published copy is on disk»*, which is useful, instead
+    of an entry that gets refused.
+
+    ⛔ **A note with no PDF is skipped**: there is no document to talk about, and the caveat there
+    says the opposite —«there is no file on disk to look for a watermark»— so proposing a value
+    would assert a document that does not exist (measured: `pdf: null`, 1 of 6).
+
+    ⚠ The parse goes through `cfg.doc_claims_on_disk`, the ONE anchor of #449 (method rule nº 2): a
+    second reader of «which document does this sentence claim» is exactly how that rule ends up
+    with two semantics."""
     out = []
     dirs = sorted(cfg.EXTRACCION.glob(f"{slug or '*'}")) if cfg.EXTRACCION.exists() else []
     for d in dirs:
@@ -923,37 +937,50 @@ def propose_pdf_leido(slug: str | None = None) -> list:
             except (json.JSONDecodeError, OSError):
                 continue
             bib = str(data.get("bibcode") or j.stem).strip()
-            nota = cfg.PAPERS / f"{mn.safe_name(bib)}.md"
-            campo = str(cfg.split_fm(nota.read_text(encoding="utf-8")).get("pdf_source")
-                        or "").strip().lower() if nota.exists() else ""
+            stem = mn.safe_name(bib)
+            if cfg.pdf_slug(stem) is None:
+                continue        # sin PDF no hay documento del que hablar (#305: una resolución)
+            nota = cfg.PAPERS / f"{stem}.md"
+            fm = cfg.split_fm(nota.read_text(encoding="utf-8")) if nota.exists() else {}
+            campo = str(fm.get("pdf_source") or "").strip().lower()
             for item in cfg.as_list(data.get("salvedades")):
-                # ⚠ Sólo el `isinstance`, a propósito: la estructurada ya está, y un string vacío
-                # o en blanco cae igual por el `len(clases) != 1` de abajo, así que un
-                # `or not item.strip()` no decidía nada (#319; su mutación sobrevivía).
                 if not isinstance(item, str):
                     continue
                 clases = {c for c, _ln in cfg.doc_claims_on_disk(item)}
                 if len(clases) != 1:
                     continue
                 clase = clases.pop()
-                doc = ("eprint" if clase == "preprint"
-                       else campo if campo in ("publisher", "ads") else "")
-                out.append((j, bib, item.strip(), doc))
+                # ⚠ Los testigos se consultan acá y no arriba: `doc_on_disk` lee el `.txt` buscando
+                # la marca de arXiv, y la población que afirma algo es chica (51 salvedades sobre
+                # 268 notas) — preguntarle al disco por cada extracción duplicaba esa lectura, que
+                # es el 77 % del costo del lint que #449 ya midió.
+                disco, porque = cfg.doc_on_disk(fm, stem)
+                if disco is not None and clase in ("preprint", "publicado") and clase != disco:
+                    out.append((j, bib, item.strip(), "",
+                                f"la salvedad quedó VIEJA: en disco está el {disco} ({porque})"))
+                    continue
+                doc = _VALOR_DE_CLASE.get(clase) or (campo if campo in ("publisher", "ads") else "")
+                out.append((j, bib, item.strip(), doc,
+                            "" if doc else "la nota no declara `pdf_source`: elegí vos cuál"))
     return out
 
 
 def print_pdf_leido(props: list) -> None:
     """The proposal, with its population declared and the entry ready to paste (D-43)."""
     cfg.print_seguro(f"{len(props)} salvedad(es) en prosa que dicen QUÉ DOCUMENTO se leyó (#452)")
-    for j, bib, texto, doc in props:
+    for j, bib, texto, doc, motivo in props:
         cfg.print_seguro(f"\n  {j.parent.name}/{j.name} · {bib}\n    «{texto[:120]}»")
         if doc:
             cfg.print_seguro(f'    → {{"tipo": "pdf_leido", "documento": "{doc}"}}')
+        elif motivo.startswith("la salvedad quedó VIEJA"):
+            # ⛔ Los testigos desmienten la prosa del JSON, que es inmutable (#311) y puede ser
+            # anterior a un `replace_pdf`: proponer el valor viejo daría una entrada que el propio
+            # chequeo rechaza. El hallazgo ÚTIL es la caducidad.
+            cfg.print_seguro(f"    ⚠ {motivo} — corregí la salvedad, no la estructures tal cual")
         else:
             # ⛔ `publicado` no distingue `publisher` de `ads` y la nota tampoco lo dice: el valor
             # lo pone quien sepa. Proponer uno sería inventar la procedencia que #296 cerró.
-            cfg.print_seguro('    → {"tipo": "pdf_leido", "documento": "publisher|ads"} — '
-                             'la nota no declara `pdf_source`: elegí vos cuál')
+            cfg.print_seguro('    → {"tipo": "pdf_leido", "documento": "publisher|ads"} — ' + motivo)
     if props:
         cfg.print_seguro("\n⚠ Se PROPONE y no se escribe: la extracción es versionada y no "
                          "regenerable sin volver a leer el PDF (#311).")

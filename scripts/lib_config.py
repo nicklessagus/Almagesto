@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.264.0"
+ALMAGESTO_VERSION = "1.264.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3568,7 +3568,50 @@ _DOC_EN_DISCO_RE = re.compile(
 _NO_PREPRINT_RE = re.compile(r"(?i)\bno\s+(?:es\s+)?(?:el\s+)?(?:pre-?print|e-?print)\b")
 _PREPRINT_RE = re.compile(r"(?i)\b(?:pre-?print|e-?print)\b")
 _PUBLICADO_RE = re.compile(r"(?i)(?:versi[oó]n\s+publicada|copia\s+del\s+editor|del\s+editor|"
-                           r"publicad[oa])")
+                           r"publicad[oa]|tipografiad[oa])")
+#: #452 · la NEGACIÓN del lado *publicado*, que faltaba. Existía sólo `_NO_PREPRINT_RE`, y la
+#: asimetría tenía dos efectos medidos y opuestos sobre el mismo corpus: **invertía** la salvedad
+#: que dice «es la versión de los autores para la web …, NO el tipografiado del editor» (clasificada
+#: *publicado*), y **perdía 47 de 51** de la forma más común —«es el PREPRINT de arXiv …, no la
+#: versión publicada en A&A»—, que nombra las dos y por eso salía ambigua.
+_NO_PUBLICADO_RE = re.compile(
+    r"(?i)\bno\s+(?:es\s+)?(?:el|la|lo)?\s*(?:versi[oó]n\s+|copia\s+)?"
+    r"(?:publicad[oa]|tipografiad[oa]|del\s+editor)(?:\s+del\s+editor)?"
+    r"(?:\s+(?:en|de)\s+[\wÁÉÍÓÚÑáéíóúñ&.]+)?")
+#: #452 · el tercer documento que una salvedad nombra y `pdf_source` ya sabe decir: `web`. Ningún
+#: testigo del disco lo decide (un snapshot no lleva marca de arXiv ni firma de reemplazo), así que
+#: es **no evaluable** — pero clasificarlo como *publicado* era peor: invertía la salvedad.
+_WEB_RE = re.compile(
+    r"(?i)(?:manuscrito\s+(?:del?|de\s+l[oa]s)\s+autor(?:es)?|"
+    r"versi[oó]n\s+(?:de\s+l[oa]s\s+autor(?:es)?|(?:de(?:l)?\s+autor(?:es)?)|para\s+la\s+web)|"
+    r"author(?:\u2019s|\'s)?\s+manuscript)")
+#: #452 · la CLÁUSULA: la clase se decide sobre la oración que el ancla matcheó, no sobre el bloque.
+#: El bloque sigue siendo la unidad de la **negación vecina** (#224) —por eso se une antes de
+#: partir: un hard-wrap no es un límite de oración—, pero no del vocabulario: medido, la clase de
+#: una salvedad la decidía una mención de la paginación de la revista **300 caracteres más
+#: adelante**, sobre una cláusula que dice literalmente lo contrario.
+_CLAUSULA_SEP = re.compile(r"(?<=[.;])\s+")
+
+
+def _clause_class(clausula: str) -> str | None:
+    """`«preprint» | «publicado» | «web» | None` for ONE clause (#452).
+
+    ⛔ The negation is applied on BOTH sides, and that asymmetry was measured twice over on the same
+    corpus, in opposite directions: with only the preprint half, «it is the authors' web version …,
+    NOT the publisher's typeset one» came out *publicado* —the caveat inverted— and the corpus's
+    most common shape, «it is the arXiv PREPRINT …, not the version published in A&A», named both
+    and was dropped as ambiguous: **47 of 51**.
+
+    ⚠ `web` is checked first and on purpose: an author's manuscript is neither of the other two, no
+    witness on disk decides it (`pdf_source: web` is a snapshot), and calling it *publicado* is how
+    the caveat ended up inverted."""
+    limpio = _NO_PUBLICADO_RE.sub(" ", _NO_PREPRINT_RE.sub(" ", clausula))
+    if _WEB_RE.search(limpio):
+        return "web"
+    pre, pub = _PREPRINT_RE.search(limpio), _PUBLICADO_RE.search(limpio)
+    if pre and pub:
+        return None
+    return "preprint" if pre else ("publicado" if pub else None)
 
 
 def doc_claims_on_disk(text: str, stem: str = "") -> list:
@@ -3610,13 +3653,13 @@ def doc_claims_on_disk(text: str, stem: str = "") -> list:
         junto = " ".join(b)
         if any(m.strip() != propio for m in LINK_RE.findall(junto)):
             return          # it is about ANOTHER paper's PDF: ambiguous, skipped
-        sin_negacion = _NO_PREPRINT_RE.sub(" ", junto)
-        pre, pub = _PREPRINT_RE.search(sin_negacion), _PUBLICADO_RE.search(sin_negacion)
-        if pre and pub:
-            return
-        clase = "preprint" if pre else ("publicado" if pub else None)
-        if clase is None:
-            return
+        # #452 — el bloque se UNE (el hard-wrap no es un límite de oración: eso es #224) y recién
+        # ahí se parte en cláusulas: la clase la decide la que el ancla matcheó.
+        clases = {c for cl in _CLAUSULA_SEP.split(junto) if _DOC_EN_DISCO_RE.search(cl)
+                  and (c := _clause_class(cl)) is not None}
+        if len(clases) != 1:
+            return          # ninguna cláusula lo dice, o dos se contradicen: ambigua
+        clase = clases.pop()
         out.extend((clase, ln.strip()) for ln in b if _DOC_EN_DISCO_RE.search(ln))
 
     bloque, dentro = [], False
@@ -3666,7 +3709,9 @@ def disk_doc_conflict(text: str, fm: dict, stem: str) -> str | None:
     arXiv mark, and the population that claims anything is small (43 lines in 31 notes of a real
     vault). Asking the disk first duplicated the read that `is_legible`/`source_hash` share and
     `tests/poblada/test_escala.py` caught it — 666 extra reads, 77 % of the lint's cost."""
-    dicho = {c for c, _ln in doc_claims_on_disk(text, stem)}
+    # #452 — `web` sale de la clasificación pero NINGÚN testigo del disco lo decide, así que no
+    # puede contradecir a nadie: se descuenta antes de cruzar, no se cuenta como desacuerdo.
+    dicho = {c for c, _ln in doc_claims_on_disk(text, stem)} - {"web"}
     if not dicho:
         return None
     disco, porque = doc_on_disk(fm, stem)

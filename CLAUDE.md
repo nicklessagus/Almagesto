@@ -422,7 +422,16 @@ apellido ajeno cambiaría estos falsos por otros. Estructurada, el bibcode va ad
 mismos tres testigos y la falsa **no se publica**; la categoría del lint queda como **residuo**: lo
 que no se pudo estructurar. Propuesta lista para pegar:
 `harvest_views.py <slug> --propose-pdf-leido` — **propone y no escribe** (la extracción es versionada
-y no regenerable, #311), y entre `publisher` y `ads` **no elige** (#296).
+y no regenerable, #311), y entre `publisher` y `ads` **no elige** (#296). ⛔ **La clase la decide la
+CLÁUSULA que el ancla matcheó** —el bloque sigue siendo la unidad de la *negación vecina* (#224), no
+del vocabulario: medido, la decidía una mención de la paginación de la revista 300 caracteres más
+adelante—, **la negación es simétrica** (sin su gemela del lado publicado, la salvedad del
+manuscrito del autor se **invertía** y la forma más común del corpus —«es el PREPRINT …, no la
+versión publicada»— se perdía: **47 de 51**), **`web` es una clase** (ningún testigo lo decide, y
+llamarlo *publicado* era la inversión) y el proponente **cruza el disco antes de proponer** y
+**saltea la nota sin PDF**: el JSON es inmutable (#311), así que puede ser anterior a un
+`replace_pdf` y entonces el hallazgo útil es *«la salvedad quedó vieja»*, no una entrada que el
+propio chequeo rechaza.
 
 ⛔ **La lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el único
 canal en esa dirección: `stars`/`thesis_links` se siembran **antes** de leer y `harvest_views` mergea

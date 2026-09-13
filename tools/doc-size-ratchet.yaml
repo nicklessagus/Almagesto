@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-13"
-techo_lineas: 1874
-techo_bytes: 152400
+techo_lineas: 1886
+techo_bytes: 153600
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -444,3 +444,13 @@ crecimientos:
       que el agente corre para migrar lo viejo, así que va acá y no sólo en `docs/lint.md`.
     techo_lineas: 1874
     techo_bytes: 152400
+  - fecha: "2026-09-13"
+    ancla: "#452 (2ª vuelta)"
+    motivo: >-
+      Once líneas en el mismo párrafo, por la devolución de la instancia: el migrador propuso mal en
+      4 de 6 casos reales y creaba un backlog de 51 notas con salida para 4. Las cuatro reglas que
+      lo cierran cambian lo que el agente lee de la propuesta —la clase la decide la CLÁUSULA, la
+      negación es simétrica, `web` es una clase, y el proponente cruza el disco y saltea la nota sin
+      PDF—, así que van con la regla y no sólo en `docs/mediciones.md`.
+    techo_lineas: 1886
+    techo_bytes: 153600

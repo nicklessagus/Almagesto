@@ -510,3 +510,31 @@ publica, si `--propose-pdf-leido` propone sobre una salvedad que no habla del do
 (mismo criterio que #449: dispara sobre una nota coherente), si propone un `documento` que la nota
 no respalda, o si **escribe** en algún JSON de `raw/extraccion/`.
 
+### #452 (2ª vuelta) · v1.264.1 — el chequeo quedó, el migrador se corrigió
+
+**Qué entró.** Las cuatro correcciones, todas en el lado del proponente/clasificador y **ninguna**
+toca `_check_pdf_leido`: (a) la clase la decide la **cláusula** que el ancla matcheó, con el bloque
+todavía como unidad de la negación vecina (#224); (b) negación **simétrica** (`_NO_PUBLICADO_RE`);
+(c) **`web` es una clase** —manuscrito del autor, versión para la web— y no contradice a ningún
+testigo; (d) el proponente **cruza `doc_on_disk`** antes de proponer y **saltea la nota sin PDF**.
+
+**Validar** — sobre las mismas seis, que es la medición que devolvió el issue:
+
+```bash
+python scripts/harvest_views.py <slug> --propose-pdf-leido
+```
+
+- `2025A&A...696A.141H` → `publisher` y `2011PLoSO...627594P` → `publisher|ads` siguen igual;
+- `1999ISPL....6..145H` y `2000NN.....13..411H` tienen que salir **`web`** (no `publisher|ads`);
+- `2011A&A...535A..17B` tiene que salir como **«la salvedad quedó VIEJA: en disco está el
+  publicado»**, sin entrada para pegar;
+- `2020BAAA...61B..27U` **no tiene que aparecer** (`pdf: null`).
+
+Y la cobertura: el conteo de propuestas tiene que acercarse a las **51** notas que el lint lista con
+salvedad en prosa sobre el documento en disco, no quedarse en 4 — la forma «es el PREPRINT …, no la
+versión publicada en A&A» ya no sale ambigua.
+
+**Devolver si** alguna de las seis vuelve a proponer mal, si el conteo sigue muy por debajo de las 51
+(declarando cuántas y por qué quedaron afuera), o si alguna propuesta nueva la rechaza su propio
+chequeo.
+

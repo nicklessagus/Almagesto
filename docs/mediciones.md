@@ -2256,3 +2256,28 @@ quieto. Y hay un caso que un script no puede cerrar: *publicado* no distingue `p
 así que cuando la nota no declara `pdf_source` emite el hallazgo **sin valor** en vez de inventar la
 procedencia que #296 cerró.
 
+**Devuelto por la instancia y corregido (1.264.1).** El chequeo (`_check_pdf_leido`) se firmó —seis
+pares reales, las tres respuestas—; el **migrador** no: **6 propuestas, 2 correctas**. Tres
+mecanismos, los tres decidibles, más un cuarto de alcance:
+
+| propuesta | qué pasó |
+|---|---|
+| `1999ISPL....6..145H` → `publisher\|ads` | la cláusula dice «NO es la version tipografiada …, sino el MANUSCRITO del autor» y la clase la decidió «paginacion **publicada** 145-147», **300 caracteres más adelante** |
+| `2000NN.....13..411H` → `publisher\|ads` | «es la versión de los autores para la web …, **NO** el tipografiado del editor»: sin negación del lado publicado, **invertida** |
+| `2011A&A...535A..17B` → `eprint` | el JSON es inmutable (#311) y es anterior a un `replace_pdf`: su propio chequeo la rechazaba en la misma corrida |
+| `2020BAAA...61B..27U` → `eprint` | la nota tiene `pdf: null`, y la salvedad dice «no hay archivo en disco donde buscar una marca de agua» — una afirmación de NO-existencia |
+
+Y el efecto que no se veía en las seis: la forma **más común** del corpus es *«es el PREPRINT de
+arXiv …, no la versión publicada en A&A»* — nombra las dos, salía ambigua, y por eso el lint listaba
+**51 notas** y el migrador veía **4**. O sea: el issue creaba un backlog de 51 y entregaba salida
+para 4.
+
+**Qué cambió (1.264.1).** La clase la decide la **cláusula** que el ancla matcheó
+(`_clause_class` sobre `_CLAUSULA_SEP`), con el bloque todavía como unidad de la **negación
+vecina** (#224: se une primero, porque un hard-wrap no es un límite de oración). Negación
+**simétrica** (`_NO_PUBLICADO_RE`). **`web` es una clase** (`_WEB_RE`: manuscrito del autor, versión
+para la web) y `disk_doc_conflict` la descuenta antes de cruzar — ningún testigo del disco la decide,
+así que no puede contradecir a nadie. Y el proponente **cruza `doc_on_disk` antes de proponer** —si
+los testigos desmienten la prosa del JSON el hallazgo es la caducidad, no una entrada que el chequeo
+rechaza— y **saltea la nota sin PDF**.
+
