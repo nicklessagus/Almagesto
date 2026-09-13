@@ -1518,9 +1518,11 @@ def test_453b_el_restamp_REHUSA_si_revertiria_una_correccion(toy_vault, capsys):
 
     # el PDF se reemplazó: los testigos ahora dicen `publicado` y la nota se corrigió a mano
     body = dest.read_text(encoding="utf-8")
+    # el PDF se reemplazó y alguien BORRÓ la salvedad vieja de la nota: el JSON la vuelve a traer,
+    # así que el re-estampado la AGREGA (pasa la guarda de reescritura) e introduce el conflicto
     nuevo = body.replace("pdf_source: eprint", "pdf_source: publisher") \
-                .replace("El PDF en disco es el PREPRINT", "Esta vista se leyó del PREPRINT")
-    assert "pdf_source: publisher" in nuevo and "Esta vista se leyó" in nuevo
+                .replace("- El PDF en disco es el PREPRINT de arXiv (marca al margen).\n", "")
+    assert "pdf_source: publisher" in nuevo and "El PDF en disco" not in nuevo
     dest.write_text(nuevo, encoding="utf-8")
     antes = dest.read_text(encoding="utf-8")
     r = hv.restamp_salvedades("test_star")
@@ -1545,3 +1547,54 @@ def test_453b_avisa_cuando_una_verificada_DEJA_de_serlo(toy_vault, capsys):
     assert r["perdidas"] == [(BIB, 1)] and r["tocadas"] == [BIB]
     hv.print_restamp_salvedades(r, "test_star", dry_run=False)
     assert "DEJARON de estarlo" in capsys.readouterr().out
+
+
+def test_453c_el_restamp_REHUSA_reescribir_una_salvedad_en_prosa(toy_vault):
+    """⛔ #453, devuelto por SEGUNDA vez — el cruce de disco de v1.265.1 comparte ANCLA con el
+    detector de #449, así que sólo protege las frases que ese detector sabe mirar: la corrección
+    real está redactada «Esta vista se leyó del PREPRINT …», que **no ancla** (no dice «en disco»),
+    pasaba limpia, y el texto falso que quedaba era encima **invisible** para `doc_en_disco`. Medido
+    sobre un barrido de 65 notas: **28 salvedades reescritas**, 22 de ellas las correcciones del
+    09-12, y una una CITA TEXTUAL cambiada por otra que la fuente no dice —que no caza nadie, porque
+    una salvedad no lleva `[[bibcode]]` (el agujero de #213)—.
+
+    La regla es ESTRUCTURAL y no depende de ningún ancla: una salvedad en prosa ya escrita no se
+    reescribe. Medido: deja pasar 43 de 65 y frena las 22."""
+    _con_pdf(toy_vault)
+    d = extraccion()
+    d["salvedades"] = ["El PDF en disco es el PREPRINT de arXiv (marca al margen)."]
+    dest = sembrar(toy_vault, d, fm_extra={"pdf_source": "eprint"})
+    hv.harvest("test_star")
+    # la corrección a mano: la frase cambia y NO ancla («en disco» ya no está)
+    dest.write_text(dest.read_text(encoding="utf-8").replace(
+        "- El PDF en disco es el PREPRINT de arXiv (marca al margen).",
+        "- Esta vista se leyó del PREPRINT de arXiv (marca al margen)."), encoding="utf-8")
+    antes = dest.read_text(encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert dest.read_text(encoding="utf-8") == antes, "⛔ la corrección a mano NO se pisa"
+    assert r["tocadas"] == [] and [b for b, _m in r["rehusadas"]] == [BIB]
+    assert "REESCRIBIRÍA 1 salvedad(es)" in r["rehusadas"][0][1]
+
+
+def test_453c_agregar_y_quitar_SIGUEN_siendo_seguros(toy_vault):
+    """#453 — la regla frena la reescritura y **no** el trabajo: cobrar una propuesta de #452 es
+    quitar la prosa y agregar la estructurada, y eso tiene que seguir pasando (43 de 65 en el
+    barrido medido)."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = ["la Fig. 3 es difícil de leer"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    # AGREGAR una prosa nueva junto a la que ya está
+    d["salvedades"] = ["la Fig. 3 es difícil de leer", "la Tabla 2 está partida en dos páginas"]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    assert hv.restamp_salvedades("test_star")["tocadas"] == [BIB]
+    assert "la Tabla 2" in dest.read_text(encoding="utf-8")
+    # QUITAR una y estructurar la otra: el caso de #452, que es el que hay que dejar pasar
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"},
+                       "la Tabla 2 está partida en dos páginas"]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert r["tocadas"] == [BIB] and r["rehusadas"] == []
+    body = dest.read_text(encoding="utf-8")
+    assert "⚙ verificada" in body and "la Fig. 3" not in body

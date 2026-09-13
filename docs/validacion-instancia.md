@@ -593,3 +593,34 @@ python scripts/lint.py | grep -A4 "QUÉ DOCUMENTO hay en disco"   # tiene que se
 si una `⚙ verificada` se va en silencio, o si la rehusada era en realidad segura (falso positivo
 sobre una nota coherente).
 
+### #453 (3ª vuelta) · v1.265.2 — una salvedad en prosa ya escrita no se reescribe
+
+**Qué falló.** Las tres correcciones de 1.265.1 se midieron y andan, pero el barrido **reescribió 28
+salvedades**: 22 correcciones del 09-12 (redactadas *«esta vista se leyó del…»*, que **no ancla**,
+así que el cruce no las veía y el texto falso quedaba además invisible para `doc_en_disco`), **una
+cita textual** cambiada por otra que la fuente no dice —que ninguna capa caza, porque una salvedad no
+lleva `[[bibcode]]`— y un escape perdido.
+
+**Qué entró.** La guarda pasa a ser **estructural**, sin depender de ningún ancla: se rehúsa la nota
+cuando el re-estampado **reescribiría** una salvedad en prosa ya escrita. Agregar y quitar siguen
+pasando. Sólo mira el bloque de prosa (el de `⚙ verificada` lo re-deriva el chequeo).
+
+**Validar** — el mismo barrido completo, sin `--paper`:
+
+```bash
+git status --short vault/wiki/papers/
+python scripts/harvest_views.py <slug> --restamp-salvedades
+git diff --stat vault/wiki/papers/
+```
+
+- **cero** salvedades en prosa reescritas: toda línea que sale del diff tiene que ser un `+` o un
+  `-`, nunca un par que cambia el texto de la misma;
+- las **22** tienen que salir como rehusadas con *«REESCRIBIRÍA N salvedad(es) en prosa»*;
+- las **43** que sólo agregan o quitan tienen que seguir pasando (incluidas las 44+2 ya cobradas,
+  que son no-op);
+- `doc_en_disco` en 0 y `vistas[]` intacto, como en la 2ª vuelta.
+
+**Devolver si** alguna salvedad en prosa cambia de texto, si una nota que sólo agregaba o quitaba
+queda rehusada (falso positivo que frenaría el trabajo), o si el conteo de rehusadas no coincide con
+las notas que tienen corrección a mano.
+

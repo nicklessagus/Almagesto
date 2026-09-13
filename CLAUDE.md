@@ -444,7 +444,14 @@ bloque y no su *contenido*, así que la prosa corregida a mano adentro le era in
 es inmutable (#311), o sea que puede ser **más viejo que la nota**: medido, un barrido de 144 notas
 dejó **27 afirmando lo que sus propios testigos desmienten** (la corrección de #449 revertida) y
 **50 `⚙ verificada` desaparecidas** sin que nada lo dijera. Hoy rehúsa la nota nombrándola y avisa
-la chequeada que dejó de serlo.
+la chequeada que dejó de serlo. ⛔ **Y la regla que de verdad la protege es ESTRUCTURAL: una
+salvedad en prosa ya escrita NO se reescribe** —agregar y quitar son seguros (cobrar una propuesta
+es justo eso)—, porque aquel cruce comparte **ancla** con el detector de #449 y por lo tanto sólo
+mira las frases que ese detector sabe mirar: la corrección real se redacta *«esta vista se leyó
+del…»*, que no ancla, así que pasaba limpia y el texto falso quedaba **invisible**. Medido: **28
+salvedades reescritas** en un barrido de 65 notas —22 correcciones y una **cita textual** cambiada
+por otra que la fuente no dice, que no caza ninguna capa porque una salvedad no lleva `[[bibcode]]`
+(#213)—; la regla deja pasar 43 de 65.
 
 ⛔ **La lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el único
 canal en esa dirección: `stars`/`thesis_links` se siembran **antes** de leer y `harvest_views` mergea

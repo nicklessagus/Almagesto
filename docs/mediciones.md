@@ -2336,3 +2336,28 @@ estructurarla es justo lo que la categoría pide, así que listarla dejaba un ba
 acción cierra (2 de 44)—; la marca la escribe el cosechador y la lee el lint por una sola constante
 (`cfg.NO_EVALUABLE_MARCA`).
 
+**Devuelto por segunda vez y corregido (1.265.2).** Las tres correcciones de 1.265.1 se midieron y
+andan —`doc_en_disco` **0** tras el barrido (eran 27), las **27 rehusadas** nombrándolas, **28**
+`⚙ verificada` perdidas avisadas en 18 notas (0 en silencio, el número por nota coincide) y
+`vistas[]` intacto en las 65 notas tocadas—, pero el barrido **reescribió 28 salvedades**:
+
+- **22 eran las correcciones del 09-12.** El cruce ancla en «el PDF **en disco** es…» y la
+  corrección está redactada *«Esta vista se leyó del PREPRINT…»*: esa frase **no ancla**, así que la
+  guarda no la veía y el JSON la pisaba. Y el texto que quedaba era falso **e invisible**: sin «en
+  disco» no dispara `doc_en_disco`. O sea: la guarda y el detector comparten ancla, así que sólo
+  protege las frases que el detector sabe mirar.
+- **1 cita textual reemplazada por otra que la fuente no dice** (`1999ITNN...10..626H`: *«…the
+  convergence is proven globally»* → *«…it converges globally»*; el `.txt` tiene la de la nota, 1
+  ocurrencia, y la del JSON cero). **No la caza nada**: una salvedad no lleva `[[bibcode]]`, así que
+  `contrast --validar` la declara no evaluable — el agujero de #213 que este módulo existe para
+  tapar.
+- **1 escape perdido** (`\$20.00` → `$20.00`).
+
+**Qué cambió (1.265.2).** La regla pasa a ser **estructural y sin ancla**: *una salvedad en prosa ya
+escrita no se reescribe*. Agregar y quitar son seguros —cobrar una propuesta de #452 es exactamente
+quitar la prosa y agregar la estructurada—, y lo que se rehúsa es el cambio de **texto** de una que
+sigue ahí, que es donde vive la corrección a mano. Se compara sólo el bloque de **prosa**: el de
+`⚙ verificada` lo re-deriva `check_salvedad` del disco, así que un texto distinto ahí es la respuesta
+nueva del chequeo y no la edición de nadie. Medido sobre el mismo barrido: deja pasar **43 de 65** y
+frena las 22.
+

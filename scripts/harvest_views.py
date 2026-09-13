@@ -945,6 +945,18 @@ def salvedades_span(scope: str) -> tuple | None:
     return ini, len(scope)
 
 
+def _bullets_prosa(scope: str) -> set:
+    """The bullets of the NOT-VERIFIED caveat block, as written (#453).
+
+    Only that block: the `⚙ verificada` one is re-derived from disk by `check_salvedad`, so a
+    different text there is the check's new answer and not somebody's edit. This one is the extractor's
+    prose — and the place where a correction made by hand lives."""
+    # ⚠ `partition` y no `find` + guarda: sin la marca la cola es `""` y el set sale vacío por
+    # construcción, así que el `if i < 0` no decidía nada (#319 — su mutación sobrevivía).
+    _antes, _marca, cola = scope.partition(SALVEDAD_MARCAS[1])
+    return {ln.strip() for ln in cola.splitlines() if ln.strip().startswith("- ")}
+
+
 def _n_verificadas(scope: str) -> int:
     """How many `⚙ verificada` lines this scope publishes (#453)."""
     return sum(1 for ln in scope.splitlines() if ln.strip().startswith("- ⚙ verificada"))
@@ -1019,6 +1031,30 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
         # propios testigos desmienten —la corrección de #449 revertida— y 50 `⚙ verificada`
         # desaparecieron sin que nada lo dijera. Es la misma familia que el proponente de #452 antes
         # de v1.264.1: se cruza el disco ANTES de escribir, con la misma función.
+        # ⛔ #453, devuelto por SEGUNDA vez — y es la regla que faltaba, porque el cruce de abajo
+        # comparte ANCLA con el detector de #449, así que sólo protege las frases que ese detector
+        # sabe mirar: la corrección real está redactada *«Esta vista se leyó del PREPRINT …»*, que
+        # NO ancla (no dice «en disco»), así que pasaba limpia y encima quedaba invisible — el texto
+        # falso no dispara `doc_en_disco`. Medido sobre un barrido de 65 notas: **28 salvedades
+        # reescritas**, 22 de ellas las correcciones del 09-12, una de ellas una CITA TEXTUAL
+        # cambiada por otra que la fuente no dice (y que no caza nadie: una salvedad no lleva
+        # `[[bibcode]]`, o sea el agujero de #213 que este módulo existe para tapar).
+        #
+        # La regla es ESTRUCTURAL, no semántica, y por eso no depende de ningún ancla: **una
+        # salvedad en prosa que ya está escrita NO se reescribe**. Agregar y quitar son seguros
+        # —cobrar una propuesta de #452 es justamente quitar la prosa y agregar la estructurada—;
+        # lo que se rehúsa es el cambio de TEXTO de una que sigue ahí, que es donde vive la
+        # corrección a mano. Medido: deja pasar 43 de 65 y frena las 22.
+        #
+        # ⚠ Sólo el bloque de PROSA: el de `⚙ verificada` lo re-deriva `check_salvedad` del disco,
+        # así que ahí un texto distinto es la respuesta nueva del chequeo, no una edición de nadie
+        # (y su pérdida ya se avisa abajo).
+        viejos, nuevos = _bullets_prosa(seccion), _bullets_prosa(nueva)
+        if (se_van := viejos - nuevos) and nuevos - viejos:
+            rehusadas.append((bib, f"el re-estampado REESCRIBIRÍA {len(se_van)} salvedad(es) en "
+                                   f"prosa ya escritas → agregar y quitar son seguros, reescribir "
+                                   f"no: si la corrección es de la nota, pasala al JSON"))
+            continue
         fm = cfg.split_fm(text)
         if (conf := cfg.disk_doc_conflict(texto_nuevo, fm, mn.safe_name(bib))):
             previo = cfg.disk_doc_conflict(text, fm, mn.safe_name(bib))
