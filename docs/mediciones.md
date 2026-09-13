@@ -2068,3 +2068,19 @@ diff el backlog de #298 habría subido de 142 a 151 sin que nadie consiguiera ni
 precedencia entre la marca de arXiv y `sources:`, y vale sólo si `pdf_sha` es el sha del PDF en disco
 (bajo el slug, o cualquier copia)—; y `extract_fulltext.stamp_targets`: con `--bibcode` se estampan
 sólo las notas cuyo `.txt` se tocó. Portadores firmados (`tools/portadores.yaml`, issue 446).
+
+## 2026-09-12 · El reemplazo que producía el bloqueante D-18/D-20 (#448)
+
+31 preprints reemplazados con `replace_pdf.py` en la instancia; después, `lint` **bloqueó** con 3
+bibcodes cuyo `.txt` difería entre slugs. Mecanismo: el bucle de re-extracción enumeraba los slugs
+desde `vault/raw/pdfs/**`, y D-18 trae el `.txt` al slug del sujeto **sin** el PDF — `2015Voss`
+tenía PDF sólo bajo `ica` y `.txt` bajo `ica` e `ica-ruido`. El `.txt` del otro slug quedaba
+describiendo el preprint mientras el PDF y su hermano describían el publicado: el invariante que
+D-18/D-20 hace bloqueante, producido por el comando que existe para cerrar ese backlog. 3 de 31
+(~10 %). La medición del docstring («2 de 11 vivían bajo dos slugs») contaba slugs de **PDF**.
+
+**Qué cambió (1.260.1):** `cfg.bibcode_slugs(stem)` —UNA enumeración, por artefacto— y el bucle
+itera la unión: el slug sin PDF recibe la copia del `.txt` regenerado (`pdftotext` es determinista
+sobre el mismo archivo); si ningún slug con PDF tenía `.txt`, se extrae en el primero y se copia de
+ahí; si no queda ninguno, se avisa y el lint lo bloquea. El reporte declara los copiados aparte de
+los re-extraídos. Portador nuevo: el detector «vista fechada sin fuente en disco» del lint.

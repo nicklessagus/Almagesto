@@ -1504,6 +1504,9 @@ que ya no está (las citas textuales siguen bien: ninguna capa mira el localizad
 `pdf_reemplazo` en la nota, add-only, y AVISA si el entrante tiene menos páginas (#437):** la copia
 del editor puede ser peor (7 páginas sin Supplementary contra 33 del preprint, con la ficha
 citando §S1.1) — aviso y no rehúse, porque el que decide es quien mira.
+⛔ **Y los slugs son la UNIÓN de PDF y `.txt` (#448):** D-18 trae el `.txt` sin el PDF, así que el
+slug sin copia del PDF recibe el `.txt` regenerado —iterando sólo los PDF, el comando dejaba el
+bloqueante D-18/D-20 que existe para cerrar (3 de 31)—.
 ⛔ **Y el REUSO entre slugs (D-18) deja una pregunta hecha, no una respuesta (#297).** Copiar el
 artefacto que ya estaba bajo otro slug es correcto, pero importa a un sujeto nuevo un archivo cuya
 **antigüedad nadie chequeó** — y la salida natural («si hubiera versión nueva la búsqueda habría

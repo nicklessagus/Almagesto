@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.260.0"
+ALMAGESTO_VERSION = "1.260.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3507,6 +3507,22 @@ def txt_slug(stem: str, prefiere: str | None = None) -> str | None:
         return prefiere
     otros = sorted(FULLTEXT.glob(f"*/{stem}.txt")) if FULLTEXT.exists() else []
     return otros[0].parent.name if otros else None
+
+
+def bibcode_slugs(stem: str) -> dict:
+    """The slugs holding this paper's artefacts, by artefact: `{"pdf": {slugs}, "txt": {slugs}}` (#448).
+
+    ⛔ The two sets are NOT the same set, and every writer that acts on «the copies of a bibcode»
+    has to take the UNION: D-18 brings the `.txt` to the subject's slug WITHOUT the PDF, so a
+    paper can have its PDF under one slug and its `.txt` under two. `replace_pdf` enumerated the
+    slugs from the PDFs and re-extracted only there, leaving the other `.txt` describing the
+    preprint while the PDF described the published copy — the exact invariant D-18/D-20 makes
+    BLOCKING, produced by the command that exists to close that backlog (measured: 3 of 31
+    replacements in one run). `pdf_slug`/`txt_slug`/`best_pdf` resolve ONE copy for READING and
+    are right to; this is the enumeration for WRITING."""
+    return {"pdf": ({c.parent.name for c in PDFS.glob(f"*/{stem}.pdf")} if PDFS.exists() else set()),
+            "txt": ({c.parent.name for c in FULLTEXT.glob(f"*/{stem}.txt")} if FULLTEXT.exists()
+                    else set())}
 
 
 def artefacto_en_otro_slug(base: Path, slug: str, stem: str, sufijo: str):

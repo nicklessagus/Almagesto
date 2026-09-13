@@ -58,7 +58,8 @@ def pdf_copies(bibcode: str) -> list:
     ⛔ The unit of the replacement is the PAPER and the unit of storage is the **slug**, so a
     replacement that writes one copy leaves the others reading the old document — and `pdf_slug`
     resolves only ONE (declared precedence, #305), which is right for reading and wrong for
-    writing. Measured: 2 of the 11 papers replaced lived under two slugs each."""
+    writing. Measured: 2 of the 11 papers replaced lived under two slugs each — counting slugs of
+    the PDF; the `.txt` lives in MORE slugs (D-18), and that side is `cfg.bibcode_slugs` (#448)."""
     stem = cfg.note_stem(bibcode)
     return sorted(cfg.PDFS.glob(f"*/{stem}.pdf")) if cfg.PDFS.exists() else []
 
@@ -319,9 +320,10 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
             # PDF truncado que `if dest.exists()` da por bajado para siempre — el modo de falla
             # que H-07 cerró, y acá el destino es un artefacto de `raw/` que viaja en git-lfs.
             cfg.copy_file_atomic(nuevo, c)
-    txts = []
+    txts, copiados = [], []
+    stem = cfg.note_stem(bibcode)
     for slug in slugs:
-        txt = cfg.FULLTEXT / slug / f"{cfg.note_stem(bibcode)}.txt"
+        txt = cfg.FULLTEXT / slug / f"{stem}.txt"
         if not txt.exists():
             continue
         txts.append(txt)
@@ -330,7 +332,33 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
             # fuente de TODOS los papers del tema. Y sí hay que re-extraer: el `.txt` es el índice
             # de búsqueda del corpus y quedó describiendo otro documento.
             subprocess.run([sys.executable, str(Path(__file__).with_name("extract_fulltext.py")),
-                            slug, "--bibcode", cfg.note_stem(bibcode), "--force"], check=False)
+                            slug, "--bibcode", stem, "--force"], check=False)
+    # ⛔ #448 — los slugs de un bibcode son la UNIÓN de sus copias de PDF y de `.txt`: D-18 trae el
+    # `.txt` al slug del sujeto SIN el PDF, así que iterar sólo `copias` dejaba ese `.txt`
+    # describiendo el preprint mientras el PDF describía el publicado — el bloqueante D-18/D-20,
+    # producido por el comando que existe para cerrar ese backlog (medido: 3 de 31). Sin PDF ahí
+    # no hay qué re-extraer: se copia el `.txt` recién regenerado (`pdftotext` es determinista
+    # sobre el mismo archivo, así que la copia ES lo que la re-extracción habría dado).
+    for slug in sorted(cfg.bibcode_slugs(stem)["txt"] - set(slugs)):
+        destino = cfg.FULLTEXT / slug / f"{stem}.txt"
+        copiados.append(destino)
+        if dry_run:
+            continue
+        origen = next((t for t in txts if t.exists()), None)
+        if origen is None:
+            # ningún slug con PDF tenía `.txt`: se extrae en el primero (sin `--force`: no existe)
+            # y ése es el origen de la copia
+            origen = cfg.FULLTEXT / slugs[0] / f"{stem}.txt"
+            subprocess.run([sys.executable, str(Path(__file__).with_name("extract_fulltext.py")),
+                            slugs[0], "--bibcode", stem], check=False)
+            if origen.exists():
+                txts.append(origen)
+        if origen.exists():
+            cfg.copy_file_atomic(origen, destino)
+        else:
+            cfg.print_seguro(f"  ⚠ {destino}: no se pudo regenerar el `.txt` (la re-extracción no "
+                             f"dejó ninguno en {', '.join(slugs)}) — queda describiendo el PDF "
+                             f"ANTERIOR y el lint lo bloquea (D-18/D-20)")
     nota = cfg.PAPERS / f"{cfg.note_stem(bibcode)}.md"
     if nota.exists() and not dry_run:
         # #383 bloquea `pdf_source` de editor con `eprint_version` (el valor viejo describía el
@@ -344,7 +372,8 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
                          f"se pudo estampar (¿`make_notes.py` todavía no la creó?)")
     extracciones = stamp_depagination(bibcode, sha_viejo, sha_nuevo, reason, dry_run=dry_run)
     return {"bibcode": bibcode, "slugs": slugs, "sha_anterior": sha_viejo, "sha": sha_nuevo,
-            "txts": [str(t) for t in txts], "extracciones": [str(e) for e in extracciones],
+            "txts": [str(t) for t in txts], "txts_copiados": [str(t) for t in copiados],
+            "extracciones": [str(e) for e in extracciones],
             "alcance": [(str(n), k) for n, k in alcance], "pares": sum(k for _n, k in alcance),
             "aviso_paginas": aviso_paginas, "paginas": paginas}
 
@@ -357,7 +386,11 @@ def print_report(r: dict, source: str, reason: str) -> None:
         f"`pdf_source: {source}`")
     if r.get("aviso_paginas"):
         cfg.print_seguro(f"  ⚠ PÁGINAS: {r['aviso_paginas']} (#437)")
-    cfg.print_seguro(f"  · `.txt` re-extraídos: {len(r['txts'])} (acotado al bibcode, #436)")
+    cfg.print_seguro(f"  · `.txt` re-extraídos: {len(r['txts'])} (acotado al bibcode, #436)"
+                     + (f" · copiados a {len(r['txts_copiados'])} slug(s) que tienen el `.txt` "
+                        f"sin el PDF (D-18, #448): "
+                        f"{', '.join(Path(t).parent.name for t in r['txts_copiados'])}"
+                        if r.get("txts_copiados") else ""))
     cfg.print_seguro(f"  · extracciones marcadas `_paginacion`: {len(r['extracciones'])} — sus "
                      f"localizadores son del documento ANTERIOR (#311: no se reescriben)")
     cfg.print_seguro(f"\n  ⚠ ALCANCE DE LA RE-VERIFICACIÓN: {r['pares']} par(es) en "

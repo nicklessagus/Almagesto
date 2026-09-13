@@ -524,6 +524,30 @@ portadores:
         estado: fuera-de-alcance
         motivo: ESCRIBE la firma (`sign_note`); la lectura es del estampador.
 
+  - issue: 448
+    regla: >-
+      Los slugs de un bibcode son la UNIÓN de sus copias de PDF y de `.txt` (D-18 trae el `.txt`
+      al slug del sujeto SIN el PDF): quien actúa sobre «las copias de un bibcode» enumera los dos
+      lados; resolver UNA copia es para leer, no para escribir.
+    funcion: lib_config.bibcode_slugs
+    patron: 'glob\(f"\*/\{[a-z_()]+\}\.(pdf|txt)"\)'
+    consumidores:
+      - modulo: scripts/replace_pdf.py
+        estado: usa
+        motivo: "el bucle de re-extracción itera PDF ∪ `.txt`; el slug sin PDF recibe la copia del `.txt` regenerado."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "«vista fechada sin fuente en disco» pregunta por los dos artefactos; el detector D-18 mira sólo `.txt` porque ESA es su población."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: Chequea una salvedad contra CUALQUIER copia (lectura); no escribe artefactos.
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: Lee la primera copia del `.txt` para juzgar una cita (D-18 garantiza que son iguales).
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "`best_pdf`/`best_fulltext`/`stamp_*` resuelven UNA copia por precedencia declarada (#304): es lectura para apuntar, no escritura sobre las copias."
+
   - issue: 416
     regla: >-
       La línea sobre un `## Abstract` transcrito del PDF afirma DOS cosas y sólo una vale siempre:

@@ -392,3 +392,11 @@ None)` con `build/ica-ruido/pdf_source.json` diciendo `eprint`. Después `extrac
 slug cambia** (hash de `vault/wiki/papers/` antes/después, red 6). Repetir un reemplazo real con
 `replace_pdf.py` → las notas ya firmadas del mismo slug no se mueven. **Devolver si** una firmada
 vuelve a `eprint`, o si una nota con `pdf_sha` distinto del PDF en disco toma la firma como válida.
+
+## #448 · v1.260.1
+
+Sobre un bibcode con PDF en un slug y `.txt` en dos (`2015Voss`: PDF en `ica`, `.txt` en `ica` e
+`ica-ruido`): `replace_pdf.py 2015Voss <pdf> --source publisher --reason "…" --dry-run` → el reporte
+dice *«copiados a 1 slug(s) … ica-ruido»*; la corrida real → `sha` igual en los dos `.txt` y `lint.py`
+sin el bloqueante D-18/D-20. **Devolver si** el `.txt` del slug sin PDF queda distinto, o si el
+reporte cuenta el copiado como re-extraído.

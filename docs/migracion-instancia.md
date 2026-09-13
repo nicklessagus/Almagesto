@@ -771,6 +771,12 @@ EOF2
 Cada línea es una nota revertida: `python scripts/extract_fulltext.py <slug> --bibcode <bib>` (sin
 `--force`: no re-extrae, sólo re-estampa) la devuelve a lo firmado, porque ahora la firma manda.
 
+## 2v · v1.260.1 (#448) — el `.txt` del slug sin PDF también se regenera
+
+Nada que migrar. Si el lint bloquea con *«Mismo bibcode con `.txt` DISTINTO entre slugs»* después
+de un reemplazo hecho con una versión anterior, el workaround sigue valiendo (copiar el `.txt` del
+slug con PDF al otro), y los reemplazos nuevos lo hacen solos.
+
 ## 3 · Cierre
 
 ```bash

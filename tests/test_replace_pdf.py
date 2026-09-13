@@ -457,3 +457,61 @@ def test_backfill_AUTO_rehusa_si_el_padre_tiene_el_MISMO_sha_que_el_pdf_actual(t
     with pytest.raises(rp.ReplaceError, match="MISMO sha"):
         rp.backfill("2007Plano", "publisher", "m")
 
+
+
+def test_el_txt_de_un_slug_SIN_pdf_tambien_se_regenera(toy_vault, tmp_path, monkeypatch, capsys):
+    """⛔ #448 — D-18 trae el `.txt` al slug del sujeto SIN el PDF, así que los slugs de un bibcode
+    son la UNIÓN de sus copias de PDF y de `.txt`. El bucle iteraba `copias` (los PDF) y el `.txt`
+    del otro slug quedaba describiendo el preprint mientras el PDF describía el publicado: el
+    bloqueante D-18/D-20, producido por el comando que existe para cerrar ese backlog. Medido: 3 de
+    31 reemplazos en una corrida."""
+    _copia("ica", "2015Voss"); _nota("2015Voss")
+    (cfg.FULLTEXT / "ica-ruido").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt").write_text("texto del preprint\n", encoding="utf-8")
+    assert cfg.bibcode_slugs("2015Voss") == {"pdf": {"ica"}, "txt": {"ica", "ica-ruido"}}
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
+    corridas = []
+
+    def _extrae(cmd, **k):          # el doble de `extract_fulltext --bibcode`: reescribe ESE `.txt`
+        corridas.append(cmd)
+        (cfg.FULLTEXT / cmd[2] / f"{cmd[4]}.txt").write_text("texto del editor\n", encoding="utf-8")
+    monkeypatch.setattr(rp.subprocess, "run", _extrae)
+    r = rp.replace("2015Voss", _entrante(tmp_path), "publisher", "copia del editor")
+    assert [c[2] for c in corridas] == ["ica"], "sin PDF en `ica-ruido` no hay qué re-extraer ahí"
+    assert (cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt").read_bytes() == \
+        (cfg.FULLTEXT / "ica" / "2015Voss.txt").read_bytes(), "las dos copias D-18 quedan iguales"
+    assert r["txts_copiados"] == [str(cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt")]
+    rp.print_report(r, "publisher", "m")
+    assert "copiados a 1 slug(s)" in capsys.readouterr().out and "ica-ruido" in r["txts_copiados"][0]
+    # y con dry-run no se copia nada
+    (cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt").write_text("texto del preprint\n", encoding="utf-8")
+    r = rp.replace("2015Voss", _entrante(tmp_path, b"%PDF-1.7\notra\n"), "publisher", "m", dry_run=True)
+    assert (cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt").read_text(encoding="utf-8") == "texto del preprint\n"
+    assert r["txts_copiados"], "el dry-run declara lo que copiaría"
+
+
+def test_si_NINGUN_slug_con_pdf_tenia_txt_se_extrae_en_el_primero_y_se_copia(toy_vault, tmp_path,
+                                                                              monkeypatch, capsys):
+    """#448, el borde: el slug con el PDF no tiene `.txt` y otro slug sí. La copia necesita un
+    origen, así que se extrae en el primer slug con PDF (sin `--force`: no existe) y de ahí se
+    copia. Si la extracción no deja nada, se AVISA y el `.txt` viejo queda (el lint lo bloquea)."""
+    _copia("ica", "2015Voss"); _nota("2015Voss")
+    (cfg.FULLTEXT / "ica" / "2015Voss.txt").unlink()
+    (cfg.FULLTEXT / "ica-ruido").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt").write_text("texto del preprint\n", encoding="utf-8")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
+    corridas = []
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
+    rp.replace("2015Voss", _entrante(tmp_path), "publisher", "m")
+    assert corridas and corridas[0][2:] == ["ica", "--bibcode", "2015Voss"], "sin `--force`: no existía"
+    assert "no se pudo regenerar" in capsys.readouterr().out
+    assert (cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt").read_text(encoding="utf-8") == "texto del preprint\n"
+
+    def _extrae(cmd, **k):
+        (cfg.FULLTEXT / cmd[2] / f"{cmd[4]}.txt").write_text("texto del editor\n", encoding="utf-8")
+    monkeypatch.setattr(rp.subprocess, "run", _extrae)
+    r = rp.replace("2015Voss", _entrante(tmp_path, b"%PDF-1.7\notra\n"), "publisher", "m")
+    assert (cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt").read_text(encoding="utf-8") == "texto del editor\n"
+    assert len(r["txts"]) == 1 and len(r["txts_copiados"]) == 1

@@ -3129,3 +3129,17 @@ def test_fm_bounds_devuelve_los_offsets_del_bloque_YAML():
     assert cfg.fm_bounds("---\nbibcode: x\n--- \n\ncuerpo\n") == (4, 14), \
         "el delimitador de cierre con espacio final es una LÍNEA `---`, como para `split_fm`"
 
+
+
+def test_bibcode_slugs_enumera_los_DOS_artefactos_por_separado(toy_vault):
+    """#448 — los slugs de un bibcode son la UNIÓN de sus copias de PDF y de `.txt`, y las dos
+    listas NO coinciden: D-18 trae el `.txt` al slug del sujeto sin el PDF. `pdf_slug`/`txt_slug`
+    resuelven UNA copia para leer; esto enumera para ESCRIBIR (el reemplazo de PDF)."""
+    assert cfg.bibcode_slugs("2015Voss") == {"pdf": set(), "txt": set()}
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / "2015Voss.pdf").write_bytes(b"%PDF")
+    for slug in ("ica", "ica-ruido"):
+        (cfg.FULLTEXT / slug).mkdir(parents=True, exist_ok=True)
+        (cfg.FULLTEXT / slug / "2015Voss.txt").write_text("t", encoding="utf-8")
+    assert cfg.bibcode_slugs("2015Voss") == {"pdf": {"ica"}, "txt": {"ica", "ica-ruido"}}
+    assert cfg.bibcode_slugs("2099Nadie") == {"pdf": set(), "txt": set()}

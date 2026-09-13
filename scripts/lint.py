@@ -5027,9 +5027,9 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # DESAPARECIÓ— y `## Citas no verificables` mira los bibcodes citados desde
         # conceptos/queries, no los pares ya verificados de una ficha. Sin esta categoría,
         # la vista se lee igual de firme que cualquier otra.
-        if any(str(v.get("fecha") or "").strip() for v in vistas) and not (
-                list(cfg.PDFS.glob(f"*/{stem}.pdf")) if cfg.PDFS.exists() else []) and not (
-                list(cfg.FULLTEXT.glob(f"*/{stem}.txt")) if cfg.FULLTEXT.exists() else []):
+        _copias = cfg.bibcode_slugs(stem)      # #448: los dos artefactos, UNA enumeración
+        if any(str(v.get("fecha") or "").strip() for v in vistas) and not _copias["pdf"] \
+                and not _copias["txt"]:
             vista_sin_fuente_en_disco.append(
                 (stem, "tiene vista FECHADA y ya no hay fuente en disco (ni PDF ni `.txt`): "
                        "la lectura ocurrió y sus localizadores siguen siendo válidos, pero "
