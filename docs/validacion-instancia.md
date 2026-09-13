@@ -434,3 +434,30 @@ PREPRINT …») y tiene que aparecer nombrando los testigos. Un reemplazo nuevo 
 sobre una nota cuya vista diga preprint → *«⚠ PROSA: N línea(s) …»* con el `grep`, y la nota **sin
 tocar**. **Devolver si** dispara sobre una nota coherente, sobre una línea que niega (*«— NO el
 preprint»*) o sobre una que nombra las dos.
+
+### #449 (2ª vuelta) · v1.262.1 — **devuelto** y re-angostado
+
+**Qué falló.** 5 hallazgos sobre 268 notas, **precisión 0/5**, y 15 líneas marcadas por
+`doc_claims_on_disk` de las que 4 lo eran de verdad. `\bdisco\b` decidía la población y en una
+bóveda astro *disco* es palabra de dominio; `publicad[oa]` pelado es ubicuo.
+
+**Qué entró.** Cuatro angosturas, todas en `cfg.doc_claims_on_disk` (una sola función, los dos
+llamadores le pasan el stem): (a) el ancla es una frase que **predica sobre el archivo** —
+`<documento> (que está) en disco`, `<documento> … en disco es …`, `en disco es/hay el/la …`— y no
+`disco` suelto; (b) el **frontmatter** y las `SECCIONES_ESTAMPADAS` quedan afuera (#214); (c) la
+unidad es el **bloque, no la línea** (#224); (d) el bloque que nombra un `[[bibcode]]` que no es el
+de la nota es **ambiguo y se saltea** — habla del PDF de otro paper. ⚠ El apellido **no** se
+chequea: no es decidible desde la nota.
+
+**Validar.**
+```bash
+python scripts/lint.py | grep -A6 "QUÉ DOCUMENTO hay en disco"   # los 5 falsos NO vuelven
+# y la recall: revertí UNA nota a su texto viejo («El PDF en disco es el PREPRINT …») → aparece
+# nombrando los testigos; las 4 verdaderas de `doc_claims_on_disk` (1999ISPL....6..145H,
+# 2000NN.....13..411H, 2011PLoSO...627594P, 2020BAAA...61B..27U) tienen que seguir marcadas.
+```
+
+**Devolver si** vuelve alguno de los cinco, si alguna de las 4 verdaderas dejó de marcarse, o si
+dispara sobre una nota coherente por otra vía. ⚠ Y sigue abierto el punto 3 del issue original
+(`pdf_leido` en `SALVEDAD_TIPOS`): es lo que cierra esto de verdad —una salvedad estructurada lleva
+el bibcode adentro y no hay que adivinar de quién habla la oración—, y va como issue propio.

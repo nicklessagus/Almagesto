@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.262.0"
+ALMAGESTO_VERSION = "1.262.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3535,37 +3535,88 @@ def txt_slug(stem: str, prefiere: str | None = None) -> str | None:
 #: #449 · la prosa que afirma QUÉ DOCUMENTO hay en disco. La escribe el extractor casi siempre
 #: («El PDF en disco es el PREPRINT de arXiv …, coherente con `pdf_source: eprint`») y es la
 #: afirmación más decidible de una nota —tres testigos máquina-legibles— que quedó en prosa libre.
-_DISCO_RE = re.compile(r"(?i)\bdisco\b")
+#:
+#: ⛔ El ancla es **el documento, no la palabra** (#449, devuelto). `\bdisco\b` suelto decide una
+#: población que en una bóveda astro es de dominio —disco de debris, disco delgado/grueso de la
+#: Galaxia, disco circunestelar— y `publicad[oa]` pelado es ubicuo en prosa científica («valores
+#: publicados», «su disco ya estaba publicado»). El cruce de las dos no dice nada sobre qué archivo
+#: hay en disco: medido en la instancia, **5 hallazgos sobre 268 notas, precisión 0/5**. Lo que
+#: distingue a los verdaderos es que la frase **predica sobre el archivo**: un sustantivo de
+#: documento, `en disco`, y una cópula. «(en disco desde el 2026-09-12)» no la tiene.
+_DOC_NOMBRE = r"(?:pdf|documento|copia|archivo|fuente|versi[oó]n)"
+_DOC_EN_DISCO_RE = re.compile(
+    # el documento, pegado al disco: «el PDF (que está) en disco …»
+    r"(?i)\b" + _DOC_NOMBRE + r"\s+(?:que\s+(?:est[aá]|hay|tenemos)\s+)?en\s+disco\b"
+    # o separado, pero PREDICANDO: «la copia … en disco es …»
+    r"|\b" + _DOC_NOMBRE + r"\b[^.\n;,]{0,40}?\ben\s+disco\b[^.\n;,]{0,15}?"
+    r"\b(?:es|son|sigue\s+siendo|fue|era)\b"
+    r"|\ben\s+disco\s+(?:es|hay|tenemos|qued[oó])\s+(?:el|la|un|una)\b")
 _NO_PREPRINT_RE = re.compile(r"(?i)\bno\s+(?:es\s+)?(?:el\s+)?(?:pre-?print|e-?print)\b")
 _PREPRINT_RE = re.compile(r"(?i)\b(?:pre-?print|e-?print)\b")
 _PUBLICADO_RE = re.compile(r"(?i)(?:versi[oó]n\s+publicada|copia\s+del\s+editor|del\s+editor|"
                            r"publicad[oa])")
 
 
-def doc_claims_on_disk(text: str) -> list:
-    """`[(«preprint»|«publicado», la línea)]` — every line of the note that asserts WHICH document
+def doc_claims_on_disk(text: str, stem: str = "") -> list:
+    """`[(«preprint»|«publicado», the line)]` — every line of the note that asserts WHICH document
     is on disk (#449).
 
     ⛔ A claim about the FILE carries no `[[bibcode]]`, so `verify-citations` leaves it out by
     construction (#213) and `contrast --validar` looks at quotes, not at prose about the disk. It
     is also the most decidable claim a note makes —`pdf_source`, `pdf_reemplazo` and the arXiv mark
     in the `.txt` are three machine-readable witnesses— and it survived a replacement that changed
-    all three: measured, 43 salvedades in 31 notes still saying «the PDF on disk is the PREPRINT»
-    after `replace_pdf` put the publisher's copy there.
+    all three: measured, 43 caveats in 31 notes still saying the PDF on disk was the preprint after
+    `replace_pdf` put the publisher's copy there.
 
-    A negated mention does not count («… es la VERSIÓN PUBLICADA del editor — NO el preprint» is a
-    *publicado* claim, not both), and a line that ends up naming both is ambiguous and skipped:
-    over-reporting on a correct note is the worst currency a detector has."""
+    ⛔ **Four narrowings, one per false positive the instance measured** — the first version scored
+    **0/5 over 268 notes**, and the condition to return it was literally «it fires on a coherent
+    note»:
+
+    - the **frontmatter** and the `SECCIONES_ESTAMPADAS` are not prose of the vault (#214): the
+      worst of the five was a YAML comment, and another lived in a stamped translation;
+    - the unit of judgement is the **block, not the line** (#224): a negation hard-wrapped one line
+      below used to be invisible, and that is what makes the YAML-comment case decidable;
+    - a block naming a `[[bibcode]]` other than this note's is **ambiguous and skipped**: it
+      asserts something about ANOTHER paper's PDF, and this function has no notion of whose
+      document it is. ⚠ A surname is NOT checked: «is this word the author of another paper?» is
+      not decidable from the note, and guessing would trade these false positives for new ones;
+    - and the anchor is the document, never the bare word (see `_DOC_EN_DISCO_RE`).
+
+    A negated mention does not count, and a block that ends up naming both versions is ambiguous
+    and skipped: over-reporting on a correct note is the worst currency a detector has."""
+    span = frontmatter_span(text or "")
+    cuerpo = span[1] if span else (text or "")
+    propio = (stem or "").strip()
     out = []
-    for ln in (text or "").split("\n"):
-        if not _DISCO_RE.search(ln):
-            continue
-        sin_negacion = _NO_PREPRINT_RE.sub(" ", ln)
+
+    def _cerrar(b: list) -> None:
+        """Judge ONE block and emit the lines of it that carry the claim, or nothing."""
+        if not b:
+            return
+        junto = " ".join(b)
+        if any(m.strip() != propio for m in LINK_RE.findall(junto)):
+            return          # it is about ANOTHER paper's PDF: ambiguous, skipped
+        sin_negacion = _NO_PREPRINT_RE.sub(" ", junto)
         pre, pub = _PREPRINT_RE.search(sin_negacion), _PUBLICADO_RE.search(sin_negacion)
-        if pre and not pub:
-            out.append(("preprint", ln.strip()))
-        elif pub and not pre:
-            out.append(("publicado", ln.strip()))
+        if pre and pub:
+            return
+        clase = "preprint" if pre else ("publicado" if pub else None)
+        if clase is None:
+            return
+        out.extend((clase, ln.strip()) for ln in b if _DOC_EN_DISCO_RE.search(ln))
+
+    bloque, dentro = [], False
+    for ln in cuerpo.split("\n"):
+        if ln.lstrip().startswith("#"):
+            _cerrar(bloque); bloque = []
+            dentro = stamped_scope(ln, dentro)
+            continue
+        if not ln.strip():
+            _cerrar(bloque); bloque = []
+            continue
+        if not dentro:
+            bloque.append(ln)
+    _cerrar(bloque)
     return out
 
 
@@ -3601,7 +3652,7 @@ def disk_doc_conflict(text: str, fm: dict, stem: str) -> str | None:
     arXiv mark, and the population that claims anything is small (43 lines in 31 notes of a real
     vault). Asking the disk first duplicated the read that `is_legible`/`source_hash` share and
     `tests/poblada/test_escala.py` caught it — 666 extra reads, 77 % of the lint's cost."""
-    dicho = {c for c, _ln in doc_claims_on_disk(text)}
+    dicho = {c for c, _ln in doc_claims_on_disk(text, stem)}
     if not dicho:
         return None
     disco, porque = doc_on_disk(fm, stem)

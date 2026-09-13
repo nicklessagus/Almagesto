@@ -839,8 +839,14 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   afuera por construcción (#213) y `contrast --validar` mira citas, no prosa sobre el disco —
   medido, 43 salvedades en 31 notas sobrevivieron al reemplazo que cambió los tres testigos (la
   marca de arXiv del `.txt`, la firma `pdf_reemplazo`, `pdf_source`). **Backlog**: cuál mitad está
-  mal lo decide quien lea —en el caso 44 medido era el **campo**, no la prosa—. La línea ambigua
-  (nombra las dos) y la mención negada (*«— NO el preprint»*) no cuentan.
+  mal lo decide quien lea —en el caso 44 medido era el **campo**, no la prosa—. El bloque ambiguo
+  (nombra las dos versiones, o nombra un `[[bibcode]]` que no es el de la nota: habla del PDF de
+  OTRO paper) y la mención negada (*«— NO el preprint»*) no cuentan. ⛔ La población la decide una
+  frase que **predica sobre el archivo** (*«el PDF en disco es …»*), nunca `disco` suelto: en una
+  bóveda astro ésa es palabra de dominio —disco de debris, disco delgado de la Galaxia— y el primer
+  detector dio **5 hallazgos, precisión 0/5** sobre 268 notas. Fuera de la población: el
+  frontmatter, las `SECCIONES_ESTAMPADAS` (#214), y la línea leída sola —la unidad es el **bloque**
+  (#224), porque la negación puede vivir en la línea vecina.
 - **Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió**
   (#297): el reuso D-18 (copiar el PDF que ya estaba bajo otro slug) es correcto y se conserva, pero
   importa a un sujeto nuevo un archivo cuya **antigüedad nadie chequeó**; y la salida natural —«si

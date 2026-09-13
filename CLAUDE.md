@@ -409,7 +409,12 @@ preprint sobre la copia del editor, con `lint` rc 0, `contrast --validar-todo` r
 vencidos. Lo levanta el lint (backlog: cuál mitad está mal lo decide quien lea — en el caso 44 era
 el **campo**) y `replace_pdf` **avisa al firmar** cuántas líneas quedaron diciendo preprint, con el
 `grep` listo. ⚠ Avisa y **no reescribe**: la línea conserva el hecho verdadero (*«esta vista se
-leyó del preprint …»*).
+leyó del preprint …»*). ⛔ **El ancla es el DOCUMENTO, no la palabra:** `\bdisco\b` + `publicado`
+sueltos miden vocabulario de dominio (disco de debris, disco delgado de la Galaxia, «valores
+publicados») y dieron **5 hallazgos con precisión 0/5** sobre 268 notas; la frase tiene que predicar
+sobre el archivo, y el frontmatter, las `SECCIONES_ESTAMPADAS` (#214) y el bloque que nombra otro
+`[[bibcode]]` —habla del PDF de otro paper— quedan afuera. La unidad es el **bloque** (#224): en el
+peor de los cinco la negación vivía en las líneas vecinas.
 
 ⛔ **La lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el único
 canal en esa dirección: `stars`/`thesis_links` se siembran **antes** de leer y `harvest_views` mergea

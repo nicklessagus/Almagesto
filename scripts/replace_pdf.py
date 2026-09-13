@@ -376,7 +376,7 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
     # afirmación sin `[[bibcode]]`, #213). El alcance de re-verificación (#436) no cubre esto, así
     # que se dice acá, al firmar. ⚠ Se AVISA y no se reescribe: la línea conserva un hecho
     # verdadero («esta vista se leyó del preprint …») y cuál mitad se corrige lo decide quien lea.
-    prosa = ([ln for clase, ln in cfg.doc_claims_on_disk(nota.read_text(encoding="utf-8"))
+    prosa = ([ln for clase, ln in cfg.doc_claims_on_disk(nota.read_text(encoding="utf-8"), bibcode)
               if clase == "preprint"] if nota.exists() else [])
     extracciones = stamp_depagination(bibcode, sha_viejo, sha_nuevo, reason, dry_run=dry_run)
     return {"bibcode": bibcode, "slugs": slugs, "sha_anterior": sha_viejo, "sha": sha_nuevo,

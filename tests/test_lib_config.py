@@ -3243,6 +3243,34 @@ def test_449_la_prosa_sobre_QUE_DOCUMENTO_hay_en_disco_se_cruza_contra_el_disco(
         "sin `disco` no es una afirmación sobre el artefacto"
     assert cfg.doc_claims_on_disk("En disco hay el preprint y la copia del editor.") == [], \
         "la línea ambigua se saltea: sobre-reportar en una nota correcta es la peor moneda"
+    # ⛔ #449 devuelto — los CINCO falsos positivos que midió la instancia (5 hallazgos sobre 268
+    # notas, precisión 0/5). Cada uno cierra una de las cuatro angosturas.
+    assert cfg.doc_claims_on_disk(
+        "Parámetros del disco de debris de HD 40307. Sin incertidumbres publicadas en esas tres "
+        "columnas.") == [], "«disco» es palabra de dominio en una bóveda astro (disco de debris)"
+    assert cfg.doc_claims_on_disk(
+        "su disco ya estaba publicado (Lestrade et al. 2012)") == [], \
+        "«disco» + «publicado» no predica sobre el archivo"
+    assert cfg.doc_claims_on_disk(
+        "## Traducción del abstract\n\nEl PDF en disco es el preprint.\n") == [], \
+        "las SECCIONES_ESTAMPADAS no son prosa de la bóveda (#214)"
+    assert cfg.doc_claims_on_disk(
+        "⚠ La comparación es contra la copia publicada de [[2007A&A...469L..43U]] (en disco desde "
+        "el 2026-09-12), así que la diferencia no es de versión.", "2008A&A...479..277B") == [], \
+        "habla del PDF de OTRO paper: ambigua, se saltea"
+    assert cfg.doc_claims_on_disk(
+        "---\npdf_source: eprint\n# La copia de Science Express tiene 7 páginas; la versión\n"
+        "# publicada dejaría esa afirmación sin fuente en disco. Acá el preprint es el documento\n"
+        "# MÁS completo.\n---\n\nProsa.\n") == [], \
+        "el frontmatter no es prosa, y el bloque —no la línea— es la unidad (#224)"
+    assert cfg.doc_claims_on_disk(
+        "El PDF en disco es la VERSIÓN PUBLICADA del editor\n(A&A 696, A141) — NO el preprint.") \
+        == [("publicado", "El PDF en disco es la VERSIÓN PUBLICADA del editor")], \
+        "la negación hard-wrapped una línea abajo cuenta: la unidad es el bloque (#224)"
+    assert cfg.doc_claims_on_disk(
+        "El PDF en disco es el PREPRINT de arXiv.\n\nAparte: los valores publicados por el "
+        "editor coinciden.") == [("preprint", "El PDF en disco es el PREPRINT de arXiv.")], \
+        "la línea EN BLANCO cierra el bloque: un párrafo vecino no vuelve ambigua la afirmación"
     # los testigos, en su orden de precedencia
     firma = [{"fecha": "2026-09-11", "source": "publisher", "sha": "a", "sha_anterior": "b"}]
     assert cfg.doc_on_disk({"pdf_source": "eprint", "pdf_reemplazo": firma}, "2020X")[0] == "publicado", \

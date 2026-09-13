@@ -2166,3 +2166,26 @@ como **backlog** —cuál mitad está mal lo decide quien lea— y `replace_pdf`
 líneas quedaron diciendo preprint, con el `grep` listo, sin reescribir. ⚠ El punto 3 del issue (la
 salvedad `pdf_leido` como tipo estructurado de `SALVEDAD_TIPOS`) queda pendiente: el issue lo declara
 «a futuro» y cambia el schema de la extracción.
+
+**Devuelto por la instancia y re-medido (1.262.1).** Sobre `Almagesto-Tesis` con v1.262.0 mergeada:
+**5 hallazgos sobre 268 notas de `papers/`, precisión 0/5** —la condición de devolución que fija
+`docs/validacion-instancia.md` para esta categoría es literal, *«devolver si dispara sobre una nota
+coherente»*—. Y el detector de afirmaciones, aparte del de conflicto, marcaba **15 líneas en 12
+notas**, de las cuales **4** lo eran de verdad. El mecanismo: `\bdisco\b` decidía la población y en
+una bóveda astro *disco* es palabra de dominio (disco de debris, disco delgado/grueso de la Galaxia,
+disco circunestelar — 19 notas de ese corpus la usan así), y `publicad[oa]` pelado es ubicuo en prosa
+científica. Los cinco, y la angostura que cierra cada uno:
+
+| # | qué decía | por qué era falso | angostura |
+|---|---|---|---|
+| 1 | «parámetros del **disco de debris** … sin incertidumbres **publicadas**» | dominio | ancla = el documento |
+| 2 | «su **disco** ya estaba **publicado** (Lestrade et al. 2012)» | dominio | ídem |
+| 3 | «los **discos** delgado y grueso … la base de datos **publicada**» | dominio, **y** la línea vive en `## Traducción del abstract` | ídem + `SECCIONES_ESTAMPADAS` (#214) |
+| 4 | «la comparación es contra la copia **publicada** de Udry (en **disco** desde …)» | la afirmación es sobre el PDF de OTRO bibcode | bloque que nombra otro `[[bibcode]]` → ambiguo |
+| 5 | un **comentario YAML del frontmatter**: la 4ª línea de una explicación de cinco que dice exactamente lo contrario | la negación vive en las líneas vecinas | frontmatter fuera + la unidad es el **bloque** (#224) |
+
+La cuarta angostura —«si la oración nombra un apellido que no es el de la nota»— **no** se
+implementó: decidir si una palabra es el autor de otro trabajo no es decidible desde la nota, y
+adivinarlo cambiaría estos falsos positivos por otros nuevos. El ancla tiene tres formas, y las tres
+predican sobre el archivo: `<documento> (que está) en disco` pegado, `<documento> … en disco es …`, y
+`en disco es/hay el/la …`.
