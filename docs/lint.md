@@ -305,6 +305,11 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   ahí encuentra la clase, no la resolución— así que la fila se resuelve, la celda lo dice, y el
   conteo la sigue contando como pendiente para siempre. Medido: 41 de 957 celdas, 7 de ellas
   `acota`. Se cierra con `write_verif_sidecar.py <nota> --migrate-condition-prefix`.
+  ⛔ **Y la celda puede ser una CADENA** (#451): `acota→resuelta: <dónde> · <vieja> ⟂ acota:
+  <nueva>` — la clase, la resolución y el conteo se deciden por el **último eslabón**
+  (`lb.current_condition`), igual que el veredicto de al lado (#450). Una fila así vuelve a contar
+  como **`acota` pendiente**, que es lo que es: la resolución firmada vale para la condición vieja,
+  no para la que trajo la ronda nueva.
 - **Celda truncada que no puede truncarse** (#226): sólo `Afirmación (extracto)` admite `…`;
   `Evidencia` (con su localizador al final, completo) y `Condición` no. Y la fila donde el cruce de
   localizadores **no se pudo evaluar** se reporta como *no evaluable*, no como ok.

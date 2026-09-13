@@ -1738,3 +1738,53 @@ def test_450_el_re_anclaje_no_blanquea_una_contradiccion_de_la_RONDA_2():
     assert lb.chained_verdict("contradice→corregida", "soportada") == "contradice→corregida"
     assert lb.chained_verdict("soportada", "soportada") == "soportada", "sin falla previa no anota"
     assert lb.chained_verdict("soportada→contradice", "contradice") == "contradice"
+
+
+def test_451_la_celda_de_condicion_se_ENCADENA_y_rige_el_ultimo_eslabon():
+    """⛔ #451 — hermana de `current_verdict` (#450) una columna más allá: una ronda posterior
+    ANOTA, no pisa, y lo que rige es el ÚLTIMO eslabón. El separador es PROPIO (`⟂`) a propósito:
+    acá el `→` ya separa la clase de su resolución, y darle un segundo significado dentro de la
+    misma celda es justo el defecto que #450 cerró."""
+    encadenada = "acota→resuelta: fila del régimen · SNR > 50 ⟂ acota: la fotometría nunca entró"
+    assert lb.condition_links(encadenada) == ["acota→resuelta: fila del régimen · SNR > 50",
+                                              "acota: la fotometría nunca entró"]
+    assert lb.condition_links("acota: X") == ["acota: X"] and lb.condition_links("") == []
+    assert lb.current_condition(encadenada) == "acota: la fotometría nunca entró"
+    assert lb.current_condition("acota: X") == "acota: X" and lb.current_condition("") == ""
+    assert lb.condition_kind(encadenada) == "acota", "la clase es la del eslabón VIGENTE"
+    assert not lb.condition_resolved(encadenada), \
+        "con una condición nueva sin resolver, la fila vuelve a contar como pendiente"
+    assert lb.condition_resolved("acota→resuelta: fila del régimen · SNR > 50")
+
+
+def test_451_condition_text_separa_la_condicion_de_su_resolucion():
+    """#451 — lo que distingue una ronda que REPITE una condición de otra que trae una NUEVA. Por
+    clase no se podía: cualquier `acota` sobre una `acota` resuelta contaba como duplicada, y así se
+    perdieron 55 en una ronda de 425 pares."""
+    assert lb.condition_text("acota: SNR > 50") == "SNR > 50"
+    assert lb.condition_text("acota→resuelta: fila del régimen · SNR > 50") == "SNR > 50"
+    assert lb.condition_text("acota→resuelta: fila del régimen") == "", \
+        "resuelta sin cola: la condición original no quedó registrada"
+    assert lb.condition_text("promedio de 4 proxies") == "promedio de 4 proxies", "sin clase"
+    assert lb.condition_text("") == ""
+
+
+def test_451_condition_same_compara_NORMALIZADO_y_tambien_la_clase():
+    """#451 — cuarta regla de método: todo chequeo que mire texto de una nota normaliza el markdown
+    primero (#168/#276/#283). Y la clase entra en la comparación: `acota: X` y `contextualiza: X` no
+    son el mismo hallazgo."""
+    assert lb.condition_same("acota→resuelta: fila · sólo con SNR > 50", "**acota** — sólo con SNR > 50")
+    assert lb.condition_same("acota:  SNR  > 50", "acota: SNR > 50"), "el espaciado no es otra condición"
+    assert not lb.condition_same("acota: SNR > 50", "acota: SNR > 30")
+    assert not lb.condition_same("acota: SNR > 50", "contextualiza: SNR > 50"), "la clase cuenta"
+
+
+def test_451_replace_current_condition_conserva_la_historia():
+    """#451 — resolver una condición encadenada reescribe el ÚLTIMO eslabón; escribir la celda
+    entera tiraría la resolución de la ronda anterior, que es una decisión firmada (#427)."""
+    assert lb.replace_current_condition("acota→resuelta: x · A ⟂ acota: B",
+                                        "acota→resuelta: y · B") == \
+        "acota→resuelta: x · A ⟂ acota→resuelta: y · B"
+    assert lb.replace_current_condition("acota: B", "acota→resuelta: y · B") == \
+        "acota→resuelta: y · B"
+    assert lb.replace_current_condition("", "acota: B") == "acota: B"

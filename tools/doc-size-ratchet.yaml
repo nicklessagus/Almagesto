@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-13"
-techo_lineas: 1860
-techo_bytes: 151200
+techo_lineas: 1866
+techo_bytes: 151600
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -420,3 +420,16 @@ crecimientos:
       párrafo de #232 sin sumar techo.
     techo_lineas: 1860
     techo_bytes: 151200
+  - fecha: "2026-09-13"
+    ancla: "#451"
+    motivo: >-
+      Siete líneas en el párrafo de #221/#427 (la columna `Condición`), donde ya vive la regla
+      madre. Es la mitad que faltaba de #450 una columna más allá: rige el ÚLTIMO eslabón, y la
+      ronda que trae una condición distinta se encadena en vez de perderse (medido en la instancia:
+      55 condiciones `acota` de una ronda de 425 pares no llegaron a su fila, una de ellas diciendo
+      que la nota se contradice consigo misma, bajo una celda que publicaba «resuelta»). Cambia lo
+      que el agente ve al cerrar una ronda —una fila que vuelve a contar como pendiente—, así que va
+      acá y no sólo en `docs/lint.md`. Suma también el re-angostado de #449, que entró en su propio
+      párrafo.
+    techo_lineas: 1866
+    techo_bytes: 151600

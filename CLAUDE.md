@@ -1383,6 +1383,13 @@ sin rastro borra lo que hay que poder re-auditar. ⛔ **Clase UNA vez; la resolu
 `--migrate-condition-prefix`. ⛔ **Y se direcciona por el PAR, no por el ancla (#434):** el ancla
 hashea el BLOQUE, así que un bloque que cita dos fuentes tiene dos filas con la misma; con clases
 distintas la `acota` no se podía marcar resuelta por ningún medio (medidas: 5 de 20).
+⛔ **Y la condición de una ronda posterior tampoco se pierde (#451):** rige el **último eslabón**,
+como el veredicto de al lado (#450), y la ronda que trae una condición **distinta** se encadena con
+un separador propio —`acota→resuelta: <dónde> · <vieja> ⟂ acota: <nueva>`, y la fila vuelve a contar
+como pendiente, que es lo que es—. Comparar por **clase** descartaba cualquier `acota` que cayera
+sobre una resuelta: medido, **55 condiciones de una ronda de 425 pares** no llegaron a su fila, una
+de ellas diciendo que la nota se contradice consigo misma. El `⟂` es propio a propósito: acá el `→`
+ya separa la clase de su resolución. Y el escritor **declara** la condición que no quedó vigente.
 
 El subagente contesta además la **sobre-generalización** (#74: la fuente afirma bajo condiciones
 que la nota no dice — no afirma falso, afirma **de más**) y, en transcripciones, la **completitud**

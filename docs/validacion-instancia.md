@@ -461,3 +461,29 @@ python scripts/lint.py | grep -A6 "QUÉ DOCUMENTO hay en disco"   # los 5 falsos
 dispara sobre una nota coherente por otra vía. ⚠ Y sigue abierto el punto 3 del issue original
 (`pdf_leido` en `SALVEDAD_TIPOS`): es lo que cierra esto de verdad —una salvedad estructurada lleva
 el bibcode adentro y no hay que adivinar de quién habla la oración—, y va como issue propio.
+
+## #451 · v1.263.0
+
+**Qué entró.** La celda `Condición` es una **cadena** (`⟂`) y rige el **último eslabón**
+(`lb.current_condition`), como el veredicto de al lado (#450). `chained_condition` compara por
+TEXTO, no por clase; `--resolver` reescribe el eslabón vigente y conserva la historia; el armador
+reconoce como el MISMO par re-anclado el juicio cuyo ancla es la de la fila previa (igualdad exacta,
+nunca cruzando `bibcode`) y ya no lo descarta; el escritor declara la condición que no quedó
+vigente.
+
+**Validar.** Sobre las notas donde midieron las 55 (`rv-doppler` 37, `harps-drs` 9, `hd_40307` 4,
+`ica-ruido` 3, `ica` 1, `2008A&A...479..277B` 1), re-correr el escritor con los JSON de esa ronda:
+
+```bash
+python scripts/write_verif_sidecar.py <nota> --from build/<slug>/verif/<ronda>
+# las `acota` nuevas tienen que aparecer ENCADENADAS detrás de la resuelta, y la fila volver a
+# contar como pendiente: `lint.py --cierre <slug>` y el `cond_acota_resueltas` de la cabecera.
+python scripts/lint.py | grep -A4 "Condición sin clasificar"
+```
+
+El caso de `hd_40307` (ancla `4f79992baa`, `2017MNRAS.468.4772S`) es el que hay que ver entrar: la
+condición que dice que la nota se contradice consigo misma.
+
+**Devolver si** una condición de la ronda sigue sin llegar a su celda, si re-correr el escritor sobre
+el mismo fan-out **colapsa** la cadena (tiene que ser un no-op), si una resolución firmada
+desaparece, o si el escritor lista como «no entró» una condición que sí quedó vigente.

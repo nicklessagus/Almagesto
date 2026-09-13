@@ -147,20 +147,33 @@ def condition_cell(par: dict, bibcode: str = "") -> str:
 
 
 def chained_condition(previous: str | None, new: str) -> str:
-    """The condition cell for a pair that may already have a row: a RESOLUTION is never undone.
+    """The condition cell for a pair that may already have a row: a later round ANNOTATES (#451).
 
-    #427/#232, the same doctrine as `chained_verdict` on the column next door. A later round
-    recomputes this cell from the fan-out's JSON, which knows nothing about the resolution somebody
-    wrote with `--resolver`; without this, marking an `acota` as resolved and re-running the writer
-    silently un-marked it — and a resolution is a decision somebody signed, in the one category
-    whose pending count the note publishes about itself."""
-    # ⚠ Sin un `previous and` adelante, a propósito: `condition_resolved(None)` ya es `False`, así
-    # que esa cláusula no decidía nada (#319 — el condicional cuyas ramas valen lo mismo es una
-    # regla escrita a medias, y ningún otro gate la ve porque no cambia comportamiento).
-    if lb.condition_resolved(previous) \
-            and lb.condition_split(previous)[0] == lb.condition_split(new)[0]:
-        return previous
-    return new
+    #427/#232/#450, the same doctrine as `chained_verdict` on the column next door, and now the
+    same SHAPE: the chain reads left to right and the link in force is the LAST one
+    (`lb.current_condition`). A signed resolution is never undone, and a round that brings a
+    DIFFERENT condition is never dropped — the cell chains and the row goes back to counting as
+    pending, which is what it is.
+
+    ⛔ What it used to do was compare by CLASS, so **any** `acota` landing on a row whose `acota`
+    was already resolved was discarded. Measured on an instance: 55 conditions of a 425-pair round
+    never reached their row, one of them saying the note contradicted itself — and it sat under a
+    cell publishing «resuelta». Comparing by TEXT (`lb.condition_same`) is what tells a re-run
+    repeating itself from a round finding something new.
+
+    ⚠ No `if not previous` up front, deliberately: `condition_resolved(None)` is already `False`
+    and `replace_current_condition(None, new)` already returns `new`, so that shortcut decided
+    nothing — and a guard that decides nothing reads as if it protected something (#319; its
+    mutation survived, which is how it was found)."""
+    # ⛔ Se reemplaza el eslabón VIGENTE, nunca la celda entera: detrás puede haber la resolución de
+    # una ronda anterior, y re-correr el escritor sobre el mismo fan-out la borraba.
+    if not lb.condition_resolved(previous):
+        return lb.replace_current_condition(previous, new)
+    if lb.condition_same(previous, new):
+        return previous               # la misma condición, ya resuelta: no-op idempotente
+    if str(new or "").strip() in ("", "—", "-", "–"):
+        return previous               # la ronda no declaró condición: no borra la resolución
+    return f"{previous}{lb.COND_CHAIN_SEP}{new}"
 
 
 def collapse_condition(cond: str) -> str:
@@ -213,7 +226,8 @@ def chained_verdict(previous: str | None, new: str) -> str:
 
 
 def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
-               descartar_muertas: bool = False, descartadas: list | None = None) -> list:
+               descartar_muertas: bool = False, descartadas: list | None = None,
+               cond_fuera: list | None = None) -> list:
     """One `Row` per body pair that the fan-out judged, in body order (#403).
 
     Matching is by `(bibcode, ancla)`, the two keys the fan-out schema carries at file and pair
@@ -230,7 +244,13 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
     between rounds the earlier rounds carry dead anchors mixed with live ones. Measured on an
     instance: 3 rounds, 77 pairs, 72 with a live verdict, and no way to write any of them.
     It is **opt-in and declared** (D-43): dropping in silence would be the tolerant reader this
-    repo does not carry; declaring it lets the operator see what stayed out and decide."""
+    repo does not carry; declaring it lets the operator see what stayed out and decide.
+
+    ⛔ `cond_fuera` (#451) collects the round's conditions that did NOT reach their cell, **with
+    their reason** — the round repeated what the row already said, or it declared none over a
+    signed resolution. The writer reported «N juzgada(s)» and said nothing about this, which is how
+    55 lost conditions went unnoticed; the cases that remain are benign, and that is exactly why
+    they have to be visible rather than assumed."""
     pares = lb.pairs_of(text)
     por_clave = {(p.bibcode, p.anchor): p for p in pares}
     # #407/#282 — la fila previa de cada par se resuelve como `reverify_subset`: ancla exacta
@@ -239,6 +259,17 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
     asignado = lb.match_rows_to_pairs(pares, previous or [])[0] if previous else {}
     sobrantes = [(b, str(par.get("ancla") or "")) for b, ps in fanout.items() for par in ps
                  if (b, str(par.get("ancla") or "")) not in por_clave]
+    # ⛔ #451 — el juicio cuyo ancla es la de la FILA PREVIA de un par vivo NO está muerto: es ese
+    # mismo par, re-anclado (#407/#282). Quedaba afuera por el ancla y la fila se rearmaba copiando
+    # el veredicto y la condición viejos, así que el ciclo normal —resolver, editar, re-anclar—
+    # dejaba ciega a la fila para la ronda siguiente: medido, 9 filas `contextualiza` sobre un JSON
+    # que decía `acota`. La igualdad es EXACTA y nunca cruza `bibcode`: no resucita un ancla muerta
+    # cualquiera, sólo la que la fila previa de ese par ya declaraba.
+    de_fila_previa = {(previa.bibcode, previa.anchor): p
+                      for p, (previa, _s) in asignado.items() if previa is not None}
+    reanclados = {c: de_fila_previa[c] for c in sobrantes if c in de_fila_previa}
+    sobrantes = [c for c in sobrantes if c not in reanclados]
+    clave_de = {p: c for c, p in reanclados.items()}
     if sobrantes and not descartar_muertas:
         raise SidecarError(
             "pares del fan-out que NO están en el cuerpo de la nota (¿se editó después de generar "
@@ -254,7 +285,7 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
                 if (a := str(par.get("ancla") or "")) and (b, a) not in muertas}
     rows, n = [], 0
     for p in pares:
-        par = juzgados.get((p.bibcode, p.anchor))
+        par = juzgados.get((p.bibcode, p.anchor)) or juzgados.get(clave_de.get(p))
         previa = asignado.get(p, (None, 0.0))[0]
         if par is None:
             if previa is None:
@@ -271,13 +302,22 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
         celda = chained_verdict(previa.verdict if previa else None, veredicto)
         ref = source_ref_for(p.bibcode, veredicto)
         kind, h = lb.split_source_ref(ref)
+        anterior = previa.condition if previa else None
+        nueva = condition_cell(par, p.bibcode)
+        cond = chained_condition(anterior, nueva)
+        # #451 — la condición de la ronda que NO quedó VIGENTE en su celda, con su motivo. Con el
+        # encadenado sólo queda un caso, y es benigno; declararlo es lo que lo mantiene benigno.
+        if cond_fuera is not None and not lb.condition_same(lb.current_condition(cond), nueva):
+            cond_fuera.append(
+                (p.bibcode, p.anchor, nueva,
+                 "la ronda no declaró condición y la fila tiene una resuelta"
+                 if str(nueva or "").strip() in ("", "—", "-", "–")
+                 else "la fila ya declaraba esta condición, resuelta"))
         # la fila SIN archivo (#223) se escribe `—`, que es lo que el parser devuelve para esa
         # celda: con `""` el round-trip de `render_verif_table` rehúsa, y con razón
         rows.append(lb.Row(n=str(n), claim=lb.truncate_claim(lb.normalize_ws(p.block.text)),
                            bibcode=p.bibcode, verdict=celda, anchor=p.anchor, source_hash=h or "—",
-                           condition=chained_condition(previa.condition if previa else None,
-                                                      condition_cell(par, p.bibcode)),
-                           source_kind=kind,
+                           condition=cond, source_kind=kind,
                            evidence=str(par.get("evidencia") or "").strip()))
     return rows
 
@@ -499,8 +539,12 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
             raise SidecarError(f"el par {ancla}:{fila.bibcode} ya declara una resolución («{ya}») — "
                                f"se anota, no se pisa (#232). Si cambió, editá el hermano a mano y "
                                f"decí por qué en el `log`")
-        celda = (f"acota→resuelta: {str(donde).strip()}"
-                 + (f"{lb.COND_RESOLUTION_SEP}{resto}" if resto else ""))
+        # #451 — se reescribe el eslabón VIGENTE, no la celda entera: detrás puede haber la
+        # resolución de una ronda anterior, que es una decisión firmada y no se pisa (#427).
+        celda = lb.replace_current_condition(
+            fila.condition,
+            f"acota→resuelta: {str(donde).strip()}"
+            + (f"{lb.COND_RESOLUTION_SEP}{resto}" if resto else ""))
         if not lb.condition_resolved(celda):      # el lector, antes de escribir
             raise SidecarError(f"la celda que se iba a escribir no se lee como resuelta: «{celda}»")
         cambios[lb.row_key(fila)] = celda
@@ -561,10 +605,10 @@ def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = Fals
     dirs = [fanout_dir] if isinstance(fanout_dir, (str, Path)) else list(fanout_dir)
     text = note.read_text(encoding="utf-8")
     rows = lb.verif_rows(note) if cfg.verif_sidecar(note).exists() else None
-    juzgados, descartadas = 0, []
+    juzgados, descartadas, cond_fuera = 0, [], []
     for d in dirs:
         fanout = load_fanout(Path(d))
-        rows = build_rows(note, text, fanout, rows, descartar_muertas, descartadas)
+        rows = build_rows(note, text, fanout, rows, descartar_muertas, descartadas, cond_fuera)
         juzgados += sum(len(ps) for ps in fanout.values())
     juzgados -= len(descartadas)
     if not rows:
@@ -573,7 +617,7 @@ def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = Fals
     c = lb.verif_counts(rows)
     return {"filas": len(rows), "pares_cuerpo": len(lb.pairs_of(text)), "juzgadas": juzgados,
             "arrastradas": max(0, len(rows) - juzgados), "rondas": len(dirs),
-            "descartadas": descartadas,
+            "descartadas": descartadas, "cond_fuera": cond_fuera,
             "encadenadas": c["cadenas"], "hermano": cfg.verif_sidecar(note).name}
 
 
@@ -725,6 +769,12 @@ def main(argv=None) -> int:
         # distintas, y acá el operador pidió el descarte explícitamente.
         cfg.print_seguro(f"{len(r['descartadas'])} par(es) descartado(s) por ancla muerta (#428)"
                          + "".join(f"\n  {b} · ancla {a}" for b, a in r["descartadas"]))
+    # ⛔ #451 — las condiciones de la ronda que no llegaron a su celda, con su motivo. El reporte
+    # decía «N juzgada(s)» y callaba, que es cómo 55 pasaron desapercibidas.
+    if r.get("cond_fuera"):
+        cfg.print_seguro(
+            f"{len(r['cond_fuera'])} condición(es) de esta ronda NO entraron a su celda (#451)"
+            + "".join(f"\n  {b} · ancla {a} · «{c}» — {por}" for b, a, c, por in r["cond_fuera"]))
     cfg.print_seguro(f"{accion} {r['hermano']}: {r['filas']} fila(s) sobre {r['pares_cuerpo']} "
                      f"par(es) del cuerpo — {r['juzgadas']} juzgada(s) en "
                      + (f"{r['rondas']} ronda(s)" if r["rondas"] > 1 else "esta ronda")

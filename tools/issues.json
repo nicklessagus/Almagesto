@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-12",
+ "fetched": "2026-09-13",
  "issues": [
   {
    "number": 2,
@@ -2239,6 +2239,11 @@
   {
    "number": 450,
    "title": "`resueltos()` lee CUALQUIER cosa tras `→` como resolución, y `→` es también el encadenado de rondas (#232): `soportada→contradice` cuenta como resuelto, el lint da rc 0 con un `contradice` abierto — medido: 5 filas en 4 notas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 451,
+   "title": "`write_verif_sidecar`: la condición de una ronda posterior se PIERDE si la fila ya tenía una (resuelta de la misma clase, o al re-anclar) — medido: 55 `acota` de una ronda de 425 pares no llegaron a su fila, una de ellas «la nota se contradice consigo misma»",
    "state": "OPEN"
   }
  ]

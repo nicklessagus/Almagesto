@@ -570,6 +570,27 @@ portadores:
         estado: fuera-de-alcance
         motivo: Ídem — backend de descubrimiento, misma paridad de schema que `to_record`.
 
+  - issue: 451
+    regla: >-
+      La CONDICIÓN vigente de un par es el último eslabón de su cadena, igual que el veredicto de al
+      lado (#450): una ronda posterior ANOTA y no pisa, y la que trae una condición distinta no se
+      descarta. Se encadena con un separador PROPIO (`⟂`) porque el `→` de esta celda ya separa la
+      clase de su resolución, y darle un segundo significado es el defecto que #450 cerró. Medido:
+      55 condiciones `acota` de una ronda de 425 pares no llegaron a su fila.
+    funcion: lib_blocks.current_condition
+    patron: 'condition_resolved\(|condition_split\(|condition_kind\(|COND_CHAIN_SEP'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: >-
+          `chained_condition` encadena y compara por TEXTO (`condition_same`), y `--resolver`
+          reescribe el eslabón vigente con `replace_current_condition` en vez de la celda entera.
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Lee la celda por `condition_split`/`condition_kind`, que es donde la cadena se desarma
+          (una sola implementación, #427): no vuelve a partirla.
+
   - issue: 450
     regla: >-
       El veredicto VIGENTE de un par es el ÚLTIMO eslabón de su cadena, y la resolución va después

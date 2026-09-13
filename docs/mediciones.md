@@ -2189,3 +2189,39 @@ implementó: decidir si una palabra es el autor de otro trabajo no es decidible 
 adivinarlo cambiaría estos falsos positivos por otros nuevos. El ancla tiene tres formas, y las tres
 predican sobre el archivo: `<documento> (que está) en disco` pegado, `<documento> … en disco es …`, y
 `en disco es/hay el/la …`.
+
+
+## #451 · la condición de una ronda posterior se perdía si la fila ya tenía una (2026-09-12, instancia `Almagesto-Tesis`, v1.260.3)
+
+Tras re-verificar **425 pares** (rondas `r-reempl`/`r-fix`, un subagente por fuente), el cruce de
+los JSON del fan-out contra los hermanos escritos con `write_verif_sidecar --from …` dio **55
+condiciones `acota` de esa ronda que no llegaron a su fila**: `rv-doppler` 37, `harps-drs` 9,
+`hd_40307` 4, `ica-ruido` 3, `ica` 1, `2008A&A...479..277B` 1. La celda seguía publicando la
+condición de la ronda anterior —`contextualiza: …` o `acota→resuelta: …`— sobre un hallazgo nuevo
+de clase `acota`.
+
+El caso que muestra el costo (`hd_40307`, ancla `4f79992baa`, `2017MNRAS.468.4772S`): la fila decía
+`acota→resuelta: su propio bloque, con cita y página · …` y el JSON de la ronda decía que la nota
+**se contradice consigo misma** —un bullet declaraba «no consta» y el siguiente metía el dato al
+promedio—. Ese hallazgo quedó en `build/`, gitignored, bajo una celda que publicaba «resuelta».
+
+**Los dos caminos, leídos en el código.** (1) `chained_condition` conservaba la previa si estaba
+resuelta **y era de la misma clase**, así que cualquier `acota` nueva sobre una `acota` resuelta se
+descartaba — correcto para la MISMA condición, pérdida para otra. (2) La fila re-anclada (el
+arrastre de #407) copiaba `condition=previa.condition` sin mirar la ronda: el juicio quedaba fuera
+por el ancla vieja y la fila se rearmaba con veredicto y condición viejos. Ése es el camino del
+ciclo normal —resolver → editar → re-anclar (#282)—, así que cada corrección dejaba ciega a la fila
+para la ronda siguiente; son las 9 de `harps-drs`, con `contextualiza` en la fila y `acota` en el
+JSON.
+
+**Qué cambió (1.263.0).** La celda `Condición` pasa a ser una **cadena** con separador propio
+(`lb.COND_CHAIN_SEP`, `⟂`) y rige el **último eslabón** (`lb.current_condition`), igual que
+`current_verdict` una columna más allá (#450). El separador es propio a propósito: el `→` de esta
+celda ya separa la clase de su resolución, y darle un segundo significado es exactamente el defecto
+que #450 acababa de cerrar. `chained_condition` compara por **texto** (`lb.condition_same`,
+normalizado) en vez de por clase; `--resolver` reescribe el eslabón vigente
+(`lb.replace_current_condition`) en vez de la celda entera; el armador reconoce el juicio cuyo ancla
+es la de la **fila previa** de un par vivo —igualdad exacta, nunca cruzando `bibcode`— como ese
+mismo par re-anclado, y ya no lo descarta; y el escritor **declara** la condición de la ronda que no
+quedó vigente, con su motivo. El único caso que queda es benigno (la ronda no declara condición
+sobre una fila resuelta), y declararlo es lo que lo mantiene benigno.

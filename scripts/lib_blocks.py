@@ -217,6 +217,31 @@ CONDITION_RESOLUTIONS = ("resuelta",)
 # `**contextualiza** — …` cuando la escribe un fan-out que pone negrita en toda la tabla (#283).
 _COND_SEP = re.compile(r"\s*(?:→|->|—|–|--|-|:)\s*")
 
+#: #451 · lo que encadena las CONDICIONES de rondas sucesivas en la misma celda:
+#: `acota→resuelta: <dónde> · <vieja> ⟂ acota: <nueva>`. Misma doctrina que el veredicto de al lado
+#: (#232/#450: una ronda posterior ANOTA, no pisa, y **rige el último eslabón**), con un separador
+#: PROPIO a propósito: acá el `→` ya separa la clase de su resolución, y darle un segundo
+#: significado dentro de la misma celda es exactamente el defecto que #450 acaba de cerrar.
+COND_CHAIN_SEP = " ⟂ "
+
+
+def condition_links(condicion: str) -> list:
+    """The cell split into its rounds, oldest first (#451). One link when there is no chain."""
+    return [x.strip() for x in str(condicion or "").split(COND_CHAIN_SEP.strip()) if x.strip()]
+
+
+def current_condition(condicion: str) -> str:
+    """The condition in force for this pair: the LAST link of its chain, or `""` (#451).
+
+    ⛔ Sibling of `current_verdict`, and for the same measured reason one column over: a round that
+    finds a NEW `acota` on a row whose previous one was already resolved used to be dropped —
+    `chained_condition` compared by CLASS, so any `acota` over a resolved `acota` was discarded.
+    Measured on an instance: 55 conditions of a 425-pair round never reached their row, one of them
+    saying «the note contradicts itself». Every reader of the cell —kind, resolved, resolution—
+    asks about the link in force, so the chain is unwound here, once."""
+    enlaces = condition_links(condicion)
+    return enlaces[-1] if enlaces else ""
+
 
 def condition_split(condicion: str) -> tuple:
     """`(kind | None, rest)` — the ONE function that splits a `Condición` cell (#427).
@@ -238,10 +263,13 @@ def condition_split(condicion: str) -> tuple:
     """
     # (#221 no tiene invariante propio: la clase de la condición es una categoría de backlog del
     # lint, no una promesa P0/P1 del contrato — la red es el test de paridad con `verdict_valido`.)
-    partes = _COND_SEP.split(str(condicion or "").strip(), maxsplit=1)
+    # #451 — sobre el eslabón VIGENTE: una celda encadenada declara la clase de la ronda que rige,
+    # no la de la primera. Es la misma corrección que `current_verdict` en la columna de al lado.
+    vigente = current_condition(condicion)
+    partes = _COND_SEP.split(vigente, maxsplit=1)
     cabeza = partes[0].strip(_ADORNO).strip().lower()
     if cabeza not in CONDITION_KINDS:
-        return None, str(condicion or "").strip()
+        return None, vigente
     return cabeza, (partes[1].strip() if len(partes) > 1 else "")
 
 
@@ -292,6 +320,42 @@ def condition_resolution(condicion: str) -> str | None:
     partes = _COND_SEP.split(resto, maxsplit=1)
     texto = partes[1] if len(partes) > 1 else ""
     return texto.split(COND_RESOLUTION_SEP)[0].strip()
+
+
+def condition_text(condicion: str) -> str:
+    """The condition's own prose in the link in force, with class and resolution stripped (#451).
+
+    It is what tells a round REPEATING a condition from one bringing a NEW one, and the distinction
+    is the whole point: comparing by CLASS (what `chained_condition` used to do) made every `acota`
+    over a resolved `acota` a duplicate. ⛔ The resolution does NOT throw the condition away
+    (`acota→resuelta: <dónde> · <la condición>`, #427), so the prose is still there to compare."""
+    _clase, resto = condition_split(condicion)
+    if not condition_resolved(condicion):
+        return resto.strip()
+    partes = _COND_SEP.split(resto, maxsplit=1)
+    trozos = (partes[1] if len(partes) > 1 else "").split(COND_RESOLUTION_SEP)
+    return COND_RESOLUTION_SEP.join(trozos[1:]).strip()
+
+
+def replace_current_condition(condicion: str, nuevo: str) -> str:
+    """The cell with its link in force replaced and its history kept (#451).
+
+    Resolving a chained condition rewrites the LAST link; writing the cell whole would throw away
+    the resolution of the earlier round, which is a decision somebody signed (#427)."""
+    enlaces = condition_links(condicion)
+    return COND_CHAIN_SEP.join(enlaces[:-1] + [nuevo]) if enlaces else nuevo
+
+
+def condition_same(a: str, b: str) -> bool:
+    """Do these two cells state the SAME condition? Normalised (#168/#276/#451).
+
+    Markdown emphasis and whitespace are not a different condition — the fourth method rule, one
+    column over: every check that reads a note's text normalises the markdown first. The class is
+    compared too, because `acota: X` and `contextualiza: X` are not the same finding."""
+    def _norm(c):
+        """The cell reduced to what makes two conditions the same: its kind and its bare prose."""
+        return (condition_kind(c), normalize_ws(condition_text(c)).strip(_ADORNO).strip().lower())
+    return _norm(a) == _norm(b)
 
 
 def locator_kinds(evidencia: str) -> set:

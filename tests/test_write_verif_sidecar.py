@@ -484,18 +484,33 @@ def test_condition_cell_REHUSA_cuando_el_extractor_se_contradice(toy_vault):
 
 
 def test_la_resolucion_de_un_acota_SOBREVIVE_a_la_ronda_siguiente(toy_vault):
-    """#427/#232 — una ronda posterior recalcula la celda desde el JSON del fan-out, que no sabe
-    nada de la resolución: sin esto, marcar un `acota` como resuelto y volver a correr el escritor
-    lo desmarcaba en silencio. Una resolución es una decisión que alguien firmó."""
+    """#427/#232/#451 — una ronda posterior recalcula la celda desde el JSON del fan-out, que no
+    sabe nada de la resolución: sin esto, marcar un `acota` como resuelto y volver a correr el
+    escritor lo desmarcaba en silencio. Una resolución es una decisión que alguien firmó — **y la
+    condición NUEVA tampoco se tira**: se encadena, y la fila vuelve a contar como pendiente."""
     assert ws.chained_condition(None, "acota: SNR > 50") == "acota: SNR > 50"
     assert ws.chained_condition("acota: SNR > 50", "acota: SNR > 50") == "acota: SNR > 50"
-    assert ws.chained_condition("acota→resuelta: fila en el régimen", "acota: SNR > 50") == \
-        "acota→resuelta: fila en el régimen", "la resolución manda sobre el recálculo"
     assert ws.chained_condition("contextualiza: x", "acota: SNR > 50") == "acota: SNR > 50"
-    # las dos mitades de la guarda, cada una por su lado: previa NO resuelta (aunque sea la misma
-    # clase) y previa resuelta de OTRA clase. En los dos casos manda el recálculo del fan-out.
+    # previa NO resuelta: no hay nada firmado que perder, manda el recálculo del fan-out
     assert ws.chained_condition("acota: SNR > 30", "acota: SNR > 50") == "acota: SNR > 50"
-    assert ws.chained_condition("contextualiza→resuelta: y", "acota: SNR > 50") == "acota: SNR > 50"
+    # previa resuelta y la ronda repite LA MISMA condición (normalizada, #168/#276): no-op — es lo
+    # que hace seguro re-correr el escritor sobre el mismo fan-out
+    assert ws.chained_condition("acota→resuelta: fila en el régimen · SNR > 50",
+                                "**acota** — SNR > 50") == \
+        "acota→resuelta: fila en el régimen · SNR > 50", "la resolución manda sobre el recálculo"
+    # ⛔ #451 — previa resuelta y la ronda trae OTRA condición: se encadena, no se descarta. Medido
+    # en la instancia: 55 condiciones de una ronda de 425 pares no llegaron a su fila, una de ellas
+    # diciendo que la nota se contradice consigo misma, bajo una celda que publicaba «resuelta».
+    assert ws.chained_condition("acota→resuelta: fila en el régimen · SNR > 50",
+                                "acota: la fotometría nunca entró al promedio") == \
+        "acota→resuelta: fila en el régimen · SNR > 50 ⟂ acota: la fotometría nunca entró al promedio"
+    assert not lb.condition_resolved(
+        ws.chained_condition("acota→resuelta: x · A", "acota: B")), \
+        "encadenada, la fila vuelve a contar como PENDIENTE: rige el último eslabón (#450)"
+    assert ws.chained_condition("contextualiza→resuelta: y", "acota: SNR > 50") == \
+        "contextualiza→resuelta: y ⟂ acota: SNR > 50", "la clase distinta también encadena"
+    # la ronda que NO declara condición no borra la resolución firmada
+    assert ws.chained_condition("acota→resuelta: x · A", "—") == "acota→resuelta: x · A"
 
 
 def test_resolver_escribe_la_notacion_QUE_EL_LECTOR_SABE_LEER(toy_vault):
@@ -856,3 +871,77 @@ def test_450_la_cadena_se_parte_con_el_vocabulario_COMPLETO_de_separadores():
     assert ws.chained_verdict("contradice", "contradice") == "contradice", "no se repite"
     assert ws.chained_verdict("soportada -> contradice", "contradice") == "soportada -> contradice"
     assert ws.chained_verdict(None, "soportada") == "soportada"
+
+
+def test_451_la_condicion_de_una_ronda_posterior_NO_se_pierde(toy_vault):
+    """⛔ #451 — `chained_condition` comparaba por CLASE, así que **cualquier** `acota` que cayera
+    sobre una fila cuya `acota` ya estaba resuelta se descartaba; y la fila re-anclada (#407) copiaba
+    la condición previa sin mirar la ronda. Medido en una instancia: **55 condiciones `acota` de una
+    ronda de 425 pares no llegaron a su fila** —`rv-doppler` 37, `harps-drs` 9, `hd_40307` 4,
+    `ica-ruido` 3, `ica` 1—, una de ellas diciendo que la nota se contradice consigo misma, bajo una
+    celda que publicaba «resuelta»."""
+    # (a) camino 1: la fila tiene una `acota` RESUELTA y la ronda trae OTRA
+    nota = _escena(toy_vault)
+    d1 = _fanout_condiciones(toy_vault, nota, {"2020Pdf": ("sólo con SNR > 50", "acota"),
+                                               "2019Txt": ("la muestra es de 12", "contextualiza")})
+    ws.write(nota, d1, fecha="2026-03-01")
+    ancla = {f.bibcode: f.anchor for f in lb.verif_rows(nota)}["2020Pdf"]
+    ws.resolve_conditions(nota, {f"{ancla}:2020Pdf": "fila en `## Régimen de validez`"})
+    assert lb.condition_resolved({f.bibcode: f for f in lb.verif_rows(nota)}["2020Pdf"].condition)
+
+    d2 = _fanout_condiciones(toy_vault, nota, {"2020Pdf": ("la fotometría nunca entró", "acota"),
+                                               "2019Txt": ("la muestra es de 12", "contextualiza")},
+                             ronda="r2")
+    r = ws.write(nota, d2, fecha="2026-03-02")
+    fila = {f.bibcode: f for f in lb.verif_rows(nota)}["2020Pdf"]
+    assert "la fotometría nunca entró" in fila.condition, "la condición nueva ENTRA"
+    assert "fila en `## Régimen de validez`" in fila.condition, "la resolución firmada se conserva"
+    assert not lb.condition_resolved(fila.condition), \
+        "rige el último eslabón (#450): la fila vuelve a contar como PENDIENTE"
+    assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == 0
+
+    # re-correr el escritor sobre el MISMO fan-out es un no-op: la cadena no se colapsa
+    antes = fila.condition
+    ws.write(nota, d2, fecha="2026-03-03")
+    assert {f.bibcode: f for f in lb.verif_rows(nota)}["2020Pdf"].condition == antes
+
+    # y la ronda que NO declara condición sobre una fila resuelta se DECLARA, no se supone
+    ws.resolve_conditions(nota, {f"{fila.anchor}:2020Pdf": "otra fila del régimen"})
+    d3 = _fanout_condiciones(toy_vault, nota, {"2020Pdf": ("", ""),
+                                               "2019Txt": ("la muestra es de 12", "contextualiza")},
+                             ronda="r3")
+    r = ws.write(nota, d3, fecha="2026-03-04")
+    assert [(b, por) for b, _a, _c, por in r["cond_fuera"]] == \
+        [("2020Pdf", "la ronda no declaró condición y la fila tiene una resuelta")]
+    assert "la fotometría nunca entró" in \
+        {f.bibcode: f for f in lb.verif_rows(nota)}["2020Pdf"].condition
+    # `cond_fuera` es opcional: sobre ESTE mismo caso, sin la lista el armador no revienta
+    ws.build_rows(nota, nota.read_text(encoding="utf-8"), ws.load_fanout(d3), lb.verif_rows(nota))
+
+
+def test_451_la_fila_RE_ANCLADA_recibe_la_condicion_de_la_ronda(toy_vault):
+    """⛔ #451, camino 2 — el ciclo normal (resolver → editar → re-anclar, #282) mueve el ancla, así
+    que el juicio de la ronda quedaba «muerto» y la fila se rearmaba copiando veredicto y condición
+    viejos: cada corrección dejaba ciega a la fila para la ronda siguiente. Medido: las 9 de
+    `harps-drs`, con `contextualiza` en la fila y `acota` en el JSON. La igualdad es EXACTA (el
+    ancla de la fila previa) y nunca cruza `bibcode`: no resucita un ancla muerta cualquiera."""
+    nota = _escena(toy_vault)
+    d1 = _fanout_condiciones(toy_vault, nota, {"2020Pdf": ("la muestra es de 12", "contextualiza"),
+                                               "2019Txt": ("la muestra es de 12", "contextualiza")})
+    ws.write(nota, d1, fecha="2026-03-01")
+    viejo = {f.bibcode: f.anchor for f in lb.verif_rows(nota)}["2020Pdf"]
+    # el fan-out de la ronda 2 se arma con el ancla VIEJA, y recién después se edita la prosa
+    d2 = _fanout_condiciones(toy_vault, nota, {"2020Pdf": ("sólo con SNR > 50", "acota"),
+                                               "2019Txt": ("la muestra es de 12", "contextualiza")},
+                             ronda="r2")
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "El período es de 34.5 días", "El período es de 34.5 días (HARPS)"), encoding="utf-8")
+    assert {f.bibcode: f.anchor for f in lb.verif_rows(nota)}["2020Pdf"] == viejo, \
+        "la fila todavía lleva el ancla vieja: es justo lo que #407 re-ancla"
+    assert lb.pairs_of(nota.read_text(encoding="utf-8"))[0].anchor != viejo, "el ancla SE MOVIÓ"
+
+    r = ws.write(nota, d2, fecha="2026-03-02")     # sin `--descartar-anclas-muertas`: no rehúsa
+    assert r["descartadas"] == [], "no es un ancla muerta: es el mismo par, re-anclado"
+    fila = {f.bibcode: f for f in lb.verif_rows(nota)}["2020Pdf"]
+    assert fila.condition == "acota: sólo con SNR > 50", "la condición de la ronda ENTRA"
+    assert fila.anchor != viejo, "y la fila queda re-anclada al bloque de hoy"
