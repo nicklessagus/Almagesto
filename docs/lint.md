@@ -853,7 +853,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   El diff corre sólo cuando difieren y es **offline** (título + abstract + `keywords`); nombra los
   stems que entrarían y saldrían. Alcance declarado: evalúa la mitad textual; un cambio que sólo
   mueve `noise_doctypes` se declara *no evaluable*; sin `lente` en el registro: *no evaluado*, nunca
-  cero.
+  cero. ⛔ **Sobre un TEMA con `facet:` aplica la regla del tema (#447)** —`facet` propia ∧ (puerta 2
+  con el `citation_count` de la nota contra el umbral guardado ∨ lente global), `cfg.theme_core`—
+  y exime el `extra_core` por bibcode: con la global pelada la categoría era un falso positivo
+  permanente en todo tema de método (medido: «−45 saldrían» sobre el canon de `ica`). El comando
+  que manda para el caso no evaluable es `query_ads.py <slug> [--theme] --dry-run` (el slug es
+  posicional; el `--slug` que imprimía no existía).
 
 ## Backlog — curación, registro y búsqueda
 

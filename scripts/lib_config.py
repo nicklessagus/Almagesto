@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.260.2"
+ALMAGESTO_VERSION = "1.260.3"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2312,6 +2312,29 @@ def gate2_threshold(meta) -> tuple[int | None, str | None]:
 _YAML_KEY_RE = re.compile(r"^(\s*)([A-Za-z_][\w.-]*):")
 
 
+def gate2_open(citas, umbral) -> bool:
+    """Gate 2 of D-26 («fundacional en su campo»): `citas >= umbral`, and ONLY when both are known.
+
+    `None` on either side is «no sé», not «pocas»: arXiv does not publish the count, and a theme
+    without `fundacional_min_citas` has the gate switched off (D-26 refuses a hidden default).
+    Treating either as 0 would be the invented zero INV-87 forbids."""
+    return umbral is not None and citas is not None and citas >= umbral
+
+
+def theme_core(facet_ok: bool, core_global: bool, citas, umbral) -> bool:
+    """The core rule of a METHOD theme (D-26 / INV-88): `facet propia ∧ (puerta 2 ∨ lente global)`.
+
+    ⛔ ONE implementation (#447). `query_ads.classify_theme` had it, and the two OFFLINE readers of
+    a theme's cut —`lens_diff_offline` (what the lint prints as *Lente desincronizada*) and
+    `query_ads.reclass_diff` (the `--dry-run` screen of `maintain` sub-mode D)— applied the GLOBAL
+    lens instead: on a real vault the dry-run proposed dropping 9 of 9 `extra_core` of one theme
+    and the canon of two others (−45, −20), all core by their own facet or by gate 2, and the lint
+    category was a permanent false positive on every method theme. The facet match and the global
+    verdict are computed by the caller (each has its own text pipeline); the COMBINATION lives
+    here, so it cannot drift again."""
+    return bool(facet_ok) and (bool(core_global) or gate2_open(citas, umbral))
+
+
 def reattach_yaml_comments(original: str, nuevo: str) -> tuple[str, list[str]]:
     """Put back into `nuevo` the YAML comments that `original` carried. `(head, huérfanos)`.
 
@@ -4282,10 +4305,33 @@ def lens_textual_changed(delta: list[str]) -> bool:
 _FACETAS_ROTAS: set = set()   # AUD-163: para avisar una sola vez por patrón
 
 
-def lens_core_text(lens: dict, text: str) -> bool:
+def lens_core_text(lens: dict, text: str, citas=None) -> bool:
     """¿`text` es core bajo `lens`, por la mitad TEXTUAL de la regla? Espeja la precedencia de
     `exclusion_reason` (sin tópico → require → min_facets) salteando el doctype, que no está en la
-    nota. Compila las regex de la lente GUARDADA, que puede tener facetas que ya no existen."""
+    nota. Compila las regex de la lente GUARDADA, que puede tener facetas que ya no existen.
+
+    ⛔ #447 — y si la lente trae `regla_tema` (la de un TEMA DE MÉTODO, D-26), el veredicto global
+    es sólo la puerta 3: `core = facet propia ∧ (puerta 2 ∨ global)`, con `citas` (el
+    `citation_count` de la nota) contra el `umbral` guardado — UNA combinación, `theme_core`.
+    Aplicar la global pelada sobre un tema devolvía «saldría» el canon entero del tema."""
+    core_global = _lens_core_global(lens, text)
+    regla = as_map(lens.get("regla_tema"))
+    if not regla.get("facet"):
+        return core_global
+    try:
+        facet_ok = re.search(str(regla["facet"]), text, re.I) is not None
+    except re.error as exc:
+        if ("facet", str(regla["facet"])) not in _FACETAS_ROTAS:
+            _FACETAS_ROTAS.add(("facet", str(regla["facet"])))
+            print_seguro(f"  ⚠ `facet` del tema no compila ({exc}) — no clasifica: se cuenta como "
+                         f"«no matchea», que NO es lo mismo", file=sys.stderr)
+        facet_ok = False
+    umbral = regla.get("umbral") if "umbral" in regla else None
+    return theme_core(facet_ok, core_global, citas, umbral)
+
+
+def _lens_core_global(lens: dict, text: str) -> bool:
+    """The GLOBAL half of `lens_core_text`: facets → require → min_facets (no doctype)."""
     facets = []
     for name, pat in as_map(lens.get("facets")).items():
         try:
@@ -4350,6 +4396,24 @@ def notes_of_subject(slug: str) -> list:
     return out
 
 
+def curated_bibcodes(slug: str) -> set:
+    """The bibcodes a subject (star OR theme) forces core by hand — its `extra_core` (#447).
+
+    `extra_core` is the user's judgement and overrides any classifier (#68/#39); every reader of a
+    subject's cut has to exempt it by BIBCODE (#303: the `via` string is written differently by the
+    two merge branches, so `via == "manual"` misses half of them). Empty set when the slug is
+    neither a star nor a theme."""
+    extra: set = set()
+    for lookup in (star_by_slug, theme_by_slug):
+        try:
+            _, meta = lookup(slug)
+        except (KeyError, RuntimeError):
+            continue
+        extra |= {str(e.get("bibcode") if isinstance(e, dict) else e)
+                  for e in listify_curado(as_map(meta).get("extra_core"), "extra_core")}
+    return extra
+
+
 def lens_diff_offline(slug: str) -> tuple[list[str], list[str], list[str]]:
     """Delta de re-clasificación **sin `build/`**: `(entran, salen, sin_nota)`.
 
@@ -4371,14 +4435,7 @@ def lens_diff_offline(slug: str) -> tuple[list[str], list[str], list[str]]:
     # los temas son justo donde `extra_core` se usa más: en el modo off-ADS y en la mitad ADS de un
     # tema mixto es la vía normal de entrada. Una categoría que repite lo ya resuelto se vuelve
     # ruido y se deja de mirar — el mismo argumento por el que #112 la respeta.
-    extra: set = set()
-    for lookup in (star_by_slug, theme_by_slug):
-        try:
-            _, meta = lookup(slug)
-        except (KeyError, RuntimeError):
-            continue
-        extra |= {str(e.get("bibcode") if isinstance(e, dict) else e)
-                  for e in listify_curado(as_map(meta).get("extra_core"), "extra_core")}
+    extra = curated_bibcodes(slug)
     lens = lens_current(slug)
     # #112: un paper EXCLUIDO del sujeto por decisión no puede volver a proponerse como "entra" en
     # cada cambio de lente — la decisión ya se tomó, con motivo y fecha. Sin esto, el diff repite
@@ -4390,7 +4447,10 @@ def lens_diff_offline(slug: str) -> tuple[list[str], list[str], list[str]]:
         con_nota.add((fm.get("bibcode") or stem))
         if (fm.get("bibcode") or stem) in excluidos:
             continue
-        core_ahora = lens_core_text(lens, note_lens_text(fm, text))
+        citas = fm.get("citation_count")
+        core_ahora = lens_core_text(lens, note_lens_text(fm, text),
+                                    citas if isinstance(citas, (int, float)) and not
+                                    isinstance(citas, bool) else None)
         era_core = (fm.get("relevance") == "high")
         if core_ahora and not era_core:
             entran.append(stem)

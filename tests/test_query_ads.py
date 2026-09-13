@@ -1032,6 +1032,59 @@ def test_reclass_diff_reporta_el_delta(toy_vault, toy_classifier, monkeypatch, c
     assert "ENTRAN al core: 1 — sin nota (a crear): 1  (1 chain:references)" in out
 
 
+def test_reclass_diff_de_un_TEMA_aplica_la_regla_del_tema_y_respeta_el_extra_core(toy_vault, toy_classifier,
+                                                                                    monkeypatch, capsys):
+    """⛔ #447 — el `--dry-run` clasificaba con `classify_record` (la lente GLOBAL) y aceptaba
+    `--theme` sin usarlo (el defecto que #208 corrigió para `--probe`); su guarda de curación era
+    `via == "manual"`, el string que las dos ramas del merge no escriben (#303). Medido en una
+    instancia: «SALEN del core: 9» sobre los 9 `extra_core` de `icasso`, y el canon de `ica`
+    (−45). Si el operador le cree, `--drop-core` de 9 papers con extracción pagada."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
+    write_yaml(cfg.THEMES_YAML, {"icasso": {"slug": "icasso", "concept": "Icasso",
+                                            "facet": "independent component|icasso",
+                                            "fundacional_min_citas": 2000,
+                                            "extra_core": [{"bibcode": "2003nnsp.conf...27H",
+                                                            "via": "usuario", "fecha": "2026-09-01",
+                                                            "motivo": "el paper del método"}]}})
+    write_ads_json(toy_vault, "icasso", [
+        # curado por bibcode, `via: usuario` (NO `manual`): la regla no lo toca
+        dict(_rec("Validating the independent components of neuroimaging", citas=900),
+             bibcode="2003nnsp.conf...27H", relevant=True, via="usuario", puertas=["manual"]),
+        # canon del tema: puerta 2, sin mencionar RV
+        dict(_rec("Independent component analysis: algorithms and applications", citas=30000),
+             bibcode="2000Hyva", relevant=True, via="query"),
+        # aplicación astro: puerta 3
+        dict(_rec("Icasso on radial velocity residuals", citas=3), bibcode="2024Astro",
+             relevant=True, via="query"),
+        # pasa la lente global por accidente y NO la faceta propia: sí sale
+        dict(_rec("Radial velocity survey", citas=5), bibcode="2019AJ....158..161D",
+             relevant=True, via="query"),
+    ])
+    from conftest import mk_note
+    for bib in ("2003nnsp.conf...27H", "2000Hyva", "2024Astro", "2019AJ....158..161D"):
+        mk_note(cfg.PAPERS, bib, {"bibcode": bib, "methods": ["ica"]})     # extraídas: se LISTAN
+    assert qa.reclass_diff(["icasso"]) == 0
+    out = capsys.readouterr().out
+    assert "core 4 → 3" in out, out
+    assert "SALEN del core: 1 — con extracción LLM: 1" in out and "← 2019AJ....158..161D" in out
+    assert "2003nnsp.conf...27H" not in out and "2000Hyva" not in out, "ni el curado ni el canon salen"
+    # y una ESTRELLA con `extra_core` tampoco ve salir lo curado (por bibcode, no por `via`)
+    write_yaml(cfg.STARS_YAML, {"Test": {"slug": "test_star", "extra_core": [
+        {"bibcode": "2001Cur", "via": "triage", "fecha": "2026-09-01", "motivo": "m"}]}})
+    write_ads_json(toy_vault, "test_star", [
+        dict(_rec("nada que ver", citas=1), bibcode="2001Cur", relevant=True, via="triage")])
+    qa.reclass_diff(["test_star"])
+    assert "SALEN del core: 0" in capsys.readouterr().out
+    # y un TEMA sin `facet:` sigue con la lente global (no hay regla propia que aplicar)
+    write_yaml(cfg.THEMES_YAML, {"sinfacet": {"slug": "sinfacet", "concept": "X"}})
+    write_ads_json(toy_vault, "sinfacet", [
+        dict(_rec("nada que ver", citas=1), bibcode="2001Glob", relevant=True, via="query")])
+    qa.reclass_diff(["sinfacet"])
+    assert "SALEN del core: 1" in capsys.readouterr().out
+
+
 def test_reclass_diff_no_escribe_nada(toy_vault, toy_classifier):
     """Dry-run: ni ads.json ni la bóveda se tocan. Es **una** de las dos caras del preview; la otra
     (`--probe`) la mide `test_probe_no_escribe_nada`.  @inv INV-59"""

@@ -2729,6 +2729,11 @@ def check_lens_desync(slug: str) -> list:
     # viajan — `reclass_diff` mide lo mismo pero necesita `build/`, que es scratch gitignored.
     if not cfg.objective_error():
         stored = cfg.lens_stored(slug)
+        try:
+            cfg.theme_by_slug(slug)
+            es_tema = True
+        except (KeyError, RuntimeError):
+            es_tema = False
         if stored is None:
             # D-43: no hay con qué comparar → se DICE, no se cuenta como "lente al día". Un
             # registro sin `lente` es pre-1.10.3 (o una corrida que no la guardó).
@@ -2752,10 +2757,13 @@ def check_lens_desync(slug: str) -> list:
                 else:
                     porque = ("mezcla cambios no evaluables offline (`doctype` no vive en la "
                               "nota; el umbral es la puerta 2)")
+                # #447 — el slug es POSICIONAL y un tema lleva `--theme`: el mensaje mandaba
+                # `--dry-run --slug X`, que `query_ads` rechaza («unrecognized arguments»).
                 lente_desync.append(
                     (slug, f"la lente cambió ({detalle}) pero el diff offline no lo puede "
                            f"evaluar: {porque} → "
-                           f"`python scripts/query_ads.py --dry-run --slug {slug}` con build/ presente"))
+                           f"`python scripts/query_ads.py {slug}{' --theme' if es_tema else ''} "
+                           f"--dry-run` con build/ presente"))
             else:
                 entran, salen, sin_nota = cfg.lens_diff_offline(slug)
                 techo = (f"; {len(sin_nota)} paper(s) del universo sin nota → no evaluables "

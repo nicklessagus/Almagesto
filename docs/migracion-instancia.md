@@ -783,6 +783,13 @@ Nada que migrar: `python scripts/lint.py` → la nota que salía *«la prosa cam
 bloques citables)»* deja de salir; la que sí movió una afirmación sigue saliendo con el bloque
 nombrado.
 
+## 2x · v1.260.3 (#447) — el delta de un tema con la regla del tema
+
+Nada que migrar. `python scripts/lint.py` → *Lente desincronizada* deja de listar el canon de los
+temas de método; si sigue listando algo, es porque la lente cambió de verdad (mirá el `detalle`).
+`python scripts/query_ads.py <tema> --theme --dry-run` → los `extra_core` y los fundacionales no
+salen.
+
 ## 3 · Cierre
 
 ```bash

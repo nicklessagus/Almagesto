@@ -184,9 +184,10 @@ p. ej. volviste obligatoria la faceta del eje para frenar el ruido del chaining)
 0. **Mirar el delta ANTES de tocar nada** (dry-run, offline — no consulta ADS ni escribe):
    ```bash
    python scripts/query_ads.py --dry-run              # todos los sujetos ya ingestados
-   python scripts/query_ads.py <slug> --dry-run       # uno solo
+   python scripts/query_ads.py <slug> --dry-run       # uno solo (temas: `<slug> --theme --dry-run`)
    ```
-   Re-clasifica en memoria los `build/<slug>/ads.json` con la regla vigente y reporta core
+   Re-clasifica en memoria los `build/<slug>/ads.json` con la regla vigente —para un tema con
+   `facet:`, la del tema y no la global, con el `extra_core` eximido por bibcode (#447)— y reporta core
    antes/después, los papers que **salen** del core —separando los que tienen **extracción LLM**
    (la lista completa: son pocos y son la decisión real) de los **stubs** (sólo el conteo)— y los
    que **entran** sin nota, por vía. Sin esto la decisión es a ciegas: "342 notas salen del core"

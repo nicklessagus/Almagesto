@@ -852,6 +852,11 @@ muere en la puerta* (`extra_core` o `fundacional_min_citas`)— y se mostraban i
 pantalla que existe para decidir eso; medido, 261 contra 32, con los dos papers que el tema existía
 para capturar entre los 32. El segundo bloque lista los que **pasan la faceta**: es de donde sale
 `extra_core`.
+⛔ **Y el DELTA de re-clasificación de un tema también (#447):** `query_ads.py <slug> --theme
+--dry-run` y la *Lente desincronizada* del lint aplican la regla del tema (`cfg.theme_core`, UNA
+combinación) y eximen la curación **por bibcode**. Con la global pelada, el dry-run proponía sacar
+9/9 `extra_core` de un tema y el canon de otros dos (−45, −20), y la categoría era un falso
+positivo permanente en todo tema de método.
 ⛔ **Y para una ESTRELLA la query también se DERIVA (#248): `python scripts/query_ads.py <slug>
 --probe`.** La tipeada a mano **no es la que corre el ingest** —la real expande las variantes de
 espaciado (`HD 40307` ↔ `HD40307`) y suma los alias—, así que se previsualizaba un universo y se

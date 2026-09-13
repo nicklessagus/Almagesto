@@ -407,3 +407,12 @@ reporte cuenta el copiado como re-extraído.
 con cita → vuelve nombrando el bloque; borrar un párrafo con cita → *«N bloque(s) citable(s)
 desaparecieron»*. **Devolver si** un cambio de forma (línea en blanco, encabezado renombrado, fence)
 sigue disparando, o si un cambio real en un bloque citado deja de verse.
+
+## #447 · v1.260.3
+
+`python scripts/query_ads.py icasso --theme --dry-run` → *«SALEN del core: 0»* (o sólo
+`2019AJ....158..161D` si además apretás la faceta); `ica` → sin el canon en «salen». `lint.py` → la
+categoría *Lente desincronizada* deja de listar −45/−20 sobre `ica`/`ica-ruido`; el comando que
+imprime para el caso no evaluable **corre** tal cual. **Devolver si** un `extra_core` o un paper con
+`citation_count` ≥ umbral y la faceta propia sigue saliendo, o si una estrella cambió de veredicto
+respecto de v1.259.2 (ahí no cambió nada salvo la exención por bibcode).

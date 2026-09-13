@@ -3143,3 +3143,84 @@ def test_bibcode_slugs_enumera_los_DOS_artefactos_por_separado(toy_vault):
         (cfg.FULLTEXT / slug / "2015Voss.txt").write_text("t", encoding="utf-8")
     assert cfg.bibcode_slugs("2015Voss") == {"pdf": {"ica"}, "txt": {"ica", "ica-ruido"}}
     assert cfg.bibcode_slugs("2099Nadie") == {"pdf": set(), "txt": set()}
+
+
+def test_theme_core_es_UNA_combinacion_y_la_puerta_2_no_inventa_ceros():
+    """⛔ #447 — `facet propia ∧ (puerta 2 ∨ global)` vivía sólo en `query_ads.classify_theme`; los
+    dos lectores offline del corte de un tema aplicaban la lente GLOBAL. Acá la combinación es una
+    función y la puerta 2 sólo abre con las DOS cosas conocidas (INV-87: `None` es «no sé»)."""
+    assert cfg.gate2_open(30000, 2000) is True
+    assert cfg.gate2_open(10, 2000) is False
+    assert cfg.gate2_open(None, 2000) is False and cfg.gate2_open(30000, None) is False
+    assert cfg.gate2_open(0, 0) is True, "umbral 0 declarado abre para todos"
+    # sin la faceta propia no hay nada que mirar, ni con 30k citas ni con la lente astro
+    assert cfg.theme_core(False, True, 30000, 2000) is False
+    # con la faceta: cualquiera de las dos puertas
+    assert cfg.theme_core(True, True, None, None) is True, "puerta 3 (lente global)"
+    assert cfg.theme_core(True, False, 30000, 2000) is True, "puerta 2 (fundacional, sin astro)"
+    assert cfg.theme_core(True, False, 10, 2000) is False
+    assert cfg.theme_core(True, False, 30000, None) is False, "sin umbral declarado la puerta no abre"
+
+
+def test_lens_core_text_aplica_la_regla_del_TEMA_cuando_la_lente_la_trae(capsys):
+    """#447 — `lens_current(slug)` cuelga `regla_tema` (#106) y nadie la leía: el diff offline
+    devolvía «saldría» el canon entero de un tema de método (medido: −45 en `ica`, −20 en
+    `ica-ruido`, 9/9 `extra_core` de `icasso`)."""
+    global_ = {"facets": {"rv": "radial velocity"}, "require": [], "min_facets": 1}
+    tema = dict(global_, regla_tema={"facet": "independent component", "umbral": 2000})
+    # sin regla: la global manda (comportamiento histórico)
+    assert cfg.lens_core_text(global_, "independent component analysis", 30000) is False
+    # con regla: el fundacional entra por la puerta 2 sin mencionar RV ni una vez
+    assert cfg.lens_core_text(tema, "independent component analysis", 30000) is True
+    assert cfg.lens_core_text(tema, "independent component analysis", 10) is False
+    assert cfg.lens_core_text(tema, "independent component analysis", None) is False, "citas desconocidas ≠ 0, pero la puerta no abre"
+    # la aplicación astro entra por la puerta 3 aunque tenga 3 citas
+    assert cfg.lens_core_text(tema, "independent component of radial velocity", 3) is True
+    # la lente global sola NO alcanza: sin la faceta propia no es core del tema
+    assert cfg.lens_core_text(tema, "radial velocity survey", 30000) is False
+    # regla sin umbral: la puerta 2 está apagada, la 3 sigue
+    sin_umbral = dict(global_, regla_tema={"facet": "independent component"})
+    assert cfg.lens_core_text(sin_umbral, "independent component analysis", 30000) is False
+    assert cfg.lens_core_text(sin_umbral, "independent component of radial velocity", 1) is True
+    # regla con `facet` que no compila: se dice y NO clasifica (misma doctrina que AUD-163)
+    cfg._FACETAS_ROTAS.clear()
+    rota = dict(global_, regla_tema={"facet": "(sin cerrar", "umbral": 1})
+    assert cfg.lens_core_text(rota, "independent component of radial velocity", 5) is False
+    assert "no compila" in capsys.readouterr().err
+    # regla sin `facet` (tema sin lente propia): la global, como siempre
+    assert cfg.lens_core_text(dict(global_, regla_tema={}), "radial velocity survey") is True
+
+
+def test_lens_diff_offline_de_un_TEMA_usa_su_facet_y_su_puerta_2(toy_vault, monkeypatch):
+    """#447 — el caso medido: un tema de método con `facet:` y `fundacional_min_citas`, cuyo canon
+    no menciona RV. Con la lente global «saldría» todo; con la regla del tema, no sale nada que
+    sea core por su propia regla."""
+    write_yaml(cfg.OBJECTIVE_YAML, {"relevance": {"facets": {"rv": "radial velocity"},
+                                                  "require": [], "min_facets": 1}})
+    write_yaml(cfg.THEMES_YAML, {"ica": {"slug": "ica", "concept": "ICA",
+                                         "facet": "independent component",
+                                         "fundacional_min_citas": 2000}})
+    def _nota(stem, titulo, citas, relevance="high"):
+        mk_note(cfg.PAPERS, stem, {"bibcode": stem, "tags": ["paper"], "relevance": relevance,
+                                   "thesis_links": ["ICA"], "title": titulo,
+                                   "citation_count": citas}, "# t\n\n## Abstract\nx\n")
+    _nota("1994Comon", "Independent component analysis, a new concept?", 30000)   # canon: puerta 2
+    _nota("2020Astro", "Independent component analysis of radial velocity", 3)    # puerta 3
+    _nota("2019Pocas", "Independent component analysis of EEG", 12)               # ninguna puerta
+    _nota("2018Ajeno", "Radial velocity survey", 500)                              # sin la faceta
+    _nota("2021Entra", "Independent component analysis of radial velocity jitter", 1, relevance="low")
+    entran, salen, _sin = cfg.lens_diff_offline("ica")
+    assert salen == ["2018Ajeno", "2019Pocas"], "el canon y la aplicación astro NO salen"
+    assert entran == ["2021Entra"]
+
+
+def test_curated_bibcodes_lee_el_extra_core_de_estrella_y_de_tema(toy_vault):
+    """#447 — UNA lectura del `extra_core` del sujeto, por bibcode (#303), para los dos lectores
+    del corte: el diff offline del lint y el `--dry-run`."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"slug": "ica", "concept": "ICA",
+                                         "extra_core": [{"bibcode": "1994Comon", "via": "usuario",
+                                                         "fecha": "2026-08-28", "motivo": "canon"},
+                                                        "1998Cardoso"]}})
+    assert cfg.curated_bibcodes("ica") == {"1994Comon", "1998Cardoso"}
+    assert cfg.curated_bibcodes("no_existe") == set()
+    assert cfg.curated_bibcodes("test_star") == set(), "estrella sin extra_core"

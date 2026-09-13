@@ -2098,3 +2098,24 @@ normaliza el reflow. Población: 1 nota, justo al cerrar el backlog de forma que
 (`lb.split_blocks` sobre la prosa descontada, viejo contra working tree): iguales ⇒ no stale, y la
 comparación textual previa —que ya no decidía nada— salió. La rama *«fuera de los bloques citables»*
 desapareció con ella; un bloque citable **borrado** sigue disparando y el hallazgo lo nombra.
+
+## 2026-09-12 · El delta de un tema con la lente global (#447)
+
+El lint mandaba `query_ads.py --dry-run --slug icasso`, que no corre (`--slug` no existe: el slug es
+posicional). Corrido bien, `query_ads.py icasso --theme --dry-run` → *«core 10 → 1 · SALEN del core:
+9 — con extracción LLM: 9»*: **los 9 `extra_core` del tema** (`via: usuario|citado-por-corpus`,
+`puertas: [manual]`), con el décimo quedando porque pasa la lente global por accidente. Y el backlog
+del lint decía **−45 saldrían** para `ica` y **−20** para `ica-ruido`: el canon (Comon 1994,
+Hyvärinen 1998, Cardoso 1998…), core por `facet:` propia + puerta 2. Dos lectores del corte de un
+tema aplicaban la lente global e ignoraban `regla_tema`: `reclass_diff` (con `classify_record`, y una
+guarda `via == "manual"` que #303 ya midió que nadie escribe) y `lens_core_text` (sólo
+`facets`/`require`/`min_facets`, con `lens_current(slug)` colgando la regla que nadie leía).
+Consecuencia: *Lente desincronizada* era un falso positivo permanente en los 3 temas de método de la
+bóveda, y la pantalla del sub-modo D de `maintain` proponía `--drop-core` de 9 papers con extracción
+pagada.
+
+**Qué cambió (1.260.3):** `cfg.theme_core(facet_ok, core_global, citas, umbral)` —UNA combinación,
+con `gate2_open`— la llaman `classify_theme`, `puertas_abiertas` y `lens_core_text` (que aplica
+`regla_tema` con el `citation_count` de la nota); `reclass_verdicts` clasifica un tema con `facet:`
+vía `reclassify_for_theme` sobre una copia y exime la curación por bibcode (`cfg.curated_bibcodes`,
+compartida con `lens_diff_offline`); el lint imprime `query_ads.py <slug> [--theme] --dry-run`.

@@ -4,7 +4,7 @@ Uso:
     python scripts/query_ads.py <slug> [--rows N] [--no-chain] [--no-glyph] [--sweep]
     python scripts/query_ads.py <slug> --theme            # tema (query cruda de themes.yaml)
     python scripts/query_ads.py <slug> --extra-only       # sólo los bibcodes de extra_core (tema mixto)
-    python scripts/query_ads.py <slug> --dry-run          # re-clasificar en memoria, sin red ni escritura
+    python scripts/query_ads.py <slug> [--theme] --dry-run  # re-clasificar en memoria, sin red ni escritura
     python scripts/query_ads.py --probe "<query>"         # previsualizar el corte core/no-core, sin bajar
     python scripts/query_ads.py <slug> --theme --probe    # ídem con la lente PROPIA del tema (D-26) y su `query:`
 
@@ -72,7 +72,8 @@ TODAS las variantes de espaciado y lista SÓLO los core que `build/<slug>/ads.js
 candidatos a `extra_core`. No baja nada ni escribe build/, pero **appendea a `barridos:`** del registro versionado (#88): a diferencia de `--probe`, deja rastro. Ver sweep_star.
 
 **`--dry-run` (delta de re-clasificación, #40):** re-clasifica **en memoria** los `ads.json` ya
-bajados con la regla vigente de `objective.yaml` y reporta el delta —core antes/después, los que
+bajados con la regla vigente —la de `objective.yaml`, o la del TEMA si el slug es un tema con
+`facet:` (#447)— y reporta el delta —core antes/después, los que
 **salen** del core separando *con extracción LLM* (la decisión real) de *stubs*, y los que **entran**
 sin nota por vía— sin consultar ADS ni escribir nada. Es el paso 2 del sub-modo D de `maintain`,
 que antes había que hacer con scripts descartables.
@@ -957,10 +958,8 @@ def classify_theme(rec: dict, meta: dict) -> tuple[list[str], bool, str | None]:
     # `None` es **no sé**, no «pocas»: arXiv no publica el conteo. Tratarlo como 0 dejaría a todo
     # paper venido de ese backend fuera de la puerta 2 por construcción, que es el cero inventado
     # que INV-87 prohíbe — un chequeo que no se puede evaluar se DECLARA, no se resuelve en contra.
-    p2_evaluable = umbral is not None and citas is not None
-    puerta2 = p2_evaluable and citas >= umbral
-    puerta3 = core_global
-    if puerta2 or puerta3:
+    # #447: la COMBINACIÓN es `cfg.theme_core`, compartida con el diff offline del lint.
+    if cfg.theme_core(True, core_global, citas, umbral):
         return facets_globales, True, None
     # (la puerta que abrió se recupera con `puertas_abiertas`, que comparte esta misma regla)
     if mal_formado:
@@ -1001,9 +1000,8 @@ def puertas_abiertas(rec: dict, meta: dict) -> tuple:
     if not propia.search(texto) or (rec.get("doctype") or "") in NOISE_DOCTYPES:
         return ()
     umbral, _mal = cfg.gate2_threshold(meta)     # AUD-142: la misma regla que `classify_theme`
-    citas = rec.get("citation_count")
     out = []
-    if umbral is not None and citas is not None and citas >= umbral:
+    if cfg.gate2_open(rec.get("citation_count"), umbral):
         out.append("fundacional")
     if classify_record(rec)[1]:
         out.append("astro")
@@ -1146,10 +1144,38 @@ def lens_used(meta: dict | None = None) -> dict:
 
 
 
+def reclass_verdicts(recs: list, slug: str) -> dict:
+    """`{id(rec): es core HOY}` for the records of a subject, under the rule that subject is
+    classified with (#447). Does not touch `recs`.
+
+    ⛔ Two rules, ONE reader each. A METHOD theme (an entry with `facet:` in `themes.yaml`) is
+    classified by `reclassify_for_theme` —facet propia ∧ (puerta 2 ∨ global), the same loop the
+    ingest runs— on a COPY of the records; anything else by the global lens (`classify_record`).
+    The dry-run applied the global lens to everything and «accepted `--theme` without using it»
+    (the defect #208 fixed for `--probe`): on a real vault it proposed dropping 9 of 9 `extra_core`
+    of one theme and the canon of two others, with the message «SALEN del core» over papers that
+    are core by the theme's own facet or by gate 2.
+
+    And the curation is exempted by BIBCODE (`extra_core`, #303), not by `via == "manual"` — a
+    string the two merge branches do not write."""
+    curados = cfg.curated_bibcodes(slug)
+    try:
+        _, meta = cfg.theme_by_slug(slug)
+    except (KeyError, RuntimeError):
+        meta = None
+    if cfg.as_map(meta).get("facet"):            # un tema SIN `facet:` sigue con la global
+        copia = json.loads(json.dumps(recs))       # la regla del tema escribe `relevant`/`puertas`
+        reclassify_for_theme(copia, meta, curados)
+        return {id(r): bool(c.get("relevant")) or r.get("bibcode") in curados
+                for r, c in zip(recs, copia)}
+    return {id(r): (r.get("bibcode") in curados) or classify_record(r)[1] for r in recs}
+
+
 def reclass_diff(slugs: list[str]) -> int:
     """Preview del delta de re-clasificación (sub-modo D de `maintain`): re-clasifica **en memoria**
-    los `build/<slug>/ads.json` existentes con la regla VIGENTE de objective.yaml y reporta el delta
-    contra el `relevant` persistido. No consulta ADS, no escribe build/ ni toca la bóveda.
+    los `build/<slug>/ads.json` existentes con la regla VIGENTE —la de objective.yaml, o la del
+    TEMA si el slug es un tema con `facet:` (#447, `reclass_verdicts`)— y reporta el delta contra el
+    `relevant` persistido. No consulta ADS, no escribe build/ ni toca la bóveda.
 
     Reporta por slug: core antes/después, los papers que SALEN del core separando los que tienen
     extracción LLM (lista completa: son pocos y son la decisión real) de los stubs (sólo conteo), y
@@ -1164,9 +1190,10 @@ def reclass_diff(slugs: list[str]) -> int:
         recs = json.loads(adsfile.read_text(encoding="utf-8"))["records"]
         aplicar_excluidos(recs, slug)      # #112: lo ya excluido no se re-propone en cada re-clasif.
         before = [r for r in recs if r.get("relevant")]
+        ahora = reclass_verdicts(recs, slug)
         after, salen, entran = [], [], []
         for r in recs:
-            _, now = classify_record(r)
+            now = ahora[id(r)]
             if now:
                 after.append(r)
             if r.get("relevant") and not now:

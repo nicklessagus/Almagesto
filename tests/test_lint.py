@@ -3049,6 +3049,21 @@ def test_lente_cambiada_reporta_diff_por_ficha(toy_vault, capsys):
     assert rc == 0, "es backlog: no bloquea"
 
 
+def test_lente_no_evaluable_manda_un_comando_que_CORRE(toy_vault, capsys):
+    """#447 — el mensaje decía `query_ads.py --dry-run --slug X`, y `query_ads` no tiene `--slug`
+    (es posicional): «unrecognized arguments». Y un tema lleva `--theme`."""
+    write_yaml(cfg.THEMES_YAML, {"ica": {"slug": "ica", "concept": "ICA", "facet": "ica"}})
+    _registro_con_lente("ica", dict(LENTE_VIEJA, noise_doctypes=["catalog"], regla_tema={"facet": "ica"}))
+    _registro_con_lente("test_star", dict(LENTE_VIEJA, noise_doctypes=["catalog"]))
+    write_yaml(cfg.OBJECTIVE_YAML, {"relevance": {"facets": LENTE_VIEJA["facets"], "require": [],
+                                                  "min_facets": 1,
+                                                  "noise_doctypes": ["catalog", "dataset"]}})
+    filas = {slug: msg for slug, msg in lint.check_lens_desync("ica") + lint.check_lens_desync("test_star")}
+    assert "`python scripts/query_ads.py ica --theme --dry-run`" in filas["ica"], filas
+    assert "`python scripts/query_ads.py test_star --dry-run`" in filas["test_star"], filas
+    assert "--slug" not in filas["ica"] + filas["test_star"]
+
+
 def test_registro_sin_lente_no_evaluado(toy_vault, capsys):
     """Adversario del cero inventado (D-43): sin `lente` guardada no hay contra qué comparar. El
     hallazgo lo DICE; callarlo dejaría la ficha leyéndose como clasificada con la regla vigente."""

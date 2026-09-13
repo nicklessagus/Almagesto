@@ -548,6 +548,28 @@ portadores:
         estado: fuera-de-alcance
         motivo: "`best_pdf`/`best_fulltext`/`stamp_*` resuelven UNA copia por precedencia declarada (#304): es lectura para apuntar, no escritura sobre las copias."
 
+  - issue: 447
+    regla: >-
+      Core de un TEMA DE MÉTODO = `facet:` propia ∧ (puerta 2 ∨ lente global), módulo curación por
+      BIBCODE (`extra_core`, `--drop-core`). La COMBINACIÓN es una sola función; todo lector del
+      corte de un tema —el ingest, el `--dry-run` y el diff offline del lint— la aplica, nunca la
+      lente global pelada.
+    funcion: lib_config.theme_core
+    patron: 'classify_theme\(|lens_core_text\(|citas >= umbral|classify_record\('
+    consumidores:
+      - modulo: scripts/query_ads.py
+        estado: usa
+        motivo: "`classify_theme` (el ingest) y `reclass_verdicts` (el `--dry-run`, vía `reclassify_for_theme`) combinan con `theme_core`; la curación se exime por bibcode (`cfg.curated_bibcodes`)."
+      - modulo: scripts/lib_config.py
+        estado: usa
+        motivo: "`lens_core_text` aplica `regla_tema` con `theme_core` cuando la lente la trae; es lo que `lens_diff_offline` imprime en el lint."
+      - modulo: scripts/openalex.py
+        estado: fuera-de-alcance
+        motivo: Descubrimiento — clasifica con la lente global por diseño (propone, no decide core; §4.3).
+      - modulo: scripts/search_arxiv.py
+        estado: fuera-de-alcance
+        motivo: Ídem — backend de descubrimiento, misma paridad de schema que `to_record`.
+
   - issue: 416
     regla: >-
       La línea sobre un `## Abstract` transcrito del PDF afirma DOS cosas y sólo una vale siempre:
