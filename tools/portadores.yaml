@@ -476,10 +476,10 @@ portadores:
   - issue: 415
     regla: >-
       `pdf_source` DECIDE LECTURAS (con `eprint`, una discrepancia numérica es candidata a
-      diferencia de versión), así que su procedencia tiene tres escalones y en ese orden: la marca
-      de arXiv (verdad de disco, #57), lo DECLARADO en `sources:` (versionado, #415) y el registro
-      del fetcher en `build/` (scratch gitignored). Sin ninguno, `null` = desconocido, que no es
-      «publicado».
+      diferencia de versión), así que su procedencia tiene cuatro escalones y en ese orden: la
+      marca de arXiv (verdad de disco, #57), la FIRMA del reemplazo (`pdf_reemplazo`, #446), lo
+      DECLARADO en `sources:` (versionado, #415) y el registro del fetcher en `build/` (scratch
+      gitignored). Sin ninguno, `null` = desconocido, que no es «publicado».
     funcion: make_notes.pdf_source_info
     patron: 'record_pdf_source'
     consumidores:
@@ -495,6 +495,34 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: Define `record_pdf_source` y el vocabulario `PDF_SOURCE_OK`; no resuelve la precedencia.
+
+  - issue: 446
+    regla: >-
+      Lo que un comando FIRMA en un artefacto versionado (`pdf_reemplazo` + `pdf_sha`, #437) no lo
+      puede revertir un scratch gitignored (`build/<slug>/pdf_source.json`): la firma entra en la
+      precedencia de `pdf_source` por encima de `build/`, y vale sólo si su `pdf_sha` describe el
+      PDF en disco.
+    funcion: make_notes.signed_pdf_source
+    patron: 'pdf_reemplazo|pdf_source\.json'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`pdf_source_info` consulta la firma entre la marca de arXiv y lo declarado en `sources:`."
+      - modulo: scripts/fetch_arxiv.py
+        estado: fuera-de-alcance
+        motivo: ESCRIBE el registro de `build/` (la mitad que la firma vence); no resuelve la precedencia.
+      - modulo: scripts/fetch_pdf.py
+        estado: fuera-de-alcance
+        motivo: Ídem — registra la rama que entregó el PDF en la corrida.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: Define `record_pdf_source` (el escritor de `build/`); no lee la firma.
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: Lee `pdf_reemplazo` para AVISAR el reemplazo a mano sin firma (#437); no resuelve `pdf_source`.
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: ESCRIBE la firma (`sign_note`); la lectura es del estampador.
 
   - issue: 416
     regla: >-

@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-11",
+ "fetched": "2026-09-12",
  "issues": [
   {
    "number": 2,
@@ -2209,6 +2209,26 @@
   {
    "number": 444,
    "title": "`stale_verif` (#431) cuenta la CABECERA estampada por `--restamp-headers` como prosa cambiada: 4 falsos «stale» por correr el backfill de #247",
+   "state": "CLOSED"
+  },
+  {
+   "number": 445,
+   "title": "`stale_verif` reporta como «prosa cambiada» una línea en blanco que separa una tabla de un `## ` — la edición que el propio lint pide en «Forma del artefacto» — con 0 anclas movidas",
+   "state": "OPEN"
+  },
+  {
+   "number": 446,
+   "title": "`pdf_source_info` no consulta `pdf_reemplazo`: un `build/<slug>/pdf_source.json` gitignored revierte la firma de #437/#440 — 9 notas volvieron de `publisher` a `eprint` en una sesión",
+   "state": "OPEN"
+  },
+  {
+   "number": 447,
+   "title": "El delta de re-clasificación de un TEMA aplica la lente GLOBAL (`--dry-run` y `lens_diff_offline`): propone sacar 9/9 `extra_core` de icasso y el canon de ica; y el lint manda un comando que no corre",
+   "state": "OPEN"
+  },
+  {
+   "number": 448,
+   "title": "`replace_pdf`: re-extrae el `.txt` sólo en los slugs con copia del PDF — las copias D-18 del `.txt` viven en más slugs, y el residuo es el BLOQUEANTE D-18/D-20",
    "state": "OPEN"
   }
  ]

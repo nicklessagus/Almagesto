@@ -5422,6 +5422,61 @@ def test_el_carril_sources_puede_declarar_pdf_source(toy_vault, monkeypatch, cap
     assert mn.pdf_source_info("test_star", "2020unk....1..1U") == (None, None), "sin declarar, igual"
 
 
+def test_la_FIRMA_del_reemplazo_gana_sobre_build_y_cae_si_el_pdf_cambio(toy_vault, monkeypatch):
+    """⛔ #446 — lo que un comando FIRMA en un artefacto versionado no lo puede revertir un scratch
+    gitignored. `build/<slug>/pdf_source.json` describe la PRIMERA descarga (el preprint) y nadie
+    lo actualiza; `pdf_reemplazo` (#437) es la firma de que ese PDF se reemplazó. Medido: 9 notas
+    firmadas `publisher` volvieron a `eprint` en una sesión, sin que nadie las tocara — y
+    `pdf_source` DECIDE LECTURAS (#57).
+
+    La firma vale sólo si describe el archivo en disco (`pdf_sha` == sha del PDF); sobre un PDF que
+    cambió de nuevo no afirma nada, y el escalón de `build/` vuelve a mandar."""
+    import lib_blocks as lb
+    stem = "2017PhRvE..96d2114K"
+    _txt("test_star", stem, "texto del editor, sin marca de arXiv\n")
+    cfg.record_pdf_source("test_star", stem, "eprint")
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / f"{stem}.pdf").write_bytes(b"%PDF-1.5\ncopia del editor\n")
+    sha = lb.sha10(b"%PDF-1.5\ncopia del editor\n")
+    assert mn.pdf_source_info("test_star", stem) == ("eprint", None), "sin firma manda `build/`"
+    nota = mk_note(toy_vault.PAPERS, stem, {"bibcode": stem, "pdf_sha": sha, "pdf_source": "publisher",
+                   "pdf_reemplazo": [{"fecha": "2026-09-11", "source": "publisher",
+                                      "sha_anterior": "?", "sha": sha, "paginas": "? → 7",
+                                      "motivo": "copia del editor"}]}, "# p\n")
+    assert mn.pdf_source_info("test_star", stem) == ("publisher", None), \
+        "la firma versionada gana sobre el registro del fetcher"
+    assert mn.signed_pdf_source("otro_slug", stem) == "publisher", \
+        "sin copia bajo ese slug se contrasta contra cualquier copia (#305)"
+    # y sobrevive a re-estampar desde extract_fulltext: el escritor real, no sólo el lector
+    assert mn.stamp_fulltext(nota, stem, "test_star") in (True, False)
+    assert cfg.split_fm(nota.read_text(encoding="utf-8"))["pdf_source"] == "publisher"
+    # el PDF cambió otra vez sin firma nueva → la firma no describe el disco → cae al escalón de build/
+    (cfg.PDFS / "test_star" / f"{stem}.pdf").write_bytes(b"%PDF-1.7\notra cosa\n")
+    assert mn.signed_pdf_source("test_star", stem) is None
+    assert mn.pdf_source_info("test_star", stem) == ("eprint", None)
+    # fuera del vocabulario cerrado (#296) o sin `pdf_sha`, la firma no se lee
+    (cfg.PDFS / "test_star" / f"{stem}.pdf").write_bytes(b"%PDF-1.5\ncopia del editor\n")
+    cfg.set_fm_scalar(nota, "pdf_sha", "null")
+    assert mn.signed_pdf_source("test_star", stem) is None
+    # la marca de arXiv sigue mandando sobre la firma (#57: un PDF con la marca ES el eprint)
+    cfg.set_fm_scalar(nota, "pdf_sha", sha)
+    _txt("test_star", stem, "arXiv:1701.00001v2 [astro-ph.EP] 1 Jan 2017\n")
+    assert mn.pdf_source_info("test_star", stem) == ("eprint", "v2")
+    # las tres ausencias devuelven None y no explotan: sin nota, sin `pdf_reemplazo`, sin PDF en
+    # NINGÚN slug (la firma no tiene contra qué contrastarse)
+    assert mn.signed_pdf_source("test_star", "2099NoNota") is None
+    sin_firma = mk_note(toy_vault.PAPERS, "2099SinFirma", {"bibcode": "2099SinFirma", "pdf_sha": sha},
+                        "# p\n")
+    assert mn.signed_pdf_source("test_star", "2099SinFirma") is None
+    mk_note(toy_vault.PAPERS, "2099Revista", {"bibcode": "2099Revista", "pdf_sha": sha,
+            "pdf_reemplazo": [{"source": "revista", "sha": sha}]}, "# p\n")
+    (cfg.PDFS / "test_star" / "2099Revista.pdf").write_bytes(b"%PDF-1.5\ncopia del editor\n")
+    assert mn.signed_pdf_source("test_star", "2099Revista") is None, \
+        "fuera del vocabulario cerrado (#296) la firma no se lee: caería por el `else` de `== 'eprint'`"
+    (cfg.PDFS / "test_star" / f"{stem}.pdf").unlink()
+    assert mn.signed_pdf_source("test_star", stem) is None, "sin copia en disco no hay firma que valga"
+
+
 def test_fill_abstracts_completa_desde_el_CATALOGO_no_desde_el_PDF(toy_vault, monkeypatch, capsys):
     """#413 — `CLAUDE.md` dice que los tres backends devuelven el abstract y que pesa justo donde
     NO hay PDF («en un `pending_source` el abstract es TODO lo que la nota tiene»). La

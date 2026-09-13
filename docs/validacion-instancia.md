@@ -382,3 +382,13 @@ bloque. **Devolver si** alguna sigue «stale» por la cabecera o si un cambio re
 sin tocar nada; la cabecera se reconoce por el aviso `⚠ Capa LLM` aunque la versión vieja no tenga
 la línea del generador. **Devolver si** alguna sigue con *«fuera de los bloques citables»*.
 
+
+## #446 · v1.260.0
+
+Sobre `2017PhRvE..96d2114K` (o cualquiera de las 9): `python -c "import sys;sys.path.insert(0,'scripts');
+import make_notes as mn;print(mn.pdf_source_info('ica-ruido','2017PhRvE..96d2114K'))"` → `('publisher',
+None)` con `build/ica-ruido/pdf_source.json` diciendo `eprint`. Después `extract_fulltext.py ica-ruido
+--bibcode 2017PhRvE..96d2114K` (sin `--force`) → la nota queda `publisher` y **ninguna otra nota del
+slug cambia** (hash de `vault/wiki/papers/` antes/después, red 6). Repetir un reemplazo real con
+`replace_pdf.py` → las notas ya firmadas del mismo slug no se mueven. **Devolver si** una firmada
+vuelve a `eprint`, o si una nota con `pdf_sha` distinto del PDF en disco toma la firma como válida.

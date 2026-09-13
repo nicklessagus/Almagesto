@@ -2053,3 +2053,18 @@ sobre una versión anterior. Hoy la cabecera se reconoce por **cualquiera** de s
 (`HEADER_MARKS`: generador, aviso de capa LLM, `_Estado —`, `_Ground-truth —`, constantes de
 `lib_config`), con test sobre la versión vieja sin generador.
 
+
+## 2026-09-12 · La firma del reemplazo revertida por un scratch (#446)
+
+La instancia reemplazó **4 PDFs** (uno por slug) con `replace_pdf.py` y **9 notas** que llevaban
+`pdf_source: publisher` firmado por `--backfill` el día anterior volvieron a `eprint` sin que nadie
+las tocara. Mecanismo: `extract_fulltext --bibcode X` re-extrae UN `.txt` y re-estampaba el slug
+**entero**, y `pdf_source_info` resolvía por marca de arXiv → `sources:` → `build/<slug>/pdf_source.json`
+— el registro de la **primera** descarga, gitignored, que nadie actualiza. Para una copia del editor
+(sin marca, bibcode ADS) el único escalón que contestaba era `build/`, y decía `eprint`. Sin mirar el
+diff el backlog de #298 habría subido de 142 a 151 sin que nadie consiguiera ni perdiera un PDF.
+
+**Qué cambió (1.260.0):** `make_notes.signed_pdf_source` —la firma `pdf_reemplazo` entra en la
+precedencia entre la marca de arXiv y `sources:`, y vale sólo si `pdf_sha` es el sha del PDF en disco
+(bajo el slug, o cualquier copia)—; y `extract_fulltext.stamp_targets`: con `--bibcode` se estampan
+sólo las notas cuyo `.txt` se tocó. Portadores firmados (`tools/portadores.yaml`, issue 446).

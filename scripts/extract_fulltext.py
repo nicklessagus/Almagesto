@@ -244,6 +244,21 @@ def select_pdfs(srcdir: Path, bibcodes) -> tuple[list, list]:
     return pdfs, sorted(pedidos - {f.stem for f in pdfs})
 
 
+def stamp_targets(outdir: Path, bibcodes) -> list:
+    """The `.txt` files whose notes this run re-stamps: the whole slug, or only the `--bibcode`
+    ones (#446).
+
+    ⛔ The stamping is what closes the machine contract for stubs born before their `.txt`, so the
+    whole-slug pass stays the default. But a run scoped to one bibcode (#436) is the replacement
+    path, and re-stamping the neighbours from there re-applied `build/` over every note of the
+    subject — including the ones a signature had just corrected."""
+    todos = sorted(outdir.glob("*.txt"))
+    if not bibcodes:
+        return todos
+    pedidos = {str(b).strip() for b in bibcodes}
+    return [t for t in todos if t.stem in pedidos]
+
+
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -399,8 +414,12 @@ def main() -> int:
     # paso un re-run idempotente migra notas pre-contrato sin los campos (es el backfill de
     # `pdf_source` en un corpus ya bajado, #57: la marca de arXiv ya está en el .txt, no hay que
     # re-bajar ningún PDF). Cirugía de make_notes: nunca toca la extracción LLM.
+    # ⛔ #446 — con `--bibcode` se estampan SÓLO las notas cuyo `.txt` se tocó: re-estampar el slug
+    # entero desde una corrida acotada volvía a pasar `build/` por encima de todo el tema (medido:
+    # 9 notas firmadas `publisher` de vuelta a `eprint` en una sesión de cuatro reemplazos).
+    txts = stamp_targets(outdir, args.bibcode)
     stamped = sum(make_notes.stamp_fulltext(cfg.PAPERS / f"{t.stem}.md", t.stem, args.slug)
-                  for t in sorted(outdir.glob("*.txt")))
+                  for t in txts)
     if stamped:
         print(f"  notas: {stamped} con fulltext:/fulltext_source:/pdf_source: estampados "
               "(contrato máquina)")

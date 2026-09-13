@@ -7,6 +7,7 @@ import pytest
 
 import extract_fulltext as ef
 import lib_config as cfg
+from conftest import mk_note
 
 GOOD_TEXT = "palabras normales de un paper con texto sano " * 12     # >200 chars ASCII
 MOJIBAKE = "ˆÿþ" * 150                                # >200 chars, ~0% ASCII
@@ -460,3 +461,27 @@ def test_bibcode_acota_la_re_extraccion_y_REHUSA_el_que_no_esta(toy_vault, monke
     pdfs, faltan = ef.select_pdfs(cfg.PDFS / "ica", [" 2010CJ ", "2099NoEsta"])
     assert [f.stem for f in pdfs] == ["2010CJ"] and faltan == ["2099NoEsta"]
 
+
+
+def test_con_bibcode_se_estampan_SOLO_las_notas_cuyo_txt_se_toco(toy_vault, monkeypatch):
+    """⛔ #446 — `extract_fulltext --bibcode X` re-extraía UN `.txt` y re-estampaba el slug ENTERO:
+    la corrida acotada del reemplazo (#436) volvía a pasar `build/` por encima de todo el tema.
+    Medido: cuatro reemplazos, 9 notas firmadas `publisher` de vuelta a `eprint`. Sin `--bibcode`
+    el universo sigue siendo el slug (es lo que cierra el contrato de los stubs pre-`.txt`)."""
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    for bib in ("2010CJ", "2001HKO"):
+        (cfg.PDFS / "ica" / f"{bib}.pdf").write_bytes(b"%PDF-1.4\nx\n")
+        mk_note(toy_vault.PAPERS, bib, {"bibcode": bib, "pdf": None}, "# p\n")
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2001HKO.txt").write_text(GOOD_TEXT, encoding="utf-8")
+    monkeypatch.setattr(ef.shutil, "which", lambda _x: "/usr/bin/pdftotext")
+    monkeypatch.setattr(ef.subprocess, "run",
+                        lambda cmd, **kw: SimpleNamespace(returncode=0, stdout=GOOD_TEXT, stderr=""))
+    estampadas = []
+    monkeypatch.setattr(ef.make_notes, "stamp_fulltext",
+                        lambda dest, stem, slug: estampadas.append(stem) or True)
+    monkeypatch.setattr(sys, "argv", ["extract_fulltext.py", "ica", "--bibcode", "2010CJ"])
+    assert ef.main() == 0
+    assert estampadas == ["2010CJ"], "el vecino NO se re-estampa desde una corrida acotada"
+    assert [t.stem for t in ef.stamp_targets(cfg.FULLTEXT / "ica", None)] == ["2001HKO", "2010CJ"]
+    assert [t.stem for t in ef.stamp_targets(cfg.FULLTEXT / "ica", [" 2010CJ "])] == ["2010CJ"]

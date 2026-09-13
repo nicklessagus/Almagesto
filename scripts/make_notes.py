@@ -99,7 +99,13 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
     para un PDF que trajo el usuario no corre ningún fetcher y no hay marca, así que sin este
     escalón el campo era `None` para siempre — 38 notas de una bóveda real). Después, lo que
     registró el fetcher de la corrida (`build/<slug>/pdf_source.json`). Sin ninguna de las tres:
-    None (desconocido, no "publicado": afirmar de más acá sería peor que no saber)."""
+    None (desconocido, no "publicado": afirmar de más acá sería peor que no saber).
+
+    ⛔ #446 — y entre la marca y lo declarado va la FIRMA del reemplazo (`pdf_reemplazo`, #437):
+    lo que un comando firmó en un artefacto versionado no lo puede revertir un scratch gitignored.
+    El registro de `build/` describe la descarga de la primera vez —el preprint— y nadie lo
+    actualiza, así que cada `extract_fulltext` re-estampaba `eprint` encima de `publisher`.
+    Medido: 9 notas revertidas en una sesión, sin que nadie las tocara."""
     if not slug:
         return None, None
     txt = cfg.FULLTEXT / slug / f"{stem}.txt"
@@ -112,6 +118,8 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
         ver = cfg.arxiv_stamp(txt.read_text(encoding="utf-8", errors="replace"))
         if ver is not None:
             return "eprint", (ver or None)
+    if (src := signed_pdf_source(slug, stem)):
+        return src, None
     # #415 — lo DECLARADO en `sources:`. Va después de la marca de arXiv (que manda por el
     # argumento de #57: un ADS_PDF que sirve el eprint ES el eprint) y antes del registro de
     # `build/`, que es scratch gitignored: entre una declaración versionada y un archivo que no
@@ -127,6 +135,39 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
         if src:
             return src, None
     return None, None
+
+
+def signed_pdf_source(slug: str | None, stem: str) -> str | None:
+    """The `source` that `replace_pdf` SIGNED on the note (`pdf_reemplazo`, #437), if it still
+    describes the PDF on disk — else None (#446).
+
+    ⛔ The signature is versioned and travels; `build/<slug>/pdf_source.json` is scratch that
+    records the FIRST download and is never updated. Between the two, the one that travels wins —
+    the same argument #415 made for `sources:`. The guard is the hash: the signature carries
+    `pdf_sha`, and it is trusted only if the PDF under this slug (or, without one there, any copy)
+    still has that sha. A signature over a file that changed again describes nothing on disk, and
+    then the note falls back to the lower steps instead of asserting a provenance it cannot back.
+    Only the LAST entry counts (the list is add-only) and only inside the closed vocabulary (#296)."""
+    nota = cfg.PAPERS / f"{stem}.md"
+    if not nota.exists():
+        return None
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
+    firmas = [x for x in cfg.as_list(fm.get("pdf_reemplazo")) if isinstance(x, dict)]
+    if not firmas:
+        return None
+    src = str(firmas[-1].get("source") or "").strip()
+    if src not in cfg.PDF_SOURCE_OK:
+        return None
+    sha = str(fm.get("pdf_sha") or "").strip()
+    if not sha:
+        return None
+    pdf = cfg.PDFS / (slug or "") / f"{stem}.pdf"
+    if not pdf.is_file():
+        rel = best_pdf(stem)
+        if rel is None:
+            return None
+        pdf = (cfg.PAPERS / rel).resolve()
+    return src if lb.sha10(pdf.read_bytes()) == sha else None
 
 
 # Calidad de fulltext para desempatar entre copias del mismo paper bajo distintos slugs (#16):

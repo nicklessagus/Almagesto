@@ -506,6 +506,11 @@ su salvedad de `pdf_source: eprint` para decir que sus citas son contra el prepr
 borrarlo destruiría la salvedad junto con el archivo. El par `pdf: null` + `pdf_source: <valor>`
 **no es hallazgo**. ⛔ **El REEMPLAZO del PDF sí (#383):** `stamp_pdf` guarda `pdf_sha`, y si el
 archivo cambió deja `pdf_source`/`eprint_version` en `null`; editor + `eprint_version` bloquea.
+⛔ **Y lo que `replace_pdf` FIRMA no lo revierte `build/` (#446):** la precedencia de `pdf_source`
+es marca de arXiv → **`pdf_reemplazo`** (si su `pdf_sha` es el del PDF en disco) → `sources:` →
+`build/`. El registro del fetcher describe la **primera** descarga y nadie lo actualiza; medido, 9
+notas firmadas `publisher` volvieron a `eprint` en una sesión. Y `extract_fulltext --bibcode`
+re-estampa **sólo** las notas cuyo `.txt` tocó.
 
 Cuando un paper vive bajo **varios slugs** el campo es **estable**: la copia ya estampada se mantiene
 salvo que llegue una de **mejor calidad** (`pdftotext`/`web` > `ocr`); no se repunta al slug que

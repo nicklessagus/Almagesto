@@ -752,6 +752,25 @@ entrante tiene N página(s) MENOS…` es aviso, no rehúse. **Devolver si** un r
 nota sin `pdf_reemplazo`, si el aviso no aparece sobre un entrante más corto, o si rehúsa por
 páginas (no debe).
 
+## 2u · v1.260.0 (#446) — la firma del reemplazo gana sobre `build/`
+
+Nada que migrar: es lectura. Pero si entre v1.258.1 y esta versión corriste `extract_fulltext` (o
+`replace_pdf`) sobre un slug con notas firmadas, alguna pudo volver a `eprint`. Chequeo:
+
+```bash
+python - <<'EOF2'
+import sys, glob; sys.path.insert(0, "scripts"); import lib_config as c
+for f in sorted(glob.glob("vault/wiki/papers/*.md")):
+    fm = c.split_fm(open(f, encoding="utf-8").read()) or {}
+    firmas = [x for x in c.as_list(fm.get("pdf_reemplazo")) if isinstance(x, dict)]
+    if firmas and fm.get("pdf_source") != firmas[-1].get("source"):
+        print(f, fm.get("pdf_source"), "→ firmado:", firmas[-1].get("source"))
+EOF2
+```
+
+Cada línea es una nota revertida: `python scripts/extract_fulltext.py <slug> --bibcode <bib>` (sin
+`--force`: no re-extrae, sólo re-estampa) la devuelve a lo firmado, porque ahora la firma manda.
+
 ## 3 · Cierre
 
 ```bash
