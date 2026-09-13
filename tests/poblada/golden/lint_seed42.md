@@ -400,6 +400,9 @@
 ## 🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog) (0)
 > sobre 60 notas de `papers/`
 
+## 💿 La prosa afirma QUÉ DOCUMENTO hay en disco y sus testigos la desmienten (#449, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## ↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog) (0)
 > sobre 60 notas de `papers/`
 

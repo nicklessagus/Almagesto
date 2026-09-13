@@ -9693,7 +9693,7 @@ def test_check_paper_views_no_pide_lo_que_no_se_puede_evaluar(toy_vault):
     def _v(fm, text="", nv=None, ti=None, tps=None):
         return lint.check_paper_views("2020X", fm, text, nv or {}, None, ti or {}, tps or {})
 
-    assert _v({}) == ([],) * 12, "una nota sin `vistas[]` ni reclamos no dispara nada"
+    assert _v({}) == ([],) * 13, "una nota sin `vistas[]` ni reclamos no dispara nada"
 
     # (a) ejes: sin lente o sin fecha no se compara; con el tema sin `ejes:` es NO EVALUABLE
     sin_fecha = {"vistas": [{"sujeto": "ica", "tipo": "theme", "lente": ["rv"]}],
@@ -10531,3 +10531,22 @@ def test_la_matriz_estampada_no_cuenta_como_link_entrante(toy_vault):
         "la matriz no llegó a linkear el concepto: el test no prueba lo que dice"
     assert "gp" in [s for s, _ in lint.collect().por_clave("orphans").items], \
         "la matriz estampada tapó un huérfano — metadata derivada no es un link entrante (#249)"
+
+
+def test_449_la_categoria_levanta_la_prosa_que_los_testigos_desmienten(toy_vault, capsys):
+    """#449 — backlog, no bloqueante: cuál mitad está mal (la prosa o el campo) lo decide quien
+    lea, y en el caso 44 medido era el CAMPO el equivocado."""
+    cuerpo = ("# p\n\n## Abstract\n\nx\n\n## Vista — Estrella Test\n\n"
+              "El PDF en disco es el PREPRINT de arXiv, coherente con `pdf_source: eprint`.\n")
+    mk_note(cfg.PAPERS, "2010Reemplazado",
+            {"bibcode": "2010Reemplazado", "tags": ["paper"], "stars": ["Estrella Test"],
+             "pdf_source": "publisher",
+             "pdf_reemplazo": [{"fecha": "2026-09-11", "source": "publisher", "sha": "a",
+                                "sha_anterior": "b", "paginas": "33 → 7", "motivo": "m"}]},
+            cuerpo)
+    mk_note(cfg.PAPERS, "2010Coherente",
+            {"bibcode": "2010Coherente", "tags": ["paper"], "stars": ["Estrella Test"],
+             "pdf_source": "eprint"}, cuerpo)
+    _rc, out = run_lint(capsys)
+    assert "2010Reemplazado" in out and "los testigos" in out
+    assert "2010Coherente" not in out.split("QUÉ DOCUMENTO")[-1].split("\n\n")[0]

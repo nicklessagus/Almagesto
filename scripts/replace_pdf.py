@@ -370,8 +370,17 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
     elif not nota.exists():
         cfg.print_seguro(f"  ⚠ no hay nota `{nota.name}`: el PDF se reemplazó y el frontmatter no "
                          f"se pudo estampar (¿`make_notes.py` todavía no la creó?)")
+    # ⛔ #449 — el comando cambia los TRES testigos del documento en disco y no puede reescribir la
+    # prosa que los cita: medido, 43 salvedades en 31 notas seguían diciendo «el PDF en disco es el
+    # PREPRINT» después del reemplazo, y ninguna capa lo miraba (`verify-citations` deja afuera la
+    # afirmación sin `[[bibcode]]`, #213). El alcance de re-verificación (#436) no cubre esto, así
+    # que se dice acá, al firmar. ⚠ Se AVISA y no se reescribe: la línea conserva un hecho
+    # verdadero («esta vista se leyó del preprint …») y cuál mitad se corrige lo decide quien lea.
+    prosa = ([ln for clase, ln in cfg.doc_claims_on_disk(nota.read_text(encoding="utf-8"))
+              if clase == "preprint"] if nota.exists() else [])
     extracciones = stamp_depagination(bibcode, sha_viejo, sha_nuevo, reason, dry_run=dry_run)
     return {"bibcode": bibcode, "slugs": slugs, "sha_anterior": sha_viejo, "sha": sha_nuevo,
+            "prosa_preprint": prosa,
             "txts": [str(t) for t in txts], "txts_copiados": [str(t) for t in copiados],
             "extracciones": [str(e) for e in extracciones],
             "alcance": [(str(n), k) for n, k in alcance], "pares": sum(k for _n, k in alcance),
@@ -391,6 +400,13 @@ def print_report(r: dict, source: str, reason: str) -> None:
                         f"sin el PDF (D-18, #448): "
                         f"{', '.join(Path(t).parent.name for t in r['txts_copiados'])}"
                         if r.get("txts_copiados") else ""))
+    if r.get("prosa_preprint"):
+        cfg.print_seguro(
+            f"  ⚠ PROSA: {len(r['prosa_preprint'])} línea(s) de la nota siguen diciendo que el PDF "
+            f"en disco es el PREPRINT, y ya no lo es (#449). No lleva `[[bibcode]]`, así que "
+            f"`verify-citations` NO la mira — corregila a mano conservando el hecho verdadero "
+            f"(«esta vista se leyó del preprint …»):")
+        cfg.print_seguro(f"      grep -n 'disco' vault/wiki/papers/{cfg.note_stem(r['bibcode'])}.md")
     cfg.print_seguro(f"  · extracciones marcadas `_paginacion`: {len(r['extracciones'])} — sus "
                      f"localizadores son del documento ANTERIOR (#311: no se reescriben)")
     cfg.print_seguro(f"\n  ⚠ ALCANCE DE LA RE-VERIFICACIÓN: {r['pares']} par(es) en "

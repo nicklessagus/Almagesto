@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.261.0"
+ALMAGESTO_VERSION = "1.262.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3530,6 +3530,87 @@ def txt_slug(stem: str, prefiere: str | None = None) -> str | None:
         return prefiere
     otros = sorted(FULLTEXT.glob(f"*/{stem}.txt")) if FULLTEXT.exists() else []
     return otros[0].parent.name if otros else None
+
+
+#: #449 · la prosa que afirma QUÉ DOCUMENTO hay en disco. La escribe el extractor casi siempre
+#: («El PDF en disco es el PREPRINT de arXiv …, coherente con `pdf_source: eprint`») y es la
+#: afirmación más decidible de una nota —tres testigos máquina-legibles— que quedó en prosa libre.
+_DISCO_RE = re.compile(r"(?i)\bdisco\b")
+_NO_PREPRINT_RE = re.compile(r"(?i)\bno\s+(?:es\s+)?(?:el\s+)?(?:pre-?print|e-?print)\b")
+_PREPRINT_RE = re.compile(r"(?i)\b(?:pre-?print|e-?print)\b")
+_PUBLICADO_RE = re.compile(r"(?i)(?:versi[oó]n\s+publicada|copia\s+del\s+editor|del\s+editor|"
+                           r"publicad[oa])")
+
+
+def doc_claims_on_disk(text: str) -> list:
+    """`[(«preprint»|«publicado», la línea)]` — every line of the note that asserts WHICH document
+    is on disk (#449).
+
+    ⛔ A claim about the FILE carries no `[[bibcode]]`, so `verify-citations` leaves it out by
+    construction (#213) and `contrast --validar` looks at quotes, not at prose about the disk. It
+    is also the most decidable claim a note makes —`pdf_source`, `pdf_reemplazo` and the arXiv mark
+    in the `.txt` are three machine-readable witnesses— and it survived a replacement that changed
+    all three: measured, 43 salvedades in 31 notes still saying «the PDF on disk is the PREPRINT»
+    after `replace_pdf` put the publisher's copy there.
+
+    A negated mention does not count («… es la VERSIÓN PUBLICADA del editor — NO el preprint» is a
+    *publicado* claim, not both), and a line that ends up naming both is ambiguous and skipped:
+    over-reporting on a correct note is the worst currency a detector has."""
+    out = []
+    for ln in (text or "").split("\n"):
+        if not _DISCO_RE.search(ln):
+            continue
+        sin_negacion = _NO_PREPRINT_RE.sub(" ", ln)
+        pre, pub = _PREPRINT_RE.search(sin_negacion), _PUBLICADO_RE.search(sin_negacion)
+        if pre and not pub:
+            out.append(("preprint", ln.strip()))
+        elif pub and not pre:
+            out.append(("publicado", ln.strip()))
+    return out
+
+
+def doc_on_disk(fm: dict, stem: str) -> tuple:
+    """`(«preprint»|«publicado»|None, por qué)` — which document is on disk, by its witnesses (#449).
+
+    Precedence, and it is the one `pdf_source` already declares: the **arXiv mark** in the `.txt`
+    (truth of the artefact, #57), then the signature of the replacement (`pdf_reemplazo`, #446),
+    then the field. `None` is «nobody can tell», and then there is nothing to contrast."""
+    for t in sorted(FULLTEXT.glob(f"*/{stem}.txt")) if FULLTEXT.exists() else []:
+        if arxiv_stamp(t.read_text(encoding="utf-8", errors="replace")) is not None:
+            return "preprint", f"la marca de arXiv está en `{t.parent.name}/{t.name}`"
+    firmas = [x for x in as_list((fm or {}).get("pdf_reemplazo")) if isinstance(x, dict)]
+    firma = str(firmas[-1].get("source") or "").strip().lower() if firmas else ""
+    if firma in ("publisher", "ads"):
+        return "publicado", f"`pdf_reemplazo` firma `{firma}` ({firmas[-1].get('fecha') or 's/f'})"
+    campo = str((fm or {}).get("pdf_source") or "").strip().lower()
+    if campo in ("publisher", "ads"):
+        return "publicado", f"`pdf_source: {campo}`"
+    if campo == "eprint":
+        return "preprint", "`pdf_source: eprint` (sin marca en el `.txt`)"
+    return None, "ningún testigo lo dice"
+
+
+def disk_doc_conflict(text: str, fm: dict, stem: str) -> str | None:
+    """The note's prose asserts a document on disk that its witnesses contradict, or `None` (#449).
+
+    The rule —*every claim a note makes about WHICH file is on disk is crossed against the disk*—
+    with its one implementation. `replace_pdf` changes the three witnesses and cannot rewrite the
+    prose, so this is what keeps the two halves from drifting.
+
+    ⚠ The prose is read FIRST, on purpose: the witnesses cost a `.txt` read per note looking for the
+    arXiv mark, and the population that claims anything is small (43 lines in 31 notes of a real
+    vault). Asking the disk first duplicated the read that `is_legible`/`source_hash` share and
+    `tests/poblada/test_escala.py` caught it — 666 extra reads, 77 % of the lint's cost."""
+    dicho = {c for c, _ln in doc_claims_on_disk(text)}
+    if not dicho:
+        return None
+    disco, porque = doc_on_disk(fm, stem)
+    if disco is None or disco in dicho:
+        return None
+    return (f"la prosa dice que el PDF en disco es el **{'/'.join(sorted(dicho))}** y los testigos "
+            f"dicen **{disco}** ({porque}) — corregí la mitad equivocada: la salvedad conserva el "
+            f"hecho verdadero («esta vista se leyó del …») y el campo se arregla con "
+            f"`replace_pdf.py {stem} --backfill` o `extract_fulltext.py <slug> --bibcode {stem}`")
 
 
 def bibcode_slugs(stem: str) -> dict:

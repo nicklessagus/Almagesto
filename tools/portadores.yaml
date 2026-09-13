@@ -596,6 +596,28 @@ portadores:
         estado: fuera-de-alcance
         motivo: Transporta la celda verbatim al `--json` del re-anclaje y no la interpreta; quien la lee es `lb.chained_verdict`.
 
+  - issue: 449
+    regla: >-
+      Toda afirmación de una nota sobre QUÉ ARCHIVO hay en disco se cruza contra el disco. No lleva
+      `[[bibcode]]`, así que `verify-citations` la deja afuera por construcción (#213) — y es la más
+      decidible de todas: la marca de arXiv del `.txt`, la firma `pdf_reemplazo` y `pdf_source` son
+      tres testigos máquina-legibles.
+    funcion: lib_config.disk_doc_conflict
+    patron: 'doc_claims_on_disk\(|doc_on_disk\(|arxiv_stamp\('
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "la categoría `doc_en_disco` (backlog) cruza la prosa de la nota contra sus tres testigos."
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Acaba de ESCRIBIR los testigos, así que no hay nada que cruzar: sólo lee la mitad de la
+          prosa (`cfg.doc_claims_on_disk`, compartida) para avisar cuántas líneas quedaron
+          diciendo «preprint». El cruce lo hace el lint, después.
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Usa `arxiv_stamp` para RESOLVER `pdf_source` (la precedencia de #446); no lee prosa."
+
   - issue: 416
     regla: >-
       La línea sobre un `## Abstract` transcrito del PDF afirma DOS cosas y sólo una vale siempre:

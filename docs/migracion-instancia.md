@@ -812,6 +812,15 @@ del último veredicto (`soportada→contradice→corregida (…)`). Para el esta
 tiene (*«la fuente citada es un CONTRASTE, no el origen del dato»*, #316) la anotación es texto
 libre y alcanza.
 
+## 2z · v1.262.0 (#449) — la prosa sobre el documento en disco
+
+Nada que migrar; categoría nueva de **backlog**. `python scripts/lint.py` →
+*«La prosa afirma QUÉ DOCUMENTO hay en disco y sus testigos la desmienten»* lista las notas; en cada
+una, corregí la mitad equivocada conservando el hecho verdadero (*«esta vista se leyó del
+preprint …»*). Si la equivocada es el **campo** —prosa que dice «versión publicada» con
+`pdf_source: eprint`— el arreglo es `replace_pdf.py <bib> --backfill --source publisher --reason
+"…"` (o `extract_fulltext.py <slug> --bibcode <bib>` si el testigo ya está firmado, #446).
+
 ## 3 · Cierre
 
 ```bash

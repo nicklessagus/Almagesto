@@ -515,3 +515,27 @@ def test_si_NINGUN_slug_con_pdf_tenia_txt_se_extrae_en_el_primero_y_se_copia(toy
     r = rp.replace("2015Voss", _entrante(tmp_path, b"%PDF-1.7\notra\n"), "publisher", "m")
     assert (cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt").read_text(encoding="utf-8") == "texto del editor\n"
     assert len(r["txts"]) == 1 and len(r["txts_copiados"]) == 1
+
+
+def test_449_avisa_que_la_PROSA_sigue_diciendo_preprint(toy_vault, tmp_path, monkeypatch, capsys):
+    """#449 punto 2 — `replace_pdf` cambia los tres testigos y no puede reescribir la prosa que los
+    cita. El alcance de re-verificación (#436) no lo cubre: esa afirmación no lleva `[[bibcode]]`.
+    Avisa con el `grep` listo y NO reescribe (la línea conserva un hecho verdadero)."""
+    _copia("gj_581", "2010D")
+    nota = mk_note(cfg.PAPERS, "2010D",
+                   {"bibcode": "2010D", "tags": ["paper"], "stars": ["Test"],
+                    "pdf_source": "eprint", "eprint_version": "v1"},
+                   "# p\n\n## Abstract\n\nx\n\n## Vista — Test\n\n"
+                   "El PDF en disco es el PREPRINT de arXiv, coherente con `pdf_source: eprint`.\n")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    _paginas(monkeypatch)
+    r = rp.replace("2010D", _entrante(tmp_path), "publisher", "la copia del editor")
+    assert len(r["prosa_preprint"]) == 1
+    rp.print_report(r, "publisher", "la copia del editor")
+    out = capsys.readouterr().out
+    assert "PROSA: 1 línea(s)" in out and "grep -n 'disco'" in out
+    assert "PREPRINT de arXiv" in nota.read_text(encoding="utf-8"), "avisa, NO reescribe"
+    # y el lint lo levanta como backlog, con los testigos ya firmados
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    assert cfg.disk_doc_conflict(nota.read_text(encoding="utf-8"), fm, "2010D") is not None

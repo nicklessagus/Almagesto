@@ -834,6 +834,13 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   viaja— no dice que el PDF cambió ni por qué; el hallazgo lo agrega. El campo existía en el
   docstring de v1.256.0 y **no se escribía** (una sola aparición en el repo: la promesa), y el motivo
   fue justo lo que hizo falta al revertir un reemplazo.
+- **La prosa afirma QUÉ DOCUMENTO hay en disco y sus testigos la desmienten** (#449): la salvedad
+  *«el PDF en disco es el PREPRINT»* no lleva `[[bibcode]]`, así que `verify-citations` la deja
+  afuera por construcción (#213) y `contrast --validar` mira citas, no prosa sobre el disco —
+  medido, 43 salvedades en 31 notas sobrevivieron al reemplazo que cambió los tres testigos (la
+  marca de arXiv del `.txt`, la firma `pdf_reemplazo`, `pdf_source`). **Backlog**: cuál mitad está
+  mal lo decide quien lea —en el caso 44 medido era el **campo**, no la prosa—. La línea ambigua
+  (nombra las dos) y la mención negada (*«— NO el preprint»*) no cuentan.
 - **Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió**
   (#297): el reuso D-18 (copiar el PDF que ya estaba bajo otro slug) es correcto y se conserva, pero
   importa a un sujeto nuevo un archivo cuya **antigüedad nadie chequeó**; y la salida natural —«si

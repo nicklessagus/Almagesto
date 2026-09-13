@@ -401,6 +401,16 @@ no sobre el paper—, así que `verify-citations` la deja afuera **por construcc
   extractor»*: publicarlo al mismo nivel visual que una fila chequeada es lo que dejó leer un
   defecto inventado como un hecho medido.
 
+⛔ **Y la que dice QUÉ DOCUMENTO hay en disco se cruza contra el disco (#449).** *«El PDF en disco
+es el PREPRINT»* es la salvedad más decidible que hay —la marca de arXiv del `.txt`, la firma
+`pdf_reemplazo` y `pdf_source` son **tres** testigos máquina-legibles— y quedó en prosa libre, así
+que sobrevivió al reemplazo que cambió los tres: medido, **43 salvedades en 31 notas** afirmando el
+preprint sobre la copia del editor, con `lint` rc 0, `contrast --validar-todo` rc 0 y 0 pares
+vencidos. Lo levanta el lint (backlog: cuál mitad está mal lo decide quien lea — en el caso 44 era
+el **campo**) y `replace_pdf` **avisa al firmar** cuántas líneas quedaron diciendo preprint, con el
+`grep` listo. ⚠ Avisa y **no reescribe**: la línea conserva el hecho verdadero (*«esta vista se
+leyó del preprint …»*).
+
 ⛔ **La lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el único
 canal en esa dirección: `stars`/`thesis_links` se siembran **antes** de leer y `harvest_views` mergea
 **add-only**, así que un reclamo falso era **infalsificable por la lectura** (el caso típico es la

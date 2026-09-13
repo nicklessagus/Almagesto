@@ -4914,6 +4914,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
     reclamo_sin_vista: list = []
     reclamo_sin_vista_declarado: list = []
     reclamo_refutado: list = []
+    doc_en_disco: list = []
     # aplicación NO es contraste sino instanciación, y leerlo como desacuerdo fabrica
     # disputas falsas. Se puebla en la extracción (la regex del clasificador no puede
     # inferirlo) — por eso el aviso cuelga de `methods`, la marca de "ya se extrajo".
@@ -5049,6 +5050,13 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                        "la lectura ocurrió y sus localizadores siguen siendo válidos, pero "
                        "`verify-citations` no puede contrastarla nunca más — conseguir de "
                        "nuevo la fuente, o declarar la pérdida en `salvedades` de la vista"))
+        # #449 — la prosa afirma QUÉ DOCUMENTO hay en disco y los testigos la desmienten. La
+        # salvedad sobre el artefacto no lleva `[[bibcode]]`, así que `verify-citations` la deja
+        # afuera por construcción (#213) y `contrast --validar` mira citas, no prosa sobre el
+        # disco: medido, 43 salvedades en 31 notas seguían diciendo «el PDF en disco es el
+        # PREPRINT» después de que `replace_pdf` pusiera ahí la copia del editor, con `lint` rc 0.
+        if (_conf := cfg.disk_doc_conflict(text, fm, stem)):
+            doc_en_disco.append((stem, _conf))
         # #212 — la lectura REFUTÓ el reclamo y el reclamo sigue en el frontmatter. Es el
         # simétrico del «reclamado sin vista» de #188: allá nadie leyó, acá se leyó y el
         # resultado dice que el reclamo es falso. El lint no lo veía porque mira la
@@ -5136,7 +5144,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                     reclamo_sin_vista.append(
                         (stem, f"lo reclama **{sujeto}** y nadie lo leyó desde ahí → hacer "
                                f"la vista, o declararla con `no_vista` y su motivo"))
-    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado
+    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado, doc_en_disco
 
 
 def check_impl_leaks(stem: str, body_full: str, offset: int, leak_patterns, scan: bool) -> list:
@@ -6033,6 +6041,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     vista_sin_fuente: list = []        # (stem, sujeto) — #207: no consta de qué se construyó
     vista_solo_abstract: list = []     # (stem, sujeto) — #207: se leyó el abstract, falta el PDF
     vista_sin_fuente_en_disco: list = []   # (stem, sujeto) — #217: leída y ya no re-verificable
+    doc_en_disco: list = []                # (stem, motivo) — #449: la prosa contra los testigos
     reclamo_refutado: list = []        # (stem, sujeto) — #212: la vista lo refuta y sigue reclamado
 
     # Los temas DECLARADOS (su `concept`, que es el nombre con el que un paper los nombra en
@@ -6495,6 +6504,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             reclamo_sin_vista += _v[9]
             reclamo_sin_vista_declarado += _v[10]
             reclamo_refutado += _v[11]
+            doc_en_disco += _v[12]
             # El `role` vive en `check_paper_role` (#396); los dos `*_refs` son índices.
             _rl1, _rl2 = check_paper_role(stem, fm, relevancia, thesis_refs, method_refs)
             bad_roles += _rl1
@@ -6942,6 +6952,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vista_sin_fuente', 'Vista sin `fuente`: no consta si salió del PDF o sólo del abstract (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente), poblacion='papers'),
         Categoria('vista_solo_abstract', '📄 Vista construida SÓLO del abstract — falta el PDF (backlog)', SEV_BACKLOG, tuple(vista_solo_abstract), poblacion='papers'),
         Categoria('vista_sin_fuente_en_disco', '🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente_en_disco), poblacion='papers'),
+        Categoria('doc_en_disco', '💿 La prosa afirma QUÉ DOCUMENTO hay en disco y sus testigos la desmienten (#449, backlog)', SEV_BACKLOG, tuple(doc_en_disco), poblacion='papers'),
         Categoria('reclamo_refutado', '↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog)', SEV_BACKLOG, tuple(reclamo_refutado), poblacion='papers'),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado), poblacion='papers'),
         Categoria('vista_ejes_faltantes', '🎯 La vista no contesta los ejes de su propia lente: el silencio se lee como «se miró y no hay nada» (#254/#270, backlog)', SEV_BACKLOG, tuple(vista_ejes_faltantes), poblacion='papers'),

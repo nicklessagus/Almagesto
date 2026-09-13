@@ -2143,3 +2143,26 @@ re-anclado y limpio ya no vuelve `soportada` pelada; `write_verif_sidecar.chaine
 `lb._cell_parts` en vez de abrir a mano sobre `→` (su pregunta es otra: qué se escribió último). El
 hallazgo del lint nombra el vigente. ⚠ La anotación sigue siendo texto libre, que es cómo se escribe
 el estado del punto 3 del issue (#316) sin abrir `VERDICTS`.
+
+## 2026-09-13 · La prosa que afirma el preprint sobre la copia del editor (#449)
+
+Tras reemplazar 31 preprints con `replace_pdf` (#436), **43 salvedades en 31 notas** seguían
+diciendo en su `## Vista`: *«El PDF en disco es el PREPRINT de arXiv (marca «arXiv:1208.4122v2 …»
+en el margen de la p. 1), coherente con `pdf_source: eprint` y `eprint_version: v2`»*. Las tres
+mitades falsas: el archivo es la copia del editor, el campo dice `publisher` y `eprint_version`
+está en `null` (#383). Ninguna capa lo vio — `lint` rc 0, `contrast --validar-todo` rc 0,
+`verify-citations` con 0 pares vencidos. La 44ª es la simétrica: `2025A&A...696A.141H` con
+`pdf_source: eprint` y el cuerpo diciendo *«es la VERSIÓN PUBLICADA — NO el preprint»* (la copia del
+editor estaba en disco desde antes, así que `replace_pdf` la rechazó por byte-idéntica).
+
+Es #213 visto del otro lado: la salvedad **sobre el artefacto** no lleva `[[bibcode]]` y queda
+afuera del fan-out por construcción. #213 estructuró las decidibles (`txt_pierde`, `pdf_paginas`) y
+ésta —la más decidible de todas, con tres testigos máquina-legibles— quedó en prosa libre.
+
+**Qué cambió (1.262.0):** `cfg.doc_claims_on_disk` (qué líneas afirman qué documento hay en disco —
+la mención negada no cuenta, la línea ambigua se saltea), `cfg.doc_on_disk` (los tres testigos en su
+precedencia: marca de arXiv → firma → campo) y `cfg.disk_doc_conflict` (el cruce). El lint lo levanta
+como **backlog** —cuál mitad está mal lo decide quien lea— y `replace_pdf` avisa al firmar cuántas
+líneas quedaron diciendo preprint, con el `grep` listo, sin reescribir. ⚠ El punto 3 del issue (la
+salvedad `pdf_leido` como tipo estructurado de `SALVEDAD_TIPOS`) queda pendiente: el issue lo declara
+«a futuro» y cambia el schema de la extracción.

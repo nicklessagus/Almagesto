@@ -425,3 +425,12 @@ cabecera de `hd_40307` pasa de «3 contradicen (3 resueltas)» a contar la abier
 `lint --cierre hd_40307` da **rc ≠ 0** hasta resolverla. **Devolver si** alguna cadena que termina en
 `no-soportada`/`contradice` sigue pasando, si una `contradice→corregida` empezó a bloquear, o si la
 cabecera de una nota sin cadenas cambió algún número.
+
+## #449 · v1.262.0
+
+Como las 43 ya se reescribieron a mano acá, el chequeo es al revés: `lint.py` → la categoría en
+**(0)** sobre la población de papers; revertí UNA a su texto viejo («El PDF en disco es el
+PREPRINT …») y tiene que aparecer nombrando los testigos. Un reemplazo nuevo con `replace_pdf.py`
+sobre una nota cuya vista diga preprint → *«⚠ PROSA: N línea(s) …»* con el `grep`, y la nota **sin
+tocar**. **Devolver si** dispara sobre una nota coherente, sobre una línea que niega (*«— NO el
+preprint»*) o sobre una que nombra las dos.

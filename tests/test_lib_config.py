@@ -3224,3 +3224,42 @@ def test_curated_bibcodes_lee_el_extra_core_de_estrella_y_de_tema(toy_vault):
     assert cfg.curated_bibcodes("ica") == {"1994Comon", "1998Cardoso"}
     assert cfg.curated_bibcodes("no_existe") == set()
     assert cfg.curated_bibcodes("test_star") == set(), "estrella sin extra_core"
+
+
+def test_449_la_prosa_sobre_QUE_DOCUMENTO_hay_en_disco_se_cruza_contra_el_disco(toy_vault):
+    """⛔ #449 — la afirmación sobre el ARTEFACTO no lleva `[[bibcode]]`, así que `verify-citations`
+    la deja afuera por construcción (#213) y `contrast --validar` mira citas, no prosa sobre el
+    disco. Medido: 43 salvedades en 31 notas seguían diciendo «el PDF en disco es el PREPRINT»
+    después de que `replace_pdf` pusiera ahí la copia del editor — `lint` rc 0, `contrast
+    --validar-todo` rc 0, 0 pares vencidos."""
+    pre = "El PDF en disco es el PREPRINT de arXiv (marca al margen), coherente con `pdf_source: eprint`."
+    pub = "El PDF en disco es la VERSIÓN PUBLICADA del editor (A&A 696, A141) — NO el preprint."
+    assert cfg.doc_claims_on_disk(pre) == [("preprint", pre)]
+    assert cfg.doc_claims_on_disk(pub) == [("publicado", pub)], "la mención NEGADA no cuenta"
+    assert cfg.doc_claims_on_disk("Una frase sin nada que ver.") == []
+    assert cfg.doc_claims_on_disk("El archivo en disco pesa 3 MB.") == [], \
+        "nombrar el disco no es afirmar QUÉ documento hay"
+    assert cfg.doc_claims_on_disk("El preprint dice X (sin hablar del archivo).") == [], \
+        "sin `disco` no es una afirmación sobre el artefacto"
+    assert cfg.doc_claims_on_disk("En disco hay el preprint y la copia del editor.") == [], \
+        "la línea ambigua se saltea: sobre-reportar en una nota correcta es la peor moneda"
+    # los testigos, en su orden de precedencia
+    firma = [{"fecha": "2026-09-11", "source": "publisher", "sha": "a", "sha_anterior": "b"}]
+    assert cfg.doc_on_disk({"pdf_source": "eprint", "pdf_reemplazo": firma}, "2020X")[0] == "publicado", \
+        "la firma del reemplazo gana sobre un campo viejo"
+    assert cfg.doc_on_disk({"pdf_source": "publisher"}, "2020X")[0] == "publicado"
+    assert cfg.doc_on_disk({"pdf_source": "eprint"}, "2020X")[0] == "preprint"
+    assert cfg.doc_on_disk({}, "2020X") == (None, "ningún testigo lo dice")
+    (cfg.FULLTEXT / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "ica" / "2020X.txt").write_text(
+        "arXiv:2001.00001v2 [astro-ph.EP] 1 Jan 2020\n", encoding="utf-8")
+    assert cfg.doc_on_disk({"pdf_source": "publisher", "pdf_reemplazo": firma}, "2020X")[0] == "preprint", \
+        "la marca de arXiv es verdad del artefacto y manda sobre las dos (#57)"
+    # el cruce
+    assert cfg.disk_doc_conflict(pre, {"pdf_source": "publisher"}, "2099Y") is not None
+    assert "publisher" in cfg.disk_doc_conflict(pre, {"pdf_source": "publisher"}, "2099Y")
+    assert cfg.disk_doc_conflict(pub, {"pdf_source": "eprint"}, "2099Y") is not None, "el simétrico"
+    assert cfg.disk_doc_conflict(pre, {"pdf_source": "eprint"}, "2099Y") is None, "coinciden"
+    assert cfg.disk_doc_conflict(pub, {"pdf_source": "publisher"}, "2099Y") is None
+    assert cfg.disk_doc_conflict(pre, {}, "2099Y") is None, "sin testigos no hay contra qué cruzar"
+    assert cfg.disk_doc_conflict("nada", {"pdf_source": "publisher"}, "2099Y") is None
