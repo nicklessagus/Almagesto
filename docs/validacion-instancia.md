@@ -400,3 +400,10 @@ Sobre un bibcode con PDF en un slug y `.txt` en dos (`2015Voss`: PDF en `ica`, `
 dice *«copiados a 1 slug(s) … ica-ruido»*; la corrida real → `sha` igual en los dos `.txt` y `lint.py`
 sin el bloqueante D-18/D-20. **Devolver si** el `.txt` del slug sin PDF queda distinto, o si el
 reporte cuenta el copiado como re-extraído.
+
+## #445 · v1.260.2
+
+`lint.py` sobre `harps-drs` con la línea en blanco puesta → sin *Verificación stale*; tocar un párrafo
+con cita → vuelve nombrando el bloque; borrar un párrafo con cita → *«N bloque(s) citable(s)
+desaparecieron»*. **Devolver si** un cambio de forma (línea en blanco, encabezado renombrado, fence)
+sigue disparando, o si un cambio real en un bloque citado deja de verse.

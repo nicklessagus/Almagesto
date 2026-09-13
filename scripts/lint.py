@@ -5448,6 +5448,12 @@ def prose_changed_since(f: str, date: str, detail: list | None = None) -> bool |
     The **body** is what follows the frontmatter (`cfg.frontmatter_span`): `make_notes` re-stamps
     the frontmatter, and a re-stamped field is not a claim.
 
+    ⛔ «Changed» means the SET OF ANCHORS of the citable blocks changed (#445) — what the
+    verification rows hang from (D-4). Comparing text against text fired on the blank line that
+    separates a table from a `## ` (the very edit the lint asks for in «Forma del artefacto») while
+    `reverify_subset` said «0 anchors move» on the same edit: closing one finding produced another.
+    A heading, a fence, a blank line are not citable blocks and cannot leave a pair unverified.
+
     `detail` is an optional sink: when the prose did change, the citable blocks that differ (by
     anchor, `lb.split_blocks`) are described into it, so the caller can say WHAT changed instead of
     ordering a re-verification of nothing.
@@ -5484,24 +5490,28 @@ def prose_changed_since(f: str, date: str, detail: list | None = None) -> bool |
         ahora = Path(f).read_text(encoding="utf-8")
     except OSError:
         return None
-    if prose(antes) == prose(ahora):
-        return False
+    # ⛔ #445 — «la prosa cambió» se decide por el CONJUNTO DE ANCLAS de los bloques citables, que
+    # es lo que las filas de verificación cuelgan (D-4): si ninguna ancla se movió, ninguna
+    # afirmación cambió, y no hay nada que re-verificar. Comparar texto contra texto disparaba
+    # sobre la línea en blanco que separa una tabla de un `## ` —la edición que el propio lint pide
+    # en «Forma del artefacto»— con `reverify_subset` diciendo «0 anclas cambian» sobre la misma
+    # edición: cerrar un hallazgo producía otro. Los bloques se parten sobre `prose(...)`, no sobre
+    # el texto completo: `split_blocks` reevalúa «sección estampada» en CADA encabezado, así que un
+    # `###` de adentro del bloque de verificación le apaga la exclusión y sus ítems vuelven como
+    # bloques; sobre la prosa ya descontada eso no puede pasar.
+    viejas = {lb.block_anchor(b.text, b.intro) for b in lb.split_blocks(prose(antes))}
+    bloques_ahora = lb.split_blocks(prose(ahora))
+    nuevas = {lb.block_anchor(b.text, b.intro) for b in bloques_ahora}
+    if viejas == nuevas:
+        return False                       # nada, o cambió la FORMA y no una afirmación
     if detail is not None:
-        # Los bloques se parten sobre `prose(...)`, no sobre el texto completo: `split_blocks`
-        # reevalúa «sección estampada» en CADA encabezado, así que un `###` de adentro del bloque
-        # de verificación —las tres sub-secciones que #344 deja en la nota— le apaga la exclusión y
-        # sus ítems vuelven como bloques. Sobre la prosa ya descontada eso no puede pasar, y las dos
-        # mitades de esta función (el veredicto y el extracto) miran exactamente el mismo texto.
-        viejas = {lb.block_anchor(b.text, b.intro) for b in lb.split_blocks(prose(antes))}
-        nuevos = [b for b in lb.split_blocks(prose(ahora))
-                  if lb.block_anchor(b.text, b.intro) not in viejas]
+        nuevos = [b for b in bloques_ahora if lb.block_anchor(b.text, b.intro) not in viejas]
         if nuevos:
             detail.append(f"{len(nuevos)} bloque(s) distintos, el primero: "
                           f"«{lb.truncate_claim(nuevos[0].text, 60)}»")
         else:
-            # `solo_prosa` mira TODO el texto no estampado y `split_blocks` sólo los bloques
-            # citables (excluye fences y encabezados): el cambio existe y no hay bloque que nombrar.
-            detail.append("fuera de los bloques citables (un fence, un encabezado)")
+            detail.append(f"{len(viejas - nuevas)} bloque(s) citable(s) desaparecieron — sus filas "
+                          f"de verificación quedan huérfanas")
     return True
 
 

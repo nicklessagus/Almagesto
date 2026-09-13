@@ -289,6 +289,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   un extracto del primero); si no hay commit hasta esa fecha o `git` falla, se cae al comportamiento
   viejo **declarándolo** («no se pudo aislar la prosa: se compara la fecha del archivo»). Cuesta dos
   llamadas a `git` por nota **disparada**, no por nota.
+  ⛔ **Y «cambió» lo decide el CONJUNTO DE ANCLAS de los bloques citables (#445)**, que es lo que las
+  filas cuelgan (D-4): una línea en blanco entre una tabla y un `## ` —la edición que *Forma del
+  artefacto* pide—, un encabezado renombrado o un fence no mueven ninguna ancla y **no disparan**.
+  Texto contra texto disparaba sobre esa línea con `reverify_subset` diciendo «0 anclas cambian»:
+  cerrar un hallazgo producía otro. Un bloque citable **borrado** sí dispara (sus filas quedan
+  huérfanas) y el hallazgo lo dice.
 - **Condición con su clase escrita DOS veces** (#427, dentro de *Condición sin clasificar*): para
   `condition_resolved` esa celda es igual de muda —lee el token que sigue al **primer** separador y
   ahí encuentra la clase, no la resolución— así que la fila se resuelve, la celda lo dice, y el

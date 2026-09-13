@@ -2027,17 +2027,48 @@ def test_stale_verif_sin_commit_hasta_la_fecha_declara_la_salvedad(toy_vault):
     assert "fecha del archivo" in filas[0][1]
 
 
-def test_stale_verif_declara_el_cambio_que_NO_cae_en_un_bloque_citable(toy_vault):
-    """`solo_prosa` mira todo el texto no estampado; `lb.split_blocks` sólo los bloques citables
-    (excluye los ```fences``` y los encabezados). Un cambio ahí es real y no tiene bloque que
-    nombrar: se declara así, en vez de publicar «0 bloque(s) distintos»."""
+def test_stale_verif_el_cambio_que_NO_cae_en_un_bloque_citable_no_es_stale(toy_vault):
+    """`lb.split_blocks` excluye los ```fences``` y los encabezados: un cambio ahí no mueve ninguna
+    afirmación ni ningún ancla. Hasta #445 se declaraba «fuera de los bloques citables» y disparaba
+    igual; hoy no dispara: la categoría existe para pedir re-verificar lo que cambió, y acá no hay
+    par que re-verificar."""
     _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
     p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
     p.write_text(p.read_text(encoding="utf-8").replace(
         "Afirmación [[2020citC...1..1C]].",
         "## Síntesis nueva\n\nAfirmación [[2020citC...1..1C]]."), encoding="utf-8")
+    assert _stale(toy_vault) == []
+
+
+def test_stale_verif_445_la_linea_en_blanco_entre_tabla_y_encabezado_NO_es_prosa_cambiada(toy_vault):
+    """⛔ #445 — el lint pedía (*Forma del artefacto*) la línea en blanco entre una fila de tabla y
+    el `## ` siguiente; insertarla daba «la prosa cambió (fuera de los bloques citables)» con
+    `reverify_subset` diciendo **0 anclas cambian** sobre la misma edición. `prose_changed_since`
+    comparaba texto contra texto; hoy decide por el CONJUNTO DE ANCLAS de los bloques citables —lo
+    que las filas cuelgan (D-4)—, así que cambiar la forma sin mover una afirmación no es stale."""
+    cuerpo = ("| Eje | Dice |\n|---|---|\n| P_rot | 34 d [[2020citC...1..1C]] |\n"
+              "## Régimen de validez\n\nVale bajo X [[2020citC...1..1C]].\n\n"
+              "## Verificación de citas (2020-01-01)\n\n"
+              "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n"
+              "|---|---|---|---|---|---|---|\n")
+    _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "|\n## Régimen de validez", "|\n\n## Régimen de validez"), encoding="utf-8")
+    assert _stale(toy_vault) == [], "la forma cambió; ninguna ancla se movió"
+    # ídem un encabezado renombrado o un fence: no son bloques citables
+    p.write_text(p.read_text(encoding="utf-8").replace("## Régimen de validez",
+                                                       "## Régimen de validez (2026)"), encoding="utf-8")
+    assert _stale(toy_vault) == []
+    # y el control: tocar la fila con cita SÍ es stale, nombrando el bloque
+    p.write_text(p.read_text(encoding="utf-8").replace("34 d", "35 d"), encoding="utf-8")
     filas = _stale(toy_vault)
-    assert len(filas) == 1 and "fuera de los bloques citables" in filas[0][1]
+    assert len(filas) == 1 and "1 bloque(s) distintos" in filas[0][1] and "35 d" in filas[0][1]
+    # y borrar un bloque citable también: sus filas quedan huérfanas
+    p.write_text(p.read_text(encoding="utf-8").replace("35 d", "34 d")
+                 .replace("Vale bajo X [[2020citC...1..1C]].\n", ""), encoding="utf-8")
+    filas = _stale(toy_vault)
+    assert len(filas) == 1 and "desaparecieron" in filas[0][1]
 
 
 def test_prose_changed_since_devuelve_None_si_el_commit_no_TIENE_la_nota(toy_vault):

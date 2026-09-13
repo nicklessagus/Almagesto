@@ -777,6 +777,12 @@ Nada que migrar. Si el lint bloquea con *«Mismo bibcode con `.txt` DISTINTO ent
 de un reemplazo hecho con una versión anterior, el workaround sigue valiendo (copiar el `.txt` del
 slug con PDF al otro), y los reemplazos nuevos lo hacen solos.
 
+## 2w · v1.260.2 (#445) — «stale» por anclas, no por texto
+
+Nada que migrar: `python scripts/lint.py` → la nota que salía *«la prosa cambió (fuera de los
+bloques citables)»* deja de salir; la que sí movió una afirmación sigue saliendo con el bloque
+nombrado.
+
 ## 3 · Cierre
 
 ```bash

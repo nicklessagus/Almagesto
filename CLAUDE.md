@@ -1662,7 +1662,9 @@ a mano. No mira las `SECCIONES_ESTAMPADAS` (#214), y la exención no alcanza a `
 
 **El cierre toma el SUJETO: `python scripts/lint.py --cierre <slug>` (R-1, #121).** Un solo detector,
 dos severidades: sin flag, los pares de verificación vencidos (D-4/D-20) y la cobertura de
-verificación reportan como **backlog** (pasada periódica); con `--cierre` **bloquean** — un par sin
+verificación reportan como **backlog** (pasada periódica — y la nota «stale» lo es por el **conjunto
+de anclas** de sus bloques citables, #445: la línea en blanco que el propio lint pide no dispara);
+con `--cierre` **bloquean** — un par sin
 verificar significa que no terminaste (D-5: la nota nace 100% verificada, así que "citas sin bloque"
 no es deuda vieja). Con el slug, el alcance son las notas del sujeto (ficha/concepto + papers,
 incluidos los retro-linkeados); ⚠ dos recortes deliberados: **el reporte no se acota** (la deuda

@@ -2084,3 +2084,17 @@ itera la unión: el slug sin PDF recibe la copia del `.txt` regenerado (`pdftote
 sobre el mismo archivo); si ningún slug con PDF tenía `.txt`, se extrae en el primero y se copia de
 ahí; si no queda ninguno, se avisa y el lint lo bloquea. El reporte declara los copiados aparte de
 los re-extraídos. Portador nuevo: el detector «vista fechada sin fuente en disco» del lint.
+
+## 2026-09-12 · «Prosa cambiada» sobre una línea en blanco (#445)
+
+Familia de #431/#444 —un cambio que no mueve ninguna afirmación reportado como stale—, con repro de
+una línea: el lint pedía (*Forma del artefacto*) la línea en blanco entre una fila de tabla y el
+`## Régimen de validez` de `harps-drs`; insertarla dio `reverify_subset` → **209 re-anclables, 0
+anclas cambian** y `lint` → *«la prosa cambió (fuera de los bloques citables)»* sobre la misma
+edición. `prose_changed_since` comparaba `solo_prosa` texto contra texto; el ancla de bloque
+normaliza el reflow. Población: 1 nota, justo al cerrar el backlog de forma que el lint pide.
+
+**Qué cambió (1.260.2):** el disparador es el **conjunto de anclas** de los bloques citables
+(`lb.split_blocks` sobre la prosa descontada, viejo contra working tree): iguales ⇒ no stale, y la
+comparación textual previa —que ya no decidía nada— salió. La rama *«fuera de los bloques citables»*
+desapareció con ella; un bloque citable **borrado** sigue disparando y el hallazgo lo nombra.
