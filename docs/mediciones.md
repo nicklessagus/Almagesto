@@ -2353,6 +2353,25 @@ andan —`doc_en_disco` **0** tras el barrido (eran 27), las **27 rehusadas** no
   tapar.
 - **1 escape perdido** (`\$20.00` → `$20.00`).
 
+**Devuelto por tercera vez y corregido (1.266.0).** La regla estructural se midió y anda —**0**
+salvedades en prosa reescritas sobre 46 notas (+279/−15 líneas, 0 bullets borrados), **55** rehusadas
+con su motivo, `doc_en_disco` en 0 **y 0 rehusadas por INTRODUCE** (la regla las atrapa antes, sin
+ancla), 1 `⚙ verificada` perdida avisada, `vistas[]` intacto y la segunda pasada en 0 notas—, pero el
+mismo barrido **duplicó 25 notas**. El lint lo mostró en lockstep: *«Salvedades sin la marca de
+#213»* **25 → 0** y *«párrafo duplicado»* **0 → 25**, las mismas notas.
+
+El mecanismo: el bloque **pelado** anterior a #213 (`**Salvedades:**`) no estaba en
+`SALVEDAD_MARCAS`, así que `salvedades_span` devolvía `None` y la nota no caía ni en la rama que
+rehúsa ni en la que reemplaza — caía en la que **agrega**, y quedaba con los dos bloques y cada
+bullet repetido (`2007AN....328.1043C`, L125 y L135). El falso verde es **doble**: la nota sale de la
+categoría de #213 **justo porque** ahora tiene el bloque marcado, con el contenido duplicado abajo.
+
+**Qué cambió.** `SALVEDAD_MARCAS_LEIDAS` separa lo que se **lee** de lo que se **escribe**: el bloque
+pelado se reconoce —y por lo tanto se **migra**, que es lo que cierra la deuda de #213 de verdad— y
+`render_salvedades` sigue emitiendo sólo los dos marcados, así que el schema viejo no vuelve a salir
+de ningún escritor. Sus bullets cuentan como los de **prosa** (el bloque pelado era todo juicio del
+extractor: no había chequeo), de modo que migrar no abre un agujero en la guarda de reescritura.
+
 **Qué cambió (1.265.2).** La regla pasa a ser **estructural y sin ancla**: *una salvedad en prosa ya
 escrita no se reescribe*. Agregar y quitar son seguros —cobrar una propuesta de #452 es exactamente
 quitar la prosa y agregar la estructurada—, y lo que se rehúsa es el cambio de **texto** de una que
@@ -2360,4 +2379,33 @@ sigue ahí, que es donde vive la corrección a mano. Se compara sólo el bloque 
 `⚙ verificada` lo re-deriva `check_salvedad` del disco, así que un texto distinto ahí es la respuesta
 nueva del chequeo y no la edición de nadie. Medido sobre el mismo barrido: deja pasar **43 de 65** y
 frena las 22.
+
+## #454 · la cita de una salvedad se verificaba contra el artefacto del que salió (2026-09-13)
+
+Sale del barrido de #453. En `1999ITNN...10..626H` el re-estampado escribió una cita que la fuente
+no dice —«…**it converges** globally» donde el paper dice «…the convergence is **proven**
+globally»—, y no la cazó nada: el `.txt` tiene la de la nota (**1** ocurrencia) y la del JSON
+(**0**), con `lint` rc 0 y `contrast --validar-todo` rc 0.
+
+Las dos capas fallan por motivos distintos, y los dos son estructurales:
+
+- **`verify-citations`** la deja afuera **por construcción**: descompone la nota en pares
+  (afirmación, `[[bibcode]]`) y una salvedad no lleva ninguno. Es el agujero de #213, que
+  `SALVEDAD_TIPOS` tapó **sólo** para las decidibles por máquina.
+- **`contrast --validar`** sí la mira —#373/#394 le suman el bibcode de la propia nota— pero la
+  **aprueba**: la cita está en `extraction_texts(propio)` porque **de ahí salió**, así que el paso 2
+  devuelve `txt_degradado` («la nota tiene razón, el índice la perdió»). Y `txt_accuses` no la
+  acusa: pide un prefijo largo que después diverja, y acá la frase entera es otra.
+
+**Qué cambió (1.266.0).** `quote_verdict` acepta `copiada`: cuando la cita vive en un bloque que la
+**máquina** estampó desde la extracción, el paso 2 **deja de aprobar** y el veredicto es
+`sin_testigo_propio` —no evaluable con su motivo (D-43)—, porque ahí el único testigo independiente
+es el `.txt` (paso 1, que sigue mandando). El predicado es **uno solo** para los dos gates
+(`cfg.quote_from_stamped_block`, #324), `contrast --validar` emite la marca `⚠verificar en el PDF`
+(#225/#341) y declara la población aparte de `solo_extraccion`, que mide otra cosa.
+
+⚠ Y un hallazgo del propio gate de #409 al firmar la regla: `carriers.existe` no contaba el
+**re-export**, así que una regla implementada en `lib_quotes` **no se podía declarar** —por el módulo
+real el gate decía «no llama» (nadie importa `lib_quotes`: los consumidores usan `cfg.`) y por el de
+la fachada, «no existe»—. `lib_config` re-exporta a propósito (AUD-306); hoy el `ImportFrom` cuenta.
 

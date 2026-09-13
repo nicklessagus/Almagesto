@@ -983,3 +983,40 @@ def test_el_barrido_NO_mira_los_hermanos_de_verificacion(toy_vault, capsys):
     assert cfg.verif_sidecar(nota) not in ct._notes_of(None)
     ct.main(["--validar-todo"])
     assert "una cola que la extracción no tiene" not in capsys.readouterr().out
+
+
+def test_454_la_cita_de_una_SALVEDAD_no_se_aprueba_contra_su_propia_extraccion(toy_vault, capsys):
+    """⛔ #454 — el bloque de salvedades lo ESTAMPA la máquina desde el JSON, así que la cita de la
+    nota **es** la del JSON: el paso 2 de `quote_verdict` la encuentra siempre y la aprueba como
+    `txt_degradado` («la nota tiene razón, el índice la perdió») sobre una cita que nadie verificó.
+
+    Medido en `1999ITNN...10..626H` al cerrar #453: el JSON decía «…it converges globally» donde la
+    fuente dice «…the convergence is proven globally» —0 ocurrencias en el `.txt` contra 1 de la de
+    la nota— y pasó con `lint` rc 0 y `contrast --validar-todo` rc 0."""
+    _extraccion("ica_ruido", "2013Voss", salvedades=[f"el `.txt` dice «{LARGA}»"])
+    _txt("ica_ruido", "2013Voss")
+    nota = cfg.PAPERS / "2013Voss.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [paper]\nbibcode: 2013Voss\n---\n\n# 2013Voss\n\n"
+                    "## Vista — ICA ruidosa\n\n"
+                    f"{cfg.SALVEDAD_MARCAS[1]}\n\n- el `.txt` dice «{LARGA}»\n",
+                    encoding="utf-8")
+    r = ct.validar(nota, mostrar=True)
+    out = capsys.readouterr().out
+    assert r["copiadas"] == 1, "la población se declara aparte de `solo_extraccion`"
+    assert r["discrepan"] and "no es testigo" in r["discrepan"][0][1]
+    assert cfg.VERIFICAR_PDF_MARK in out, "sale con la marca de #225/#341, no en silencio"
+    assert not r["alteradas"], "no bloquea: la evidencia es la AUSENCIA de testigo (#205)"
+
+
+def test_454_la_misma_cita_en_PROSA_de_la_nota_sigue_aprobandose(toy_vault, capsys):
+    """#454 — la regla es sobre QUIÉN escribió el bloque, no sobre la cita: la que el sintetizador
+    re-tipeó tiene a la extracción de testigo real (#315), y eso no se toca."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss")
+    nota = cfg.PAPERS / "2013Voss.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [paper]\nbibcode: 2013Voss\n---\n\n# 2013Voss\n\n"
+                    f"## Vista — ICA ruidosa\n\nEl paper dice «{LARGA}».\n", encoding="utf-8")
+    r = ct.validar(nota, mostrar=True)
+    assert r["copiadas"] == 0 and not r["discrepan"] and not r["alteradas"]

@@ -692,3 +692,41 @@ def test_quotes_in_devuelve_las_citas_LARGAS_de_un_bloque():
     assert lq.quotes_in(f"Dice «{larga}» y también «no» y « {larga} ».") == [larga, larga]
     assert lq.quotes_in("sin comillas") == []
 
+
+
+def test_454_la_cita_que_la_MAQUINA_copio_de_la_extraccion_no_se_juzga_contra_ella(toy_vault):
+    """⛔ #454 — `quote_verdict` trata la extracción como TESTIGO («la transcripción hecha leyendo el
+    PDF»), y eso es cierto de una cita que el sintetizador RE-TIPEÓ en una ficha, no de una que
+    `harvest_views` copió verbatim del JSON: ahí el testigo y el juzgado son el mismo archivo, el
+    paso 2 la encuentra siempre y el veredicto sale `txt_degradado` —«la nota tiene razón, el índice
+    la perdió»— sobre una cita que nadie verificó nunca.
+
+    Medido en `1999ITNN...10..626H` al cerrar #453: la nota decía «…the convergence is proven
+    globally» (1 ocurrencia en el `.txt`) y el JSON «…it converges globally» (0), y pasó con `lint`
+    rc 0 y `contrast --validar-todo` rc 0."""
+    _txt_324("citado", "un `.txt` que no dice esa frase")
+    _extr_324("citado", CITA_324)
+    fuentes = {"citado": cfg.fulltext_readings("citado")}
+    assert cfg.quote_verdict(CITA_324, ["citado"], {"citado"}, fuentes)[0] == "txt_degradado", \
+        "re-tipeada por el sintetizador: la extracción SÍ es testigo (#315)"
+    assert cfg.quote_verdict(CITA_324, ["citado"], {"citado"}, fuentes,
+                             copiada=True)[0] == "sin_testigo_propio", \
+        "copiada por la máquina DE la extracción: no hay testigo independiente"
+    # ⚠ y el `.txt` sigue mandando: si la dice, no hay nada que reportar (paso 1, #324)
+    _txt_324("condice", f"prosa. {CITA_324}. más prosa.")
+    _extr_324("condice", CITA_324)
+    assert cfg.quote_verdict(CITA_324, ["condice"], {"condice"},
+                             {"condice": cfg.fulltext_readings("condice")},
+                             copiada=True)[0] == "en_su_txt"
+
+
+def test_454_el_predicado_del_bloque_estampado_es_UNO_SOLO():
+    """#454/#324 — los dos gates de citas deciden «este bloque lo copió la máquina» con la misma
+    función: con código separado ya divergieron una vez (13 contra 12 sobre el mismo corpus)."""
+    marca = cfg.SALVEDAD_MARCAS[1]
+    assert cfg.quote_from_stamped_block("- «una cita»", intro=marca)
+    assert cfg.quote_from_stamped_block(f"{marca}\n\n- «una cita»")
+    assert cfg.quote_from_stamped_block("- ⚙ verificada: x", intro=cfg.SALVEDAD_MARCAS[0])
+    assert not cfg.quote_from_stamped_block("- «una cita»", intro="**Ejes:**")
+    assert not cfg.quote_from_stamped_block("prosa de la ficha con «una cita» [[2020X]]")
+    assert not cfg.quote_from_stamped_block("")

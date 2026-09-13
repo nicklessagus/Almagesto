@@ -575,6 +575,52 @@ portadores:
         estado: fuera-de-alcance
         motivo: Ídem — backend de descubrimiento, misma paridad de schema que `to_record`.
 
+  - issue: 454
+    regla: >-
+      La extracción es testigo de la prosa que el SINTETIZADOR volvió a tipear, nunca de la que la
+      MÁQUINA copió de ella. `quote_verdict` la usa como testigo porque es «la transcripción hecha
+      leyendo el PDF», y eso vale para una cita re-tipeada en una ficha; el bloque de salvedades de
+      una `## Vista` lo estampa `harvest_views` DESDE el JSON, así que el testigo y el juzgado son
+      el mismo archivo: el paso 2 la encuentra siempre y la aprueba como `txt_degradado` sobre una
+      cita que nadie verificó. Medido: una cita que la fuente no dice, publicada con `lint` rc 0 y
+      `contrast --validar-todo` rc 0. Ahí el único testigo independiente es el `.txt`.
+    funcion: lib_config.quote_verdict
+    patron: 'quote_verdict\(|extraction_texts\(|SALVEDAD_MARCAS'
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: >-
+          `validar` le pasa `copiada` desde el predicado compartido y emite la marca
+          `⚠verificar en el PDF` (#225/#341), con la población declarada aparte de
+          `solo_extraccion`, que mide otra cosa.
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          El otro gate que juzga la MISMA cita (#324): decide `copiada` con la misma función y
+          reporta el hallazgo en la categoría de discrepancia, con la marca.
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Es quien ESCRIBE el bloque —`render_salvedades` lo copia del JSON—, o sea la causa de la
+          regla, no su consumidor; usa `cfg.SALVEDAD_MARCAS` para el re-estampado acotado (#453) en
+          vez de repetir el literal.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Re-exporta `quote_verdict`, `quote_from_stamped_block` y `SALVEDAD_MARCAS` para que
+          `cfg.…` siga funcionando (AUD-306); no decide nada sobre una cita.
+
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Es la casa de la regla (`quote_verdict`, `quote_from_stamped_block`, `SALVEDAD_MARCAS`):
+          no es un consumidor. `lib_config` la re-exporta y por ahí la llaman los dos gates
+          (AUD-306).
+      - modulo: tools/carriers.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea por el docstring de `existe`, que cita esta regla al explicar por qué el
+          re-export cuenta como símbolo expuesto (#454); no juzga ninguna cita.
   - issue: 453
     regla: >-
       Toda sección que un script ESTAMPA desde un artefacto tiene su re-estampado ACOTADO, que
@@ -614,6 +660,11 @@ portadores:
           Junta lo que el sistema propone y espera firma (#328); el re-estampado es la firma
           aplicándose, no una propuesta.
 
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea porque desde #454 hospeda `SALVEDAD_MARCAS` —la leen los dos gates de citas, así
+          que vive con `quote_verdict`—; no re-estampa ninguna sección.
   - issue: 452
     regla: >-
       Toda afirmación de una nota sobre el ARTEFACTO que una máquina puede decidir se emite

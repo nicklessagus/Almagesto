@@ -288,9 +288,9 @@ def render_view(sujeto: str, data: dict) -> str:
 
 
 #: #453 · las dos marcas que abren el bloque de salvedades en la nota. Son el límite del
-#: re-estampado acotado, así que el que las escribe y el que las busca son el MISMO literal.
-SALVEDAD_MARCAS = ("**Salvedades (verificadas contra el archivo):**",
-                   "**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**")
+#: re-estampado acotado, así que el que las escribe y el que las busca son el MISMO literal — y
+#: desde #454 también las leen los dos gates de citas, así que viven en `lib_quotes`.
+SALVEDAD_MARCAS = cfg.SALVEDAD_MARCAS
 
 
 def render_salvedades(data: dict) -> list:
@@ -934,13 +934,18 @@ def salvedades_span(scope: str) -> tuple | None:
     the scope. ⛔ It is only a span while everything in it is a marker, a bullet or blank: a
     re-stamp that finds anything else REFUSES and names the note instead of destroying prose
     somebody wrote by hand."""
-    idx = [scope.find(m) for m in SALVEDAD_MARCAS if scope.find(m) >= 0]
+    # ⛔ #453 — se RECONOCE también el bloque pelado pre-#213: si no, el re-estampado no lo
+    # encuentra, cae en la rama que AGREGA y la nota queda con los dos bloques y cada bullet
+    # repetido (medido: 25 notas en un barrido). Reconocerlo es el migrador; escribirlo sería
+    # reintroducir el schema que #213 retiró, y `render_salvedades` sigue emitiendo sólo los dos
+    # marcados.
+    idx = [scope.find(m) for m in cfg.SALVEDAD_MARCAS_LEIDAS if scope.find(m) >= 0]
     if not idx:
         return None
     ini = min(idx)
     for ln in scope[ini:].splitlines():
         b = ln.strip()
-        if b and not b.startswith("- ") and b not in SALVEDAD_MARCAS:
+        if b and not b.startswith("- ") and b not in cfg.SALVEDAD_MARCAS_LEIDAS:
             return None
     return ini, len(scope)
 
@@ -953,7 +958,12 @@ def _bullets_prosa(scope: str) -> set:
     prose — and the place where a correction made by hand lives."""
     # ⚠ `partition` y no `find` + guarda: sin la marca la cola es `""` y el set sale vacío por
     # construcción, así que el `if i < 0` no decidía nada (#319 — su mutación sobrevivía).
-    _antes, _marca, cola = scope.partition(SALVEDAD_MARCAS[1])
+    # #453 — el bloque pelado pre-#213 es TODO juicio del extractor (no había chequeo), así que
+    # cuenta como el de prosa: sin esto sus bullets no se comparan y la guarda de reescritura no
+    # protege la corrección a mano que viva ahí.
+    aperturas = [i for i in (scope.find(m) for m in (SALVEDAD_MARCAS[1],
+                                                     cfg.SALVEDAD_MARCA_LEGACY)) if i >= 0]
+    cola = scope[min(aperturas):] if aperturas else ""
     return {ln.strip() for ln in cola.splitlines() if ln.strip().startswith("- ")}
 
 
@@ -1011,7 +1021,7 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
         # adelante no decidiría nada (#319).
         dentro = salvedades_span(seccion)
         if dentro is None:
-            if any(m in seccion for m in SALVEDAD_MARCAS):
+            if any(m in seccion for m in cfg.SALVEDAD_MARCAS_LEIDAS):
                 rehusadas.append((bib, "el bloque de salvedades tiene prosa que no escribió el "
                                        "cosechador → NO se pisa, revisala a mano"))
                 continue

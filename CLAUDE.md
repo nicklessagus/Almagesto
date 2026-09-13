@@ -443,8 +443,10 @@ de esa lectura (#311). ⛔ **Y CRUZA EL DISCO antes de escribir:** la guarda mir
 bloque y no su *contenido*, así que la prosa corregida a mano adentro le era invisible — y el JSON
 es inmutable (#311), o sea que puede ser **más viejo que la nota**: medido, un barrido de 144 notas
 dejó **27 afirmando lo que sus propios testigos desmienten** (la corrección de #449 revertida) y
-**50 `⚙ verificada` desaparecidas** sin que nada lo dijera. Hoy rehúsa la nota nombrándola y avisa
-la chequeada que dejó de serlo. ⛔ **Y la regla que de verdad la protege es ESTRUCTURAL: una
+**50 `⚙ verificada` desaparecidas** sin que nada lo dijera. Hoy rehúsa la nota nombrándola, avisa
+la chequeada que dejó de serlo y **migra** el bloque pelado pre-#213 en vez de agregar el marcado
+abajo (medido: **25 notas duplicadas**, con el lint en lockstep — *«sin la marca»* 25→0 y *«párrafo
+duplicado»* 0→25). ⛔ **Y la regla que de verdad la protege es ESTRUCTURAL: una
 salvedad en prosa ya escrita NO se reescribe** —agregar y quitar son seguros (cobrar una propuesta
 es justo eso)—, porque aquel cruce comparte **ancla** con el detector de #449 y por lo tanto sólo
 mira las frases que ese detector sabe mirar: la corrección real se redacta *«esta vista se leyó
@@ -1154,6 +1156,12 @@ re-extraer el `.txt`.
    una fuente** (agrupar bibcodes bajo una glosa compartida fabrica atribuciones). ⛔ **Y las
    comillas son las del EXTRACTOR: el script no pone ninguna (#330)** —`valor` llega entre «», con
    «» adentro (glosa) o sin «»—; lo que sale sin comillas NO es verbatim y no se entrecomilla.
+   ⛔ **Y la extracción es testigo de lo que el SINTETIZADOR re-tipeó, nunca de lo que la MÁQUINA
+   copió de ella (#454):** el bloque de salvedades de una `## Vista` lo estampa `harvest_views`
+   desde el JSON, así que ahí el testigo y el juzgado son el mismo archivo y el paso 2 la aprueba
+   **siempre** —medido: una cita que la fuente no dice, publicada con `lint` rc 0 y `contrast
+   --validar-todo` rc 0—. Ahí el único testigo independiente es el `.txt`; si calla, sale **no
+   evaluable con su motivo** y con la marca `⚠verificar en el PDF`, nunca «pasa».
    ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`** (#315/#317): es la
    transcripción hecha leyendo el PDF, y con el `.txt` de juez la señal era 2 de 17 y 0 de 35.
    Bloquea con **evidencia positiva** (#318/#321) —la frase bajo **otro** bibcode (atribución), o un

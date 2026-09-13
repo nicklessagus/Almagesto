@@ -624,3 +624,53 @@ git diff --stat vault/wiki/papers/
 queda rehusada (falso positivo que frenaría el trabajo), o si el conteo de rehusadas no coincide con
 las notas que tienen corrección a mano.
 
+## #454 · v1.266.0
+
+**Qué entró.** `quote_verdict(..., copiada=True)` deja de aprobar por la extracción cuando la cita
+vive en un bloque que la máquina copió de ella (el de salvedades): sin el `.txt` el veredicto es
+`sin_testigo_propio`. Predicado compartido por los dos gates, marca `⚠verificar en el PDF` en
+`contrast --validar`, población declarada. Y `carriers.existe` cuenta el re-export.
+
+**Validar** — el caso está en la bóveda:
+
+```bash
+python scripts/contrast.py --validar vault/wiki/papers/1999ITNN...10..626H.md
+python scripts/lint.py | grep -B2 -A6 "no es testigo"
+```
+
+- la cita de la salvedad de `1999ITNN...10..626H` tiene que salir **con la marca** y contarse en la
+  población nueva, en vez de pasar en silencio;
+- una cita en **prosa** de una ficha o un concepto —re-tipeada por el sintetizador— tiene que
+  seguir aprobándose por la extracción (#315): la regla es sobre quién escribió el bloque, no sobre
+  la cita;
+- `contrast --validar-todo` no puede empezar a bloquear por esto (es marca, no bloqueante).
+
+**Devolver si** una cita en prosa deja de aprobarse, si la de una salvedad sigue pasando en
+silencio, si la marca no sale, o si el gate de cierre pasa a bloquear por esta población.
+
+### #453 (4ª vuelta) · v1.266.0 — el bloque pre-#213 se MIGRA en vez de duplicarse
+
+**Qué falló.** El barrido **duplicó 25 notas**: el bloque pelado `**Salvedades:**` (pre-#213) no
+estaba en las marcas, así que caía en la rama que AGREGA y la nota quedaba con los dos bloques y
+cada bullet repetido. Falso verde doble — la nota salía de la categoría de #213 **por tener** el
+bloque marcado, con el contenido repetido abajo.
+
+**Qué entró.** `SALVEDAD_MARCAS_LEIDAS` separa lo que se lee de lo que se escribe: el pelado se
+reconoce (y se migra), y `render_salvedades` sigue emitiendo sólo los dos marcados. Sus bullets
+cuentan como los de prosa, así que la guarda de reescritura los protege igual.
+
+**Validar** — el mismo barrido:
+
+```bash
+python scripts/harvest_views.py <slug> --restamp-salvedades
+python scripts/lint.py | grep -E "Salvedades sin la marca|párrafo duplicado"
+```
+
+- *«párrafo duplicado»* tiene que quedarse en **0** (era 0 → 25);
+- *«Salvedades sin la marca de #213»* baja porque el bloque se **migró**, y el contenido tiene que
+  aparecer **una sola vez** (chequealo en `2007AN....328.1043C`, que es el caso medido);
+- una corrección a mano dentro de un bloque pelado tiene que seguir **rehusándose**.
+
+**Devolver si** una nota queda con el contenido repetido, si *«párrafo duplicado»* sube, o si migrar
+pisa una corrección a mano que vivía en el bloque viejo.
+

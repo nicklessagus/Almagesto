@@ -4122,7 +4122,10 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
     if stem not in NON_ORPHAN:
         _por_bloque: dict = {}
         for _par in lb.pairs_of(text):
-            _por_bloque.setdefault((_par.block.first_line, _par.block.text), []).append(_par.bibcode)
+            # #454 — el `intro` entra en la clave: es lo que dice si el bloque es el que la máquina
+            # copió DE la extracción (el de salvedades), y ahí la extracción no puede ser testigo.
+            _por_bloque.setdefault(
+                (_par.block.first_line, _par.block.text, _par.block.intro), []).append(_par.bibcode)
         # #321 — los bibcodes de TODA la nota: el error de atribución medido es la frase de un
         # paper puesta bajo otro de la misma nota (6 de 32 hits), y ésa es evidencia POSITIVA.
         _bibs_nota = {b for _bs in _por_bloque.values() for b in _bs}
@@ -4136,7 +4139,7 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
         _propio = cfg.note_own_bibcode(Path(f), fm)   # el fm YA parseado: una sola pasada de YAML
         if _propio:
             _bibs_nota.add(_propio)
-        for (_ln, _btxt), _bibs in _por_bloque.items():
+        for (_ln, _btxt, _bintro), _bibs in _por_bloque.items():
             _bibs = cfg.with_own_bibcode(_bibs, _propio)
             # ⚠ Sin `if not _citas: continue`: el `for` de abajo no itera igual (red 8, #396).
             for _c in cfg.quotes_in(_btxt):
@@ -4161,9 +4164,24 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                 # función, y su primer paso —la cita contra el `.txt` de SU fuente— es el que
                 # evita marcar como mal atribuida una cita correcta cuya extracción,
                 # selectiva (#188), no la transcribió.
-                _ver, _det = cfg.quote_verdict(_c, _bibs_c, _bibs_nota, _fuentes, ambiguo=bool(_amb))
+                _ver, _det = cfg.quote_verdict(_c, _bibs_c, _bibs_nota, _fuentes,
+                                               ambiguo=bool(_amb),
+                                               copiada=cfg.quote_from_stamped_block(_btxt, _bintro))
                 _corte = _c if len(_c) <= 70 else _c[:70] + "…"
                 if _ver == "en_su_txt":
+                    continue
+                if _ver == "sin_testigo_propio":
+                    # ⛔ #454 — la cita la copió la MÁQUINA de la extracción (el bloque de
+                    # salvedades de una `## Vista`), así que juzgarla contra esa extracción es
+                    # compararla consigo misma: el paso 2 la aprobaría SIEMPRE como
+                    # `txt_degradado`. Su único testigo independiente es el `.txt`, y no la dice.
+                    # Medido: una cita que la fuente no dice, publicada con `lint` rc 0.
+                    cita_txt_discrepa.append(
+                        (stem, f"L{_ln}: «{_corte}» — la escribió la máquina DESDE la extracción "
+                               f"de {', '.join(_bibs_c) or 'su fuente'}, así que esa extracción no "
+                               f"es testigo (#454), y el `.txt` no la dice: nadie la verificó "
+                               f"nunca. Confirmala en el PDF y, si no podés, marcala "
+                               f"`{VERIFICAR_PDF_MARK}`{_amb}"))
                     continue
                 if _ver == "txt_degradado":
                     # #315/#317 — la EXTRACCIÓN es la transcripción hecha leyendo el PDF, así

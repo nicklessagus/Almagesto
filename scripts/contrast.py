@@ -297,7 +297,9 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     can declare its population (INV-40) instead of printing a bare zero."""
     texto = nota.read_text(encoding="utf-8")
     out = {"alteradas": [], "no_evaluables": [], "discrepan": [], "resueltas": [],
-           "citas": 0, "solo_extraccion": 0}
+           # #454 — población propia: las citas que viven en un bloque estampado desde la
+           # extracción. Contarlas dentro de `solo_extraccion` mezclaba dos cosas distintas.
+           "citas": 0, "solo_extraccion": 0, "copiadas": 0}
     bibs_nota = set(lb._bibcodes(texto))
     # #373/#394 — en una nota de PAPER el bibcode es la nota, no un link, y desde #394 la regla
     # (y su medición) vive en `cfg.note_own_bibcode`/`cfg.with_own_bibcode`, compartida con el lint:
@@ -326,7 +328,11 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
             # #324 — la MISMA función que usa el lint, no una re-implementación: con código separado
             # daban 13 y 12 sobre el mismo corpus, y el de más era una cita CORRECTA cuya extracción
             # simplemente no la había transcripto.
-            ver, det = cfg.quote_verdict(cita, candidatos, bibs_nota, txts, ambiguo=ambiguo)
+            # #454 — la cita que la MÁQUINA copió de la extracción (el bloque de salvedades) no
+            # puede juzgarse contra la extracción: el testigo y el juzgado son el mismo archivo.
+            copiada = cfg.quote_from_stamped_block(b.text, b.intro)
+            ver, det = cfg.quote_verdict(cita, candidatos, bibs_nota, txts, ambiguo=ambiguo,
+                                         copiada=copiada)
             corte = cita if len(cita) <= 70 else cita[:70] + "…"
             quienes = ", ".join(candidatos) or "sin fuente adyacente"
             if ver in ("txt_degradado", "txt_acusa"):
@@ -379,6 +385,18 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                     (b.first_line, f"«{corte}» — el arranque coincide con la extracción de "
                                    f"{quienes} y la cola diverge: la cita se completó al copiar (el "
                                    f"patrón de #314)"))
+            elif ver == "sin_testigo_propio":
+                # ⛔ #454 — la cita vive en el bloque que la máquina copió de la extracción, así que
+                # la extracción NO es testigo: la aprobaría siempre. Su único testigo independiente
+                # es el `.txt`, y no la tiene. Sale con la marca de #225/#341, que no destruye la
+                # afirmación, es visible y se saca con evidencia.
+                out["copiadas"] += 1
+                out["discrepan"].append(
+                    (b.first_line,
+                     f"«{corte}» — la escribió la máquina DESDE la extracción de {quienes}, así que "
+                     f"esa extracción no es testigo (#454), y el `.txt` no la dice: nadie la "
+                     f"verificó nunca",
+                     cfg.verificar_pdf_mark("la cita de una salvedad, sin testigo independiente")))
             elif ver == "no_evaluable":
                 out["no_evaluables"].append(
                     (b.first_line, f"«{corte}» — {quienes} sin `.txt` ni extracción en disco: no "

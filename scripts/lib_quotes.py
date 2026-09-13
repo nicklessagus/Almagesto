@@ -638,7 +638,49 @@ def with_own_bibcode(bibs, own: str) -> list:
     return bibs if not own or own in bibs else [*bibs, own]
 
 
-def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: bool = False) -> tuple:
+#: #453/#454 · las dos marcas que abren el bloque de salvedades de una `## Vista`. Viven acá —y no
+#: en el cosechador que las escribe— porque las leen los DOS gates de citas: el bloque es el único
+#: que la máquina estampa **desde la extracción** dentro de una sección que `verify-citations` sí
+#: contrasta, y ésa es la asimetría que produce #454.
+SALVEDAD_MARCAS = ("**Salvedades (verificadas contra el archivo):**",
+                   "**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**")
+
+#: #453 · el bloque PELADO anterior a #213, que ya no se escribe y sigue en las notas viejas. Se
+#: RECONOCE aparte de las dos de arriba: escribirlo otra vez sería reintroducir el schema que #213
+#: retiró, pero no reconocerlo hace que el re-estampado no encuentre el bloque y lo AGREGUE abajo —
+#: medido, **25 notas duplicadas** en un barrido, con el lint mostrándolo en lockstep («Salvedades
+#: sin la marca de #213» 25 → 0 y «párrafo duplicado» 0 → 25, las mismas notas) y un falso verde
+#: doble: la nota sale de la categoría de #213 **justo porque** ahora tiene el bloque marcado, con
+#: el contenido repetido abajo.
+SALVEDAD_MARCA_LEGACY = "**Salvedades:**"
+
+#: Lo que se LEE como apertura de un bloque de salvedades. `SALVEDAD_MARCAS` es lo que se ESCRIBE:
+#: la asimetría es el migrador de #213 —el bloque viejo se reconoce para reemplazarlo por el nuevo—
+#: y no una capa de compatibilidad (el schema viejo no vuelve a salir de ningún escritor).
+SALVEDAD_MARCAS_LEIDAS = (*SALVEDAD_MARCAS, SALVEDAD_MARCA_LEGACY)
+
+
+def quote_from_stamped_block(text: str, intro: str | None = None) -> bool:
+    """Did the MACHINE copy this block out of the extraction? (#454)
+
+    ⛔ The one predicate both quote gates use (#324). It matters because `quote_verdict` treats the
+    extraction as a WITNESS —«the transcription made while reading the PDF»— and that is true of a
+    quote the synthesiser re-typed into a note, not of one `harvest_views` copied verbatim out of
+    the JSON: there the witness and the accused are the same file, so step 2 always finds it and
+    answers `txt_degradado` («the note is right, the index lost it») over a quote nobody ever
+    checked. Measured: a quote the source does not say —«…it converges globally» where the paper
+    says «…the convergence is proven globally», 1 occurrence of the note's in the `.txt` and 0 of
+    the JSON's— published with `lint` rc 0 and `contrast --validar-todo` rc 0.
+
+    ⚠ The caveat block is the only stamped one INSIDE a section the fan-out has to contrast
+    (`## Vista`); `SECCIONES_ESTAMPADAS` are already out of it (#214), and that asymmetry is the
+    whole case."""
+    return any(str(intro or "").lstrip().startswith(m) or m in (text or "")
+               for m in SALVEDAD_MARCAS_LEIDAS)
+
+
+def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: bool = False,
+                  copiada: bool = False) -> tuple:
     """Is this quote altered, or is the artefact the problem? ONE implementation (#324).
 
     ⛔ `lint.collect` and `contrast.validar` were deciding this with separate code and **already
@@ -678,6 +720,12 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
     fuentes = {b: ts for b, ts in (txt_texts or {}).items() if ts}
     if any(quote_found(quote, t) for ts in fuentes.values() for t in ts):
         return "en_su_txt", {}
+    # ⛔ #454 — la cita que la MÁQUINA copió de la extracción no se juzga contra la extracción: ahí
+    # el testigo y el juzgado son el mismo archivo, y el paso 2 la aprobaría siempre. Su único
+    # testigo independiente es el `.txt` (paso 1, arriba); si calla, es **no evaluable con su
+    # motivo** (D-43), nunca `txt_degradado`.
+    if copiada:
+        return "sin_testigo_propio", {}
     extracciones = {b: extraction_texts(b) for b in (cited or [])}
     en_extraccion = sorted(b for b, ts in extracciones.items()
                            if any(quote_found(quote, t) for t in ts))

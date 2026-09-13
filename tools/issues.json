@@ -2255,6 +2255,11 @@
    "number": 453,
    "title": "No hay re-estampado ACOTADO del bloque de salvedades: cobrar una salvedad estructurada (#452) obliga a re-cosechar la vista, y eso RE-FECHA la lectura — medido: 50 propuestas sin camino a la nota",
    "state": "OPEN"
+  },
+  {
+   "number": 454,
+   "title": "Una cita textual dentro de una SALVEDAD se verifica contra el artefacto del que salió: `quote_verdict` la aprueba como `txt_degradado` — medido, una cita que la fuente no dice publicada con lint rc 0",
+   "state": "OPEN"
   }
  ]
 }

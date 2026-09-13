@@ -1598,3 +1598,49 @@ def test_453c_agregar_y_quitar_SIGUEN_siendo_seguros(toy_vault):
     assert r["tocadas"] == [BIB] and r["rehusadas"] == []
     body = dest.read_text(encoding="utf-8")
     assert "⚙ verificada" in body and "la Fig. 3" not in body
+
+
+def test_453d_el_bloque_LEGACY_se_MIGRA_en_vez_de_duplicarse(toy_vault):
+    """⛔ #453, tercera devolución — el bloque pelado anterior a #213 (`**Salvedades:**`) no estaba
+    en las marcas, así que `salvedades_span` devolvía `None` y la nota no caía ni en la rama que
+    rehúsa ni en la que reemplaza: caía en la que AGREGA, y quedaba con los dos bloques y cada
+    bullet repetido. Medido en un barrido: **25 notas duplicadas**, con el lint en lockstep
+    («Salvedades sin la marca de #213» 25 → 0 y «párrafo duplicado» 0 → 25, las mismas notas) — un
+    falso verde doble, porque la nota sale de la categoría de #213 **justo porque** ahora tiene el
+    bloque marcado, con el contenido repetido abajo.
+
+    Reconocerlo es el MIGRADOR de #213: se lee para reemplazarlo, nunca se vuelve a escribir."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = ["la Fig. 3 es difícil de leer"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    # la nota vieja: el bloque PELADO, como lo dejaba el schema pre-#213
+    dest.write_text(dest.read_text(encoding="utf-8").replace(
+        cfg.SALVEDAD_MARCAS[1], cfg.SALVEDAD_MARCA_LEGACY), encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert r["tocadas"] == [BIB] and r["rehusadas"] == []
+    assert body.count("la Fig. 3 es difícil de leer") == 1, "⛔ NO se duplica: se migra"
+    assert cfg.SALVEDAD_MARCA_LEGACY not in body and cfg.SALVEDAD_MARCAS[1] in body
+    # y es idempotente: la segunda pasada ya no tiene nada que migrar
+    assert hv.restamp_salvedades("test_star")["tocadas"] == []
+
+
+def test_453d_el_legacy_con_una_CORRECCION_A_MANO_se_rehusa_igual(toy_vault):
+    """#453 — migrar no puede ser un agujero en la guarda de reescritura: el bloque pelado es TODO
+    juicio del extractor (no había chequeo), así que sus bullets cuentan como los de prosa y una
+    corrección a mano ahí adentro se protege igual que en el bloque marcado."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = ["la Fig. 3 es difícil de leer"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    dest.write_text(dest.read_text(encoding="utf-8")
+                    .replace(cfg.SALVEDAD_MARCAS[1], cfg.SALVEDAD_MARCA_LEGACY)
+                    .replace("- la Fig. 3 es difícil de leer",
+                             "- la Fig. 3 es ilegible en la copia del editor"), encoding="utf-8")
+    antes = dest.read_text(encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert dest.read_text(encoding="utf-8") == antes
+    assert [b for b, _m in r["rehusadas"]] == [BIB] and "REESCRIBIRÍA" in r["rehusadas"][0][1]

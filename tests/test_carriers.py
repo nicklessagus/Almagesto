@@ -252,3 +252,18 @@ def test_main_propose_sin_patron_AVISA_que_falta_la_mitad(monkeypatch, capsys):
     assert cr.main(["--propose", "lib.regla", "--patron", "RE"]) == 0
     out = capsys.readouterr().out
     assert "scripts/b.py" in out and "fuera-de-alcance" in out
+
+
+def test_454_el_RE_EXPORT_cuenta_como_simbolo_expuesto(tmp_path):
+    """⛔ #454 — `lib_config` re-exporta todo nombre público de `lib_quotes` a propósito (AUD-306),
+    así que los consumidores importan `lib_config as cfg` y llaman `cfg.quote_verdict(...)`. Sin
+    contar el `ImportFrom`, la regla cuya implementación vive en `lib_quotes` **no se podía
+    declarar**: por el módulo real el gate decía «no llama» (nadie importa `lib_quotes`) y por el de
+    la fachada, «no existe». Un gate que rehúsa las dos formas de la misma verdad deja la regla sin
+    declarar, que es lo que esta herramienta existe para impedir."""
+    assert cr.existe("def f():\n    pass\n", "f")
+    assert cr.existe("F = 1\n", "F")
+    assert cr.existe("from lib_quotes import quote_verdict\n", "quote_verdict"), "el re-export"
+    assert cr.existe("from lib_quotes import quote_verdict as qv\n", "qv"), "y bajo su alias"
+    assert not cr.existe("from lib_quotes import otra_cosa\n", "quote_verdict")
+    assert not cr.existe("# quote_verdict en un comentario\n", "quote_verdict")

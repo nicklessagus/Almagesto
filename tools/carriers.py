@@ -97,7 +97,15 @@ def calls(fuente: str, modulo: str, simbolo: str) -> bool:
 
 
 def existe(fuente: str, simbolo: str) -> bool:
-    """¿El módulo define ese símbolo al nivel superior? Es la mitad (1) del chequeo."""
+    """Does this module EXPOSE that symbol at top level? Half (1) of the check.
+
+    ⛔ A **re-export counts** (#454). `lib_config` re-exports every public name of `lib_quotes` on
+    purpose (AUD-306) so `cfg.quote_verdict(...)` keeps working for callers, tests and the `@inv`
+    map — so consumers import `lib_config as cfg` and call through it, which is what `calls`
+    detects. Without counting the `ImportFrom`, a rule implemented in `lib_quotes` **could not be
+    declared at all**: named by its real module the gate said «does not call» (nobody imports
+    `lib_quotes`), and by its facade, «does not exist». A gate that refuses both forms of the same
+    truth leaves the rule undeclared, which is exactly what this tool exists to prevent."""
     try:
         arbol = ast.parse(fuente)
     except SyntaxError:
@@ -105,7 +113,9 @@ def existe(fuente: str, simbolo: str) -> bool:
     return any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
                and n.name == simbolo for n in arbol.body) or any(
         isinstance(n, ast.Assign) and any(getattr(t, "id", None) == simbolo for t in n.targets)
-        for n in arbol.body)
+        for n in arbol.body) or any(
+        isinstance(n, ast.ImportFrom) and any(
+            (a.asname or a.name) == simbolo for a in n.names) for n in ast.walk(arbol))
 
 
 def load(path: Path = DECLARACION) -> list:
