@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.265.0"
+ALMAGESTO_VERSION = "1.265.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3166,6 +3166,12 @@ VISTA_FUENTES = ("pdf", "abstract")
 #: invocando #205 para darse autoridad, y lo cazó un duplicado ACCIDENTAL de la extracción.
 #: ⚠ Cerrado y chico a propósito: lo que no es decidible por un script no entra acá — se escribe
 #: como salvedad de prosa y la nota la marca **NO VERIFICADA**, que es la otra mitad del arreglo.
+#: #453 · la marca con la que el cosechador publica una salvedad YA ESTRUCTURADA cuyo chequeo no
+#: pudo correr (D-43). La escribe `harvest_views.split_salvedades` y la lee el lint para NO contarla
+#: como deuda: estructurarla es exactamente lo que la categoría pide, y listarla igual deja un
+#: backlog que ninguna acción cierra (medido: 2 de 44 al cobrar #452).
+NO_EVALUABLE_MARCA = "(no evaluable:"
+
 SALVEDAD_TIPOS = {
     "txt_pierde": "cadena",      # el `.txt` NO contiene `cadena` (la fuente sí): un grep lo decide
     "pdf_paginas": "n",          # el PDF tiene `n` páginas: lo decide el propio PDF

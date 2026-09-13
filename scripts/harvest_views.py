@@ -197,7 +197,7 @@ def split_salvedades(bibcode: str, data: dict) -> tuple[list, list, list]:
             else:
                 # No evaluable NO es «verificada» ni «falsa» (D-43): se publica como prosa marcada.
                 prosa.append(f"{item.get('nota') or ev or item.get('tipo')} "
-                             f"(no evaluable: {detalle})")
+                             f"{cfg.NO_EVALUABLE_MARCA} {detalle})")
         elif str(item).strip():
             prosa.append(str(item).strip())
     return verificadas, prosa, falsas
@@ -945,6 +945,11 @@ def salvedades_span(scope: str) -> tuple | None:
     return ini, len(scope)
 
 
+def _n_verificadas(scope: str) -> int:
+    """How many `⚙ verificada` lines this scope publishes (#453)."""
+    return sum(1 for ln in scope.splitlines() if ln.strip().startswith("- ⚙ verificada"))
+
+
 def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = False) -> dict:
     """Re-stamp ONLY the caveat block of each view, from its extraction JSON (#453).
 
@@ -959,7 +964,7 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
     So: it does NOT touch `vistas[]`, does NOT touch the view's prose, and the caveats are checked
     exactly as always (`check_salvedad`) — the false one still is not published. Idempotent (red 6),
     declares its population, and `--dry-run` writes nothing."""
-    tocadas, sin_bloque, rehusadas, revisadas = [], [], [], 0
+    tocadas, sin_bloque, rehusadas, perdidas, revisadas = [], [], [], [], 0
     d = cfg.EXTRACCION / slug
     for j in sorted(d.glob("*.json")) if d.exists() else []:
         try:
@@ -1007,11 +1012,30 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
                        + text[ini + off + len(seccion):])
         if texto_nuevo == text:
             continue
+        # ⛔ #453, devuelto — la guarda de arriba mira la FORMA del bloque (¿están los marcadores?)
+        # y no su CONTENIDO, así que la prosa CORREGIDA A MANO dentro de un bloque bien formado le
+        # es invisible. Y el JSON es inmutable por diseño (#311), o sea que puede ser MÁS VIEJO que
+        # la nota: medido en un barrido de 144 notas, 27 pasaron a afirmar un documento que sus
+        # propios testigos desmienten —la corrección de #449 revertida— y 50 `⚙ verificada`
+        # desaparecieron sin que nada lo dijera. Es la misma familia que el proponente de #452 antes
+        # de v1.264.1: se cruza el disco ANTES de escribir, con la misma función.
+        fm = cfg.split_fm(text)
+        if (conf := cfg.disk_doc_conflict(texto_nuevo, fm, mn.safe_name(bib))):
+            previo = cfg.disk_doc_conflict(text, fm, mn.safe_name(bib))
+            rehusadas.append((bib, (f"el re-estampado {'dejaría' if previo else 'INTRODUCE'} una "
+                                    f"afirmación que los testigos desmienten ({conf.split(' — ')[0]})"
+                                    f" → corregí la prosa del JSON, que es la vieja")))
+            continue
+        # ⚠ Y que una salvedad CHEQUEADA deje de serlo es un cambio de estado (el PDF se reemplazó y
+        # el conteo de páginas ya no da), no ruido de diff: se avisa, con su número.
+        antes_ok, ahora_ok = _n_verificadas(seccion), _n_verificadas(nueva)
+        if ahora_ok < antes_ok:
+            perdidas.append((bib, antes_ok - ahora_ok))
         tocadas.append(bib)
         if not dry_run:
             cfg.write_text_atomic(nota, texto_nuevo)
     return {"revisadas": revisadas, "tocadas": tocadas, "sin_bloque": sin_bloque,
-            "rehusadas": rehusadas}
+            "rehusadas": rehusadas, "perdidas": perdidas}
 
 
 def print_restamp_salvedades(r: dict, slug: str, dry_run: bool) -> None:
@@ -1023,6 +1047,9 @@ def print_restamp_salvedades(r: dict, slug: str, dry_run: bool) -> None:
         cfg.print_seguro(f"  · {bib}")
     for bib, motivo in r["rehusadas"]:
         cfg.print_seguro(f"  ⚠ {bib}: {motivo}")
+    for bib, n in r.get("perdidas") or []:
+        cfg.print_seguro(f"  ⚠ {bib}: {n} salvedad(es) `⚙ verificada` DEJARON de estarlo — "
+                         f"¿cambió el archivo? (un reemplazo de PDF cambia el conteo de páginas)")
     for bib, motivo in r["sin_bloque"]:
         cfg.print_seguro(f"  — {bib}: {motivo}")
     cfg.print_seguro("⚠ NO toca `vistas[]` ni la prosa de la vista: la lectura no volvió a "

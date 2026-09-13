@@ -727,12 +727,13 @@ portadores:
         motivo: "Usa `arxiv_stamp` para RESOLVER `pdf_source` (la precedencia de #446); no lee prosa."
 
       - modulo: scripts/harvest_views.py
-        estado: fuera-de-alcance
+        estado: usa
         motivo: >-
-          Comparte los TESTIGOS y no el cruce: el chequeo de la salvedad `pdf_leido` (#452) llama a
-          `doc_on_disk` en vez de releerlos, pero no cruza prosa contra disco — su afirmación viene
-          estructurada, con el bibcode adentro, que es justo lo que `disk_doc_conflict` tiene que
-          adivinar.
+          Dos usos, y el segundo es por qué esta regla es suya: el chequeo de `pdf_leido` (#452)
+          llama a `doc_on_disk` en vez de releer los testigos, y `--restamp-salvedades` (#453) cruza
+          `disk_doc_conflict` sobre el texto RESULTANTE antes de escribir — sin eso el barrido dejó
+          27 notas afirmando lo que sus propios testigos desmienten, revirtiendo la corrección que
+          esta misma regla existe para proteger.
   - issue: 416
     regla: >-
       La línea sobre un `## Abstract` transcrito del PDF afirma DOS cosas y sólo una vale siempre:

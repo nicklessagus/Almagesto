@@ -2311,3 +2311,28 @@ Y la salvedad estructurada acepta **`evidencia`**: lo que el lector vio no lo re
 —re-deriva el veredicto— y el JSON es versionado y no regenerable (#311), o sea el registro de esa
 lectura.
 
+**Devuelto por la instancia y corregido (1.265.1).** El modo `--paper` cumplió lo que pedía el issue
+—44 propuestas de #452 cobradas, **0 líneas** de `fecha`/`lente`/`sujeto`/`txt`/`fuente` tocadas en
+40 notas, idempotente, y la categoría del lint bajando de 170 a **131**—; el **barrido sin
+`--paper`** no: re-estampó 144 notas y **27 pasaron a afirmar un documento que sus propios testigos
+desmienten** (`doc_en_disco` de 0 a 27), con **50 `⚙ verificada` desaparecidas** en silencio.
+
+El caso, en `2011A&A...535A..17B`: la nota decía «**Esta vista se leyó del preprint** de arXiv…»
+—corregida a mano el 09-12— y el re-estampado escribió «**El PDF en disco es el preprint**…», contra
+testigos que dicen `publicado` (`pdf_reemplazo` firma `publisher`). El mecanismo en una línea: **la
+guarda miraba la FORMA del bloque** (¿están los marcadores?, `salvedades_span`) **y no su
+CONTENIDO**, así que la prosa corregida dentro de un bloque bien formado le era invisible. Es la
+misma familia que el proponente de #452 antes de v1.264.1: *el JSON puede ser más viejo que la nota,
+y hay que cruzar el disco antes de escribir.*
+
+**Qué cambió (1.265.1).** Antes de escribir cada nota se cruza `cfg.disk_doc_conflict` sobre el
+**texto resultante** —la misma función que ya llama `--propose-pdf-leido`—: si el re-estampado
+dejaría la nota afirmando lo que los testigos desmienten, esa nota se **rehúsa** nombrándola, y el
+mensaje distingue *lo INTRODUCE este re-estampado* de *ya estaba*. Y una `⚙ verificada` que **deja de
+serlo** se avisa con su número: es un cambio de estado (el PDF se reemplazó y el conteo de páginas ya
+no da), no ruido de diff. ⚠ Menor, de la misma devolución: la salvedad ya estructurada que sale **no
+evaluable** dejó de contar en la categoría del lint —su `evidencia` es prosa y matcheaba el ancla, y
+estructurarla es justo lo que la categoría pide, así que listarla dejaba un backlog que ninguna
+acción cierra (2 de 44)—; la marca la escribe el cosechador y la lee el lint por una sola constante
+(`cfg.NO_EVALUABLE_MARCA`).
+

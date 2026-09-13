@@ -4046,7 +4046,11 @@ def check_paper_salvedades(stem: str, f, text: str) -> tuple:
                 continue
             if _b.startswith("## "):
                 _en_juicio = False
-            if _en_juicio and _b.startswith(("- ", "* ")) and cfg.looks_decidable(_b):
+            # ⚠ #453 — la que YA está estructurada y salió no evaluable (D-43) no es deuda: su
+            # `evidencia` es prosa y matchea el ancla, pero estructurarla es justo lo que esta
+            # categoría pide. Listarla deja un backlog que ninguna acción cierra.
+            if _en_juicio and _b.startswith(("- ", "* ")) and cfg.NO_EVALUABLE_MARCA not in _b \
+                    and cfg.looks_decidable(_b):
                 salv_decidible.append(
                     (stem, f"salvedad en prosa que un script podría decidir: «{_b[2:82]}…» → "
                            f"emitila estructurada (`SALVEDAD_TIPOS`) y el cosechador la chequea"))

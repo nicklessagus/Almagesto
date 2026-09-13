@@ -1500,3 +1500,48 @@ def test_453_la_lente_se_re_estampa_SIN_tocar_la_vista_del_sujeto(toy_vault):
     body = dest.read_text(encoding="utf-8")
     assert "prosa de la primera lectura" in body, "la vista del sujeto no se toca"
     assert "prosa de la segunda" not in body and "⚙ verificada" in body
+
+
+def test_453b_el_restamp_REHUSA_si_revertiria_una_correccion(toy_vault, capsys):
+    """⛔ #453 devuelto — la guarda miraba la FORMA del bloque (¿están los marcadores?) y no su
+    CONTENIDO, así que la prosa corregida A MANO dentro de un bloque bien formado le era invisible.
+    Y el JSON es inmutable por diseño (#311), o sea que puede ser MÁS VIEJO que la nota: medido en un
+    barrido de 144 notas, **27 pasaron a afirmar un documento que sus propios testigos desmienten**
+    —la corrección de #449 revertida— y 50 `⚙ verificada` desaparecieron sin que nada lo dijera."""
+    _con_pdf(toy_vault)
+    d = extraccion()
+    d["salvedades"] = ["El PDF en disco es el PREPRINT de arXiv (marca al margen)."]
+    dest = sembrar(toy_vault, d, fm_extra={"pdf_source": "eprint"})
+    hv.harvest("test_star")
+    assert cfg.disk_doc_conflict(dest.read_text(encoding="utf-8"),
+                                 cfg.split_fm(dest.read_text(encoding="utf-8")), BIB) is None
+
+    # el PDF se reemplazó: los testigos ahora dicen `publicado` y la nota se corrigió a mano
+    body = dest.read_text(encoding="utf-8")
+    nuevo = body.replace("pdf_source: eprint", "pdf_source: publisher") \
+                .replace("El PDF en disco es el PREPRINT", "Esta vista se leyó del PREPRINT")
+    assert "pdf_source: publisher" in nuevo and "Esta vista se leyó" in nuevo
+    dest.write_text(nuevo, encoding="utf-8")
+    antes = dest.read_text(encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert dest.read_text(encoding="utf-8") == antes, "⛔ no se revierte la corrección"
+    assert r["tocadas"] == [] and [b for b, _m in r["rehusadas"]] == [BIB]
+    hv.print_restamp_salvedades(r, "test_star", dry_run=False)
+    assert "INTRODUCE" in capsys.readouterr().out, "y dice que lo introduce ESTE re-estampado"
+
+
+def test_453b_avisa_cuando_una_verificada_DEJA_de_serlo(toy_vault, capsys):
+    """#453 devuelto — que una salvedad CHEQUEADA deje de estarlo es un cambio de estado (el PDF se
+    reemplazó y el conteo de páginas ya no da), no ruido de diff: 50 se fueron sin que nada lo
+    dijera."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}]
+    sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    d["salvedades"] = ["ahora es sólo prosa"]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert r["perdidas"] == [(BIB, 1)] and r["tocadas"] == [BIB]
+    hv.print_restamp_salvedades(r, "test_star", dry_run=False)
+    assert "DEJARON de estarlo" in capsys.readouterr().out

@@ -4558,6 +4558,22 @@ def test_la_salvedad_decidible_del_extractor_SIGUE_siendo_hallazgo(toy_vault, ca
         "el juicio del extractor que un grep podría decidir sigue reportándose"
 
 
+def test_453_la_estructurada_NO_EVALUABLE_no_es_deuda_de_prosa(toy_vault, capsys):
+    """⛔ #453 — la salvedad que YA está estructurada y salió **no evaluable** (D-43) se publica como
+    prosa marcada, y su `evidencia` matchea el ancla: el lint la contaba como deuda. Estructurarla es
+    exactamente lo que esta categoría pide, así que listarla deja un backlog que **ninguna acción
+    cierra** (medido: 2 de 44 al cobrar #452). La marca la escribe el cosechador y la lee el lint —
+    una sola constante (`cfg.NO_EVALUABLE_MARCA`)."""
+    _nota_con_salvedades(toy_vault,
+                         "**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**\n\n"
+                         "- el PDF en disco es el manuscrito del autor "
+                         f"{cfg.NO_EVALUABLE_MARCA} `documento: web` no lo deciden los testigos)\n"
+                         "- el `.txt` no contiene la cadena `log R'HK` en ninguna parte\n")
+    _, rep = run_lint_reporte(capsys)
+    assert "log R'HK" in rep, "la que NO está estructurada sigue siendo deuda"
+    assert "manuscrito del autor" not in rep, "la ya estructurada y no evaluable, no"
+
+
 def test_el_alias_rechazado_con_motivo_deja_de_ser_deuda(toy_vault, capsys):
     """#252: el carril de `aliases` era el ÚNICO sin escotilla del NO. El mensaje del hallazgo manda
     dejar afuera el catálogo-máquina (*«los `Gaia DR3`/`2MASS J` no»*), o sea que **instruía

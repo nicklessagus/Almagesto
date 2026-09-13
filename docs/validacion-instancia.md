@@ -564,3 +564,32 @@ python scripts/harvest_views.py <slug> --restamp-salvedades --paper <bib>
 de la vista o del bloque que no escribió el cosechador; si no es idempotente; o si una salvedad
 falsa se publica por este camino (el chequeo es el mismo).
 
+### #453 (2ª vuelta) · v1.265.1 — el barrido dejó de revertir correcciones
+
+**Qué falló.** El barrido **sin `--paper`** re-estampó 144 notas y dejó **27 afirmando un documento
+que sus testigos desmienten** (`doc_en_disco` 0 → 27) con **50 `⚙ verificada`** desaparecidas: la
+guarda miraba la forma del bloque y no su contenido, y el JSON conserva la prosa anterior al
+`replace_pdf`.
+
+**Qué entró.** (a) Antes de escribir se cruza `cfg.disk_doc_conflict` sobre el texto **resultante**
+y la nota se **rehúsa** nombrándola, distinguiendo *lo INTRODUCE* de *ya estaba*; (b) se **avisa** la
+`⚙ verificada` que deja de serlo, con su número; (c) la estructurada **no evaluable** ya no cuenta
+como deuda de prosa en el lint.
+
+**Validar** — es el barrido que hubo que revertir:
+
+```bash
+git status --short vault/wiki/papers/          # limpio antes
+python scripts/harvest_views.py <slug> --restamp-salvedades      # los siete slugs, SIN --paper
+python scripts/lint.py | grep -A4 "QUÉ DOCUMENTO hay en disco"   # tiene que seguir en 0
+```
+
+- `doc_en_disco` **no puede pasar de 0**, y las 27 tienen que salir como **rehusadas** con su
+  motivo;
+- ninguna `⚙ verificada` desaparece sin aviso;
+- la categoría #234 tiene que bajar también por las 2 estructuradas no evaluables que antes contaba.
+
+**Devolver si** el barrido vuelve a escribir sobre una nota corregida a mano, si `doc_en_disco` sube,
+si una `⚙ verificada` se va en silencio, o si la rehusada era en realidad segura (falso positivo
+sobre una nota coherente).
+

@@ -439,7 +439,12 @@ salida era `--force`, que **re-fecha la lectura** (medido: `fecha` y `lente` de 
 lado, #395). No toca `vistas[]` ni la prosa; el bloque con prosa ajena se **rehúsa** en vez de
 pisarse. ⚠ La salvedad estructurada lleva **`evidencia`**: lo que el lector vio (*«marca de agua en
 el margen de la p. 1»*) no lo re-deriva el chequeo —re-deriva el veredicto— y el JSON es el registro
-de esa lectura (#311).
+de esa lectura (#311). ⛔ **Y CRUZA EL DISCO antes de escribir:** la guarda miraba la *forma* del
+bloque y no su *contenido*, así que la prosa corregida a mano adentro le era invisible — y el JSON
+es inmutable (#311), o sea que puede ser **más viejo que la nota**: medido, un barrido de 144 notas
+dejó **27 afirmando lo que sus propios testigos desmienten** (la corrección de #449 revertida) y
+**50 `⚙ verificada` desaparecidas** sin que nada lo dijera. Hoy rehúsa la nota nombrándola y avisa
+la chequeada que dejó de serlo.
 
 ⛔ **La lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el único
 canal en esa dirección: `stars`/`thesis_links` se siembran **antes** de leer y `harvest_views` mergea
