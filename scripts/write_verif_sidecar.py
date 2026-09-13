@@ -202,7 +202,13 @@ def chained_verdict(previous: str | None, new: str) -> str:
     rounds fought this» when one round confirmed it three times."""
     if not previous:
         return new
-    ultimo = lb._bare_verdict(previous.split("→")[-1]) if "→" in previous else lb._bare_verdict(previous)
+    # ⛔ #450 — la partición del separador es UNA definición (`lb._cell_parts`): acá se abría a mano
+    # sobre `→` y el vocabulario real incluye `->`, `—`, `:` y `(`, así que una celda escrita con
+    # cualquiera de ésos se extendía repitiendo el veredicto que ya tenía. ⚠ La pregunta de esta
+    # función NO es la de `lb.current_verdict` (cuál rige) sino **qué se escribió último**: con
+    # `no-soportada→corregida` + una ronda que vuelve a fallar, el veredicto vigente coincide con el
+    # nuevo y la cadena NO se extendería — y esa fila tiene que quedar abierta (#450).
+    ultimo = lb._cell_parts(previous)[-1]
     return previous if ultimo == lb._bare_verdict(new) else f"{previous}→{new}"
 
 

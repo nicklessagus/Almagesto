@@ -687,30 +687,68 @@ def _bare_verdict(verdict: str) -> str:
     return _RESOLUCION_SEP.split((verdict or "").strip().lower(), maxsplit=1)[0].strip(_ADORNO).strip()
 
 
+def _cell_parts(verdict: str) -> list:
+    """The cell split on the separator, normalised — ONE split for the three readers of a cell
+    (`verdict_chain`, `current_verdict`, `resueltos`).
+
+    ⛔ #450 — the separator carries TWO meanings and they were read by two different pieces of
+    code: it chains ROUNDS (`soportada→contradice`, #232/#274c) and it annotates the RESOLUTION
+    (`no-soportada→corregida`). What tells them apart is the closed vocabulary —a part that is a
+    verdict is a round, anything else is the annotation— and that has to be decided once."""
+    return [x.strip(_ADORNO).strip() for x in _RESOLUCION_SEP.split(str(verdict or "").lower())]
+
+
+def current_verdict(verdict: str) -> str:
+    """The verdict in force for this pair: the LAST link of its chain, or `""` if unreadable (#450).
+
+    ⛔ The partition of `verif_counts` used to key on the FIRST link («what the note got wrong»,
+    #274c) and `resueltos` read anything after the separator as a resolution, so
+    `soportada→contradice` —round 2 finding a contradiction the note still carries— was filed as
+    *soportada* AND counted as resolved: measured, 5 open verdicts in 4 notes sitting under headers
+    reading «209 soportadas / 0 contradicen», with `lint --cierre` at rc 0. The verdict that
+    demands action is the last one."""
+    cadena = verdict_chain(verdict)
+    return cadena[-1] if cadena else ""
+
+
 def resueltos(verdict: str) -> bool:
     """`False` si esta fila deja una afirmación sin respaldo. Tolera la anotación de la resolución
     en la misma celda —`no-soportada→corregida`, que es como la plantilla del skill muestra el caso
-    resuelto, con o sin espacios alrededor de la flecha—: lo que bloquea es el veredicto **pelado**.
+    resuelto, con o sin espacios alrededor de la flecha—: lo que bloquea es el veredicto **vigente**.
 
     Dos correcciones de #168, una por dirección. El veredicto se compara **normalizado**, así que el
     énfasis markdown no es una resolución (`**no-soportada**` seguía siendo una afirmación sin
     respaldo y pasaba limpia). Y la resolución se detecta por el **separador**, no por
     `startswith(mal + " ")`, así que el espaciado de la flecha no inventa un veredicto nuevo
-    (`no-soportada → corregida`, que es como se escribe a mano, bloqueaba estando resuelta)."""
+    (`no-soportada → corregida`, que es como se escribe a mano, bloqueaba estando resuelta).
+
+    ⛔ #450 — y el veredicto vigente es el **ÚLTIMO** eslabón (`current_verdict`), no el primero:
+    la resolución tiene que venir DESPUÉS de él. *Cualquier cosa* tras el separador contaba como
+    resolución, y el mismo separador encadena rondas (#232), así que `soportada→contradice` —una
+    contradicción que la ronda 2 encontró y nadie resolvió— pasaba limpia y apagaba el bloqueante
+    de #91. Medido: 5 filas abiertas en 4 notas, dos de ellas de sesiones anteriores, con
+    `lint --cierre` en rc 0. Las tres formas y su lectura:
+
+    - `soportada→contradice` → ABIERTA (la ronda 2 contradice y nadie la resolvió);
+    - `no-soportada→corregida` → resuelta (la anotación va después del último veredicto);
+    - `no-soportada→corregida→no-soportada` → ABIERTA (volvió a fallar en la ronda siguiente).
+
+    ⚠ La anotación sigue siendo texto libre: es lo que permite declarar un estado que el
+    vocabulario cerrado no tiene —`no-soportada→la fuente citada es un CONTRASTE, no el origen del
+    dato` (#316)— sin abrir `VERDICTS`, que es lo que decide el bloqueante."""
     # @inv INV-117
-    v = (verdict or "").strip().lower()
-    partes = _RESOLUCION_SEP.split(v, maxsplit=1)
-    if len(partes) > 1 and partes[1].strip(_ADORNO).strip():
-        return True                     # hay resolución anotada: la celda dice qué se hizo
-    pelado = partes[0].strip(_ADORNO).strip()
+    partes = _cell_parts(verdict)
+    idx = [i for i, x in enumerate(partes) if x in VERDICTS]
     # ⛔ Un veredicto FUERA del vocabulario cerrado no puede contar como resuelto. Medido el
     # 2026-08-28: `'contradise'`, `''` y `'no soportada'` (con espacio) devolvían `True`, o sea que
     # el bloqueante que INV-117 sostiene **se apagaba con una letra** — y la fila quedaba bajo un
     # encabezado que se lee como garantía. Una celda que no se puede leer no certifica nada; el
     # lint la reporta aparte con el motivo correcto (typo, no «sin resolver»).
-    if pelado not in VERDICTS:
+    if not idx:
         return False
-    return pelado not in VERDICTS_SIN_RESOLVER
+    if partes[idx[-1]] not in VERDICTS_SIN_RESOLVER:
+        return True
+    return any(partes[idx[-1] + 1:])    # la resolución va DESPUÉS del veredicto vigente
 
 
 def verdict_valido(verdict: str) -> bool:
@@ -924,14 +962,23 @@ def verif_counts(rows: list) -> dict:
     the lesson of INV-81 —the roll-up header and its rows come from the same code— applied to the
     verification block.
 
-    `contradicen` counts every row whose verdict mentions `contradice`, resolved or not: the point of
+    `contradicen` counts every row whose verdict IS `contradice` today, resolved or not: the point of
     the number is that the note DID contradict its source, and the second round must not blank it.
+
+    ⛔ #450 — the partition keys on the verdict IN FORCE (`current_verdict`, the last link), not on
+    the first one. Keying on the first filed `soportada→contradice` —an open contradiction found by
+    round 2— under *soportadas*, so the header published «209 soportadas / 0 contradicen» over a
+    note that contradicted its source. The canonical chain of #232 is unaffected: `contradice→
+    corregida` annotates (the verb is not a verdict), so its last link is still `contradice` and it
+    keeps counting as a contradiction, resolved. What #232 feared —round 2 blanking the number— can
+    only happen if someone writes a bare `contradice→soportada` by hand, and that is exactly what
+    `revertidas` publishes.
     """
-    vs = [str(r.verdict or "").strip().lower() for r in rows]
+    vs = [current_verdict(r.verdict) for r in rows]
     return {"pares": len(rows),
-            "soportadas": sum(1 for v in vs if v.startswith("soportada")),
-            "no_soportadas": sum(1 for v in vs if v.startswith("no-soportada")),
-            "contradicen": sum(1 for v in vs if v.startswith("contradice")),
+            "soportadas": sum(1 for v in vs if v == "soportada"),
+            "no_soportadas": sum(1 for v in vs if v == "no-soportada"),
+            "contradicen": sum(1 for v in vs if v == "contradice"),
             # #263 — el cuarto veredicto del vocabulario. Sin él los conteos NO PARTICIONAN: medido
             # en una ficha real, 73 + 6 + 5 = 84 sobre 88 pares, y las 4 que faltaban eran
             # `no verificable por extracción` correctas (#223: la fuente no está en disco). El
@@ -940,16 +987,24 @@ def verif_counts(rows: list) -> dict:
             # cabecera del propio bloque: lo no evaluable se declara, no se omite — y acá es lo que
             # dice que N afirmaciones de la nota no se pudieron contrastar contra nada.
             "no_verificables": sum(1 for v in vs if v.startswith("no verificable")),
+            # #450 — la fila cuyo veredicto vigente ya no exige acción pero que SÍ la exigió en una
+            # ronda anterior, y no por la anotación de #232 sino porque alguien escribió el
+            # veredicto pelado (`contradice→soportada`). La partición la cuenta por el último
+            # eslabón, que es lo correcto; esto es lo que ese cambio dejaría de mostrar, declarado
+            # aparte en vez de perdido — el punto de #232 es que el número no se blanquea.
+            "revertidas": sum(1 for r in rows
+                              if current_verdict(r.verdict) not in VERDICTS_SIN_RESOLVER
+                              and any(x in VERDICTS_SIN_RESOLVER for x in verdict_chain(r.verdict))),
             # #286 — cuántas de esas dos ya no están abiertas. ⛔ Sin RESTARLAS del total: el punto
             # de #232 es que el número no se blanquea —la nota SÍ contradijo a su fuente— y lo que
             # faltaba era decir cuántas se resolvieron. Sin el desglose, «9 no-soportadas» tiene dos
             # lecturas —«hay 9 afirmaciones sin respaldo» (falsa y grave) y «las tuvo y se
             # corrigieron» (verdadera)— y la cabecera existe para no tener que bajar a la tabla.
             "no_soportadas_resueltas": sum(1 for r in rows
-                                           if str(r.verdict or "").strip().lower().startswith("no-soportada")
+                                           if current_verdict(r.verdict) == "no-soportada"
                                            and resueltos(r.verdict)),
             "contradicen_resueltas": sum(1 for r in rows
-                                         if str(r.verdict or "").strip().lower().startswith("contradice")
+                                         if current_verdict(r.verdict) == "contradice"
                                          and resueltos(r.verdict)),
             # #274c — filas cuya celda registra MÁS DE UNA ronda (`no-soportada→contradice→
             # corregida`). La partición sigue siendo por el PRIMER veredicto —el que dice qué hizo
@@ -985,7 +1040,8 @@ def verif_summary(rows: list) -> str:
             f"/ {c['contradicen']} contradicen ({c['contradicen_resueltas']} resueltas) "
             f"/ {c['no_verificables']} no verificables "
             f"— {c['con_condicion']} con condición declarada"
-            + (f" · {c['cadenas']} con más de una ronda" if c["cadenas"] else ""))
+            + (f" · {c['cadenas']} con más de una ronda" if c["cadenas"] else "")
+            + (f" · {c['revertidas']} revertidas en una ronda posterior" if c["revertidas"] else ""))
 
 
 def verif_subsection_lines(rows: list, prose: str) -> dict:
@@ -1275,8 +1331,7 @@ def verdict_chain(verdict: str) -> list:
     13 bad verdicts were issued and 11 reached the block. Reading the chain is what lets a consumer
     count rounds; the partition of `verif_counts` still keys on the **first** verdict, which is the
     one that says what the note actually did wrong."""
-    partes = [x.strip(_ADORNO).strip() for x in _RESOLUCION_SEP.split(str(verdict or "").lower())]
-    return [x for x in partes if x in VERDICTS]
+    return [x for x in _cell_parts(verdict) if x in VERDICTS]
 
 
 def chained_verdict(previous: str, current: str) -> str:
@@ -1295,10 +1350,14 @@ def chained_verdict(previous: str, current: str) -> str:
 
     ⚠ Loosening the anchor is not an option (#224): the anchor stays the detector of expiry; this is
     the history axis, which is what was missing."""
-    prev = verdict_chain(previous)
+    # ⛔ #450 — se mira el veredicto VIGENTE del previo (el último eslabón), no el primero: con
+    # `prev[0]`, un `soportada→contradice` re-anclado y limpio en la ronda siguiente devolvía
+    # `soportada` pelada y la contradicción desaparecía del bloque — el blanqueo exacto que #232
+    # existe para impedir, por el camino que #366 abrió.
+    vigente = current_verdict(previous)
     cur = verdict_chain(current)
-    if prev and prev[0] in ("contradice", "no-soportada") and cur == ["soportada"]:
-        return f"{prev[0]}→corregida"
+    if vigente in ("contradice", "no-soportada") and cur == ["soportada"]:
+        return f"{vigente}→corregida"
     return current
 
 

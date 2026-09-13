@@ -128,6 +128,11 @@ Deben quedar en **0**:
 - **Veredicto que exige acción sin resolver** (#91) y las demás reglas del bloque de verificación —
   ver la sección *Verify* de `CLAUDE.md`: `no-soportada`/`contradice` pelados bloquean; la
   resolución se anota en la celda (`contradice→corregida`), nunca pisa el veredicto (#232).
+  ⛔ **Se decide por el ÚLTIMO eslabón de la cadena (#450)**, no por el primero, y la resolución
+  tiene que venir después de él: `soportada→contradice` **bloquea** (la ronda 2 contradice y nadie
+  la resolvió), `no-soportada→corregida` no, `no-soportada→corregida→no-soportada` sí. El hallazgo
+  **nombra el vigente** cuando la celda es una cadena, porque leída de izquierda a derecha dice lo
+  contrario de lo que rige.
 - **Bloque de verificación con plantilla vieja** (sin las columnas de hash): no es "cero vencidos",
   es un bloque que nadie puede evaluar. **Bloqueante siempre**, con o sin `--cierre`.
 - **El par nota ↔ hermano de auditoría** (#344/INV-148) — tres categorías, las tres bloqueantes.

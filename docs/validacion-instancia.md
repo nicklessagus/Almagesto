@@ -416,3 +416,12 @@ categoría *Lente desincronizada* deja de listar −45/−20 sobre `ica`/`ica-ru
 imprime para el caso no evaluable **corre** tal cual. **Devolver si** un `extra_core` o un paper con
 `citation_count` ≥ umbral y la faceta propia sigue saliendo, o si una estrella cambió de veredicto
 respecto de v1.259.2 (ahí no cambió nada salvo la exención por bibcode).
+
+## #450 · v1.261.0
+
+Sobre las 6 filas del barrido: `lint.py` → las 5 abiertas salen como **bloqueante** de #91 nombrando
+el vigente (`soportada→contradice` (vigente: `contradice`)), y la 6ª (`…→corregida (r9 …)`) no; la
+cabecera de `hd_40307` pasa de «3 contradicen (3 resueltas)» a contar la abierta, y
+`lint --cierre hd_40307` da **rc ≠ 0** hasta resolverla. **Devolver si** alguna cadena que termina en
+`no-soportada`/`contradice` sigue pasando, si una `contradice→corregida` empezó a bloquear, o si la
+cabecera de una nota sin cadenas cambió algún número.

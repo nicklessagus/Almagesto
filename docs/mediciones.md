@@ -2119,3 +2119,27 @@ con `gate2_open`— la llaman `classify_theme`, `puertas_abiertas` y `lens_core_
 `regla_tema` con el `citation_count` de la nota); `reclass_verdicts` clasifica un tema con `facet:`
 vía `reclassify_for_theme` sobre una copia y exime la curación por bibcode (`cfg.curated_bibcodes`,
 compartida con `lens_diff_offline`); el lint imprime `query_ads.py <slug> [--theme] --dry-run`.
+
+## 2026-09-13 · El `→` con dos significados: un `contradice` abierto con el gate en rc 0 (#450)
+
+Tras re-verificar 425 pares a ciegas en la instancia (#436 → D-20), el hermano de `hd_40307` quedó
+con una fila `soportada→contradice` —la ficha decía «no publica RV individuales» y el publicado sí
+las publica—, la cabecera dijo **«3 contradicen (3 resueltas)»** y `lint --cierre hd_40307` dio
+**rc 0**. Barrido de la bóveda: **6 filas en 4 notas** con el último eslabón `contradice`/
+`no-soportada`, **5 abiertas contadas como resueltas**, dos de sesiones anteriores que nadie vio.
+
+Mecanismo: `resueltos()` devolvía `True` ante *cualquier* texto tras el separador, y el mismo
+separador encadena rondas (#232/#274c). Dos significados en un carácter, y el lector elegía el
+benigno; la partición de la cabecera iba por el **primer** eslabón, así que la fila caía en
+`soportadas`. Es INV-117 reabierto por la mecánica de rondas: **el veredicto que exige acción es el
+último, y era el que nadie miraba.**
+
+**Qué cambió (1.261.0):** `lb.current_verdict` (el último eslabón) y `lb._cell_parts` (UNA
+partición de la celda, compartida por sus tres lectores); `resueltos` exige que la anotación venga
+**después** del veredicto vigente; `verif_counts`/`verif_summary` particionan por el vigente y
+declaran `revertidas` —lo único que esa partición dejaría de mostrar, y el blanqueo que #232 teme—;
+`lb.chained_verdict` (#366) mira el vigente y no `prev[0]`, con lo que un `soportada→contradice`
+re-anclado y limpio ya no vuelve `soportada` pelada; `write_verif_sidecar.chained_verdict` parte con
+`lb._cell_parts` en vez de abrir a mano sobre `→` (su pregunta es otra: qué se escribió último). El
+hallazgo del lint nombra el vigente. ⚠ La anotación sigue siendo texto libre, que es cómo se escribe
+el estado del punto 3 del issue (#316) sin abrir `VERDICTS`.

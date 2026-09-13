@@ -790,6 +790,28 @@ temas de método; si sigue listando algo, es porque la lente cambió de verdad (
 `python scripts/query_ads.py <tema> --theme --dry-run` → los `extra_core` y los fundacionales no
 salen.
 
+## 2y · v1.261.0 (#450) — el veredicto vigente es el último eslabón
+
+Nada que migrar en el schema, pero **el lint va a bloquear** lo que antes pasaba: toda fila cuya
+cadena termine en `no-soportada`/`contradice` sin resolución después. Enumeralas antes de correr el
+cierre:
+
+```bash
+python - <<'EOF2'
+import sys, glob; sys.path.insert(0, "scripts"); import lib_config as c, lib_blocks as lb
+for f in sorted(glob.glob("vault/wiki/**/*.verif.md", recursive=True)):
+    for r in (lb.parse_verif_table(open(f, encoding="utf-8").read()) or []):
+        if not lb.resueltos(r.verdict):
+            print(f, r.n, r.verdict)
+EOF2
+```
+
+Cada una se resuelve como cualquier `no-soportada`: bajar la afirmación a lo que dice la fuente,
+reasignar la cita, marcarla `inferencia` o taguear la disputa — y anotar la resolución **después**
+del último veredicto (`soportada→contradice→corregida (…)`). Para el estado que el vocabulario no
+tiene (*«la fuente citada es un CONTRASTE, no el origen del dato»*, #316) la anotación es texto
+libre y alcanza.
+
 ## 3 · Cierre
 
 ```bash

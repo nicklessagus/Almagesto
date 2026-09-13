@@ -2230,6 +2230,16 @@
    "number": 448,
    "title": "`replace_pdf`: re-extrae el `.txt` sólo en los slugs con copia del PDF — las copias D-18 del `.txt` viven en más slugs, y el residuo es el BLOQUEANTE D-18/D-20",
    "state": "CLOSED"
+  },
+  {
+   "number": 449,
+   "title": "Reemplazar el PDF deja la PROSA de la nota afirmando lo contrario de lo que hay en disco («el PDF en disco es el preprint»), y ninguna capa lo mira — medido: 43 salvedades en 31 notas tras #436",
+   "state": "OPEN"
+  },
+  {
+   "number": 450,
+   "title": "`resueltos()` lee CUALQUIER cosa tras `→` como resolución, y `→` es también el encadenado de rondas (#232): `soportada→contradice` cuenta como resuelto, el lint da rc 0 con un `contradice` abierto — medido: 5 filas en 4 notas",
+   "state": "OPEN"
   }
  ]
 }

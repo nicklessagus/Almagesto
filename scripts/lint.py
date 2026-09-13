@@ -3351,8 +3351,14 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tu
                        f"({' | '.join(lb.VERDICTS)}): la celda no se puede leer, así que no "
                        f"certifica nada — corregí el veredicto"))
         elif not lb.resueltos(fila.verdict):
+            # #450 — se nombra el veredicto VIGENTE (el último eslabón) además de la celda: en una
+            # cadena, la celda empieza con el veredicto de la ronda 1 y se lee al revés de lo que
+            # dice hoy (`soportada→contradice` arranca con «soportada»).
+            vigente = lb.current_verdict(fila.verdict)
+            detalle = (f"`{fila.verdict}` (vigente: `{vigente}`)"
+                       if len(lb.verdict_chain(fila.verdict)) > 1 else f"`{fila.verdict}`")
             verif_sin_resolver.append(
-                (stem, f"[[{fila.bibcode}]] quedó `{fila.verdict}` en el bloque: la nota afirma "
+                (stem, f"[[{fila.bibcode}]] quedó {detalle} en el bloque: la nota afirma "
                        f"algo que su propia fuente no respalda → bajala a lo que dice la fuente, "
                        f"reasigná la cita, marcala `inferencia`, o tagueá la disputa"))
         exacto = next((p for p in pendientes

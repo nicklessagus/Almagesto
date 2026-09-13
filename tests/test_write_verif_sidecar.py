@@ -843,3 +843,16 @@ def test_el_cli_de_condiciones_rehusa_la_nota_QUE_NO_EXISTE(toy_vault, capsys):
     error saldría desde adentro, sobre un archivo que nadie abrió."""
     assert ws.main(["--migrate-condition-prefix", str(cfg.WIKI / "no-existe.md")]) == 2
     assert "no es una nota" in capsys.readouterr().out
+
+
+def test_450_la_cadena_se_parte_con_el_vocabulario_COMPLETO_de_separadores():
+    """#450 — `chained_verdict` abría la celda a mano sobre `→` y el separador real incluye `->`,
+    `—`, `:` y `(` (`lb._RESOLUCION_SEP`): una celda escrita con cualquiera de ésos se extendía
+    repitiendo el veredicto que ya tenía. ⚠ Su pregunta NO es «cuál rige» sino «qué se escribió
+    último»: una fila resuelta que vuelve a fallar SÍ se extiende, y así queda abierta."""
+    assert ws.chained_verdict("no-soportada→corregida", "no-soportada") == \
+        "no-soportada→corregida→no-soportada"
+    assert lb.resueltos("no-soportada→corregida→no-soportada") is False, "y queda ABIERTA"
+    assert ws.chained_verdict("contradice", "contradice") == "contradice", "no se repite"
+    assert ws.chained_verdict("soportada -> contradice", "contradice") == "soportada -> contradice"
+    assert ws.chained_verdict(None, "soportada") == "soportada"

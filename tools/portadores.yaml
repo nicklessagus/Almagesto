@@ -570,6 +570,32 @@ portadores:
         estado: fuera-de-alcance
         motivo: Ídem — backend de descubrimiento, misma paridad de schema que `to_record`.
 
+  - issue: 450
+    regla: >-
+      El veredicto VIGENTE de un par es el ÚLTIMO eslabón de su cadena, y la resolución va después
+      de él: el separador encadena rondas (#232) y anota la resolución (#91), y lo que las
+      distingue es el vocabulario cerrado. La partición de la cabecera y el bloqueante se deciden
+      por el vigente, nunca por el primero.
+    funcion: lib_blocks.current_verdict
+    patron: 'resueltos\(|verdict_chain\(|verif_counts\(|\.verdict\b'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: usa
+        motivo: "`resueltos`, `verif_counts` y `chained_verdict` (#366) deciden por el eslabón vigente; `_cell_parts` es la única partición de la celda."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "el detector #91 bloquea por `resueltos` y NOMBRA el vigente cuando la celda es una cadena."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Su `chained_verdict` pregunta QUÉ SE ESCRIBIÓ ÚLTIMO en la celda (para no extender la
+          cadena repitiendo una ronda), no cuál veredicto rige — son preguntas distintas y dan
+          distinto sobre `no-soportada→corregida`. Comparte la PARTICIÓN (`lb._cell_parts`) en vez
+          de abrirla a mano sobre `→`, que es lo que hacía.
+      - modulo: scripts/reverify_subset.py
+        estado: fuera-de-alcance
+        motivo: Transporta la celda verbatim al `--json` del re-anclaje y no la interpreta; quien la lee es `lb.chained_verdict`.
+
   - issue: 416
     regla: >-
       La línea sobre un `## Abstract` transcrito del PDF afirma DOS cosas y sólo una vale siempre:

@@ -1678,3 +1678,63 @@ def test_subsection_split_conserva_el_ADORNO_de_apertura_de_la_prosa():
     es, prosa = lb.subsection_split("Omisiones en transcripciones: `nada`", "Omisiones en transcripciones")
     assert es and prosa == "`nada`", prosa
 
+
+
+def test_450_el_veredicto_vigente_es_el_ULTIMO_eslabon_de_la_cadena():
+    """⛔ #450 — el separador `→` tiene DOS significados: encadena rondas (#232/#274c) y anota la
+    resolución. `resueltos` leía *cualquier cosa* tras el separador como resolución, así que
+    `soportada→contradice` —una contradicción que la ronda 2 encontró y nadie resolvió— contaba
+    como resuelta y apagaba el bloqueante de #91. Medido: 5 filas abiertas en 4 notas, dos de
+    sesiones anteriores, con `lint --cierre` en rc 0 y la cabecera diciendo «0 contradicen»."""
+    # el veredicto vigente
+    assert lb.current_verdict("soportada→contradice") == "contradice"
+    assert lb.current_verdict("no-soportada→corregida") == "no-soportada", "la anotación no es ronda"
+    assert lb.current_verdict("no-soportada→corregida→no-soportada") == "no-soportada"
+    assert lb.current_verdict("contradise") == "", "typo: no hay veredicto legible"
+    # resueltos: la resolución va DESPUÉS del veredicto vigente
+    assert lb.resueltos("soportada→contradice") is False
+    assert lb.resueltos("soportada → contradice") is False, "el espaciado no cambia el veredicto"
+    assert lb.resueltos("**soportada**→**contradice**") is False, "#168: el adorno tampoco"
+    assert lb.resueltos("no-soportada→corregida") is True
+    assert lb.resueltos("soportada→contradice→corregida (r9 con el publicado)") is True
+    assert lb.resueltos("no-soportada→corregida→no-soportada") is False
+    assert lb.resueltos("soportada") is True and lb.resueltos("contradice") is False
+    assert lb.resueltos("no verificable por extracción") is True
+    assert lb.resueltos("contradise") is False and lb.resueltos("") is False
+    # la anotación es texto LIBRE: declara un estado que el vocabulario cerrado no tiene (#316)
+    assert lb.resueltos("no-soportada→la fuente citada es un CONTRASTE, no el origen del dato") is True
+
+
+def test_450_la_cabecera_particiona_por_el_veredicto_VIGENTE():
+    """#450 — «3 contradicen (3 resueltas)» con una abierta es un mapa que atribuye mal (regla de
+    método 4). La partición pasa al último eslabón; la cadena canónica de #232
+    (`contradice→corregida`) NO se blanquea, porque su último eslabón sigue siendo `contradice`."""
+    def _f(v):
+        return lb.Row(n=1, claim="c", bibcode="2020A", verdict=v, evidence="e", anchor="a",
+                      source_hash="pdf:1234567890", condition="—")
+    c = lb.verif_counts([_f("soportada→contradice")])
+    assert (c["soportadas"], c["contradicen"], c["contradicen_resueltas"]) == (0, 1, 0)
+    assert lb.verif_summary([_f("soportada→contradice")]).startswith(
+        "1 pares; 0 soportadas / 0 no-soportadas (0 resueltas) / 1 contradicen (0 resueltas)")
+    # #232 intacto: la anotación no mueve el veredicto vigente
+    c = lb.verif_counts([_f("contradice→corregida")])
+    assert (c["contradicen"], c["contradicen_resueltas"], c["revertidas"]) == (1, 1, 0)
+    # lo que la partición por el último eslabón dejaría de mostrar, se DECLARA
+    c = lb.verif_counts([_f("contradice→soportada")])
+    assert (c["soportadas"], c["contradicen"], c["revertidas"]) == (1, 0, 1)
+    assert "1 revertidas en una ronda posterior" in lb.verif_summary([_f("contradice→soportada")])
+    # y los cuatro siguen PARTICIONANDO (#263)
+    filas = [_f(v) for v in ("soportada", "no-soportada→corregida", "soportada→contradice",
+                             "no verificable por extracción", "contradice→soportada")]
+    c = lb.verif_counts(filas)
+    assert c["soportadas"] + c["no_soportadas"] + c["contradicen"] + c["no_verificables"] == c["pares"]
+
+
+def test_450_el_re_anclaje_no_blanquea_una_contradiccion_de_la_RONDA_2():
+    """#450 en el camino de #366: `chained_verdict` miraba `prev[0]`, así que un
+    `soportada→contradice` re-anclado y limpio en la ronda siguiente volvía `soportada` pelada y la
+    contradicción desaparecía del bloque — el blanqueo que #232 existe para impedir."""
+    assert lb.chained_verdict("soportada→contradice", "soportada") == "contradice→corregida"
+    assert lb.chained_verdict("contradice→corregida", "soportada") == "contradice→corregida"
+    assert lb.chained_verdict("soportada", "soportada") == "soportada", "sin falla previa no anota"
+    assert lb.chained_verdict("soportada→contradice", "contradice") == "contradice"

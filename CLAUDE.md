@@ -1408,8 +1408,15 @@ de `entity.py`.
   `contradice` **pelados bloquean**. No cuentan `no verificable por extracción` ni la resolución
   anotada en la celda.
 - ⛔ **Con DOS RONDAS, la segunda ANOTA, no pisa (#232):** `contradice→corregida`. Si pisara, el
-  bloque final publicaría 0 donde hubo 3 `contradice`. Con más rondas la celda encadena (#274c): la
-  partición de la cabecera es por el **primer** veredicto y la cadena se publica aparte.
+  bloque final publicaría 0 donde hubo 3 `contradice`. Con más rondas la celda encadena (#274c).
+  ⛔ **El veredicto VIGENTE es el ÚLTIMO eslabón, y la resolución va DESPUÉS de él (#450):** el
+  mismo `→` encadena rondas y anota la resolución, y lo que los distingue es el vocabulario cerrado
+  —`soportada→contradice` es una contradicción **abierta**, no una resuelta—. Leyendo *cualquier
+  cosa* tras el separador como resolución, el bloqueante se apagaba y la cabecera partía por el
+  **primer** veredicto: medido, 5 filas abiertas en 4 notas bajo un «0 contradicen», con
+  `lint --cierre` en 0. La partición, los `(N resueltas)` y el re-anclaje de #366 van por el
+  vigente; lo que eso dejaría de mostrar se declara (`revertidas`). ⚠ La anotación sigue siendo
+  **texto libre**: es cómo se escribe un estado que el vocabulario cerrado no tiene (#316).
 - ⛔ **La cabecera la genera el mismo código que lee la tabla** (`lib_blocks.verif_summary`,
   INV-81): los **cuatro** veredictos —que particionan— y, tras un **`—`**, `con_condicion` (eje
   ortogonal). Las **tres sub-secciones** van **aunque digan «ninguna»**: son el único rastro del
