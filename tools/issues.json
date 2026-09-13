@@ -2245,6 +2245,11 @@
    "number": 451,
    "title": "`write_verif_sidecar`: la condición de una ronda posterior se PIERDE si la fila ya tenía una (resuelta de la misma clase, o al re-anclar) — medido: 55 `acota` de una ronda de 425 pares no llegaron a su fila, una de ellas «la nota se contradice consigo misma»",
    "state": "OPEN"
+  },
+  {
+   "number": 452,
+   "title": "La salvedad que dice QUÉ DOCUMENTO se leyó no es estructurada (`pdf_leido` en `SALVEDAD_TIPOS`): el detector de #449 tiene que adivinar de quién habla la oración — punto 3 de #449",
+   "state": "OPEN"
   }
  ]
 }
