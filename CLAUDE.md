@@ -893,6 +893,13 @@ abre nunca** (medido en `ica`: 0 papers con el `fq` heredado teniendo `fundacion
 2 sin él —Comon 1994—; el tema se cerró sin su canon y hubo que re-sintetizarlo entero). Es **sólo
 un aviso**: los tres estados no se tocan y un `null` **declarado** lo hace callar.
 
+⛔ **Y la re-clasificación del tema va sobre el corpus COMPLETO, no sólo sobre la query directa
+(#455):** entre medio suman registros la **segunda pasada por fecha** (#79) y el **chaining**, y las
+dos clasifican con la lente global — medido en `ica-ruido`, **7 de 10** papers de `query:recent`
+entraron core con **`puertas: []`** (radar, EEG, motores) sin matchear la faceta propia, se bajaron
+sus PDFs y se les hizo nota. Corre después de todo lo que suma registros y **antes** de la exclusión
+declarada (#112), y la red barata es que **`relevant: True` con `puertas: []` es un estado
+IMPOSIBLE** para un tema con faceta propia: se reporta con sus bibcodes.
 ⛔ **Y el PREVIEW de un tema se corre con esa lente, no con la global (#208):**
 `python scripts/query_ads.py <slug> --theme --probe` (la query sale de `query:` del tema).
 Clasificar ahí con `relevance.facets` no es «menos preciso» sobre la población que el tema existe

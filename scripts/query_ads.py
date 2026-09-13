@@ -1050,6 +1050,22 @@ def reclassify_for_theme(recs: list, meta: dict, curados=()) -> tuple[list, list
     return entraron, salieron
 
 
+def core_without_gate(recs: list, meta: dict) -> list:
+    """The bibcodes that are `relevant: True` with `puertas: []` — the state D-26 calls IMPOSSIBLE (#455).
+
+    For a theme with its own facet, `core = own facet AND (gate 2 OR gate 3)`: no gate open and core
+    anyway is the exact signature of a path that classified with the **global** lens. Measured on
+    `ica-ruido`: 7 of 10 papers from the by-date second pass —radar, EEG, engines— carried it, and
+    they were downloaded and given notes.
+
+    ⛔ Only when the theme declares `facet:`. Without an own facet the global lens IS the right one
+    (`reclassify_for_theme` is a no-op on purpose), so an empty `puertas` is the NORMAL state and
+    warning would be a permanent false positive over every theme that declares no lens of its own."""
+    if not (meta or {}).get("facet"):
+        return []
+    return [r.get("bibcode") for r in recs if r.get("relevant") and not (r.get("puertas") or [])]
+
+
 def gate_cited_by_corpus(recs: list, index: dict | None = None) -> list:
     """**Puerta 1** de D-26: los registros que la regla del tema NO hizo core pero que **el corpus
     cita**, propuestos como candidatos del triage.
@@ -1851,6 +1867,30 @@ def main() -> int:
             cfg.print_seguro(f"  puerta 1 (lo cita tu corpus): +{len(p1)} candidatos al triage "
                              f"— no son core, los juzgás vos: python scripts/triage.py {args.slug}")
 
+    # ⛔ #455 — la regla del tema, sobre `recs` COMPLETO y no sólo sobre la query directa. Entre la
+    # primera pasada y acá suman registros la segunda pasada por fecha (#79) y el chaining, y los
+    # dos clasifican con la lente GLOBAL: medido en `ica-ruido`, **7 de 10** papers de `query:recent`
+    # entraron `relevant: True` con `puertas: []` —radar, EEG, motores— sin matchear la faceta
+    # propia, o sea el estado que D-26 declara imposible; se bajaron sus PDFs y se les hizo nota.
+    # Es el tercer portador de la misma regla, después del preview (#208) y del delta (#447).
+    #
+    # ⚠ Va ACÁ y no más abajo, por el orden que #112 ya fija: después de todo lo que suma registros
+    # y ANTES de la exclusión declarada, o la re-clasificación volvería a marcar core lo que
+    # `--drop-core` sacó. Y la primera pasada se conserva: el chaining se ancla a los core de la
+    # query directa, así que si esa no se re-juzga el grafo se siembra con la lente equivocada.
+    # Correrla dos veces es idempotente (el delta sale vacío y `puertas` se recomputa igual).
+    if head.get("kind") == "theme":
+        _ent2, _sal2 = reclassify_for_theme(
+            recs, meta, curados={e["bibcode"] for e in cfg.load_extra_core(meta, entry=args.slug)})
+        if _ent2 or _sal2:
+            cfg.print_seguro(f"  regla del tema (D-26) sobre TODO el corpus: +{len(_ent2)} core / "
+                             f"-{len(_sal2)} · entran {_ent2[:5]} · salen {_sal2[:5]}")
+        # Y la red barata (#455): el estado que D-26 declara imposible.
+        _imposibles = core_without_gate(recs, meta)
+        if _imposibles:
+            cfg.print_seguro(f"  ⛔ {len(_imposibles)} core SIN ninguna puerta abierta (#455): es el "
+                             f"estado que D-26 declara imposible — algún camino clasificó con la "
+                             f"lente global · {_imposibles[:5]}")
     # ⛔ SEGUNDA pasada de la exclusión declarada, y es la que decide (#112). La primera corre justo
     # después de la query directa, o sea ANTES de que sumen registros la 2ª pasada por fecha (#79),
     # `extra_core`, el rescate por glifo (#28) y el chaining: por esos cuatro caminos un paper

@@ -702,3 +702,30 @@ git diff --stat vault/wiki/papers/   # ningún `-` de bullet de prosa
 **Devolver si** algún bullet de prosa desaparece, si el cobro de #452 con `evidencia` queda
 rehusado, o si la escotilla amnistía un borrado que no tiene contraparte en la nota.
 
+## #455 · v1.267.0
+
+**Qué entró.** `reclassify_for_theme` sobre `recs` COMPLETO (después de todo lo que suma registros y
+antes de la exclusión declarada, #112), así que la segunda pasada por fecha y el chaining quedan
+cubiertos por construcción. Más `core_without_gate`: `relevant: True` con `puertas: []` se reporta,
+sólo en temas con faceta propia.
+
+**Validar** — es la corrida que produjo el issue:
+
+```bash
+python scripts/query_ads.py ica-ruido --theme          # o la cadena entera
+python -c "import json;d=json.load(open('build/ica-ruido/ads.json'));\
+print([r['bibcode'] for r in d['records'] if r['relevant'] and not r.get('puertas')])"
+```
+
+- los 7 de `query:recent` que no matchean la faceta propia tienen que salir **`relevant: False`**
+  con *«sin la faceta propia del tema»*, y **no** bajarse ni crear nota;
+- **ningún** core con `puertas: []` (la lista de arriba tiene que dar vacía);
+- los `extra_core` y el `2026ChPhB..35e0401H` que declaraste **siguen core**, con `puertas`
+  poblado;
+- y los 9 que sacaste con `--drop-core` siguen afuera (la re-clasificación corre **antes** de la
+  exclusión declarada, así que no los devuelve).
+
+**Devolver si** un paper sin la faceta propia sigue entrando core por cualquier camino, si algún
+core queda con `puertas: []`, si la re-clasificación revierte un `--drop-core`, o si toca un
+`extra_core`.
+

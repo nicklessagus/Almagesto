@@ -2689,3 +2689,53 @@ def test_probe_sin_umbral_no_habla_de_la_puerta_2(toy_classifier, monkeypatch, c
     _objetivo_con_fq(monkeypatch, search_fq=None, facets={"rv": "rv"})
     qa.print_probe("q", _recs_ica(), theme_meta={"title": "ICA", "facet": "ica"})
     assert "citation_count de ADS" not in capsys.readouterr().out
+
+
+def test_455_la_SEGUNDA_PASADA_y_el_chaining_se_re_juzgan_con_la_lente_DEL_TEMA(
+        toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    """⛔ #455 — `recent_pass` (#79) y `chain_candidates` llaman a `query_ads` directo, que clasifica
+    con la lente GLOBAL y nunca pasa por `classify_theme`: el veredicto de core dependía de POR QUÉ
+    CAMINO llegó el paper, cuando D-26 lo define como función de `(paper, lente del tema)`.
+
+    Medido en `ica-ruido` el 2026-09-13: la cadena creó **10 notas que nadie pidió**, todas de la
+    segunda pasada, y **7 de 10** no matchean la faceta propia —radar, EEG, detección de combustión
+    en motores— pero salieron `relevant: True` con **`puertas: []`**, que es literalmente el estado
+    que D-26 declara imposible. Se bajaron sus PDFs y se les hizo nota. Tercer portador de la misma
+    regla, después del preview (#208) y del delta de re-clasificación (#447)."""
+    monkeypatch.setattr(qa, "FACET_PATTERNS", {"rv": re.compile("radial velocity", re.I)})
+    monkeypatch.setattr(qa, "REQUIRE_FACETS", [])
+    monkeypatch.setattr(qa, "MIN_FACETS", 1)
+    write_yaml(cfg.THEMES_YAML, {"ica_ruido": {"slug": "ica_ruido", "concept": "ICA ruidosa",
+                                               "query": "title:ica", "facet": "independent component",
+                                               "fundacional_min_citas": 2000}})
+    directa = [rec("2020dir.....1D", title="independent component analysis of radial velocity")]
+
+    def fake_query(q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k):
+        if meta is not None:                       # la query directa: marca truncado
+            meta.update({"truncated": True, "num_found": 99, "rows": rows})
+            return [dict(r) for r in directa]
+        # la SEGUNDA pasada: la lente global lo da core (dice «radial velocity»), la del tema no
+        return [rec("2024RemS...16.1544W", title="radial velocity clutter suppression for radar")]
+    monkeypatch.setattr(qa, "query_ads", fake_query)
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
+    assert run_main(monkeypatch, ["ica_ruido", "--theme"]) == 0
+    bibs = {r["bibcode"]: r for r in json.loads(
+        (toy_vault.ROOT / "build" / "ica_ruido" / "ads.json").read_text())["records"]}
+    radar = bibs["2024RemS...16.1544W"]
+    assert radar["relevant"] is False, "⛔ no matchea la faceta propia: no puede ser core"
+    assert "sin la faceta propia" in (radar["why_excluded"] or "")
+    assert bibs["2020dir.....1D"]["relevant"] is True, "el que SÍ la matchea no se toca"
+    # ⛔ Y la red barata: `relevant: True` con `puertas: []` es el estado imposible de D-26
+    assert not [r for r in bibs.values() if r["relevant"] and not (r.get("puertas") or [])]
+    assert "regla del tema (D-26) sobre TODO el corpus" in capsys.readouterr().out
+
+
+def test_455_core_sin_puerta_es_el_estado_IMPOSIBLE_y_solo_con_faceta_propia():
+    """#455 — la red barata. ⚠ Sólo si el tema declara `facet:`: sin faceta propia la lente global
+    es la que corresponde (`reclassify_for_theme` es no-op a propósito), así que `puertas` vacío es
+    el estado NORMAL y avisar sería un falso positivo permanente."""
+    recs = [rec("2024mal.....1M", puertas=[]), rec("2024ok......1O", puertas=["astro"]),
+            rec("2024no......1N", relevant=False, puertas=[])]
+    assert qa.core_without_gate(recs, {"facet": "independent component"}) == ["2024mal.....1M"]
+    assert qa.core_without_gate(recs, {}) == [], "sin faceta propia no hay regla del tema que violar"
+    assert qa.core_without_gate([], {"facet": "x"}) == []

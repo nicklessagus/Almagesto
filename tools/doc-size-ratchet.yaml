@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-13"
-techo_lineas: 1914
-techo_bytes: 156600
+techo_lineas: 1922
+techo_bytes: 157500
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -488,3 +488,14 @@ crecimientos:
       dos cambian lo que el agente puede correr sin revisar.
     techo_lineas: 1914
     techo_bytes: 156600
+  - fecha: "2026-09-13"
+    ancla: "#455"
+    motivo: >-
+      Siete líneas en el párrafo de D-26, junto al preview (#208) y al delta (#447), que son los
+      otros dos portadores de la misma regla: la re-clasificación del tema va sobre el corpus
+      COMPLETO, porque entre medio suman registros la segunda pasada por fecha y el chaining, que
+      clasifican con la lente global (medido: 7 de 10 papers de `query:recent` core con
+      `puertas: []` —radar, EEG, motores—, bajados y con nota). Cambia lo que el agente ve al
+      correr un ingest de tema, así que va con la regla.
+    techo_lineas: 1922
+    techo_bytes: 157500

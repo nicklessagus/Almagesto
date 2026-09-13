@@ -2431,3 +2431,33 @@ que no tiene contraparte en ninguna parte, sí lo es. ⚠ Menor de la misma vuel
 interpolaba el literal *«sin fuente adyacente»* donde va el bibcode — el bloque de salvedades no
 lleva `[[bibcode]]`, así que ahí el dueño es **la nota**.
 
+## #455 · la segunda pasada por fecha clasificaba con la lente global (2026-09-13, `Almagesto-Tesis`)
+
+Corriendo `ingest_theme.py ica-ruido` —tema de método con `search_fq: null` (#351)— para meter un
+paper curado, la cadena creó **10 notas que nadie pidió**, todas de la segunda pasada (#79). **7 de
+10 no matchean la faceta propia del tema** —supresión de clutter de radar, radar pasivo LEO, radar
+UWB en una mina, respiración por WiFi, ranging óptico, signos vitales por radar, detección de
+combustión por vibraciones en motores— y sin embargo salieron `relevant: True`, se bajaron sus PDFs,
+se extrajeron sus `.txt` y se les creó nota.
+
+El mecanismo: `recent_pass` llama a `query_ads` directo, que clasifica con la lente **global** y
+nunca pasa por `classify_theme`; sus `facets` son las globales y **`puertas` queda vacío** — la marca
+de #126 que dice *por cuál puerta entró*— con `relevant: True`. Un core sin ninguna puerta abierta es
+literalmente el estado que D-26 declara imposible. Misma familia que #208 (el preview) y #447 (el
+delta): el veredicto de core dependía de **por qué camino** llegó el paper, cuando tendría que ser
+función de `(paper, lente del tema)`.
+
+**Qué cambió (1.267.0).** `reclassify_for_theme` corre una segunda vez sobre `recs` **completo** —
+después de todo lo que suma registros (segunda pasada, `extra_core`, glifo, chaining) y **antes** de
+la exclusión declarada (#112), que es el orden que esa regla ya fijaba—, así que la cobertura no
+depende de enumerar caminos: los cubre por construcción. La primera pasada se conserva porque el
+chaining se ancla a los core de la query directa. Y `core_without_gate` es la red barata:
+`relevant: True` con `puertas: []` se reporta con sus bibcodes, ⚠ sólo en temas **con** faceta propia
+(sin ella la lente global es la que corresponde, así que avisar sería un falso positivo permanente).
+
+⚠ Lo que el issue declara y **no** se toca: con `search_fq: null` la **puerta 3** cambia de
+significado —deja de ser *«es astro»* y pasa a ser *«su abstract usa palabras que la lente astro
+matchea»*—, y por ahí entraron dos casos de polisemia pura que la regla admite (`radial velocities`
+de corrientes marinas medidas por radar HF; artefactos oculares en EEG vía componentes
+independientes). Eso es diseño, no bug, y queda dicho.
+

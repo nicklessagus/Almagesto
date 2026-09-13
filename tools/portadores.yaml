@@ -575,6 +575,25 @@ portadores:
         estado: fuera-de-alcance
         motivo: Ídem — backend de descubrimiento, misma paridad de schema que `to_record`.
 
+  - issue: 455
+    regla: >-
+      Todo camino que CLASIFIQUE papers de un tema usa la lente DEL TEMA, nunca la global: core es
+      función de `(paper, lente del tema)` y no de por qué camino llegó el paper (D-26/INV-88). Ya
+      se arregló para el preview (#208) y para el delta de re-clasificación (#447); faltaban la
+      segunda pasada por fecha (#79) y el chaining, que llaman a `query_ads` directo. Medido en
+      `ica-ruido`: 7 de 10 papers de `query:recent` entraron `relevant: True` con `puertas: []`
+      —radar, EEG, motores— sin matchear la faceta propia, se bajaron sus PDFs y se les hizo nota.
+      La re-clasificación va sobre `recs` COMPLETO, después de todo lo que suma registros y antes de
+      la exclusión declarada (#112).
+    funcion: query_ads.reclassify_for_theme
+    patron: 'recent_pass|classify_theme|theme_core|reclassify_for_theme'
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Hospeda `theme_core` —la combinación de la regla, UNA implementación (#447)— que
+          `classify_theme` llama; no clasifica ningún corpus ni recorre caminos de descubrimiento.
+
   - issue: 454
     regla: >-
       La extracción es testigo de la prosa que el SINTETIZADOR volvió a tipear, nunca de la que la
