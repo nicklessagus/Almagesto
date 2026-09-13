@@ -2281,3 +2281,33 @@ así que no puede contradecir a nadie. Y el proponente **cruza `doc_on_disk` ant
 los testigos desmienten la prosa del JSON el hallazgo es la caducidad, no una entrada que el chequeo
 rechaza— y **saltea la nota sin PDF**.
 
+## #453 · el bloque de salvedades no tenía re-estampado acotado (2026-09-13, al cobrar #452)
+
+#452 quedó andando —87 propuestas sobre 80 bibcodes, **50 de las 51** notas que el lint lista, 0
+rechazadas por su propio chequeo— y al ir a **pegarlas** no había camino. Tres pasos, los tres
+medidos en la instancia:
+
+1. pegar la entrada en `raw/extraccion/<slug>/<bib>.json` **no cambia la nota** (el bloque lo
+   escribe el cosechador), y el lint sigue listando la prosa —la categoría subió de 53 a **170** con
+   el ancla nueva—;
+2. `harvest_views.py <slug>` **sin** `--force` no re-estampa prosa redactada, y además **rechaza las
+   32 vistas de `icasso`** porque el `lente`/`fecha` del JSON ya no coincide con el de la nota: le
+   pasa a toda vista cosechada antes de #395/#307;
+3. `--force --paper <bib>` sí escribe y **re-fecha la lectura**. Medido sobre
+   `2011PLoSO...627594P`: `fecha: 2026-08-31 → 2026-09-13` y la `lente` de ocho facetas reemplazada
+   por la de hoy, sobre una lectura que **no volvió a ocurrir** y una pregunta que no cambió. Es
+   INV-146 roto del otro lado (#395 lo corrigió en la dirección contraria).
+
+O sea: la única salida que existía para cobrar #452 **falsificaba la fecha de lectura**, y por eso
+la instancia no estructuró ninguna de las 50.
+
+**Qué cambió (1.265.0).** `harvest_views.py <slug> --restamp-salvedades [--paper] [--dry-run]`
+reescribe **sólo** el bloque de salvedades desde el JSON, chequeando las estructuradas como siempre
+(`check_salvedad`), sin tocar `vistas[]` ni la prosa de la vista. Con `enfasis` la unidad es la
+sub-sección `### Lente — <x>` (#239), así que dos lecturas del mismo sujeto no se pisan. El bloque
+que tiene prosa que el cosechador no escribió se **rehúsa** nombrando la nota —misma doctrina que
+`write_view_section`—, y el renderer es **uno solo** (`render_salvedades`, sacado de `render_view`).
+Y la salvedad estructurada acepta **`evidencia`**: lo que el lector vio no lo re-deriva el chequeo
+—re-deriva el veredicto— y el JSON es versionado y no regenerable (#311), o sea el registro de esa
+lectura.
+

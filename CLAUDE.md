@@ -431,7 +431,15 @@ versión publicada»— se perdía: **47 de 51**), **`web` es una clase** (ning�
 llamarlo *publicado* era la inversión) y el proponente **cruza el disco antes de proponer** y
 **saltea la nota sin PDF**: el JSON es inmutable (#311), así que puede ser anterior a un
 `replace_pdf` y entonces el hallazgo útil es *«la salvedad quedó vieja»*, no una entrada que el
-propio chequeo rechaza.
+propio chequeo rechaza. ⛔ **Y cobrarla NO re-cosecha la vista:
+`harvest_views.py <slug> --restamp-salvedades [--paper <bib>] [--dry-run]` (#453)** — toda sección
+estampada desde un artefacto tiene su re-estampado **acotado**, y ésta era la excepción: la única
+salida era `--force`, que **re-fecha la lectura** (medido: `fecha` y `lente` de una vista del
+2026-08-31 reescritas a la de hoy sobre una lectura que no volvió a ocurrir — INV-146 roto del otro
+lado, #395). No toca `vistas[]` ni la prosa; el bloque con prosa ajena se **rehúsa** en vez de
+pisarse. ⚠ La salvedad estructurada lleva **`evidencia`**: lo que el lector vio (*«marca de agua en
+el margen de la p. 1»*) no lo re-deriva el chequeo —re-deriva el veredicto— y el JSON es el registro
+de esa lectura (#311).
 
 ⛔ **La lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212).** Es el único
 canal en esa dirección: `stars`/`thesis_links` se siembran **antes** de leer y `harvest_views` mergea

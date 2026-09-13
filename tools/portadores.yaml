@@ -575,6 +575,45 @@ portadores:
         estado: fuera-de-alcance
         motivo: Ídem — backend de descubrimiento, misma paridad de schema que `to_record`.
 
+  - issue: 453
+    regla: >-
+      Toda sección que un script ESTAMPA desde un artefacto tiene su re-estampado ACOTADO, que
+      reescribe SÓLO esa sección. Re-generar la unidad entera para actualizar una parte reescribe
+      metadata que nadie cambió: el bloque de salvedades era la excepción, así que cobrar una
+      salvedad estructurada (#452) obligaba a re-cosechar la vista, y `--force` RE-FECHA la lectura
+      —medido: `fecha` y `lente` de una vista leída el 2026-08-31 reescritas al 2026-09-13 con la
+      lente de hoy, sobre una lectura que no volvió a ocurrir, que es INV-146 roto del otro lado
+      (#395)—. Con eso, las 50 propuestas de #452 no tenían camino a la nota.
+    funcion: harvest_views.restamp_salvedades
+    patron: 'restamp|SALVEDAD_MARCAS'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Es quien FIJA el contrato: la familia `--restamp-*` (índice, matriz, cabeceras, `lente`,
+          `alcance`, abstracts) re-estampa acotado desde su artefacto. No estampa el bloque de
+          salvedades —lo escribe el cosechador— así que no puede llamar a éste.
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: >-
+          El otro portador que ya cumple, una nota más allá: `--restamp-section` reescribe SÓLO la
+          sección del hermano y no toca la tabla (#430).
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Reporta la deuda (`salvedad en prosa que un script podría decidir`, #213/#452) que hasta
+          ahora no tenía salida ejecutable; no re-estampa nada.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea por `section_span`/`write_text_atomic`, las piezas que TODO re-estampado acotado
+          usa para recortar y escribir; no decide qué sección se re-estampa.
+      - modulo: scripts/proposals.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Junta lo que el sistema propone y espera firma (#328); el re-estampado es la firma
+          aplicándose, no una propuesta.
+
   - issue: 452
     regla: >-
       Toda afirmación de una nota sobre el ARTEFACTO que una máquina puede decidir se emite

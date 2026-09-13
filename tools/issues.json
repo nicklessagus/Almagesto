@@ -2234,7 +2234,7 @@
   {
    "number": 449,
    "title": "Reemplazar el PDF deja la PROSA de la nota afirmando lo contrario de lo que hay en disco («el PDF en disco es el preprint»), y ninguna capa lo mira — medido: 43 salvedades en 31 notas tras #436",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 450,
@@ -2244,11 +2244,16 @@
   {
    "number": 451,
    "title": "`write_verif_sidecar`: la condición de una ronda posterior se PIERDE si la fila ya tenía una (resuelta de la misma clase, o al re-anclar) — medido: 55 `acota` de una ronda de 425 pares no llegaron a su fila, una de ellas «la nota se contradice consigo misma»",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 452,
    "title": "La salvedad que dice QUÉ DOCUMENTO se leyó no es estructurada (`pdf_leido` en `SALVEDAD_TIPOS`): el detector de #449 tiene que adivinar de quién habla la oración — punto 3 de #449",
+   "state": "CLOSED"
+  },
+  {
+   "number": 453,
+   "title": "No hay re-estampado ACOTADO del bloque de salvedades: cobrar una salvedad estructurada (#452) obliga a re-cosechar la vista, y eso RE-FECHA la lectura — medido: 50 propuestas sin camino a la nota",
    "state": "OPEN"
   }
  ]

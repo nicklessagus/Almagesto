@@ -1354,3 +1354,149 @@ def test_previa_solo_marca_los_campos_de_LECTURA_no_una_migracion(toy_vault):
                               "fuente": "pdf", "lente": ["rv", "actividad"]}, force=True) is True
     v = read_fm(d)["vistas"][0]
     assert set(v["previa"]) == {"fuente"}, "el `lente` reemplazado NO entra en `previa`"
+
+
+# ── #453 · el re-estampado ACOTADO del bloque de salvedades ──────────────────
+
+def test_453_restamp_salvedades_NO_refecha_la_lectura(toy_vault):
+    """⛔ #453 — la regla: lo que un script estampa desde un artefacto tiene su re-estampado
+    ACOTADO. El bloque de salvedades era la excepción, así que cobrar una salvedad estructurada
+    (#452) obligaba a re-cosechar la vista, y `--force` **re-fecha la lectura**: medido, `fecha` y
+    `lente` de una vista leída el 2026-08-31 reescritas al 2026-09-13 con la lente de hoy, sobre una
+    lectura que no volvió a ocurrir. Eso es INV-146 roto del otro lado (#395)."""
+    _con_txt(toy_vault, "el texto sin el simbolo raro")
+    d = extraccion()
+    d["salvedades"] = ["la Fig. 3 es difícil de leer"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    antes_fm = cfg.split_fm(dest.read_text(encoding="utf-8"))["vistas"][0]
+
+    # ahora se COBRA una salvedad estructurada en el JSON, como propone #452
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ_{×+×}",
+                        "evidencia": "la fórmula está en la p. 4, y el `.txt` la pierde"},
+                       "la Fig. 3 es difícil de leer"]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert r["tocadas"] == [BIB] and r["revisadas"] == 1
+    assert "⚙ verificada" in body and "ζ_{×+×}" in body
+    assert "la fórmula está en la p. 4" in body, \
+        "#453 — `evidencia` es lo que el lector VIO y el chequeo no la re-deriva"
+    assert "la Fig. 3 es difícil de leer" in body, "la prosa restante sigue publicada, marcada"
+    assert cfg.split_fm(body)["vistas"][0] == antes_fm, \
+        "⛔ la lectura no volvió a ocurrir: `fecha` y `lente` NO se tocan (INV-146)"
+
+
+def test_453_restamp_salvedades_es_IDEMPOTENTE_y_declara_su_poblacion(toy_vault, capsys):
+    """#453 — red nº 6 del framework: correr dos veces no cambia nada. Y el CERO se declara, con su
+    denominador: «0 tocadas» sobre 0 extracciones no es lo mismo que sobre 40 (INV-40/D-43)."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    hv.restamp_salvedades("test_star")
+    antes = dest.read_text(encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert r["tocadas"] == [] and dest.read_text(encoding="utf-8") == antes, "IDEMPOTENTE"
+    hv.print_restamp_salvedades(r, "test_star", dry_run=False)
+    out = capsys.readouterr().out
+    assert "0 nota(s) sobre 1 extracción(es)" in out, "el cero se declara con su denominador"
+    assert "NO toca `vistas[]`" in out
+
+
+def test_453_el_dry_run_NO_escribe_y_la_prosa_ajena_se_REHUSA(toy_vault):
+    """⛔ #453 — dos recortes. El `--dry-run` dice qué cambiaría y no toca el disco; y si el bloque
+    tiene algo que el cosechador no escribió, se REHÚSA nombrando la nota en vez de destruirlo
+    (misma doctrina que `write_view_section` con la prosa redactada)."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}, "una prosa nueva del extractor"]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    antes = dest.read_text(encoding="utf-8")
+    r = hv.restamp_salvedades("test_star", dry_run=True)
+    assert r["tocadas"] == [BIB] and dest.read_text(encoding="utf-8") == antes, "--dry-run no escribe"
+
+    # alguien anotó a mano DENTRO del bloque: no es del cosechador → se rehúsa
+    marcado = antes.replace("**Salvedades (verificadas contra el archivo):**",
+                            "**Salvedades (verificadas contra el archivo):**\n\n"
+                            "Ojo: esto lo escribí yo a mano.")
+    assert marcado != antes
+    dest.write_text(marcado, encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert [b for b, _m in r["rehusadas"]] == [BIB] and r["tocadas"] == []
+
+
+def test_453_las_ramas_del_restamp_acotado(toy_vault, capsys):
+    """#453 — las precondiciones, cada una con su respuesta: `--paper` acota, la nota que no existe
+    o la vista sin sujeto se saltean sin contarse, la nota sin `## Vista` y la lente sin
+    `### Lente` se REPORTAN (no son lo mismo que «no había nada que hacer», D-43), y el bloque que
+    todavía no está se AGREGA."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = []
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    assert "**Salvedades" not in dest.read_text(encoding="utf-8")
+    # (a) el bloque que NO existe todavía se agrega
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    assert hv.restamp_salvedades("test_star")["tocadas"] == [BIB]
+    assert "⚙ verificada" in dest.read_text(encoding="utf-8")
+    # (b) `--paper` acota
+    assert hv.restamp_salvedades("test_star", paper="otro")["revisadas"] == 0
+    # (c) la vista SIN sujeto no se cuenta: no hay sección que ubicar
+    d["vista"] = {"sujeto": "", "tipo": "star"}
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    assert hv.restamp_salvedades("test_star")["revisadas"] == 0
+    # (d) la nota SIN esa `## Vista` se REPORTA
+    d["vista"] = {"sujeto": "Otra Estrella", "tipo": "star"}
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert [b for b, _m in r["sin_bloque"]] == [BIB] and r["tocadas"] == []
+    hv.print_restamp_salvedades(r, "test_star", dry_run=False)
+    assert "no tiene `## Vista" in capsys.readouterr().out
+    # (e) y la LENTE que la nota no tiene, igual (#239)
+    d["vista"] = {"sujeto": "Estrella Test", "tipo": "star"}
+    d["enfasis"] = "ruido"
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert [m for _b, m in r["sin_bloque"]] == ["la vista no tiene `### Lente — ruido`"]
+
+
+def test_453_la_nota_que_no_existe_no_se_cuenta(toy_vault):
+    """#453 / D-43 — una extracción sin nota no es «revisada y sin cambios»: no hay dónde estampar.
+    Se saltea sin inflar el denominador, que es lo que hace legible el conteo."""
+    d = cfg.EXTRACCION / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2099sin....1X.json").write_text(json.dumps(
+        {"bibcode": "2099sin....1X", "vista": {"sujeto": "Estrella Test", "tipo": "star"},
+         "salvedades": ["algo"]}), encoding="utf-8")
+    assert hv.restamp_salvedades("test_star")["revisadas"] == 0
+
+
+def test_453_la_lente_se_re_estampa_SIN_tocar_la_vista_del_sujeto(toy_vault):
+    """⛔ #453 + #239 — con `enfasis` la unidad es la sub-sección `### Lente — <x>`: su bloque de
+    salvedades se re-estampa y el de la vista de arriba queda intacto. Dos lecturas del mismo sujeto
+    conviven, y el re-estampado acotado de una no puede pisar a la otra."""
+    _con_txt(toy_vault, "sin el simbolo")
+    base = extraccion()
+    base["salvedades"] = ["prosa de la primera lectura"]
+    dest = sembrar(toy_vault, base)
+    hv.harvest("test_star")
+    d2 = extraccion()
+    d2["enfasis"] = "ruido"
+    d2["salvedades"] = ["prosa de la segunda"]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}__ruido.json").write_text(json.dumps(d2),
+                                                                    encoding="utf-8")
+    hv.harvest("test_star")
+    d2["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}__ruido.json").write_text(json.dumps(d2),
+                                                                     encoding="utf-8")
+    hv.restamp_salvedades("test_star", paper=BIB)
+    body = dest.read_text(encoding="utf-8")
+    assert "prosa de la primera lectura" in body, "la vista del sujeto no se toca"
+    assert "prosa de la segunda" not in body and "⚙ verificada" in body

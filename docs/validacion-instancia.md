@@ -538,3 +538,29 @@ versión publicada en A&A» ya no sale ambigua.
 (declarando cuántas y por qué quedaron afuera), o si alguna propuesta nueva la rechaza su propio
 chequeo.
 
+## #453 · v1.265.0
+
+**Qué entró.** `harvest_views.py <slug> --restamp-salvedades [--paper <bib>] [--dry-run]`: reescribe
+sólo el bloque de salvedades desde el JSON, con `check_salvedad` como siempre, **sin tocar
+`vistas[]` ni la prosa**. Con `enfasis`, la unidad es `### Lente — <x>`. El bloque con prosa ajena se
+rehúsa. Y `evidencia` es campo de la salvedad estructurada.
+
+**Validar** — es justo el paso que quedó trabado al cerrar #452:
+
+```bash
+python scripts/harvest_views.py <slug> --restamp-salvedades --dry-run   # qué cambiaría
+# pegá una de las 50 propuestas de `--propose-pdf-leido` en su JSON y corré sin --dry-run:
+python scripts/harvest_views.py <slug> --restamp-salvedades --paper <bib>
+```
+
+- la nota tiene que publicar la salvedad **verificada**, y su `vistas[]` —`fecha` y `lente`—
+  quedar **byte a byte igual** (es el defecto que produjo el issue);
+- las **32 vistas de `icasso`** que `harvest` rechazaba tienen que re-estamparse igual: este camino
+  no compara `lente` ni `fecha`;
+- correrlo dos veces no cambia nada (red 6);
+- y la categoría del lint tiene que **bajar** a medida que se pegan las propuestas.
+
+**Devolver si** re-estampar cambia `fecha`, `lente` o cualquier campo de `vistas[]`; si pisa prosa
+de la vista o del bloque que no escribió el cosechador; si no es idempotente; o si una salvedad
+falsa se publica por este camino (el chequeo es el mismo).
+

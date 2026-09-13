@@ -30,8 +30,8 @@
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
 medido_en: "2026-09-13"
-techo_lineas: 1886
-techo_bytes: 153600
+techo_lineas: 1896
+techo_bytes: 154600
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -454,3 +454,13 @@ crecimientos:
       PDF—, así que van con la regla y no sólo en `docs/mediciones.md`.
     techo_lineas: 1886
     techo_bytes: 153600
+  - fecha: "2026-09-13"
+    ancla: "#453"
+    motivo: >-
+      Nueve líneas en el mismo párrafo: el comando con el que se COBRA una salvedad estructurada sin
+      re-cosechar la vista. Sin él, la única salida era `--force`, que re-fecha la lectura (medido:
+      `fecha` y `lente` de una vista del 2026-08-31 reescritas a la de hoy sobre una lectura que no
+      volvió a ocurrir), y por eso las 50 propuestas de #452 no tenían camino a la nota. Es un
+      comando que el agente corre, así que va con la regla.
+    techo_lineas: 1896
+    techo_bytes: 154600

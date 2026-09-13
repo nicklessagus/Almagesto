@@ -185,13 +185,19 @@ def split_salvedades(bibcode: str, data: dict) -> tuple[list, list, list]:
     for item in cfg.as_list(data.get("salvedades")):
         if isinstance(item, dict):
             ok, detalle = check_salvedad(bibcode, item)
+            # ⛔ #453 — `evidencia` es lo que el lector VIO («marca de agua en el margen de la
+            # p. 1») y el chequeo no la re-deriva: re-deriva el veredicto. Estructurar una salvedad
+            # sin campo donde ponerla obligaba a tirar esa prosa, sobre un artefacto versionado y
+            # no regenerable (#311) que es justamente el registro de la lectura.
+            ev = str(item.get("evidencia") or "").strip()
             if ok is True:
-                verificadas.append(f"⚙ verificada: {detalle}")
+                verificadas.append(f"⚙ verificada: {detalle}" + (f" — {ev}" if ev else ""))
             elif ok is False:
                 falsas.append(detalle)
             else:
                 # No evaluable NO es «verificada» ni «falsa» (D-43): se publica como prosa marcada.
-                prosa.append(f"{item.get('nota') or item.get('tipo')} (no evaluable: {detalle})")
+                prosa.append(f"{item.get('nota') or ev or item.get('tipo')} "
+                             f"(no evaluable: {detalle})")
         elif str(item).strip():
             prosa.append(str(item).strip())
     return verificadas, prosa, falsas
@@ -277,14 +283,29 @@ def render_view(sujeto: str, data: dict) -> str:
     # extractor no pueden publicarse al mismo nivel visual. Ésta es la sección que el consumidor lee
     # para saber cuánto confiar en la extracción, y un defecto inventado ahí le dice que la fuente
     # está rota donde no lo está. Las FALSAS no se publican: las filtró el cosechador y las gritó.
-    verificadas, prosa, _falsas = split_salvedades(str(data.get("bibcode") or ""), data)
-    if verificadas:
-        out += ["**Salvedades (verificadas contra el archivo):**", ""] + [
-            f"- {_safe_links(s)}" for s in verificadas] + [""]
-    if prosa:
-        out += ["**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**", ""] + [
-            f"- {_safe_links(s)}" for s in prosa] + [""]
+    out += render_salvedades(data)
     return "\n".join(out).rstrip("\n") + "\n"
+
+
+#: #453 · las dos marcas que abren el bloque de salvedades en la nota. Son el límite del
+#: re-estampado acotado, así que el que las escribe y el que las busca son el MISMO literal.
+SALVEDAD_MARCAS = ("**Salvedades (verificadas contra el archivo):**",
+                   "**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**")
+
+
+def render_salvedades(data: dict) -> list:
+    """The two caveat blocks of a view, as lines (#213). ONE implementation (#453).
+
+    Split out of `render_view` because the acotado re-stamp needs exactly this and nothing else:
+    a second renderer of «how a caveat looks in the note» is how the two drift, and here they would
+    drift into the note the lint reads."""
+    verificadas, prosa, _falsas = split_salvedades(str(data.get("bibcode") or ""), data)
+    out = []
+    if verificadas:
+        out += [SALVEDAD_MARCAS[0], ""] + [f"- {_safe_links(s)}" for s in verificadas] + [""]
+    if prosa:
+        out += [SALVEDAD_MARCAS[1], ""] + [f"- {_safe_links(s)}" for s in prosa] + [""]
+    return out
 
 
 def _norm(texto: str) -> str:
@@ -906,6 +927,108 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
 _VALOR_DE_CLASE = {"preprint": "eprint", "web": "web"}
 
 
+def salvedades_span(scope: str) -> tuple | None:
+    """Span of the caveat blocks inside a view scope, or `None` if it has none (#453).
+
+    `render_view` always emits them LAST, so the region runs from the first marker to the end of
+    the scope. ⛔ It is only a span while everything in it is a marker, a bullet or blank: a
+    re-stamp that finds anything else REFUSES and names the note instead of destroying prose
+    somebody wrote by hand."""
+    idx = [scope.find(m) for m in SALVEDAD_MARCAS if scope.find(m) >= 0]
+    if not idx:
+        return None
+    ini = min(idx)
+    for ln in scope[ini:].splitlines():
+        b = ln.strip()
+        if b and not b.startswith("- ") and b not in SALVEDAD_MARCAS:
+            return None
+    return ini, len(scope)
+
+
+def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = False) -> dict:
+    """Re-stamp ONLY the caveat block of each view, from its extraction JSON (#453).
+
+    ⛔ The rule this closes: *what a script stamps from an artefact gets an ACOTADO re-stamp; to
+    update one section you do not regenerate the whole unit.* It is the doctrine of the
+    `make_notes --restamp-*` family and of `write_verif_sidecar --restamp-section`, and this block
+    was the exception — so cobrar a structured caveat (#452) meant re-harvesting the view, and
+    `--force` **re-dates the reading**: measured, `fecha` and `lente` of a view read on 2026-08-31
+    rewritten to 2026-09-13 with the lens of today, over a reading that did not happen again. That
+    is INV-146 broken from the other side (#395).
+
+    So: it does NOT touch `vistas[]`, does NOT touch the view's prose, and the caveats are checked
+    exactly as always (`check_salvedad`) — the false one still is not published. Idempotent (red 6),
+    declares its population, and `--dry-run` writes nothing."""
+    tocadas, sin_bloque, rehusadas, revisadas = [], [], [], 0
+    d = cfg.EXTRACCION / slug
+    for j in sorted(d.glob("*.json")) if d.exists() else []:
+        try:
+            data = json.loads(j.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        bib = str(data.get("bibcode") or j.stem).strip()
+        if paper and bib != paper:
+            continue
+        nota = cfg.PAPERS / f"{mn.safe_name(bib)}.md"
+        vista = cfg.as_map(data.get("vista"))
+        sujeto = str(vista.get("sujeto") or "").strip()
+        if not nota.exists() or not sujeto:
+            continue
+        revisadas += 1
+        text = nota.read_text(encoding="utf-8")
+        span = section_span(text, f"## Vista — {sujeto}")
+        if span is None:
+            sin_bloque.append((bib, f"la nota no tiene `## Vista — {sujeto}`"))
+            continue
+        ini, fin = span
+        seccion, off = text[ini:fin], 0
+        if (enf := str(data.get("enfasis") or "").strip()):
+            sub = _lens_span(seccion, enf)
+            if sub is None:
+                sin_bloque.append((bib, f"la vista no tiene `### Lente — {enf}`"))
+                continue
+            off, seccion = sub[0], seccion[sub[0]:sub[1]]
+        bloque = "\n".join(render_salvedades(data)).rstrip("\n")
+        # ⚠ Sin repetir `dentro is None` en las dos ramas, a propósito: «hay marcas» ya implica
+        # que `salvedades_span` no devolvió `None` por ausencia, así que un `and dentro is None`
+        # adelante no decidiría nada (#319).
+        dentro = salvedades_span(seccion)
+        if dentro is None:
+            if any(m in seccion for m in SALVEDAD_MARCAS):
+                rehusadas.append((bib, "el bloque de salvedades tiene prosa que no escribió el "
+                                       "cosechador → NO se pisa, revisala a mano"))
+                continue
+            nueva = seccion.rstrip("\n") + ("\n\n" + bloque + "\n" if bloque else "\n")
+        else:
+            s_i, s_f = dentro
+            nueva = seccion[:s_i].rstrip("\n") + ("\n\n" + bloque + "\n" if bloque else "\n") \
+                + seccion[s_f:]
+        texto_nuevo = (text[:ini] + text[ini:ini + off] + nueva.rstrip("\n") + "\n"
+                       + text[ini + off + len(seccion):])
+        if texto_nuevo == text:
+            continue
+        tocadas.append(bib)
+        if not dry_run:
+            cfg.write_text_atomic(nota, texto_nuevo)
+    return {"revisadas": revisadas, "tocadas": tocadas, "sin_bloque": sin_bloque,
+            "rehusadas": rehusadas}
+
+
+def print_restamp_salvedades(r: dict, slug: str, dry_run: bool) -> None:
+    """What changed, over how many, and what was refused — the three, always (D-43)."""
+    verbo = "se re-estamparía" if dry_run else "re-estampado"
+    cfg.print_seguro(f"{verbo} el bloque de salvedades de {len(r['tocadas'])} nota(s) "
+                     f"sobre {r['revisadas']} extracción(es) de `{slug}`")
+    for bib in r["tocadas"]:
+        cfg.print_seguro(f"  · {bib}")
+    for bib, motivo in r["rehusadas"]:
+        cfg.print_seguro(f"  ⚠ {bib}: {motivo}")
+    for bib, motivo in r["sin_bloque"]:
+        cfg.print_seguro(f"  — {bib}: {motivo}")
+    cfg.print_seguro("⚠ NO toca `vistas[]` ni la prosa de la vista: la lectura no volvió a "
+                     "ocurrir, así que su `fecha` y su `lente` no cambian (INV-146, #395).")
+
+
 def propose_pdf_leido(slug: str | None = None) -> list:
     """`[(json, bibcode, prosa, documento, motivo)]` — the prose caveats that could be `pdf_leido`,
     with the entry ready to paste, or the reason there is none (#452).
@@ -996,10 +1119,19 @@ def main() -> int:
     ap.add_argument("--paper", default=None, metavar="BIBCODE",
                     help="acota la cosecha a esa extracción — el alcance por unidad que `--force` "
                          "necesita para no re-estampar las vistas ya verificadas del slug (#420)")
+    ap.add_argument("--restamp-salvedades", action="store_true",
+                    help="re-estampa SÓLO el bloque de salvedades de cada vista desde su JSON "
+                         "(#453). No toca `vistas[]` ni la prosa: la lectura no volvió a ocurrir.")
+    ap.add_argument("--dry-run", action="store_true", help="no escribe: dice qué cambiaría")
     ap.add_argument("--propose-pdf-leido", action="store_true",
                     help="lista las salvedades en PROSA que dicen qué documento se leyó, con la "
                          "entrada estructurada lista para pegar (#452). No escribe nada.")
     args = ap.parse_args()
+    if args.restamp_salvedades:
+        print_restamp_salvedades(
+            restamp_salvedades(args.slug, paper=args.paper, dry_run=args.dry_run),
+            args.slug, args.dry_run)
+        return 0
     if args.propose_pdf_leido:
         print_pdf_leido(propose_pdf_leido(None if args.slug == "*" else args.slug))
         return 0
