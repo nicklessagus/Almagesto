@@ -851,3 +851,27 @@ disco es hoy la copia del editor…»*, no el arranque *«esta vista se leyó de
 **Devolver si** vuelve alguno de los 3 hallazgos de codificación, si `poblada` sigue rojo por leer
 la bóveda real, o si una propuesta sigue mostrando un extracto que contradice su propia clase.
 
+### #460 (2ª vuelta) · v1.269.1 — el plegado va ANTES del pelado de llaves
+
+**Qué falló.** Las tres pasadas eran correctas y nunca veían una llave: `bibtex_fields` pelaba el
+agrupamiento antes, así que `\textquotedblleftStellar` era un comando de 25 letras y el borrado
+genérico se llevaba la palabra.
+
+**Qué entró.** `bibtex_fields` conserva el agrupamiento; el único que pela es `fold_tex`, como
+último paso. `check_sources` pide el pelado por ese mismo plegador.
+
+**Validar:**
+
+```bash
+python scripts/lint.py | grep -A10 "exportación oficial dicen cosas distintas"
+```
+
+Tienen que quedar **2** (`2008Yang` por el `year`, `2006Tichavsky` por el escape de IEEE). Los tres
+de codificación —`2015Sci...347.1080A`, `2015Sci...347.1080R`, `2011arXiv1109.2505F`— cierran.
+
+⚠ Y mirá que `check_sources` siga sacando bien el apellido: es el otro consumidor de
+`bibtex_fields` y el que más se podía romper al mover el pelado.
+
+**Devolver si** queda alguno de los tres, si aparece un hallazgo nuevo, o si el cruce de `sources:`
+empieza a fallar por un apellido con llaves.
+

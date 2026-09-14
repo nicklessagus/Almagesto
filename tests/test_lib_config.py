@@ -2735,8 +2735,10 @@ def test_bibtex_fields_lee_las_tres_formas_de_valor():
     entrada = ('@ARTICLE{k,\n  year = 2004,\n  title = "{Identifiability Issues}",\n'
                '  doi = {10.1109/LSP.2004.836989},\n  author = {{Davies}, Mike},\n}\n')
     campos = cfg.bibtex_fields(entrada)
-    assert campos == {"year": "2004", "title": "Identifiability Issues",
-                      "doi": "10.1109/LSP.2004.836989", "author": "Davies, Mike"}
+    # #460 — el agrupamiento se CONSERVA: lo pela `fold_tex`, que lo necesita para saber dónde
+    # termina un comando. El plegador se aplica sobre el markup intacto.
+    assert campos == {"year": "2004", "title": "{Identifiability Issues}",
+                      "doi": "10.1109/LSP.2004.836989", "author": "{Davies}, Mike"}
     assert cfg.bibtex_fields("") == {} and cfg.bibtex_fields("sin nada") == {}
 
 
@@ -3003,8 +3005,10 @@ def test_bibtex_fields_sigue_parseando_el_MULTILINEA_y_la_coma_protegida():
            '         year = 2000,\n'
            '        pages = {355-359},\n}')
     f = cfg.bibtex_fields(ads)
-    assert f["title"] == "A Jupiter-mass companion, at last", "la coma protegida no parte el campo"
-    assert f["author"] == "Mayor, Michel and Queloz, D." and f["year"] == "2000"
+    assert f["title"] == "{A Jupiter-mass companion, at last}", \
+        "la coma protegida no parte el campo (y el agrupamiento se conserva, #460)"
+    assert f["author"] == "{Mayor}, Michel and {Queloz}, D." and f["year"] == "2000"
+    assert cfg.fold_tex(f["author"]) == "Mayor, Michel and Queloz, D.", "el pelado es de `fold_tex`"
     assert cfg.bibtex_fields("") == {} and cfg.bibtex_fields("@article{solo_la_clave}") == {}
 
 
@@ -3400,6 +3404,20 @@ def test_460_el_comando_TeX_que_denota_un_CARACTER_se_pliega_a_ese_caracter():
     # ⚠ el borde del comando es la primera NO-LETRA, no `\b`: entre `e` y `5` no hay borde de
     # palabra, y ése era justo el caso medido
     assert cfg.fold_tex(r"\textasciitilde581") == "~581"
+    # ⛔ #460 devuelto — y sobre lo que le llega del PRODUCTOR REAL, que es donde vivía el bug:
+    # `bibtex_fields` pelaba las llaves antes, así que `\textquotedblleftStellar` era un comando de
+    # 25 letras y el borrado genérico se llevaba la palabra («Comment on  activity masquerading»).
+    # Los tests del fold le pasaban cadenas CON llaves y el único productor real, SIN: la regla de
+    # método nº 2 en su forma más pura.
+    for plano, entrada in [
+            ("Comment on “Stellar activity masquerading”",
+             '@ARTICLE{k,\n title = {Comment on {\\textquotedblleft}Stellar activity '
+             'masquerading{\\textquotedblright}},\n}'),
+            ("Only 4 planets in the Gl~581 system",
+             '@ARTICLE{k,\n title = {Only 4 planets in the '
+             'Gl\\raisebox{-0.5ex}\\textasciitilde581 system},\n}')]:
+        assert cfg.catalog_compare_key(plano) == \
+            cfg.catalog_compare_key(cfg.bibtex_fields(entrada)["title"]), plano
     # lo de #459 no se rompe: el símbolo sin par en el catálogo se sigue borrando de los dos lados
     assert cfg.catalog_compare_key("Hα Activity") == \
         cfg.catalog_compare_key(r"H{\ensuremath{\alpha}} Activity")

@@ -228,11 +228,18 @@ def test_main_con_error_de_red_sale_2(tmp_path, monkeypatch, capsys):
 
 def test_bibtex_fields_desenvuelve_las_llaves_de_proteccion():
     """ADS escribe `title = "{A Jupiter-mass…}"` y `author = {{Mayor}, Michel}`: comparar eso crudo
-    contra el `title` del frontmatter daría una discrepancia que no existe."""
+    contra el `title` del frontmatter daría una discrepancia que no existe.
+
+    ⛔ #460 — el pelado de las llaves de protección se MOVIÓ a `fold_tex`, que es el último paso de
+    la comparación: `bibtex_fields` las conserva porque el plegador las necesita para saber dónde
+    termina un comando (sin `}`, `\textquotedblleftStellar` es un comando de 25 letras y el borrado
+    genérico se lleva la palabra). Un plegador de markup se aplica sobre el markup INTACTO."""
     campos = cfg.bibtex_fields(ENTRADA_ADS)
-    assert campos["title"] == "A Jupiter-mass companion to a solar-type star"
+    assert campos["title"] == "{A Jupiter-mass companion to a solar-type star}", "intacto"
+    assert cfg.fold_tex(campos["title"]) == "A Jupiter-mass companion to a solar-type star"
     assert campos["year"] == "1995" and campos["doi"] == "10.1038/378355a0"
-    assert campos["author"].startswith("Mayor, Michel")
+    assert campos["author"].startswith("{Mayor}, Michel"), "intacto"
+    assert cfg.fold_tex(campos["author"]).startswith("Mayor, Michel")
 
 
 def test_bibtex_for_baja_por_la_cascada_hasta_arxiv(monkeypatch):

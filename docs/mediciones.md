@@ -2627,3 +2627,31 @@ equivocó»* sin abrir el JSON, y el modo de falla es firmar una propuesta que n
 clase —con la misma partición que el clasificador, no una segunda lectura— y la propuesta imprime
 eso.
 
+**Devuelto y corregido (1.269.1).** Con v1.269.0 el lint seguía dando **5** y los tres de
+codificación seguían ahí. Las tres pasadas del plegado eran correctas —aisladas hacen exactamente lo
+que el commit promete— y **nunca veían una llave**: `bibtex_fields` pelaba el agrupamiento
+(`valor.replace("{","").replace("}","")`) antes de entregar el campo, con su motivo declarado (ADS
+escribe `author = {{Mayor}, Michel}`). Sin `}` de cierre, `\textquotedblleftStellar` **es** un
+comando de 25 letras y el borrado genérico se llevaba la palabra:
+
+```
+v1.266.1: 'Comment on \textquotedblleftStellar activity masquerading'   (no plegaba)
+v1.268.2: 'Comment on  activity masquerading'                            ← ya se la comía
+v1.269.0: 'Comment on  activity masquerading”'
+```
+
+Y `_TEX_LAYOUT_RE` matcheaba sólo el nombre (su cuantificador de argumento es `*`), dejando
+`-0.5ex` como texto.
+
+**Qué cambió (1.269.1).** El pelado de llaves **se mueve después del plegado**: `bibtex_fields`
+devuelve el valor con su agrupamiento **intacto** y el único que pela es `fold_tex`, como último
+paso. `check_sources` —el otro consumidor, que saca el apellido del `author`— pide el pelado por ese
+mismo plegador, que además le resuelve el acento de un `Cram{\'e}r`.
+
+⛔ **La regla: un plegador de markup se aplica sobre el markup INTACTO; el normalizado que borra
+delimitadores va después, nunca antes.** Es la regla de método nº 2 en su forma más pura — los tests
+del fold le pasaban cadenas **con** llaves y el único productor real le pasaba cadenas **sin**
+llaves, y el bug vivía exactamente en esa diferencia. Por eso el gate quedaba verde en el template
+con el caso medido rojo en la instancia. El test nuevo va contra `bibtex_fields`, no contra una
+cadena escrita a mano.
+

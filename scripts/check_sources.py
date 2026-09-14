@@ -109,13 +109,17 @@ def datacite_meta(doi: str) -> dict | None:
     if not entrada:
         return None
     campos = cfg.bibtex_fields(entrada)
-    autor = campos.get("author") or ""
+    # #460 — `bibtex_fields` ya no pela las llaves de protección (`{{Mayor}, Michel}`): se las
+    # dejaba a `fold_tex`, que las necesita para saber dónde termina un comando. Acá el pelado se
+    # pide por el MISMO plegador, que además resuelve el acento de un apellido (`Cram{\'e}r`).
+    autor = cfg.fold_tex(campos.get("author") or "")
     # BibTeX escribe `Apellido, Nombre and Otro, Otra`: el primer autor es lo que hay antes del
     # primer ` and `, y su apellido lo que hay antes de la coma (o la última palabra si no hay).
     primero = autor.split(" and ")[0].strip()
     familia = primero.split(",", 1)[0].strip() if "," in primero else (
         primero.split()[-1] if primero.split() else "")
-    return {"family": familia, "year": _year(campos.get("year")), "title": campos.get("title") or ""}
+    return {"family": familia, "year": _year(campos.get("year")),
+            "title": cfg.fold_tex(campos.get("title") or "")}
 
 
 def crossref_meta(msg: dict) -> dict:

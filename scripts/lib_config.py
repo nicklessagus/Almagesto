@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.269.0"
+ALMAGESTO_VERSION = "1.269.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2109,11 +2109,21 @@ def bibtex_fields(entry: str) -> dict:
     """`{campo en minúsculas: valor}` de una entrada BibTeX — lo justo para cruzarla contra el
     frontmatter (#397), no un parser de BibTeX.
 
-    Devuelve el valor **desenvuelto** de `{…}`, `"…"` o pelado (un año va sin llaves), y con las
-    llaves internas de protección sacadas: ADS escribe `title = "{A Jupiter-mass companion…}"` y
-    `author = {{Mayor}, Michel}`, así que compararlo crudo contra el `title` del frontmatter daría
-    una discrepancia que no existe. No resuelve macros ni concatenación con `#`: lo que no entienda
-    sale como está, y el chequeo que lo consume compara **normalizado** o no compara."""
+    Devuelve el valor **desenvuelto** de `{…}`, `"…"` o pelado (un año va sin llaves), **con su
+    agrupamiento interno intacto**. ⛔ #460 — las llaves de protección (`author = {{Mayor}, Michel}`)
+    las sacaba ACÁ, y eso le destruía el markup a `fold_tex`, que las necesita para saber dónde
+    termina un comando: sin `}`, `\textquotedblleftStellar` es un comando de 25 letras y el borrado
+    genérico se lleva `Stellar` con él (medido: «Comment on  activity masquerading», y los tres
+    hallazgos de codificación que #459/#460 tenían que cerrar seguían abiertos). **Un plegador de
+    markup se aplica sobre el markup INTACTO; el normalizado que borra delimitadores va después,
+    nunca antes** — y hoy ese pelado es el último paso de `fold_tex`, que es el único que lo hace.
+
+    Es la regla de método nº 2 en su forma más pura: los tests del fold le pasaban cadenas **con**
+    llaves y el único productor real le pasaba cadenas **sin** llaves; el bug vivía exactamente en
+    esa diferencia.
+
+    No resuelve macros ni concatenación con `#`: lo que no entienda sale como está, y el chequeo que
+    lo consume compara **normalizado** o no compara."""
     out: dict = {}
     cuerpo = entry.split("{", 1)[1] if "{" in entry else entry
     for chunk in _bibtex_chunks(cuerpo):
@@ -2127,7 +2137,7 @@ def bibtex_fields(entry: str) -> dict:
             continue                      # la primera gana: una entrada bien formada no repite
         if valor[:1] in ("{", '"') and valor[-1:] in ("}", '"'):
             valor = valor[1:-1]
-        out[campo] = valor.replace("{", "").replace("}", "").strip()
+        out[campo] = valor.strip()
     return out
 
 
