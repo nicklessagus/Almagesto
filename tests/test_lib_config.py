@@ -3379,3 +3379,59 @@ def test_459_el_titulo_en_DOS_CODIFICACIONES_deja_de_ser_desacuerdo(toy_vault):
     # y lo que NO es codificación sigue siendo distinto
     assert cfg.catalog_compare_key("un título") != cfg.catalog_compare_key("otro título")
 
+
+
+def test_460_el_comando_TeX_que_denota_un_CARACTER_se_pliega_a_ese_caracter():
+    """⛔ #460 — residuo de #459: el plegado borraba TODO comando, y el que denota un **símbolo** no
+    tiene letra que dejar. `\\textquotedblleft` **es** `“`: borrado, queda `Comment on Stellar`
+    contra `Comment on “Stellar` del catálogo, y abajo `method_key` colapsa lo no-alfanumérico a
+    `-`, así que sobra un separador y la comparación dice «distinto». Medido tras v1.268.2: 5
+    hallazgos, **3 de esta clase**. La simetría que el plegado busca sólo se cumple para el comando
+    que representa NADA.
+
+    ⛔ Y el que lleva ARGUMENTO de layout se come el argumento: `\\raisebox{-0.5ex}` borrado a secas
+    dejaba su medida como texto (`gl-0-5ex581`), que agrega caracteres que ninguna fuente dice."""
+    pares = [("Comment on “Stellar activity", r"{Comment on {\textquotedblleft}Stellar activity"),
+             ("Response to Comment on “Stellar", r"Response to Comment on {\textquotedblleft}Stellar"),
+             ("Only 4 planets in the Gl~581 system",
+              r"Only 4 planets in the Gl\raisebox{-0.5ex}\textasciitilde581 system")]
+    for plano, tex in pares:
+        assert cfg.catalog_compare_key(plano) == cfg.catalog_compare_key(tex), (plano, tex)
+    # ⚠ el borde del comando es la primera NO-LETRA, no `\b`: entre `e` y `5` no hay borde de
+    # palabra, y ése era justo el caso medido
+    assert cfg.fold_tex(r"\textasciitilde581") == "~581"
+    # lo de #459 no se rompe: el símbolo sin par en el catálogo se sigue borrando de los dos lados
+    assert cfg.catalog_compare_key("Hα Activity") == \
+        cfg.catalog_compare_key(r"H{\ensuremath{\alpha}} Activity")
+    assert cfg.fold_tex(r"H\&K") == "H&K", "el escape sigue conservando el carácter"
+
+
+def test_462_deciding_clause_devuelve_la_CLAUSULA_que_decidio(toy_vault):
+    """⛔ #462 — la pantalla donde se firma algo muestra la evidencia que produjo la decisión, no el
+    arranque del texto. El bullet de una salvedad es UNA línea larga: medido, **10 de 37**
+    propuestas correctas se leían como contradictorias porque la cláusula que decidió la clase
+    —«el PDF en disco es hoy la copia del editor»— está 400 caracteres después del arranque —«esta
+    vista se leyó del preprint»— y el extracto cortaba a ~110."""
+    bullet = ("Esta vista se leyó del preprint de arXiv (marca de agua «arXiv:1412.4533v1»). "
+              + "Relleno de la salvedad. " * 20
+              + "⚠ Actualizado: el PDF en disco es hoy la copia del editor, así que los "
+                "localizadores son del documento ANTERIOR.")
+    [(clase, linea)] = cfg.doc_claims_on_disk(bullet)
+    assert clase == "publicado"
+    dicha = cfg.deciding_clause(linea, clase)
+    assert dicha.startswith("⚠ Actualizado") and "copia del editor" in dicha
+    assert "se leyó del preprint" not in dicha, "el arranque NO es la evidencia de esta clase"
+    # sin cláusula que matchee, la línea entera (nunca vacío: es lo que el operador va a leer)
+    assert cfg.deciding_clause("una prosa cualquiera", "publicado") == "una prosa cualquiera"
+    assert cfg.deciding_clause("", "publicado") == ""
+    # ⛔ las DOS mitades de la guarda, cada una por su lado: una cláusula que ancla pero da OTRA
+    # clase no es la evidencia de ésta, y una que da la clase sin anclar tampoco la produjo.
+    dos = ("El PDF en disco es el preprint de arXiv. "
+           "Y el documento en disco es la copia del editor.")
+    assert cfg.deciding_clause(dos, "publicado").startswith("Y el documento")
+    assert cfg.deciding_clause(dos, "preprint").startswith("El PDF en disco")
+    # y la cláusula que da la clase SIN anclar no es la que decidió: el ancla es el documento, no
+    # la palabra (#449), así que la evidencia es la que predica sobre el archivo
+    sin_ancla = ("Los valores publicados no dicen nada del archivo. "
+                 "El documento en disco es la copia del editor.")
+    assert cfg.deciding_clause(sin_ancla, "publicado").startswith("El documento en disco")

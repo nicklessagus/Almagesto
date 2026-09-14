@@ -819,3 +819,35 @@ python scripts/lint.py | grep -A12 "exportación oficial dicen cosas distintas"
 **Devolver si** alguno de los 8 vuelve, si el acierto de #392 deja de salir, o si un `&` escapado
 (`H\&K`) deja de coincidir con su par del catálogo.
 
+## #460 · #461 · #462 · v1.269.0
+
+**Validar #460** — los 5 que quedaban:
+
+```bash
+python scripts/lint.py | grep -A10 "exportación oficial dicen cosas distintas"
+```
+
+Tienen que quedar **2**: el `year` de `2008Yang` (real, pide decisión de convención) y
+`2006Tichavsky` (escape de IEEE, no TeX). Los tres de `\textquotedblleft`/`\raisebox` se van.
+
+**Validar #461** — es el gate que estaba rojo allá y verde acá:
+
+```bash
+pytest tests/poblada -q -m poblada
+```
+
+**62 passed**, sin los dos rojos de `extraccion_despaginada (68)`. Y el test nuevo tiene que morir
+si sacás una constante del mapa (probalo: es lo que garantiza que no vuelva a divergir).
+
+**Validar #462:**
+
+```bash
+python scripts/harvest_views.py ica-ruido --theme --propose-pdf-leido
+```
+
+Las 10 propuestas que se leían contradictorias tienen que mostrar ahora la cláusula *«el PDF en
+disco es hoy la copia del editor…»*, no el arranque *«esta vista se leyó del preprint…»*.
+
+**Devolver si** vuelve alguno de los 3 hallazgos de codificación, si `poblada` sigue rojo por leer
+la bóveda real, o si una propuesta sigue mostrando un extracto que contradice su propia clase.
+

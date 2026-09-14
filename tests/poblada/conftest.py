@@ -46,8 +46,16 @@ from generador import sembrar_corpus   # noqa: E402
 # Mismas claves que tests/conftest.py::toy_vault — un solo "shape" de `paths` para los dos mundos
 # (bóveda de juguete de 1-2 notas y bóveda poblada de cientos): cualquier test/fixture que ya sepa
 # leer `toy_vault.STARS`, `toy_vault.PAPERS`, etc. lee `boveda_poblada.STARS` igual.
+# ⛔ #461 — la lista se COMPARA contra las constantes de `lib_config`
+# (`test_aislamiento.py`), no se escribe de memoria: `EXTRACCION` faltaba y los módulos que la
+# leen veían la **bóveda real de la máquina** desde el corpus sintético. Medido en una instancia
+# poblada: `extraccion_despaginada (68)` —el conteo de la bóveda de verdad— rompiendo los dos
+# tests que existen para fijar el comportamiento del lint, en verde en el template (semilla, 0
+# extracciones) y en rojo en toda instancia. Dos declaraciones del mismo mapa que divergieron: la
+# regla de método nº 2, y lo que la red 10 existe para cerrar.
 _PATH_ATTRS = ("ROOT", "VAULT", "CONFIG", "STARS_YAML", "THEMES_YAML", "OBJECTIVE_YAML",
-              "ADS_KEY_FILE", "REGISTRO", "RAW", "WIKI", "PDFS", "FULLTEXT", "GROUND_TRUTH",
+              "ADS_KEY_FILE", "MAILTO_FILE", "REGISTRO", "STATUS", "RAW", "WIKI", "PDFS",
+              "FULLTEXT", "GROUND_TRUTH", "EXTRACCION",
               "STARS", "PAPERS", "CONCEPTS", "QUERIES", "MATRICES", "INDEX", "LOG")
 
 
@@ -69,6 +77,12 @@ def _build_paths(root: Path) -> SimpleNamespace:
         "CONCEPTS": vault / "wiki" / "concepts", "QUERIES": vault / "wiki" / "queries",
         "MATRICES": vault / "wiki" / "matrices",
         "INDEX": vault / "wiki" / "index.md", "LOG": vault / "wiki" / "log.md",
+        # #461 · las tres que faltaban. `EXTRACCION` es la que rompía (nueve módulos la leen, y
+        # `entity`/`replace_pdf` además escriben); `MAILTO_FILE` y `STATUS` son del mismo tipo y
+        # estaban por el mismo motivo: nadie comparaba el mapa contra `lib_config`.
+        "EXTRACCION": vault / "raw" / "extraccion",
+        "MAILTO_FILE": vault / "config" / "mailto",
+        "STATUS": vault / "STATUS.md",
     }
     return SimpleNamespace(**paths)
 

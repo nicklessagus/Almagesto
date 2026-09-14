@@ -1827,3 +1827,22 @@ def test_456_el_printer_emite_el_segundo_eje_aunque_el_primero_no_se_pueda_decid
     hv.print_pdf_leido([(j, "2020X", "El PDF …", "", "", "eprint")])
     out = capsys.readouterr().out
     assert '"leido": "eprint"' in out and "publisher|ads" in out and "elegí vos" in out
+
+
+def test_462_la_propuesta_muestra_la_CLAUSULA_no_el_arranque_del_bullet(toy_vault):
+    """⛔ #462 — validando #456, las propuestas eran CORRECTAS y el extracto las hacía parecer lo
+    contrario: la evidencia decía *preprint* y el `documento` propuesto decía *publisher*. La
+    cláusula que decidió está 400 caracteres después. Medido: **10 de 37** propuestas, las 10 bien
+    clasificadas. El operador no podía distinguir «la cláusula lo decidió» de «el detector se
+    equivocó» sin abrir el JSON."""
+    _con_pdf(toy_vault)
+    d = extraccion()
+    d["salvedades"] = ["Esta vista se leyó del preprint de arXiv (marca de agua). "
+                       + "Relleno de la salvedad. " * 20
+                       + "⚠ Actualizado: el PDF en disco es hoy la copia del editor."]
+    sembrar(toy_vault, d, fm_extra={"pdf_source": "publisher"})
+    [(_j, _b, texto, doc, _m, _l)] = hv.propose_pdf_leido("test_star")
+    assert doc == "publisher"
+    assert texto.startswith("⚠ Actualizado"), "se muestra la cláusula que produjo la clase"
+    assert "se leyó del preprint" not in texto
+

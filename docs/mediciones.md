@@ -2566,3 +2566,64 @@ con el título de **otro** (#392, un título declarado de memoria): saltearlo pa
 costaría justo ese hallazgo. El ruido se cierra plegando, no eximiendo. Queda **1 falso** de los 10
 —el escape de IEEE `Crame/spl acute/r`, que es basura del catálogo y no TeX—, contra 9 antes.
 
+## #460 · el comando TeX que denota un SÍMBOLO se plegaba a vacío (2026-09-13)
+
+Residuo medido de #459 sobre las **270 notas** de la instancia: el plegado cerró **5 de 10 sin
+regresiones**, pero quedaron **5**, y **3 son la clase que el issue existía para cerrar**.
+
+`_TEX_CMD_RE` **borra** el comando, y el que denota un **carácter** no tiene letra que dejar:
+`\textquotedblleft` **es** `“`, así que borrado queda `Comment on Stellar` contra `Comment on
+“Stellar` del catálogo — y abajo `method_key` colapsa lo no-alfanumérico a `-`, así que sobra un
+separador y la comparación dice «distinto». `\textasciitilde` es `~`, mismo caso. Y `\raisebox`
+es peor: el nombre se va y su **argumento dimensional sobrevive como texto** (`gl-0-5ex581`), que
+agrega caracteres que ninguna de las dos fuentes dice. La simetría que el plegado declara sólo se
+cumple para el comando que representa **nada**.
+
+**Qué cambió (1.269.0).** Tres pasadas en orden, y el orden decide: `_TEX_LAYOUT_RE` (se come el
+nombre **y su argumento**), `_TEX_SIMBOLO_RE` (lista **cerrada** comando→carácter, por el mismo
+argumento que `_TEX_ACENTO_RE`: con set abierto se adivina) y recién después el borrado genérico.
+⚠ Y el borde de un comando es la primera **no-letra**, no `\b`: entre `e` y `5` no hay borde de
+palabra, y `Gl\raisebox{-0.5ex}\textasciitilde581` era justo el caso medido.
+
+## #461 · el aislamiento del corpus de test no cubría `EXTRACCION` (2026-09-13)
+
+`tests/poblada/conftest.py` re-apunta 20 constantes de `lib_config` al corpus sintético y
+`EXTRACCION` no estaba. Los chequeos que la leen veían la **bóveda real de la máquina**: medido en
+una instancia poblada, `extraccion_despaginada (68)` —el conteo de la bóveda de verdad, que el
+corpus sintético (seed=42, 0 extracciones) no puede producir— rompiendo los **dos** tests que
+existen para fijar el comportamiento del lint. Verdes en el template, rojos en cualquier instancia:
+el gate `poblada` no podía distinguir «regresión» de «bóveda poblada».
+
+⚠ Preexistente, no de la tanda que lo destapó. Y no es sólo el lint: **nueve módulos** leen la
+constante, entre ellos `lib_quotes` —el juez de citas de #324, que cachea por
+`str(cfg.EXTRACCION)`— y `entity`/`replace_pdf`, que además **escriben**.
+
+**Qué cambió (1.269.0).** Las tres que faltaban (`EXTRACCION`, `MAILTO_FILE`, `STATUS`) entran al
+mapa, y —lo que cierra la clase— `tests/poblada/test_aislamiento.py` **compara** `_PATH_ATTRS`
+contra las constantes de path que `lib_config` expone, leídas del módulo: si mañana aparece una
+nueva, el test la exige sin que nadie se acuerde. Más su simétrico: que el fixture las re-apunte de
+verdad. Dos declaraciones del mismo mapa que divergieron es la regla de método nº 2, y esto es el
+corolario de INV-101 un nivel más abajo.
+
+⚠ Lo que **no** se hizo: firmar la regla en `portadores.yaml`. El gate de #409 compara **llamadas a
+funciones** (`carriers.calls` es AST sobre `ast.Call`) y acá lo compartido es una **constante leída
+por atributo**, que no puede ver. La red que cierra la clase es el assert, que es más fuerte que una
+lista firmada; queda dicho para que nadie lo lea como un portador sin declarar.
+
+## #462 · la propuesta mostraba el arranque del bullet, no la cláusula que decidió (2026-09-13)
+
+Validando #456: las propuestas eran **correctas** y el extracto las hacía parecer lo contrario. La
+evidencia impresa decía *«Esta vista se leyó del preprint de arXiv»* y el `documento` propuesto
+decía `publisher`; la cláusula que ancló —*«el PDF **en disco** es hoy la copia del editor»*— está
+**400 caracteres después**, y el extracto cortaba a ~110 desde el principio del bullet. Medido: **10
+de 37** propuestas se leían así, y las 10 estaban bien clasificadas.
+
+`propose_pdf_leido` se quedaba con la clase y **descartaba la línea**; la información que hace
+auditable la propuesta ya estaba calculada y se tiraba una línea antes de imprimirse. Es #289 en
+otra superficie: el operador no podía distinguir *«la cláusula lo decidió»* de *«el detector se
+equivocó»* sin abrir el JSON, y el modo de falla es firmar una propuesta que no se entendió.
+
+**Qué cambió (1.269.0).** `cfg.deciding_clause` devuelve la **cláusula** que ancló y produjo la
+clase —con la misma partición que el clasificador, no una segunda lectura— y la propuesta imprime
+eso.
+

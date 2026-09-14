@@ -2285,6 +2285,21 @@
    "number": 459,
    "title": "El desacuerdo frontmatter ↔ exportación (#397) compara títulos con escapes LaTeX contra texto plano: 9 de 10 hallazgos son la misma cadena escrita de dos maneras",
    "state": "OPEN"
+  },
+  {
+   "number": 460,
+   "title": "#459 residuo: el comando TeX que denota un SÍMBOLO se pliega a vacío, no a su carácter — quedan 3 falsos de 5",
+   "state": "OPEN"
+  },
+  {
+   "number": 461,
+   "title": "tests/poblada no aísla `cfg.EXTRACCION`: 9 módulos leen la bóveda REAL desde el corpus sintético (2 tests rojos en toda instancia poblada)",
+   "state": "OPEN"
+  },
+  {
+   "number": 462,
+   "title": "--propose-pdf-leido imprime el arranque del bullet, no la cláusula que decidió la clase: 10 de 37 propuestas correctas se leen como contradictorias",
+   "state": "OPEN"
   }
  ]
 }

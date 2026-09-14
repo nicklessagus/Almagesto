@@ -1232,10 +1232,17 @@ def propose_pdf_leido(slug: str | None = None) -> list:
             for item in cfg.as_list(data.get("salvedades")):
                 if not isinstance(item, str):
                     continue
-                clases = {c for c, _ln in cfg.doc_claims_on_disk(item)}
+                # ⛔ #462 — la CLÁUSULA que decidió la clase se conserva: es la evidencia de la
+                # propuesta, y se estaba tirando una línea antes de imprimirse. Sin ella la
+                # pantalla muestra el arranque del bullet, que 400 caracteres antes de la cláusula
+                # dice lo contrario: medido, **10 de 37** propuestas correctas se leen como
+                # contradictorias («la evidencia dice preprint y el `documento` dice publisher»).
+                hits = cfg.doc_claims_on_disk(item)
+                clases = {c for c, _ln in hits}
                 if len(clases) != 1:
                     continue
                 clase = clases.pop()
+                item = cfg.deciding_clause(next(ln for c, ln in hits if c == clase), clase)
                 # ⚠ Los testigos se consultan acá y no arriba: `doc_on_disk` lee el `.txt` buscando
                 # la marca de arXiv, y la población que afirma algo es chica (51 salvedades sobre
                 # 268 notas) — preguntarle al disco por cada extracción duplicaba esa lectura, que

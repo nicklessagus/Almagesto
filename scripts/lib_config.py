@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.268.2"
+ALMAGESTO_VERSION = "1.269.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1982,11 +1982,33 @@ def fm_bounds(text: str) -> tuple[int, int] | None:
 ADS_BIBCODE_LEN = 19
 
 
-#: #459 · CUALQUIER comando TeX, no una lista corta. Con la lista, `\ensuremath` se iba y el
-#: `\alpha` de adentro quedaba como la palabra «alpha» contra la `α` del catálogo, que `method_key`
-#: descarta por no ser alfanumérica ASCII: el mismo título en dos codificaciones salía como
-#: desacuerdo. Medido: **9 de 10** hallazgos de la categoría eran eso.
-_TEX_CMD_RE = re.compile(r"\\[a-zA-Z]+\b")
+#: #460 · el comando TeX que denota un CARÁCTER se pliega a ESE carácter, no a vacío. `\alpha` no
+#: tiene par en el catálogo (`method_key` descarta la `α` por no ser alfanumérica ASCII, así que
+#: borrar los dos lados es simétrico), pero `\textquotedblleft` **es** `“` y `\textasciitilde`
+#: **es** `~`: borrarlo deja `Comment on Stellar` contra `Comment on “Stellar`, y abajo
+#: `method_key` colapsa lo no-alfanumérico a `-`, así que sobra un separador y la comparación dice
+#: «distinto». La simetría que este plegado busca sólo se cumple para el comando que representa
+#: NADA. ⛔ Lista CERRADA, por el mismo argumento que `_TEX_ACENTO_RE`: con set abierto se adivina.
+_TEX_SIMBOLOS = {
+    "textquotedblleft": "\u201c", "textquotedblright": "\u201d",
+    "textquoteleft": "\u2018", "textquoteright": "\u2019",
+    "textasciitilde": "~", "textasciicircum": "^", "textbackslash": "\\",
+    "textendash": "\u2013", "textemdash": "\u2014", "textbar": "|", "textless": "<",
+    "textgreater": ">", "textdegree": "\u00b0", "textpm": "\u00b1", "texttimes": "\u00d7",
+    "ldots": "\u2026", "dots": "\u2026", "textperiodcentered": "\u00b7",
+}
+# ⚠ `(?![a-zA-Z])` y no `\b`: TeX termina un comando en el primer NO-LETRA, así que
+# `\textasciitilde581` es el comando seguido de `581` — y entre `e` y `5` no hay borde de palabra,
+# por lo que `\b` no matcheaba justo el caso medido (`Gl\raisebox{-0.5ex}\textasciitilde581`).
+_TEX_SIMBOLO_RE = re.compile(
+    r"\\(" + "|".join(sorted(_TEX_SIMBOLOS, key=len, reverse=True)) + r")(?![a-zA-Z])")
+#: #460 · el comando con ARGUMENTO DE LAYOUT: se come el nombre **y su argumento**. `\raisebox`
+#: borrado a secas dejaba su medida como texto (`Gl\raisebox{-0.5ex}~581` → `gl-0-5ex581`), que es
+#: peor que el símbolo perdido: agrega caracteres que ninguna de las dos fuentes dice.
+_TEX_LAYOUT_RE = re.compile(r"\\(?:raisebox|hspace|vspace|rule|kern|mbox|makebox|scalebox)\*?"
+                            r"(?:\{[^{}]*\}|\[[^\[\]]*\])*")
+#: #459 · y CUALQUIER otro comando, que es puro formato o un símbolo sin par en el catálogo.
+_TEX_CMD_RE = re.compile(r"\\[a-zA-Z]+(?![a-zA-Z])")
 #: #459 · el acento de BibTeX (`{\'e}`, `\"o`, `\~n`): la barra y el diacrítico se van y queda la
 #: letra, que es lo que `method_key` normaliza igual del lado del catálogo. ⛔ La lista de
 #: diacríticos es CERRADA y no «cualquier no-alfanumérico»: `\&` es un ESCAPE, no un acento, y con
@@ -2014,6 +2036,11 @@ def fold_tex(s: str) -> str:
     if not isinstance(s, str):
         return s
     out = _TEX_ACENTO_RE.sub(r"\2", s)
+    # El orden es el que decide: primero el que se come su ARGUMENTO, después el que deja un
+    # CARÁCTER, y recién al final el borrado genérico — al revés, el genérico se lleva el nombre y
+    # deja el argumento suelto, que es el defecto de #460.
+    out = _TEX_LAYOUT_RE.sub("", out)
+    out = _TEX_SIMBOLO_RE.sub(lambda m: _TEX_SIMBOLOS[m.group(1)], out)
     out = _TEX_CMD_RE.sub("", out)
     out = re.sub(r"\$([_^])\{?([^${}]*)\}?\$", r"\2", out)      # $_2$ · $^{-1}$ → 2 · -1
     out = re.sub(r"[_^]\{([^{}]*)\}", r"\1", out)                # _{2} → 2
@@ -3665,6 +3692,25 @@ def _clause_class(clausula: str) -> str | None:
     if pre and pub:
         return None
     return "preprint" if pre else ("publicado" if pub else None)
+
+
+def deciding_clause(linea: str, clase: str) -> str:
+    """The CLAUSE of this line that anchored and produced `clase`, or the line itself (#462).
+
+    ⛔ The screen where something gets signed shows the evidence that produced the decision, not the
+    start of the text. `doc_claims_on_disk` emits the LINE, and a caveat's bullet is one long line:
+    measured, **10 of 37** correct proposals read as contradictory because the clause that decided
+    the class («the PDF on disk is today the publisher's copy») sits 400 characters after the
+    opening («this view was read from the arXiv preprint»), and the extract cut at ~110. It is #289
+    on another surface: the operator could not tell «the clause decided it» from «the detector got
+    it wrong» without opening the JSON.
+
+    Same partition as the classifier (`_CLAUSULA_SEP` + `_clause_class`): a second reader of «which
+    clause decided this» is how the two end up disagreeing about what the proposal is based on."""
+    for cl in _CLAUSULA_SEP.split(str(linea or "")):
+        if _DOC_EN_DISCO_RE.search(cl) and _clause_class(cl) == clase:
+            return cl.strip()
+    return str(linea or "").strip()
 
 
 def doc_claims_on_disk(text: str, stem: str = "") -> list:
