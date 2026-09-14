@@ -257,7 +257,7 @@ Salieron de una sesión en la que **los bugs los encontraron agentes leyendo, no
 ataca una clase de defecto que se repitió, y las diez son deterministas: nada acá depende del
 juicio de un modelo.
 
-⚠ **La 9 se agregó el 2026-08-28 (AUD-212) y la 10 el 2026-09-06 (#409); la numeración es la de `CLAUDE.md` §*las diez redes*,
+⚠ **La 9 se agregó el 2026-08-28 (AUD-212) y la 10 el 2026-09-06 (#409); la numeración es la de `docs/desarrollo.md` §*las diez redes* (hasta #465, `CLAUDE.md`),
 que manda (AUD-228: los dos docs tenían la 8 y la 9 cruzadas).** El mapa de `docs/trazabilidad.md` mide *que alguien
 puso la marca*, no que la marca esté sobre código que el test cubre — que es la primera de las dos
 lecciones de método de la pasada `/auditar`. El gate vacía cada implementación marcada `@inv` y
@@ -465,7 +465,7 @@ día y ningún assert lo habría visto. La forma correcta de institucionalizarlo
 emita tests, no veredictos** — un veredicto de modelo no es reproducible y no sirve de red de
 regresión; un test que él propuso, sí. (Sin decidir todavía; anotado.)
 
-> Las **seis reglas de método** de las que salen estas redes están en `CLAUDE.md`,
+> Las **seis reglas de método** de las que salen estas redes están en `docs/desarrollo.md` (las 1-3; las 4-6 siguen en `CLAUDE.md`, #465),
 > sección *Seis reglas de método*. Acá va sólo la mecánica.
 
 ### Dos trampas ya pisadas, para no repetirlas

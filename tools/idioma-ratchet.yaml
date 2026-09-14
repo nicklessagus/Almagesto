@@ -2,7 +2,7 @@
 #
 # Sólo puede BAJAR. Se mide con `pytest tests/test_idioma_codigo.py`.
 #
-# QUÉ ES ESTO. La convención del repo (2026-08-24, `CLAUDE.md`) es: archivos, nombres de funciones,
+# QUÉ ES ESTO. La convención del repo (2026-08-24, `docs/desarrollo.md` § Convención de idioma) es: archivos, nombres de funciones,
 # docstrings y comentarios **nuevos** en inglés; la prosa de la doc sigue en castellano. **Sin
 # retrofit** — lo ya escrito no se renombra.
 #
@@ -83,7 +83,7 @@ conocidos:
 
 # ── Las otras DOS MITADES de la convención (2026-08-28, pasada `/auditar` — AUD-193/194) ─────────
 #
-# `CLAUDE.md` dice **«archivos, nombres de funciones, docstrings y comentarios NUEVOS en inglés»**
+# `docs/desarrollo.md` (hasta #465, `CLAUDE.md`) dice **«archivos, nombres de funciones, docstrings y comentarios NUEVOS en inglés»**
 # y este ratchet miraba **sólo los nombres**: dos tercios de la regla no los vigilaba nadie. Es el
 # corolario del propio repo —*una promesa que el sistema dejó de cumplir en silencio es peor que una
 # que nunca hizo*— aplicado a la regla que ya había nacido así una vez (#156).

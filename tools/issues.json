@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-13",
+ "fetched": "2026-09-14",
  "issues": [
   {
    "number": 2,
@@ -2269,36 +2269,51 @@
   {
    "number": 456,
    "title": "`pdf_leido` conflaga «qué se leyó» con «qué hay en disco»: en un PDF reemplazado no hay valor correcto — medido, 27 salvedades donde el campo diría `publisher` y su propia evidencia dice `preprint`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 457,
    "title": "El re-estampado de salvedades no converge en tres notas: la vista con `### Lente` tiene DOS bloques y el span rehúsa, y `render_salvedades` escapa `|` pero no `$`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 458,
    "title": "`query_ads` no pagina y ADS topea en 2000: el remedio que prescriben el aviso y el lint (`subí --rows`) es un no-op — y el aviso registra las filas PEDIDAS como traídas",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 459,
    "title": "El desacuerdo frontmatter ↔ exportación (#397) compara títulos con escapes LaTeX contra texto plano: 9 de 10 hallazgos son la misma cadena escrita de dos maneras",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 460,
    "title": "#459 residuo: el comando TeX que denota un SÍMBOLO se pliega a vacío, no a su carácter — quedan 3 falsos de 5",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 461,
    "title": "tests/poblada no aísla `cfg.EXTRACCION`: 9 módulos leen la bóveda REAL desde el corpus sintético (2 tests rojos en toda instancia poblada)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 462,
    "title": "--propose-pdf-leido imprime el arranque del bullet, no la cláusula que decidió la clase: 10 de 37 propuestas correctas se leen como contradictorias",
+   "state": "CLOSED"
+  },
+  {
+   "number": 463,
+   "title": "fuente_metadata_falsa (#353) bloquea sin salida cuando el equivocado es el CATÁLOGO: las tres correcciones que prescribe piden publicar una atribución falsa",
+   "state": "OPEN"
+  },
+  {
+   "number": 464,
+   "title": "CLAUDE.md no tiene criterio de admisión: el ratchet frena el crecimiento en silencio, no el crecimiento (39 % del archivo es schema que sólo se necesita al escribir un tipo de nota)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 465,
+   "title": "El ratchet de doc-size mide el techo, no el presupuesto — 43 subas firmadas y 0 rechazadas en 14 días (y los SKILL.md no tienen red)",
    "state": "OPEN"
   }
  ]

@@ -29,9 +29,44 @@
 # `crecimientos` con fecha, ancla y motivo. Lo que sigue prohibido es que el archivo crezca sin que
 # nadie lo declare — que es lo que el ratchet vino a frenar. `test_la_suba_del_techo_esta_declarada`
 # lo vigila: el techo vigente tiene que ser el de la última entrada.
-medido_en: "2026-09-13"
-techo_lineas: 1936
-techo_bytes: 158800
+#
+# ⛔ TECHO Y PRESUPUESTO (#465). Medido el 2026-09-14: 43 subas firmadas y 0 rechazadas en 14 días,
+# el archivo clavado contra el techo (7 líneas libres) — el mismo estado que #340 midió al abrir la
+# puerta. Cada firma se juzgaba sola («¿entra esta regla?», y la respuesta honesta casi siempre es
+# sí), ninguna contra la tendencia, y ninguna declaraba qué sale. Tres cosas nuevas:
+#   - `sale:` es obligatorio en toda entrada de `crecimientos` desde esa fecha: qué sale de
+#     CLAUDE.md para hacer lugar, o por qué nada puede salir (mismo criterio que `--reason`).
+#   - `pendiente:` es una ALARMA (aviso, no rojo): N subas en una ventana móvil de D días.
+#   - `skills:` da techo a cada `SKILL.md` — entran ENTEROS al contexto al invocarse, misma economía
+#     que CLAUDE.md, y nadie los miraba (los 4 grandes: 13 kB el 1-jul → 185 kB el 14-sep). Una suba
+#     se firma en `crecimientos_skills`; un skill nuevo declara su techo al nacer.
+#   - Y la red barata del hallazgo secundario: claves `ancla:` contadas contra las entradas
+#     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
+#     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
+medido_en: "2026-09-14"
+techo_lineas: 1835
+techo_bytes: 150000
+
+pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
+  ventana_dias: 14
+  max_subas: 6
+
+sale_obligatorio_desde: "2026-09-14"
+
+skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de CLAUDE.md
+  append-knowledge: 12100
+  audit-note: 18000
+  auditar: 18400
+  find-contradictions: 21500
+  ingest-star: 32000
+  ingest-theme: 51800
+  maintain: 36300
+  query-corpus: 6000
+  setup: 15300
+  test-hypothesis: 15700
+  verify-citations: 66500
+
+crecimientos_skills: []   # {fecha, skill, ancla, motivo, sale, techo_bytes} por suba
 
 crecimientos:
   - fecha: "2026-08-31"
@@ -72,6 +107,7 @@ crecimientos:
       no había visto la línea de #351. Suba mínima para que las dos entren.
     techo_lineas: 1665
     techo_bytes: 132200
+  - fecha: "2026-08-31"
     ancla: "#345"
     motivo: >-
       El alcance de las redes 1 y 4 es una REGLA ESCRITA de CLAUDE.md («toda función nueva de
@@ -511,3 +547,17 @@ crecimientos:
       Las tres cambian lo que el agente escribe o corre.
     techo_lineas: 1936
     techo_bytes: 158800
+  - fecha: "2026-09-14"
+    ancla: "#465"
+    motivo: >-
+      BAJA, no suba: salen a `docs/desarrollo.md` las reglas de método 1-3, la convención de idioma
+      y las diez redes (−103 líneas, −7,9 kB): se leen al escribir código del framework, que es
+      operación explícita del template, y una instancia (#377) las pagaba en cada sesión sin
+      usarlas. Entran seis líneas de puntero y el criterio de admisión (siete líneas), que es lo que
+      faltaba para que la próxima regla sepa si va acá o a `docs/`. Medido en #465: 43 subas
+      firmadas y 0 rechazadas en 14 días con el techo a 7 líneas.
+    sale: >-
+      Reglas de método 1-3, «Convención de idioma del código» y «Al escribir código: las diez
+      redes» → `docs/desarrollo.md`, con puntero desde `CLAUDE.md` y desde `tests/README.md`.
+    techo_lineas: 1835
+    techo_bytes: 150000

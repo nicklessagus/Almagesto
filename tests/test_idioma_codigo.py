@@ -132,7 +132,7 @@ def test_no_crecen_los_simbolos_en_castellano():
     nuevos = [s for s in hallados if s.split("::")[1] not in set(ratchet.get("conocidos") or [])]
     assert not nuevos, (
         "símbolos NUEVOS con nombre en castellano (la convención pide inglés para lo nuevo; "
-        f"`CLAUDE.md` § Convención de idioma):\n  " + "\n  ".join(nuevos))
+        f"`docs/desarrollo.md` § Convención de idioma):\n  " + "\n  ".join(nuevos))
     assert len(hallados) <= techo, (
         f"{len(hallados)} símbolos en castellano (techo {techo}):\n  " + "\n  ".join(hallados))
     if len(hallados) < techo:

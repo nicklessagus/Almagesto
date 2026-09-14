@@ -2655,3 +2655,38 @@ llaves, y el bug vivía exactamente en esa diferencia. Por eso el gate quedaba v
 con el caso medido rojo en la instancia. El test nuevo va contra `bibtex_fields`, no contra una
 cadena escrita a mano.
 
+
+## #465 · el ratchet de tamaño medía el techo, no el presupuesto (2026-09-14)
+
+**Estado al medir.** `CLAUDE.md` 1929 líneas / 157 564 B contra techo 1936 / 158 800: **7 líneas
+libres**, el mismo estado que #340 midió al pasar el muro a aviso (1639/1640). Serie por `git`:
+21 kB (1-jul) → 32 kB (1-ago) → 133 kB (1-sep) → 158 kB (14-sep), ~1,8 kB/día. Firmas en
+`crecimientos`: **43 subas, 0 rechazadas** (2026-08-31 → 2026-09-13). El gate pasaba en verde.
+
+**Lo que NO era la salida, medido antes de tocar.** (a) Prosa de medición inline: 77 líneas, **5 %
+de los bytes**, casi toda dentro de la regla como su consecuencia — el archivo sigue en la densidad
+que #340 midió (3 %). (b) Mover el schema de notas a `docs/` (`### papers/`: 405 líneas, 21 %): de
+las 752 líneas de la zona candidata, el 97 % tiene red —39 % bloqueante del lint, 11 % backlog, 33 %
+guarda en script o test— pero **se cobra en el cierre o al correr el script, no antes de escribir**;
+72 de 137 anclas viven sólo en `CLAUDE.md`. Descartado por la restricción del usuario (no perder
+ninguna regla). (c) «Duplicación con los skills»: 6-gramas normalizados sobre los 141 bloques con
+ancla (1427 líneas) — 49 bloques comparten ancla con un skill, **2 bloques / 12 líneas** son copia
+real (≥ 50 % de texto en común), 45 sólo comparten el `#N`: el skill cita la regla, no la repite.
+
+**Lo que sí salió.** Partir por audiencia: reglas de método 1-3, convención de idioma y las diez
+redes → `docs/desarrollo.md` (−103 líneas, −7,9 kB, −5 %): una instancia no escribe código del
+framework (#377). Las reglas 4-6 se quedan: rigen operaciones de bóveda, no de código —«riesgo ~0
+sobre el bloque entero», como proponía el issue, no era cierto—. Techo 1936/158 800 → 1835/150 000.
+
+**Hallazgo secundario, verificado.** La entrada de #345 en `crecimientos` no tenía `- fecha:` y
+YAML la anidó en la del merge de #344: 44 `ancla:`, 43 entradas parseadas, la firma del merge
+reemplazada por la de #345 sin que el gate lo viera (compara sólo la última). ⚠ La red que se
+escribió primero contaba `- fecha:` y **no cazaba el defecto original** (43 = 43, porque la entrada
+anidada no tenía esa línea): se vio al re-crear el defecto y ver el test en verde. La que quedó
+cuenta `ancla:`.
+
+**Red nueva (`tests/test_doc_size.py`):** `sale:` obligatorio en toda suba desde 2026-09-14; alarma
+de pendiente (aviso, no rojo: ≥ 6 subas en 14 días, anclada a la última suba y no al calendario —
+hoy dispara con 44); techo por `SKILL.md` (los 4 grandes: 13 kB el 1-jul → 185 kB hoy;
+`verify-citations` solo 66 kB) con suba firmada en `crecimientos_skills` y techo declarado al
+nacer. Las seis mutaciones dirigidas mueren por la línea que prueban.
