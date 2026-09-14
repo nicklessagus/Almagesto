@@ -361,6 +361,9 @@
 ## ⛔ `sources:` declara un autor o un año que Crossref DESMIENTE para ese `doi` (#353): atribución falsa publicada (0)
 > sobre 0 temas de `themes.yaml`
 
+## ✍ `sources:` cuyo desacuerdo con el catálogo está FIRMADO: el equivocado es el catálogo (#463) — declarado, no es deuda (0)
+> sobre 0 temas de `themes.yaml`
+
 ## 🕳 `sources:` sin cruzar contra su `doi`/PDF, o cruzada con título distinto, primera página que no confirma o no evaluable (#353, backlog) (0)
 > sobre 0 temas de `themes.yaml`
 

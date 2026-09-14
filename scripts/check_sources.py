@@ -27,6 +27,12 @@ contract— can report it: `autor`/`anio` block (a published false attribution),
 `no-evaluable` are backlog, and a source whose declaration changed since the check counts as
 unchecked. `ingest_theme` runs it at declare time; `python scripts/check_sources.py <slug>` runs
 it on demand (`--dry-run` measures without writing).
+
+⛔ And when the wrong one is the CATALOGUE there is a fourth way out (#463): `--firmar <key>
+--campo <c> --motivo "<why>"` prints the `metadata_revisada` block that drops the blocking finding
+to declared backlog. Without it the three prescribed fixes all ask for a FALSE attribution to be
+published — measured on `2012Naik`, whose Crossref record splits the name as `given: Ganesh,
+family: R.` and loses «Naik» — and the only way to a green exit was `--no-verify` on every commit.
 """
 from __future__ import annotations
 
@@ -391,13 +397,74 @@ def run(slug: str, dry_run: bool = False) -> dict:
     return records
 
 
+def firmar(slug: str, key: str, campo: str, motivo: str) -> int:
+    """Print the `metadata_revisada` block for `key` — the fourth way out, when the CATALOGUE is
+    the wrong one (#463).
+
+    PROPOSES and does not write: `sources:` is curated, versioned config (same doctrine as
+    `triage --accept-source`). The two values come from the REGISTRY —what the check actually
+    compared— and never from memory (#392): a signature typed by hand would cover a state nobody
+    measured, and then it covers nothing the day the catalogue moves.
+    """
+    if campo not in cfg.METADATA_CAMPOS:
+        cfg.print_seguro(f"⛔ `--campo {campo}` fuera del vocabulario ({', '.join(cfg.METADATA_CAMPOS)})")
+        return 2
+    if not str(motivo or "").strip():
+        cfg.print_seguro("⛔ `--motivo` vacío: la firma sin motivo no es auditable (#463)")
+        return 2
+    rec = cfg.as_map(cfg.as_map(cfg.load_registro(slug).get("fuentes_chequeadas")).get(key))
+    if not rec:
+        cfg.print_seguro(f"⛔ `{key}` no tiene cruce registrado en {cfg.registro_path(slug)}: corré "
+                         f"primero `python scripts/check_sources.py {slug}` — una firma sobre un "
+                         f"veredicto que nadie midió no cubre nada")
+        return 2
+    v = str(rec.get("veredicto") or "")
+    esperado = {"autor": "author", "anio": "year", "titulo": "title"}.get(v)
+    if esperado != campo:
+        cfg.print_seguro(f"⛔ el cruce del {rec.get('fecha')} para `{key}` dice `{v}`, no un "
+                         f"desacuerdo de `{campo}`: no hay nada que firmar en ese campo")
+        return 2
+    declarado = cfg.as_map(rec.get("declarado")).get(campo)
+    hallado = cfg.as_map(rec.get("encontrado"))
+    catalogo = hallado.get("family" if campo == "author" else campo)
+    # ⛔ Si ya hay firma, decir CUÁL de los tres estados es: «ya está firmada» y «la firma quedó
+    # vieja» piden acciones opuestas —no tocar nada contra re-firmar—, y una firma rota pide
+    # arreglar la que está, no agregar otra abajo. Lo decide la misma función que el lint (#463).
+    item = next((s for s in cfg.as_list(cfg.as_map(cfg.theme_by_slug(slug)[1]).get("sources"))
+                 if isinstance(s, dict) and str(s.get("key") or "").strip() == key), {})
+    estado, detalle = cfg.metadata_review(item, campo, declarado, catalogo)
+    if estado == "firmada":
+        cfg.print_seguro(f"✓ `{key}`/`{campo}` YA está firmada el {detalle.get('fecha')}: "
+                         f"{detalle.get('motivo')}\n  → no hay nada que hacer; el lint ya la "
+                         f"reporta como declarada")
+        return 0
+    if estado in ("vencida", "rota"):
+        cfg.print_seguro(f"⚠ hay una firma que NO cubre el hallazgo de hoy: {detalle}\n"
+                         f"  → reemplazá esa entrada por la de abajo (no agregues una segunda)\n")
+    cfg.print_seguro(f"Cruce del {rec.get('fecha')} [{rec.get('via')}]: {rec.get('detalle')}\n")
+    cfg.print_seguro(cfg.metadata_revisada_snippet(key, campo, declarado, catalogo, motivo,
+                                                   dt.date.today().isoformat()))
+    cfg.print_seguro("\n⚠ Se PROPONE y no se escribe: `sources:` es config curada. Pegalo, y el "
+                     "lint baja el hallazgo a backlog declarado.")
+    return 0
+
+
 def main(argv=None) -> int:
-    """CLI: `check_sources.py <slug> [--dry-run]` — cross every declared source of one theme."""
+    """CLI: `check_sources.py <slug> [--dry-run | --firmar KEY --campo C --motivo M]`."""
     cfg.stdout_tolerante()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("slug")
     ap.add_argument("--dry-run", action="store_true", help="mide y no escribe el registro")
+    ap.add_argument("--firmar", metavar="KEY",
+                    help="firma que el equivocado es el CATÁLOGO para esa fuente (#463): imprime "
+                         "el bloque `metadata_revisada` listo para pegar, no lo escribe")
+    ap.add_argument("--campo", choices=cfg.METADATA_CAMPOS, help="qué campo firma `--firmar`")
+    ap.add_argument("--motivo", help="por qué el catálogo se equivoca (obligatorio con `--firmar`)")
     args = ap.parse_args(argv)
+    if args.firmar:
+        if not args.campo:
+            ap.error("`--firmar` necesita `--campo` (el chequeo compara campo por campo)")
+        return firmar(args.slug, args.firmar, args.campo, args.motivo or "")
     run(args.slug, dry_run=args.dry_run)
     return 0
 

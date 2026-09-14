@@ -1393,6 +1393,14 @@ o sin `motivo`, el `via` fuera del vocabulario y el valor **retirado**. ⚠ El P
 `pending_source` no necesita `via` propio: ya entró con el suyo. ⛔ **Y lo declarado se CRUZA
 contra su `doi` o la primera página del PDF al ingestar (`check_sources`, #353):** autor/año
 desmentidos por Crossref **bloquean**, el resto es backlog; registra y no reescribe `sources:`.
+⛔ **Y cuando el equivocado es el CATÁLOGO se FIRMA, no se corrige el dato correcto (#463):
+`metadata_revisada: [{campo, declarado, catalogo, motivo, fecha}]`**, que
+`check_sources.py <slug> --firmar <key> --campo <c> --motivo "<por qué>"` imprime listo para pegar
+(propone y no escribe). Las otras tres salidas suponen que el equivocado es el repo, así que pedían
+publicar una **atribución falsa** —`2012Naik`: Crossref trae `given: Ganesh, family: R.` y perdió
+«Naik»— y la única forma de cerrar era `--no-verify`, que apaga el lint entero. ⛔ **Cubre un
+ESTADO, no un campo:** vale mientras `declarado` y `catalogo` sean los que firmó —si el catálogo se
+corrige, vuelve a bloquear— y la firma vieja o rota **no se ignora** (doctrina de D-4 y #71).
 
 ⛔ **El carril off-ADS tiene salida hacia la ingesta** (#111): `python scripts/triage.py <slug>
 --accept-source <doi> --via <via> --reason "<motivo>"` arma la entrada completa —metadata de

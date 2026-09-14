@@ -25,6 +25,57 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 463
+    regla: >-
+      Todo chequeo que compare lo que el REPO declara contra lo que dice un TERCERO necesita una
+      salida para «el tercero se equivoca», y esa salida es una firma versionada con motivo —no la
+      corrección del dato correcto. Sin ella, las salidas prescritas piden publicar una atribución
+      FALSA: medido en `2012Naik`, cuyo registro de Crossref trae `given: Ganesh, family: R.` y
+      perdió «Naik». Y la firma cubre un ESTADO (declarado + catálogo), nunca una categoría: si
+      apagara el campo para siempre, el día que el catálogo se corrige nadie se entera.
+    funcion: lib_config.metadata_review
+    patron: 'crossref|datacite|Crossref|DataCite'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_sources_metadata` decide con ella si el hallazgo de #353 bloquea o baja a la categoría declarada."
+      - modulo: scripts/check_sources.py
+        estado: usa
+        motivo: "`firmar` la consulta antes de proponer: distingue «ya firmada» de «la firma quedó vieja» (D-43)."
+      - modulo: scripts/check_retractions.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Lleva la MISMA relación (compara contra Crossref y puede estar leyendo un catálogo
+          equivocado), pero su veredicto no es «el repo declara X y el catálogo dice Y»: es un
+          hecho del catálogo SOBRE el paper, sin nada declarado a mano contra qué cruzarlo, así
+          que no hay un par (declarado, catálogo) que firmar. Una retracción mal registrada en
+          Crossref sería el caso, y no está medido en este repo — cuando aparezca, la firma es
+          ésta y no una nueva.
+      - modulo: scripts/sweep_external.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Sus ramas de ground-truth y de citas comparan contra un tercero, pero REPORTAN y
+          preguntan antes de aplicar (AUD-206): un diff que el usuario no acepta no escribe nada,
+          así que no hay veredicto que quede bloqueando sin salida. La pieza que falta es la misma
+          el día que alguna de esas ramas bloquee.
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: "Trae la exportación oficial y no juzga al repo contra ella: quien juzga es `bibtex_drift` (lint), y es backlog."
+      - modulo: scripts/discover.py
+        estado: fuera-de-alcance
+        motivo: "Descubre y propone candidatos; no compara nada declarado por el repo contra el catálogo."
+      - modulo: scripts/openalex.py
+        estado: fuera-de-alcance
+        motivo: "Backend de consulta: devuelve registros al schema común, no emite veredictos sobre lo que el repo declara."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Estampa lo que otros resolvieron; el cruce declarado↔catálogo no ocurre acá."
+      - modulo: scripts/ingest_star.py
+        estado: fuera-de-alcance
+        motivo: "Orquesta la cadena; el cruce y su veredicto viven en `check_sources`, que sí lleva la firma."
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: "Ídem: corre `check_sources` al declarar, y es ése el que decide y el que propone la firma."
   - issue: 444
     regla: >-
       «Esto es la cabecera estampada» es UNA función: el blockquote que contiene `GENERATOR_LINE`

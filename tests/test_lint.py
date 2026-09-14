@@ -8514,7 +8514,7 @@ def test_check_sources_metadata_separa_lo_que_bloquea_de_lo_que_es_backlog(toy_v
             "author": "Comon", "year": 1994, "title": "ICA"}
     write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods",
                                          "source": "local-pdfs", "sources": [decl]}})
-    falsa, dudosa = lint.check_sources_metadata()
+    falsa, dudosa, _ = lint.check_sources_metadata()
     assert falsa == [] and "nunca se cruzó" in dudosa[0][1]
 
     def _cruce(**rec):
@@ -8522,18 +8522,18 @@ def test_check_sources_metadata_separa_lo_que_bloquea_de_lo_que_es_backlog(toy_v
             "fecha": "2026-03-01",
             "declarado": {"author": "Comon", "year": 1994, "title": "ICA"}, **rec}}})
     _cruce(veredicto="ok", via="crossref")
-    assert lint.check_sources_metadata() == ([], [])
+    assert lint.check_sources_metadata() == ([], [], [])
     _cruce(veredicto="autor", via="crossref", detalle="declarado «Comon», Crossref dice «Vrabie»")
-    falsa, dudosa = lint.check_sources_metadata()
+    falsa, dudosa, _ = lint.check_sources_metadata()
     assert len(falsa) == 1 and dudosa == [] and "Vrabie" in falsa[0][1]
     _cruce(veredicto="anio", via="crossref", detalle="1994 vs 1995",
            encontrado={"year": 1995})
-    falsa, dudosa = lint.check_sources_metadata()
+    falsa, dudosa, _ = lint.check_sources_metadata()
     assert falsa == [] and len(dudosa) == 1, "±1 es online-first, no una atribución falsa"
     _cruce(veredicto="anio", via="crossref", detalle="1994 vs 1999", encontrado={"year": 1999})
     assert len(lint.check_sources_metadata()[0]) == 1, "≥2 sí bloquea"
     _cruce(veredicto="autor", via="pdf", detalle="la primera página no trae el apellido")
-    falsa, dudosa = lint.check_sources_metadata()
+    falsa, dudosa, _ = lint.check_sources_metadata()
     assert falsa == [] and len(dudosa) == 1, "el PDF no bloquea: no trae el apellido en 14 de 52"
     # y lo declarado que cambió desde el cruce vuelve a ser dudoso, no un veredicto viejo
     _cruce(veredicto="ok", via="crossref")
@@ -8541,6 +8541,56 @@ def test_check_sources_metadata_separa_lo_que_bloquea_de_lo_que_es_backlog(toy_v
                                          "sources": [{**decl, "author": "Otro"}]}})
     assert "lo declarado cambió" in lint.check_sources_metadata()[1][0][1]
 
+
+
+def test_la_firma_de_catalogo_equivocado_baja_el_bloqueante_a_declarado(toy_vault):
+    """#463 — cuando el equivocado es el CATÁLOGO, las tres salidas que prescribía el mensaje
+    piden publicar una atribución FALSA (medido: `2012Naik`, cuyo registro de Crossref trae
+    `given: Ganesh, family: R.` y perdió «Naik»). La cuarta salida es la firma versionada.
+
+    Los cuatro estados piden acciones distintas y por eso se prueban los cuatro: sin firma bloquea;
+    firmada baja a declarado (categoría APARTE, AUD-207); la firma que quedó VIEJA —el catálogo se
+    corrigió, o alguien cambió lo declarado— vuelve a bloquear nombrando qué se movió; y la firma
+    ROTA no se ignora en silencio."""
+    def _tema(item):
+        write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods",
+                                             "source": "local-pdfs", "sources": [item]}})
+    decl = {"key": "2012Naik", "pdf": "x.pdf", "via": "usuario", "motivo": "m",
+            "author": "Naik", "year": 2012, "title": "Introduction: ICA"}
+    write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "fuentes_chequeadas": {"2012Naik": {
+        "fecha": "2026-09-13", "via": "crossref", "veredicto": "autor",
+        "detalle": "declarado «Naik», Crossref dice «R.»",
+        "declarado": {"author": "Naik", "year": 2012, "title": "Introduction: ICA"},
+        "encontrado": {"family": "R.", "year": 2012}}}})
+    _tema(decl)
+    falsa, _, firmada = lint.check_sources_metadata()
+    assert len(falsa) == 1 and firmada == []
+    assert "--firmar 2012Naik --campo author" in falsa[0][1], "el bloqueante nombra su cuarta salida (#436)"
+
+    firma = {"campo": "author", "declarado": "Naik", "catalogo": "R.",
+             "motivo": "InTech cargó `given: Ganesh, family: R.` y perdió el apellido",
+             "fecha": "2026-09-14"}
+    _tema({**decl, "metadata_revisada": [firma]})
+    falsa, _, firmada = lint.check_sources_metadata()
+    assert falsa == [] and len(firmada) == 1 and "InTech" in firmada[0][1]
+
+    # el catálogo se corrigió: la firma cubre un estado, no una categoría
+    write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "fuentes_chequeadas": {"2012Naik": {
+        "fecha": "2026-10-01", "via": "crossref", "veredicto": "autor",
+        "detalle": "declarado «Naik», Crossref dice «Vrabie»",
+        "declarado": {"author": "Naik", "year": 2012, "title": "Introduction: ICA"},
+        "encontrado": {"family": "Vrabie", "year": 2012}}}})
+    falsa, _, firmada = lint.check_sources_metadata()
+    assert len(falsa) == 1 and firmada == [] and "hoy devuelve «Vrabie»" in falsa[0][1]
+
+    # la firma rota (typo en `campo`) NO se ignora: bloquea nombrando el vocabulario
+    _tema({**decl, "metadata_revisada": [{**firma, "campo": "autor"}]})
+    falsa, _, firmada = lint.check_sources_metadata()
+    assert len(falsa) == 1 and firmada == [] and "fuera del vocabulario" in falsa[0][1]
+
+    # y la firma sin motivo tampoco cubre nada
+    _tema({**decl, "metadata_revisada": [{**firma, "motivo": ""}]})
+    assert "no declara ['motivo']" in lint.check_sources_metadata()[0][0][1]
 
 # ── #396 · los dos barridos: `build/*/ads.json` y el registro versionado ─────────────────────────
 

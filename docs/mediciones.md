@@ -2690,3 +2690,47 @@ de pendiente (aviso, no rojo: ≥ 6 subas en 14 días, anclada a la última suba
 hoy dispara con 44); techo por `SKILL.md` (los 4 grandes: 13 kB el 1-jul → 185 kB hoy;
 `verify-citations` solo 66 kB) con suba firmada en `crecimientos_skills` y techo declarado al
 nacer. Las seis mutaciones dirigidas mueren por la línea que prueban.
+
+## #463 · el chequeo contra un tercero sin salida para «el tercero se equivoca» (2026-09-14)
+
+**El caso.** `check_sources.py ica` en `Almagesto-Tesis` reportó `2012Naik` → *declarado «Naik»,
+Crossref dice «R.»*, **bloqueante**. La entrada y el DOI están bien: la primera página del PDF —la
+autoridad que #392 manda abrir— dice *«Ganesh R. Naik»*, y el registro de Crossref para
+`10.5772/52324` trae `[{"given": "Ganesh", "family": "R."}]`: InTech cargó mal el nombre **en el
+catálogo** y perdió el apellido. `crossref_meta` lee bien lo que hay; lo que hay está mal.
+
+**Por qué era peor que una operación trabada.** Las tres salidas prescritas suponen que el
+equivocado es el repo: corregir `sources:` publica `author: R.` —la atribución falsa que esta misma
+categoría existe para impedir—, migrar a `extra_core` no cambia quién tiene razón, y el DOI es el
+correcto. La cuarta, no escrita, era borrar el veredicto del registro: la próxima corrida lo repone.
+Y como el hook `pre-commit` corre el lint, el único bloqueante de toda la bóveda dejaba **cada
+commit siguiente** —de cualquier sujeto— pasando por `--no-verify`, que apaga el chequeo entero.
+
+**La regla, no el caso.** Todo chequeo que compare lo que el repo declara contra un tercero necesita
+una salida para «el tercero se equivoca», y esa salida es una **firma versionada con motivo**, no la
+corrección del dato correcto — la forma que el framework ya usa en `--drop-core … --reason`,
+`no_sintetizado`, `segunda_mano_revisada` (#433) y `no_vista`.
+
+**Lo que se implementó.** `metadata_revisada: [{campo, declarado, catalogo, motivo, fecha}]` en el
+item de `sources:`; `cfg.metadata_review` es la **única** implementación de la regla (la llaman el
+lint y `check_sources`); `check_sources.py <slug> --firmar <key> --campo <c> --motivo "<por qué>"`
+imprime el bloque listo para pegar y **no escribe** `themes.yaml`, con los dos valores sacados del
+cruce REGISTRADO y no de memoria (#392).
+
+**La decisión de diseño que importa: la firma cubre un ESTADO, no un campo.** Si apagara el campo,
+el día que el catálogo se corrige nadie se entera y la firma se vuelve un apagador permanente. Vale
+mientras `declarado` y `catalogo` sigan siendo los que firmó; si cualquiera se mueve, **vuelve a
+bloquear** nombrando qué cambió. Es la doctrina del ancla de verificación (D-4) y de `if_version`.
+Y la firma **rota** no se ignora: la forma se juzga sobre **todas** las entradas, no sobre la que
+matchea el campo consultado — un `campo: autor` (typo) no matchea ninguna consulta, así que mirando
+sólo la que matchea el typo entraba **mudo**, que es el modo de falla de #71 y #73.
+
+**Alcance declarado (#409).** Se firmó en `tools/portadores.yaml` sobre 10 módulos que matchean
+`crossref|datacite`: **usan** `lint` y `check_sources`; los otros ocho quedan `fuera-de-alcance`
+**con motivo**, y los dos que llevan la misma relación se declaran como tales —`check_retractions`
+(su veredicto es un hecho del catálogo sobre el paper, sin par declarado↔catálogo que firmar) y
+`sweep_external` (reporta y pregunta antes de aplicar, AUD-206: no bloquea)—. `bibtex_drift` (#397)
+tiene un caso vivo del mismo tipo (`2006Tichavsky`, con `Crame/spl acute/r` en la exportación de
+IEEE) y es **backlog**, así que no frena nada: cuando bloquee, la firma es ésta y no una nueva.
+
+**Redes.** Las 4 funciones nuevas y las 6 guardas de `metadata_review` mueren en su test dirigido.

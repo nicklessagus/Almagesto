@@ -2461,8 +2461,8 @@ def check_sources_provenance() -> list:
 
 
 def check_sources_metadata() -> tuple:
-    """`(fuente_metadata_falsa, fuente_metadata_dudosa)` — what `sources:` DECLARES against what its
-    `doi` or its PDF say (#353).
+    """`(falsa, dudosa, firmada)` — what `sources:` DECLARES against what its `doi` or its PDF say
+    (#353), with the signed-catalogue rail of #463 as the third list.
 
     Extracted from `lint.collect` by #396; the blocks compute and the caller accumulates. The cross
     itself is `check_sources` (network); this reads its verdict from the versioned registro,
@@ -2471,6 +2471,7 @@ def check_sources_metadata() -> tuple:
     """
     fuente_metadata_falsa: list = []
     fuente_metadata_dudosa: list = []
+    fuente_metadata_firmada: list = []
     # #353 — lo que un item de `sources:` DECLARA contra lo que su `doi` o su PDF dicen. El cruce
     # lo hace `check_sources` (red; corre al declarar y a pedido) y deja el veredicto en el
     # registro versionado con un snapshot de lo declarado: acá se lee, offline. Medido en una bóveda
@@ -2505,16 +2506,39 @@ def check_sources_metadata() -> tuple:
             _bloquea = _via in ("crossref", "bib") and (
                 _v == "autor" or (_v == "anio" and abs(int(_decl_hoy["year"] or 0)
                                                     - int(cfg.as_map(_rec.get("encontrado")).get("year") or 0)) >= 2))
+            # #463 — la CUARTA salida: cuando el equivocado es el CATÁLOGO, las tres que prescribe
+            # el mensaje piden publicar una atribución falsa (medido: `2012Naik`, cuyo registro de
+            # Crossref trae `given: Ganesh, family: R.` y perdió «Naik»). La firma versionada por
+            # caso baja el hallazgo a backlog DECLARADO; la firma vieja o rota vuelve a bloquear.
+            _campo = {"autor": "author", "anio": "year", "titulo": "title"}.get(_v, _v)
+            _hallado = cfg.as_map(_rec.get("encontrado"))
+            _estado, _firma = cfg.metadata_review(
+                _it, _campo, _decl_hoy.get(_campo),
+                _hallado.get("family" if _campo == "author" else _campo))
+            if _estado == "firmada":
+                fuente_metadata_firmada.append(
+                    (_k, f"[{_via}] {_v}: el catálogo es el equivocado, firmado el "
+                         f"{_firma.get('fecha')} — {_firma.get('motivo')} (tema `{_slug}`)"))
+                continue
+            if _estado in ("vencida", "rota"):
+                fuente_metadata_falsa.append(
+                    (_k, f"{_det} (tema `{_slug}`) → la firma `metadata_revisada` NO cubre este "
+                         f"hallazgo: {_firma}. Re-firmala con "
+                         f"`python scripts/check_sources.py {_slug} --firmar {_k} --campo {_campo} "
+                         f'--motivo "<por qué el catálogo se equivoca>"`, o corregí `sources:`'))
+                continue
             if _bloquea:
                 fuente_metadata_falsa.append(
                     (_k, f"{_det} (tema `{_slug}`, cruce del {_rec.get('fecha')}) → corregí la entrada de "
                          f"`sources:` (o migrala a `extra_core` si tiene bibcode ADS) y re-corré {_cmd}; "
-                         f"si el DOI es el equivocado, corregí el DOI"))
+                         f"si el DOI es el equivocado, corregí el DOI; y si el equivocado es el "
+                         f"CATÁLOGO (#463), firmalo: `python scripts/check_sources.py {_slug} "
+                         f'--firmar {_k} --campo {_campo} --motivo "<por qué>"`'))
             else:
                 fuente_metadata_dudosa.append(
                     (_k, f"[{_via}] {_v}: {_det} (tema `{_slug}`, {_rec.get('fecha')}) → abrí la fuente y "
                          f"decidí; re-corré {_cmd} tras corregir"))
-    return fuente_metadata_falsa, fuente_metadata_dudosa
+    return fuente_metadata_falsa, fuente_metadata_dudosa, fuente_metadata_firmada
 
 
 def check_gate_vocabulary(slug: str, data: dict) -> list:
@@ -6017,6 +6041,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     cascada_sin_correr: list = []      # (tema, motivo) — #361: el paso 0b nunca corrió, corrió vacío o cojo
     tema_ejes_heredados: list = []     # (tema, motivo) — #360: tema de método sin `ejes:` → lee con los del objetivo
     fuente_metadata_falsa: list = []   # (key, motivo) — #353: autor/año declarados ≠ Crossref (atribución falsa publicada)
+    fuente_metadata_firmada: list = []  # (key, motivo) — #463: el catálogo es el equivocado, firmado con motivo
     fuente_metadata_dudosa: list = []  # (key, motivo) — #353: título ≠, primera página no confirma, no evaluable o sin cruzar
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     indice_viejo: list = []            # (stem, motivo) — #237: index.md contra la verdad de disco
@@ -6783,9 +6808,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     bad_sources += check_sources_provenance()
 
     # El cruce de #353, leído offline del registro, vive en `check_sources_metadata` (#396).
-    _fmf, _fmd = check_sources_metadata()
+    _fmf, _fmd, _fms = check_sources_metadata()
     fuente_metadata_falsa += _fmf
     fuente_metadata_dudosa += _fmd
+    fuente_metadata_firmada += _fms
 
     # categorías que NO se pudieron evaluar: se omiten del reporte en vez de mostrar un "(0)" que
     # se leería como veredicto (el adversario que D-43 nombra: el cero inventado).
@@ -6975,6 +7001,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('status_apilado', '🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog)', SEV_BACKLOG, tuple(status_apilado), poblacion='config'),
         Categoria('alcance_desfasado', '🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog)', SEV_BACKLOG, tuple(alcance_desfasado), poblacion='papers'),
         Categoria('fuente_metadata_falsa', '⛔ `sources:` declara un autor o un año que Crossref DESMIENTE para ese `doi` (#353): atribución falsa publicada', SEV_BLOQUEANTE, tuple(fuente_metadata_falsa), poblacion='temas'),
+        Categoria('fuente_metadata_firmada', '✍ `sources:` cuyo desacuerdo con el catálogo está FIRMADO: el equivocado es el catálogo (#463) — declarado, no es deuda', SEV_BACKLOG, tuple(fuente_metadata_firmada), poblacion='temas'),
         Categoria('fuente_metadata_dudosa', '🕳 `sources:` sin cruzar contra su `doi`/PDF, o cruzada con título distinto, primera página que no confirma o no evaluable (#353, backlog)', SEV_BACKLOG, tuple(fuente_metadata_dudosa), poblacion='temas'),
         Categoria('tema_ejes_heredados', '🕳 Tema de MÉTODO sin `ejes:`: lee con los ejes del objetivo, que son los de una bóveda astro (#360, backlog)', SEV_BACKLOG, tuple(tema_ejes_heredados), poblacion='temas'),
         Categoria('cascada_sin_correr', '🕳 Tema off-ADS/mixto cuya cascada de descubrimiento (paso 0b) nunca corrió, corrió vacía o con backends caídos (#361, backlog)', SEV_BACKLOG, tuple(cascada_sin_correr), poblacion='temas'),

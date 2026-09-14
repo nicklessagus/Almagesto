@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.270.0"
+ALMAGESTO_VERSION = "1.271.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3014,6 +3014,103 @@ def dropped_from_subject(slug: str) -> dict:
     return {b: (d.get("motivo") or "(sin motivo)")
             for b, d in load_decisiones(slug).items()
             if d.get("decision") == "descartado" and es_del_carril(d, "sujeto")}
+
+
+#: Fields of a `sources:` item that `check_sources` compares against a catalogue (#353), and the
+#: closed vocabulary of `metadata_revisada[].campo` (#463): the signature can only cover a field
+#: some check actually judges. A typo would leave the signature mute for its only consumer.
+METADATA_CAMPOS = ("author", "year", "title")
+
+#: Keys of one `metadata_revisada` entry. `motivo` is mandatory for the same reason as the triage
+#: `--reason`: in six months the reason is what helps, not the category.
+METADATA_REVISADA_CLAVES = ("campo", "declarado", "catalogo", "motivo", "fecha")
+
+
+def yaml_scalar(v) -> str:
+    """One-line YAML scalar, quoted only when the value needs it (#463).
+
+    Lives here because two rails print pasteable YAML —`triage._set_campo` and the
+    `metadata_revisada` snippet— and `lib_config` cannot import `triage`. Writing the quoting by
+    hand is how a `motivo` with a colon silently becomes a broken block."""
+    return yaml.safe_dump(v, allow_unicode=True, width=10 ** 6).split("\n")[0]
+
+
+def _metadata_val(v) -> str:
+    """Comparison form for a signed value: `None`/absent and the empty string are the SAME state
+    («the catalogue has nothing here»), and surrounding blanks never decide a verdict."""
+    return "" if v is None else " ".join(str(v).split())
+
+
+def metadata_review(item, campo: str, declarado, catalogo) -> tuple:
+    """Does a signed `metadata_revisada` entry cover THIS disagreement? (#463)
+
+    Returns one of three states —never two— because each asks for a different action (D-43):
+
+    - `("firmada", entrada)` — somebody signed that the CATALOGUE is the wrong one, for this field
+      and for exactly this pair of values. The finding drops to declared backlog.
+    - `("vencida", motivo)` — there is a signature for the field, but what it signed is no longer
+      what is on the table: the declared value changed, or the catalogue now says something else
+      (it was corrected, or a different rail answered). A signature covers a STATE, not a category
+      — same doctrine as the verification anchor (D-4) and `if_version`: what nobody looked at
+      again is not covered. It blocks, naming what moved.
+    - `(None, None)` — nothing signed for this field.
+
+    ⛔ Malformed entries are NOT ignored: they come back as `("rota", motivo)`, which blocks. A
+    signature that the reader skips in silence is worse than an error (same rule as the old
+    `disputes` schema, #71) — it reads as «this was reviewed» while covering nothing.
+
+    The rule lives HERE and nowhere else: `lint` reads the verdict offline from the registry and
+    `check_sources` prints the snippet, and two implementations of one rule already cost this repo
+    a measured defect (#324).
+    """
+    campo = str(campo or "").strip()
+    # ⛔ La FORMA se juzga sobre TODAS las entradas, no sobre la que matchea el campo pedido: un
+    # `campo: autor` (typo) no matchea ninguna consulta, así que mirando sólo la que matchea el
+    # typo entra MUDO — y una firma que nadie lee se lee como «esto se revisó». Es el modo de falla
+    # del `role` fuera de vocabulario (#73) y del schema viejo de `disputes` (#71).
+    entradas = as_list(as_map(item).get("metadata_revisada"))
+    for e in entradas:
+        if not isinstance(e, dict):
+            return "rota", f"una entrada de `metadata_revisada` no es un mapa (`{type(e).__name__}`)"
+        _c = str(e.get("campo") or "").strip()
+        if _c not in METADATA_CAMPOS:
+            return "rota", (f"`campo: {_c or '(vacío)'}` fuera del vocabulario "
+                            f"({', '.join(METADATA_CAMPOS)})")
+        faltan = [k for k in METADATA_REVISADA_CLAVES if not _metadata_val(e.get(k)).strip()
+                  and not (k == "catalogo" and "catalogo" in e)]
+        if faltan:
+            return "rota", f"la firma de `{_c}` no declara {faltan}"
+    for e in entradas:
+        if str(e.get("campo") or "").strip() != campo:
+            continue
+        if _metadata_val(e.get("declarado")) != _metadata_val(declarado):
+            return "vencida", (f"la firma de `{campo}` dice que se declaraba "
+                               f"«{_metadata_val(e.get('declarado'))}» y hoy `sources:` declara "
+                               f"«{_metadata_val(declarado)}»")
+        if _metadata_val(e.get("catalogo")) != _metadata_val(catalogo):
+            return "vencida", (f"la firma de `{campo}` dice que el catálogo devolvía "
+                               f"«{_metadata_val(e.get('catalogo'))}» y hoy devuelve "
+                               f"«{_metadata_val(catalogo)}»")
+        return "firmada", e
+    return None, None
+
+
+def metadata_revisada_snippet(key: str, campo: str, declarado, catalogo, motivo: str,
+                              fecha: str) -> str:
+    """The `metadata_revisada:` block ready to paste into that `sources:` item (#463).
+
+    Printed, never written: `sources:` is curated, versioned config and the framework reports on it
+    without rewriting it (same doctrine as `triage --accept-source`). The two values come from the
+    REGISTRY —what the check actually compared—, never from memory (#392)."""
+    return "\n".join([
+        f"# pegar DENTRO del item `key: {key}` de `sources:` en vault/config/themes.yaml",
+        "    metadata_revisada:",
+        f"      - campo: {campo}",
+        f"        declarado: {yaml_scalar(_metadata_val(declarado))}",
+        f"        catalogo: {yaml_scalar(_metadata_val(catalogo))}",
+        f"        motivo: {yaml_scalar(motivo)}",
+        f'        fecha: "{fecha}"',
+    ])
 
 
 # Vocabulario CERRADO de `via` en `extra_core` (D-58): de dónde salió la aceptación de ese paper.

@@ -3453,3 +3453,63 @@ def test_462_deciding_clause_devuelve_la_CLAUSULA_que_decidio(toy_vault):
     sin_ancla = ("Los valores publicados no dicen nada del archivo. "
                  "El documento en disco es la copia del editor.")
     assert cfg.deciding_clause(sin_ancla, "publicado").startswith("El documento en disco")
+
+
+# ── #463 · la firma de «el catálogo es el equivocado» ───────────────────────────────────────────
+
+FIRMA = {"campo": "author", "declarado": "Naik", "catalogo": "R.",
+         "motivo": "InTech cargó `family: R.` y perdió el apellido", "fecha": "2026-09-14"}
+
+
+def test_la_firma_cubre_un_ESTADO_y_no_una_categoria():
+    """#463 — el corazón de la regla: una firma vale mientras lo declarado y lo del catálogo sigan
+    siendo los que firmó. Si no, apagaría el chequeo de ese campo PARA SIEMPRE, incluso después de
+    que el catálogo se corrija. Misma doctrina que el ancla de verificación (D-4) y que
+    `if_version`: lo que nadie volvió a mirar no está cubierto."""
+    firma = {"campo": "author", "declarado": "Naik", "catalogo": "R.", "motivo": "x",
+             "fecha": "2026-09-14"}
+    item = {"metadata_revisada": [firma]}
+    assert cfg.metadata_review(item, "author", "Naik", "R.")[0] == "firmada"
+    assert cfg.metadata_review(item, "author", "Naik", "Vrabie")[0] == "vencida"
+    assert cfg.metadata_review(item, "author", "Otro", "R.")[0] == "vencida"
+    assert cfg.metadata_review(item, "year", 2012, 2015) == (None, None), "firma por CAMPO"
+    # `None` y `""` son el mismo estado (el catálogo no trae nada ahí), y los blancos no deciden
+    assert cfg.metadata_review({"metadata_revisada": [{**firma, "catalogo": ""}]},
+                               "author", "Naik", None)[0] == "firmada"
+    assert cfg.metadata_review({"metadata_revisada": [{**firma, "declarado": " Naik  "}]},
+                               "author", "Naik", "R.")[0] == "firmada"
+
+
+def test_la_firma_MAL_FORMADA_no_se_ignora_en_silencio():
+    """#463/#71/#73 — una firma que el lector saltea se lee como «esto se revisó» y no cubre nada.
+    El typo en `campo` es el caso agudo: no matchea ninguna consulta, así que juzgando sólo la
+    entrada que matchea entraría MUDO — por eso la forma se juzga sobre TODAS las entradas."""
+    def _rota(**cambios):
+        return cfg.metadata_review({"metadata_revisada": [{**FIRMA, **cambios}]},
+                                   "author", "Naik", "R.")
+    assert _rota()[0] == "firmada"
+    assert _rota(campo="autor")[0] == "rota", "el typo no matchea la consulta y NO puede entrar mudo"
+    assert "fuera del vocabulario" in _rota(campo="autor")[1]
+    for clave in ("declarado", "motivo", "fecha"):
+        estado, motivo = _rota(**{clave: "  "})
+        assert estado == "rota" and clave in motivo
+    assert cfg.metadata_review({"metadata_revisada": ["no soy un mapa"]}, "author", "a", "b")[0] == "rota"
+    # `catalogo` declarado vacío es un estado LEGÍTIMO (el catálogo no trae nada ahí), no una firma rota
+    assert cfg.metadata_review({"metadata_revisada": [{**FIRMA, "catalogo": None}]},
+                               "author", "Naik", None)[0] == "firmada"
+
+
+def test_el_snippet_de_la_firma_es_YAML_pegable():
+    """El `motivo` con dos puntos es el caso normal (`family: R.`) y sin comillas parte el bloque:
+    por eso el escalar lo escribe `yaml_scalar` y no una f-string."""
+    import yaml
+    bloque = cfg.metadata_revisada_snippet("2012Naik", "author", "Naik", "R.",
+                                           "InTech cargó `family: R.`: perdió el apellido",
+                                           "2026-09-14")
+    cuerpo = "\n".join(l[4:] for l in bloque.split("\n") if not l.startswith("#"))
+    e = yaml.safe_load(cuerpo)["metadata_revisada"][0]
+    assert e["campo"] == "author" and e["catalogo"] == "R." and e["fecha"] == "2026-09-14"
+    assert "perdió el apellido" in e["motivo"]
+    assert cfg.metadata_review({"metadata_revisada": [e]}, "author", "Naik", "R.")[0] == "firmada", \
+        "lo que el snippet propone tiene que ser exactamente lo que la firma acepta"
+

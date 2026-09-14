@@ -209,7 +209,8 @@ Deben quedar en **0**:
 - **Nota de paper sin `## Abstract`** (#124/#277, `sin_abstract`) — detalle en *Backlog —
   verificación y garantías*, donde vive con sus hermanas de #124; es bloqueante.
 - **`sources:` con autor o año que Crossref desmiente** (#353, `fuente_metadata_falsa`) — detalle
-  en *Backlog — curación, registro y búsqueda*, junto a su hermana backlog; es bloqueante.
+  en *Backlog — curación, registro y búsqueda*, junto a sus hermanas backlog; es bloqueante. Su
+  cuarta salida, cuando el equivocado es el catálogo, es la firma `metadata_revisada` (#463).
 - **Driver `merge=ours` REGISTRADO en un clon que tiene `origin`** (#390, invierte #99):
   `merge=ours` es una regla por **path** y git no puede condicionarla por remoto, así que el mismo
   driver que protege contra `upstream` **descarta en silencio** lo que traiga `origin` — la otra
@@ -947,6 +948,25 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   confirma (14 de 20 sin DOI: capítulos, preprints, `Hyv¨arinen`), no evaluable, nunca cruzada y
   cruce anterior a un cambio de lo declarado son backlog con su motivo. **No reescribe**
   `sources:`: se corrige la entrada (o se migra a `extra_core` si tiene bibcode ADS) y se re-corre.
+- **`sources:` cuyo desacuerdo con el catálogo está FIRMADO** (#463, `fuente_metadata_firmada`,
+  backlog **declarado** — no es deuda, va aparte por AUD-207): la **cuarta salida** del bloqueante
+  de arriba, para cuando el equivocado es el **catálogo**. Las tres que prescribía el mensaje
+  suponen que el equivocado es el repo, así que ahí pedían publicar una **atribución falsa**:
+  medido en `2012Naik`, cuyo registro de Crossref trae `given: Ganesh, family: R.` y perdió
+  «Naik» —InTech cargó mal el nombre en el propio catálogo—, con la primera página del PDF (la
+  autoridad de #392) diciendo «Ganesh R. Naik». Peor que una operación trabada: el hook
+  `pre-commit` corre el lint, así que **todo commit de la bóveda** —de cualquier sujeto— pasaba por
+  `--no-verify`, que apaga el chequeo entero y no sólo la categoría sin salida. Se firma con
+  `metadata_revisada: [{campo, declarado, catalogo, motivo, fecha}]` en el item de `sources:`, que
+  arma `python scripts/check_sources.py <slug> --firmar <key> --campo <c> --motivo "<por qué>"`
+  **listo para pegar** (propone y no escribe: `sources:` es config curada, igual que
+  `triage --accept-source`; los dos valores salen del cruce REGISTRADO y no de memoria, #392).
+  ⛔ La firma cubre un **estado**, no un campo: vale mientras `declarado` y `catalogo` sigan siendo
+  los que firmó, así que si el catálogo se corrige —o alguien cambia lo declarado— **vuelve a
+  bloquear** nombrando qué se movió (doctrina del ancla, D-4, y de `if_version`). Y la firma
+  **vieja o mal formada no se ignora en silencio**: bloquea, porque una firma que el lector saltea
+  se lee como «esto se revisó» y no cubre nada (#71/#73). `campo` es vocabulario cerrado
+  (`author|year|title`) y `motivo` obligatorio.
 - **Tema de MÉTODO sin `ejes:`** (#360, `tema_ejes_heredados`): el simétrico literal del anterior
   sobre el otro eje de #307. Sin `ejes:` la extracción pregunta los del objetivo —los de una bóveda
   astro— a un tema de otra disciplina; medido: **6 de 8** facetas vacías en 12 extracciones y los

@@ -44,8 +44,8 @@
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
 medido_en: "2026-09-14"
-techo_lineas: 1835
-techo_bytes: 150000
+techo_lineas: 1841
+techo_bytes: 150500
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -561,3 +561,18 @@ crecimientos:
       redes» → `docs/desarrollo.md`, con puntero desde `CLAUDE.md` y desde `tests/README.md`.
     techo_lineas: 1835
     techo_bytes: 150000
+  - fecha: "2026-09-14"
+    ancla: "#463"
+    motivo: >-
+      Seis líneas en el párrafo de `check_sources` (#353), que es su regla madre: cuando el
+      equivocado es el CATÁLOGO se firma con `metadata_revisada`, y la firma cubre un ESTADO y no
+      un campo. Va acá y no en `docs/` porque decide lo que un agente ESCRIBE en `sources:` y
+      porque, sin ella, el bloqueante no tenía salida y todo commit de la bóveda pasaba por
+      `--no-verify` (medido en la instancia, #463).
+    sale: >-
+      Nada. Se buscó: el párrafo de #353 ya está en regla-y-consecuencia (cuatro líneas para el
+      cruce entero) y la regla nueva se comprimió de 10 líneas a 6 sacándole la medición, que va al
+      issue y a `docs/mediciones.md`. La sección entera de `sources:` mide 14 líneas y sus cuatro
+      reglas tienen consumidor distinto: ninguna es candidata a salir sin perderse.
+    techo_lineas: 1841
+    techo_bytes: 150500

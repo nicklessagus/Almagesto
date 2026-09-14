@@ -363,3 +363,76 @@ def test_datacite_meta_saca_el_apellido_del_primer_autor(monkeypatch):
     assert cs.datacite_meta("10.48550/x") == {"family": "Morello", "year": 2014, "title": "A new look"}
     monkeypatch.setattr(fb, "doi_bibtex", lambda doi: ("", ""))
     assert cs.datacite_meta("10.48550/x") is None
+
+
+# ── #463 · la cuarta salida: el equivocado es el CATÁLOGO ───────────────────────────────────────
+
+NAIK = {"key": "2012Naik", "pdf": "x.pdf", "via": "usuario", "motivo": "m",
+        "author": "Naik", "year": 2012, "title": "Introduction: ICA"}
+NAIK_REC = {"fecha": "2026-09-13", "via": "crossref", "veredicto": "autor",
+            "detalle": "declarado «Naik», Crossref dice «R.»",
+            "declarado": {"author": "Naik", "year": 2012, "title": "Introduction: ICA"},
+            "encontrado": {"family": "R.", "year": 2012}}
+
+
+def _registro_naik(rec=None):
+    write_yaml(cfg.REGISTRO / "ica.yaml",
+               {"slug": "ica", "fuentes_chequeadas": {"2012Naik": dict(rec or NAIK_REC)}})
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods",
+                                         "source": "local-pdfs", "sources": [NAIK]}})
+
+
+def test_firmar_arma_el_bloque_con_los_valores_del_REGISTRO(toy_vault, capsys):
+    """#463/#392 — los dos valores salen del cruce REGISTRADO, nunca de lo que el operador
+    recuerde: una firma tipeada a mano cubriría un estado que nadie midió, y entonces no cubre nada
+    el día que el catálogo se mueve."""
+    _registro_naik()
+    assert cs.firmar("ica", "2012Naik", "author", "InTech partió el nombre: `family: R.`") == 0
+    out = capsys.readouterr().out
+    assert "campo: author" in out and "declarado: Naik" in out and "catalogo: R." in out
+    assert "InTech" in out and "fecha:" in out
+    assert "no se escribe" in out, "propone y no aplica: `sources:` es config curada"
+
+
+def test_firmar_rehusa_lo_que_no_puede_firmar(toy_vault, capsys):
+    """Los tres rehúses piden acciones distintas, así que se prueban los tres (D-43). Firmar un
+    veredicto que nadie midió, o un campo que el cruce no juzga, sería una firma que cubre nada."""
+    _registro_naik()
+    assert cs.firmar("ica", "2012Naik", "author", "   ") == 2
+    assert "motivo" in capsys.readouterr().out
+    assert cs.firmar("ica", "2012Naik", "year", "el año está mal en Crossref") == 2
+    assert "no hay nada que firmar" in capsys.readouterr().out
+    assert cs.firmar("ica", "noexiste", "author", "m") == 2
+    assert "no tiene cruce registrado" in capsys.readouterr().out
+
+
+def test_firmar_no_escribe_el_themes_yaml(toy_vault):
+    """La doctrina de todo el carril off-ADS: se REPORTA sobre `sources:` y no se lo reescribe
+    (igual que `triage --accept-source`)."""
+    _registro_naik()
+    antes = cfg.THEMES_YAML.read_text(encoding="utf-8")
+    cs.firmar("ica", "2012Naik", "author", "el catálogo perdió el apellido")
+    assert cfg.THEMES_YAML.read_text(encoding="utf-8") == antes
+
+
+def test_firmar_dice_CUAL_de_los_tres_estados_encontro(toy_vault, capsys):
+    """#463/D-43 — «ya está firmada», «la firma quedó vieja» y «la firma está rota» piden acciones
+    opuestas: no tocar nada, reemplazar la entrada, arreglarla. Un snippet impreso a secas las
+    confunde y produce una segunda firma abajo de la primera."""
+    firma = {"campo": "author", "declarado": "Naik", "catalogo": "R.",
+             "motivo": "InTech perdió el apellido", "fecha": "2026-09-14"}
+    _registro_naik()
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "local-pdfs",
+                                         "sources": [{**NAIK, "metadata_revisada": [firma]}]}})
+    assert cs.firmar("ica", "2012Naik", "author", "otro motivo") == 0
+    out = capsys.readouterr().out
+    assert "YA está firmada" in out and "no hay nada que hacer" in out
+    assert "metadata_revisada:" not in out, "no propone una segunda firma sobre una vigente"
+
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "local-pdfs",
+                                         "sources": [{**NAIK, "metadata_revisada":
+                                                      [{**firma, "catalogo": "Vrabie"}]}]}})
+    assert cs.firmar("ica", "2012Naik", "author", "el catálogo perdió el apellido") == 0
+    out = capsys.readouterr().out
+    assert "NO cubre el hallazgo de hoy" in out and "no agregues una segunda" in out
+    assert "metadata_revisada:" in out, "y sí propone el reemplazo"

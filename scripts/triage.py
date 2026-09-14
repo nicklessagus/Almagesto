@@ -633,8 +633,8 @@ CURATED_KEYS = ("no_vista", "no_sintetizado", "salvedades", "vistas", "methods",
 
 
 def _yaml_scalar(v) -> str:
-    """One-line YAML scalar for `_set_campo` (quoted when the value needs it)."""
-    return yaml.safe_dump(v, allow_unicode=True, width=10 ** 6).split("\n")[0]
+    """One-line YAML scalar for `_set_campo` — delegates to `cfg.yaml_scalar` (#463)."""
+    return cfg.yaml_scalar(v)
 
 
 def promote_source(slug: str, key: str, bibcode: str) -> int:
