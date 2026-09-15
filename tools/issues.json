@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-14",
+ "fetched": "2026-09-15",
  "issues": [
   {
    "number": 2,
@@ -2319,11 +2319,21 @@
   {
    "number": 466,
    "title": "doi_candidate filtra por autor SERVER-SIDE sin normalizar y después compara normalizado: la diéresis de «Hyvärinen» se lleva el DOI, y el motivo culpa al título",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 467,
    "title": "El hueco de `bibtex` es MUDO: la cascada calcula el motivo y lo tira, y el lint no tiene categoría para «nota sin bibtex» (17 de 272 invisibles, rc 0)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 468,
+   "title": "fetch_bibtex estampa `sin_bibtex` con el motivo de una consulta que NO contestó: un 429 de Crossref mueve la nota de la deuda a «decisión registrada», con rc 0",
+   "state": "OPEN"
+  },
+  {
+   "number": 469,
+   "title": "El test que dice medir el codificador del reporte asserta que la BÓVEDA no tiene bloqueantes: un solo assert deja inoperable la red #1 en toda bóveda poblada",
    "state": "OPEN"
   }
  ]

@@ -968,6 +968,16 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   `cfg.method_key` sí al **comparar**, así que `query.author=Hyvarinen` descartaba el registro
   «Hyvärinen» antes de que el chequeo lo viera y el motivo publicado culpaba al **título**, que
   matcheaba exacto (regla de método 4: un mapa que atribuye mal es peor que uno vacío).
+  ⛔ **Y el hueco se estampa sólo si se MIDIÓ (#468):** un carril caído y uno que contestó «no hay»
+  devolvían el mismo vacío, así que un **429 de Crossref** movía la nota de esta deuda a la
+  categoría de al lado —la que titula *«decisión registrada, **no es deuda**»*— sin que nadie
+  decidiera nada, con **`rc 0`** y con la cadena firmada (D-57) sobre notas que nadie consultó; y
+  para volver a verlo había que re-correr el paso caro, que es lo que #467 existía para evitar. Hoy
+  los tres carriles devuelven la señal de red **aparte del veredicto** (`sin_medir`): si alguno se
+  cayó, `fetch_bibtex` **no estampa**, sale en **rc 2** y la nota se queda en `sin_bibtex_mudo`,
+  que es lo que es. El **4xx sí es una respuesta** y clasifica como hueco medido (mismo corte que
+  el 404 de ADS, #399); sólo el timeout y el 5xx dejan al paper sin consultar. Es D-43 un nivel más
+  abajo, y sobre el único campo de esta familia que además **se escribe en la nota**.
 - **`sources:` cuyo desacuerdo con el catálogo está FIRMADO** (#463, `fuente_metadata_firmada`,
   backlog **declarado** — no es deuda, va aparte por AUD-207): la **cuarta salida** del bloqueante
   de arriba, para cuando el equivocado es el **catálogo**. Las tres que prescribía el mensaje

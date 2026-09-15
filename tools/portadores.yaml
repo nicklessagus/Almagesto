@@ -25,6 +25,43 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 468
+    regla: >-
+      Una consulta que NO contestó no produce un veredicto PERSISTIDO. Un carril caído y un carril
+      que contestó «no hay» devuelven lo mismo —vacío—, así que quien escribe tiene que recibir la
+      distinción como SEÑAL y no como prosa: el que la lee es una categoría del lint, no una
+      persona. Sin eso, un 429 de Crossref movía la nota de la deuda (`sin_bibtex_mudo`, backlog) a
+      `sin_bibtex`, que el lint titula «decisión registrada, NO es deuda», con `rc 0` y la cadena
+      firmada (D-57) sobre notas que nadie midió. Es D-43 un nivel más abajo, sobre un campo que
+      además se escribe en la nota. El 4xx SÍ es una respuesta y clasifica; sólo el timeout y el
+      5xx dejan al paper sin consultar.
+    funcion: fetch_bibtex.stamp_bibtex_gap
+    patron: 'cfg\.stamp_fm_fields|save_registro|_red\.yaml'
+    consumidores:
+      - modulo: scripts/check_retractions.py
+        estado: fuera-de-alcance
+        motivo: "Ya la implementa por su cuenta y es el precedente del issue: «Crossref no contestó» va a `errors` y NUNCA a un veredicto por paper, así que no hay nada que persista una consulta caída."
+      - modulo: scripts/check_sources.py
+        estado: fuera-de-alcance
+        motivo: "Ya la implementa: `no-evaluable` es uno de los cinco veredictos del vocabulario cerrado, con su motivo (D-43), y el registro guarda ese estado en vez de un `ok` o un hallazgo."
+      - modulo: scripts/sweep_external.py
+        estado: fuera-de-alcance
+        motivo: "Ya la implementa y con el MISMO mecanismo: `rc == 2` levanta «la bóveda NO quedó barrida» y el detector no entra en `cubrio`. Es de donde salió el precedente."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Ya la implementa en el único carril suyo que consulta afuera (`--fill-abstracts`, #413): la excepción hace `fallo += 1; continue` y NO escribe nada en la nota."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Ya la implementa en su único carril de red (SIMBAD): `_simbad_aliases: null` ≠ `[]` sale ⛔ NO EVALUADO y no «limpio». Del lado del lector, es quien TITULA las dos categorías que este issue separa."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Es el escritor quirúrgico (`stamp_fm_fields`) y el registro (`save_registro`): matchea por ser la herramienta de escritura, no por decidir qué se escribe. No consulta afuera."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "Offline: sus testigos son el `.txt` y la extracción versionada, así que no tiene consulta que pueda no contestar."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "Persiste juicio de CURACIÓN (`decisiones`), que lo firma una persona: no hay consulta de red de la que pueda derivar un veredicto."
   - issue: 467
     regla: >-
       El borrado de una clave del frontmatter es UNA función: se lleva la clave **y sus líneas de

@@ -359,9 +359,9 @@ def test_datacite_meta_saca_el_apellido_del_primer_autor(monkeypatch):
     import fetch_bibtex as fb
     monkeypatch.setattr(fb, "doi_bibtex", lambda doi: (
         '@misc{k,\n  author = {Morello, Giuseppe and Waldmann, Ingo P.},\n'
-        '  title = {A new look},\n  year = {2014},\n}\n', "datacite"))
+        '  title = {A new look},\n  year = {2014},\n}\n', "datacite", ""))
     assert cs.datacite_meta("10.48550/x") == {"family": "Morello", "year": 2014, "title": "A new look"}
-    monkeypatch.setattr(fb, "doi_bibtex", lambda doi: ("", ""))
+    monkeypatch.setattr(fb, "doi_bibtex", lambda doi: ("", "", ""))
     assert cs.datacite_meta("10.48550/x") is None
 
 

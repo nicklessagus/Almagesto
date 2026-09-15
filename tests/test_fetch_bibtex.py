@@ -85,24 +85,27 @@ def test_doi_bibtex_RECHAZA_el_html_del_resolver(monkeypatch):
     sería exactamente el bloque inventado que este issue existe para impedir, y encima con la firma
     de una descarga. Se exige el `Content-Type` de BibTeX, no sólo el status."""
     fake_net(monkeypatch, get=lambda *a, **k: Resp(404, text="<!DOCTYPE html>", ct="text/html"))
-    assert fb.doi_bibtex("10.0/no-existe") == ("", "")
+    assert fb.doi_bibtex("10.0/no-existe") == ("", "", "")
     # ⛔ Y el cuerpo que PARECE una entrada no alcanza: es justamente la forma del defecto que este
     # issue persigue —algo plausible, con cara de descargado, que nadie escribió—. Los dos lados de
     # la guarda tienen su caso: status de error con cuerpo BibTeX-oide, y 200 con `Content-Type`
     # equivocado (un proxy, un portal cautivo). Sin uno u otro, el `startswith("@")` los deja pasar.
     fake_net(monkeypatch, get=lambda *a, **k: Resp(
         404, text="@article{inventado, title={no existe}}", ct="text/html"))
-    assert fb.doi_bibtex("10.0/no-existe") == ("", "")
+    assert fb.doi_bibtex("10.0/no-existe") == ("", "", "")
     fake_net(monkeypatch, get=lambda *a, **k: Resp(
         200, text="@article{inventado, title={no existe}}", ct="text/html"))
-    assert fb.doi_bibtex("10.0/proxy") == ("", "")
+    assert fb.doi_bibtex("10.0/proxy") == ("", "", "")
     # Y el status manda por su cuenta: un error que igual declara `application/x-bibtex` (un
     # intermediario que sirve su propia página de error con el header que le pidieron) no es una
     # entrada. Es el único caso donde `not r.ok` es lo único que separa a la ficha de una cita
     # inventada, y por eso la guarda tiene las dos cláusulas y no una.
     fake_net(monkeypatch, get=lambda *a, **k: Resp(
         503, text="@article{inventado, title={no existe}}", ct="application/x-bibtex"))
-    assert fb.doi_bibtex("10.0/caido") == ("", "")
+    entrada, fuente, sin_medir = fb.doi_bibtex("10.0/caido")
+    # ⛔ #468 — y el 5xx sale además por el carril de «NO se midió»: el resolver caído no dice nada
+    # del DOI, así que el llamador no puede persistir un hueco con esto.
+    assert (entrada, fuente) == ("", "") and "no contestó" in sin_medir
 
 
 def test_doi_bibtex_devuelve_la_entrada_y_su_agencia(monkeypatch):
@@ -111,7 +114,7 @@ def test_doi_bibtex_devuelve_la_entrada_y_su_agencia(monkeypatch):
             return Resp(200, payload=[{"DOI": "10.1038/x", "RA": "Crossref"}])
         return Resp(200, text="@article{Mayor_1995, title={X}}", ct="application/x-bibtex")
     fake_net(monkeypatch, get=get)
-    entrada, fuente = fb.doi_bibtex("10.1038/x")
+    entrada, fuente, _ = fb.doi_bibtex("10.1038/x")
     assert entrada.startswith("@article{") and fuente == "crossref"
 
 
@@ -128,7 +131,7 @@ def test_doi_agency_sin_respuesta_dice_doi_y_no_adivina(monkeypatch):
 
 def test_arxiv_bibtex_lo_que_no_arranca_con_arroba_no_es_una_entrada(monkeypatch):
     fake_net(monkeypatch, get=lambda *a, **k: Resp(200, text="<html>error</html>"))
-    assert fb.arxiv_bibtex("2301.00001") == ""
+    assert fb.arxiv_bibtex("2301.00001") == ("", "")
 
 
 # ── la cascada, y el cuarto caso ────────────────────────────────────────────────────────────────
@@ -140,8 +143,9 @@ def test_bibtex_for_respeta_el_orden_de_la_cascada(monkeypatch):
     llamado = []
     fake_net(monkeypatch, get=lambda *a, **k: llamado.append(a) or Resp(404))
     fm = {"bibcode": "1995Natur.378..355M", "doi": "10.1038/378355a0", "arxiv_id": "9509001"}
-    entrada, fuente, motivo = fb.bibtex_for(fm, "1995Natur.378..355M",
-                                            {"1995Natur.378..355M": ENTRADA_ADS})
+    entrada, fuente, motivo, sin_medir = fb.bibtex_for(fm, "1995Natur.378..355M",
+                                                       {"1995Natur.378..355M": ENTRADA_ADS})
+    assert sin_medir == []
     assert fuente == "ads" and entrada == ENTRADA_ADS and motivo == ""
     assert llamado == [], "con la entrada de ADS no se consulta ningún otro carril"
 
@@ -153,7 +157,8 @@ def test_bibtex_for_sin_ningun_identificador_devuelve_HUECO_con_su_motivo(monkey
 
     @inv INV-151"""
     fake_net(monkeypatch)
-    entrada, fuente, motivo = fb.bibtex_for({"bibcode": "2001Libro"}, "2001Libro", {})
+    entrada, fuente, motivo, sin_medir = fb.bibtex_for({"bibcode": "2001Libro"}, "2001Libro", {})
+    assert sin_medir == [], "nadie se cayó: el hueco es MEDIDO y por eso se puede estampar"
     assert entrada == "" and fuente == ""
     assert "sin bibcode ADS" in motivo and "sin doi" in motivo and "sin arxiv_id" in motivo
 
@@ -164,8 +169,11 @@ def test_ads_bibtex_declara_el_error_en_vez_de_devolver_vacio(monkeypatch):
     def post(*a, **k):
         raise real_requests.RequestException("boom")
     fake_net(monkeypatch, post=post)
-    out, errores = fb.ads_bibtex(["1995Natur.378..355M"], "tok")
+    out, errores, sin_consultar = fb.ads_bibtex(["1995Natur.378..355M"], "tok")
     assert out == {} and len(errores) == 1 and "1995Natur" in errores[0]
+    # ⛔ #468 — y los nombra POR BIBCODE, no sólo en la prosa del error: es lo que le permite al
+    # llamador saltear esas notas en vez de estamparles el hueco.
+    assert sin_consultar == {"1995Natur.378..355M"}
 
 
 # ── el estampado ────────────────────────────────────────────────────────────────────────────────
@@ -252,7 +260,7 @@ def test_bibtex_for_baja_por_la_cascada_hasta_arxiv(monkeypatch):
         return Resp(404, text="<html>", ct="text/html")          # el resolver no lo tiene
     fake_net(monkeypatch, get=get)
     fm = {"bibcode": "2020SinADS", "doi": "10.0/no-existe", "arxiv_id": "2301.00001"}
-    entrada, fuente, motivo = fb.bibtex_for(fm, "2020SinADS", {})
+    entrada, fuente, motivo, _ = fb.bibtex_for(fm, "2020SinADS", {})
     assert fuente == "arxiv" and entrada.startswith("@misc{") and motivo == ""
 
     # y el carril del medio, cuando el resolver sí contesta
@@ -322,7 +330,7 @@ def test_doi_candidate_exige_el_titulo_EXACTO(monkeypatch):
          "author": [{"family": "Mayor"}]},
         {"DOI": "10.1038/378355a0", "title": ["A Jupiter-mass companion to a solar-type star"],
          "author": [{"family": "Mayor"}], "issued": {"date-parts": [[1995]]}}]))
-    doi, por_que = fb.doi_candidate("A Jupiter-mass companion to a solar-type star", "Mayor, Michel", 1995)
+    doi, por_que, _ = fb.doi_candidate("A Jupiter-mass companion to a solar-type star", "Mayor, Michel", 1995)
     assert doi == "10.1038/378355a0" and "título exacto" in por_que
 
 
@@ -331,7 +339,7 @@ def test_doi_candidate_NO_propone_por_parecido(monkeypatch):
     fake_net(monkeypatch, get=lambda *a, **k: _cr([
         {"DOI": "10.1/parecido", "title": ["Applications of higher order statistics in sEMG"],
          "author": [{"family": "Naik"}]}]))
-    doi, por_que = fb.doi_candidate("Applications of Higher Order Statistics", "Naik", 2011)
+    doi, por_que, _ = fb.doi_candidate("Applications of Higher Order Statistics", "Naik", 2011)
     assert doi == "" and "ningún resultado con el título EXACTO" in por_que
 
 
@@ -434,7 +442,7 @@ def test_las_claves_SINTETICAS_no_se_le_mandan_a_ADS(monkeypatch):
         mandados.extend((json or {}).get("bibcode") or [])
         return Resp(200, payload={"export": ENTRADA_ADS})
     fake_net(monkeypatch, post=post)
-    out, errores = fb.ads_bibtex(["1995Natur.378..355M", "2011Naik", "1998HyvarinenICANN"], "tok")
+    out, errores, _ = fb.ads_bibtex(["1995Natur.378..355M", "2011Naik", "1998HyvarinenICANN"], "tok")
     assert mandados == ["1995Natur.378..355M"], mandados
     assert errores == [] and "1995Natur.378..355M" in out
 
@@ -444,7 +452,7 @@ def test_solo_claves_sinteticas_no_llama_a_ADS_ni_reporta_error(monkeypatch):
     bibcode no se hace el request, y la corrida no puede salir en rc 2."""
     llamado = []
     fake_net(monkeypatch, post=lambda *a, **k: llamado.append(1) or Resp(404))
-    assert fb.ads_bibtex(["2011Naik", "1998HyvarinenICANN"], "tok") == ({}, [])
+    assert fb.ads_bibtex(["2011Naik", "1998HyvarinenICANN"], "tok") == ({}, [], set())
     assert llamado == []
 
 
@@ -453,9 +461,9 @@ def test_el_404_de_ADS_es_una_RESPUESTA_y_el_5xx_es_no_evaluado(monkeypatch):
     timeout o un 5xx deja papers **sin consultar**, y ésa es la única condición que puede sacar la
     corrida en rc 2. Los dos se veían igual porque `raise_for_status` levanta para ambos."""
     fake_net(monkeypatch, post=lambda *a, **k: Resp(404))
-    assert fb.ads_bibtex(["1995Natur.378..355M"], "tok") == ({}, [])
+    assert fb.ads_bibtex(["1995Natur.378..355M"], "tok") == ({}, [], set())
     fake_net(monkeypatch, post=lambda *a, **k: Resp(503))
-    out, errores = fb.ads_bibtex(["1995Natur.378..355M"], "tok")
+    out, errores, _sc = fb.ads_bibtex(["1995Natur.378..355M"], "tok")
     assert out == {} and len(errores) == 1 and "SIN consultar" in errores[0]
 
 
@@ -471,7 +479,7 @@ def test_el_titulo_EXACTO_con_autor_distinto_sale_como_DUDOSO(monkeypatch, tmp_p
     fake_net(monkeypatch, get=lambda *a, **k: _cr([
         {"DOI": "10.5772/52324", "title": ["Introduction: Independent Component Analysis"],
          "author": [{"family": "R.", "given": "Ganesh"}], "issued": {"date-parts": [[2012]]}}]))
-    doi, por_que = fb.doi_candidate("Introduction: Independent Component Analysis", "Naik", 2011)
+    doi, por_que, _ = fb.doi_candidate("Introduction: Independent Component Analysis", "Naik", 2011)
     assert doi == "", "sigue sin proponerse como bueno"
     assert por_que.startswith("DUDOSO") and "10.5772/52324" in por_que and "«R.»" in por_que
 
@@ -515,10 +523,10 @@ def test_el_export_se_decodifica_UTF8_explicito_no_por_adivinanza(monkeypatch):
 
     monkeypatch.setattr(fb.requests, "get", lambda *a, **k: r)
     monkeypatch.setattr(fb, "doi_agency", lambda doi: "crossref")
-    entrada, fuente = fb.doi_bibtex("10.1/a")
+    entrada, fuente, _ = fb.doi_bibtex("10.1/a")
     assert "711–725" in entrada and fuente == "crossref"
     assert "â€“" not in entrada, "y el carril entero, no sólo el helper"
-    assert "711–725" in fb.arxiv_bibtex("2201.01234"), "el carril de arXiv, igual"
+    assert "711–725" in fb.arxiv_bibtex("2201.01234")[0], "el carril de arXiv, igual"
 
 
 def test_estampa_la_cadena_aunque_NO_HAYA_NADA_que_bajar(tmp_path, monkeypatch, capsys):
@@ -566,7 +574,7 @@ def test_el_filtro_SERVER_SIDE_no_puede_repetir_el_criterio_que_se_compara_norma
         return _cr(CON if "query.author" in (params or {}) else SIN)
 
     fake_net(monkeypatch, get=_get)
-    doi, por_que = fb.doi_candidate(TITULO, "Hyvarinen, Aapo", 2000)
+    doi, por_que, _ = fb.doi_candidate(TITULO, "Hyvarinen, Aapo", 2000)
     assert doi == "10.1016/j.neunet.2000.00026", \
         "el candidato bueno llega recién cuando la query deja de repetir el criterio normalizado"
     assert "sin `query.author`" in por_que, "y el motivo dice por qué etapa entró"
@@ -587,7 +595,7 @@ def test_la_etapa_1_sigue_resolviendo_sola_y_no_paga_la_segunda(monkeypatch):
                      "author": [{"family": "Mayor"}], "issued": {"date-parts": [[1995]]}}])
 
     fake_net(monkeypatch, get=_get)
-    doi, por_que = fb.doi_candidate("A Jupiter-mass companion", "Mayor, Michel", 1995)
+    doi, por_que, _ = fb.doi_candidate("A Jupiter-mass companion", "Mayor, Michel", 1995)
     assert doi == "10.1038/378355a0" and len(n) == 1
     assert "con `query.author`" in por_que
 
@@ -599,7 +607,7 @@ def test_el_motivo_del_hueco_NO_culpa_al_TITULO_cuando_fallo_la_query(monkeypatc
     no tiene el trabajo. Hoy declara **las dos etapas y lo que trajo cada una**."""
     monkeypatch.setattr(cfg, "get_mailto", lambda: "")
     fake_net(monkeypatch, get=lambda *a, **k: _cr([]))
-    doi, por_que = fb.doi_candidate("Un titulo que no esta", "Nadie", 2020)
+    doi, por_que, _ = fb.doi_candidate("Un titulo que no esta", "Nadie", 2020)
     assert doi == ""
     assert "dos etapas" in por_que and "con `query.author`: 0" in por_que \
         and "sin `query.author`" in por_que
@@ -611,7 +619,7 @@ def test_la_red_que_no_contesta_NO_se_lee_como_hueco(monkeypatch):
     Medido en el issue: una de las tres sondas volvió HTTP 429."""
     monkeypatch.setattr(cfg, "get_mailto", lambda: "")
     fake_net(monkeypatch, get=lambda *a, **k: Resp(429))
-    doi, por_que = fb.doi_candidate("Un titulo", "Alguien", 2020)
+    doi, por_que, _ = fb.doi_candidate("Un titulo", "Alguien", 2020)
     assert doi == "" and "no consta" in por_que and "título EXACTO" not in por_que
 
 
@@ -648,3 +656,100 @@ def test_cuando_el_hueco_SE_CIERRA_el_motivo_se_va(tmp_path):
     assert fm is not None, "sacar la clave no puede dejar el frontmatter sin parsear (#244)"
     assert "sin_bibtex" not in fm and fm["year"] == 2012 and fm["title"] == "X"
     assert cfg.drop_fm_keys(nota, "sin_bibtex") is False, "idempotente: nada que sacar"
+
+
+# ── #468 · una consulta que NO contestó no produce un veredicto PERSISTIDO ───────────────────────
+
+def test_el_429_de_Crossref_NO_estampa_el_hueco_declarado(tmp_path, monkeypatch, capsys):
+    """⛔ #468 — el defecto exacto del issue: con Crossref caído, la nota pasaba de la deuda
+    (`sin_bibtex_mudo`, backlog) a la categoría que el lint titula «decisión registrada, **no es
+    deuda**», y encima con `rc 0`. `_crossref_try` ya separaba el fallo de red del veredicto; el
+    que los volvía a mezclar era el llamador, concatenando el motivo de red al del hueco.
+
+    Medido en el repo: la sonda de #466 (2026-09-14) reporta «1 no evaluable (`2003Sarela`, HTTP
+    429)» — una de 17. La condición no es hipotética."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch, get=lambda *a, **k: Resp(429),          # Crossref caído
+             post=lambda *a, **k: Resp(200, payload={"export": ""}))
+    f = _nota(tmp_path, {"bibcode": "2003Sarela", "tags": ["paper"],
+                         "title": "Denoising source separation", "first_author": "Sarela"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 2, "la corrida no puede certificar lo que no miró"
+    fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+    assert "sin_bibtex" not in fm, "el hueco NO se midió: no se persiste"
+    assert "bibtex_accessed" not in fm, "ni la fecha de una consulta que no contestó"
+    assert "NO EVALUADA" in capsys.readouterr().out
+
+
+def test_el_hueco_MEDIDO_sigue_estampandose(tmp_path, monkeypatch):
+    """La mitad simétrica: Crossref CONTESTÓ y no tiene el título, así que el hueco es un veredicto
+    y #467 sigue valiendo. Sin este par, «no estampar» se podría cumplir no estampando nunca."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch, get=lambda *a, **k: Resp(200, payload={"message": {"items": []}}),
+             post=lambda *a, **k: Resp(200, payload={"export": ""}))
+    f = _nota(tmp_path, {"bibcode": "2001Libro", "tags": ["paper"],
+                         "title": "Un libro", "first_author": "Alguien"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 0
+    fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+    assert "sin exportación oficial" in fm["sin_bibtex"] and fm["bibtex_accessed"]
+
+
+def test_la_caida_de_ADS_tampoco_estampa_el_hueco_de_SUS_notas(tmp_path, monkeypatch):
+    """El mismo portador un carril más arriba: `errores` sacaba la corrida en rc 2, pero cada nota
+    de la tanda caída seguía recorriendo la cascada y terminaba con `sin_bibtex` escrito. `rc 2` no
+    revierte lo que ya se estampó — y para volver a verlo hay que re-correr el paso caro."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+
+    def post(*a, **k):
+        raise real_requests.RequestException("red caída")
+    fake_net(monkeypatch, post=post)
+    f = _nota(tmp_path, {"bibcode": "1995Natur.378..355M", "tags": ["paper"]})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 2
+    assert "sin_bibtex" not in (cfg.split_fm(f.read_text(encoding="utf-8")) or {})
+
+
+def test_el_resolver_caido_NO_es_un_paper_sin_exportacion(monkeypatch):
+    """`doi.org` y arXiv devolvían el mismo vacío para «no contestó» y «no lo tiene», y con `doi:`
+    poblado el motivo del hueco ni siquiera lo nombraba: decía «sin bibcode ADS» sobre un paper cuyo
+    DOI nadie llegó a consultar."""
+    def get(*a, **k):
+        raise real_requests.RequestException("timeout")
+    fake_net(monkeypatch, get=get)
+    _e, _f, motivo, sin_medir = fb.bibtex_for({"doi": "10.1/x", "arxiv_id": "2201.1"}, "2020X", {})
+    assert motivo and len(sin_medir) == 2, "los dos carriles caídos se declaran, no se resumen"
+    assert any("doi.org" in m for m in sin_medir) and any("arXiv" in m for m in sin_medir)
+
+
+def test_el_4xx_de_arxiv_SI_es_una_respuesta(monkeypatch):
+    """Mismo corte que el 404 de ADS (#399): «ese id no está» clasifica como hueco medido; sólo el
+    5xx y el timeout dejan al paper sin consultar. Sin esta línea, un id inexistente convertiría un
+    hueco real en deuda permanente que nadie puede cerrar."""
+    fake_net(monkeypatch, get=lambda *a, **k: Resp(404, text="not found", ct="text/html"))
+    assert fb.arxiv_bibtex("2301.99999") == ("", "")
+    fake_net(monkeypatch, get=lambda *a, **k: Resp(502))
+    assert "no contestó" in fb.arxiv_bibtex("2301.99999")[1]
+
+
+def test_la_cadena_NO_se_estampa_sobre_notas_que_nadie_midio(tmp_path, monkeypatch):
+    """D-57 — `save_paso` registra el paso como corrido, y con `--slug` la guarda miraba sólo
+    `errores` (el carril ADS). Un corte de Crossref dejaba la cadena firmada sobre notas sin medir."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    estampados = []
+    monkeypatch.setattr(cfg, "save_paso", lambda *a, **k: estampados.append(a))
+    import check_retractions as cr
+    f = _nota(tmp_path, {"bibcode": "2003Sarela", "tags": ["paper"],
+                         "title": "T", "first_author": "Sarela"})
+    monkeypatch.setattr(cr, "slug_notes", lambda slug: [f])
+    fake_net(monkeypatch, get=lambda *a, **k: Resp(429),
+             post=lambda *a, **k: Resp(200, payload={"export": ""}))
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--slug", "ica"])
+    assert fb.main() == 2 and estampados == []

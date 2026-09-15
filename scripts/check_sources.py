@@ -111,7 +111,7 @@ def datacite_meta(doi: str) -> dict | None:
     It reuses the content negotiation `fetch_bibtex` already does —one call, one implementation—
     and reads the entry with the same minimal parser the lint uses."""
     import fetch_bibtex as fb
-    entrada, _fuente = fb.doi_bibtex(doi)
+    entrada, _fuente, _sin_medir = fb.doi_bibtex(doi)   # #468: el tercero es «no contestó»
     if not entrada:
         return None
     campos = cfg.bibtex_fields(entrada)

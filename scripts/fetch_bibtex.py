@@ -84,11 +84,17 @@ def split_entries(export: str) -> dict:
 
 
 def ads_bibtex(bibcodes: list, token: str) -> tuple:
-    """`({bibcode: entrada}, [errores])` — la exportación oficial de ADS, en tandas de `ADS_CHUNK`.
+    """`({bibcode: entrada}, [errores], {bibcodes sin consultar})` — la exportación oficial de ADS,
+    en tandas de `ADS_CHUNK`.
 
     Un error de red devuelve lo que sí se pudo traer y lo DECLARA: la alternativa es que una caída a
-    mitad de camino se lea como «esos papers no tienen BibTeX», que es el falso limpio de siempre."""
-    out, errores = {}, []
+    mitad de camino se lea como «esos papers no tienen BibTeX», que es el falso limpio de siempre.
+
+    ⛔ Y los declara POR BIBCODE (#468), no sólo como texto de error: `errores` saca la corrida en
+    rc 2, pero cada nota de la tanda caída seguía recorriendo la cascada y terminaba con su hueco
+    ESTAMPADO —`sin_bibtex`, que el lint titula «decisión registrada, no es deuda»— sobre una
+    consulta que nunca contestó. El tercer elemento es lo que le permite al llamador saltearlas."""
+    out, errores, sin_consultar = {}, [], set()
     # #399 — sólo lo que TIENE forma de bibcode. Con las claves sintéticas adentro, ADS contesta 404
     # al lote entero y la corrida anunciaba «ADS export falló» sobre papers que sí se habían
     # evaluado bien: el ⛔ afirmaba «no evaluado» de algo evaluado, que es la confusión que este
@@ -105,6 +111,7 @@ def ads_bibtex(bibcodes: list, token: str) -> tuple:
             errores.append(f"ADS export no contestó para {len(tanda)} bibcode(s) "
                            f"({tanda[0]}…): {exc.__class__.__name__} — esos papers quedaron SIN "
                            f"consultar")
+            sin_consultar.update(tanda)
             continue
         # ⛔ #399 — el 404 de un lote es una RESPUESTA: «ninguno de éstos está en ADS», que es un
         # hueco legítimo y lo clasifica la cascada. Sólo el resto —timeout, 5xx, JSON roto— deja
@@ -118,7 +125,8 @@ def ads_bibtex(bibcodes: list, token: str) -> tuple:
             errores.append(f"ADS export falló para {len(tanda)} bibcode(s) "
                            f"({tanda[0]}…): {exc.__class__.__name__} — esos papers quedaron SIN "
                            f"consultar")
-    return out, errores
+            sin_consultar.update(tanda)
+    return out, errores, sin_consultar
 
 
 def doi_agency(doi: str) -> str:
@@ -151,31 +159,47 @@ def _utf8(r) -> str:
 
 
 def doi_bibtex(doi: str) -> tuple:
-    """`(entrada, fuente)` por content negotiation contra `doi.org`, o `("", "")`.
+    """`(entrada, fuente, sin_medir)` por content negotiation contra `doi.org` (#468).
 
     ⛔ Se exige status 2xx **y** `Content-Type` de BibTeX: el resolver contesta su «DOI Not Found»
-    como HTML, y ese HTML en el frontmatter sería una cita inventada con cara de descargada."""
+    como HTML, y ese HTML en el frontmatter sería una cita inventada con cara de descargada.
+
+    ⛔ `sin_medir` separa **«el resolver no contestó»** de **«contestó que no hay»** (D-43). Los dos
+    devuelven entrada vacía, y sin el tercer elemento el llamador estampaba el hueco declarado sobre
+    una consulta que nunca ocurrió: el 404 del resolver ES una respuesta y clasifica; el timeout no.
+    Un status raro con el `Content-Type` equivocado tampoco es red caída — es el resolver diciendo
+    que no tiene la entrada, y ahí el hueco es medido."""
     try:
         r = requests.get(DOI_RESOLVER.format(doi=doi), headers={"Accept": BIBTEX_CT},
                          timeout=30, allow_redirects=True)
-    except requests.RequestException:
-        return "", ""
+    except requests.RequestException as exc:
+        return "", "", f"`doi.org` no contestó por `{doi}` ({exc.__class__.__name__}): no consta"
+    if r.status_code >= 500:                   # el 5xx no dice nada del DOI: no se midió
+        return "", "", f"`doi.org` no contestó por `{doi}` (HTTP {r.status_code}): no consta"
     if not r.ok or BIBTEX_CT not in (r.headers.get("Content-Type") or ""):
-        return "", ""
+        return "", "", ""
     entrada = _utf8(r).strip()
-    return (entrada + "\n", doi_agency(doi)) if entrada.startswith("@") else ("", "")
+    return (entrada + "\n", doi_agency(doi), "") if entrada.startswith("@") else ("", "", "")
 
 
-def arxiv_bibtex(arxiv_id: str) -> str:
-    """La exportación que publica arXiv para ese id, o `""`. Mismo criterio que el carril del DOI:
-    lo que no arranca con `@` no es una entrada, venga con el status que venga."""
+def arxiv_bibtex(arxiv_id: str) -> tuple:
+    """`(entrada, sin_medir)` — la exportación que publica arXiv para ese id (#468).
+
+    Mismo criterio que el carril del DOI en las dos mitades: lo que no arranca con `@` no es una
+    entrada, venga con el status que venga; y una caída de red se DECLARA aparte en vez de volver
+    como un vacío que el llamador persistiría como hueco medido (D-43)."""
     try:
         r = requests.get(ARXIV_BIBTEX.format(arxiv_id=arxiv_id), timeout=30)
-        r.raise_for_status()
-    except requests.RequestException:
-        return ""
+    except requests.RequestException as exc:
+        return "", f"arXiv no contestó por `{arxiv_id}` ({exc.__class__.__name__}): no consta"
+    # ⛔ El 4xx ES una respuesta —«ese id no está»— y clasifica como hueco medido; el 5xx no dice
+    # nada del paper, así que sale por el carril de «no se midió» (mismo corte que el 404 de ADS).
+    if r.status_code >= 500:
+        return "", f"arXiv no contestó por `{arxiv_id}` (HTTP {r.status_code}): no consta"
+    if not r.ok:
+        return "", ""
     entrada = _utf8(r).strip()
-    return entrada + "\n" if entrada.startswith("@") else ""
+    return (entrada + "\n" if entrada.startswith("@") else ""), ""
 
 
 def _family(nombre: str) -> str:
@@ -187,7 +211,7 @@ def _family(nombre: str) -> str:
 
 
 def doi_candidate(title: str, first_author: str, year=None) -> tuple:
-    """`(doi, motivo)` — PROPOSES a DOI for a note that has none. It never stamps one (#397).
+    """`(doi, motivo, sin_medir)` — PROPOSES a DOI for a note that has none. Never stamps one (#397).
 
     The off-ADS rail declared the hole without ever asking whether the DOI exists: measured on a
     real vault, `2011Naik` is not case 4 of the cascade (no official source) but case 2 — Crossref
@@ -206,10 +230,16 @@ def doi_candidate(title: str, first_author: str, year=None) -> tuple:
     ⛔ Two stages (#466): the server-side author filter is tried first and then dropped, because
     Crossref does not fold diacritics when SEARCHING while the local check does when COMPARING.
     The reason it returns names the stages and what each brought, so a hole is never blamed on the
-    title when what failed was a query nobody sees."""
+    title when what failed was a query nobody sees.
+
+    ⛔ The third element is the NETWORK signal (#468). `_crossref_try` already tells «the service did
+    not answer» apart from a verdict, and this function already stopped there — but it returned the
+    reason through the same slot as a measured one, so `main` concatenated it into a hole it then
+    STAMPED (`sin_bibtex`, which the lint titles «decisión registrada, no es deuda»). The distinction
+    has to be in the field, not in the prose: whoever reads it is a category, not a person."""
     titulo, familia = str(title or "").strip(), _family(first_author)
     if not titulo or not familia:
-        return "", "sin `title` o sin `first_author`: no hay con qué preguntar"
+        return "", "sin `title` o sin `first_author`: no hay con qué preguntar", ""
     # ⛔ DOS ETAPAS (#466). La query RECUPERA y el chequeo DECIDE, así que el filtro server-side no
     # puede repetir el criterio que abajo se compara NORMALIZADO: Crossref no pliega la diéresis al
     # buscar, así que `query.author=Hyvarinen` descarta el registro cuyo `family` es «Hyvärinen»
@@ -226,14 +256,14 @@ def doi_candidate(title: str, first_author: str, year=None) -> tuple:
         doi, motivo, items, duda = _crossref_try(titulo, familia, year, extra)
         traidos.append(f"{etiqueta}: {len(items)}")
         if motivo:                             # la red no contestó: no consta, y no se sigue
-            return "", motivo
+            return "", motivo, motivo
         if doi:
-            return doi, f"título exacto + autor «{familia}» en Crossref [{etiqueta}]"
+            return doi, f"título exacto + autor «{familia}» en Crossref [{etiqueta}]", ""
         dudosos += [d for d in duda if d not in dudosos]
     if dudosos:
-        return "", "DUDOSO — " + "; ".join(dudosos)
+        return "", "DUDOSO — " + "; ".join(dudosos), ""
     return "", (f"ningún resultado con el título EXACTO en dos etapas ({' · '.join(traidos)}): "
-                f"resolvelo a mano — acá no se propone por parecido (#397)")
+                f"resolvelo a mano — acá no se propone por parecido (#397)"), ""
 
 
 def _crossref_try(titulo: str, familia: str, year, extra: dict) -> tuple:
@@ -282,26 +312,42 @@ def _crossref_try(titulo: str, familia: str, year, extra: dict) -> tuple:
     return "", "", items, dudosos
 
 
-def bibtex_for(fm: dict, stem: str, ads_cache: dict) -> tuple:
-    """`(entrada, fuente, motivo)` para una nota, recorriendo la cascada declarada.
+def bibtex_for(fm: dict, stem: str, ads_cache: dict, sin_consultar=()) -> tuple:
+    """`(entrada, fuente, motivo, sin_medir)` para una nota, recorriendo la cascada declarada.
 
     `motivo` sólo se puebla cuando NO hay entrada, y dice cuál es el hueco: es la diferencia entre
     «este paper no tiene exportación oficial» y «nadie preguntó».
 
+    ⛔ `sin_medir` es la lista de carriles que NO CONTESTARON (#468), y existe porque los tres de la
+    cascada devolvían un vacío indistinguible del hueco: una caída de ADS, de `doi.org` o de arXiv
+    caía por el mismo `return` que un libro sin exportación oficial, y el llamador lo PERSISTÍA como
+    `sin_bibtex` — el campo que el lint titula «decisión registrada, **no es deuda**». Un 429 movía
+    así la nota de la deuda a la decisión firmada sin que nadie decidiera nada, y con `rc 0`. Es
+    D-43 un nivel más abajo: un detector que no pudo correr se declara no evaluado y se queda del
+    lado de la deuda. Mientras la lista no esté vacía el motivo NO es un veredicto.
+
     @inv INV-151"""
     bib = str(fm.get("bibcode") or "").strip() or stem
+    sin_medir: list = []
     if (entrada := ads_cache.get(bib)):
-        return entrada, "ads", ""
+        return entrada, "ads", "", []
+    if bib in sin_consultar:
+        sin_medir.append(f"ADS no contestó por `{bib}`: no consta")
     if (doi := str(fm.get("doi") or "").strip()):
-        entrada, fuente = doi_bibtex(doi)
+        entrada, fuente, no_medido = doi_bibtex(doi)
         if entrada:
-            return entrada, fuente, ""
+            return entrada, fuente, "", []
+        if no_medido:
+            sin_medir.append(no_medido)
     if (arx := str(fm.get("arxiv_id") or "").strip()):
-        if (entrada := arxiv_bibtex(arx)):
-            return entrada, "arxiv", ""
+        entrada, no_medido = arxiv_bibtex(arx)
+        if entrada:
+            return entrada, "arxiv", "", []
+        if no_medido:
+            sin_medir.append(no_medido)
     faltan = [c for c, v in (("bibcode ADS", ads_cache.get(bib)), ("doi", fm.get("doi")),
                              ("arxiv_id", fm.get("arxiv_id"))) if not v]
-    return "", "", "sin exportación oficial (sin " + ", sin ".join(faltan) + ")"
+    return "", "", "sin exportación oficial (sin " + ", sin ".join(faltan) + ")", sin_medir
 
 
 def stamp_bibtex(path: Path, fm: dict, body: str, entrada: str, fuente: str, fecha: str) -> None:
@@ -385,17 +431,18 @@ def main() -> int:
     bibcodes = [str(fms[f][0].get("bibcode") or "").strip() or f.stem for f in pendientes]
     errores: list = []
     ads_cache: dict = {}
+    sin_consultar: set = set()
     try:
-        ads_cache, errores = ads_bibtex(bibcodes, cfg.get_ads_token())
+        ads_cache, errores, sin_consultar = ads_bibtex(bibcodes, cfg.get_ads_token())
     except RuntimeError as exc:            # sin token: los otros dos carriles siguen sirviendo
         errores.append(f"sin token ADS, el carril `ads` NO corrió: {exc}")
 
     hoy = _dt.date.today().isoformat()
-    n_ok, huecos, propuestas = 0, [], []
+    n_ok, huecos, propuestas, no_evaluadas = 0, [], [], []
     por_fuente: dict = {}
     for f in pendientes:
         fm, text = fms[f]
-        entrada, fuente, motivo = bibtex_for(fm, f.stem, ads_cache)
+        entrada, fuente, motivo, sin_medir = bibtex_for(fm, f.stem, ads_cache, sin_consultar)
         if not entrada:
             # #397 (cola) — antes de declarar el hueco, preguntar si el DOI EXISTE. El carril
             # off-ADS declaraba metadata a mano y nadie chequeaba: medido, `2011Naik` no era un
@@ -403,8 +450,9 @@ def main() -> int:
             # ⛔ PROPONE y no escribe: poblar `doi:` es curación, y el matcheo por título es lo que
             # este repo prohíbe (`discover`: 18 de 25 resueltos, 2 apuntando a OTRO trabajo).
             if not str(fm.get("doi") or "").strip():
-                doi_prop, por_que = doi_candidate(fm.get("title"), fm.get("first_author"),
-                                                  fm.get("year"))
+                doi_prop, por_que, no_medido = doi_candidate(fm.get("title"),
+                                                             fm.get("first_author"),
+                                                             fm.get("year"))
                 if doi_prop:
                     propuestas.append(f"{f.stem}: Crossref tiene `{doi_prop}` ({por_que}) — poblá "
                                       f"`doi:` en la nota y re-corré; NO se estampa solo")
@@ -414,7 +462,17 @@ def main() -> int:
                     # un candidato que nadie ve es indistinguible de no haber buscado.
                     propuestas.append(f"{f.stem}: {por_que} — si es el mismo trabajo, poblá `doi:`")
                     continue
-                motivo += f" · {por_que}"
+                if no_medido:
+                    sin_medir.append(no_medido)
+                else:
+                    motivo += f" · {por_que}"
+            # ⛔ #468 — una consulta que NO contestó no produce un veredicto PERSISTIDO. El hueco se
+            # estampa sólo sobre carriles que contestaron; si alguno se cayó, la nota se queda del
+            # lado de la deuda (`sin_bibtex_mudo`, que es lo que es) y la corrida sale en rc 2, así
+            # que `save_paso` tampoco registra la cadena sobre notas que nadie midió (D-57).
+            if sin_medir:
+                no_evaluadas.append(f"{f.stem}: {' · '.join(sin_medir)}")
+                continue
             huecos.append(f"{f.stem}: {motivo}")
             # #467 — el motivo se PERSISTE: sin esto la distinción que el docstring de `bibtex_for`
             # promete se pierde al terminar el proceso, y para verla hay que re-correr el paso caro.
@@ -436,14 +494,17 @@ def main() -> int:
         cfg.print_seguro(f"  ⚑ el hueco NO es tal — hay DOI y la nota no lo lleva: {pr}")
     for h in huecos:
         cfg.print_seguro(f"  · sin BibTeX (campo VACÍO + `sin_bibtex` con el motivo, #467): {h}")
+    for ne in no_evaluadas:
+        cfg.print_seguro(f"  ⛔ NO EVALUADA — el hueco no se midió, NO se estampó `sin_bibtex` "
+                         f"(#468): {ne}")
     for e in errores:
         cfg.print_seguro(f"  ⛔ {e}")
     # D-57/R-6 — el paso se estampa a sí mismo, y sólo al salir 0: un paso que no pudo mirar todo
     # no puede dejar traza de haber corrido, o el lint reporta la cadena completa sobre un hueco.
-    if args.slug and not errores:
+    if args.slug and not errores and not no_evaluadas:
         cfg.save_paso(args.slug, "fetch_bibtex", flags=cfg.flags_usados(args, ap))
     # Un error de red deja papers SIN consultar, y eso no se puede leer como «no tienen BibTeX».
-    return 2 if errores else 0
+    return 2 if (errores or no_evaluadas) else 0
 
 
 if __name__ == "__main__":

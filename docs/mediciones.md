@@ -2795,3 +2795,42 @@ forma de arreglarse con la herramienta.
 **Un portador que apareció solo.** `carriers --check` marcó `fetch_bibtex` contra el patrón
 `sin_abstract` de #416: matchea porque el docstring nuevo **nombra** la familia de campos. Declarado
 `fuera-de-alcance` con ese motivo — no lee ni escribe el campo. El gate haciendo lo suyo sobre prosa.
+
+## #468 · un 429 movía la nota de la deuda a «decisión registrada», con rc 0 (2026-09-15)
+
+#467 persistió el motivo del hueco. La mitad que faltaba es **cuál motivo se puede persistir**: los
+tres carriles de la cascada devolvían el **mismo vacío** para *«el servicio no contestó»* y para
+*«el servicio contestó que no hay»*, así que `main` concatenaba el motivo de red al del hueco y lo
+**estampaba**. `sin_bibtex` es el campo que el lint titula *«decisión registrada, **no es deuda**»*:
+un 429 de Crossref sacaba la nota del backlog y la ponía del lado de la firma, sin que nadie firmara.
+
+**Población: 0 de 13 hoy** — en la corrida real de esta bóveda (2026-09-15) Crossref contestó las 13
+veces. Latente, no realizado, y así lo declara el issue. ⚠ Pero la condición está **medida en este
+repo**: la sonda de #466 (2026-09-14) reporta *«1 no evaluable (`2003Sarela`, HTTP 429)»* — una de
+17. Con el código de v1.272.0, esa misma corrida habría escrito el hueco declarado.
+
+Tres consecuencias, ninguna reversible sola: **rc 0** (`errores` sólo juntaba fallos del carril
+ADS), la deuda desaparecida del único reporte que la nombraba, y con `--slug` **la cadena estampada**
+(D-57) sobre notas que nadie midió. Para volver a verlo había que re-correr el paso caro — lo que
+#467 existía para evitar.
+
+**Lo que entró.** Los cuatro carriles devuelven la señal de red **aparte** del veredicto:
+`ads_bibtex` agrega los bibcodes **sin consultar** (por bibcode, no en la prosa del error),
+`doi_bibtex` y `arxiv_bibtex` un tercer/segundo elemento, y `doi_candidate` el que `_crossref_try`
+ya calculaba y ella tiraba por el mismo slot. `bibtex_for` los junta en `sin_medir`, y mientras esa
+lista no esté vacía el motivo **no es un veredicto**: no se estampa, la corrida sale en **rc 2** y
+`save_paso` no firma. ⛔ La distinción quedó **en el campo, no en la prosa**: quien la lee es una
+categoría del lint, no una persona.
+
+**El corte 4xx / 5xx es parte del arreglo**, no un detalle: el 404 de arXiv *es* una respuesta —«ese
+id no está»— y clasifica como hueco medido, igual que el 404 de ADS (#399). Sin esa línea, el fix
+cambiaba un falso «decisión» por una deuda permanente que nadie puede cerrar.
+
+**Portadores (#409).** Enumerados con `carriers --propose fetch_bibtex.stamp_bibtex_gap --patron
+'cfg\.stamp_fm_fields|save_registro|_red\.yaml'`: 8 módulos, los 8 `fuera-de-alcance` con motivo.
+Cinco ya llevan la regla bien —`sweep_external` (`rc == 2` y el detector fuera de `cubrio`, el
+precedente exacto), `check_retractions` (a `errors`, nunca a un veredicto por paper), `check_sources`
+(`no-evaluable` en el vocabulario cerrado), `make_notes --fill-abstracts` (`continue` sin escribir) y
+`lint` (SIMBAD: `null` ≠ `[]` → ⛔ NO EVALUADO)—; los otros tres no consultan afuera. `fetch_bibtex`
+la reintroducía un nivel más abajo, sobre el único campo de la familia que además **se escribe en la
+nota**.
