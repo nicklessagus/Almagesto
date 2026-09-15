@@ -524,7 +524,9 @@ Qué cambia respecto del flujo ADS de arriba:
   entrada declaró autor, título, clave y `motivo` a partir de `RAICAR-N.pdf`, y el paper era de
   otros autores. La cadena corre `check_sources.py` al ingestar (Crossref por `doi`; si no, la
   primera página del PDF), registra el veredicto y el lint bloquea autor/año desmentidos por
-  Crossref. Antes de declarar: `pdftotext -f 1 -l 1 <pdf> -` y leé la primera página. Si el
+  Crossref. ⛔ **Si el equivocado es el CATÁLOGO —pasa: InTech cargó `family: R.` y perdió «Naik»—
+  se FIRMA, no se corrige el dato correcto (#463):** `check_sources.py <slug> --firmar <key>
+  --campo <c> --motivo "<por qué>"` imprime el bloque para pegar. Antes de declarar: `pdftotext -f 1 -l 1 <pdf> -` y leé la primera página. Si el
   paper **tiene bibcode ADS** no va en `sources:`: va en `extra_core` (ADS trae la metadata).
   ⛔ **Y mirá lo que hay AL LADO del PDF antes de escribir nada (#392):** un `.bib`, `.xlsx`, `.csv`
   o `.ris` en el directorio de la biblioteca del usuario es la planilla correcta; se lee primero

@@ -89,6 +89,10 @@ python check_sources.py <slug>      # #353/#392: lo DECLARADO en `sources:` cont
                                     #   el `.bib` del usuario al lado del PDF, la primera página del
                                     #   PDF o el snapshot web; registra el veredicto, no reescribe
                                     #   la config (`--dry-run` mide sin escribir); el lint lo lee offline
+python check_sources.py <slug> --firmar <key> --campo author|year|title --motivo "<por qué>"
+                                    #   #463: cuando el equivocado es el CATÁLOGO (y no el repo), imprime
+                                    #   el bloque `metadata_revisada` listo para pegar en ese item de
+                                    #   `sources:` — propone y NO escribe; baja el bloqueante a declarado
 python check_retractions.py         # Crossref → marca `retracted` (bloqueante) y `corrections`
                                     #   (erratum/corrigendum/EoC: backlog) (red); la cadena usa --slug <slug>,
                                     #   sin --slug barre TODA la bóveda (pasada periódica, skill maintain)

@@ -875,3 +875,46 @@ de codificación —`2015Sci...347.1080A`, `2015Sci...347.1080R`, `2011arXiv1109
 **Devolver si** queda alguno de los tres, si aparece un hallazgo nuevo, o si el cruce de `sources:`
 empieza a fallar por un apellido con llaves.
 
+
+---
+
+## T-doc · v1.270.0–v1.271.0 (#465 · #463)
+
+⚠ **#465 (v1.270.0) ya se validó y cerró el 2026-09-14** desde la instancia, con su medición en el
+issue (techo/presupuesto del ratchet, el YAML anidado, `docs/desarrollo.md`). No tiene entrada acá
+porque la validación precedió a este documento; lo que sigue es lo que falta cerrar.
+
+### #463 · la firma para «el equivocado es el catálogo»
+
+**Qué entró.** `metadata_revisada: [{campo, declarado, catalogo, motivo, fecha}]` en el item de
+`sources:` como cuarta salida del bloqueante `fuente_metadata_falsa` (#353), con
+`cfg.metadata_review` como única implementación y una categoría de backlog **declarado** aparte
+(`fuente_metadata_firmada`). El bloque lo arma `check_sources.py --firmar`, que **propone y no
+escribe** `themes.yaml`.
+
+**Validar** — el caso es tuyo, `2012Naik` en `ica`:
+
+```bash
+python scripts/check_sources.py ica                      # el bloqueante sigue ahí: «Crossref dice «R.»»
+python scripts/check_sources.py ica --firmar 2012Naik --campo author \
+  --motivo "InTech cargó `given: Ganesh, family: R.` en Crossref y perdió el apellido; la p. 1 del PDF dice «Ganesh R. Naik»"
+# pegar el bloque en el item `key: 2012Naik` de vault/config/themes.yaml
+python scripts/lint.py
+git commit -m "…"                                        # y esta vez SIN escotilla
+```
+
+Esperado: `fuente_metadata_falsa` **1 → 0**, `fuente_metadata_firmada` **0 → 1** con tu motivo a la
+vista, y **`git commit` sin `--no-verify`** — que es el daño que el issue midió. Confirmá que
+`themes.yaml` no lo tocó el script: el bloque lo pegás vos.
+
+**Y la propiedad que hay que ver funcionar** (es la decisión de diseño, no un detalle): la firma
+cubre un **estado**. Cambiá a mano el `catalogo:` de la firma a otra cosa y re-corré el lint — tiene
+que **volver a bloquear** diciendo «hoy devuelve «R.»». Después dejalo como estaba. Si no vuelve a
+bloquear, la firma es un apagador permanente y hay que devolver el issue.
+
+**Devolver si** la firma apaga la categoría sin importar lo que diga el catálogo, si `--firmar`
+escribe `themes.yaml`, si una firma con `campo:` mal escrito pasa inadvertida, o si el snippet que
+imprime no es el que la firma acepta.
+
+**Al cerrar:** los dos conteos, y si te apareció algún otro caso del mismo tipo entre tus 52
+fuentes (el issue nombra `2006Tichavsky` del lado de `bibtex_drift`, que es backlog y no bloquea).

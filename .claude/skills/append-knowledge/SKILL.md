@@ -64,7 +64,8 @@ Progreso del append de <fuente> → <destino>:
      (#392):** `pdftotext -f 1 -l 1 <pdf> -` antes de escribir el item, y el `.bib`/`.xlsx` que
      haya al lado del PDF se lee primero. Si tiene DOI, `python scripts/check_sources.py <slug>`
      lo cruza al ingestar; una `url:` se declara con el `<title>` del snapshot, no con lo que uno
-     recuerda del sitio.
+     recuerda del sitio. Si el bloqueante sale y el equivocado es el **catálogo**, se firma:
+     `check_sources.py <slug> --firmar <key> --campo <c> --motivo "<por qué>"` (#463).
    - **(iii) URL** a un tema off-ADS → ídem con `url` en `sources:` + `ingest_theme.py`.
    - **(ii)/(iii) puntual a un tema ADS o a una estrella** (fuente off-ADS aislada, sin cambiar el
      `source` de la entidad) → usar las piezas sueltas: `python scripts/fetch_web.py <slug> <key>

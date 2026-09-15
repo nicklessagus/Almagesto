@@ -54,7 +54,7 @@ pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana m
 sale_obligatorio_desde: "2026-09-14"
 
 skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de CLAUDE.md
-  append-knowledge: 12100
+  append-knowledge: 12200
   audit-note: 18000
   auditar: 18400
   find-contradictions: 21500
@@ -66,7 +66,19 @@ skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de
   test-hypothesis: 15700
   verify-citations: 66500
 
-crecimientos_skills: []   # {fecha, skill, ancla, motivo, sale, techo_bytes} por suba
+crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por suba
+  - fecha: "2026-09-14"
+    skill: append-knowledge
+    ancla: "#463"
+    motivo: >-
+      Dos líneas: el bloqueante de #353 tiene una cuarta salida cuando el equivocado es el
+      CATÁLOGO, y este skill es uno de los dos lugares donde un operador declara una fuente
+      off-ADS y se la come. Sin el puntero, la salida existe y no la encuentra quien la necesita
+      (#436).
+    sale: >-
+      Nada. El párrafo de #392 ya está en regla-y-consecuencia y las dos líneas son el puntero
+      más corto posible: el comando y su ancla, con el porqué en `docs/lint.md` § #463.
+    techo_bytes: 12200
 
 crecimientos:
   - fecha: "2026-08-31"
