@@ -2304,7 +2304,7 @@
   {
    "number": 463,
    "title": "fuente_metadata_falsa (#353) bloquea sin salida cuando el equivocado es el CATÁLOGO: las tres correcciones que prescribe piden publicar una atribución falsa",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 464,
@@ -2315,6 +2315,16 @@
    "number": 465,
    "title": "El ratchet de doc-size mide el techo, no el presupuesto — 43 subas firmadas y 0 rechazadas en 14 días (y los SKILL.md no tienen red)",
    "state": "CLOSED"
+  },
+  {
+   "number": 466,
+   "title": "doi_candidate filtra por autor SERVER-SIDE sin normalizar y después compara normalizado: la diéresis de «Hyvärinen» se lleva el DOI, y el motivo culpa al título",
+   "state": "OPEN"
+  },
+  {
+   "number": 467,
+   "title": "El hueco de `bibtex` es MUDO: la cascada calcula el motivo y lo tira, y el lint no tiene categoría para «nota sin bibtex» (17 de 272 invisibles, rc 0)",
+   "state": "OPEN"
   }
  ]
 }

@@ -2734,3 +2734,64 @@ tiene un caso vivo del mismo tipo (`2006Tichavsky`, con `Crame/spl acute/r` en l
 IEEE) y es **backlog**, así que no frena nada: cuando bloquee, la firma es ésta y no una nueva.
 
 **Redes.** Las 4 funciones nuevas y las 6 guardas de `metadata_review` mueren en su test dirigido.
+
+## #466 · el filtro server-side que repetía el criterio normalizado (2026-09-15)
+
+`fetch_bibtex.doi_candidate` mandaba a Crossref `query.author=<familia>` **y** comparaba después el
+apellido con `cfg.method_key`, que pliega la diéresis. Crossref **no la pliega al buscar**, así que
+el registro cuyo `family` es «Hyvärinen» —el que el chequeo local aceptaría— se descartaba antes de
+llegar a esa línea.
+
+**Sonda contra el servicio real** (2026-09-15, mismo título, `rows=5`, una sola variable):
+
+| query | ¿aparece el título exacto? | top-1 |
+|---|---|---|
+| **CON** `query.author=Hyvarinen` | **no** | otro paper, `family: 'Hyvarinen'` |
+| **SIN** `query.author` | **sí** | `family: 'Hyvärinen'` |
+
+Y el motivo publicado decía *«Crossref devolvió 5 resultado(s) y ninguno con el título EXACTO»*
+sobre un caso donde el título **matchea exacto**: quien lo lee concluye que Crossref no tiene el
+trabajo. Regla de método 4 — un mapa que atribuye mal es peor que uno vacío.
+
+**Lo que entró.** Dos etapas con **una sola regla de juicio** (`_crossref_try`, para que la
+severidad de #397/#399 no derive entre ellas): la 1 conserva el filtro —recall preciso, y si
+resuelve la 2 **no se corre**— y la 2 lo suelta con `rows` 5 → 20, porque sin el filtro compiten más
+registros por slot (en la sonda el bueno entró **5.º**). La severidad no se afloja: sigue exigiendo
+título exacto **y** apellido normalizado, sólo que ahora sobre candidatos que llegaron. El motivo
+declara las etapas y lo que trajo cada una, y la red que no contesta **corta** en vez de dejar que
+la etapa 2 convierta un 429 en un veredicto (D-43).
+
+**Verificado end-to-end contra Crossref**: el título de Hyvärinen & Oja 2000 devuelve
+`10.1016/s0893-6080(00)00026-5` con `[sin query.author (#466)]` en el motivo. Antes: vacío.
+
+⚠ **Portadores: cero, y declarado igual** — es el único lugar del repo que filtra server-side por un
+campo de texto no-ASCII y lo re-compara normalizado (`query_ads` lee `author` de la respuesta, no lo
+manda en la query). `--check` en 0 no alcanza si nadie enumeró (#409).
+
+## #467 · el hueco de `bibtex` era mudo, y el lint no tenía dónde verlo (2026-09-15)
+
+`bibtex_for` **calculaba** el motivo del hueco y lo tiraba por stdout de una corrida que además
+escribe: la distinción que su propio docstring promete —*«no tiene exportación oficial»* vs *«nadie
+preguntó»*— se perdía al terminar el proceso. Medido: **17 de 272** notas sin `bibtex`, con
+`bibtex_accessed` poblado en **0** de las 17, y `lint.py` en **rc 0** — sus dos categorías
+(`bibtex_sin_fuente`, `bibtex_drift`) miran notas que **ya** tienen entrada.
+
+**Lo que entró.** `sin_bibtex: <motivo>` + `bibtex_accessed` del intento, estampado por
+`fetch_bibtex` y **borrado** cuando el hueco se cierra; dos categorías de lint, la declarada
+**aparte** de la muda (AUD-207). Es el sexto campo de la familia del motivo obligatorio.
+
+**Orden forzado por el propio issue**: #466 primero. Persistir hoy el motivo habría persistido uno
+**falso** —decía «ninguno con el título EXACTO» sobre casos donde el título matchea—, y un motivo
+falso escrito en la nota es peor que ninguno (regla de método 4).
+
+**El borrado de la clave NO se duplicó** (#244): `make_notes._drop_keys` subió a
+`lib_config.drop_fm_keys_from_block` —con `drop_fm_keys` como envoltorio por archivo— y `make_notes`
+delega. ⚠ La guarda de re-parseo compara contra el **ANTES** y no es `is None`: `split_fm` devuelve
+`{}` tanto para «no parsea» como para «no hay», así que con `is None` no dispararía nunca — el falso
+limpio de siempre. Y esa mitad tiene su propio caso de uso: la nota que **ya** estaba rota se
+repara sacando la clave que la rompió, así que una guarda que mirara sólo el DESPUÉS la dejaría sin
+forma de arreglarse con la herramienta.
+
+**Un portador que apareció solo.** `carriers --check` marcó `fetch_bibtex` contra el patrón
+`sin_abstract` de #416: matchea porque el docstring nuevo **nombra** la familia de campos. Declarado
+`fuera-de-alcance` con ese motivo — no lee ni escribe el campo. El gate haciendo lo suyo sobre prosa.

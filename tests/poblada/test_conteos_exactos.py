@@ -413,6 +413,10 @@ _RUIDO_DELIBERADO = {
                         "una bóveda real (`methods` lo puebla la extracción de `ingest-star`, las "
                         "notas de método las crea `ingest-theme`, que es otra operación). Por eso "
                         "el detector es backlog y no bloqueante; el corpus lo refleja",
+    "sin_bibtex_mudo": "el generador no corre `fetch_bibtex` (es red), así que ninguna nota "
+                       "sintética tiene `bibtex` ni su motivo — que es el estado exacto de una "
+                       "bóveda antes de la primera corrida, y justamente el que #467 hizo visible. "
+                       "Sembrarlo a mano probaría el campo contra sí mismo (red #3)",
 }
 
 

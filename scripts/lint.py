@@ -4616,8 +4616,8 @@ def check_paper_citation_unit(stem: str, fm: dict) -> tuple:
 
 
 def check_paper_bibtex(stem: str, fm: dict) -> tuple:
-    """`(bibtex_sin_fuente, bibtex_drift, bad_roles)` — the BibTeX entry and the two closed
-    vocabularies of the artefact fields (#397/#296).
+    """`(bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo)` — the BibTeX
+    entry and the two closed vocabularies of the artefact fields (#397/#296/#467).
 
     Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
     accumulates. A `bibtex` with no `bibtex_source` is a block written BY HAND, and an invented entry
@@ -4626,7 +4626,24 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     bibtex_sin_fuente: list = []
     bibtex_drift: list = []
     bad_roles: list = []
+    sin_bibtex: list = []
+    sin_bibtex_mudo: list = []
     _btx = str(fm.get("bibtex") or "").strip()
+    # #467 — las dos categorías que FALTABAN: las de abajo miran notas que YA tienen `bibtex`, así
+    # que la nota SIN entrada no aparecía en ningún reporte y el lint daba rc 0 con ella adentro
+    # (medido: 17 de 272, y `bibtex_accessed` poblado en 0 de las 17). El hueco declarado va
+    # APARTE del mudo (AUD-207): uno es una decisión registrada, el otro es «nadie preguntó».
+    _motivo_hueco = str(fm.get("sin_bibtex") or "").strip()
+    if not _btx:
+        if _motivo_hueco:
+            sin_bibtex.append((stem, f"{_motivo_hueco} (consultado el "
+                                     f"{str(fm.get('bibtex_accessed') or 's/f')})"))
+        else:
+            sin_bibtex_mudo.append(
+                (stem, "sin `bibtex` y sin `sin_bibtex`: no se distingue «no tiene exportación "
+                       "oficial» de «nadie preguntó», y es el campo que existe para que una cita "
+                       f"impresa no se redacte de memoria → `python scripts/fetch_bibtex.py "
+                       f"--paper {stem}` (#467)"))
     if _btx and not str(fm.get("bibtex_source") or "").strip():
         bibtex_sin_fuente.append(
             (stem, "tiene `bibtex` y no declara `bibtex_source`: una entrada sin "
@@ -4682,7 +4699,7 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                                     f"«desconocido»; si querías escribir una nota, va a "
                                     f"`pending_motivo` o a `salvedades`. Migrador: "
                                     f"`python scripts/make_notes.py --migrate-source-fields`"))
-    return bibtex_sin_fuente, bibtex_drift, bad_roles
+    return bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo
 
 
 def check_data_availability(stem: str, fm: dict) -> list:
@@ -6042,6 +6059,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     tema_ejes_heredados: list = []     # (tema, motivo) — #360: tema de método sin `ejes:` → lee con los del objetivo
     fuente_metadata_falsa: list = []   # (key, motivo) — #353: autor/año declarados ≠ Crossref (atribución falsa publicada)
     fuente_metadata_firmada: list = []  # (key, motivo) — #463: el catálogo es el equivocado, firmado con motivo
+    sin_bibtex: list = []              # (stem, motivo) — #467: hueco de `bibtex` DECLARADO con su motivo
+    sin_bibtex_mudo: list = []         # (stem, motivo) — #467: sin `bibtex` y sin motivo (indistinguible de «nadie preguntó»)
     fuente_metadata_dudosa: list = []  # (key, motivo) — #353: título ≠, primera página no confirma, no evaluable o sin cruzar
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     indice_viejo: list = []            # (stem, motivo) — #237: index.md contra la verdad de disco
@@ -6521,10 +6540,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # (b) el frontmatter y la exportación oficial no pueden decir cosas distintas del mismo
             #     paper. El caso que lo motivó: una ficha `2011Naik` con `year: 2012` adentro.
             # El BibTeX y los dos vocabularios cerrados viven en `check_paper_bibtex` (#396).
-            _b1, _b2, _b3 = check_paper_bibtex(stem, fm)
+            _b1, _b2, _b3, _b4, _b5 = check_paper_bibtex(stem, fm)
             bibtex_sin_fuente += _b1
             bibtex_drift += _b2
             bad_roles += _b3
+            sin_bibtex += _b4
+            sin_bibtex_mudo += _b5
             data_mal_formada += check_data_availability(stem, fm)          # #424
             # #298 — las dos señales de «la bóveda se apoya en el preprint». (a) El hallazgo del
             # detector de versiones, estampado para que SOBREVIVA a la corrida: sin él, correr la
@@ -6900,6 +6921,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   SEV_BACKLOG, tuple(data_mal_formada), poblacion='papers'),
         Categoria('bibtex_sin_fuente', '⛔ `bibtex` sin `bibtex_source`: una entrada de cita sin procedencia es un bloque escrito a mano (#397)',
                   SEV_BLOQUEANTE, tuple(bibtex_sin_fuente), poblacion='papers'),
+        Categoria('sin_bibtex_mudo', '📇 Nota de paper SIN `bibtex` y sin motivo: no se distingue «no tiene exportación oficial» de «nadie preguntó» (#467, backlog)', SEV_BACKLOG, tuple(sin_bibtex_mudo), poblacion='papers'),
+        Categoria('sin_bibtex', '📇 Hueco de `bibtex` DECLARADO con su motivo (#467) — decisión registrada, no es deuda', SEV_BACKLOG, tuple(sin_bibtex), poblacion='papers'),
         Categoria('bibtex_drift', '📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog)',
                   SEV_BACKLOG, tuple(bibtex_drift), poblacion='papers'),
         Categoria('merge_ours', '⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390)',

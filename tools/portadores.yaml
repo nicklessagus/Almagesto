@@ -25,6 +25,35 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 467
+    regla: >-
+      El borrado de una clave del frontmatter es UNA función: se lleva la clave **y sus líneas de
+      continuación** (#244), y re-parsea antes de escribir comparando contra el ANTES —`split_fm`
+      devuelve `{}` tanto para «no parsea» como para «no hay», así que con `is None` la guarda no
+      dispara nunca—. Filtrar por `startswith` deja la continuación huérfana, el YAML deja de
+      parsear y la nota evade TODOS los chequeos de su tipo.
+    funcion: lib_config.drop_fm_keys_from_block
+    patron: 'fm_key_span|_drop_keys'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`_drop_keys` delega desde 1.272.0; era la implementación original (#244)."
+      - modulo: scripts/lib_config.py
+        estado: usa
+        motivo: "`drop_fm_keys` (por archivo) la envuelve y le agrega la guarda de re-parseo; `fetch_bibtex` cierra por ahí el hueco de `sin_bibtex`."
+  - issue: 466
+    regla: >-
+      Un criterio que se aplica SERVER-SIDE no puede repetir el que se verifica localmente si la
+      versión local está normalizada y la remota no: la query RECUPERA y el chequeo DECIDE. Crossref
+      no pliega la diéresis al BUSCAR y `cfg.method_key` sí al COMPARAR, así que
+      `query.author=Hyvarinen` descartaba el registro «Hyvärinen» antes de que el chequeo lo viera —
+      y el motivo publicado culpaba al título, que matcheaba exacto.
+    funcion: fetch_bibtex._crossref_try
+    patron: 'query\.(author|bibliographic)|filter=.*author'
+    consumidores:
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: "`doi_candidate` corre las dos etapas con ella: una sola regla de juicio para ambas."
   - issue: 463
     regla: >-
       Todo chequeo que compare lo que el REPO declara contra lo que dice un TERCERO necesita una
@@ -872,6 +901,12 @@ portadores:
       - modulo: scripts/query_ads.py
         estado: fuera-de-alcance
         motivo: PRODUCE el campo al clasificar; no afirma nada sobre él en la nota.
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea desde #467 porque su docstring NOMBRA a `sin_abstract_motivo` como uno de los
+          cinco campos de la familia «hueco con su motivo» que `sin_bibtex` viene a completar. No
+          lee ni escribe el campo ni afirma nada sobre él: es prosa, no un portador.
       - modulo: scripts/openalex.py
         estado: fuera-de-alcance
         motivo: Ídem — es uno de los tres backends de descubrimiento que lo pueblan.

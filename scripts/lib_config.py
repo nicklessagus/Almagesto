@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.271.0"
+ALMAGESTO_VERSION = "1.272.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3024,6 +3024,54 @@ METADATA_CAMPOS = ("author", "year", "title")
 #: Keys of one `metadata_revisada` entry. `motivo` is mandatory for the same reason as the triage
 #: `--reason`: in six months the reason is what helps, not the category.
 METADATA_REVISADA_CLAVES = ("campo", "declarado", "catalogo", "motivo", "fecha")
+
+
+def drop_fm_keys_from_block(yaml_block: str, claves) -> list:
+    """Frontmatter lines with those keys removed, **continuation lines included** (#244).
+
+    Filtering by `startswith` alone deletes the first line of a block scalar and leaves the
+    indented continuation orphaned, so the YAML stops parsing — and the note then evades every
+    per-type check. Not a rare case: `pending_motivo` is mandatory free text (#80), so any motive
+    over ~90 characters serialises multi-line.
+
+    THE deletion (#244/#467): it lives here, next to `fm_key_span`, because a second copy is how
+    this shape gets paid for a fifth time.
+    """
+    lines = yaml_block.split("\n")
+    fuera: set = set()
+    for clave in claves:
+        i = 0
+        while (span := fm_key_span(lines, str(clave).rstrip(":"), i)):
+            fuera.update(range(*span))
+            i = span[1]
+    return [ln for k, ln in enumerate(lines) if k not in fuera]
+
+
+def drop_fm_keys(path, *claves) -> bool:
+    """Remove those frontmatter keys from the note at `path`; `True` if anything changed (#467).
+
+    Carries the guard of #244/#222: the frontmatter is **re-parsed** and nothing is written if it
+    stopped parsing — an operation may not leave the note worse than it found it.
+    """
+    path = Path(path)
+    texto = path.read_text(encoding="utf-8")
+    if not texto.startswith("---\n") or "\n---\n" not in texto:
+        return False
+    head, body = texto[4:].split("\n---\n", 1)
+    nuevo = "\n".join(drop_fm_keys_from_block(head, claves))
+    if nuevo == head:
+        return False
+    salida = "---\n" + nuevo + "\n---\n" + body
+    # #244/#222 — el lector antes del escritor. ⚠ La condición se compara contra el ANTES y NO es
+    # `is None`: `split_fm` devuelve `{}` tanto para «no parsea» como para «no hay», así que con
+    # `is None` esta guarda no dispararía nunca (el falso limpio de siempre). Mismo criterio que
+    # `stamp_fm_fields`, que es la otra mitad de esta regla.
+    if split_fm(texto) and not split_fm(salida):
+        print_seguro(f"  ⛔ {path.name}: sacar {list(claves)} dejaría el frontmatter sin parsear "
+                     f"(#244): no se escribió nada")
+        return False
+    write_text_atomic(path, salida)
+    return True
 
 
 def yaml_scalar(v) -> str:

@@ -351,6 +351,14 @@ fulltext_source(pdftotext|ocr|web), pdf_source(eprint|ads|publisher|web), pdf_sh
 bibtex, bibtex_source(ads|crossref|datacite|doi|arxiv), bibtex_accessed`.
 
 ⛔ **El `bibtex` se TRAE de una exportación oficial, nunca se redacta (#397).** La ficha guardaba campos sueltos y no la **referencia**, así que quien escribe un informe rearmaba la entrada con la ficha más lo que recordara el modelo — y una entrada inventada sale plausible, con volumen y páginas verosímiles, sobre el dato que termina impreso. Lo baja `python scripts/fetch_bibtex.py` (paso final de la cadena) por la cascada **ADS export → content negotiation en `doi.org` → arXiv**, y el cuarto caso —un libro, un manual— deja el campo **VACÍO**: un hueco es correcto, una cita inventada no. El lint **bloquea** el `bibtex` sin `bibtex_source` (una entrada sin procedencia es un bloque escrito a mano) y reporta el desacuerdo entre el frontmatter y la exportación (medido: una ficha `2011Naik` con `year: 2012` adentro).
+⛔ **Y el HUECO se declara: `sin_bibtex: <motivo>` + `bibtex_accessed` del intento (#467)**, sexto
+campo de la familia de `no_sintetizado`/`pending_motivo`/`sin_conclusiones`/`no_vista`. El motivo se
+tiraba por stdout, así que la nota consultada sin exportación oficial se veía **idéntica** a una que
+nadie tocó (17 de 272) y el lint daba rc 0: sus dos categorías miran notas que **ya** tienen
+`bibtex`. Lo estampa `fetch_bibtex` y **lo borra** al cerrarse el hueco. ⚠ Antes de declararlo
+pregunta si el DOI existe, en **dos etapas** (#466): el filtro server-side por autor no puede
+repetir el criterio que abajo se compara normalizado —Crossref no pliega la diéresis al buscar y
+`method_key` sí al comparar—, y el motivo nombra las etapas en vez de culpar al título.
 
 ⛔ **Toda nota de paper pertenece a alguna ENTIDAD (D-23).** Al menos uno de `stars`,
 `thesis_links` o `methods` tiene que estar poblado. Sin ninguno de los tres el paper no entra en

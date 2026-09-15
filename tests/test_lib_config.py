@@ -3513,3 +3513,85 @@ def test_el_snippet_de_la_firma_es_YAML_pegable():
     assert cfg.metadata_review({"metadata_revisada": [e]}, "author", "Naik", "R.")[0] == "firmada", \
         "lo que el snippet propone tiene que ser exactamente lo que la firma acepta"
 
+
+
+# ── #244/#467 · el borrado de una clave es UNA función ──────────────────────────────────────────
+
+def test_drop_fm_keys_se_lleva_las_LINEAS_DE_CONTINUACION(tmp_path):
+    """#244 — filtrar por `startswith` borra la primera línea de un escalar de bloque y deja la
+    continuación huérfana bajo la clave siguiente: el frontmatter deja de parsear y la nota evade
+    **todos** los chequeos de su tipo. No es raro — `pending_motivo` y `sin_bibtex` son texto libre
+    obligatorio, así que cualquier motivo de más de ~90 caracteres serializa multilínea."""
+    nota = tmp_path / "n.md"
+    nota.write_text("---\ntitle: X\nsin_bibtex: >-\n  un motivo largo que sigue\n  en otra línea\n"
+                    "year: 2012\n---\n\ncuerpo\n", encoding="utf-8")
+    assert cfg.drop_fm_keys(nota, "sin_bibtex") is True
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    assert fm is not None and "sin_bibtex" not in fm and fm["year"] == 2012
+    assert nota.read_text(encoding="utf-8").endswith("\n---\n\ncuerpo\n"), "el cuerpo no se toca"
+
+
+def test_drop_fm_keys_declara_sus_tres_NO_OP(tmp_path):
+    """Las tres piden acciones distintas, así que ninguna puede confundirse con «borré» (D-43):
+    sin frontmatter no hay clave que sacar, la clave ausente es idempotencia, y el borrado que
+    dejaría el YAML sin parsear **no escribe nada** (la guarda de #244/#222: una operación no puede
+    dejar la nota peor de lo que la encontró)."""
+    sin_fm = tmp_path / "a.md"
+    sin_fm.write_text("no tengo frontmatter\n", encoding="utf-8")
+    assert cfg.drop_fm_keys(sin_fm, "sin_bibtex") is False
+    assert sin_fm.read_text(encoding="utf-8") == "no tengo frontmatter\n"
+
+    fm_abierto = tmp_path / "b.md"
+    fm_abierto.write_text("---\ntitle: X\nsin cierre\n", encoding="utf-8")
+    assert cfg.drop_fm_keys(fm_abierto, "title") is False
+
+    ok = tmp_path / "c.md"
+    ok.write_text("---\ntitle: X\n---\n\ncuerpo\n", encoding="utf-8")
+    antes = ok.read_text(encoding="utf-8")
+    assert cfg.drop_fm_keys(ok, "no_existe") is False and ok.read_text(encoding="utf-8") == antes
+
+
+def test_drop_fm_keys_NO_escribe_si_el_resultado_no_parsea(tmp_path, capsys, monkeypatch):
+    """La guarda de #244/#222: se re-parsea ANTES de escribir y, si dejó de parsear, no se escribe
+    y se dice cuál nota fue.
+
+    ⚠ El borrado se fuerza a devolver YAML roto a propósito. Con `fm_key_span` haciendo su trabajo
+    esta rama no se alcanza desde un frontmatter real —probado con un escalar de bloque y con una
+    lista de mapas: las dos siguen parseando—, así que lo que este test prueba es la GUARDA, no la
+    imposibilidad: el día que el cortador tenga un borde, la nota no se rompe."""
+    nota = tmp_path / "d.md"
+    original = "---\ntitle: X\nsin_bibtex: un motivo\n---\n\ncuerpo\n"
+    nota.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(cfg, "drop_fm_keys_from_block", lambda block, claves: ["title: [roto"])
+    assert cfg.drop_fm_keys(nota, "sin_bibtex") is False
+    assert nota.read_text(encoding="utf-8") == original
+    salida = capsys.readouterr().out
+    assert "no se escribió nada" in salida and "d.md" in salida
+
+
+def test_drop_fm_keys_exige_que_el_frontmatter_ABRA_el_archivo(tmp_path):
+    """Las dos mitades de la guarda son distintas y las dos hacen falta: un cuerpo markdown puede
+    traer `\n---\n` como línea horizontal sin tener frontmatter, y ahí el bloque «head» sería
+    prosa. Sin la primera cláusula, el borrado reescribiría el documento partiéndolo por su
+    separador."""
+    nota = tmp_path / "e.md"
+    original = "# Un documento sin frontmatter\n\ntitle: parece una clave\n\n---\n\notra sección\n"
+    nota.write_text(original, encoding="utf-8")
+    assert cfg.drop_fm_keys(nota, "title") is False
+    assert nota.read_text(encoding="utf-8") == original
+
+
+def test_drop_fm_keys_SI_toca_la_nota_que_ya_estaba_rota(tmp_path):
+    """La guarda compara contra el ANTES, y esa mitad importa por sí sola: si el frontmatter ya no
+    parseaba, sacar una clave **no lo empeoró**, así que el borrado procede.
+
+    Es el caso de uso de #244 al revés: la nota que quedó ilegible se arregla sacando la clave que
+    la rompió, y una guarda que mirara sólo el DESPUÉS dejaría a esa nota sin forma de repararse con
+    la herramienta —rehusaría para siempre—. Mismo criterio que `stamp_fm_fields`."""
+    nota = tmp_path / "rota.md"
+    nota.write_text("---\ntitle: [sin cerrar\nsin_bibtex: un motivo\nyear: [tampoco\n---\n\ncuerpo\n",
+                    encoding="utf-8")
+    assert cfg.split_fm(nota.read_text(encoding="utf-8")) in ({}, None), "arranca sin parsear"
+    assert cfg.drop_fm_keys(nota, "sin_bibtex") is True
+    texto = nota.read_text(encoding="utf-8")
+    assert "sin_bibtex" not in texto and "title: [sin cerrar" in texto

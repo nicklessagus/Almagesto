@@ -332,7 +332,7 @@ def test_doi_candidate_NO_propone_por_parecido(monkeypatch):
         {"DOI": "10.1/parecido", "title": ["Applications of higher order statistics in sEMG"],
          "author": [{"family": "Naik"}]}]))
     doi, por_que = fb.doi_candidate("Applications of Higher Order Statistics", "Naik", 2011)
-    assert doi == "" and "ninguno con el título EXACTO" in por_que
+    assert doi == "" and "ningún resultado con el título EXACTO" in por_que
 
 
 def test_doi_candidate_descarta_el_autor_que_no_es(monkeypatch):
@@ -541,3 +541,110 @@ def test_estampa_la_cadena_aunque_NO_HAYA_NADA_que_bajar(tmp_path, monkeypatch, 
     assert fb.main() == 0
     assert "todas ya lo tienen" in capsys.readouterr().out
     assert pasos == [("hd_40307", "fetch_bibtex")], "el paso corrió y quedó estampado"
+
+
+def test_el_filtro_SERVER_SIDE_no_puede_repetir_el_criterio_que_se_compara_normalizado(monkeypatch):
+    """#466 — la query RECUPERA y el chequeo DECIDE. Crossref **no pliega la diéresis al buscar** y
+    el chequeo local **sí al comparar** (`cfg.method_key`), así que `query.author=Hyvarinen`
+    descarta el registro cuyo `family` es «Hyvärinen» —el que el chequeo aceptaría— antes de que
+    nadie lo vea.
+
+    Verificado contra el servicio real el 2026-09-15 (mismo título, `rows=5`, una sola variable):
+    CON el filtro, cinco resultados y **ninguno** con el título exacto; SIN el filtro, el título
+    exacto aparece con `family: "Hyvärinen"`. El doble responde como el servicio: mira si la query
+    llevaba `query.author` y devuelve lo que ése devolvió."""
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    TITULO = "Independent component analysis: algorithms and applications"
+    CON = [{"DOI": "10.1/otro", "title": ["Fast and robust fixed-point algorithms"],
+            "author": [{"family": "Hyvarinen"}]}]
+    SIN = [{"DOI": "10.1016/j.neunet.2000.00026", "title": [TITULO],
+            "author": [{"family": "Hyvärinen"}], "issued": {"date-parts": [[2000]]}}]
+    vistas = []
+
+    def _get(url, params=None, **k):
+        vistas.append(dict(params or {}))
+        return _cr(CON if "query.author" in (params or {}) else SIN)
+
+    fake_net(monkeypatch, get=_get)
+    doi, por_que = fb.doi_candidate(TITULO, "Hyvarinen, Aapo", 2000)
+    assert doi == "10.1016/j.neunet.2000.00026", \
+        "el candidato bueno llega recién cuando la query deja de repetir el criterio normalizado"
+    assert "sin `query.author`" in por_que, "y el motivo dice por qué etapa entró"
+    assert len(vistas) == 2 and "query.author" in vistas[0] and "query.author" not in vistas[1]
+    assert vistas[1]["rows"] > vistas[0]["rows"], \
+        "sin el filtro compiten más registros por slot: el bueno entró 5º en la sonda real"
+
+
+def test_la_etapa_1_sigue_resolviendo_sola_y_no_paga_la_segunda(monkeypatch):
+    """El rescate de #466 no cambia el camino feliz: si la etapa 1 resuelve, la 2 **no se corre** —
+    una llamada de red de más por nota es el costo que este carril no tiene que pagar."""
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    n = []
+
+    def _get(url, params=None, **k):
+        n.append(1)
+        return _cr([{"DOI": "10.1038/378355a0", "title": ["A Jupiter-mass companion"],
+                     "author": [{"family": "Mayor"}], "issued": {"date-parts": [[1995]]}}])
+
+    fake_net(monkeypatch, get=_get)
+    doi, por_que = fb.doi_candidate("A Jupiter-mass companion", "Mayor, Michel", 1995)
+    assert doi == "10.1038/378355a0" and len(n) == 1
+    assert "con `query.author`" in por_que
+
+
+def test_el_motivo_del_hueco_NO_culpa_al_TITULO_cuando_fallo_la_query(monkeypatch):
+    """Regla de método 4 — un mapa que atribuye mal es peor que uno vacío. El motivo viejo decía
+    *«Crossref devolvió N y ninguno con el título EXACTO»* sobre casos donde el título matchea
+    exacto y lo que falló fue un filtro que el mensaje ni nombra: quien lo lee concluye que Crossref
+    no tiene el trabajo. Hoy declara **las dos etapas y lo que trajo cada una**."""
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch, get=lambda *a, **k: _cr([]))
+    doi, por_que = fb.doi_candidate("Un titulo que no esta", "Nadie", 2020)
+    assert doi == ""
+    assert "dos etapas" in por_que and "con `query.author`: 0" in por_que \
+        and "sin `query.author`" in por_que
+
+
+def test_la_red_que_no_contesta_NO_se_lee_como_hueco(monkeypatch):
+    """D-43 — «Crossref no contestó» y «Crossref no lo tiene» piden acciones opuestas (reintentar
+    contra resolverlo a mano), y la etapa 2 no puede convertir un 429 en un veredicto: se para ahí.
+    Medido en el issue: una de las tres sondas volvió HTTP 429."""
+    monkeypatch.setattr(cfg, "get_mailto", lambda: "")
+    fake_net(monkeypatch, get=lambda *a, **k: Resp(429))
+    doi, por_que = fb.doi_candidate("Un titulo", "Alguien", 2020)
+    assert doi == "" and "no consta" in por_que and "título EXACTO" not in por_que
+
+
+# ── #467 · el motivo del hueco se PERSISTE ──────────────────────────────────────────────────────
+
+def test_el_hueco_se_estampa_con_su_motivo_y_la_fecha_del_intento(tmp_path):
+    """#467 — `bibtex_for` calculaba el motivo y su docstring decía para qué («la diferencia entre
+    *no tiene exportación oficial* y *nadie preguntó*»), y después lo tiraba por stdout de una
+    corrida que además escribe: para verlo había que re-correr el paso caro. `bibtex` es el sexto
+    campo de la misma familia (`no_sintetizado`, `pending_motivo`, `sin_abstract_motivo`,
+    `sin_conclusiones`, `no_vista`)."""
+    nota = tmp_path / "2019Pfister.md"
+    nota.write_text("---\ntitle: X\nfirst_author: Pfister\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    fb.stamp_bibtex_gap(nota, fm, "\n## Abstract\n\nx\n",
+                        "sin exportación oficial (sin bibcode ADS, sin doi, sin arxiv_id)",
+                        "2026-09-15")
+    fm2 = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    assert "sin exportación oficial" in fm2["sin_bibtex"]
+    assert fm2["bibtex_accessed"] == "2026-09-15"
+    assert fm2["title"] == "X" and fm2["first_author"] == "Pfister", "cirugía, no re-serialización"
+
+
+def test_cuando_el_hueco_SE_CIERRA_el_motivo_se_va(tmp_path):
+    """Un motivo que describe un estado que ya no es, es peor que ninguno: la nota publicaría «no
+    tiene exportación oficial» arriba de su propia entrada. Y el borrado usa LA función de #244, que
+    se lleva las líneas de continuación —un motivo largo serializa multilínea—."""
+    nota = tmp_path / "2011Naik.md"
+    nota.write_text(
+        "---\ntitle: X\nsin_bibtex: >-\n  un motivo largo que serializa en varias líneas y\n"
+        "  sigue acá abajo indentado\nyear: 2012\n---\n\ncuerpo\n", encoding="utf-8")
+    assert cfg.drop_fm_keys(nota, "sin_bibtex") is True
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    assert fm is not None, "sacar la clave no puede dejar el frontmatter sin parsear (#244)"
+    assert "sin_bibtex" not in fm and fm["year"] == 2012 and fm["title"] == "X"
+    assert cfg.drop_fm_keys(nota, "sin_bibtex") is False, "idempotente: nada que sacar"

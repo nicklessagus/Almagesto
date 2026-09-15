@@ -44,8 +44,8 @@
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
 medido_en: "2026-09-14"
-techo_lineas: 1841
-techo_bytes: 150500
+techo_lineas: 1849
+techo_bytes: 151300
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -467,7 +467,7 @@ crecimientos:
       una salvedad, así que va acá y no sólo en `docs/lint.md`. La regla de #450 entró en el
       párrafo de #232 sin sumar techo.
     techo_lineas: 1860
-    techo_bytes: 151200
+    techo_bytes: 151300
   - fecha: "2026-09-13"
     ancla: "#451"
     motivo: >-
@@ -588,3 +588,18 @@ crecimientos:
       reglas tienen consumidor distinto: ninguna es candidata a salir sin perderse.
     techo_lineas: 1841
     techo_bytes: 150500
+  - fecha: "2026-09-15"
+    ancla: "#467 + #466"
+    motivo: >-
+      Ocho líneas en el párrafo de `bibtex` (#397), su regla madre. (a) #467: el hueco se declara
+      con `sin_bibtex` —sexto campo de la familia del motivo obligatorio—, porque el motivo se
+      tiraba y la nota consultada se veía igual que la que nadie tocó (17 de 272, lint en rc 0).
+      (b) #466: el filtro server-side no puede repetir el criterio que se compara normalizado. Las
+      dos cambian lo que el agente ESCRIBE en una nota de paper y lo que lee del reporte.
+    sale: >-
+      Nada, y esta vez se buscó dos veces: la primera redacción entraba en 10 líneas y se comprimió
+      a 8 sacando la medición de #466 (va a `docs/mediciones.md`) y la mención de
+      `sin_abstract_motivo`, que ya está nombrada en su propio párrafo. El de #397 son cinco líneas
+      y sus tres reglas tienen consumidor distinto.
+    techo_lineas: 1849
+    techo_bytes: 151300

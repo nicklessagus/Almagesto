@@ -948,6 +948,26 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   confirma (14 de 20 sin DOI: capítulos, preprints, `Hyv¨arinen`), no evaluable, nunca cruzada y
   cruce anterior a un cambio de lo declarado son backlog con su motivo. **No reescribe**
   `sources:`: se corrige la entrada (o se migra a `extra_core` si tiene bibcode ADS) y se re-corre.
+- **Nota de paper SIN `bibtex` y sin motivo** (#467, `sin_bibtex_mudo`, backlog) y **hueco de
+  `bibtex` DECLARADO** (`sin_bibtex`, backlog **declarado**, aparte por AUD-207): las dos
+  categorías de #397 miran notas que **ya** tienen `bibtex`, así que la nota sin entrada no
+  aparecía en ningún reporte y el lint daba **rc 0** con ella adentro — medido, 17 de 272 notas,
+  con `bibtex_accessed` poblado en **0** de las 17. Es el lado ciego de D-43/INV-40: ni siquiera
+  había un `(0)` que mirar. `fetch_bibtex.bibtex_for` **calculaba** el motivo —su docstring dice
+  para qué: *«la diferencia entre este paper no tiene exportación oficial y nadie preguntó»*— y lo
+  tiraba por stdout de una corrida que además escribe, así que verlo costaba re-correr el paso
+  caro. Hoy lo persiste `sin_bibtex: <motivo>` + `bibtex_accessed` **del intento** (#34: la fecha
+  es la de la consulta que produjo ESE motivo), y `fetch_bibtex` **lo borra** cuando el hueco se
+  cierra —un motivo que describe un estado que ya no es publicaría «no tiene exportación oficial»
+  arriba de su propia entrada—. Importa más que un backlog cualquiera porque es el campo que
+  existe para que **una cita impresa no se redacte de memoria** (#397): con el hueco mudo, quien
+  escribe el informe no puede saber si el campo vacío significa «no hay entrada oficial» o «nunca
+  se buscó», y el camino de menor resistencia es justo el que #397 prohíbe. ⚠ Y el motivo es
+  confiable desde #466: el carril que pregunta si el DOI existe corre en **dos etapas** —el filtro
+  server-side por autor y después sin él—, porque Crossref no pliega la diéresis al **buscar** y
+  `cfg.method_key` sí al **comparar**, así que `query.author=Hyvarinen` descartaba el registro
+  «Hyvärinen» antes de que el chequeo lo viera y el motivo publicado culpaba al **título**, que
+  matcheaba exacto (regla de método 4: un mapa que atribuye mal es peor que uno vacío).
 - **`sources:` cuyo desacuerdo con el catálogo está FIRMADO** (#463, `fuente_metadata_firmada`,
   backlog **declarado** — no es deuda, va aparte por AUD-207): la **cuarta salida** del bloqueante
   de arriba, para cuando el equivocado es el **catálogo**. Las tres que prescribía el mensaje

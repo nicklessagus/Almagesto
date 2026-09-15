@@ -10616,3 +10616,36 @@ def test_449_la_categoria_levanta_la_prosa_que_los_testigos_desmienten(toy_vault
     _rc, out = run_lint(capsys)
     assert "2010Reemplazado" in out and "los testigos" in out
     assert "2010Coherente" not in out.split("QUÉ DOCUMENTO")[-1].split("\n\n")[0]
+
+
+# ── #467 · el hueco de `bibtex` deja de ser mudo ────────────────────────────────────────────────
+
+def test_la_nota_SIN_bibtex_tiene_superficie_en_el_lint(toy_vault):
+    """#467 — las dos categorías de #397 miran notas que YA tienen `bibtex`, así que la nota sin
+    entrada no aparecía en ningún reporte: el lint daba **rc 0** con ella adentro (medido: 17 de
+    272, y `bibtex_accessed` poblado en 0 de las 17). Es el lado ciego de D-43/INV-40 — ni siquiera
+    había un `(0)` que mirar.
+
+    Y el hueco DECLARADO va aparte del mudo (AUD-207): uno es una decisión registrada con su
+    motivo, el otro es indistinguible de «nadie preguntó»."""
+    _, _, _, declarado, mudo = lint.check_paper_bibtex("2019Pfister", {"title": "X"})
+    assert declarado == [] and len(mudo) == 1
+    assert "nadie preguntó" in mudo[0][1] and "fetch_bibtex.py --paper 2019Pfister" in mudo[0][1]
+
+    _, _, _, declarado, mudo = lint.check_paper_bibtex(
+        "2019Pfister", {"title": "X", "sin_bibtex": "JMLR no deposita en Crossref",
+                        "bibtex_accessed": "2026-09-15"})
+    assert mudo == [] and len(declarado) == 1
+    assert "JMLR" in declarado[0][1] and "2026-09-15" in declarado[0][1]
+
+    # con entrada, ninguna de las dos: es la población de las categorías de #397
+    _, _, _, declarado, mudo = lint.check_paper_bibtex(
+        "2019Pfister", {"title": "X", "bibtex": "@article{x}", "bibtex_source": "doi"})
+    assert declarado == [] and mudo == []
+
+
+def test_el_hueco_declarado_sin_fecha_lo_DICE(toy_vault):
+    """La fecha es de qué intento produjo ESE motivo (#34): sin ella el campo no puede afirmar un
+    snapshot, así que se publica `s/f` en vez de la de hoy."""
+    _, _, _, declarado, _ = lint.check_paper_bibtex("X", {"sin_bibtex": "es una tesis doctoral"})
+    assert "s/f" in declarado[0][1]

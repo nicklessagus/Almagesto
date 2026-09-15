@@ -4418,27 +4418,8 @@ def unpend_note(dest, citekey: str, slug: str | None) -> bool:
 
 
 def _drop_keys(yaml_block: str, prefijos: tuple) -> list:
-    """Frontmatter lines with those keys removed, **including their continuation lines** (#244).
-
-    Filtering by `startswith` alone deletes the first line of a block scalar and leaves the
-    indented continuation orphaned, so the YAML stops parsing — and the note then evades every
-    per-type check, which the lint reports as BLOCKING. It is not a rare case: `pending_motivo` is
-    mandatory free text (#80), so any motive over ~90 characters serialises multi-line, and the
-    happy path of #80 —«when the source arrives, replace `pending` by `pdf:` and re-run»— broke the
-    note every time.
-
-    ⛔ Third time this repo pays for this shape: `_set_lista_de_mapas` already carries the same
-    `dropping` flag, and its own comment records that without it a `--rename-paper` left the note
-    ILLEGIBLE for the whole tooling.
-    """
-    lines = yaml_block.split("\n")
-    fuera: set = set()
-    for pref in prefijos:
-        i = 0
-        while (span := cfg.fm_key_span(lines, pref.rstrip(":"), i)):
-            fuera.update(range(*span))
-            i = span[1]
-    return [ln for k, ln in enumerate(lines) if k not in fuera]
+    """Delegates to `cfg.drop_fm_keys_from_block` — THE deletion is one function (#244/#467)."""
+    return cfg.drop_fm_keys_from_block(yaml_block, prefijos)
 
 
 def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | None = None,

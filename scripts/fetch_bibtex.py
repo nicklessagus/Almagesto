@@ -201,12 +201,50 @@ def doi_candidate(title: str, first_author: str, year=None) -> tuple:
     papers, none of them the target — which is the failure this strictness exists to refuse.
 
     `year` is a tie-breaker with ±1 slack, because the deposit and the publication disagree by a
-    year often enough (`2011Naik` declares 2012 in its own frontmatter)."""
+    year often enough (`2011Naik` declares 2012 in its own frontmatter).
+
+    ⛔ Two stages (#466): the server-side author filter is tried first and then dropped, because
+    Crossref does not fold diacritics when SEARCHING while the local check does when COMPARING.
+    The reason it returns names the stages and what each brought, so a hole is never blamed on the
+    title when what failed was a query nobody sees."""
     titulo, familia = str(title or "").strip(), _family(first_author)
     if not titulo or not familia:
         return "", "sin `title` o sin `first_author`: no hay con qué preguntar"
-    params = {"query.bibliographic": titulo, "query.author": familia, "rows": 5,
-              "select": "DOI,title,author,issued,published-print,published-online"}
+    # ⛔ DOS ETAPAS (#466). La query RECUPERA y el chequeo DECIDE, así que el filtro server-side no
+    # puede repetir el criterio que abajo se compara NORMALIZADO: Crossref no pliega la diéresis al
+    # buscar, así que `query.author=Hyvarinen` descarta el registro cuyo `family` es «Hyvärinen»
+    # —el que `cfg.method_key` aceptaría— antes de que el chequeo lo vea. Medido contra el servicio
+    # real: con el filtro, cinco resultados y ninguno con el título exacto; sin él, el título exacto
+    # aparece con `family: "Hyvärinen"`. La etapa 1 conserva el recall preciso de siempre; la 2
+    # rescata ese caso y paga más `rows`, porque sin el filtro compiten más registros por slot (el
+    # bueno entró 5º en la sonda). La severidad NO se afloja: sigue exigiendo título exacto Y
+    # apellido normalizado, sólo que ahora sobre candidatos que llegaron.
+    etapas = (("con `query.author`", {"query.author": familia, "rows": 5}),
+              ("sin `query.author` (#466)", {"rows": 20}))
+    dudosos, traidos = [], []
+    for etiqueta, extra in etapas:
+        doi, motivo, items, duda = _crossref_try(titulo, familia, year, extra)
+        traidos.append(f"{etiqueta}: {len(items)}")
+        if motivo:                             # la red no contestó: no consta, y no se sigue
+            return "", motivo
+        if doi:
+            return doi, f"título exacto + autor «{familia}» en Crossref [{etiqueta}]"
+        dudosos += [d for d in duda if d not in dudosos]
+    if dudosos:
+        return "", "DUDOSO — " + "; ".join(dudosos)
+    return "", (f"ningún resultado con el título EXACTO en dos etapas ({' · '.join(traidos)}): "
+                f"resolvelo a mano — acá no se propone por parecido (#397)")
+
+
+def _crossref_try(titulo: str, familia: str, year, extra: dict) -> tuple:
+    """One Crossref query → `(doi, motivo_de_red, items, dudosos)` (#466).
+
+    Split out of `doi_candidate` so the two stages share ONE judging rule: duplicating it is how
+    the strictness of #397/#399 would drift between them. `motivo_de_red` is only for «the service
+    did not answer» — the caller stops there instead of declaring a hole the query never measured.
+    """
+    params = {"query.bibliographic": titulo,
+              "select": "DOI,title,author,issued,published-print,published-online", **extra}
     if (correo := cfg.get_mailto()):
         params["mailto"] = correo              # polite pool, opt-in (#: nunca sale de git config)
     try:
@@ -216,7 +254,7 @@ def doi_candidate(title: str, first_author: str, year=None) -> tuple:
         r.raise_for_status()
         items = (r.json().get("message") or {}).get("items") or []
     except (requests.RequestException, ValueError, AttributeError) as exc:
-        return "", f"Crossref no contestó ({exc.__class__.__name__}): no consta"
+        return "", f"Crossref no contestó ({exc.__class__.__name__}): no consta", [], []
     dudosos = []
     for it in items:
         cand = ((it.get("title") or [""])[0] or "").strip()
@@ -240,11 +278,8 @@ def doi_candidate(title: str, first_author: str, year=None) -> tuple:
             dudosos.append(f"`{str(it.get('DOI') or '')}` (título exacto, pero Crossref dice autor "
                            f"«{cr_familia or 's/d'}» ≠ «{familia}»: confirmalo contra la portada)")
             continue
-        return str(it.get("DOI") or ""), f"título exacto + autor «{familia}» en Crossref"
-    if dudosos:
-        return "", "DUDOSO — " + "; ".join(dudosos)
-    return "", (f"Crossref devolvió {len(items)} resultado(s) y ninguno con el título EXACTO: "
-                f"resolvelo a mano — acá no se propone por parecido (#397)")
+        return str(it.get("DOI") or ""), "", items, dudosos
+    return "", "", items, dudosos
 
 
 def bibtex_for(fm: dict, stem: str, ads_cache: dict) -> tuple:
@@ -278,6 +313,24 @@ def stamp_bibtex(path: Path, fm: dict, body: str, entrada: str, fuente: str, fec
     (#34): sin eso el campo afirma un snapshot que nadie tomó."""
     cfg.stamp_fm_fields(path, fm, body,
                         {"bibtex": entrada, "bibtex_source": fuente, "bibtex_accessed": fecha})
+
+
+def stamp_bibtex_gap(path: Path, fm: dict, body: str, motivo: str, fecha: str) -> None:
+    """Persist the HOLE with its reason: `sin_bibtex` + `bibtex_accessed` of THIS attempt (#467).
+
+    `bibtex_for` computed the reason and its docstring said what for —«the difference between *this
+    paper has no official export* and *nobody asked*»— and then threw it away on stdout, so seeing
+    it meant re-running the expensive step. `bibtex` is the sixth field of the same family
+    (`no_sintetizado` #75, `pending_motivo` #80, `sin_abstract_motivo` #413, `sin_conclusiones`
+    #277, `no_vista` #268): a hole the system decides to leave empty records its reason, or it is
+    indistinguishable from one nobody looked at — and this is the field that exists so a printed
+    citation is not retyped from memory (#397), where that confusion leads straight to the thing
+    #397 forbids.
+
+    ⚠ The date is the one of the attempt that produced THIS reason, same rule as `bibtex_accessed`
+    (#34): otherwise the note claims an enquiry nobody made."""
+    cfg.stamp_fm_fields(path, fm, body,
+                        {"sin_bibtex": motivo, "bibtex_accessed": fecha})
 
 
 def notes_to_check(args) -> list:
@@ -363,7 +416,15 @@ def main() -> int:
                     continue
                 motivo += f" · {por_que}"
             huecos.append(f"{f.stem}: {motivo}")
+            # #467 — el motivo se PERSISTE: sin esto la distinción que el docstring de `bibtex_for`
+            # promete se pierde al terminar el proceso, y para verla hay que re-correr el paso caro.
+            stamp_bibtex_gap(f, fm, text.split("\n---\n", 1)[-1], motivo, hoy)
             continue
+        if str(fm.get("sin_bibtex") or "").strip():
+            # El hueco se cerró: el motivo describía un estado que ya no es. Dejarlo haría que la
+            # nota publique «no tiene exportación oficial» arriba de su propia entrada.
+            cfg.drop_fm_keys(f, "sin_bibtex")
+            fm, text = cfg.split_fm(t2 := f.read_text(encoding="utf-8")) or {}, t2
         stamp_bibtex(f, fm, text.split("\n---\n", 1)[-1], entrada, fuente, hoy)
         por_fuente[fuente] = por_fuente.get(fuente, 0) + 1
         n_ok += 1
@@ -374,7 +435,7 @@ def main() -> int:
     for pr in propuestas:
         cfg.print_seguro(f"  ⚑ el hueco NO es tal — hay DOI y la nota no lo lleva: {pr}")
     for h in huecos:
-        cfg.print_seguro(f"  · sin BibTeX (campo VACÍO, que es el hueco correcto): {h}")
+        cfg.print_seguro(f"  · sin BibTeX (campo VACÍO + `sin_bibtex` con el motivo, #467): {h}")
     for e in errores:
         cfg.print_seguro(f"  ⛔ {e}")
     # D-57/R-6 — el paso se estampa a sí mismo, y sólo al salir 0: un paso que no pudo mirar todo
