@@ -117,3 +117,17 @@ regla: en la sesión que la produjo, los bugs los encontraron agentes leyendo el
 ⚠ **La red que no mira el código nuevo no es una red (INV-101):** el gate de mutación seleccionaba
 con `git diff --name-only HEAD`, que no lista untracked, así que un archivo recién creado salía en
 verde sin mutarse. Antes de creer un gate, confirmá **sobre qué corrió**.
+
+⛔ **Y un test del framework mide el CÓDIGO, nunca el CONTENIDO de la bóveda (#469).** Si su
+veredicto depende de lo que la bóveda tenga adentro —o de algo que la copia de trabajo no lleva—, la
+población se **declara** y se skipea **con motivo visible** (`pytest.skip`, el precedente que
+`pytest.ini` bendice para el tier `instancia`), o se corre contra `toy_vault`, que es población
+declarada. Medido: `test_lint_no_muere_en_una_consola_no_utf8` asserteaba `returncode == 0` —o sea
+*«esta bóveda no tiene bloqueantes»*— cuando `exit 1` es el **trabajo** del lint. Un solo assert
+hacía dos daños: en el árbol real se ponía rojo por deuda de contenido **sin que
+`UnicodeEncodeError` apareciera por ningún lado** (regla de método 4), y dentro de la copia de
+`mutar` —que excluye `vault/raw/pdfs`— fallaba **siempre**, así que `mutar.py <archivo>` devolvía 2
+para cualquier archivo y **la red #1 quedaba inoperable** («1 failed, 3008 passed»). ⚠ Y la red que
+lo caza —`test_mutar.py::test_la_copia_del_repo_arranca_con_baseline_verde`, tier `poblada`— **sólo
+dispara donde la bóveda tiene deuda**: en el repo template, cuya semilla está limpia, el test pasaba.
+El gate funcionó donde había población; lo que faltaba era no depender de ella.

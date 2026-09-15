@@ -1646,13 +1646,35 @@ def test_lint_no_muere_en_una_consola_no_utf8():
     y `cfg.ROOT` es una constante de módulo que cualquier fixture re-apunta (es justo el mecanismo de
     `toy_vault`). Con el tier `instancia` corriendo en la misma sesión, `cfg.ROOT` apuntaba a la copia
     de la instancia —que no tiene `scripts/`— y este test rompía; el síntoma sólo aparecía en el modo
-    combinado `-m ""`, nunca en un tier corrido solo."""
+    combinado `-m ""`, nunca en un tier corrido solo.
+
+    ⛔ **Y asserta lo que NOMBRA, no el contenido de la bóveda (#469).** Acá había un
+    `assert r.returncode == 0`, que afirma *«esta bóveda no tiene bloqueantes»* — y `exit 1` es el
+    trabajo del lint, el estado normal a mitad de una operación. Dos daños, los dos medidos: en el
+    árbol real el test se ponía rojo por deuda de contenido **sin que `UnicodeEncodeError` apareciera
+    por ningún lado** (regla de método 4: quien lo lea concluye que el reporte no sobrevive a una
+    consola `ascii`); y dentro de la copia de `tools/mutar.py` —que excluye `vault/raw/pdfs` a
+    propósito— fallaba **siempre**, así que `mutar.py <archivo>` devolvía 2 para cualquier archivo y
+    **la red #1 quedaba inoperable**. Un solo assert: «1 failed, 3008 passed» adentro de la copia.
+    Es la misma lección que `test_rutas_absolutas` ya documenta con su `pytest.skip`.
+
+    Lo que sí se mide, y es independiente del contenido: que el `print` final **llegue** en `ascii`,
+    que no haya `UnicodeEncodeError` y que no haya **traceback** —una excepción no atrapada sale con
+    el mismo `1` que los bloqueantes, así que el rc no la distingue—. El camino «bóveda limpia» lo
+    cubren los tests in-process sobre `toy_vault`, que es población declarada."""
     repo = Path(__file__).resolve().parent.parent
     r = subprocess.run([sys.executable, "scripts/lint.py"], cwd=repo, capture_output=True,
                        env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PYTHONIOENCODING": "ascii",
                             "HOME": str(Path.home())})
-    assert b"UnicodeEncodeError" not in r.stderr, r.stderr[-400:].decode("utf-8", "replace")
-    assert r.returncode == 0
+    cola = r.stderr[-400:].decode("utf-8", "replace")
+    assert b"UnicodeEncodeError" not in r.stderr, cola
+    assert b"Traceback" not in r.stderr, cola
+    # El vocabulario CERRADO del lint: 0 limpio · 1 bloqueantes · 2 no evaluado (D-43). Cuál de los
+    # tres toca lo decide el contenido de la bóveda, y eso no es lo que este test mide.
+    assert r.returncode in (0, 1, 2), f"exit {r.returncode} fuera del vocabulario del lint\n{cola}"
+    # Y el reporte tiene que haber LLEGADO: un lint que no imprime nada pasaría los asserts de
+    # arriba sin haber ejercido el codificador ni una vez.
+    assert b"exit 1" in r.stdout or b"lint-" in r.stdout, r.stdout[-400:].decode("utf-8", "replace")
 
 
 def test_decision_que_no_es_un_mapa_se_reporta(toy_vault, capsys):

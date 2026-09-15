@@ -2834,3 +2834,43 @@ precedente exacto), `check_retractions` (a `errors`, nunca a un veredicto por pa
 `lint` (SIMBAD: `null` ≠ `[]` → ⛔ NO EVALUADO)—; los otros tres no consultan afuera. `fetch_bibtex`
 la reintroducía un nivel más abajo, sobre el único campo de la familia que además **se escribe en la
 nota**.
+
+## #469 · el test del codificador asserteaba que la bóveda no tiene bloqueantes (2026-09-15)
+
+`test_lint_no_muere_en_una_consola_no_utf8` dice qué mide: que el `print` final del reporte no tire
+`UnicodeEncodeError` en una consola `ascii`. Lo probaba su primera línea. La segunda —`assert
+r.returncode == 0`— afirmaba otra cosa: que **la bóveda de quien corra la suite no tiene
+bloqueantes**. `exit 1` es el trabajo del lint y el estado normal a mitad de una operación.
+
+**Dos poblaciones medidas.** En la copia de `tools/mutar.py`, que excluye `vault/raw/pdfs` a
+propósito: **1415 filas** ancladas a `pdf:` reportadas como archivo ausente, exit 1, y
+`mutar.py <archivo>` devolviendo 2 para **cualquier** archivo — la **red #1 inoperable** por un solo
+test («1 failed, 3008 passed»). En el árbol real de `Almagesto-Tesis`, cada vez que la bóveda tiene
+deuda bloqueante: rojo con `assert 1 == 0` y `stderr` **vacío** — quien lo lea concluye que el
+reporte no sobrevive a una consola `ascii` (regla de método 4, un mapa que atribuye mal).
+
+**Reproducido acá antes de tocarlo** (regla de método 3, el test visto morir por la línea que
+prueba). La semilla del template está limpia, así que el defecto no se manifiesta solo: se sembró un
+wikilink roto en `vault/wiki/queries/`, el lint salió en **rc 1** sin `UnicodeEncodeError` ni
+traceback, y el test **viejo** murió con `assert 1 == 0` / `stderr=b''` mientras el **nuevo** pasaba.
+
+**Lo que entró.** El test asserta lo que nombra y nada que dependa del contenido: sin
+`UnicodeEncodeError` **y sin `Traceback`** en `stderr` —una excepción no atrapada sale con el mismo
+`1` que los bloqueantes, así que el rc no la distingue—, `returncode in (0, 1, 2)` (el vocabulario
+cerrado del lint: limpio · bloqueantes · no evaluado) y el reporte **llegado** a stdout, porque un
+lint que no imprime nada pasaría todo lo anterior sin ejercer el codificador ni una vez. Verificado:
+`mutar.py scripts/fetch_bibtex.py` vuelve a correr entero — 13 funciones, 0 sobrevivientes.
+
+**Portadores (#409).** `tools/carriers.py` no puede enumerarlos: sus `ARBOLES` son
+`("scripts", "tools")` y esta regla vive en `tests/`. Enumerados a mano con
+`grep -rn "subprocess.run" tests/*.py` filtrando los `tmp_path`: son **dos** los tests que corren un
+proceso externo contra el repo real. El otro, `test_rutas_absolutas`, **ya la lleva bien** —
+`pytest.skip` con motivo visible cuando no hay `.git`— y su docstring documenta este mismo daño
+(*«Un test agregado hoy dejaba inoperable el gate que audita a todos los demás»*). La regla quedó
+escrita en `docs/desarrollo.md`, al lado de INV-101.
+
+⚠ **Lo que NO entró, y por qué.** El issue sugiere symlinkear `pdfs`/`fulltext` en la copia de
+`mutar` en vez de omitirlos. No se hizo: la promesa de cabecera de `mutar` es *«el árbol real NO se
+toca»*, y un symlink la rompe para esos dos directorios a cambio de nada que el fix estructural no
+dé ya. La exclusión es correcta para lo que la copia necesita; lo que no podía seguir era que un
+test dependiera de ella.
