@@ -25,6 +25,24 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 471
+    regla: >-
+      La exportación se pide en la forma en que se PEGA, y el bloque `bibtex` no se post-procesa.
+      ADS exporta por defecto la revista como macro de AASTeX (`journal = {\aap}`), que sin
+      `aas_macros.sty` compila VACÍO (medido: 126 de 219 bloques `ads` de una instancia). La
+      salida NO es una tabla macro → nombre en el repo —sería redactar un campo de la cita, que es
+      lo que #397 prohíbe—: se pide `journalformat: 3` y un bloque con macro cuenta como
+      PENDIENTE, así que re-correr la cadena lo cierra sin `--force`. UNA función decide «no está
+      cerrado» para los dos lectores.
+    funcion: lib_config.bibtex_journal_macro
+    patron: 'journalformat|get\("bibtex"\)'
+    consumidores:
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: "Único que construye la request a `/v1/export/bibtex` (pide el formato 3) y el que decide si una nota «ya tiene» `bibtex`: con macro, pendiente."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Categoría `bibtex_macro_revista` (backlog): nombra el stem y el comando, con la misma función."
   - issue: 468
     regla: >-
       Una consulta que NO contestó no produce un veredicto PERSISTIDO. Un carril caído y un carril

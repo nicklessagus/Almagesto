@@ -3595,3 +3595,17 @@ def test_drop_fm_keys_SI_toca_la_nota_que_ya_estaba_rota(tmp_path):
     assert cfg.drop_fm_keys(nota, "sin_bibtex") is True
     texto = nota.read_text(encoding="utf-8")
     assert "sin_bibtex" not in texto and "title: [sin cerrar" in texto
+
+
+# ── #471 · el bloque `bibtex` con la revista como macro no se pega ─────────────────────────────
+
+def test_bibtex_journal_macro_reconoce_SOLO_el_campo_que_es_una_macro():
+    """#471 — `journal = {\\aap}` sin `aas_macros.sty` compila vacío. Cuenta el campo que es
+    EXACTAMENTE una macro —con llaves o comillas, con o sin coma—; el nombre completo, un `\\&`
+    dentro del nombre y una macro en OTRO campo no son este defecto."""
+    assert cfg.bibtex_journal_macro("@ARTICLE{x,\n      journal = {\\aap},\n year = 2011,\n}") == "\\aap"
+    assert cfg.bibtex_journal_macro('@ARTICLE{x,\n journal = "\\apjl"\n}') == "\\apjl"
+    assert cfg.bibtex_journal_macro("@ARTICLE{x,\n journal = {Astronomy and Astrophysics},\n}") == ""
+    assert cfg.bibtex_journal_macro("@ARTICLE{x,\n journal = {A\\&A},\n}") == ""
+    assert cfg.bibtex_journal_macro("@ARTICLE{x,\n title = {\\aap},\n journal = {AJ},\n}") == ""
+    assert cfg.bibtex_journal_macro("") == "" and cfg.bibtex_journal_macro(None) == ""

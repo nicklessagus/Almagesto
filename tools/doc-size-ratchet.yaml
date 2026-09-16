@@ -603,3 +603,18 @@ crecimientos:
       y sus tres reglas tienen consumidor distinto.
     techo_lineas: 1849
     techo_bytes: 151300
+  - fecha: "2026-09-15"
+    ancla: "#471"
+    motivo: >-
+      Cuatro líneas en el párrafo de `bibtex` (#397), su regla madre: la exportación se pide en la
+      forma en que se pega (`journalformat: 3`), el bloque con macro de AASTeX no está cerrado y NO
+      se post-procesa. Decide lo que un agente hace al ver un `journal = {\aap}` en una nota —la
+      tentación natural es una tabla macro → nombre, que es redactar un campo de la cita— y cómo
+      lee el backlog nuevo del lint.
+    sale: >-
+      Nada. Se buscó: la medición (126 de 219) y la verificación contra la API van a
+      `docs/mediciones.md` y a `docs/lint.md`; el párrafo de #397 queda en regla-y-consecuencia
+      (cinco reglas con consumidor distinto: procedencia, hueco declarado, dos etapas del DOI,
+      forma pegable). Ninguna es candidata a salir sin perderse.
+    techo_lineas: 1852
+    techo_bytes: 151700

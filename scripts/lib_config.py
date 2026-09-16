@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.272.2"
+ALMAGESTO_VERSION = "1.273.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2071,6 +2071,25 @@ LOG_SUPERSEDED_MARK = "⚠ corregido"
 
 
 BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv")
+
+#: #471 — `journal = {\\aap}`: la revista como macro de AASTeX. Es lo que ADS exporta por defecto
+#: (`journalformat: 1`), y sin `aas_macros.sty` el campo compila VACÍO. Un bloque con macro no es
+#: pegable, o sea que no está cerrado: `fetch_bibtex` lo cuenta como pendiente y el lint lo nombra.
+BIBTEX_JOURNAL_MACRO_RE = re.compile(r"(?im)^\s*journal\s*=\s*[{\"]\s*(\\[A-Za-z]+)\s*[}\"]\s*,?\s*$")
+
+
+def bibtex_journal_macro(entry: str) -> str:
+    """The AASTeX macro (`\\aap`) in the `journal` field of a BibTeX entry, or `""` (#471).
+
+    ONE function for the two readers that decide whether a `bibtex` block is CLOSED: `fetch_bibtex`
+    (a block with a macro is pending, and re-running the chain re-fetches it without `--force`)
+    and the lint (category `bibtex_macro_revista`). The rule behind both: the export is requested in
+    the form in which it is PASTED, never post-processed — a macro → name table in the repo would
+    be a field of the citation written here, which is what #397 forbids. Only a field that is
+    EXACTLY a macro counts: `{\\aap}` yes, `{Astronomy and Astrophysics}` no, and a journal whose
+    name merely contains a backslash somewhere is not this defect."""
+    m = BIBTEX_JOURNAL_MACRO_RE.search(entry or "")
+    return m.group(1) if m else ""
 
 
 def _bibtex_chunks(body: str) -> list:

@@ -10671,3 +10671,28 @@ def test_el_hueco_declarado_sin_fecha_lo_DICE(toy_vault):
     snapshot, así que se publica `s/f` en vez de la de hoy."""
     _, _, _, declarado, _ = lint.check_paper_bibtex("X", {"sin_bibtex": "es una tesis doctoral"})
     assert "s/f" in declarado[0][1]
+
+
+# ── #471 · el `bibtex` con la revista como macro de AASTeX ─────────────────────────────────────
+
+_BTX_MACRO = ("@ARTICLE{2020aaa...1..1A,\n       author = {{Autor}, A.},\n"
+              "      journal = {\\mnras},\n         year = 2020,\n}\n")
+
+
+def test_el_bibtex_con_macro_de_revista_es_backlog_y_nombra_el_comando(toy_vault, capsys):
+    """#471 — sin `aas_macros.sty` el campo compila VACÍO, así que el bloque no se pega y no está
+    cerrado (medido: 126 de 219 bloques `ads` en una instancia). Backlog, no bloqueante: la cita
+    sigue siendo la oficial, y la salida es re-correr `fetch_bibtex`, que lo cuenta como pendiente
+    con la MISMA función."""
+    assert lint.check_bibtex_journal_macro("2020aaa...1..1A", {"bibtex": _BTX_MACRO}) == [
+        ("2020aaa...1..1A", lint.check_bibtex_journal_macro("2020aaa...1..1A",
+                                                            {"bibtex": _BTX_MACRO})[0][1])]
+    assert "\\mnras" in lint.check_bibtex_journal_macro("x", {"bibtex": _BTX_MACRO})[0][1]
+    assert lint.check_bibtex_journal_macro("x", {"bibtex": _BTX_OK}) == []
+    assert lint.check_bibtex_journal_macro("x", {}) == []
+
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_MACRO, "bibtex_source": "ads", "year": 2020})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0, "backlog, no frena"
+    sec = _seccion(rep, "macro de AASTeX")
+    assert "2020aaa" in sec and "fetch_bibtex.py --paper 2020aaa...1..1A" in sec, rep

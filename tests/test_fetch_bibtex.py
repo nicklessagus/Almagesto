@@ -753,3 +753,61 @@ def test_la_cadena_NO_se_estampa_sobre_notas_que_nadie_midio(tmp_path, monkeypat
              post=lambda *a, **k: Resp(200, payload={"export": ""}))
     monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--slug", "ica"])
     assert fb.main() == 2 and estampados == []
+
+
+# ── #471 · la exportación se pide en la forma en que se PEGA ────────────────────────────────────
+
+ENTRADA_ADS_MACRO = ('@ARTICLE{2011A&A...534A..58P,\n'
+                     '       author = {{Pepe}, F.},\n'
+                     '      journal = {\\aap},\n'
+                     '         year = 2011,\n'
+                     '}\n')
+
+
+def test_ads_bibtex_pide_el_nombre_COMPLETO_de_la_revista(monkeypatch):
+    """#471 — el default de ADS (`journalformat: 1`) escribe `journal = {\\aap}`, que sin
+    `aas_macros.sty` compila VACÍO (medido: 126 de 219 bloques `ads` en una instancia). La salida
+    no es una tabla macro → nombre en el repo —sería redactar un campo de la cita, #397—: se pide
+    el formato 3 y el bloque es lo que ADS devolvió."""
+    llamadas = []
+
+    def post(*a, **k):
+        llamadas.append(k.get("json"))
+        return Resp(200, payload={"export": ENTRADA_ADS})
+    fake_net(monkeypatch, post=post)
+    fb.ads_bibtex(["1995Natur.378..355M"], "tok")
+    assert llamadas and llamadas[0]["journalformat"] == 3 == fb.ADS_JOURNALFORMAT
+
+
+def test_main_re_baja_el_bloque_con_macro_SIN_force_y_deja_el_pegable(tmp_path, monkeypatch, capsys):
+    """Un bloque con macro no está CERRADO: cuenta como pendiente, así que re-correr la cadena
+    (idempotente) lo cierra sin `--force`. El que ya se pega no se toca —la misma función que el
+    lint (`cfg.bibtex_journal_macro`) decide las dos cosas—."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    pedidos = []
+
+    def post(*a, **k):
+        pedidos.extend(k["json"]["bibcode"])
+        return Resp(200, payload={"export": ENTRADA_ADS.replace(
+            "1995Natur.378..355M", "2011A&A...534A..58P")})
+    fake_net(monkeypatch, post=post)
+    con_macro = _nota(tmp_path, {"bibcode": "2011A&A...534A..58P", "tags": ["paper"],
+                                 "bibtex": ENTRADA_ADS_MACRO, "bibtex_source": "ads"})
+    limpio = _nota(tmp_path, {"bibcode": "1995Natur.378..355M", "tags": ["paper"],
+                              "bibtex": ENTRADA_ADS, "bibtex_source": "ads"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 0
+    assert pedidos == ["2011A&A...534A..58P"], "sólo la nota con macro se re-pide"
+    fm = cfg.split_fm(con_macro.read_text(encoding="utf-8")) or {}
+    assert "\\aap" not in fm["bibtex"] and fm["bibtex_source"] == "ads"
+    assert (cfg.split_fm(limpio.read_text(encoding="utf-8")) or {})["bibtex"] == ENTRADA_ADS
+    assert "1 re-bajada(s) porque la revista era una macro" in capsys.readouterr().out
+
+
+def test_bibtex_closed_es_presente_Y_pegable():
+    """La decisión «ya lo tiene» vive en una función propia para que la mutación la mire (#331):
+    con macro NO está cerrado; sin `bibtex`, tampoco; con nombre completo, sí."""
+    assert fb.bibtex_closed({"bibtex": ENTRADA_ADS}) is True
+    assert fb.bibtex_closed({"bibtex": ENTRADA_ADS_MACRO}) is False
+    assert fb.bibtex_closed({"bibtex": ""}) is False and fb.bibtex_closed({}) is False

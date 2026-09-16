@@ -978,6 +978,18 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   que es lo que es. El **4xx sí es una respuesta** y clasifica como hueco medido (mismo corte que
   el 404 de ADS, #399); sólo el timeout y el 5xx dejan al paper sin consultar. Es D-43 un nivel más
   abajo, y sobre el único campo de esta familia que además **se escribe en la nota**.
+- **`bibtex` con la revista como macro de AASTeX** (#471, `bibtex_macro_revista`, backlog): ADS
+  exporta por defecto `journal = {\aap}` (`journalformat: 1`), y sin `aas_macros.sty` —que el
+  `.bib` de un informe normal no carga— el campo compila **vacío**; la ficha no lleva el nombre en
+  ningún otro lado (`bibstem` es la abreviatura). Medido en una instancia: **126 de 219** bloques
+  `ads`, y cada entrada nueva del `.bib` exigía reemplazar la macro **a mano** — justo la
+  transcripción que #397 existe para eliminar. La salida **no** es una tabla macro → nombre en el
+  repo (sería redactar un campo de la cita, lo que #397 prohíbe): `fetch_bibtex` pide
+  `journalformat: 3` —nombre completo, verificado contra la API— y un bloque con macro **no está
+  cerrado**: cuenta como pendiente **sin `--force`**, así que re-correr la cadena (idempotente) o
+  `python scripts/fetch_bibtex.py --paper <stem>` lo re-baja. UNA función
+  (`lib_config.bibtex_journal_macro`) decide eso para los dos lectores; sólo cuenta el campo que
+  es **exactamente** una macro (`{\aap}` sí, `{A\&A}` no).
 - **`sources:` cuyo desacuerdo con el catálogo está FIRMADO** (#463, `fuente_metadata_firmada`,
   backlog **declarado** — no es deuda, va aparte por AUD-207): la **cuarta salida** del bloqueante
   de arriba, para cuando el equivocado es el **catálogo**. Las tres que prescribía el mensaje

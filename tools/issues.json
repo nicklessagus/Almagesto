@@ -2329,11 +2329,21 @@
   {
    "number": 468,
    "title": "fetch_bibtex estampa `sin_bibtex` con el motivo de una consulta que NO contestó: un 429 de Crossref mueve la nota de la deuda a «decisión registrada», con rc 0",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 469,
    "title": "El test que dice medir el codificador del reporte asserta que la BÓVEDA no tiene bloqueantes: un solo assert deja inoperable la red #1 en toda bóveda poblada",
+   "state": "CLOSED"
+  },
+  {
+   "number": 470,
+   "title": "fetch_bibtex: la exportación de ADS llega con macros de revista (`journal = {\\aap}`) y no es pegable — pedir `journalformat: 3`",
+   "state": "OPEN"
+  },
+  {
+   "number": 471,
+   "title": "El `bibtex` de ADS trae la revista como macro de AASTeX (`\\aap`, `\\apj`): 126 de 219 bloques no son pegables sin `aas_macros.sty`, y la ficha no lleva el nombre en ningún otro lado",
    "state": "OPEN"
   }
  ]

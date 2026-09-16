@@ -4702,6 +4702,23 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     return bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo
 
 
+def check_bibtex_journal_macro(stem: str, fm: dict) -> list:
+    """`[(stem, motivo)]` — the `bibtex` block whose journal is an AASTeX macro (#471, backlog).
+
+    ADS exports `journal = {\\aap}` by default, and without `aas_macros.sty` the field compiles
+    EMPTY: the block is not pasteable, so it is not closed. Measured in an instance: 126 of 219
+    `ads` blocks. Same function as `fetch_bibtex` (`cfg.bibtex_journal_macro`), which counts the
+    note as pending — so the way out is re-running the chain, not a macro → name table here."""
+    _btx = str(fm.get("bibtex") or "").strip()
+    _macro = cfg.bibtex_journal_macro(_btx) if _btx else ""
+    if not _macro:
+        return []
+    return [(stem, f"`journal = {{{_macro}}}` es una macro de AASTeX: sin `aas_macros.sty` el "
+                   f"campo compila VACÍO y el bloque no se pega tal cual → `python "
+                   f"scripts/fetch_bibtex.py --paper {stem}` (pide el nombre completo a ADS; "
+                   f"cuenta como pendiente sin `--force`, #471)")]
+
+
 def check_data_availability(stem: str, fm: dict) -> list:
     """`data_mal_formada` — entries of `data_availability` that cannot be used or verified (#424).
 
@@ -6061,6 +6078,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     fuente_metadata_firmada: list = []  # (key, motivo) — #463: el catálogo es el equivocado, firmado con motivo
     sin_bibtex: list = []              # (stem, motivo) — #467: hueco de `bibtex` DECLARADO con su motivo
     sin_bibtex_mudo: list = []         # (stem, motivo) — #467: sin `bibtex` y sin motivo (indistinguible de «nadie preguntó»)
+    bibtex_macro_revista: list = []    # (stem, motivo) — #471: `journal = {\\aap}`, el bloque no se pega
     fuente_metadata_dudosa: list = []  # (key, motivo) — #353: título ≠, primera página no confirma, no evaluable o sin cruzar
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     indice_viejo: list = []            # (stem, motivo) — #237: index.md contra la verdad de disco
@@ -6546,6 +6564,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             bad_roles += _b3
             sin_bibtex += _b4
             sin_bibtex_mudo += _b5
+            bibtex_macro_revista += check_bibtex_journal_macro(stem, fm)   # #471
             data_mal_formada += check_data_availability(stem, fm)          # #424
             # #298 — las dos señales de «la bóveda se apoya en el preprint». (a) El hallazgo del
             # detector de versiones, estampado para que SOBREVIVA a la corrida: sin él, correr la
@@ -6925,6 +6944,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('sin_bibtex', '📇 Hueco de `bibtex` DECLARADO con su motivo (#467) — decisión registrada, no es deuda', SEV_BACKLOG, tuple(sin_bibtex), poblacion='papers'),
         Categoria('bibtex_drift', '📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog)',
                   SEV_BACKLOG, tuple(bibtex_drift), poblacion='papers'),
+        Categoria('bibtex_macro_revista', '📇 `bibtex` con la revista como macro de AASTeX (`\\aap`): sin `aas_macros.sty` compila vacío, el bloque no se pega (#471, backlog)',
+                  SEV_BACKLOG, tuple(bibtex_macro_revista), poblacion='papers'),
         Categoria('merge_ours', '⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390)',
                   SEV_BLOQUEANTE, tuple(merge_ours), poblacion='merge_ours'),
         Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis), poblacion='entidades'),

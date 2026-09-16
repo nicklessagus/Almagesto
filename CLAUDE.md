@@ -359,6 +359,10 @@ nadie tocó (17 de 272) y el lint daba rc 0: sus dos categorías miran notas que
 pregunta si el DOI existe, en **dos etapas** (#466): el filtro server-side por autor no puede
 repetir el criterio que abajo se compara normalizado —Crossref no pliega la diéresis al buscar y
 `method_key` sí al comparar—, y el motivo nombra las etapas en vez de culpar al título.
+⛔ **Y se pide en la forma en que se PEGA (#471):** ADS exporta la revista como macro de AASTeX
+(`journal = {\aap}`, que compila vacío sin `aas_macros.sty`), así que se pide `journalformat: 3`;
+un bloque con macro **no está cerrado** —pendiente sin `--force`, backlog del lint— y **no se
+post-procesa** con una tabla macro → nombre: sería redactar un campo de la cita.
 
 ⛔ **Toda nota de paper pertenece a alguna ENTIDAD (D-23).** Al menos uno de `stars`,
 `thesis_links` o `methods` tiene que estar poblado. Sin ninguno de los tres el paper no entra en

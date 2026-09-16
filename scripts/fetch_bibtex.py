@@ -31,6 +31,12 @@ distinto entre dos instancias de la misma bóveda.
 ⚠ Y una respuesta con status 200 no alcanza: `doi.org` contesta **404 con una página HTML** cuando
 el DOI no existe, así que se exige además el `Content-Type` de BibTeX. Guardar ese HTML en el
 frontmatter sería exactamente el bloque inventado, con la firma de una descarga.
+
+⛔ **Y la exportación se pide en la forma en que se PEGA (#471).** ADS exporta por defecto la revista
+como macro de AASTeX (`journal = {\\aap}`), que sin `aas_macros.sty` compila VACÍO; medido en una
+instancia, 126 de 219 bloques `ads`. La salida NO es una tabla macro → nombre en el repo —eso es
+redactar un campo de la cita, lo que #397 prohíbe—: se pide `journalformat: 3` (nombre completo) y
+un bloque con macro cuenta como **pendiente**, así que re-correr la cadena lo re-baja sin `--force`.
 """
 from __future__ import annotations
 
@@ -54,6 +60,11 @@ CROSSREF_SEARCH = "https://api.crossref.org/works"
 #: error. `doi.org` sirve su 404 como `text/html` con status 404, pero el chequeo va por los dos
 #: lados a propósito: un proxy que devuelva 200 con HTML no puede terminar en el frontmatter.
 BIBTEX_CT = "application/x-bibtex"
+
+#: #471 — `journalformat` de la exportación de ADS: 1 = macro de AASTeX (`\\aap`, el default),
+#: 2 = abreviatura, 3 = nombre completo. Se pide el 3 porque es el único que se pega tal cual en
+#: un `.bib` que no carga `aas_macros.sty`; el bloque `bibtex` es lo que ADS devolvió, sin tocar.
+ADS_JOURNALFORMAT = 3
 
 #: Cuántos bibcodes por request a ADS. La exportación acepta listas; el tope es para que un fallo
 #: de red no tire una bóveda entera de golpe y para que el reporte diga por dónde iba.
@@ -106,7 +117,8 @@ def ads_bibtex(bibcodes: list, token: str) -> tuple:
             r = requests.post(ADS_EXPORT,
                               headers={"Authorization": f"Bearer {token}",
                                        "Content-Type": "application/json"},
-                              json={"bibcode": tanda}, timeout=60)
+                              json={"bibcode": tanda, "journalformat": ADS_JOURNALFORMAT},
+                              timeout=60)
         except requests.RequestException as exc:
             errores.append(f"ADS export no contestó para {len(tanda)} bibcode(s) "
                            f"({tanda[0]}…): {exc.__class__.__name__} — esos papers quedaron SIN "
@@ -379,6 +391,17 @@ def stamp_bibtex_gap(path: Path, fm: dict, body: str, motivo: str, fecha: str) -
                         {"sin_bibtex": motivo, "bibtex_accessed": fecha})
 
 
+def bibtex_closed(fm: dict) -> bool:
+    """True when the note's `bibtex` is DONE: present and pasteable as is (#471).
+
+    A block whose journal is an AASTeX macro (`journal = {\\aap}`) compiles empty without
+    `aas_macros.sty`, so it is not closed: `main` treats it as pending without `--force`, which is
+    what lets the idempotent chain close the backlog the lint names (`bibtex_macro_revista`, same
+    function: `cfg.bibtex_journal_macro`)."""
+    _btx = str(fm.get("bibtex") or "").strip()
+    return bool(_btx) and not cfg.bibtex_journal_macro(_btx)
+
+
 def notes_to_check(args) -> list:
     """Las notas de paper que esta corrida mira: una (`--paper`), las de un ingest (`--slug`, el
     mismo enumerador que `check_retractions`) o todas."""
@@ -405,12 +428,16 @@ def main() -> int:
                          "(¿`--paper`/`--slug` equivocado, o bóveda vacía?)")
         return 2
 
-    pendientes, fms = [], {}
+    pendientes, fms, n_macro = [], {}, 0
     for f in notas:
         text = f.read_text(encoding="utf-8")
         fm = cfg.split_fm(text) or {}
-        if str(fm.get("bibtex") or "").strip() and not args.force:
+        # #471 — un bloque con la revista como macro NO está cerrado: no se pega. Cuenta como
+        # pendiente sin `--force`, para que re-correr la cadena (idempotente) cierre el backlog.
+        if bibtex_closed(fm) and not args.force:
             continue
+        if str(fm.get("bibtex") or "").strip() and not bibtex_closed(fm):
+            n_macro += 1
         fms[f] = (fm, text)
         pendientes.append(f)
     if not pendientes:
@@ -489,7 +516,9 @@ def main() -> int:
 
     detalle = ", ".join(f"{k}: {v}" for k, v in sorted(por_fuente.items())) or "ninguna"
     cfg.print_seguro(f"bibtex: {n_ok} de {len(pendientes)} nota(s) con exportación oficial "
-                     f"({detalle}) — sobre {len(notas)} nota(s) de paper miradas")
+                     f"({detalle}) — sobre {len(notas)} nota(s) de paper miradas"
+                     + (f"; {n_macro} re-bajada(s) porque la revista era una macro de AASTeX "
+                        f"(#471)" if n_macro else ""))
     for pr in propuestas:
         cfg.print_seguro(f"  ⚑ el hueco NO es tal — hay DOI y la nota no lo lleva: {pr}")
     for h in huecos:

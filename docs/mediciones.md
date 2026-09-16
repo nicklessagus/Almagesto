@@ -2874,3 +2874,30 @@ escrita en `docs/desarrollo.md`, al lado de INV-101.
 toca»*, y un symlink la rompe para esos dos directorios a cambio de nada que el fix estructural no
 dé ya. La exclusión es correcta para lo que la copia necesita; lo que no podía seguir era que un
 test dependiera de ella.
+
+## #471 · la exportación de ADS traía la revista como macro, y el bloque no se pegaba (2026-09-15)
+
+Reportado desde la instancia (nicklessagus/Almagesto-Tesis#6) al alinear una entrada del `.bib` de
+la tesis con su ficha: `2026ARA&A..64..449B` con `journal = {\araa}`. Sin `aas_macros.sty` el campo
+compila **vacío**, y `bibstem` (`ARA&A`) no es un nombre. Cada entrada nueva del `.bib` exigía
+reemplazar la macro a mano — la transcripción que #397 existe para eliminar.
+
+**Población (instancia, 2026-09-15): 126 de 219** bloques con `bibtex_source: ads`. Por macro:
+`\aap` 63 · `\apj` 21 · `\mnras` 19 · `\aj` 7 · `\pasp` 3 · `\apjl` 2 · `\pre`, `\nat`,
+`\memsai`, `\araa`, `\apjs`, `\aaps` 1 c/u. En el template, 0 (la semilla no corre
+`fetch_bibtex`).
+
+**Verificado contra la API real** (mismo `POST /v1/export/bibtex`, dos bibcodes): con
+`journalformat: 1` (el default) vuelve `{\araa}` / `{\aap}`; con `journalformat: 3`, `{Annual Review
+of Astronomy and Astrophysics}` / `{Astronomy and Astrophysics}`. El resto del bloque es idéntico.
+
+**Lo que entró, y lo que NO.** El issue de la instancia proponía dos salidas; la segunda —una tabla
+fija de las 12 macros presentes → nombre— se **rechazó**: un `bibtex` con procedencia `ads` tiene que
+ser lo que ADS devolvió, y una tabla en el repo es un campo de la cita redactado acá (INV-151). Entró
+la primera: `ads_bibtex` pide el formato 3, y `lib_config.bibtex_journal_macro` —UNA función— decide
+para `fetch_bibtex` (la nota con macro es **pendiente** sin `--force`: la cadena idempotente cierra
+el backlog) y para el lint (`bibtex_macro_revista`, backlog con el comando). Sólo cuenta el campo que
+es exactamente una macro: `{A\&A}` no dispara.
+
+**Portadores (#409).** `carriers --propose lib_config.bibtex_journal_macro --patron
+'journalformat|get\("bibtex"\)'`: 2 llaman (`fetch_bibtex`, `lint`), 0 matchean sin llamar.
