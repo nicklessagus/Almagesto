@@ -2354,21 +2354,26 @@
   {
    "number": 473,
    "title": "`bibtex_closed` (#471) sólo mira la macro de revista: la exportación de Crossref también llega no pegable (sin autor ni título, meses no estándar, claves repetidas) — medido compilando el .bib",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 474,
    "title": "fm_key_span se frena en la línea vacía de un escalar entre comillas: el bloque de la clave queda corto y borrarla rompe el frontmatter (19 de 259 notas)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 475,
    "title": "drop_fm_keys devuelve bool y sus dos llamadores lo ignoran: un borrado que rehusó igual estampa el hueco, y la nota queda con el campo Y su sin_bibtex",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 476,
    "title": "carriers.calls sólo ve ast.Call: una regla cuyo portador compartido es una CONSTANTE no se puede declarar (32 candidatas, 0 declaradas)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 477,
+   "title": "Barrido post-#476: las reglas que viven en un vocabulario cerrado o una tabla de decisión siguen sin firmar (5 de 32 constantes compartidas)",
    "state": "OPEN"
   }
  ]

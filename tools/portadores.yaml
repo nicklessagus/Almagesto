@@ -53,6 +53,131 @@ portadores:
       - modulo: scripts/fetch_bibtex.py
         estado: fuera-de-alcance
         motivo: "Lo cita en un docstring como hermano de `sin_bibtex` (familia del motivo obligatorio); no lo lee."
+  - issue: 477
+    regla: >-
+      El vocabulario cerrado de `pdf_source` / `fulltext_source` es UNA lista. El campo **decide
+      lecturas** —`eprint` dice que las citas de esa nota son contra el preprint, así que una
+      discrepancia numérica es candidata a diferencia de versión y NO se corrige la nota— y un
+      valor fuera de vocabulario cae por el `else` de todo `== "eprint"` **en silencio** (#296).
+      Con una segunda copia de la lista, el bloqueante del lint y los escritores dejan de hablar
+      del mismo conjunto: el lint aceptaría lo que un escritor rechaza, o al revés, sin que nada
+      lo diga.
+    funcion: lib_config.PDF_SOURCE_OK
+    patron: 'PDF_SOURCE_OK|pdf_source'
+    consumidores:
+      - modulo: scripts/fetch_pdf.py
+        estado: usa
+        motivo: "Estampa la procedencia de la descarga (`stamp_pdf`): es el escritor original del campo."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "La salvedad `pdf_leido` se chequea contra `pdf_source` y contra el disco (#452/#456): sus valores son el mismo vocabulario."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "El bloqueante de #296 y el de editor + `eprint_version` (#383) se ramifican por esta lista."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "El migrador `--migrate-source-fields` decide con ella qué pasa a `null` y qué prosa se mueve a `salvedades`."
+      - modulo: scripts/replace_pdf.py
+        estado: usa
+        motivo: "`--source` firma la procedencia del PDF entrante y avisa sin escribir el valor fuera de lista (#415/#436)."
+      - modulo: scripts/check_sources.py
+        estado: fuera-de-alcance
+        motivo: "Cruza autor/año declarados contra el catálogo (#353); toca `sources:`, no la procedencia de la lectura."
+      - modulo: scripts/fetch_arxiv.py
+        estado: fuera-de-alcance
+        motivo: "Registra su rama en `build/<slug>/pdf_source.json` vía `cfg.record_pdf_source` con un literal que la cadena SIEMPRE conoce (`eprint`): no elige entre valores ni valida el vocabulario."
+      - modulo: scripts/fetch_web.py
+        estado: fuera-de-alcance
+        motivo: "Ídem con el literal `web` (#230): un snapshot tiene una sola procedencia posible."
+      - modulo: scripts/discover.py
+        estado: fuera-de-alcance
+        motivo: "`resolve_pdf` PROPONE una URL y para (#313/#358): no estampa procedencia ni toca la nota."
+      - modulo: scripts/extract_fulltext.py
+        estado: fuera-de-alcance
+        motivo: "Re-estampa `pdf_source` por VERDAD DE DISCO —la marca de arXiv en el `.txt`, que es retroactiva (#57)—, no por la lista: su entrada es el archivo, no un valor declarado."
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: "Lo nombra en la prosa del prompt (el vocabulario de `pdf_leido`, #452); no lo lee ni lo valida."
+  - issue: 477
+    regla: >-
+      `fulltext_source` describe **cómo se extrajo** el `.txt` (`pdftotext|ocr|web`) y es el gemelo
+      de `pdf_source`, con una asimetría deliberada: éste **se limpia** cuando el archivo
+      desaparece y aquél **sobrevive**, porque no describe al archivo sino a la lectura que ocurrió
+      (#230). Una segunda copia de la lista rompería esa asimetría en silencio, que es la que
+      sostiene la salvedad de una nota cuyo PDF ya no está.
+    funcion: lib_config.FULLTEXT_SOURCE_OK
+    patron: 'FULLTEXT_SOURCE_OK'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Bloquea el valor fuera de vocabulario y reporta el par `fulltext: null` + `fulltext_source` poblado (#230/#296)."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "Mismo migrador que el gemelo: `--migrate-source-fields` decide con las dos listas."
+  - issue: 477
+    regla: >-
+      `pending` es vocabulario CERRADO y su cuarto valor existe porque describe otra cosa: un libro
+      que el usuario va a conseguir **no falló**, tiene otra latencia, y entraba forzado como
+      `paywall` perdiendo el motivo real (#80). Un typo entraba **mudo**; hoy la cadena aborta y el
+      lint lo nombra. Las dos mitades leen la misma lista o el estado vuelve a ser mudo de un lado.
+    funcion: lib_config.PENDING_OK
+    patron: 'PENDING_OK|pending_source'
+    consumidores:
+      - modulo: scripts/ingest_theme.py
+        estado: usa
+        motivo: "Aborta la cadena ante un `pending:` fuera de vocabulario en la entrada del tema, antes de crear el stub."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Lista la precondición `pending_source` y bloquea el valor que no está en la lista."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "Escribe el stub `pending_source` con su `pending_motivo` obligatorio."
+  - issue: 477
+    regla: >-
+      Una fuente LARGA declara cómo se la cita (`unidad_cita: linea|pagina|seccion`) y qué parte
+      entró (`alcance`), porque rompe dos supuestos de `verify-citations`: el fan-out asume un
+      `.txt` que se lee entero —700 páginas lo revientan— y «línea 18443» no es una referencia
+      utilizable (#80). El valor **ramifica el prompt del extractor** (#241), así que una segunda
+      copia de la lista haría que el lint acepte una unidad que el prompt no sabe tratar.
+    funcion: lib_config.UNIDAD_CITA_OK
+    patron: 'UNIDAD_CITA_OK|unidad_cita'
+    consumidores:
+      - modulo: scripts/ingest_theme.py
+        estado: usa
+        motivo: "Valida la unidad declarada en `sources:`/`extra_core` al ingestar, y aborta ante el typo."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Bloquea el valor fuera de vocabulario y reporta el `alcance` faltante cuando la unidad no es la línea."
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: "RAMIFICA por el valor (#241: empezar por el índice, pegar el `alcance`, citar por página) pero no valida el vocabulario: lo recibe ya validado por la cadena."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Re-sincroniza `alcance`/`unidad_cita` desde la config al stub (#312); copia el valor, no lo juzga."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Usa la unidad para la exclusión ESTRUCTURAL de `## Conclusiones` en un documento largo (#277): consume un valor ya validado, no decide el conjunto."
+      - modulo: scripts/proposals.py
+        estado: fuera-de-alcance
+        motivo: "Declara su población leyendo `unidad_cita` del frontmatter para juntar los pedidos de ampliar el `alcance` (#328); no valida el vocabulario."
+  - issue: 477
+    regla: >-
+      El espejo de ground-truth tiene AUTORIDAD POR CAMPO: cada campo vale lo que dice SU autoridad
+      o NADA (#70 / D-1). `spectral_type` ← SIMBAD; `teff_K`, `dist_pc`, `P_rot_days`, `mass_msun`
+      y los cinco de cada `planets[]` ← NEA. Si la autoridad declarada calla, el campo queda `null`
+      **aunque la otra tenga el dato**: un valor cuya procedencia depende de quién contestó primero
+      no es auditable. La tabla es lo que hace cumplir eso, y la leen el que consulta y el que
+      estampa — con dos copias, la ficha podría publicar un campo que su propio JSON atribuye a
+      otra autoridad.
+    funcion: lib_config.AUTORIDAD_CAMPO
+    patron: 'AUTORIDAD_CAMPO|_autoridad'
+    consumidores:
+      - modulo: scripts/fetch_ground_truth.py
+        estado: usa
+        motivo: "Consulta a cada autoridad por los campos que le tocan y registra en `_autoridad` quién contestó cada uno (y en `_otras_autoridades` lo que no se adoptó, D-2)."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "Estampa el frontmatter y la línea `> _Ground-truth — …_` de la cabecera, que publica qué autoridad respondió cada campo y cuáles volvieron vacíos."
   - issue: 476
     regla: >-
       El gate de #409 pregunta «¿este módulo LLEVA la regla?», y una regla se lleva de DOS maneras:

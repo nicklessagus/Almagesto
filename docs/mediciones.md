@@ -2903,6 +2903,41 @@ descubrió que tenía **tres** síntomas y que #471 cubría uno.
 **Portadores (#409).** `carriers --propose lib_config.bibtex_no_pegable --patron
 'journalformat|get\("bibtex"\)'`: 2 llaman (`fetch_bibtex`, `lint`), 0 matchean sin llamar.
 
+## #477 · el barrido que #476 habilitó: 5 reglas que viven en una constante (2026-09-16)
+
+#476 hizo declarable la regla cuyo portador compartido es una constante. Éste es el barrido que
+quedó pendiente al cerrarlo, y su valor está tanto en lo que entra como en lo que **se descarta con
+motivo**. Sobre el template: 86 constantes públicas de `lib_config`, **32 leídas por dos o más
+módulos**, **0** firmadas.
+
+| clase | n | se declara | por qué |
+|---|---|---|---|
+| ruta de la bóveda | 14 | **no** | su regla es *«no hardcodear»*, y `portadores` pregunta quién la LLEVA (medio repo), no quién la evade: 14 entradas con hasta 18 consumidores harían ilegible el archivo sin cerrar esa otra pregunta |
+| string / marca | 8 | **no** | su divergencia rompe algo **ruidoso, no silencioso**: si el escritor y el lector de una marca divergen, la marca no aparece |
+| regex de parseo | 4 | **no** | ídem, y `lib_blocks` ya centraliza el parseo que importa |
+| **vocabulario cerrado** | 4 | **sí** | el valor fuera de lista cae por un `else` **en silencio** (#296/#80) |
+| **tabla de decisión** | 2 | 1 | `AUTORIDAD_CAMPO` (#70/D-1); `BIBTEX_NO_PEGABLE` ya va por la función que ambos llaman (#473) |
+
+Las cinco declaradas y sus portadores: `PDF_SOURCE_OK` (5 lectores), `PENDING_OK` (3),
+`FULLTEXT_SOURCE_OK` (2), `UNIDAD_CITA_OK` (2), `AUTORIDAD_CAMPO` (2). `portadores.yaml`: **54 → 59**
+reglas.
+
+**Lo que encontró el gate al declararlas, y es el punto.** Los patrones de las entradas nuevas son
+el nombre del **campo** (`pdf_source`, `unidad_cita`), no sólo el de la constante, y eso levantó
+**7 módulos** que tocan el campo sin leer la lista. Cada uno pedía una respuesta distinta, y
+ninguno era un portador:
+
+- `fetch_arxiv` y `fetch_web` registran su rama con un **literal que la cadena siempre conoce**
+  (`eprint`, `web`): no eligen entre valores.
+- `extract_fulltext` re-estampa por **verdad de disco** —la marca de arXiv en el `.txt`, que es
+  retroactiva (#57)—, o sea que su entrada es el archivo y no un valor declarado.
+- `discover` **propone una URL y para** (#313/#358); `extraction_prompt` lo nombra en la prosa del
+  prompt; `harvest_views` y `proposals` **consumen** una unidad ya validada.
+
+Los siete quedaron `fuera-de-alcance` **con su motivo**, que es la mitad del gate que evita la
+atribución falsa: decir «lleva la regla» de quien sólo toca el campo sería el mapa que la regla de
+método nº 4 llama peor que el vacío.
+
 ## #476 · el gate de portadores sólo veía una de las dos formas de llevar una regla (2026-09-16)
 
 #409 pide que toda regla nombre a sus portadores y que el gate los verifique. `carriers.calls`
