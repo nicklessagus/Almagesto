@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.274.0"
+ALMAGESTO_VERSION = "1.275.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -797,16 +797,75 @@ def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
     corrupted); what did not work was the operation, and the note kept asserting that material does
     not enter while its view published it.
 
-    A continuation is an indented non-empty line, or a `- ` item of a block list. Returns `None`
-    when the key is absent — «no está» is not «está vacía»."""
+    A continuation is an indented non-empty line, or a `- ` item of a block list. ⛔ And, **inside a
+    QUOTED scalar, also an empty one** (#474): `yaml.safe_dump` of a value that ends in `\n` emits
+    `clave: '…\n\n  '`, so the blank line is part of the value and the rule «indented non-empty»
+    stopped one line short of the closing quote. Measured on a real vault: **19 of 259** notes —the
+    whole Crossref rail, whose BibTeX export arrives as one line with a trailing newline— could not
+    have their `bibtex` removed without breaking the frontmatter, and the fifth payment for having
+    «the block of a key» implicit landed on the sixth consumer. The quote is followed to its close;
+    an unterminated one falls back to the conservative span rather than swallowing the rest of the
+    frontmatter, because a file that is already broken must not be made worse.
+
+    Returns `None` when the key is absent — «no está» is not «está vacía»."""
     #  @inv INV-147
     for i in range(desde, len(lines)):
         if lines[i].startswith(f"{field}:"):
+            if (cierre := _quoted_scalar_end(lines, i)) is not None:
+                return i, cierre
             j = i + 1
             while j < len(lines) and (lines[j].startswith("- ")
                                       or (lines[j][:1] in (" ", "\t") and lines[j].strip())):
                 j += 1
             return i, j
+    return None
+
+
+def _closes_quote(texto: str, q: str) -> bool:
+    """Whether `texto` closes a scalar opened with `q` (#474).
+
+    YAML escapes the delimiter by doubling it inside `'…'` and with a backslash inside `"…"`, so
+    «contains the character» is not the question: the scan has to walk the string. Used for the
+    opening line (the part after the delimiter) and for each continuation line."""
+    i = 0
+    while i < len(texto):
+        c = texto[i]
+        if q == "'" and c == "'":
+            if texto[i + 1:i + 2] == "'":
+                i += 2                          # `''` es una comilla literal, no cierra
+                continue
+            return True
+        if q == '"':
+            if c == "\\":
+                i += 2
+                continue
+            if c == '"':
+                return True
+        i += 1
+    return False
+
+
+def _quoted_scalar_end(lines: list, i: int) -> int | None:
+    """`j` — the line AFTER the one that closes the quoted scalar opened at `lines[i]`, or `None`
+    when that line does not open one that stays open (#474).
+
+    `None` means «this is not the case»: the caller then applies the ordinary continuation rule. An
+    unterminated quote also returns `None` on purpose — the frontmatter is already malformed and
+    the block of the key is not knowable, so the conservative span is the safe answer.
+
+    ⚠ `q not in ("'", '"')` is a TYPE guard, and `mutar.py --guardas` reports it as the one clause
+    of this pair no test can distinguish — correctly, and it is declared here rather than covered
+    by a test that would not measure it. Neutralising it sends a non-quoted value down the scalar
+    path with a `q` that is not a delimiter, and `_closes_quote` answers `False` for every such
+    `q`, so the search never closes and the result is `None` either way. The guard says what the
+    code means and saves the scan; it cannot change an answer."""
+    valor = lines[i].split(":", 1)[1].lstrip() if ":" in lines[i] else ""
+    q = valor[:1]
+    if q not in ("'", '"') or _closes_quote(valor[1:], q):
+        return None
+    for j in range(i + 1, len(lines)):
+        if _closes_quote(lines[j], q):
+            return j + 1
     return None
 
 

@@ -10650,18 +10650,18 @@ def test_la_nota_SIN_bibtex_tiene_superficie_en_el_lint(toy_vault):
 
     Y el hueco DECLARADO va aparte del mudo (AUD-207): uno es una decisión registrada con su
     motivo, el otro es indistinguible de «nadie preguntó»."""
-    _, _, _, declarado, mudo = lint.check_paper_bibtex("2019Pfister", {"title": "X"})
+    _, _, _, declarado, mudo, _ = lint.check_paper_bibtex("2019Pfister", {"title": "X"})
     assert declarado == [] and len(mudo) == 1
     assert "nadie preguntó" in mudo[0][1] and "fetch_bibtex.py --paper 2019Pfister" in mudo[0][1]
 
-    _, _, _, declarado, mudo = lint.check_paper_bibtex(
+    _, _, _, declarado, mudo, _ = lint.check_paper_bibtex(
         "2019Pfister", {"title": "X", "sin_bibtex": "JMLR no deposita en Crossref",
                         "bibtex_accessed": "2026-09-15"})
     assert mudo == [] and len(declarado) == 1
     assert "JMLR" in declarado[0][1] and "2026-09-15" in declarado[0][1]
 
     # con entrada, ninguna de las dos: es la población de las categorías de #397
-    _, _, _, declarado, mudo = lint.check_paper_bibtex(
+    _, _, _, declarado, mudo, _ = lint.check_paper_bibtex(
         "2019Pfister", {"title": "X", "bibtex": "@article{x}", "bibtex_source": "doi"})
     assert declarado == [] and mudo == []
 
@@ -10669,7 +10669,7 @@ def test_la_nota_SIN_bibtex_tiene_superficie_en_el_lint(toy_vault):
 def test_el_hueco_declarado_sin_fecha_lo_DICE(toy_vault):
     """La fecha es de qué intento produjo ESE motivo (#34): sin ella el campo no puede afirmar un
     snapshot, así que se publica `s/f` en vez de la de hoy."""
-    _, _, _, declarado, _ = lint.check_paper_bibtex("X", {"sin_bibtex": "es una tesis doctoral"})
+    _, _, _, declarado, _, _ = lint.check_paper_bibtex("X", {"sin_bibtex": "es una tesis doctoral"})
     assert "s/f" in declarado[0][1]
 
 
@@ -10695,6 +10695,28 @@ def test_el_bibtex_con_macro_de_revista_es_backlog_y_nombra_el_comando(toy_vault
     assert rc == 0, "backlog, no frena"
     sec = _seccion(rep, "NO se pega tal cual")
     assert "2020aaa" in sec and "fetch_bibtex.py --paper 2020aaa...1..1A" in sec, rep
+
+
+# ── #475 · el campo lleno y su hueco declarado no conviven ────────────────────────────────────
+
+def test_bibtex_Y_sin_bibtex_a_la_vez_BLOQUEA(toy_vault, capsys):
+    """#475 — son dos afirmaciones contradictorias sobre el mismo campo, y ninguna de las dos
+    categorías vecinas lo veía: «hueco declarado» exige `bibtex` vacío y «no pegable» sólo mira el
+    bloque, así que la nota salía en **rc 0** contándose en la categoría equivocada. Lo produce un
+    borrado que rehusó con su retorno ignorado (el defecto de #475) y también una edición a mano.
+    """
+    _, _, _, declarado, mudo, contradictorio = lint.check_paper_bibtex(
+        "X", {"bibtex": _BTX_OK, "bibtex_source": "ads", "sin_bibtex": "es una tesis doctoral"})
+    assert [s for s, _ in contradictorio] == ["X"]
+    assert declarado == [] and mudo == [], "no se cuenta dos veces"
+    assert "fetch_bibtex.py --paper X" in contradictorio[0][1]
+    assert lint.check_paper_bibtex("X", {"bibtex": _BTX_OK, "bibtex_source": "ads"})[5] == []
+
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "ads",
+                                  "sin_bibtex": "es una tesis doctoral", "year": 2020})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0, "bloqueante: un consumidor no puede saber cuál rige"
+    assert "2020aaa" in _seccion(rep, "`bibtex` Y `sin_bibtex`"), rep
 
 
 # ── #473 · las otras dos formas de no pegarse, y la clave repetida ─────────────────────────────

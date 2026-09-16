@@ -983,6 +983,14 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   que es lo que es. El **4xx sí es una respuesta** y clasifica como hueco medido (mismo corte que
   el 404 de ADS, #399); sólo el timeout y el 5xx dejan al paper sin consultar. Es D-43 un nivel más
   abajo, y sobre el único campo de esta familia que además **se escribe en la nota**.
+- **Nota con `bibtex` Y `sin_bibtex`** (#475, `bibtex_hueco_contradictorio`, **bloqueante**): el
+  hueco declarado dice que no hay exportación oficial **arriba de la que la misma nota publica**, y
+  un consumidor no puede saber cuál rige. Ninguna de las dos categorías vecinas lo veía —«hueco
+  declarado» exige `bibtex` vacío y «no pegable» sólo mira el bloque—, así que la nota salía en
+  **rc 0** contándose en la categoría equivocada. Lo produce un borrado que **rehusó** con su
+  retorno ignorado (el defecto que #475 arregla del lado del escritor) y también una edición a
+  mano; la salida es `python scripts/fetch_bibtex.py --paper <stem>`, que re-pregunta y deja UNA de
+  las dos.
 - **`bibtex` que NO se pega tal cual** (#471/#473, `bibtex_no_pegable`, backlog): la regla es que
   **la exportación se pide en la forma en que se PEGA, y un bloque que no se pega no está
   cerrado**. Esta categoría junta las formas que **re-correr la cadena cierra**, así que la salida

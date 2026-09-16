@@ -2903,6 +2903,112 @@ descubrió que tenía **tres** síntomas y que #471 cubría uno.
 **Portadores (#409).** `carriers --propose lib_config.bibtex_no_pegable --patron
 'journalformat|get\("bibtex"\)'`: 2 llaman (`fetch_bibtex`, `lint`), 0 matchean sin llamar.
 
+## #476 · el gate de portadores sólo veía una de las dos formas de llevar una regla (2026-09-16)
+
+#409 pide que toda regla nombre a sus portadores y que el gate los verifique. `carriers.calls`
+responde mirando **sólo `ast.Call`**, así que una regla cuyo portador compartido es una
+**constante** —una tabla, un vocabulario cerrado, un regex— no se podía declarar: se lee por
+atributo (`cfg.EXTRACCION`) y eso nunca es una llamada, de modo que el gate contestaba *«declarado
+`usa` y NO llama»*. Reproducido antes de tocar nada, sobre una entrada con dos consumidores reales:
+
+```
+-> (entrada de prueba)/scripts/fetch_bibtex.py: declarado `usa` y NO llama a `lib_config.BIBTEX_NO_PEGABLE` …
+-> (entrada de prueba)/scripts/lint.py:         declarado `usa` y NO llama a `lib_config.BIBTEX_NO_PEGABLE` …
+```
+
+⚠ El número de esa entrada de prueba se escribe así a propósito: un `#N` inventado en un documento
+lo levanta `test_todo_numero_de_issue_que_el_repo_cita_existe` (#292), y con razón — pasó al
+redactar esta misma entrada.
+
+Las dos salidas que quedaban eran malas: declarar `fuera-de-alcance` a un módulo que **sí** lleva la
+regla —una atribución falsa, que la regla de método nº 4 llama peor que el vacío— o no declarar la
+regla. Se eligió la segunda dos veces, y las dos quedaron anotadas: **#461** se cerró **sin firmar**
+en `portadores.yaml` con la nota de que era un hueco del gate, y **#473** sólo pudo firmarse porque
+*además* de la tabla existe una función que ambos consumidores llaman.
+
+**Población (template, 2026-09-16).** `lib_config` expone **86** constantes públicas; **62** las lee
+al menos otro módulo y **32 las leen dos o más**, o sea 32 candidatas a ser el portador compartido de
+una regla. Declaradas como `funcion:` en `tools/portadores.yaml` antes de este issue: **cero**.
+
+| constante | módulos que la leen |
+|---|---|
+| `PAPERS` | 18 |
+| `ROOT` | 15 |
+| `FULLTEXT` | 14 |
+| `ALMAGESTO_VERSION` | 13 |
+| `EXTRACCION` | 9 |
+
+**Lo que entró.** `carries` hace UNA pregunta —«¿este módulo lleva la regla?»— y ramifica por lo que
+el **símbolo** es (`es_callable`), nunca por el consumidor: una función se lleva llamándola
+(`calls`, sin cambios), una constante leyéndola (`reads`). ⛔ Ramificar es lo que conserva el
+veredicto de las reglas que ya cerraban en 0: `ROOT` y `PAPERS` los toca medio repo, así que contar
+lecturas de atributo para una regla de función volvería portador a quien sólo la nombra —
+exactamente lo que #347 midió y prohibió—. Y el reporte de `--propose` **nombra la vía** (`LLAMAN a`
+vs `LEEN`), porque las dos piden acciones distintas: a una función hay que hacerla llamar, a una
+constante hay que leerla.
+
+**El efecto inmediato**, que es la prueba de que el hueco era real: `--propose lib_config.EXTRACCION`
+pasó de no poder enumerar nada a listar sus **9** portadores, y la regla de #461 quedó **firmada**
+con los nueve motivos, ocho meses de deuda declarada cerrada por el mismo cambio que la hizo
+posible. `portadores.yaml`: 52 → 54 reglas.
+
+## #474 / #475 · el borrado que rehusaba, y el que igual estampaba el hueco (2026-09-16)
+
+Los levantó la **validación de #473 en la instancia**, corriendo `fetch_bibtex.py` contra la bóveda
+real. Dos de las tres clases de #473 validaron; la tercera —la que **descarta** el cascarón— no
+llegó a la nota, y dejó a la nota en el estado que el fix dice impedir.
+
+**El mecanismo, en cuatro pasos.** El bloque de Crossref llega en **una línea con `\n` final**, así
+que `yaml.safe_dump` lo serializa como escalar entrecomillado de cuatro líneas **con una línea
+vacía** antes de la comilla de cierre:
+
+```yaml
+bibtex: '@book{2010, ISBN={…}, url={…},
+  DOI={…}, publisher={Elsevier}, year={2010} }
+
+  '
+bibtex_source: crossref
+```
+
+1. `fm_key_span` define continuación como *«línea indentada NO vacía, o item `- `»*, así que **se
+   frena en la línea vacía** y devuelve dos líneas de las cuatro (#474).
+2. `drop_fm_keys_from_block` deja huérfana la `  '` de cierre.
+3. La guarda de #244 hace su trabajo: el re-parseo falla, **no se escribe nada** y devuelve `False`.
+4. `fetch_bibtex` **ignora el retorno** (#475): anuncia el borrado, y `stamp_bibtex_gap` escribe
+   `sin_bibtex` sobre la nota que todavía tiene el bloque.
+
+**Población de #474: 19 de 259** notas con `bibtex` no pueden perder el campo sin romper el
+frontmatter — **el carril Crossref completo** (`1998Cichocki`, `1998Hyvarinen`,
+`1998HyvarinenICANN`, `2000Ikeda`, `2001Hyvarinen`, `2004DaviesNoisyICA`, `2004Himberg`,
+`2004Hyvarinen`, …). No es un accidente de un campo: es la forma que el serializador produce para
+**todo** valor terminado en salto.
+
+**Y el lint no lo veía.** Con la nota contradictoria en disco, `lint.py` salía en **rc 0**: «hueco
+declarado» no la contaba porque tiene `bibtex`, «no pegable» sí la contaba porque tiene `bibtex`, y
+no había categoría para *`bibtex` y `sin_bibtex` a la vez*. El estado que el fix declara imposible
+era invisible para el único chequeo que podía nombrarlo — por eso la escotilla y su red entran
+juntas.
+
+**Lo que enseñan las dos, y es lo mismo que enseñó la jornada anterior.** #474 es la **sexta** vez
+que el repo paga «el bloque de una clave» implícito (#244, `_set_lista_de_mapas`, #306, #327, #436
+y ésta), y la primera en que lo incompleto es **la definición central** y no un consumidor: se
+arregla para los seis de una vez. Y los tests viejos de `fm_key_span` construían el frontmatter **a
+mano**, mientras el único productor real es `safe_dump` — el bug vivía exactamente en esa
+diferencia, que es la **regla de método nº 2** por tercer día consecutivo. El test nuevo serializa
+el bloque real de Crossref.
+
+⚠ **Y el mismo error de test volvió dentro del fix:** los primeros casos del escape (`''`, `\"`)
+asertaban el span conservador, que es **el mismo valor** que da la vía correcta cuando no hay línea
+vacía — o sea que pasaban con el escape roto. `mutar.py --guardas` los midió: **8 de 13** guardas sin
+test que las distinga. Reescritos con la línea vacía adentro (y con una comilla en una clave
+posterior, para el caso simétrico), quedó **1 de 13**: `q not in ("'", '"')`, una guarda de **tipo**
+cuyo camino alternativo converge al mismo `None`, declarada en su docstring en vez de cubierta por
+un test que no mediría nada.
+
+**Portadores (#409).** `fm_key_span`: 1 usa (`make_notes`), 1 fuera de alcance (`fetch_bibtex`, que
+llega por el envoltorio). `drop_fm_keys`: 1 usa (`fetch_bibtex`, sus dos llamadas), 1 fuera de
+alcance (`make_notes`, que usa el nivel de texto y no persiste).
+
 ## #473 · «no se pega» tenía tres formas y #471 cubría una (2026-09-16)
 
 Lo levantó la **validación de #471 en la instancia** (Almagesto-Tesis#6), y por el único método que

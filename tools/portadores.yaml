@@ -53,6 +53,101 @@ portadores:
       - modulo: scripts/fetch_bibtex.py
         estado: fuera-de-alcance
         motivo: "Lo cita en un docstring como hermano de `sin_bibtex` (familia del motivo obligatorio); no lo lee."
+  - issue: 476
+    regla: >-
+      El gate de #409 pregunta «¿este módulo LLEVA la regla?», y una regla se lleva de DOS maneras:
+      una función, llamándola; una constante —una tabla, un vocabulario cerrado, un regex—,
+      leyéndola. Mirando sólo `ast.Call`, una regla cuyo portador compartido es una constante era
+      **imposible de declarar**: el gate contestaba «declarado `usa` y NO llama», y las dos salidas
+      que quedaban eran malas —llamar `fuera-de-alcance` a un portador real, que es la atribución
+      falsa que la regla de método nº 4 llama peor que el vacío, o no declarar la regla—. Medido en
+      el template: `lib_config` expone 86 constantes públicas, **32 leídas por dos o más módulos** y
+      **cero** declaradas. ⛔ La rama la decide lo que el SÍMBOLO es, nunca el consumidor: contar
+      atributos para una regla de función volvería portador a quien sólo la nombra, que es lo que
+      #347 midió y prohibió.
+    funcion: carriers.carries
+    patron: 'ast\.Call|es_callable|def calls'
+    consumidores:
+      - modulo: tools/carriers.py
+        estado: usa
+        motivo: "Es su propio módulo: `entry_errors` (el gate) y `propose` (la enumeración) preguntan las dos por acá, y el reporte nombra la vía —LLAMAN o LEEN— porque piden acciones distintas."
+  - issue: 461
+    regla: >-
+      El corpus sintético de `tests/poblada` aísla **todas** las rutas de la bóveda, y el mapa no se
+      escribe de memoria: `test_aislamiento.py` lo compara contra `lib_config`. `EXTRACCION` faltaba
+      en uno de los dos conftest divergidos, así que nueve módulos leían la bóveda REAL desde el
+      corpus sintético y dos tests salían rojos en toda instancia poblada. ⚠ Esta entrada existe
+      desde #476: hasta entonces el gate no podía ver a sus portadores —la llevan LEYENDO la
+      constante, no llamándola— y la regla se cerró **sin firmar**, que es el hueco que #476 arregla.
+    funcion: lib_config.EXTRACCION
+    patron: 'EXTRACCION'
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "Lee los JSON de extracción para armar el digest del contraste (2b) y para validar las citas contra la transcripción."
+      - modulo: scripts/entity.py
+        estado: usa
+        motivo: "La extracción es una de las ocho capas que borra o renombra un sujeto (INV-19)."
+      - modulo: scripts/extraction_prompt.py
+        estado: usa
+        motivo: "Resuelve si el par `(sujeto, enfasis)` ya tiene lectura para rehusar pedirla de nuevo (#308)."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "Es el cosechador: la única compuerta que corre `is_extraction` (INV-103) y la lee entera."
+      - modulo: scripts/lib_quotes.py
+        estado: usa
+        motivo: "El veredicto de una cita se juzga contra la extracción, que es la transcripción hecha leyendo el PDF (#315/#324)."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Cruza las vistas declaradas contra los JSON en disco y reporta la extracción que quedó en `build/` (pre-#311)."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "El renombre mueve la extracción con la nota (#228/#374) y la matriz método×estrella se estampa desde ella (#429)."
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: "Barre los JSON juntando lo que el sistema propone y nadie firmó (#328)."
+      - modulo: scripts/replace_pdf.py
+        estado: usa
+        motivo: "Marca `_paginacion` en la extracción del PDF reemplazado: es versionada y no regenerable (#311/#436)."
+  - issue: 474
+    regla: >-
+      El bloque de una clave del frontmatter incluye el escalar entre comillas HASTA su comilla de
+      cierre, con las líneas VACÍAS que haya adentro. `yaml.safe_dump` de un valor que termina en
+      salto emite `clave: '…\n\n  '`, así que la regla vieja —«continuación = línea indentada NO
+      vacía»— se frenaba una línea antes del cierre: borrar la clave dejaba huérfana la comilla, el
+      YAML dejaba de parsear y la guarda de #244 rehusaba la operación entera. Medido: 19 de 259
+      notas, el carril Crossref completo. Una comilla SIN cerrar cae al span conservador en vez de
+      tragarse el resto: un frontmatter ya mal formado no se empeora. Es la QUINTA vez que el repo
+      paga «el bloque de una clave» implícito (#244, `_set_lista_de_mapas`, #306, #327, ésta), y la
+      primera en que lo incompleto es la definición central y no un consumidor.
+    funcion: lib_config.fm_key_span
+    patron: 'fm_key_span|drop_fm_keys'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`_set_campo` y el re-estampado de `keywords` computan el span con ella; son los dos escritores que tocan una clave sin re-serializar el YAML."
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: "Llega por `drop_fm_keys`, que es el envoltorio con la guarda de #244: no computa el span ni puede tener una definición propia de él."
+  - issue: 475
+    regla: >-
+      Un borrado que NO ocurrió no produce un hueco persistido, y el campo lleno y su hueco
+      declarado no conviven. `drop_fm_keys` devuelve `bool` porque su guarda de #244 puede REHUSAR
+      —sacar la clave dejaría el frontmatter sin parsear—, así que el llamador que ignora el retorno
+      anuncia un borrado que no pasó y estampa el veredicto encima: la nota queda con el bloque Y
+      su `sin_bibtex`, que es el estado que ese borrado existe para impedir. Es #468 un nivel más
+      abajo (allá, una consulta que no contestó; acá, una escritura que no se hizo), y su red es la
+      categoría del lint que nombra el estado si igual aparece —por una edición a mano—, porque la
+      escotilla y su red se escriben juntas o la red no llega nunca.
+    funcion: lib_config.drop_fm_keys
+    patron: 'drop_fm_keys'
+    consumidores:
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: "Sus dos llamadas —sacar el bloque que no imprime referencia, y cerrar el hueco al llegar una entrada— condicionan su efecto al retorno; si rehúsa, la nota sale como NO EVALUADA y la corrida en rc 2."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Llama a `drop_fm_keys_from_block` (el nivel de texto, sin escritura): no hay retorno que decida nada porque no persiste."
   - issue: 473
     regla: >-
       La clave de cita de una entrada BibTeX se saca con UNA función. En un `.bib` la clave ES el

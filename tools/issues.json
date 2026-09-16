@@ -2344,7 +2344,7 @@
   {
    "number": 471,
    "title": "El `bibtex` de ADS trae la revista como macro de AASTeX (`\\aap`, `\\apj`): 126 de 219 bloques no son pegables sin `aas_macros.sty`, y la ficha no lleva el nombre en ningún otro lado",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 472,
@@ -2354,6 +2354,21 @@
   {
    "number": 473,
    "title": "`bibtex_closed` (#471) sólo mira la macro de revista: la exportación de Crossref también llega no pegable (sin autor ni título, meses no estándar, claves repetidas) — medido compilando el .bib",
+   "state": "OPEN"
+  },
+  {
+   "number": 474,
+   "title": "fm_key_span se frena en la línea vacía de un escalar entre comillas: el bloque de la clave queda corto y borrarla rompe el frontmatter (19 de 259 notas)",
+   "state": "OPEN"
+  },
+  {
+   "number": 475,
+   "title": "drop_fm_keys devuelve bool y sus dos llamadores lo ignoran: un borrado que rehusó igual estampa el hueco, y la nota queda con el campo Y su sin_bibtex",
+   "state": "OPEN"
+  },
+  {
+   "number": 476,
+   "title": "carriers.calls sólo ve ast.Call: una regla cuyo portador compartido es una CONSTANTE no se puede declarar (32 candidatas, 0 declaradas)",
    "state": "OPEN"
   }
  ]

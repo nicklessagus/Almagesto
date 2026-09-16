@@ -45,6 +45,59 @@ def test_calls_distingue_la_LLAMADA_de_la_mencion(tmp_path):
     assert not cr.calls("def (:\n", "lib", "regla"), "un archivo que no parsea no afirma nada"
 
 
+# ── #476 · la regla cuyo portador compartido es una CONSTANTE ──────────────────────────────────
+
+TABLA = "TABLA = {'a': 1}\n\n\ndef otra(x):\n    return x\n"
+
+
+def test_es_callable_separa_la_funcion_de_la_constante():
+    """#476 — decide CÓMO se lleva la regla: una función, llamándola; una tabla o un vocabulario
+    cerrado, leyéndolo. Un archivo que no parsea cae al criterio de siempre en vez de afirmar que
+    el símbolo es una constante, que mandaría la entrada al camino equivocado."""
+    assert cr.es_callable(LIB, "regla") is True
+    assert cr.es_callable(TABLA, "TABLA") is False
+    assert cr.es_callable(TABLA, "otra") is True
+    assert cr.es_callable("def (:\n", "lo_que_sea") is True, "no parsea: no decide"
+
+
+def test_reads_ve_la_LECTURA_de_una_constante_que_calls_no_puede_ver():
+    """#476 — `cfg.TABLA` no es nunca un `ast.Call`, así que una regla cuyo portador compartido es
+    una constante era **imposible de declarar**: el gate contestaba «declarado `usa` y NO llama», y
+    las dos salidas que quedaban eran malas —llamar `fuera-de-alcance` a un portador real (una
+    atribución falsa) o no declarar la regla—. Medido en el template: 32 constantes de `lib_config`
+    leídas por dos o más módulos, **cero** declaradas."""
+    assert not cr.calls("import lib\nx = lib.TABLA['a']\n", "lib", "TABLA"), "el bug de #476"
+    assert cr.reads("import lib\nx = lib.TABLA['a']\n", "lib", "TABLA")
+    assert cr.reads("import lib as cfg\nif k in cfg.TABLA:\n    pass\n", "lib", "TABLA"), "alias"
+    assert cr.reads("from lib import TABLA\nx = TABLA['a']\n", "lib", "TABLA"), "directo"
+    assert not cr.reads("import otro\nx = otro.TABLA\n", "lib", "TABLA"), "otro módulo, no"
+    assert not cr.reads("import lib\nx = lib.OTRA\n", "lib", "TABLA"), "otra constante, no"
+
+
+def test_carries_ramifica_por_lo_que_el_SIMBOLO_es_no_por_el_consumidor():
+    """#476 — contar la lectura para TODO haría ruido: `ROOT` y `PAPERS` los toca medio repo, así
+    que una regla de función empezaría a «tener» portadores que sólo la nombran, y eso desharía
+    #347. La rama la decide el símbolo declarado, y por eso el veredicto de las reglas de función
+    que ya cierran en 0 no se mueve."""
+    lector = "import lib\nx = lib.regla\n"
+    assert not cr.carries(lector, "lib", "regla", LIB), "función: mencionarla no es llevarla"
+    assert cr.carries("import lib\nlib.regla(1)\n", "lib", "regla", LIB)
+    assert cr.carries("import lib\nx = lib.TABLA['a']\n", "lib", "TABLA", TABLA), "constante: sí"
+
+
+def test_la_regla_con_portador_CONSTANTE_se_puede_declarar(tmp_path):
+    """#476 de punta a punta: el gate acepta la entrada cuyos consumidores LEEN la tabla, y sigue
+    exigiéndola en la otra dirección — quien la lee sin estar declarado, bloquea."""
+    root = _repo(tmp_path, **{"scripts/lib.py": TABLA,
+                              "scripts/usa.py": "import lib\nx = lib.TABLA['a']\n"})
+    decl = dict(funcion="lib.TABLA", patron="TABLA")
+    _, h = cr.check(root, _decl(tmp_path, **decl))
+    assert len(h) == 1 and "usa.py" in h[0], "el lector sin declarar bloquea"
+    _, h = cr.check(root, _decl(tmp_path, **decl, consumidores=[
+        {"modulo": "scripts/usa.py", "estado": "usa", "motivo": "lee la tabla"}]))
+    assert h == [], "declarado, cierra"
+
+
 def test_el_portador_SIN_DECLARAR_bloquea(tmp_path):
     """La mitad que cierra la familia: alguien llama a la implementación única y nadie lo declaró."""
     root = _repo(tmp_path, **{"scripts/lib.py": LIB,

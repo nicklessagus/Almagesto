@@ -539,22 +539,42 @@ def main() -> int:
             if sin_medir:
                 no_evaluadas.append(f"{f.stem}: {' · '.join(sin_medir)}")
                 continue
-            huecos.append(f"{f.stem}: {motivo}")
             # ⛔ #473 — la nota no puede publicar un bloque Y el hueco: son dos afirmaciones
             # contradictorias sobre el mismo campo. Si la cascada descartó lo que la nota traía
             # (`descartable`: no imprime nada), el bloque se SACA junto con declarar el hueco, y se
             # AVISA nombrando la nota. Es regenerable —re-correr vuelve a preguntar— y el motivo
             # que queda escrito dice qué contestó cada carril, así que la decisión no se pierde.
+            # ⛔ #475 — y el hueco se estampa SÓLO si el borrado ocurrió. `drop_fm_keys` devuelve
+            # `False` cuando su guarda de #244 rehúsa —sacar la clave dejaría el frontmatter sin
+            # parsear—, y con el retorno ignorado la nota terminaba con el bloque Y `sin_bibtex`:
+            # exactamente el estado que este bloque existe para impedir, anunciado además como un
+            # borrado que no pasó. Es #468 un nivel más abajo: una escritura que no se hizo no
+            # produce un veredicto persistido.
             if str(fm.get("bibtex") or "").strip():
-                cfg.drop_fm_keys(f, "bibtex", "bibtex_source")
+                if not cfg.drop_fm_keys(f, "bibtex", "bibtex_source"):
+                    no_evaluadas.append(f"{f.stem}: el bloque que hay NO imprime una referencia y "
+                                        f"no se pudo sacar (el frontmatter quedaría sin parsear, "
+                                        f"#244), así que NO se estampó el hueco: la nota conserva "
+                                        f"lo que tenía — arreglá el frontmatter a mano y re-corré")
+                    continue
                 sacados.append(f.stem)
                 fm, text = cfg.split_fm(t2 := f.read_text(encoding="utf-8")) or {}, t2
+            huecos.append(f"{f.stem}: {motivo}")
             stamp_bibtex_gap(f, fm, text.split("\n---\n", 1)[-1], motivo, hoy)
             continue
         if str(fm.get("sin_bibtex") or "").strip():
             # El hueco se cerró: el motivo describía un estado que ya no es. Dejarlo haría que la
             # nota publique «no tiene exportación oficial» arriba de su propia entrada.
-            cfg.drop_fm_keys(f, "sin_bibtex")
+            # ⛔ #475 — el simétrico del de arriba, y por el mismo motivo: `sin_bibtex` es texto
+            # libre, así que también se serializa como escalar multilínea. Si no se pudo sacar, la
+            # entrada NO se estampa: publicarla dejaría el hueco declarado arriba de su propia
+            # referencia, que es la contradicción mirada desde el otro lado.
+            if not cfg.drop_fm_keys(f, "sin_bibtex"):
+                no_evaluadas.append(f"{f.stem}: hay exportación oficial, pero no se pudo sacar el "
+                                    f"`sin_bibtex` viejo (el frontmatter quedaría sin parsear, "
+                                    f"#244), así que NO se estampó: la nota publicaría el hueco "
+                                    f"arriba de su propia entrada — arreglalo a mano y re-corré")
+                continue
             fm, text = cfg.split_fm(t2 := f.read_text(encoding="utf-8")) or {}, t2
         stamp_bibtex(f, fm, text.split("\n---\n", 1)[-1], entrada, fuente, hoy)
         por_fuente[fuente] = por_fuente.get(fuente, 0) + 1

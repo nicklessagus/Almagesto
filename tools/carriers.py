@@ -96,6 +96,76 @@ def calls(fuente: str, modulo: str, simbolo: str) -> bool:
     return False
 
 
+def es_callable(fuente: str, simbolo: str) -> bool:
+    """Is that top-level symbol a function or a class, as opposed to a constant? (#476)
+
+    It decides HOW a consumer carries the rule: a function is carried by CALLING it, a table or a
+    closed vocabulary by READING it. A re-export (`from lib_quotes import …`, AUD-306) is treated
+    as callable, which is the historical behaviour: the facade exists so consumers call through it.
+    """
+    try:
+        arbol = ast.parse(fuente)
+    except SyntaxError:
+        return True                       # no se pudo decidir: el criterio de siempre
+    for n in arbol.body:
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) \
+                and n.name == simbolo:
+            return True
+        if isinstance(n, ast.Assign) and any(getattr(x, "id", None) == simbolo
+                                             for x in n.targets):
+            return False                  # asignación a nivel módulo: una constante
+    return True
+
+
+def reads(fuente: str, modulo: str, simbolo: str) -> bool:
+    """Does this module READ `modulo.simbolo`? By AST, like `calls` (#476).
+
+    ⛔ The gate asks «does this module carry the rule?», and until #476 it could only see one of the
+    two ways of carrying one. `calls` looks at `ast.Call`, so a rule whose shared carrier is a
+    **constant** —a table, a closed vocabulary, a regex— was **impossible to declare**: read as an
+    attribute (`cfg.BIBTEX_NO_PEGABLE`) it is never a call, and the gate answered «declared `usa`
+    and does NOT call». Both remaining options were bad: calling a real carrier `fuera-de-alcance`
+    (a false attribution, which method rule nº 4 calls worse than a blank) or leaving the rule
+    undeclared. Measured on the template: `lib_config` exposes 86 public constants, **32 read by two
+    or more modules** —32 candidates to be the shared carrier of a rule— and **zero** declared.
+
+    ⚠ Deliberately NOT used for a callable symbol (see `carries`): counting a mere mention of a
+    function name would undo #347, where the comment said «delegates to X» and did not delegate.
+    """
+    try:
+        arbol = ast.parse(fuente)
+    except SyntaxError:
+        return False
+    alias, directo = set(), False
+    for n in ast.walk(arbol):
+        if isinstance(n, ast.Import):
+            for a in n.names:
+                if a.name == modulo:
+                    alias.add(a.asname or a.name)
+        elif isinstance(n, ast.ImportFrom) and n.module == modulo:
+            directo = directo or any(a.name == simbolo for a in n.names)
+    for n in ast.walk(arbol):
+        if isinstance(n, ast.Attribute) and n.attr == simbolo \
+                and isinstance(n.value, ast.Name) and n.value.id in alias:
+            return True
+        if directo and isinstance(n, ast.Name) and n.id == simbolo:
+            return True
+    return False
+
+
+def carries(fuente: str, modulo: str, simbolo: str, dueño_src: str) -> bool:
+    """Does this module CARRY the rule that lives in `modulo.simbolo`? (#476)
+
+    ⛔ ONE question with two shapes, and which one applies is decided by what the symbol IS, not by
+    the consumer: a function is carried by **calling** it, a constant by **reading** it. Branching
+    here rather than counting both for everything is what keeps the veredict of the 52 rules that
+    already close at 0 unchanged — `ROOT` and `PAPERS` are touched by half the repo, so counting
+    attribute reads for a callable rule would drown the signal."""
+    if es_callable(dueño_src, simbolo):
+        return calls(fuente, modulo, simbolo)
+    return reads(fuente, modulo, simbolo)
+
+
 def existe(fuente: str, simbolo: str) -> bool:
     """Does this module EXPOSE that symbol at top level? Half (1) of the check.
 
@@ -182,7 +252,7 @@ def entry_errors(entrada: dict, fuentes: dict) -> list:
     for mod, fuente in fuentes.items():
         if mod == dueño:
             continue
-        usa = calls(fuente, modulo, simbolo)
+        usa = carries(fuente, modulo, simbolo, fuentes[dueño])     # #476
         matchea = bool(patron.search(fuente))
         if mod in declarados and declarados[mod] is None:
             continue                      # estado inválido: ya se reportó, no se reporta dos veces
@@ -231,7 +301,7 @@ def propose(ref: str, patron: str | None, root: Path = ROOT) -> tuple:
     for mod, fuente in fuentes.items():
         if mod == dueño:
             continue
-        if calls(fuente, modulo, simbolo):
+        if carries(fuente, modulo, simbolo, fuentes[dueño] if dueño else ""):   # #476
             llaman.append(mod)
         elif rx and rx.search(fuente):
             sospechosos.append(mod)
@@ -249,12 +319,19 @@ def main(argv=None) -> int:
 
     if args.propose:
         llaman, sospechosos = propose(args.propose, args.patron)
-        print(f"LLAMAN a `{args.propose}` ({len(llaman)}) — van declarados `usa`:")
+        # #476 — el reporte dice por QUÉ VÍA se lleva la regla, porque son dos y piden acciones
+        # distintas: a una función hay que hacerla llamar, a una constante hay que leerla. Decir
+        # «LLAMAN» sobre la lectura de una tabla sería el mapa que atribuye mal (regla nº 4).
+        fuentes = source_modules(ROOT)
+        _mod, _sim = str(args.propose).rsplit(".", 1)
+        _dueño = next((r for r in fuentes if Path(r).stem == _mod), None)
+        verbo = "LLAMAN a" if (_dueño and es_callable(fuentes[_dueño], _sim)) else "LEEN"
+        print(f"{verbo} `{args.propose}` ({len(llaman)}) — van declarados `usa`:")
         for m in llaman:
             print(f"  {m}")
         if args.patron:
-            print(f"\nMATCHEAN `{args.patron}` y NO llaman ({len(sospechosos)}) — cada uno se "
-                  f"declara `usa` (y se hace llamar) o `fuera-de-alcance` CON motivo:")
+            print(f"\nMATCHEAN `{args.patron}` y NO la llevan ({len(sospechosos)}) — cada uno se "
+                  f"declara `usa` (y se hace llevar) o `fuera-de-alcance` CON motivo:")
             for m in sospechosos:
                 print(f"  {m}")
         else:

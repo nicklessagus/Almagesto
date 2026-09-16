@@ -859,6 +859,47 @@ def test_si_NINGUN_carril_trae_referencia_el_hueco_dice_que_alguien_CONTESTO(mon
     assert "no trae una referencia imprimible" in motivo and "10.1016/b" in motivo
 
 
+def test_main_NO_estampa_el_hueco_si_el_borrado_REHUSO(tmp_path, monkeypatch, capsys):
+    """#475 — `drop_fm_keys` devuelve `False` cuando su guarda de #244 rehúsa (sacar la clave
+    dejaría el frontmatter sin parsear). Con el retorno ignorado, la nota terminaba con el bloque Y
+    `sin_bibtex`: exactamente el estado que el borrado existe para impedir, anunciado además como
+    un borrado que no pasó. Es #468 un nivel más abajo — una escritura que no se hizo no produce un
+    veredicto persistido—, así que la nota sale por el canal de lo NO EVALUADO y la corrida en rc 2.
+    """
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(cfg, "drop_fm_keys", lambda *a, **k: False)   # la guarda de #244 rehúsa
+    fake_net(monkeypatch,
+             get=lambda url, **k: Resp(200, text=ENTRADA_CASCARON, ct=fb.BIBTEX_CT))
+    nota = _nota(tmp_path, {"bibcode": "2010ComonJutten", "tags": ["paper"], "doi": "10.1016/b",
+                            "bibtex": ENTRADA_CASCARON, "bibtex_source": "crossref"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 2, "no se midió: la corrida no puede salir 0"
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
+    assert fm.get("bibtex") and not fm.get("sin_bibtex"), "la nota conserva lo que tenía"
+    out = capsys.readouterr().out
+    assert "NO EVALUADA" in out and "2010ComonJutten" in out
+    assert "SACADO" not in out, "no se anuncia un borrado que no ocurrió"
+
+
+def test_main_NO_estampa_la_entrada_si_no_pudo_sacar_el_sin_bibtex_viejo(tmp_path, monkeypatch,
+                                                                        capsys):
+    """#475 — el simétrico, y por el mismo motivo: `sin_bibtex` es texto libre, así que también se
+    serializa como escalar multilínea. Publicar la entrada sin sacar el hueco dejaría la nota
+    diciendo «no tiene exportación oficial» arriba de su propia referencia."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(cfg, "drop_fm_keys", lambda *a, **k: False)
+    fake_net(monkeypatch, get=lambda url, **k: Resp(200, text=ENTRADA_ADS, ct=fb.BIBTEX_CT))
+    nota = _nota(tmp_path, {"bibcode": "2020SinADS", "tags": ["paper"], "doi": "10.1/x",
+                            "sin_bibtex": "es un capitulo sin DOI propio"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 2
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
+    assert not fm.get("bibtex") and fm.get("sin_bibtex"), "ni entrada nueva ni hueco borrado"
+    assert "NO EVALUADA" in capsys.readouterr().out
+
+
 def test_main_SACA_el_cascaron_al_declarar_el_hueco_y_lo_AVISA(tmp_path, monkeypatch, capsys):
     """#473 — la nota no puede publicar un bloque Y el hueco: son dos afirmaciones contradictorias
     sobre el mismo campo, y `sin_bibtex` es el que el lint titula «decisión registrada». El bloque

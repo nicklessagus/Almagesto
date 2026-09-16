@@ -4616,7 +4616,8 @@ def check_paper_citation_unit(stem: str, fm: dict) -> tuple:
 
 
 def check_paper_bibtex(stem: str, fm: dict) -> tuple:
-    """`(bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo)` — the BibTeX
+    """`(bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo,
+    bibtex_hueco_contradictorio)` — the BibTeX
     entry and the two closed vocabularies of the artefact fields (#397/#296/#467).
 
     Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
@@ -4628,6 +4629,7 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     bad_roles: list = []
     sin_bibtex: list = []
     sin_bibtex_mudo: list = []
+    bibtex_hueco_contradictorio: list = []
     _btx = str(fm.get("bibtex") or "").strip()
     # #467 — las dos categorías que FALTABAN: las de abajo miran notas que YA tienen `bibtex`, así
     # que la nota SIN entrada no aparecía en ningún reporte y el lint daba rc 0 con ella adentro
@@ -4644,6 +4646,17 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                        "oficial» de «nadie preguntó», y es el campo que existe para que una cita "
                        f"impresa no se redacte de memoria → `python scripts/fetch_bibtex.py "
                        f"--paper {stem}` (#467)"))
+    # ⛔ #475 — el campo lleno y su hueco declarado son dos afirmaciones CONTRADICTORIAS sobre el
+    # mismo campo, y ninguna de las dos categorías de arriba lo veía: «hueco declarado» exige
+    # `bibtex` vacío y «no pegable» sólo mira el bloque, así que la nota salía en rc 0 contándose
+    # en la categoría equivocada. Lo produce un borrado que rehusó (#244) con su retorno ignorado
+    # —el defecto de #475— y también lo produciría una edición a mano.
+    if _btx and _motivo_hueco:
+        bibtex_hueco_contradictorio.append(
+            (stem, f"tiene `bibtex` Y `sin_bibtex: {_motivo_hueco[:60]}`: el hueco declarado dice "
+                   f"que no hay exportación oficial arriba de la que la nota publica, y un "
+                   f"consumidor no puede saber cuál rige → `python scripts/fetch_bibtex.py "
+                   f"--paper {stem}` (re-pregunta y deja UNA de las dos, #475)"))
     if _btx and not str(fm.get("bibtex_source") or "").strip():
         bibtex_sin_fuente.append(
             (stem, "tiene `bibtex` y no declara `bibtex_source`: una entrada sin "
@@ -4699,7 +4712,8 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                                     f"«desconocido»; si querías escribir una nota, va a "
                                     f"`pending_motivo` o a `salvedades`. Migrador: "
                                     f"`python scripts/make_notes.py --migrate-source-fields`"))
-    return bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo
+    return (bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo,
+            bibtex_hueco_contradictorio)
 
 
 def check_bibtex_no_pegable(stem: str, fm: dict) -> tuple:
@@ -6114,6 +6128,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     sin_bibtex: list = []              # (stem, motivo) — #467: hueco de `bibtex` DECLARADO con su motivo
     sin_bibtex_mudo: list = []         # (stem, motivo) — #467: sin `bibtex` y sin motivo (indistinguible de «nadie preguntó»)
     bibtex_no_pegable: list = []       # (stem, motivo) — #471/#473: el bloque no se pega; re-correr lo cierra
+    bibtex_hueco_contradictorio: list = []  # (stem, motivo) — #475: `bibtex` Y `sin_bibtex` a la vez
     bibtex_residuo: list = []          # (stem, motivo) — #473: no se pega y es lo que la fuente da (no es deuda)
     bibtex_por_clave: dict = {}        # {citekey: [stem]} — #473: en un `.bib` la repetida desaparece
     bibtex_clave_repetida: list = []   # (stem, motivo) — #473: dos notas con la misma clave de cita
@@ -6596,12 +6611,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # (b) el frontmatter y la exportación oficial no pueden decir cosas distintas del mismo
             #     paper. El caso que lo motivó: una ficha `2011Naik` con `year: 2012` adentro.
             # El BibTeX y los dos vocabularios cerrados viven en `check_paper_bibtex` (#396).
-            _b1, _b2, _b3, _b4, _b5 = check_paper_bibtex(stem, fm)
+            _b1, _b2, _b3, _b4, _b5, _b6 = check_paper_bibtex(stem, fm)
             bibtex_sin_fuente += _b1
             bibtex_drift += _b2
             bad_roles += _b3
             sin_bibtex += _b4
             sin_bibtex_mudo += _b5
+            bibtex_hueco_contradictorio += _b6
             _np, _nr = check_bibtex_no_pegable(stem, fm)                   # #471/#473
             bibtex_no_pegable += _np
             bibtex_residuo += _nr
@@ -6991,6 +7007,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('sin_bibtex', '📇 Hueco de `bibtex` DECLARADO con su motivo (#467) — decisión registrada, no es deuda', SEV_BACKLOG, tuple(sin_bibtex), poblacion='papers'),
         Categoria('bibtex_drift', '📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog)',
                   SEV_BACKLOG, tuple(bibtex_drift), poblacion='papers'),
+        Categoria('bibtex_hueco_contradictorio', '⛔ Nota con `bibtex` Y `sin_bibtex`: el hueco declarado contradice a la entrada que la misma nota publica, y un consumidor no puede saber cuál rige (#475)',
+                  SEV_BLOQUEANTE, tuple(bibtex_hueco_contradictorio), poblacion='papers'),
         Categoria('bibtex_no_pegable', '📇 `bibtex` que NO se pega tal cual y re-correr la cadena lo cierra (#471/#473, backlog)',
                   SEV_BACKLOG, tuple(bibtex_no_pegable), poblacion='papers'),
         Categoria('bibtex_residuo', '📇 `bibtex` no pegable tal cual que es LO QUE LA FUENTE DA: re-bajarlo es un no-op, se nombra para quien pega el `.bib` (#473) — no es deuda',

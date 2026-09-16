@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 
 import pytest
+import yaml
 
 import lib_config as cfg
 import lib_blocks as lb
@@ -2390,6 +2391,95 @@ def test_fm_key_span_toma_los_items_de_una_lista_en_BLOQUE():
     lines = ["salvedades:", "  - la primera", "  - la segunda", "stars:", "- tau Cet", "year: 2020"]
     assert cfg.fm_key_span(lines, "salvedades") == (0, 3)
     assert cfg.fm_key_span(lines, "stars") == (3, 5)
+
+
+# ── #474 · la línea vacía DENTRO de un escalar entre comillas ──────────────────────────────────
+
+def _fm_crossref() -> str:
+    """El frontmatter tal como lo escribe el repo para una entrada del carril Crossref.
+
+    ⛔ Se construye con `yaml.safe_dump` a partir del bloque REAL —una línea con `\n` final, que es
+    como Crossref exporta—, nunca a mano: el bug de #474 vivía exactamente en la diferencia entre
+    la forma que el serializador produce y la que uno escribiría en un test (regla de método nº 2).
+    """
+    entrada = ("@book{2010, ISBN={9780123747266}, url={http://dx.doi.org/10.1016/B978-0-12-374726-6.X0001-4}, "
+               "DOI={10.1016/b978-0-12-374726-6.x0001-4}, publisher={Elsevier}, year={2010} }\n")
+    return yaml.safe_dump({"bibcode": "2010ComonJutten", "doi": "10.1016/b", "bibtex": entrada,
+                           "bibtex_source": "crossref"},
+                          sort_keys=False, allow_unicode=True).rstrip("\n")
+
+
+def test_fm_key_span_sigue_el_escalar_entre_comillas_HASTA_su_cierre():
+    """#474 — `safe_dump` de un valor que termina en `\n` emite `clave: '…\n\n  '`, así que la
+    línea VACÍA es parte del valor. Con la regla «indentada no vacía» el span se frenaba una línea
+    antes de la comilla de cierre y borrar la clave dejaba huérfana la `  '`: el frontmatter dejaba
+    de parsear y la guarda de #244 rehusaba la operación entera (medido: 19 de 259 notas, el carril
+    Crossref completo)."""
+    head = _fm_crossref()
+    lines = head.split("\n")
+    i, j = cfg.fm_key_span(lines, "bibtex")
+    assert lines[j - 1].strip() == "'", "el span termina EN la comilla de cierre"
+    assert lines[j] == "bibtex_source: crossref", "y no se come la clave siguiente"
+    assert "" in lines[i:j], "la línea vacía del escalar quedó ADENTRO"
+    # y el efecto que importa: la clave se puede sacar sin romper el frontmatter
+    quedan = "\n".join(cfg.drop_fm_keys_from_block(head, ["bibtex", "bibtex_source"]))
+    assert yaml.safe_load(quedan) == {"bibcode": "2010ComonJutten", "doi": "10.1016/b"}
+
+
+def test_fm_key_span_NO_cambia_el_escalar_que_cierra_en_su_propia_linea():
+    """#474 — el caso común no se toca: un valor entrecomillado que cierra donde empieza sigue la
+    regla de continuación de siempre. Sin esta mitad, el fix se llevaría la clave siguiente."""
+    lines = ['title: "{Un titulo}"', "year: 2020", 'nota: "otra cosa"']
+    assert cfg.fm_key_span(lines, "title") == (0, 1)
+    assert cfg.fm_key_span(lines, "year") == (1, 2)
+    # ⚠ La última clave lleva OTRA comilla a propósito: sin preguntar si el escalar ya cerró en su
+    # propia línea, la búsqueda del cierre seguiría hasta encontrarla y el span de `title` se
+    # comería las dos claves del medio. Con un frontmatter sin más comillas el test pasa igual con
+    # esa pregunta rota, que es la trampa de la que salió el caso anterior.
+    assert cfg.fm_key_span(lines, "nota") == (2, 3)
+
+
+def test_fm_key_span_respeta_el_ESCAPE_del_delimitador():
+    r"""#474 — YAML escapa la comilla doblándola dentro de `'…'` y con `\` dentro de `"…"`, así que
+    «contiene el carácter» no es la pregunta: hay que recorrer la cadena.
+
+    ⚠ El caso se construye **con la línea vacía adentro**, que es lo único que distingue las dos
+    vías: sin ella, el escalar y la regla de continuación dan el MISMO span, así que un test sin
+    línea vacía pasa igual con el escape roto — y eso es un test que no mide lo que dice medir.
+    Con el escape ignorado, la apertura se daría por cerrada en la primera comilla del par y el
+    span se frenaría antes de la comilla de cierre real."""
+    lines = ["nota: 'lo que el autor llama ''ruido'' en el paper,", "  y su continuación", "",
+             "  '", "year: 2020"]
+    assert cfg.fm_key_span(lines, "nota") == (0, 4)
+    lines2 = ['nota: "una \\" escapada', "  y sigue", "", '  "', "year: 2020"]
+    assert cfg.fm_key_span(lines2, "nota") == (0, 4)
+
+
+def test_fm_key_span_no_cierra_un_escalar_con_la_comilla_del_OTRO_tipo():
+    """#474 — dentro de `"…"` una comilla simple es texto (y al revés). Sin distinguir el
+    delimitador con el que se abrió, un apóstrofo cualquiera cerraría el escalar y el span volvería
+    a quedar corto — sobre valores que son prosa libre, donde el apóstrofo es común."""
+    lines = ['nota: "lo que el autor llama \'ruido\' en el paper,', "  y su continuación", "",
+             '  "', "year: 2020"]
+    assert cfg.fm_key_span(lines, "nota") == (0, 4)
+    lines2 = ["nota: 'una \"cita\" adentro,", "  y sigue", "", "  '", "year: 2020"]
+    assert cfg.fm_key_span(lines2, "nota") == (0, 4)
+
+
+def test_fm_key_span_solo_mira_el_escalar_cuando_el_VALOR_abre_uno():
+    """#474 — la rama nueva se activa por el primer carácter del VALOR, no por que la línea
+    contenga una comilla en alguna parte: `title: {\\aap} 'x'` no abre un escalar entrecomillado, y
+    tratarlo como tal se llevaría las claves siguientes."""
+    lines = ["nota: sin comillas, con 'apóstrofos' adentro", "year: 2020", "doi: 10.1/x"]
+    assert cfg.fm_key_span(lines, "nota") == (0, 1)
+
+
+def test_fm_key_span_con_la_comilla_SIN_CERRAR_no_se_come_el_frontmatter():
+    """#474 — un escalar que nunca cierra es un frontmatter ya mal formado, y ahí el bloque de la
+    clave no es conocible: se cae al span conservador en vez de tragarse el resto. Una operación no
+    puede dejar la nota PEOR de lo que la encontró, que es la doctrina de la guarda de #244."""
+    lines = ["nota: 'arranca y nunca cierra", "  sigue indentada", "year: 2020"]
+    assert cfg.fm_key_span(lines, "nota") == (0, 2), "conservador: no llega al `year`"
 
 
 def test_fm_key_span_arranca_donde_se_le_pide():
