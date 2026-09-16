@@ -131,6 +131,9 @@
 ## 📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog) (0)
 > sobre 60 notas de `papers/`
 
+## 📇 `bibtex` con la revista como macro de AASTeX (`\aap`): sin `aas_macros.sty` compila vacío, el bloque no se pega (#471, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## ⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390) (0)
 > sobre 0 patrones `merge=ours` de `.gitattributes`
 
