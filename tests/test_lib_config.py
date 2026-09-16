@@ -3609,3 +3609,61 @@ def test_bibtex_journal_macro_reconoce_SOLO_el_campo_que_es_una_macro():
     assert cfg.bibtex_journal_macro("@ARTICLE{x,\n journal = {A\\&A},\n}") == ""
     assert cfg.bibtex_journal_macro("@ARTICLE{x,\n title = {\\aap},\n journal = {AJ},\n}") == ""
     assert cfg.bibtex_journal_macro("") == "" and cfg.bibtex_journal_macro(None) == ""
+
+
+# ── #473 · las otras dos formas de no pegarse, y la clave de cita ──────────────────────────────
+
+def test_el_mes_no_estandar_mira_el_valor_CRUDO_y_no_los_campos_desenvueltos():
+    """#473 — `month = July` es una macro que ningún `.bst` define y el mes se PIERDE; `month =
+    {July}` es una cadena literal y se pega perfecto. La diferencia está SÓLO en los delimitadores,
+    así que este chequeo no puede usar `bibtex_fields` —que los desenvuelve— o convertiría la
+    entrada correcta en un hallazgo. Una concatenación tampoco es este defecto."""
+    assert cfg.bibtex_mes_no_estandar('@article{x, month=July, year={2007}}') == "July"
+    assert cfg.bibtex_mes_no_estandar('@article{x, month=Sept}') == "Sept"
+    assert cfg.bibtex_mes_no_estandar('@article{x, month=jul, year={2007}}') == ""
+    assert cfg.bibtex_mes_no_estandar('@article{x, month={July}, year={2007}}') == ""
+    assert cfg.bibtex_mes_no_estandar('@article{x, month=jan # "~1"}') == ""
+    assert cfg.bibtex_mes_no_estandar("") == "" and cfg.bibtex_mes_no_estandar(None) == ""
+
+
+def test_el_cascaron_exige_que_falten_los_TRES_campos_que_imprimen():
+    """#473 — `author`, `editor` y `title` son los tres que el `.bst` necesita para imprimir algo:
+    sin ninguno, la cita sale VACÍA. La conjunción es angosta a propósito —con título y sin autor
+    la referencia sale incompleta, no vacía—, porque esta clase hace que la cascada DESCARTE el
+    bloque y un detector ancho ahí sería el barrido que revierte trabajo bueno."""
+    cascaron = "@book{2010, ISBN={978}, publisher={Elsevier}, year={2010}}"
+    assert [c for c, _ in cfg.bibtex_no_pegable(cascaron)] == ["sin_autor_ni_titulo"]
+    assert cfg.bibtex_no_pegable("@book{x, editor={Comon, P.}, year={2010}}") == []
+    assert cfg.bibtex_no_pegable("@book{x, title={Handbook}, year={2010}}") == []
+    # ⚠ La nota SIN `bibtex` no es un bloque roto: es un hueco, y lo miran `sin_bibtex` /
+    # `sin_bibtex_mudo` (#467). Sin esta guarda el vacío cae por la conjunción de arriba —no trae
+    # ninguno de los tres campos— y TODA nota sin exportación aparecería como cascarón.
+    assert cfg.bibtex_no_pegable("") == [] and cfg.bibtex_no_pegable(None) == []
+
+
+def test_las_tres_clases_se_reparten_por_la_TABLA_no_por_una_lista_del_llamador():
+    """#473 — las tres clases no son grados de un eje: son tres consecuencias (`pendiente` se
+    re-baja, `descartable` no se guarda, `residuo` se nombra y no se re-baja). El filtro sale de
+    `BIBTEX_NO_PEGABLE`, así que una clase nueva aterriza sola en sus cuatro consumidores."""
+    assert set(cfg.BIBTEX_NO_PEGABLE.values()) == {"pendiente", "descartable", "residuo"}
+    macro = "@ARTICLE{x,\n author = {A},\n title = {T},\n journal = {\\aap},\n}"
+    assert [c for c, _ in cfg.bibtex_no_pegable_clase(macro, "pendiente")] == ["macro_revista"]
+    assert cfg.bibtex_no_pegable_clase(macro, "descartable") == []
+    cascaron = "@book{2010, ISBN={978}, year={2010}}"
+    assert [c for c, _ in cfg.bibtex_no_pegable_clase(cascaron, "descartable")] == \
+        ["sin_autor_ni_titulo"]
+    mes = '@article{x, author={A}, title={T}, month=July, year={2007}}'
+    assert [c for c, _ in cfg.bibtex_no_pegable_clase(mes, "residuo")] == ["mes_no_estandar"]
+    assert cfg.bibtex_no_pegable_clase(mes, "pendiente") == [], "un residuo NO se re-baja"
+
+
+def test_la_clave_de_cita_sale_de_la_cabecera_y_solo_de_una_entrada():
+    """#473 — es el identificador con el que la entrada aterriza en un `.bib`, y dos iguales hacen
+    que `bibtex` saltee la segunda EN SILENCIO. Lo que no es una entrada no tiene clave."""
+    assert cfg.bibtex_citekey("@article{Hyv_rinen_1998, title={x}}") == "Hyv_rinen_1998"
+    assert cfg.bibtex_citekey("@ARTICLE{2011A&A...1..1M,\n author = {x},\n}") == "2011A&A...1..1M"
+    # Las dos mitades de la guarda, por separado: sin `{` no hay clave dónde cortar, y un texto
+    # con `{` que NO arranca en `@` no es una entrada (una fórmula, una cita de la nota).
+    assert cfg.bibtex_citekey("@article sin llave") == ""
+    assert cfg.bibtex_citekey("texto con {llaves} que no es una entrada") == ""
+    assert cfg.bibtex_citekey("no es una entrada") == "" and cfg.bibtex_citekey("") == ""

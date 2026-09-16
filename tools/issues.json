@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-15",
+ "fetched": "2026-09-16",
  "issues": [
   {
    "number": 2,
@@ -2349,6 +2349,11 @@
   {
    "number": 472,
    "title": "make_notes: el roll-up publica como «extraído, no sintetizado» un paper con `no_vista` declarado cuando `methods` lo pobló otro sujeto (#268 roto en la columna Estado)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 473,
+   "title": "`bibtex_closed` (#471) sólo mira la macro de revista: la exportación de Crossref también llega no pegable (sin autor ni título, meses no estándar, claves repetidas) — medido compilando el .bib",
    "state": "OPEN"
   }
  ]

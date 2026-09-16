@@ -10684,15 +10684,66 @@ def test_el_bibtex_con_macro_de_revista_es_backlog_y_nombra_el_comando(toy_vault
     cerrado (medido: 126 de 219 bloques `ads` en una instancia). Backlog, no bloqueante: la cita
     sigue siendo la oficial, y la salida es re-correr `fetch_bibtex`, que lo cuenta como pendiente
     con la MISMA función."""
-    assert lint.check_bibtex_journal_macro("2020aaa...1..1A", {"bibtex": _BTX_MACRO}) == [
-        ("2020aaa...1..1A", lint.check_bibtex_journal_macro("2020aaa...1..1A",
-                                                            {"bibtex": _BTX_MACRO})[0][1])]
-    assert "\\mnras" in lint.check_bibtex_journal_macro("x", {"bibtex": _BTX_MACRO})[0][1]
-    assert lint.check_bibtex_journal_macro("x", {"bibtex": _BTX_OK}) == []
-    assert lint.check_bibtex_journal_macro("x", {}) == []
+    pend, res = lint.check_bibtex_no_pegable("2020aaa...1..1A", {"bibtex": _BTX_MACRO})
+    assert [s for s, _ in pend] == ["2020aaa...1..1A"] and res == []
+    assert "\\mnras" in pend[0][1]
+    assert lint.check_bibtex_no_pegable("x", {"bibtex": _BTX_OK}) == ([], [])
+    assert lint.check_bibtex_no_pegable("x", {}) == ([], [])
 
     _paper_con_bibtex(toy_vault, {"bibtex": _BTX_MACRO, "bibtex_source": "ads", "year": 2020})
     rc, rep = run_lint_reporte(capsys)
     assert rc == 0, "backlog, no frena"
-    sec = _seccion(rep, "macro de AASTeX")
+    sec = _seccion(rep, "NO se pega tal cual")
     assert "2020aaa" in sec and "fetch_bibtex.py --paper 2020aaa...1..1A" in sec, rep
+
+
+# ── #473 · las otras dos formas de no pegarse, y la clave repetida ─────────────────────────────
+
+_BTX_CASCARON = ('@book{2010,\n        ISBN = {9780123747266},\n         DOI = {10.1016/b},\n'
+                 '   publisher = {Elsevier},\n        year = {2010},\n}\n')
+_BTX_MES = ('@article{Yang_2007, title={Un titulo}, author={Yang, F.}, month=July, '
+            'year={2007}}\n')
+
+
+def test_el_cascaron_sin_autor_ni_titulo_es_backlog_QUE_SE_CIERRA_re_corriendo(toy_vault, capsys):
+    """#473 — `bibtex` dice `empty author and editor` · `empty title` · `to sort, need author,
+    editor, or key`, y la cita se imprime VACÍA. Va a la categoría que re-correr la cadena cierra,
+    porque la salida es preguntar de nuevo (y terminar en el hueco declarado si nadie contesta con
+    una referencia), no reescribir el bloque acá."""
+    pend, res = lint.check_bibtex_no_pegable("2020aaa...1..1A", {"bibtex": _BTX_CASCARON})
+    assert res == [] and len(pend) == 1
+    assert "sin_autor_ni_titulo" in pend[0][1] and "VACÍA" in pend[0][1]
+
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_CASCARON, "bibtex_source": "crossref"})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0, "backlog, no frena"
+    assert "2020aaa" in _seccion(rep, "NO se pega tal cual"), rep
+
+
+def test_el_mes_no_estandar_va_a_la_categoria_que_NO_es_deuda(toy_vault, capsys):
+    """#473 — `month=July` hace que `bibtex` avise `string name "july" is undefined` y el mes se
+    pierda, pero es lo que Crossref exporta: re-bajarlo devuelve lo mismo. Si contara como
+    pendiente, la nota se re-bajaría en cada pasada y su línea quedaría en pantalla para siempre
+    —el backlog permanente que #435 midió—, así que va a la categoría que el reporte titula «no es
+    deuda» y NOMBRA cómo se pega."""
+    pend, res = lint.check_bibtex_no_pegable("2020aaa...1..1A", {"bibtex": _BTX_MES})
+    assert pend == [] and len(res) == 1
+    assert "mes_no_estandar" in res[0][1] and "@string{july" in res[0][1]
+
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_MES, "bibtex_source": "crossref"})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0
+    assert "2020aaa" in _seccion(rep, "LO QUE LA FUENTE DA"), rep
+    assert "2020aaa" not in _seccion(rep, "NO se pega tal cual"), "no se re-baja: sería un no-op"
+
+
+def test_la_clave_de_cita_repetida_se_NOMBRA_de_los_dos_lados():
+    """#473 — en un `.bib` `bibtex` saltea la segunda entrada y esa referencia NO se imprime
+    (medido: 257 `\\bibitem` sobre 259). Se nombra a las DOS notas, porque cuál renombrar lo decide
+    quien pega; una clave usada una sola vez no es hallazgo."""
+    hall = lint.check_bibtex_claves_repetidas({"Hyv_rinen_1998": ["1998Hyvarinen",
+                                                                 "1998HyvarinenICANN"],
+                                               "Mayor_1995": ["1995Natur.378..355M"]})
+    assert sorted(s for s, _ in hall) == ["1998Hyvarinen", "1998HyvarinenICANN"]
+    assert "1998HyvarinenICANN" in dict(hall)["1998Hyvarinen"]
+    assert lint.check_bibtex_claves_repetidas({}) == []

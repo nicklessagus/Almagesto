@@ -131,7 +131,13 @@
 ## 📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog) (0)
 > sobre 60 notas de `papers/`
 
-## 📇 `bibtex` con la revista como macro de AASTeX (`\aap`): sin `aas_macros.sty` compila vacío, el bloque no se pega (#471, backlog) (0)
+## 📇 `bibtex` que NO se pega tal cual y re-correr la cadena lo cierra (#471/#473, backlog) (0)
+> sobre 60 notas de `papers/`
+
+## 📇 `bibtex` no pegable tal cual que es LO QUE LA FUENTE DA: re-bajarlo es un no-op, se nombra para quien pega el `.bib` (#473) — no es deuda (0)
+> sobre 60 notas de `papers/`
+
+## 📇 Dos notas con la misma clave de cita: en un `.bib` `bibtex` saltea la segunda y esa referencia no se imprime (#473, backlog) (0)
 > sobre 60 notas de `papers/`
 
 ## ⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390) (0)

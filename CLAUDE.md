@@ -359,10 +359,20 @@ nadie tocó (17 de 272) y el lint daba rc 0: sus dos categorías miran notas que
 pregunta si el DOI existe, en **dos etapas** (#466): el filtro server-side por autor no puede
 repetir el criterio que abajo se compara normalizado —Crossref no pliega la diéresis al buscar y
 `method_key` sí al comparar—, y el motivo nombra las etapas en vez de culpar al título.
-⛔ **Y se pide en la forma en que se PEGA (#471):** ADS exporta la revista como macro de AASTeX
-(`journal = {\aap}`, que compila vacío sin `aas_macros.sty`), así que se pide `journalformat: 3`;
-un bloque con macro **no está cerrado** —pendiente sin `--force`, backlog del lint— y **no se
-post-procesa** con una tabla macro → nombre: sería redactar un campo de la cita.
+⛔ **Y se pide en la forma en que se PEGA: un bloque que NO SE PEGA no está cerrado (#471/#473).**
+ADS exporta la revista como macro de AASTeX (`journal = {\aap}`, que compila vacío sin
+`aas_macros.sty`), así que se pide `journalformat: 3`. ⛔ **Y NO se post-procesa** —una tabla macro
+→ nombre sería redactar un campo de la cita—, así que la salida es pedirlo de nuevo, y **cada forma
+de no pegarse declara su consecuencia** (`cfg.BIBTEX_NO_PEGABLE`, #473): `pendiente` se re-baja
+(macro de revista) · **`descartable` NO se guarda** y la cascada sigue al carril siguiente —el
+cascarón sin `author` ni `editor` ni `title` hace que `bibtex` imprima la cita **VACÍA**, y un hueco
+declarado lo ve el lint mientras una cita vacía se cuela al PDF— · `residuo` se **nombra** y no se
+re-baja (`month=July`, que ningún `.bst` define: re-pedirlo devuelve lo mismo, y llamarlo pendiente
+fabrica una deuda que ninguna corrida puede cerrar). #471 lo implementó contra **un** síntoma y por
+eso daba por cerrado el carril Crossref; medido compilando el `.bib` de una bóveda real: 0
+`Undefined control sequence` y todavía **13 warnings + 2 errores**. ⚠ La **clave de cita repetida**
+entre dos notas se **nombra y no se toca** (backlog): el contrato ya dice «pegable cambiando sólo la
+clave», pero `bibtex` saltea la segunda **en silencio** (257 `\bibitem` sobre 259).
 
 ⛔ **Toda nota de paper pertenece a alguna ENTIDAD (D-23).** Al menos uno de `stars`,
 `thesis_links` o `methods` tiene que estar poblado. Sin ninguno de los tres el paper no entra en

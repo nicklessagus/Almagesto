@@ -4702,21 +4702,56 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     return bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo
 
 
-def check_bibtex_journal_macro(stem: str, fm: dict) -> list:
-    """`[(stem, motivo)]` — the `bibtex` block whose journal is an AASTeX macro (#471, backlog).
+def check_bibtex_no_pegable(stem: str, fm: dict) -> tuple:
+    """`(pendiente, residuo)` — the `bibtex` block that does not paste as is (#471/#473, backlog).
 
-    ADS exports `journal = {\\aap}` by default, and without `aas_macros.sty` the field compiles
-    EMPTY: the block is not pasteable, so it is not closed. Measured in an instance: 126 of 219
-    `ads` blocks. Same function as `fetch_bibtex` (`cfg.bibtex_journal_macro`), which counts the
-    note as pending — so the way out is re-running the chain, not a macro → name table here."""
+    ⛔ **Two categories, because the two close in opposite ways.** `pendiente` is closed by
+    re-running the idempotent chain (the export can be asked for again in a pasteable form);
+    `residuo` is what the official export gives, so re-fetching it is a no-op and its line would
+    stay on screen forever — the permanent-backlog noise #435 measured (60 of 62), inside the check
+    #471 created precisely so the debt would close by re-running. Which class is which is the table
+    `cfg.BIBTEX_NO_PEGABLE`, not a list enumerated here, so a fourth class lands in the right
+    category on its own (#455).
+
+    Same function as `fetch_bibtex` (`cfg.bibtex_no_pegable`), which decides with it whether the
+    note counts as pending. The rule behind both: the export is requested in the form in which it
+    is PASTED, never post-processed — a macro → name table, or a month rewritten here, would be a
+    field of the citation written in the repo, which is what #397 forbids."""
     _btx = str(fm.get("bibtex") or "").strip()
-    _macro = cfg.bibtex_journal_macro(_btx) if _btx else ""
-    if not _macro:
-        return []
-    return [(stem, f"`journal = {{{_macro}}}` es una macro de AASTeX: sin `aas_macros.sty` el "
-                   f"campo compila VACÍO y el bloque no se pega tal cual → `python "
-                   f"scripts/fetch_bibtex.py --paper {stem}` (pide el nombre completo a ADS; "
-                   f"cuenta como pendiente sin `--force`, #471)")]
+    if not _btx:
+        return [], []
+    pend, res = [], []
+    for clase, detalle in cfg.bibtex_no_pegable(_btx):
+        if cfg.BIBTEX_NO_PEGABLE.get(clase) == "residuo":
+            res.append((stem, f"{detalle} [`{clase}`]"))
+        else:
+            pend.append((stem, f"{detalle} [`{clase}`] → `python scripts/fetch_bibtex.py "
+                               f"--paper {stem}` (cuenta como pendiente sin `--force`, #471/#473)"))
+    return pend, res
+
+
+def check_bibtex_claves_repetidas(por_clave: dict) -> list:
+    """`[(stem, motivo)]` — the citekey two or more notes share (#473, backlog).
+
+    In a `.bib` the key is the identifier and two entries cannot share one: `bibtex` reports
+    `Repeated entry … I'm skipping whatever remains of this entry` and the second one **disappears
+    in silence**. Measured on a real vault: 257 `\\bibitem` printed out of 259 entries, from two
+    pairs of Hyvärinen notes whose exports both came back as `Hyv_rinen_1998` / `Hyv_rinen_2001`.
+
+    ⛔ Backlog and not blocking, and nothing is rewritten: the contract already says a block is
+    pasteable «changing only the key», so the key is the consumer's to choose. What was missing is
+    that the loss was invisible — which is the corollary this repo keeps: a promise the system
+    quietly stopped keeping is worse than one it never made."""
+    out = []
+    for clave, stems in sorted(por_clave.items()):
+        if len(stems) < 2:
+            continue
+        for stem in sorted(stems):
+            otras = ", ".join(s for s in sorted(stems) if s != stem)
+            out.append((stem, f"su `bibtex` lleva la clave de cita `{clave}`, la misma que "
+                              f"{otras}: en un `.bib` `bibtex` saltea la segunda y esa referencia "
+                              f"NO se imprime — al pegarlas, cambiá la clave de una (#473)"))
+    return out
 
 
 def check_data_availability(stem: str, fm: dict) -> list:
@@ -6078,7 +6113,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     fuente_metadata_firmada: list = []  # (key, motivo) — #463: el catálogo es el equivocado, firmado con motivo
     sin_bibtex: list = []              # (stem, motivo) — #467: hueco de `bibtex` DECLARADO con su motivo
     sin_bibtex_mudo: list = []         # (stem, motivo) — #467: sin `bibtex` y sin motivo (indistinguible de «nadie preguntó»)
-    bibtex_macro_revista: list = []    # (stem, motivo) — #471: `journal = {\\aap}`, el bloque no se pega
+    bibtex_no_pegable: list = []       # (stem, motivo) — #471/#473: el bloque no se pega; re-correr lo cierra
+    bibtex_residuo: list = []          # (stem, motivo) — #473: no se pega y es lo que la fuente da (no es deuda)
+    bibtex_por_clave: dict = {}        # {citekey: [stem]} — #473: en un `.bib` la repetida desaparece
+    bibtex_clave_repetida: list = []   # (stem, motivo) — #473: dos notas con la misma clave de cita
     fuente_metadata_dudosa: list = []  # (key, motivo) — #353: título ≠, primera página no confirma, no evaluable o sin cruzar
     impl_leaks: list = []              # (stem, "línea N: marcador → texto") — fuga de implementación
     indice_viejo: list = []            # (stem, motivo) — #237: index.md contra la verdad de disco
@@ -6564,7 +6602,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             bad_roles += _b3
             sin_bibtex += _b4
             sin_bibtex_mudo += _b5
-            bibtex_macro_revista += check_bibtex_journal_macro(stem, fm)   # #471
+            _np, _nr = check_bibtex_no_pegable(stem, fm)                   # #471/#473
+            bibtex_no_pegable += _np
+            bibtex_residuo += _nr
+            if (_ck := cfg.bibtex_citekey(str(fm.get("bibtex") or ""))):
+                bibtex_por_clave.setdefault(_ck, []).append(stem)
             data_mal_formada += check_data_availability(stem, fm)          # #424
             # #298 — las dos señales de «la bóveda se apoya en el preprint». (a) El hallazgo del
             # detector de versiones, estampado para que SOBREVIVA a la corrida: sin él, correr la
@@ -6716,6 +6758,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     (identidad_dup, alias_con_nota, alias, ya_reportados,
      _id_incompletos) = check_identidad_duplicada(paper_fms, ft_hash, illegible_txt)
     incomplete += _id_incompletos
+    # ── #473 · dos notas con la misma clave de cita ──────────────────────────────────────────
+    # Es CROSS-NOTA por naturaleza: una clave repetida no es una propiedad del bloque, sino del
+    # `.bib` en el que aterrizan dos. Por eso se junta en el loop y se juzga acá.
+    bibtex_clave_repetida = check_bibtex_claves_repetidas(bibtex_por_clave)
+
     # ── #216 · duplicado SIN doi ni arxiv_id (backlog, REPORTA y no fusiona) ─────────────────
     # El bloque vive en `check_duplicate_without_id` (#396).
     abstract_dup = check_duplicate_without_id(paper_fms, paper_abstracts,
@@ -6944,8 +6991,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('sin_bibtex', '📇 Hueco de `bibtex` DECLARADO con su motivo (#467) — decisión registrada, no es deuda', SEV_BACKLOG, tuple(sin_bibtex), poblacion='papers'),
         Categoria('bibtex_drift', '📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog)',
                   SEV_BACKLOG, tuple(bibtex_drift), poblacion='papers'),
-        Categoria('bibtex_macro_revista', '📇 `bibtex` con la revista como macro de AASTeX (`\\aap`): sin `aas_macros.sty` compila vacío, el bloque no se pega (#471, backlog)',
-                  SEV_BACKLOG, tuple(bibtex_macro_revista), poblacion='papers'),
+        Categoria('bibtex_no_pegable', '📇 `bibtex` que NO se pega tal cual y re-correr la cadena lo cierra (#471/#473, backlog)',
+                  SEV_BACKLOG, tuple(bibtex_no_pegable), poblacion='papers'),
+        Categoria('bibtex_residuo', '📇 `bibtex` no pegable tal cual que es LO QUE LA FUENTE DA: re-bajarlo es un no-op, se nombra para quien pega el `.bib` (#473) — no es deuda',
+                  SEV_BACKLOG, tuple(bibtex_residuo), poblacion='papers'),
+        Categoria('bibtex_clave_repetida', '📇 Dos notas con la misma clave de cita: en un `.bib` `bibtex` saltea la segunda y esa referencia no se imprime (#473, backlog)',
+                  SEV_BACKLOG, tuple(bibtex_clave_repetida), poblacion='papers'),
         Categoria('merge_ours', '⛔ Driver `merge=ours` REGISTRADO en un clon con `origin`: el próximo merge de la otra máquina descarta lo del remoto en silencio (#390)',
                   SEV_BLOQUEANTE, tuple(merge_ours), poblacion='merge_ours'),
         Categoria('dangling_thesis', 'thesis_links sin página destino', SEV_BLOQUEANTE, tuple(dangling_thesis), poblacion='entidades'),

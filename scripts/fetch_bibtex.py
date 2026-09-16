@@ -85,8 +85,12 @@ def split_entries(export: str) -> dict:
             if actual:
                 out[actual] = "\n".join(buf).strip() + "\n"
             buf = [linea]
-            cabeza = linea.split("{", 1)
-            actual = cabeza[1].rstrip().rstrip(",").strip() if len(cabeza) > 1 else ""
+            # ⛔ #473 — la clave de cita se saca con la MISMA función que la lee el lint
+            # (`cfg.bibtex_citekey`): acá se indexa por ella y allá se detecta la repetida, y dos
+            # implementaciones de «cuál es la clave» harían que el detector y el índice no hablen
+            # de lo mismo. Además corta en la coma, así que sirve igual para la exportación que
+            # llega en UNA línea (Crossref) y para la de una línea por campo (ADS).
+            actual = cfg.bibtex_citekey(linea)
         elif actual:
             buf.append(linea)
     if actual:
@@ -324,6 +328,21 @@ def _crossref_try(titulo: str, familia: str, year, extra: dict) -> tuple:
     return "", "", items, dudosos
 
 
+def _descartable(entrada: str) -> str:
+    """Why this entry is NOT kept, or `""` (#473).
+
+    A `descartable` block prints nothing —`@book{2010, ISBN={…}, publisher={Elsevier}}` makes
+    `bibtex` say `empty author and editor` · `empty title` · `to sort, need author, editor, or
+    key`, and the citation comes out EMPTY— so keeping it is worse than the declared hole: the lint
+    sees a hole, while an empty citation reaches the PDF of whoever pastes the `.bib`. The cascade
+    moves on to the next rail, exactly as if that rail had not answered.
+
+    ⚠ The class is deliberately narrow (`author` AND `editor` AND `title` all missing): a block with
+    a title and no author prints an incomplete reference, which is fixed by looking at the title
+    page, not by deleting."""
+    return " · ".join(d for _, d in cfg.bibtex_no_pegable_clase(entrada, "descartable"))
+
+
 def bibtex_for(fm: dict, stem: str, ads_cache: dict, sin_consultar=()) -> tuple:
     """`(entrada, fuente, motivo, sin_medir)` para una nota, recorriendo la cascada declarada.
 
@@ -341,22 +360,35 @@ def bibtex_for(fm: dict, stem: str, ads_cache: dict, sin_consultar=()) -> tuple:
     @inv INV-151"""
     bib = str(fm.get("bibcode") or "").strip() or stem
     sin_medir: list = []
+    descartadas: list = []
     if (entrada := ads_cache.get(bib)):
-        return entrada, "ads", "", []
+        if not (por_que := _descartable(entrada)):
+            return entrada, "ads", "", []
+        descartadas.append(f"la exportación de ADS {por_que}")
     if bib in sin_consultar:
         sin_medir.append(f"ADS no contestó por `{bib}`: no consta")
     if (doi := str(fm.get("doi") or "").strip()):
         entrada, fuente, no_medido = doi_bibtex(doi)
-        if entrada:
+        if entrada and not (por_que := _descartable(entrada)):
             return entrada, fuente, "", []
+        if entrada:
+            descartadas.append(f"la exportación de `{fuente}` por `{doi}` {por_que}")
         if no_medido:
             sin_medir.append(no_medido)
     if (arx := str(fm.get("arxiv_id") or "").strip()):
         entrada, no_medido = arxiv_bibtex(arx)
-        if entrada:
+        if entrada and not (por_que := _descartable(entrada)):
             return entrada, "arxiv", "", []
+        if entrada:
+            descartadas.append(f"la exportación de arXiv por `{arx}` {por_que}")
         if no_medido:
             sin_medir.append(no_medido)
+    if descartadas:
+        # ⛔ #473 — el hueco NO es «nadie tiene este paper»: alguien contestó y lo que contestó no
+        # es una referencia. El motivo lo dice, porque la acción de quien lo lea es OTRA (buscar la
+        # cita en la portada del libro, no re-preguntar a un servicio que ya contestó).
+        return "", "", ("la exportación oficial no trae una referencia imprimible: "
+                        + " · ".join(descartadas)), sin_medir
     faltan = [c for c, v in (("bibcode ADS", ads_cache.get(bib)), ("doi", fm.get("doi")),
                              ("arxiv_id", fm.get("arxiv_id"))) if not v]
     return "", "", "sin exportación oficial (sin " + ", sin ".join(faltan) + ")", sin_medir
@@ -392,14 +424,20 @@ def stamp_bibtex_gap(path: Path, fm: dict, body: str, motivo: str, fecha: str) -
 
 
 def bibtex_closed(fm: dict) -> bool:
-    """True when the note's `bibtex` is DONE: present and pasteable as is (#471).
+    """True when the note's `bibtex` is DONE: present and pasteable as is (#471/#473).
 
-    A block whose journal is an AASTeX macro (`journal = {\\aap}`) compiles empty without
-    `aas_macros.sty`, so it is not closed: `main` treats it as pending without `--force`, which is
-    what lets the idempotent chain close the backlog the lint names (`bibtex_macro_revista`, same
-    function: `cfg.bibtex_journal_macro`)."""
+    A block that does not paste is not closed, and `cfg.bibtex_no_pegable` says in how many ways it
+    can fail to (the journal as an AASTeX macro, a shell with no author and no title, a non-standard
+    month). Only the classes whose action is **not** `residuo` count here: a residue is what the
+    official export gives, so calling it pending would re-fetch the same block on every pass and
+    leave a debt no run can close (`BIBTEX_NO_PEGABLE`).
+
+    ONE function with the lint, which names the same two categories."""
     _btx = str(fm.get("bibtex") or "").strip()
-    return bool(_btx) and not cfg.bibtex_journal_macro(_btx)
+    if not _btx:
+        return False
+    return not [c for c, _ in cfg.bibtex_no_pegable(_btx)
+                if cfg.BIBTEX_NO_PEGABLE.get(c) != "residuo"]
 
 
 def notes_to_check(args) -> list:
@@ -428,16 +466,17 @@ def main() -> int:
                          "(¿`--paper`/`--slug` equivocado, o bóveda vacía?)")
         return 2
 
-    pendientes, fms, n_macro = [], {}, 0
+    pendientes, fms, n_no_pegable = [], {}, 0
     for f in notas:
         text = f.read_text(encoding="utf-8")
         fm = cfg.split_fm(text) or {}
-        # #471 — un bloque con la revista como macro NO está cerrado: no se pega. Cuenta como
-        # pendiente sin `--force`, para que re-correr la cadena (idempotente) cierre el backlog.
+        # #471/#473 — un bloque que NO SE PEGA no está cerrado, y `cfg.bibtex_no_pegable` dice de
+        # cuántas maneras puede no pegarse. Cuenta como pendiente sin `--force`, para que re-correr
+        # la cadena (idempotente) cierre el backlog que el lint nombra.
         if bibtex_closed(fm) and not args.force:
             continue
         if str(fm.get("bibtex") or "").strip() and not bibtex_closed(fm):
-            n_macro += 1
+            n_no_pegable += 1
         fms[f] = (fm, text)
         pendientes.append(f)
     if not pendientes:
@@ -465,7 +504,7 @@ def main() -> int:
         errores.append(f"sin token ADS, el carril `ads` NO corrió: {exc}")
 
     hoy = _dt.date.today().isoformat()
-    n_ok, huecos, propuestas, no_evaluadas = 0, [], [], []
+    n_ok, huecos, propuestas, no_evaluadas, sacados = 0, [], [], [], []
     por_fuente: dict = {}
     for f in pendientes:
         fm, text = fms[f]
@@ -501,8 +540,15 @@ def main() -> int:
                 no_evaluadas.append(f"{f.stem}: {' · '.join(sin_medir)}")
                 continue
             huecos.append(f"{f.stem}: {motivo}")
-            # #467 — el motivo se PERSISTE: sin esto la distinción que el docstring de `bibtex_for`
-            # promete se pierde al terminar el proceso, y para verla hay que re-correr el paso caro.
+            # ⛔ #473 — la nota no puede publicar un bloque Y el hueco: son dos afirmaciones
+            # contradictorias sobre el mismo campo. Si la cascada descartó lo que la nota traía
+            # (`descartable`: no imprime nada), el bloque se SACA junto con declarar el hueco, y se
+            # AVISA nombrando la nota. Es regenerable —re-correr vuelve a preguntar— y el motivo
+            # que queda escrito dice qué contestó cada carril, así que la decisión no se pierde.
+            if str(fm.get("bibtex") or "").strip():
+                cfg.drop_fm_keys(f, "bibtex", "bibtex_source")
+                sacados.append(f.stem)
+                fm, text = cfg.split_fm(t2 := f.read_text(encoding="utf-8")) or {}, t2
             stamp_bibtex_gap(f, fm, text.split("\n---\n", 1)[-1], motivo, hoy)
             continue
         if str(fm.get("sin_bibtex") or "").strip():
@@ -517,8 +563,11 @@ def main() -> int:
     detalle = ", ".join(f"{k}: {v}" for k, v in sorted(por_fuente.items())) or "ninguna"
     cfg.print_seguro(f"bibtex: {n_ok} de {len(pendientes)} nota(s) con exportación oficial "
                      f"({detalle}) — sobre {len(notas)} nota(s) de paper miradas"
-                     + (f"; {n_macro} re-bajada(s) porque la revista era una macro de AASTeX "
-                        f"(#471)" if n_macro else ""))
+                     + (f"; {n_no_pegable} re-bajada(s) porque su bloque no se pegaba tal cual "
+                        f"(#471/#473)" if n_no_pegable else ""))
+    for s in sacados:
+        cfg.print_seguro(f"  ⚠ `bibtex` SACADO y hueco declarado — lo que había no imprimía "
+                         f"ninguna referencia y ningún carril trajo otra (#473): {s}")
     for pr in propuestas:
         cfg.print_seguro(f"  ⚑ el hueco NO es tal — hay DOI y la nota no lo lleva: {pr}")
     for h in huecos:

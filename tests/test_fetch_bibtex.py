@@ -267,7 +267,8 @@ def test_bibtex_for_baja_por_la_cascada_hasta_arxiv(monkeypatch):
     def get_ok(url, headers=None, timeout=None, allow_redirects=None):
         if "/ra/" in url:
             return Resp(200, payload=[{"RA": "DataCite"}])
-        return Resp(200, text="@dataset{y}", ct="application/x-bibtex")
+        return Resp(200, text="@dataset{y, author={{Vizier}}, title={{Un catalogo}}}",
+                    ct="application/x-bibtex")
     fake_net(monkeypatch, get=get_ok)
     assert fb.bibtex_for(fm, "2020SinADS", {})[1] == "datacite"
 
@@ -542,9 +543,13 @@ def test_estampa_la_cadena_aunque_NO_HAYA_NADA_que_bajar(tmp_path, monkeypatch, 
     monkeypatch.setattr(fb.cfg, "save_paso",
                         lambda slug, paso, **kw: pasos.append((slug, paso)))
     monkeypatch.setattr(fb, "notes_to_check", lambda args: [tmp_path / "a.md", tmp_path / "b.md"])
-    monkeypatch.setattr(fb.cfg, "split_fm", lambda t: {"bibtex": "@article{x}"})
+    # ⚠ El bloque del doble lleva `author` y `title`, como uno real: una entrada sin ninguno de
+    # los dos no se pega —`bibtex` imprime la cita vacía— y desde #473 cuenta como PENDIENTE, así
+    # que el doble degenerado le daba a `main` un caso que su población nunca produce.
+    _btx = "@article{x, author={A}, title={T}}"
+    monkeypatch.setattr(fb.cfg, "split_fm", lambda t: {"bibtex": _btx})
     for f in ("a.md", "b.md"):
-        (tmp_path / f).write_text("---\nbibtex: '@article{x}'\n---\n", encoding="utf-8")
+        (tmp_path / f).write_text(f"---\nbibtex: '{_btx}'\n---\n", encoding="utf-8")
     monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--slug", "hd_40307"])
     assert fb.main() == 0
     assert "todas ya lo tienen" in capsys.readouterr().out
@@ -802,7 +807,7 @@ def test_main_re_baja_el_bloque_con_macro_SIN_force_y_deja_el_pegable(tmp_path, 
     fm = cfg.split_fm(con_macro.read_text(encoding="utf-8")) or {}
     assert "\\aap" not in fm["bibtex"] and fm["bibtex_source"] == "ads"
     assert (cfg.split_fm(limpio.read_text(encoding="utf-8")) or {})["bibtex"] == ENTRADA_ADS
-    assert "1 re-bajada(s) porque la revista era una macro" in capsys.readouterr().out
+    assert "1 re-bajada(s) porque su bloque no se pegaba tal cual" in capsys.readouterr().out
 
 
 def test_bibtex_closed_es_presente_Y_pegable():
@@ -811,3 +816,65 @@ def test_bibtex_closed_es_presente_Y_pegable():
     assert fb.bibtex_closed({"bibtex": ENTRADA_ADS}) is True
     assert fb.bibtex_closed({"bibtex": ENTRADA_ADS_MACRO}) is False
     assert fb.bibtex_closed({"bibtex": ""}) is False and fb.bibtex_closed({}) is False
+
+
+# ── #473 · las otras dos formas de no pegarse ──────────────────────────────────────────────────
+
+ENTRADA_CASCARON = ('@book{2010,\n        ISBN = {9780123747266},\n'
+                    '   publisher = {Elsevier},\n        year = {2010},\n}\n')
+ENTRADA_MES = ('@article{Yang_2007, title={T}, author={Yang, F.}, month=July, year={2007}}\n')
+
+
+def test_el_RESIDUO_esta_cerrado_y_el_resto_no():
+    """#473 — `bibtex_closed` mira todas las formas de no pegarse MENOS el residuo. El mes no
+    estándar es lo que Crossref exporta: contarlo como pendiente re-bajaría la misma entrada en
+    cada pasada y dejaría una deuda que ninguna corrida puede cerrar."""
+    assert fb.bibtex_closed({"bibtex": ENTRADA_MES}) is True, "residuo: re-bajarlo es un no-op"
+    assert fb.bibtex_closed({"bibtex": ENTRADA_CASCARON}) is False
+    assert fb.bibtex_closed({"bibtex": ENTRADA_ADS_MACRO}) is False
+
+
+def test_la_cascada_DESCARTA_el_cascaron_y_sigue_al_carril_siguiente(monkeypatch):
+    """#473 — un bloque sin `author` ni `editor` ni `title` hace que `bibtex` imprima la cita
+    VACÍA, así que guardarlo es peor que el hueco: el hueco lo ve el lint, la cita vacía se cuela
+    al PDF. La cascada sigue exactamente como si ese carril no hubiera contestado."""
+    def get(url, **k):
+        if "arxiv" in url:
+            return Resp(200, text=ENTRADA_ADS)
+        return Resp(200, text=ENTRADA_CASCARON, ct=fb.BIBTEX_CT)
+    fake_net(monkeypatch, get=get)
+    entrada, fuente, motivo, sin_medir = fb.bibtex_for(
+        {"doi": "10.1016/b", "arxiv_id": "1234.5678"}, "2010ComonJutten", {})
+    assert entrada == ENTRADA_ADS and fuente == "arxiv" and motivo == "" and sin_medir == []
+
+
+def test_si_NINGUN_carril_trae_referencia_el_hueco_dice_que_alguien_CONTESTO(monkeypatch):
+    """#473 — el motivo distingue «nadie tiene este paper» de «contestaron y lo que contestaron no
+    es una referencia»: la acción de quien lo lea es OTRA (buscar la cita en la portada del libro,
+    no re-preguntarle a un servicio que ya contestó)."""
+    fake_net(monkeypatch,
+             get=lambda url, **k: Resp(200, text=ENTRADA_CASCARON, ct=fb.BIBTEX_CT))
+    entrada, _, motivo, sin_medir = fb.bibtex_for({"doi": "10.1016/b"}, "2010ComonJutten", {})
+    assert entrada == "" and sin_medir == []
+    assert "no trae una referencia imprimible" in motivo and "10.1016/b" in motivo
+
+
+def test_main_SACA_el_cascaron_al_declarar_el_hueco_y_lo_AVISA(tmp_path, monkeypatch, capsys):
+    """#473 — la nota no puede publicar un bloque Y el hueco: son dos afirmaciones contradictorias
+    sobre el mismo campo, y `sin_bibtex` es el que el lint titula «decisión registrada». El bloque
+    es regenerable (re-correr vuelve a preguntar) y lo que se saca queda escrito en el motivo, así
+    que la decisión no se pierde — pero se AVISA nombrando la nota, nunca en silencio."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    fake_net(monkeypatch,
+             get=lambda url, **k: Resp(200, text=ENTRADA_CASCARON, ct=fb.BIBTEX_CT))
+    nota = _nota(tmp_path, {"bibcode": "2010ComonJutten", "tags": ["paper"],
+                            "doi": "10.1016/b", "bibtex": ENTRADA_CASCARON,
+                            "bibtex_source": "crossref"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 0
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
+    assert not str(fm.get("bibtex") or "").strip() and not fm.get("bibtex_source")
+    assert "no trae una referencia imprimible" in fm["sin_bibtex"]
+    assert "2010ComonJutten" in capsys.readouterr().out
+    assert "prosa que no se toca" in nota.read_text(encoding="utf-8")

@@ -983,18 +983,49 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   que es lo que es. El **4xx sí es una respuesta** y clasifica como hueco medido (mismo corte que
   el 404 de ADS, #399); sólo el timeout y el 5xx dejan al paper sin consultar. Es D-43 un nivel más
   abajo, y sobre el único campo de esta familia que además **se escribe en la nota**.
-- **`bibtex` con la revista como macro de AASTeX** (#471, `bibtex_macro_revista`, backlog): ADS
-  exporta por defecto `journal = {\aap}` (`journalformat: 1`), y sin `aas_macros.sty` —que el
-  `.bib` de un informe normal no carga— el campo compila **vacío**; la ficha no lleva el nombre en
-  ningún otro lado (`bibstem` es la abreviatura). Medido en una instancia: **126 de 219** bloques
-  `ads`, y cada entrada nueva del `.bib` exigía reemplazar la macro **a mano** — justo la
-  transcripción que #397 existe para eliminar. La salida **no** es una tabla macro → nombre en el
-  repo (sería redactar un campo de la cita, lo que #397 prohíbe): `fetch_bibtex` pide
-  `journalformat: 3` —nombre completo, verificado contra la API— y un bloque con macro **no está
-  cerrado**: cuenta como pendiente **sin `--force`**, así que re-correr la cadena (idempotente) o
-  `python scripts/fetch_bibtex.py --paper <stem>` lo re-baja. UNA función
-  (`lib_config.bibtex_journal_macro`) decide eso para los dos lectores; sólo cuenta el campo que
-  es **exactamente** una macro (`{\aap}` sí, `{A\&A}` no).
+- **`bibtex` que NO se pega tal cual** (#471/#473, `bibtex_no_pegable`, backlog): la regla es que
+  **la exportación se pide en la forma en que se PEGA, y un bloque que no se pega no está
+  cerrado**. Esta categoría junta las formas que **re-correr la cadena cierra**, así que la salida
+  es `python scripts/fetch_bibtex.py --paper <stem>` (o la cadena entera, idempotente: el bloque
+  cuenta como pendiente **sin `--force`**). Dos hoy:
+  - **la revista como macro de AASTeX** (#471): ADS exporta `journal = {\aap}` por defecto
+    (`journalformat: 1`) y sin `aas_macros.sty` —que el `.bib` de un informe normal no carga— el
+    campo compila **vacío**; la ficha no lleva el nombre en ningún otro lado (`bibstem` es la
+    abreviatura). Medido en una instancia: **126 de 219** bloques `ads` (149 al validarlo, la
+    bóveda creció), y compilando de verdad, **149 → 0** `Undefined control sequence`. La salida no
+    es una tabla macro → nombre en el repo (sería redactar un campo de la cita, lo que #397
+    prohíbe): `fetch_bibtex` pide `journalformat: 3`. Sólo cuenta el campo que es **exactamente**
+    una macro (`{\aap}` sí, `{A\&A}` no).
+  - **el cascarón sin autor ni título** (#473): `@book{2010, ISBN={…}, publisher={Elsevier},
+    year={2010}}` — identificadores y ninguna referencia, así que `bibtex` dice `empty author and
+    editor` · `empty title` · `to sort, need author, editor, or key` y **la cita se imprime
+    VACÍA**. Es peor que el hueco declarado: el hueco lo ve el lint, la cita vacía se cuela al PDF.
+    Por eso la cascada lo **descarta** y sigue al carril siguiente; si ninguno trae una referencia,
+    `fetch_bibtex` **saca el bloque** —avisando y nombrando la nota— y declara `sin_bibtex` con un
+    motivo que dice que alguien **sí contestó**. ⛔ La conjunción es angosta a propósito (faltan
+    `author` **y** `editor` **y** `title`): con título y sin autor la referencia sale incompleta,
+    no vacía, y borrar ahí sería el barrido que revierte trabajo bueno (#453).
+- **`bibtex` no pegable que es LO QUE LA FUENTE DA** (#473, `bibtex_residuo`, backlog **declarado**
+  — no es deuda, va aparte por AUD-207): re-bajarlo es un **no-op**, así que **no** cuenta como
+  pendiente y se **nombra** para quien pega el `.bib`. Hoy una: **el mes como macro no estándar**
+  (`month=July`, `month=Sept`), que ningún `.bst` define —los estándar son `jan`…`dec`—, así que
+  `bibtex` avisa `string name "july" is undefined` y **el mes se pierde**. Medido: 5 notas del
+  carril Crossref. Se pega agregando `@string{july = "July"}` al `.bib` o cambiando el valor a
+  mano; acá **no se redacta un campo de la cita** (#397). ⛔ Y está separada de la categoría de
+  arriba porque las dos cierran al revés: llamar pendiente a un residuo fabrica una deuda que
+  **ninguna corrida puede cerrar** —la nota se re-baja en cada pasada y vuelve idéntica—, que es el
+  ruido permanente que #435 midió (60 de 62) dentro del chequeo que #471 creó para que el backlog
+  se cerrara re-corriendo. Qué clase es cuál lo dice la tabla `cfg.BIBTEX_NO_PEGABLE`, no una lista
+  enumerada en cada consumidor (#455).
+- **Dos notas con la misma clave de cita** (#473, `bibtex_clave_repetida`, backlog): en un `.bib`
+  la clave **es** el identificador y dos entradas no pueden compartirla — `bibtex` dice `Repeated
+  entry … I'm skipping whatever remains of this entry` y la segunda **desaparece en silencio**.
+  Medido en una bóveda real: **257 `\bibitem` impresos sobre 259 entradas**, por dos pares de notas
+  de Hyvärinen cuyas exportaciones volvieron con la misma clave. No bloquea y **nada se reescribe**:
+  el contrato ya dice que un bloque es pegable «cambiando sólo la clave», así que cuál renombrar lo
+  decide quien pega. Lo que faltaba es que la pérdida fuera **visible**. Se nombra a las **dos**
+  notas, y la clave sale de la misma función que la usa `fetch_bibtex` para indexar la exportación
+  multi-entrada de ADS (`cfg.bibtex_citekey`).
 - **`sources:` cuyo desacuerdo con el catálogo está FIRMADO** (#463, `fuente_metadata_firmada`,
   backlog **declarado** — no es deuda, va aparte por AUD-207): la **cuarta salida** del bloqueante
   de arriba, para cuando el equivocado es el **catálogo**. Las tres que prescribía el mensaje

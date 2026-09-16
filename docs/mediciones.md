@@ -2896,11 +2896,75 @@ fija de las 12 macros presentes → nombre— se **rechazó**: un `bibtex` con p
 ser lo que ADS devolvió, y una tabla en el repo es un campo de la cita redactado acá (INV-151). Entró
 la primera: `ads_bibtex` pide el formato 3, y `lib_config.bibtex_journal_macro` —UNA función— decide
 para `fetch_bibtex` (la nota con macro es **pendiente** sin `--force`: la cadena idempotente cierra
-el backlog) y para el lint (`bibtex_macro_revista`, backlog con el comando). Sólo cuenta el campo que
-es exactamente una macro: `{A\&A}` no dispara.
+el backlog) y para el lint. Sólo cuenta el campo que es exactamente una macro: `{A\&A}` no dispara.
+⚠ Desde #473 esa función es `lib_config.bibtex_no_pegable`, que la envuelve: la regla no cambió, se
+descubrió que tenía **tres** síntomas y que #471 cubría uno.
 
-**Portadores (#409).** `carriers --propose lib_config.bibtex_journal_macro --patron
+**Portadores (#409).** `carriers --propose lib_config.bibtex_no_pegable --patron
 'journalformat|get\("bibtex"\)'`: 2 llaman (`fetch_bibtex`, `lint`), 0 matchean sin llamar.
+
+## #473 · «no se pega» tenía tres formas y #471 cubría una (2026-09-16)
+
+Lo levantó la **validación de #471 en la instancia** (Almagesto-Tesis#6), y por el único método que
+podía levantarlo: **compilar el `.bib` de verdad**. Un `.bib` con las 259 entradas de la bóveda más
+`\nocite{*}` y `plain.bst`, `pdflatex → bibtex → pdflatex`, antes y después del fix:
+
+| | antes de v1.273.0 | después |
+|---|---|---|
+| `Undefined control sequence` | **149** (`\aap` 77, `\apj` 25, `\mnras` 24, `\aj` 10, …) | **0** |
+| warnings de `bibtex` | 13 | **13** |
+| errores de `bibtex` | 2 | **2** |
+| `\bibitem` impresos | 257 (sobre 259) | **257** |
+
+El fix de #471 cerró su columna entera y **no movió ninguna de las otras tres filas**: los 13
+warnings y los 2 errores son del carril **Crossref/DataCite**, y `fetch_bibtex.bibtex_closed` los
+daba por **cerrados** porque sólo miraba la macro de revista. Las tres formas, con su población:
+
+| forma | ejemplo | n | qué hace `bibtex` |
+|---|---|---|---|
+| cascarón **sin autor ni título** | `@book{2010, ISBN={…}, DOI={…}, publisher={Elsevier}, year={2010}}` | 1 | `empty author and editor` · `empty title` · `to sort, need author, editor, or key`: **la cita se imprime vacía** |
+| **mes como macro no estándar** | `month=July`, `month=June`, `month=Sept` | 5 notas | `string name "july" is undefined`: el mes **se pierde** |
+| **clave repetida entre notas** | `Hyv_rinen_1998` (`1998Hyvarinen` y `1998HyvarinenICANN`), `Hyv_rinen_2001` | 2 pares | `Repeated entry … I'm skipping whatever remains`: **la segunda entrada desaparece** (257 sobre 259) |
+
+**Lo que entró, y por qué son TRES consecuencias y no un grado.** La regla de #471 no cambió —la
+exportación se pide en la forma en que se pega y no se post-procesa (#397)—: lo que cambió es que
+cada síntoma pide una acción distinta, y mezclarlas produce un defecto en cada dirección.
+
+- `macro_revista` → **`pendiente`**: el bloque sirve (lleva autor, título, volumen; sólo un campo
+  compila vacío) y pedirlo de nuevo lo arregla.
+- `sin_autor_ni_titulo` → **`descartable`**: no imprime nada, así que guardarlo es **peor** que el
+  hueco —el hueco lo ve el lint, la cita vacía se cuela al PDF—. La cascada sigue al carril
+  siguiente y, si ninguno trae una referencia, `fetch_bibtex` **saca el bloque avisando** y declara
+  `sin_bibtex` con un motivo que dice que alguien **sí contestó**: la acción de quien lo lea es otra
+  (buscar la cita en la portada, no re-preguntarle a un servicio que ya contestó). Es el caso 4 de
+  la cascada de #397 —un libro— con un cascarón encima.
+- `mes_no_estandar` → **`residuo`**: es lo que Crossref da. Llamarlo pendiente re-bajaría la misma
+  entrada en cada pasada y dejaría una deuda que **ninguna corrida puede cerrar**, que es el ruido
+  permanente que #435 midió (60 de 62) **dentro del chequeo que #471 creó para que el backlog se
+  cerrara re-corriendo**. Se nombra en una categoría aparte, con la salida (`@string{july =
+  "July"}`) y sin tocar el bloque.
+
+Y en la otra dirección: llamar `descartable` a un `pendiente` **borra un bloque bueno por un campo
+roto**, que es el barrido que #453 pagó con cuatro devoluciones. Por eso la conjunción del cascarón
+es angosta —faltan `author` **y** `editor` **y** `title`, los tres que el `.bst` necesita para
+imprimir algo—: con título y sin autor la referencia sale incompleta, no vacía.
+
+**Lo que NO entró.** Reescribir el mes o rellenar autor/título desde el frontmatter: sería redactar
+un campo de la cita (#397/INV-151). La clave repetida tampoco se renombra —el contrato ya dice que
+un bloque es pegable «cambiando sólo la clave», así que cuál renombrar lo decide quien pega—: lo que
+faltaba es que la pérdida fuera **visible**.
+
+**Dos regresiones que encontró la suite vieja, y son la regla de método nº 2.** Dos tests
+preexistentes cayeron con el detector nuevo, los dos por **fixtures degeneradas**: `@article{x}` y
+`@dataset{y}`, bloques sin un solo campo que ningún backend real devuelve. El doble le daba a
+`main` un caso que su población no produce. Se corrigieron los dobles, no el detector.
+
+**Portadores (#409).** `carriers --propose lib_config.bibtex_no_pegable --patron
+'journalformat|get\("bibtex"\)'`: 2 llaman (`fetch_bibtex`, `lint`), 0 matchean sin llamar.
+`carriers --propose lib_config.bibtex_citekey --patron 'bibtex_citekey|startswith\("@"\)'`: 2 llaman,
+0 sin llamar — el segundo portador apareció al enumerar: `fetch_bibtex.split_entries` sacaba la clave
+de cita **a mano** para indexar la exportación de ADS, que es la misma pregunta que hace el detector
+de la repetida. Con dos implementaciones, el índice y el detector dejarían de hablar de lo mismo.
 
 ## #472 · el roll-up publicaba deuda sobre un `no_vista` declarado cuando otro sujeto pobló `methods` (2026-09-15)
 

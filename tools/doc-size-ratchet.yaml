@@ -43,9 +43,9 @@
 #   - Y la red barata del hallazgo secundario: claves `ancla:` contadas contra las entradas
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
-medido_en: "2026-09-14"
-techo_lineas: 1849
-techo_bytes: 151300
+medido_en: "2026-09-16"
+techo_lineas: 1862
+techo_bytes: 152700
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -618,3 +618,21 @@ crecimientos:
       forma pegable). Ninguna es candidata a salir sin perderse.
     techo_lineas: 1852
     techo_bytes: 151700
+  - fecha: "2026-09-16"
+    ancla: "#473"
+    motivo: >-
+      Diez líneas que reemplazan las cuatro de #471 en el mismo párrafo. La regla de #471 no
+      cambia: cambia que tiene TRES síntomas y que cada uno pide una acción distinta, y es
+      exactamente lo que un agente necesita antes de tocar un `bibtex` — si trata el cascarón como
+      la macro publica una cita que imprime VACÍA, y si trata el mes como la macro fabrica una
+      deuda que ninguna corrida puede cerrar. La tabla de consecuencias (`BIBTEX_NO_PEGABLE`) no
+      se puede leer del reporte del lint: decide antes.
+    sale: >-
+      La mitad del párrafo de #471. La versión vieja gastaba tres líneas en explicar la macro y el
+      porqué del no-post-procesado; ahora la macro es UN ejemplo de `pendiente` y el «no se
+      post-procesa» quedó en media línea, con el porqué apoyado en #397, que está arriba. La
+      medición (13 warnings + 2 errores compilando 259 entradas) entra en una cláusula porque es lo
+      que justifica que la regla tenga tres ramas; el detalle por forma va a `docs/mediciones.md` y
+      el catálogo de las dos categorías nuevas, a `docs/lint.md`.
+    techo_lineas: 1862
+    techo_bytes: 152700

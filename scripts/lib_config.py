@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.273.2"
+ALMAGESTO_VERSION = "1.274.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2078,18 +2078,137 @@ BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv")
 BIBTEX_JOURNAL_MACRO_RE = re.compile(r"(?im)^\s*journal\s*=\s*[{\"]\s*(\\[A-Za-z]+)\s*[}\"]\s*,?\s*$")
 
 
+#: #473 — los meses que BibTeX define como macro. `month = jul` se pega; `month = July` es una
+#: macro que ningún `.bst` define, así que `bibtex` avisa `string name "july" is undefined` y el
+#: mes SE PIERDE. ⚠ `month = {July}` es una cadena literal y está bien: la diferencia está en los
+#: delimitadores, o sea que este chequeo mira el valor CRUDO y no puede usar `bibtex_fields`, que
+#: los desenvuelve.
+BIBTEX_MESES = ("jan", "feb", "mar", "apr", "may", "jun",
+                "jul", "aug", "sep", "oct", "nov", "dec")
+
+BIBTEX_MONTH_RE = re.compile(r"(?i)(?:^|[,{])\s*month\s*=\s*([A-Za-z]+)\s*(?=[,}]|$)")
+
+#: #473 — las clases de bloque NO PEGABLE, y **qué hay que hacer con cada una**, que es lo único
+#: que las distingue. Los tres valores no son grados de un mismo eje: son tres consecuencias.
+#:
+#: * `pendiente` — el bloque SIRVE (lleva autor, título, volumen; lo único roto es un campo) y
+#:   pedirlo de nuevo lo arregla. Se guarda, cuenta como NO cerrado, y re-correr la cadena
+#:   idempotente cierra la deuda que el lint nombra.
+#: * `descartable` — el bloque NO imprime nada, así que guardarlo es peor que el hueco: la cascada
+#:   sigue al carril siguiente y, si ninguno trae una referencia, se declara `sin_bibtex` con el
+#:   motivo. Un hueco lo ve el lint; una cita vacía se cuela al PDF.
+#: * `residuo` — es lo que la exportación oficial da y re-pedirlo es un **no-op**. Se guarda, se
+#:   NOMBRA para quien pega el `.bib`, y **no** cuenta como pendiente.
+#:
+#: ⛔ Llamar `pendiente` a un residuo fabrica una deuda que ninguna corrida puede cerrar: la nota se
+#: re-baja en cada pasada, vuelve idéntica, y su línea queda en pantalla para siempre — la forma de
+#: ruido que #435 midió (60 de 62 propuestas eran permanentes) dentro del chequeo que #471 creó
+#: para que el backlog se cerrara re-corriendo. Y llamar `descartable` a un `pendiente` borra un
+#: bloque bueno por un campo roto, que es el barrido que #453 pagó cuatro devoluciones.
+BIBTEX_NO_PEGABLE = {"macro_revista": "pendiente",
+                     "sin_autor_ni_titulo": "descartable",
+                     "mes_no_estandar": "residuo"}
+
+
 def bibtex_journal_macro(entry: str) -> str:
     """The AASTeX macro (`\\aap`) in the `journal` field of a BibTeX entry, or `""` (#471).
 
-    ONE function for the two readers that decide whether a `bibtex` block is CLOSED: `fetch_bibtex`
-    (a block with a macro is pending, and re-running the chain re-fetches it without `--force`)
-    and the lint (category `bibtex_macro_revista`). The rule behind both: the export is requested in
-    the form in which it is PASTED, never post-processed — a macro → name table in the repo would
-    be a field of the citation written here, which is what #397 forbids. Only a field that is
-    EXACTLY a macro counts: `{\\aap}` yes, `{Astronomy and Astrophysics}` no, and a journal whose
-    name merely contains a backslash somewhere is not this defect."""
+    Detail of `bibtex_no_pegable`, which is the ONE function the two readers call (#473). The rule:
+    the export is requested in the form in which it is PASTED, never post-processed — a macro →
+    name table in the repo would be a field of the citation written here, which is what #397
+    forbids. Only a field that is EXACTLY a macro counts: `{\\aap}` yes, `{Astronomy and
+    Astrophysics}` no, and a journal whose name merely contains a backslash somewhere is not this
+    defect."""
     m = BIBTEX_JOURNAL_MACRO_RE.search(entry or "")
     return m.group(1) if m else ""
+
+
+def bibtex_mes_no_estandar(entry: str) -> str:
+    """The non-standard month macro of a BibTeX entry, or `""` (#473).
+
+    Crossref exports `month=July`, and the twelve macros a `.bst` defines are `jan`…`dec`: `bibtex`
+    reports `Warning--string name "july" is undefined` and the month disappears from the printed
+    reference. ⚠ Only an UNDELIMITED value is this defect — `month = {July}` is a literal string and
+    prints fine — so the raw entry is what gets read, never `bibtex_fields` (which unwraps `{…}`
+    and would turn a correct entry into a finding). A concatenation (`month = jan # "~1"`) does not
+    match either: the value has to run to the comma that closes the field."""
+    m = BIBTEX_MONTH_RE.search(entry or "")
+    if not m:
+        return ""
+    return "" if m.group(1).casefold() in BIBTEX_MESES else m.group(1)
+
+
+def bibtex_no_pegable(entry: str) -> list:
+    """`[(class, detail)]` — why this `bibtex` block does NOT paste as is (#471/#473).
+
+    ⛔ ONE function for the readers that decide whether a block is CLOSED —`fetch_bibtex`
+    (`bibtex_closed`, plus the cascade that discards a shell) and the lint (its two categories)—
+    because the rule is a single one: **the export is requested in the form in which it is PASTED,
+    and a block that does not paste is not closed** (#471). #471 implemented it against ONE symptom
+    —the journal macro of the ADS rail— and therefore treated the Crossref rail as closed, which
+    arrives unpasteable in two other ways. Measured by compiling a real vault's `.bib` (259
+    entries, `plain.bst`): after #471, **0** `Undefined control sequence` and still **13 warnings**
+    and **2 errors**, all of them from the Crossref/DataCite rail.
+
+    The three classes, and what `bibtex` prints for each:
+
+    * `macro_revista` — `journal = {\\aap}`: the field compiles EMPTY without `aas_macros.sty`.
+    * `sin_autor_ni_titulo` — `@book{2010, ISBN={…}, publisher={Elsevier}, year={2010}}` is a shell
+      with identifiers and no reference, so `bibtex` says `empty author and editor` · `empty title`
+      · `to sort, need author, editor, or key` and **the citation prints EMPTY**. That is worse
+      than the declared hole: the lint sees a hole, while an empty citation reaches the PDF. It is
+      case 4 of the #397 cascade —a book— with a shell on top.
+    * `mes_no_estandar` — the month is lost; a **residue**, because it is what Crossref gives.
+
+    ⛔ The conjunction in `sin_autor_ni_titulo` is deliberately narrow: `author` **and** `editor`
+    **and** `title` all missing, which are exactly the three the `.bst` needs to print anything. A
+    block with a title and no author prints an incomplete reference, not an empty one, and deleting
+    there would be the sweep that reverts good work (the return #453 paid for four times)."""
+    entrada = str(entry or "").strip()
+    if not entrada:
+        return []
+    out = []
+    if (macro := bibtex_journal_macro(entrada)):
+        out.append(("macro_revista", f"`journal = {{{macro}}}` es una macro de AASTeX: sin "
+                                     f"`aas_macros.sty` el campo compila VACÍO"))
+    campos = bibtex_fields(entrada)
+    if not any(str(campos.get(c) or "").strip() for c in ("author", "editor", "title")):
+        out.append(("sin_autor_ni_titulo", "el bloque no trae `author` ni `editor` ni `title`: "
+                                           "`bibtex` no tiene con qué imprimir la referencia y la "
+                                           "cita sale VACÍA"))
+    if (mes := bibtex_mes_no_estandar(entrada)):
+        out.append(("mes_no_estandar", f"`month = {mes}` es una macro que ningún `.bst` define "
+                                       f"(los estándar son `jan`…`dec`): el mes se PIERDE al "
+                                       f"compilar. Se pega agregando `@string{{{mes.casefold()} = "
+                                       f'"{mes}"}}` al `.bib`, o cambiando el valor a mano — acá '
+                                       f"no se redacta un campo de la cita (#397)"))
+    return out
+
+
+def bibtex_citekey(entry: str) -> str:
+    """The citation key of a BibTeX entry (`@article{Hyv_rinen_1998,` → `Hyv_rinen_1998`), or `""`
+    (#473).
+
+    It exists because in a `.bib` the key IS the identifier and **two entries cannot share one**:
+    `bibtex` reports `Repeated entry … I'm skipping whatever remains of this entry` and the second
+    one **disappears in silence** (measured on a real vault: 257 `\bibitem` out of 259 entries,
+    from two pairs of Hyvärinen notes). The contract already says a block is pasteable «changing
+    only the key», so this does not block: it NAMES it, which is the difference between a silent
+    loss and a decision by whoever pastes."""
+    cabeza = str(entry or "").strip().split("{", 1)
+    if len(cabeza) < 2 or not cabeza[0].lstrip().startswith("@"):
+        return ""
+    return cabeza[1].split(",", 1)[0].strip().rstrip(",").strip()
+
+
+def bibtex_no_pegable_clase(entry: str, accion: str) -> list:
+    """The classes of `bibtex_no_pegable` whose action is `accion` (#473).
+
+    ⛔ The filter goes through the TABLE (`BIBTEX_NO_PEGABLE`), never through a list of classes
+    enumerated by the caller: a fourth class is then covered on its own in every consumer, which is
+    the lesson of #455 (fix without enumerating paths)."""
+    return [(c, d) for c, d in bibtex_no_pegable(entry)
+            if BIBTEX_NO_PEGABLE.get(c) == accion]
 
 
 def _bibtex_chunks(body: str) -> list:

@@ -53,24 +53,46 @@ portadores:
       - modulo: scripts/fetch_bibtex.py
         estado: fuera-de-alcance
         motivo: "Lo cita en un docstring como hermano de `sin_bibtex` (familia del motivo obligatorio); no lo lee."
+  - issue: 473
+    regla: >-
+      La clave de cita de una entrada BibTeX se saca con UNA función. En un `.bib` la clave ES el
+      identificador y dos entradas no pueden compartirla: `bibtex` dice `Repeated entry … I'm
+      skipping whatever remains of this entry` y la segunda DESAPARECE en silencio (medido en una
+      bóveda real: 257 `\bibitem` impresos sobre 259 entradas, por dos pares de notas de
+      Hyvärinen). No bloquea —el contrato ya dice que un bloque es pegable «cambiando sólo la
+      clave», así que cuál renombrar lo decide quien pega—: lo que faltaba es que la pérdida fuera
+      VISIBLE. Con dos implementaciones de «cuál es la clave», el índice que las junta y el
+      detector que las compara dejarían de hablar de lo mismo.
+    funcion: lib_config.bibtex_citekey
+    patron: 'bibtex_citekey|startswith\("@"\)'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Junta `{citekey: [stem]}` en el loop de papers y lo juzga cross-nota (`check_bibtex_claves_repetidas`)."
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: "`split_entries` indexa la exportación multi-entrada de ADS POR la clave de cita (nunca por posición, #397): es la misma pregunta que el detector."
   - issue: 471
     regla: >-
-      La exportación se pide en la forma en que se PEGA, y el bloque `bibtex` no se post-procesa.
-      ADS exporta por defecto la revista como macro de AASTeX (`journal = {\aap}`), que sin
-      `aas_macros.sty` compila VACÍO (medido: 126 de 219 bloques `ads` de una instancia). La
-      salida NO es una tabla macro → nombre en el repo —sería redactar un campo de la cita, que es
-      lo que #397 prohíbe—: se pide `journalformat: 3` y un bloque con macro cuenta como
-      PENDIENTE, así que re-correr la cadena lo cierra sin `--force`. UNA función decide «no está
-      cerrado» para los dos lectores.
-    funcion: lib_config.bibtex_journal_macro
+      La exportación se pide en la forma en que se PEGA, y el bloque `bibtex` no se post-procesa:
+      un bloque que NO SE PEGA no está cerrado. #471 lo implementó contra un síntoma —la macro de
+      revista de ADS, `journal = {\aap}`, que sin `aas_macros.sty` compila VACÍO: 126 de 219
+      bloques `ads` de una instancia— y por eso daba por cerrado el carril Crossref, que llega no
+      pegable de otras dos maneras (#473: el cascarón sin autor ni título imprime la cita VACÍA; el
+      mes `month=July` no lo define ningún `.bst`). La salida NUNCA es reescribir el campo acá
+      —sería redactar la cita, que es lo que #397 prohíbe—: se pide la exportación en la forma
+      pegable, y cada clase declara su consecuencia en `BIBTEX_NO_PEGABLE` (`pendiente` se re-baja ·
+      `descartable` no se guarda y la cascada sigue · `residuo` se nombra y no se re-baja). UNA
+      función decide «no está cerrado» para los dos lectores.
+    funcion: lib_config.bibtex_no_pegable
     patron: 'journalformat|get\("bibtex"\)'
     consumidores:
       - modulo: scripts/fetch_bibtex.py
         estado: usa
-        motivo: "Único que construye la request a `/v1/export/bibtex` (pide el formato 3) y el que decide si una nota «ya tiene» `bibtex`: con macro, pendiente."
+        motivo: "Único que construye la request a `/v1/export/bibtex` (pide el formato 3), el que decide si una nota «ya tiene» `bibtex` (`bibtex_closed`, todo lo que no es `residuo`) y el que descarta el cascarón en la cascada."
       - modulo: scripts/lint.py
         estado: usa
-        motivo: "Categoría `bibtex_macro_revista` (backlog): nombra el stem y el comando, con la misma función."
+        motivo: "Las dos categorías de #473 (`bibtex_no_pegable`, que re-correr cierra, y `bibtex_residuo`, que no es deuda) salen de la misma función y se reparten por la misma tabla."
   - issue: 468
     regla: >-
       Una consulta que NO contestó no produce un veredicto PERSISTIDO. Un carril caído y un carril
