@@ -2768,8 +2768,14 @@ def _estado_paper(stem: str, fm: dict, cuerpo: str, dropeados: set, sujetos: set
         return ESTADO_DROPEADO
     if (fm.get("relevance") or "").lower() == "low":
         return ESTADO_FUERA
+    # #472 — la declaración es por PAR (paper, sujeto) y va ANTES de mirar `methods`: ese campo lo
+    # puebla la lectura bajo CUALQUIER sujeto, así que un paper leído para el hub y declarado
+    # `no_vista` para el radio caía a «extraído, no sintetizado» — dos deudas que el usuario ya
+    # cerró con motivo, y el lint (#268) diciendo lo contrario sobre el mismo par.
+    if _no_vista_declarada(fm, stem, sujetos):
+        return ESTADO_SIN_VISTA
     if not (fm.get("methods") or []):
-        return (ESTADO_SIN_VISTA if _no_vista_declarada(fm, stem, sujetos) else ESTADO_SIN_EXTRAER)
+        return ESTADO_SIN_EXTRAER
     return ESTADO_SINTETIZADO if f"[[{stem}" in cuerpo else ESTADO_EXTRAIDO
 
 

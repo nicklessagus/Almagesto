@@ -4378,6 +4378,25 @@ def test_no_vista_no_es_sin_extraer_en_el_rollup(toy_vault):
     assert [f["estado"] for f in filas] == [mn.ESTADO_SIN_VISTA], filas
 
 
+def test_no_vista_gana_aunque_methods_lo_haya_poblado_OTRO_sujeto(toy_vault):
+    """#472 — `methods` lo puebla la lectura bajo CUALQUIER sujeto (el hub), así que consultar
+    `no_vista` sólo con `methods` vacío publicaba «extraído, no sintetizado» sobre el par que el
+    usuario cerró con motivo (medido: 2 de 40 en `ica-ruido`, con el lint diciendo lo contrario).
+    La declaración es por par y va antes de la escalera de `methods`; y no depende de si la prosa
+    del sujeto lo cita."""
+    write_yaml(cfg.STARS_YAML, {"Estrella S": {"slug": "s"}})
+    mk_note(cfg.PAPERS, "1994SigPr..36..287C",
+            {"tags": ["paper"], "bibcode": "1994SigPr..36..287C", "stars": ["Estrella S"],
+             "relevance": "high", "methods": ["ica", "CoM2 algorithm"],
+             "no_vista": [{"sujeto": "Estrella S", "motivo": "leído para el hub; acá sólo roll-up"}]},
+            "# p\n")
+    filas = mn.papers_universe("s", "star")
+    assert [f["estado"] for f in filas] == [mn.ESTADO_SIN_VISTA], filas
+    # sin la declaración, la escalera de `methods` sigue mandando: es la misma nota, otro sujeto
+    assert mn._estado_paper("1994SigPr..36..287C", {"methods": ["ica"]}, "", set(), {"otro"}) \
+        == mn.ESTADO_EXTRAIDO
+
+
 def test_un_no_vista_roto_no_tumba_el_rollup(toy_vault):
     """`papers_universe` corre DENTRO de la escritura de notas: una nota con el campo mal formado no
     puede abortar la pasada entera (misma doctrina que `fm_broken` en el lint). Cae a la escalera

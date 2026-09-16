@@ -25,6 +25,34 @@
 # meses sirve el motivo, no la categoría.
 
 portadores:
+  - issue: 472
+    regla: >-
+      `no_vista` es una declaración por PAR (paper, sujeto) y se consulta ANTES de cualquier señal
+      de lectura: `methods` lo puebla la lectura bajo CUALQUIER sujeto, así que «`methods` vacío»
+      no es «este sujeto no lo leyó». Consultarla sólo con `methods` vacío publicaba en el roll-up
+      «extraído, no sintetizado» sobre el par que el usuario cerró con motivo (medido: 2 de 40 en
+      `ica-ruido`), con el lint (#268) diciendo lo contrario sobre el mismo par.
+    funcion: make_notes._no_vista_declarada
+    patron: 'no_vista'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`_estado_paper`, la única escalera de los dos roll-ups (D-10/#300): la declaración va antes de `methods`."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Parsea `no_vista` con `cfg.load_no_vista` por su cuenta (#268) y decide por sujeto en sus cuatro redes; la única que mira `methods` (`sin extraer`, #90) lo hace para el caso opuesto —`methods` vacío Y sin declaración— y no puede producir la deuda falsa de este issue."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Es el parser (`load_no_vista`): define la forma, no decide un estado."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Sólo nombra `no_vista` en el mensaje que propone las dos salidas para un reclamo sin vista; no deriva ningún estado."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "`CURATED_KEYS`: preserva el campo al reescribir la nota; no lo interpreta."
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: "Lo cita en un docstring como hermano de `sin_bibtex` (familia del motivo obligatorio); no lo lee."
   - issue: 471
     regla: >-
       La exportación se pide en la forma en que se PEGA, y el bloque `bibtex` no se post-procesa.

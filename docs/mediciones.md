@@ -2901,3 +2901,26 @@ es exactamente una macro: `{A\&A}` no dispara.
 
 **Portadores (#409).** `carriers --propose lib_config.bibtex_journal_macro --patron
 'journalformat|get\("bibtex"\)'`: 2 llaman (`fetch_bibtex`, `lint`), 0 matchean sin llamar.
+
+## #472 · el roll-up publicaba deuda sobre un `no_vista` declarado cuando otro sujeto pobló `methods` (2026-09-15)
+
+Lo levantó `audit-note` sobre `ica-ruido` (Almagesto-Tesis), por tres frentes separados. #268 había
+hecho valer `no_vista` en las cuatro redes, pero `_estado_paper` la consultaba **sólo si `methods`
+estaba vacío** — y `methods` lo puebla la lectura bajo cualquier sujeto. El paper leído para el hub
+(`ica`) y declarado `no_vista` para el radio caía a «extraído, no sintetizado».
+
+**Población: 2 de 40** filas de `## Papers que tocan este tema` en `ica-ruido`
+(`1994SigPr..36..287C`, leído bajo `ica`; `2011PLoSO...627594P`, bajo `icasso`), con el lint
+listando los dos como *«declarado, no es deuda»*: dos capas contradiciéndose sobre el mismo par.
+En el template, 0 (la semilla no declara `no_vista`).
+
+**Lo que entró.** La declaración se consulta **antes** de la escalera de `methods`: es por par
+(paper, sujeto) y no depende de quién más leyó la nota. Una implementación para los dos roll-ups
+(D-10/#300), así que el paper de estrella en la misma situación queda cubierto sin enumerar caminos.
+El test nuevo muere sin el fix.
+
+**Portadores (#409).** `carriers --propose make_notes._no_vista_declarada --patron 'no_vista'`:
+0 llaman, 5 matchean — los cinco `fuera-de-alcance` con motivo (el lint decide por sujeto en sus
+cuatro redes; `lib_config` es el parser; `harvest_views`, `triage` y `fetch_bibtex` no derivan
+estado). Los tres «menores» del issue (fecha sin comillas en `vistas[]`, snippet de 80 caracteres,
+`## Excluidos` sin fecha) son reglas distintas y quedan en el issue.

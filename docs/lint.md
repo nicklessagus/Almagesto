@@ -556,6 +556,11 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   (`extraccion: todos los core` dejaba de cerrar por su culpa) y el roll-up lo publica con estado
   propio, `sin vista (declarado)`, en vez de `sin extraer`. ⚠ La forma **inválida** del campo sigue
   siendo bloqueante: el parseo temprano guarda el error y lo re-levanta donde se reporta.
+  ⛔ **Y en el roll-up la declaración va ANTES de `methods` (#472):** ese campo lo puebla la lectura
+  bajo **cualquier** sujeto, así que consultarla sólo con `methods` vacío publicaba *«extraído, no
+  sintetizado»* sobre el paper leído para el hub y declarado `no_vista` para el radio — dos deudas
+  que el usuario ya cerró con motivo, y esta categoría diciendo lo contrario sobre el mismo par
+  (medido: 2 de 40 en `ica-ruido`). La declaración es por par y no depende de quién más leyó la nota.
 - **La prosa afirma sobre la autoridad algo que su ground-truth desmiente** (#278, backlog): el
   espejo #70 vigila el **frontmatter** campo por campo y nunca el cuerpo. Medido: una ficha publica
   *«NEA publica las dos como `confirmed`»* sobre un planeta que NEA no lista — falso contra cuatro

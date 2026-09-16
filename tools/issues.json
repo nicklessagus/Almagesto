@@ -2339,11 +2339,16 @@
   {
    "number": 470,
    "title": "fetch_bibtex: la exportación de ADS llega con macros de revista (`journal = {\\aap}`) y no es pegable — pedir `journalformat: 3`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 471,
    "title": "El `bibtex` de ADS trae la revista como macro de AASTeX (`\\aap`, `\\apj`): 126 de 219 bloques no son pegables sin `aas_macros.sty`, y la ficha no lleva el nombre en ningún otro lado",
+   "state": "OPEN"
+  },
+  {
+   "number": 472,
+   "title": "make_notes: el roll-up publica como «extraído, no sintetizado» un paper con `no_vista` declarado cuando `methods` lo pobló otro sujeto (#268 roto en la columna Estado)",
    "state": "OPEN"
   }
  ]
