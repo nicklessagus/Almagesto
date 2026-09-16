@@ -1526,6 +1526,28 @@ def test_reviewed_second_hand_matchea_el_QUE_TRUNCADO_del_reporte(toy_vault):
         "un `que` vacío no matchea TODO: sería el noqa de nota entera"
 
 
+def test_481_la_fecha_de_una_vista_se_lee_como_STR_aunque_venga_sin_comillas():
+    """#481 — YAML parsea `fecha: 2026-08-30` como `date`; medido, 1 de 336 vistas de una bóveda
+    real, invisible para toda comparación con la str que escribe el cosechador (D-49). Un solo
+    normalizador, para el lector y para el escritor; y no muta la entrada."""
+    import datetime as _d
+    v = {"sujeto": "S", "tipo": "star", "fecha": _d.date(2026, 8, 30),
+         "previa": {"fecha": _d.date(2026, 8, 1), "fuente": "abstract"}}
+    out = cfg.vista_fecha_str(v)
+    assert out["fecha"] == "2026-08-30" and out["previa"]["fecha"] == "2026-08-01"
+    assert isinstance(v["fecha"], _d.date) and isinstance(v["previa"]["fecha"], _d.date), "no muta"
+    assert cfg.vista_fecha_str({"fecha": "2026-08-30"}) == {"fecha": "2026-08-30"}, "la str queda igual"
+    vistas = cfg.load_vistas({"vistas": [v]})
+    assert vistas[0]["fecha"] == "2026-08-30" and vistas[0]["previa"]["fecha"] == "2026-08-01"
+
+
+def test_481_la_firma_pegada_con_el_puntos_suspensivos_del_reporte_matchea():
+    """#481 — el reporte corta en borde de palabra y deja `…`; pegarlo tal cual tiene que seguir
+    siendo la forma canónica de firmar (#433), o la escotilla es un no-op silencioso (#256)."""
+    d = [{"ref": "2010A....2A", "que": "m_V de la compilación…", "motivo": "coincidencia"}]
+    assert cfg.reviewed_second_hand(d, "2010A....2A", "m_V de la compilación de PASTEL") == "coincidencia"
+
+
 def test_fuente_de_una_vista_es_vocabulario_cerrado():
     """#207 — opcional (ausente = no consta, como `fecha`) pero cerrada cuando está: un typo la
     dejaría muda justo para la pregunta que existe para contestar."""

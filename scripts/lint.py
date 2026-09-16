@@ -1336,22 +1336,22 @@ def check_second_hand_lifted(anchor_bodies: dict, segunda_mano: dict,
                 if _motivo is not None:
                     _usadas.add((_par.bibcode, _q))
                     revisados.append(
-                        (_stem, f"L{_par.block.first_line}: [[{_par.bibcode}]] «{_q[:80]}» — "
+                        (_stem, f"L{_par.block.first_line}: [[{_par.bibcode}]] «{lb.truncate_claim(_q, 80)}» — "
                                 f"revisado y rechazado: {_motivo}"))
                     continue
                 hallazgos.append(
                     (_stem,
                      f"L{_par.block.first_line}: la línea toma {', '.join(_ev)} de "
                      f"[[{_par.bibcode}]], y su vista marca ese valor como SEGUNDA MANO "
-                     f"(«{_q[:80]}» → {_de[:120]}) → la ficha tiene que decir de quién es (#103): "
+                     f"(«{lb.truncate_claim(_q, 80)}» → {_de[:120]}) → la ficha tiene que decir de quién es (#103): "
                      f"el número no es de esta fuente. Si es una coincidencia —el bloque no toma "
                      f"ese valor de nadie— firmalo: `segunda_mano_revisada: [{{ref: "
-                     f"{_par.bibcode}, que: {_q[:80]}, motivo: <por qué no es deuda>}}]` (#433)"))
+                     f"{_par.bibcode}, que: {lb.truncate_claim(_q, 80)}, motivo: <por qué no es deuda>}}]` (#433)"))
         for _d in _revisadas:
             if not any(cfg.reviewed_second_hand([_d], _ref, _que) for _ref, _que in _usadas):
                 huerfanas.append(
                     (_stem, f"`segunda_mano_revisada` declara `{str(_d.get('ref'))[:30]}` / "
-                            f"«{str(_d.get('que'))[:60]}» y ningún hallazgo corresponde → o el "
+                            f"«{lb.truncate_claim(str(_d.get('que')), 60)}» y ningún hallazgo corresponde → o el "
                             f"cruce ya no dispara (sacá la entrada) o el `ref`/`que` no es el que "
                             f"el lint nombra (la escotilla no exime nada, #256)"))
     return hallazgos, n_pares, revisados, huerfanas
@@ -5060,6 +5060,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
     reclamo_sin_vista_declarado: list = []
     reclamo_refutado: list = []
     doc_en_disco: list = []
+    vista_fecha_no_str: list = []
     # aplicación NO es contraste sino instanciación, y leerlo como desacuerdo fabrica
     # disputas falsas. Se puebla en la extracción (la regex del clasificador no puede
     # inferirlo) — por eso el aviso cuelga de `methods`, la marca de "ya se extrajo".
@@ -5071,6 +5072,16 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         vistas = cfg.load_vistas(fm, entry=stem)
         if nv_error is not None:
             raise nv_error
+        # #481 — la fecha sin comillas la parsea YAML como `date`, y toda comparación con la str
+        # que escribe el cosechador la deja afuera (medido: 1 de 336). `load_vistas` la normaliza
+        # para los lectores; acá se mira el tipo CRUDO, que es lo que está en disco.
+        for _raw in fm.get("vistas") or []:
+            if isinstance(_raw, dict) and cfg.vista_fecha_str(_raw) != _raw:
+                vista_fecha_no_str.append(
+                    (stem, f"la vista de **{str(_raw.get('sujeto') or '').strip()}** lleva "
+                           f"`fecha: {_raw.get('fecha')}` sin comillas (YAML la lee como fecha, no "
+                           f"como str) → `python scripts/make_notes.py --restamp-lente` la "
+                           f"re-serializa"))
         # #268 — `no_vista` ya viene parseado de `check_paper_coverage`, de la MISMA fuente. Lo
         # que esta rama hace es re-levantar su error para que caiga en el `except` de abajo: la
         # forma inválida la reporta ESTE bloque, que es el dueño del campo.
@@ -5289,7 +5300,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                     reclamo_sin_vista.append(
                         (stem, f"lo reclama **{sujeto}** y nadie lo leyó desde ahí → hacer "
                                f"la vista, o declararla con `no_vista` y su motivo"))
-    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado, doc_en_disco
+    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado, doc_en_disco, vista_fecha_no_str
 
 
 def check_impl_leaks(stem: str, body_full: str, offset: int, leak_patterns, scan: bool) -> list:
@@ -6195,6 +6206,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     vista_solo_abstract: list = []     # (stem, sujeto) — #207: se leyó el abstract, falta el PDF
     vista_sin_fuente_en_disco: list = []   # (stem, sujeto) — #217: leída y ya no re-verificable
     doc_en_disco: list = []                # (stem, motivo) — #449: la prosa contra los testigos
+    vista_fecha_no_str: list = []          # (stem, motivo) — #481: `fecha` parseada como date
     reclamo_refutado: list = []        # (stem, sujeto) — #212: la vista lo refuta y sigue reclamado
 
     # Los temas DECLARADOS (su `concept`, que es el nombre con el que un paper los nombra en
@@ -6666,6 +6678,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             reclamo_sin_vista_declarado += _v[10]
             reclamo_refutado += _v[11]
             doc_en_disco += _v[12]
+            vista_fecha_no_str += _v[13]
             # El `role` vive en `check_paper_role` (#396); los dos `*_refs` son índices.
             _rl1, _rl2 = check_paper_role(stem, fm, relevancia, thesis_refs, method_refs)
             bad_roles += _rl1
@@ -7130,6 +7143,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vista_sin_fuente', 'Vista sin `fuente`: no consta si salió del PDF o sólo del abstract (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente), poblacion='papers'),
         Categoria('vista_solo_abstract', '📄 Vista construida SÓLO del abstract — falta el PDF (backlog)', SEV_BACKLOG, tuple(vista_solo_abstract), poblacion='papers'),
         Categoria('vista_sin_fuente_en_disco', '🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog)', SEV_BACKLOG, tuple(vista_sin_fuente_en_disco), poblacion='papers'),
+        Categoria('vista_fecha_no_str', 'Vista con `fecha` sin comillas: YAML la lee como fecha y no como str, y toda comparación la deja afuera (#481, backlog)', SEV_BACKLOG, tuple(vista_fecha_no_str), poblacion='papers'),
         Categoria('doc_en_disco', '💿 La prosa afirma QUÉ DOCUMENTO hay en disco y sus testigos la desmienten (#449, backlog)', SEV_BACKLOG, tuple(doc_en_disco), poblacion='papers'),
         Categoria('reclamo_refutado', '↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog)', SEV_BACKLOG, tuple(reclamo_refutado), poblacion='papers'),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(reclamo_sin_vista_declarado), poblacion='papers'),

@@ -682,7 +682,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   quedaba vacía según la grafía que eligió el extractor. Se cierra
   haciendo la vista o declarando `no_vista: [{sujeto, motivo}]`; el **declarado pasa a su propia
   categoría** (*«visible, no es deuda»*). Su hermana, la **vista sin `fecha`** (sembrada por el stub
-  y nunca leída), es backlog propio. ⛔ La escotilla decide sobre la vista **sin fecha** (#256), que
+  y nunca leída), es backlog propio; y la **vista con `fecha` sin comillas** (#481,
+  `vista_fecha_no_str`, backlog) también: YAML la lee como fecha y no como str, así que toda
+  comparación con la que escribe el cosechador la deja afuera (medido: 1 de 336) —
+  `make_notes.py --restamp-lente` la re-serializa. ⛔ La escotilla decide sobre la vista **sin fecha** (#256), que
   es donde vive el reclamo pendiente; `no_vista` **no borra** la entrada de `vistas[]` — declara por
   qué no se leyó.
 - **Vista sin `fuente`, y vista construida SÓLO del abstract** (#207, `vista_sin_fuente` /

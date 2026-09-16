@@ -481,6 +481,9 @@
 ## 🔒 Vista fechada SIN fuente en disco: ya no es re-verificable (backlog) (0)
 > sobre 60 notas de `papers/`
 
+## Vista con `fecha` sin comillas: YAML la lee como fecha y no como str, y toda comparación la deja afuera (#481, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## 💿 La prosa afirma QUÉ DOCUMENTO hay en disco y sus testigos la desmienten (#449, backlog) (0)
 > sobre 60 notas de `papers/`
 

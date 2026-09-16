@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.276.1"
+ALMAGESTO_VERSION = "1.277.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3621,6 +3621,22 @@ class VistasError(RuntimeError):
     so an `except Exception` around the walk would not even catch it."""
 
 
+def vista_fecha_str(vista: dict) -> dict:
+    """The view with `fecha` (and `previa.fecha`) as an ISO **string** (#481).
+
+    YAML parses an unquoted `fecha: 2026-08-30` as a `date`, and every writer that round-trips the
+    block through `yaml.safe_dump` keeps it unquoted; measured: 1 of 336 views of a real vault, so
+    any `== '2026-08-30'` (the offline lens diff, D-49) left it out. ONE normaliser, applied by the
+    reader (`load_vistas`) and by the writer (`harvest_views.upsert_view`)."""
+    out = dict(vista)
+    if isinstance(out.get("previa"), dict):
+        out["previa"] = dict(out["previa"])
+    for m in (out, out.get("previa")):
+        if isinstance(m, dict) and isinstance(m.get("fecha"), (_dt.date, _dt.datetime)):
+            m["fecha"] = m["fecha"].isoformat()
+    return out
+
+
 def load_vistas(meta: dict, *, entry: str = "?") -> list:
     """`vistas` in canonical form: a list of maps `{sujeto, tipo[, fecha, txt, lente]}`.
 
@@ -3674,7 +3690,7 @@ def load_vistas(meta: dict, *, entry: str = "?") -> list:
         # `vistas[]` se indexa por sujeto a secas y la segunda lectura no tiene dónde ir — peor, el
         # cosechador PISABA la anterior en silencio. Ausente = la lectura por default del sujeto.
         enfasis = str(x.get("enfasis") or "").strip()
-        nueva = dict(x, sujeto=sujeto, tipo=tipo)
+        nueva = vista_fecha_str(dict(x, sujeto=sujeto, tipo=tipo))
         if enfasis:
             nueva["enfasis"] = enfasis
         elif "enfasis" in nueva:
@@ -3824,7 +3840,7 @@ def reviewed_second_hand(declaraciones: list, ref: str, que: str) -> str | None:
 
     ⛔ ONE function decides the match, for the same reason `method_key` does: the declaration is
     written by a person copying the finding the lint printed, and that finding **truncates** the
-    *qué* (`_q[:80]`). So the comparison is normalised —whitespace collapsed, casefolded— and a
+    *qué* (`truncate_claim(_q, 80)`, at a word boundary with a trailing `…` — #481). So the comparison is normalised —whitespace collapsed, casefolded— and a
     declared `que` that is a PREFIX of the row's counts: otherwise the canonical way of signing
     (paste what the report says) would produce a hatch that silently matches nothing, which is the
     #256 failure mode (a field parsed and consumed by nobody).
@@ -3834,8 +3850,8 @@ def reviewed_second_hand(declaraciones: list, ref: str, que: str) -> str | None:
 
     @inv INV-142"""
     def _norm(t) -> str:
-        """Whitespace collapsed and casefolded — what both halves of the pair go through."""
-        return " ".join(str(t or "").split()).casefold()
+        """Whitespace collapsed, casefolded, and without the `…` the report's cut leaves (#481)."""
+        return " ".join(str(t or "").split()).casefold().rstrip("…").rstrip()
 
     ref_n, que_n = _norm(ref), _norm(que)
     for d in declaraciones or []:

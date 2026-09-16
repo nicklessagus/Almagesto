@@ -663,6 +663,7 @@ def upsert_view(dest: Path, vista: dict, *, force: bool = False) -> bool:
             nuevas.append(v)
     if not visto:
         nuevas.append(vista)
+    nuevas = [cfg.vista_fecha_str(v) for v in nuevas]     # #481: la fecha se escribe como str
     if nuevas == previas:
         return False
     bloque = yaml.safe_dump({"vistas": nuevas}, sort_keys=False, allow_unicode=True,

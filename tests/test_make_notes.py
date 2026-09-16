@@ -5217,6 +5217,26 @@ def test_restamp_lente_toma_la_lente_DECLARADA_por_la_extraccion(toy_vault, caps
     assert "0 vista(s) con `lente` re-estampada" in capsys.readouterr().out, "idempotente"
 
 
+def test_481_restamp_lente_re_serializa_la_fecha_parseada_como_date(toy_vault, capsys):
+    """#481 — el migrador de la categoría `vista_fecha_no_str`: la vista cuya `fecha` YAML leyó como
+    `date` se reescribe como str, sin re-fechar la lectura ni tocar la lente."""
+    import datetime as _d
+    f = _nota_y_extraccion(
+        {"sujeto": "Estrella Test", "tipo": "star", "fecha": _d.date(2026, 8, 30), "lente": ["rv", "activity"]},
+        _CUERPO_UN_EJE,
+        {"bibcode": "2020lente..1..1L", "vista": {"sujeto": "Estrella Test", "tipo": "star"},
+         "lente": ["rv", "activity"], "ejes": {"rv": "reporta K", "activity": ""}})
+    assert "fecha: 2026-08-30\n" in f.read_text(encoding="utf-8"), "sin comillas (el fixture del defecto)"
+    mn.restamp_lens()
+    assert "1 con `fecha` re-serializada como str (#481)" in capsys.readouterr().out
+    texto = f.read_text(encoding="utf-8")
+    assert "'2026-08-30'" in texto
+    v = yaml.safe_load(texto[4:].split("\n---\n")[0])["vistas"][0]
+    assert v["fecha"] == "2026-08-30" and isinstance(v["fecha"], str) and list(v["lente"]) == ["rv", "activity"]
+    mn.restamp_lens()
+    assert "#481" not in capsys.readouterr().out, "idempotente"
+
+
 def test_restamp_lente_sin_lente_en_el_json_usa_las_claves_y_lo_DECLARA(toy_vault, capsys):
     """La extracción PRE-#395 no trae `lente:`, y ahí la mejor fuente son las CLAVES de `ejes` —lo
     que el prompt sembró—. Es una **cota inferior** y se dice: un eje que el extractor omitió no se

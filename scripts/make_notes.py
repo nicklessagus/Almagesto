@@ -480,7 +480,7 @@ def restamp_lens() -> int:
     recoverable from disk. It is still strictly better than the config lens, which describes a
     reading that did not happen."""
     import harvest_views as hv_mod
-    n_lente = n_ejes = 0
+    n_lente = n_ejes = n_fecha = 0
     sin_json: list = []
     por_claves: list = []
     for f in cfg.note_paths(cfg.PAPERS):
@@ -496,6 +496,15 @@ def restamp_lens() -> int:
         for v in vistas:
             sujeto = str(v.get("sujeto") or "").strip()
             enfasis = str(v.get("enfasis") or "").strip()
+            if cfg.vista_fecha_str(v) != v:
+                # #481 — `fecha` parseada como `date` (sin comillas): un upsert SIN fecha no choca
+                # y `upsert_view` la re-serializa como str. No es una lectura nueva.
+                entrada = {"sujeto": sujeto, "tipo": v.get("tipo") or "star"}
+                if enfasis:
+                    entrada["enfasis"] = enfasis
+                if hv_mod.upsert_view(f, entrada):
+                    n_fecha += 1
+                    text = f.read_text(encoding="utf-8")
             data = _extraction_of(bib, enfasis)
             if data is None:
                 sin_json.append(f"{f.stem} · «{sujeto}»"
@@ -522,7 +531,8 @@ def restamp_lens() -> int:
                 cfg.write_text_atomic(f, text)
                 n_ejes += 1
     cfg.print_seguro(f"papers: {n_lente} vista(s) con `lente` re-estampada y {n_ejes} con líneas de "
-                     f"eje backfilleadas desde la extracción (#395)")
+                     f"eje backfilleadas desde la extracción (#395)"
+                     + (f"; {n_fecha} con `fecha` re-serializada como str (#481)" if n_fecha else ""))
     for x in sin_json:
         cfg.print_seguro(f"  ⚠ sin extracción en disco, la vista NO se tocó: {x}")
     if por_claves:
@@ -2259,7 +2269,21 @@ def excluded_table(slug: str) -> str:
         rows.append(f"| [{title}]({url}) | {r.get('year') or ''} | {citas(r)} | {motivo} |")
     extra = len(out) - len(rows)
     tail = f"\n\n_(+ {extra} más excluidos por el filtro)_" if extra > 0 else ""
+    # #481 — a qué corrida corresponde el snapshot: la fecha y el `n_total` de la última búsqueda
+    # del registro (D-12, como la línea de estado). Si el `ads.json` en disco no cuadra con ella
+    # —`build/` es scratch y puede ser de otra corrida—, se DICE en vez de dejar un número que no
+    # reconcilia contra nada.
+    bs = cfg.load_busquedas(slug)
+    b = bs[-1] if bs else {}
+    if b.get("fecha"):
+        corrida = f"corrida {b['fecha']} · {b.get('n_total', '?')} traídos"
+        if isinstance(b.get("n_total"), int) and b["n_total"] != len(records):
+            corrida += (f" — ⚠ el `ads.json` en disco tiene {len(records)} registros: es OTRA "
+                        f"corrida, re-corré `query_ads`")
+    else:
+        corrida = "corrida sin registro (`busquedas` vacío: no se puede fechar el snapshot)"
     return ("\n## Excluidos por el filtro (no-core · snapshot del ingest)\n"
+            f"> _{corrida}_\n"
             "> Top por TASA de citas (citas/año, política única de `lib_config`) de lo que el clasificador dejó afuera (no matchea `relevance.facets`, "
             "no cumple la regla de combinación `require`/`min_facets`, o doctype ruido). **No se bajan "
             "ni se fichan** — esto es un puntero por las dudas. Si ves un falso negativo, ajustá "

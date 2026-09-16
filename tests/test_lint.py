@@ -4524,6 +4524,20 @@ def test_la_vista_sin_fecha_y_SIN_declarar_sigue_siendo_deuda(toy_vault, capsys)
     assert "2020Falta" in sin_fecha
 
 
+def test_481_la_vista_con_fecha_SIN_COMILLAS_se_reporta_y_la_str_no(toy_vault, capsys):
+    """#481 — 1 de 336 vistas llevaba `fecha: 2026-08-30` sin comillas (YAML: `date`), invisible
+    para toda comparación con str. El lint cruza el tipo CRUDO y nombra la nota con su migrador."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020Date.md").write_text(
+        "---\ntags: [paper]\nbibcode: 2020Date\nstars: [Estrella Test]\nvistas:\n"
+        "- sujeto: Estrella Test\n  tipo: star\n  fecha: 2026-08-30\n---\n\n# p\n\n"
+        "## Vista — Estrella Test\n\ntexto\n", encoding="utf-8")
+    _nota_con_vista(toy_vault, "2020Str", {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-30"})
+    cat = lint.collect().por_clave("vista_fecha_no_str")
+    assert [s for s, _ in cat.items] == ["2020Date"], cat.items
+    assert "--restamp-lente" in cat.items[0][1]
+
+
 def _gt_con_simbad(toy_vault, conocidos):
     (toy_vault.GROUND_TRUTH).mkdir(parents=True, exist_ok=True)
     (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
@@ -9781,7 +9795,7 @@ def test_check_paper_views_no_pide_lo_que_no_se_puede_evaluar(toy_vault):
     def _v(fm, text="", nv=None, ti=None, tps=None):
         return lint.check_paper_views("2020X", fm, text, nv or {}, None, ti or {}, tps or {})
 
-    assert _v({}) == ([],) * 13, "una nota sin `vistas[]` ni reclamos no dispara nada"
+    assert _v({}) == ([],) * 14, "una nota sin `vistas[]` ni reclamos no dispara nada"
 
     # (a) ejes: sin lente o sin fecha no se compara; con el tema sin `ejes:` es NO EVALUABLE
     sin_fecha = {"vistas": [{"sujeto": "ica", "tipo": "theme", "lente": ["rv"]}],

@@ -398,6 +398,23 @@ def test_la_cosecha_se_estampa_en_la_cadena(toy_vault, monkeypatch):
     assert any(p["paso"] == "harvest_views" for p in cfg.load_cadena("test_star"))
 
 
+def test_481_upsert_view_escribe_la_fecha_como_STR_y_normaliza_la_que_estaba(toy_vault):
+    """#481 — el escritor del bloque `vistas:` fuerza str en `fecha`: la que YAML leyó como `date`
+    se re-serializa con comillas en el primer upsert, y una entrada sin fecha (sin choque) alcanza."""
+    import yaml
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020fecha..1..1F.md"
+    f.write_text("---\nbibcode: 2020fecha..1..1F\ntags: [paper]\nvistas:\n"
+                 "- sujeto: Estrella Test\n  tipo: star\n  fecha: 2026-08-30\n---\n\n# p\n",
+                 encoding="utf-8")
+    assert not isinstance(yaml.safe_load(f.read_text()[4:].split("\n---\n")[0])["vistas"][0]["fecha"], str)
+    assert hv.upsert_view(f, {"sujeto": "Estrella Test", "tipo": "star"}) is True
+    raw = yaml.safe_load(f.read_text()[4:].split("\n---\n")[0])["vistas"][0]
+    assert raw["fecha"] == "2026-08-30" and isinstance(raw["fecha"], str)
+    assert "'2026-08-30'" in f.read_text(), "con comillas en el disco"
+    assert hv.upsert_view(f, {"sujeto": "Estrella Test", "tipo": "star"}) is False, "idempotente"
+
+
 def test_upsert_view_no_se_come_el_cierre_del_frontmatter(toy_vault):
     """Regresión medida: `upsert_view` reconstruía la nota con `text[end + 1:]`, y ese `+1` se
     comía el `\\n` que separa la última clave del `---` de cierre. Resultado: `generator: v1.69.0---`
