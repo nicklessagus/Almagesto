@@ -200,10 +200,48 @@ def test_propose_enumera_para_que_la_lista_no_se_escriba_de_MEMORIA(tmp_path, ca
                               "scripts/usa.py": "import lib\nlib.regla(1)\n",
                               "scripts/gemelo.py": "x = 'PATRON'\n",
                               "scripts/ajeno.py": "x = 1\n"})
-    llaman, sosp = cr.propose("lib.regla", "PATRON", root)
-    assert llaman == ["scripts/usa.py"] and sosp == ["scripts/gemelo.py"]
+    llaman, firmados, sosp = cr.propose("lib.regla", "PATRON", root, tmp_path / "no-existe.yaml")
+    assert llaman == ["scripts/usa.py"] and sosp == ["scripts/gemelo.py"] and firmados == {}
     assert "scripts/lib.py" not in llaman + sosp, "el DUEÑO de la regla no es portador de sí mismo"
-    assert cr.propose("lib.regla", None, root)[1] == [], "sin patrón no se inventan sospechosos"
+    assert cr.propose("lib.regla", None, root)[2] == [], "sin patrón no se inventan sospechosos"
+
+
+def test_482_propose_SEPARA_el_firmado_fuera_de_alcance_del_que_nadie_declaro(tmp_path, capsys):
+    """#482: el bloque que se pega en cada issue mostraba igual al consumidor ya firmado
+    `fuera-de-alcance` y al que nadie miró. Tres listas: el firmado lleva su motivo y no es deuda;
+    el `sin declarar` es el único que pide acción, y vacío lo DICE (D-43)."""
+    root = _repo(tmp_path, **{"scripts/lib.py": LIB,
+                              "scripts/firmado.py": "x = 'PATRON'\n",
+                              "scripts/deuda.py": "x = 'PATRON'\n"})
+    decl = _decl(tmp_path, consumidores=[
+        {"modulo": "scripts/firmado.py", "estado": "fuera-de-alcance", "motivo": "lee otra cosa"}])
+    llaman, firmados, sosp = cr.propose("lib.regla", "PATRON", root, decl)
+    assert llaman == [] and firmados == {"scripts/firmado.py": "lee otra cosa"}
+    assert sosp == ["scripts/deuda.py"]
+    # otra regla con la misma firma NO la hereda: la firma es por `funcion`
+    assert cr.propose("lib.otra", "PATRON", root, decl)[1] == {}
+    # la declaración ilegible no tumba el reporte (el gate es --check), y todo queda «sin declarar»
+    (tmp_path / "rota.yaml").write_text(": [", encoding="utf-8")
+    assert cr.propose("lib.regla", "PATRON", root, tmp_path / "rota.yaml")[2] == [
+        "scripts/deuda.py", "scripts/firmado.py"]
+    # y el reporte: el firmado con su motivo, el otro bajo «sin declarar»
+    import re as _re
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(cr, "propose", lambda ref, pat, **kw: ([], {"scripts/firmado.py": "lee otra cosa"},
+                                                          ["scripts/deuda.py"]))
+    try:
+        assert cr.main(["--propose", "lib.regla", "--patron", "PATRON"]) == 0
+    finally:
+        monkey.undo()
+    out = capsys.readouterr().out
+    assert _re.search(r"firmados `fuera-de-alcance` \(1, con motivo\):\n  scripts/firmado.py — lee otra cosa", out)
+    assert _re.search(r"\(1 sin declarar\).*\n  scripts/deuda.py", out)
+    monkey.setattr(cr, "propose", lambda ref, pat, **kw: ([], {}, []))
+    try:
+        cr.main(["--propose", "lib.regla", "--patron", "PATRON"])
+    finally:
+        monkey.undo()
+    assert "(0 sin declarar)" in capsys.readouterr().out, "vacío se dice, no desaparece (D-43)"
 
 
 def test_la_declaracion_VIGENTE_del_repo_cierra():
@@ -298,7 +336,7 @@ def test_main_con_la_declaracion_ILEGIBLE_sale_2_y_no_0(monkeypatch, capsys):
 def test_main_propose_sin_patron_AVISA_que_falta_la_mitad(monkeypatch, capsys):
     """Sin `--patron` sólo se enumera quién YA llama, que es la mitad que nunca fue el problema: el
     portador que falta es, por definición, el que no llama a la implementación única."""
-    monkeypatch.setattr(cr, "propose", lambda ref, pat, **kw: (["scripts/a.py"], ["scripts/b.py"]))
+    monkeypatch.setattr(cr, "propose", lambda ref, pat, **kw: (["scripts/a.py"], {}, ["scripts/b.py"]))
     assert cr.main(["--propose", "lib.regla"]) == 0
     out = capsys.readouterr().out
     assert "scripts/a.py" in out and "scripts/b.py" not in out and "sin `--patron`" in out

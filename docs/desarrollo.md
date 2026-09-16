@@ -104,7 +104,9 @@ no verde. Detalle y ratchets en `tests/README.md`; el resumen operativo:
     compara las dos direcciones y rehúsa si alguien llama sin estar declarado, si un declarado `usa`
     **no** llama (el comentario que dice «delega» y no delega), o si un módulo matchea el patrón y
     nadie dijo nada de él; `fuera-de-alcance` lleva motivo. La lista no se escribe de memoria:
-    `--propose <modulo.simbolo> --patron <re>` la enumera. Motivo: cuatro lectores clasificaron los
+    `--propose <modulo.simbolo> --patron <re>` la enumera en **tres** bloques —llaman · firmados
+    `fuera-de-alcance` con su motivo · **sin declarar**—, y sólo el tercero es deuda (#482: con dos
+    bloques, el firmado y el que nadie miró salían iguales en lo que se pega en cada issue). Motivo: cuatro lectores clasificaron los
     ~400 issues del repo por mecanismo sin verse entre ellos y tres nombraron el mismo tema
     dominante — **el fix se escribe contra el caso medido y no contra la relación que lo contiene**
     (45 de 100 en un tramo, ~50 en otro, 32 en el último). Su primer hallazgo fue una segunda

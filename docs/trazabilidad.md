@@ -106,7 +106,7 @@
 | **INV-151** | P0 | garantizado y medido | `scripts/fetch_bibtex.py:360` · `bibtex_for` | `tests/test_fetch_bibtex.py:158` · `test_bibtex_for_sin_ningun_identificador_devuelve_HUECO_con_su_motivo`<br>`tests/test_lint.py:7893` · `test_bibtex_sin_fuente_BLOQUEA` |
 | **INV-152** | P1 | garantizado y medido | `scripts/make_notes.py:2509` · `vista_block` | `tests/test_make_notes.py:619` · `test_el_stub_de_estrella_publica_una_LINEA_DE_ESTADO_y_no_el_prompt` |
 | **INV-153** | P0 | garantizado y medido | `scripts/lint.py:5262` · `check_paper_views` | `tests/test_lint.py:7953` · `test_vistas_vacia_NO_apaga_el_chequeo_de_reclamos` |
-| **INV-154** | P0 | garantizado y medido | `tools/carriers.py:282` · `check` | `tests/test_carriers.py:214` · `test_la_declaracion_VIGENTE_del_repo_cierra` |
+| **INV-154** | P0 | garantizado y medido | `tools/carriers.py:282` · `check` | `tests/test_carriers.py:252` · `test_la_declaracion_VIGENTE_del_repo_cierra` |
 | **INV-48** | P0 | garantizado y medido | `scripts/lib_config.py:3419` · `load_extra_core`<br>`scripts/triage.py:190` · `drop` | `tests/test_make_notes.py:1661` · `test_stamp_header_backfillea_la_nota_que_nacio_sin_cabecera`<br>`tests/test_triage.py:61` · `test_drop_persiste_con_motivo_en_config_versionada` |
 | **INV-49** | P0 | parcial (medido, con la brecha nombrada) | `scripts/query_ads.py:692` · `load_triage` | `tests/test_query_ads.py:1329` · `test_main_triage_no_repropone_descartados` |
 | **INV-50** | P0 | garantizado y medido | `scripts/query_ads.py:672` · `subject_in_title` | `tests/test_query_ads.py:1282` · `test_main_chaining_solo_auto_acepta_sujeto_en_titulo` |

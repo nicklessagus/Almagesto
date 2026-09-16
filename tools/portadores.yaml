@@ -16,8 +16,10 @@
 #
 #     python tools/carriers.py --propose lib_config.txt_slug --patron 'FULLTEXT\s*/\s*\w+\s*/'
 #
-# imprime quién LLAMA (van `usa`) y quién MATCHEA y no llama (cada uno `usa` —y se lo hace llamar—
-# o `fuera-de-alcance` CON motivo). El `patron` es la parte que piensa una persona: es la relación
+# imprime quién LLAMA (van `usa`), quién MATCHEA y ya está firmado `fuera-de-alcance` (con su
+# motivo: no es deuda) y quién MATCHEA y NADIE declaró (#482 — el único bloque que pide acción:
+# cada uno `usa` —y se lo hace llamar— o `fuera-de-alcance` CON motivo; vacío lo dice, no
+# desaparece). El `patron` es la parte que piensa una persona: es la relación
 # estructural escrita, y es lo único que hace que el barrido termine donde termina la clase y no
 # donde el agente dejó de mirar.
 #

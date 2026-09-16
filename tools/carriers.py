@@ -288,24 +288,50 @@ def check(root: Path = ROOT, path: Path = DECLARACION) -> tuple:
     return entradas, hallazgos
 
 
-def propose(ref: str, patron: str | None, root: Path = ROOT) -> tuple:
-    """`(callers, suspects)` — the enumeration the entry has to declare.
+def signed_out_of_scope(ref: str, path: Path = DECLARACION) -> dict:
+    """`{modulo: motivo}` — the consumers already signed `fuera-de-alcance` for `ref`.
+
+    #482: the block that gets pasted into every issue showed them under the same heading as the
+    consumer nobody looked at, so the reader could not tell which ones were debt. An unreadable
+    declaration yields `{}`: `--check` is the gate for that, this is a report."""
+    try:
+        entradas = load(path)
+    except DeclaracionIlegible:
+        return {}
+    out: dict = {}
+    for e in entradas:
+        if not isinstance(e, dict) or str(e.get("funcion")) != ref:
+            continue
+        for c in e.get("consumidores") or []:
+            if isinstance(c, dict) and c.get("estado") == "fuera-de-alcance":
+                out[str(c.get("modulo"))] = str(c.get("motivo") or "").strip()
+    return out
+
+
+def propose(ref: str, patron: str | None, root: Path = ROOT, path: Path = DECLARACION) -> tuple:
+    """`(callers, signed, undeclared)` — the enumeration the entry has to declare.
 
     It exists so the list is NOT written from memory, the failure mode this repo chases everywhere:
-    `callers` comes from the AST and `suspects` from the pattern it is given."""
+    `callers` comes from the AST and the other two from the pattern it is given. `signed` is
+    `{modulo: motivo}` for the matches already declared `fuera-de-alcance` (#482); `undeclared`
+    is the only list that asks for action."""
     modulo, simbolo = ref.rsplit(".", 1)
     fuentes = source_modules(root)
     dueño = next((r for r in fuentes if Path(r).stem == modulo), None)
     rx = re.compile(patron) if patron else None
-    llaman, sospechosos = [], []
+    firmados = signed_out_of_scope(ref, path)
+    llaman, sin_declarar, firmados_matchean = [], [], {}
     for mod, fuente in fuentes.items():
         if mod == dueño:
             continue
         if carries(fuente, modulo, simbolo, fuentes[dueño] if dueño else ""):   # #476
             llaman.append(mod)
         elif rx and rx.search(fuente):
-            sospechosos.append(mod)
-    return llaman, sospechosos
+            if mod in firmados:
+                firmados_matchean[mod] = firmados[mod]
+            else:
+                sin_declarar.append(mod)
+    return llaman, firmados_matchean, sin_declarar
 
 
 def main(argv=None) -> int:
@@ -318,7 +344,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.propose:
-        llaman, sospechosos = propose(args.propose, args.patron)
+        llaman, firmados, sin_declarar = propose(args.propose, args.patron)
         # #476 — el reporte dice por QUÉ VÍA se lleva la regla, porque son dos y piden acciones
         # distintas: a una función hay que hacerla llamar, a una constante hay que leerla. Decir
         # «LLAMAN» sobre la lectura de una tabla sería el mapa que atribuye mal (regla nº 4).
@@ -330,9 +356,15 @@ def main(argv=None) -> int:
         for m in llaman:
             print(f"  {m}")
         if args.patron:
-            print(f"\nMATCHEAN `{args.patron}` y NO la llevan ({len(sospechosos)}) — cada uno se "
-                  f"declara `usa` (y se hace llevar) o `fuera-de-alcance` CON motivo:")
-            for m in sospechosos:
+            # #482 — tres bloques: el firmado ya tiene motivo y no es deuda; el tercero es el
+            # único que pide acción, y vacío lo DICE en vez de desaparecer (D-43).
+            print(f"\nMATCHEAN `{args.patron}` y están firmados `fuera-de-alcance` "
+                  f"({len(firmados)}, con motivo):")
+            for m, motivo in firmados.items():
+                print(f"  {m} — {motivo}")
+            print(f"\nMATCHEAN `{args.patron}` y NADIE declaró ({len(sin_declarar)} sin declarar) "
+                  f"— cada uno se declara `usa` (y se hace llevar) o `fuera-de-alcance` CON motivo:")
+            for m in sin_declarar:
                 print(f"  {m}")
         else:
             print("\n⚠ sin `--patron` no se enumeran los sospechosos: sólo se ve quién YA llama, "
