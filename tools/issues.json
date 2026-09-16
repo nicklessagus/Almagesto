@@ -2374,6 +2374,11 @@
   {
    "number": 477,
    "title": "Barrido post-#476: las reglas que viven en un vocabulario cerrado o una tabla de decisión siguen sin firmar (5 de 32 constantes compartidas)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 478,
+   "title": "Las dos tablas derivadas de un vocabulario cerrado no declaran su cobertura: un valor nuevo cae por el .get() en silencio",
    "state": "OPEN"
   }
  ]

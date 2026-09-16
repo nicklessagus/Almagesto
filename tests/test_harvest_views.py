@@ -1846,3 +1846,21 @@ def test_462_la_propuesta_muestra_la_CLAUSULA_no_el_arranque_del_bullet(toy_vaul
     assert texto.startswith("⚠ Actualizado"), "se muestra la cláusula que produjo la clase"
     assert "se leyó del preprint" not in texto
 
+
+# ── #478 · la tabla derivada declara su cobertura ─────────────────────────────────────────────
+
+def test_la_tabla_de_documento_CUBRE_el_vocabulario_o_declara_lo_que_deja_afuera():
+    """#478 — `_DOC_DE_FUENTE` mapea desde `PDF_SOURCE_OK`, y `web` queda afuera a propósito: un
+    snapshot no tiene testigo, así que sale **no evaluable con su motivo** (D-43). El problema era
+    que esa decisión vivía sólo en un comentario: sin este cruce, el día que el vocabulario gane un
+    quinto valor ese valor cae por el mismo `.get()` y no hay cómo distinguir «deliberadamente no
+    evaluable» de «se olvidaron» — la confusión que D-43 existe para no producir.
+
+    ⛔ El assert es de PARTICIÓN, no de inclusión: `claves ⊆ vocabulario` ya se cumplía y no habría
+    cazado nada. Lo que tiene que romper es el vocabulario que CRECE."""
+    cubiertas, fuera = set(hv._DOC_DE_FUENTE), set(hv._SIN_TESTIGO)
+    assert cubiertas | fuera == set(cfg.PDF_SOURCE_OK), (
+        "un valor de `PDF_SOURCE_OK` sin lugar en la tabla ni en su complemento declarado")
+    assert not (cubiertas & fuera), "un valor no puede estar cubierto Y declarado afuera"
+    assert set(hv._DOC_DE_FUENTE.values()) == {"preprint", "publicado"}, (
+        "el eje que los testigos deciden tiene dos valores (#452)")

@@ -114,3 +114,99 @@ def test_ningun_script_enumera_las_notas_con_un_glob_crudo():
         "enumerar notas con un glob crudo se lleva los hermanos `.verif.md` (INV-148) — usá "
         "`cfg.note_paths(<dir>)`, que es la única definición de «qué es una nota»:\n  "
         + "\n  ".join(ofensores))
+
+
+# ── #478 · la tabla derivada de un vocabulario cerrado declara su cobertura ────────────────────
+
+#: Las tablas que YA declaran su cobertura, con el test que la cruza. El barrido de abajo exige que
+#: toda tabla derivada esté acá: una nueva es un rojo, no un silencio.
+#:
+#: ⛔ Por qué #478 NO tiene entrada en `tools/portadores.yaml`, y no es un olvido: su «¿quién MÁS
+#: lleva esta regla?» (#409) lo contesta **este barrido**, que recorre `scripts/` y `tools/`
+#: enteros y es exhaustivo por construcción. Una declaración firmada a mano sería estrictamente
+#: peor —hay que acordarse de firmarla, y un portador nuevo que nadie firme queda mudo—, que es el
+#: modo de falla que `portadores` existe para cubrir cuando la regla vive en un símbolo. Acá la
+#: regla no vive en un símbolo de `scripts/`: vive en la relación entre cada tabla y su vocabulario,
+#: y eso se enumera, no se declara.
+TABLAS_CON_COBERTURA = {
+    ("harvest_views.py", "_DOC_DE_FUENTE"):
+        "tests/test_harvest_views.py::test_la_tabla_de_documento_CUBRE_el_vocabulario_o_declara_lo_que_deja_afuera",
+    ("make_notes.py", "_FULLTEXT_QUALITY"):
+        "tests/test_make_notes.py::test_la_tabla_de_calidad_de_fulltext_CUBRE_su_vocabulario",
+}
+
+
+def _vocabularios_cerrados() -> dict:
+    """`{nombre: set(valores)}` — los vocabularios cerrados de `lib_config`, leídos de la constante.
+
+    ⛔ No se copian acá: se importan. Una lista repetida en el test es la misma divergencia que la
+    regla de #477 persigue, un nivel más arriba."""
+    import sys
+    sys.path.insert(0, str(RAIZ / "scripts"))
+    import lib_config as cfg
+    return {n: set(getattr(cfg, n)) for n in ("PDF_SOURCE_OK", "FULLTEXT_SOURCE_OK",
+                                              "PENDING_OK", "UNIDAD_CITA_OK")}
+
+
+def _tablas_derivadas(fuente: str, vocs: dict) -> list:
+    """`[(nombre, vocabulario, claves)]` — los dicts de módulo cuyas claves son un subconjunto
+    PROPIO de un vocabulario cerrado (#478).
+
+    El subconjunto **propio** con 2+ claves es la forma que importa: mapea desde el vocabulario y
+    **no lo cubre**, así que el valor que falta cae por el `.get()`. Un dict que lo cubre entero
+    también entra —su riesgo es el vocabulario que crece—, y por eso la condición es «⊆», no «⊂»."""
+    try:
+        arbol = ast.parse(fuente)
+    except SyntaxError:
+        return []
+    out = []
+    for n in arbol.body:
+        if not isinstance(n, ast.Assign) or not isinstance(n.value, ast.Dict):
+            continue
+        nombre = next((x.id for x in n.targets if isinstance(x, ast.Name)), None)
+        claves = {k.value for k in n.value.keys
+                  if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+        if not nombre or len(claves) < 2:
+            continue
+        for voc, vals in vocs.items():
+            if claves <= vals:
+                out.append((nombre, voc, claves))
+    return out
+
+
+def test_toda_tabla_derivada_de_un_vocabulario_cerrado_declara_su_cobertura():
+    """#478 — una tabla cuyas claves son valores de un vocabulario cerrado tiene que CUBRIRLO o
+    nombrar lo que deja afuera; si no, el valor nuevo cae por su `.get()` **en silencio**.
+
+    Medido al abrir el issue: dos tablas, y una (`_DOC_DE_FUENTE`) ya dejaba `web` afuera **a
+    propósito** —un snapshot no tiene testigo, D-43— con esa decisión viviendo sólo en un
+    comentario. El defecto no era el hueco: era que nada lo cruzaba, así que un quinto valor del
+    vocabulario habría sido indistinguible de un olvido.
+
+    ⛔ Este barrido es la mitad que arregla la CLASE y no el caso (#409): las dos tablas de hoy ya
+    tienen su test de partición, y lo que este assert cierra es la **tercera**, la que alguien
+    escriba mañana. Una tabla nueva es un rojo que manda a escribirle su cruce."""
+    sin_declarar = []
+    vocs = _vocabularios_cerrados()
+    for f in FUENTES:
+        for nombre, voc, _claves in _tablas_derivadas(f.read_text(encoding="utf-8"), vocs):
+            if (f.name, nombre) not in TABLAS_CON_COBERTURA:
+                sin_declarar.append(f"{f.name}::{nombre} (claves de `{voc}`)")
+    assert not sin_declarar, (
+        "tabla(s) derivadas de un vocabulario cerrado sin test que cruce su cobertura — el valor "
+        "nuevo del vocabulario caería por su `.get()` en silencio (#478). Escribile el assert de "
+        "partición y agregala a `TABLAS_CON_COBERTURA`:\n  " + "\n  ".join(sin_declarar))
+
+
+def test_el_barrido_de_cobertura_SIGUE_VIENDO_las_tablas_que_ya_estan(tmp_path):
+    """#478 — la red del barrido de arriba: si `_tablas_derivadas` dejara de reconocerlas, el test
+    pasaría con **cero** tablas miradas, que es el falso limpio de D-43 dentro del gate que existe
+    para no producir uno. Así que se exige que las conocidas sigan apareciendo, y que una tabla
+    nueva se detecte."""
+    vocs = _vocabularios_cerrados()
+    vistas = {(f.name, n) for f in FUENTES
+              for n, _v, _c in _tablas_derivadas(f.read_text(encoding="utf-8"), vocs)}
+    assert set(TABLAS_CON_COBERTURA) <= vistas, (
+        "el barrido dejó de ver una tabla declarada: ¿se renombró, o dejó de derivar del vocabulario?")
+    nueva = "_NUEVA = {'eprint': 1, 'ads': 2}\n"
+    assert [n for n, _v, _c in _tablas_derivadas(nueva, vocs)] == ["_NUEVA"], "y ve una nueva"

@@ -2903,6 +2903,50 @@ descubrió que tenía **tres** síntomas y que #471 cubría uno.
 **Portadores (#409).** `carriers --propose lib_config.bibtex_no_pegable --patron
 'journalformat|get\("bibtex"\)'`: 2 llaman (`fetch_bibtex`, `lint`), 0 matchean sin llamar.
 
+## #478 · la tabla derivada que no declara su cobertura (2026-09-16)
+
+Lo levantó el validador al cerrar #477, como observación y no como devolución. #477 firmó que el
+vocabulario cerrado es **una** lista; esto cierra el otro lado: **quién deriva de ella**.
+
+Barrido sobre `scripts/` y `tools/` (dict de módulo cuyas claves son subconjunto de un vocabulario
+cerrado de `lib_config`, con 2+ claves). Devuelve **dos**:
+
+| tabla | vocabulario | cubre | falta |
+|---|---|---|---|
+| `harvest_views._DOC_DE_FUENTE` | `PDF_SOURCE_OK` | ads, eprint, publisher | **web** |
+| `make_notes._FULLTEXT_QUALITY` | `FULLTEXT_SOURCE_OK` | ocr, pdftotext, web | ninguna |
+
+⚠ **El hueco de `web` no era el defecto.** Está documentado y es doctrina D-43: un snapshot no
+lleva marca de arXiv ni firma de reemplazo, así que no tiene testigo y sale **no evaluable con su
+motivo**, que es la tercera respuesta y no la segunda. El defecto es que **esa decisión vivía sólo
+en un comentario**: nada la cruzaba contra la constante, así que el día que `PDF_SOURCE_OK` gane un
+quinto valor, ese valor cae por el mismo `.get()` y **no hay cómo distinguir «deliberadamente no
+evaluable» de «se olvidaron»** — la confusión que D-43 existe para no producir, dentro del código
+que la predica. Y `_FULLTEXT_QUALITY`, que hoy cubre todo, desempata entre copias del mismo paper
+con default 0: un valor nuevo perdería contra `ocr` **en silencio**, o sea que una extracción de
+mejor calidad quedaría descartada sin que nada avise.
+
+**Lo que entró.** Cada tabla declara su complemento como constante hermana (`_SIN_TESTIGO`,
+`_FULLTEXT_QUALITY_FUERA`) y un test cruza la **partición** contra el vocabulario. ⛔ Partición y no
+inclusión: `claves ⊆ vocabulario` ya se cumplía en las dos y no habría cazado nada — lo que tiene
+que romper es el vocabulario que **crece**. Verificado: agregando un valor ficticio a cada
+vocabulario, los dos tests caen.
+
+**Y la mitad que arregla la clase (#409), que es la que importa:**
+`test_toda_tabla_derivada_de_un_vocabulario_cerrado_declara_su_cobertura` corre el mismo barrido
+sobre el repo y exige que toda tabla encontrada esté en `TABLAS_CON_COBERTURA`. Las dos de hoy ya
+tienen su cruce; lo que ese assert cierra es la **tercera**, la que alguien escriba mañana.
+Verificado agregando una tabla nueva en `triage.py`: el test la nombra con su vocabulario. Lleva
+además su propia red —que el barrido siga viendo las conocidas—, porque un barrido que deja de
+reconocerlas pasaría con **cero** tablas miradas, que es el falso limpio de D-43 dentro del gate
+que existe para no producir uno.
+
+⛔ **Por qué NO tiene entrada en `tools/portadores.yaml`**, y no es un olvido: su «¿quién más lleva
+esta regla?» lo contesta el **barrido**, que es exhaustivo por construcción. Una declaración firmada
+a mano sería estrictamente peor —hay que acordarse de firmarla—. La regla no vive en un símbolo de
+`scripts/`: vive en la relación entre cada tabla y su vocabulario, y eso se **enumera**, no se
+declara.
+
 ## #477 · el barrido que #476 habilitó: 5 reglas que viven en una constante (2026-09-16)
 
 #476 hizo declarable la regla cuyo portador compartido es una constante. Éste es el barrido que

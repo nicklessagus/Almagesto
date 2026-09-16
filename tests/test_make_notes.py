@@ -5981,3 +5981,22 @@ def test_la_columna_sale_de_la_ficha_aunque_stars_yaml_no_la_declare(toy_vault):
     assert [e[:2] for e in datos["estrellas"]] == [("test_star", "Estrella Test")]
     assert datos["metodos"]["gp"]["estrellas"] == {"test_star": ["2020aaa...1..1A"]}, \
         "sin la entrada del YAML el paper dejó de enganchar con su ficha"
+
+
+# ── #478 · la tabla derivada declara su cobertura ─────────────────────────────────────────────
+
+def test_la_tabla_de_calidad_de_fulltext_CUBRE_su_vocabulario():
+    """#478 — `_FULLTEXT_QUALITY` desempata entre copias del mismo paper bajo distintos slugs
+    (#16) y su default es 0, así que un valor **nuevo** de `FULLTEXT_SOURCE_OK` perdería contra
+    `ocr` sin que nada avise: una extracción de mejor calidad quedaría descartada en silencio. Hoy
+    no falta ninguno; el riesgo es futuro, y por eso el assert es de PARTICIÓN contra la constante
+    y no una lista repetida acá.
+
+    Si alguno llegara a quedar fuera a propósito, va en `_FULLTEXT_QUALITY_FUERA` con su motivo,
+    igual que el `_SIN_TESTIGO` de `harvest_views` (D-43)."""
+    cubiertas, fuera = set(mn._FULLTEXT_QUALITY), set(mn._FULLTEXT_QUALITY_FUERA)
+    assert cubiertas | fuera == set(cfg.FULLTEXT_SOURCE_OK), (
+        "un valor de `FULLTEXT_SOURCE_OK` sin calidad declarada valdría 0 y perdería el desempate")
+    assert not (cubiertas & fuera)
+    assert min(mn._FULLTEXT_QUALITY.values()) > 0, (
+        "una calidad de 0 no se distingue de «desconocido», que es el default")

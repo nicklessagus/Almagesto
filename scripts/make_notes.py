@@ -173,7 +173,12 @@ def signed_pdf_source(slug: str | None, stem: str) -> str | None:
 # Calidad de fulltext para desempatar entre copias del mismo paper bajo distintos slugs (#16):
 # `pdftotext`/`web` son extracción/snapshot limpios; `ocr` es rescate "citable con salvedad".
 # Mayor = mejor; desconocido = 0.
+# ⛔ #478 — cubre `FULLTEXT_SOURCE_OK` ENTERO, y un test lo cruza. Hoy no falta ninguno, así que el
+# riesgo es futuro y silencioso: un valor nuevo valdría 0, o sea que una extracción de calidad
+# nueva perdería el desempate contra `ocr` sin que nada avise. Si alguno llegara a quedar fuera a
+# propósito, va en un complemento declarado como el `_SIN_TESTIGO` de `harvest_views` (D-43).
 _FULLTEXT_QUALITY = {"pdftotext": 2, "web": 2, "ocr": 1}
+_FULLTEXT_QUALITY_FUERA: tuple = ()
 
 
 def fulltext_info(slug: str | None, stem: str) -> tuple[str | None, str | None]:

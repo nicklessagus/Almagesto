@@ -89,9 +89,16 @@ def pdf_on_disk(bibcode: str) -> bool:
 
 
 #: #452 · qué documento declara cada valor de `PDF_SOURCE_OK` en el eje que los TESTIGOS deciden.
-#: `web` no tiene testigo (un snapshot no lleva marca de arXiv ni firma de reemplazo), así que sale
-#: **no evaluable con su motivo** — que es la tercera respuesta, no la segunda (D-43).
 _DOC_DE_FUENTE = {"eprint": "preprint", "ads": "publicado", "publisher": "publicado"}
+
+#: #478 · el complemento DECLARADO de la tabla de arriba. `web` no tiene testigo —un snapshot no
+#: lleva marca de arXiv ni firma de reemplazo—, así que sale **no evaluable con su motivo**, que es
+#: la tercera respuesta y no la segunda (D-43). ⛔ Vive acá y no en un comentario porque la unión de
+#: las dos tiene que ser `PDF_SOURCE_OK` **entero** y eso lo cruza un test: sin él, el día que el
+#: vocabulario gane un quinto valor ese valor cae por el mismo `.get()` y no hay cómo distinguir
+#: «deliberadamente no evaluable» de «se olvidaron» — la confusión que D-43 existe para no
+#: producir, dentro del código que la predica.
+_SIN_TESTIGO = ("web",)
 
 
 def _leido_detalle(leido: str, doc: str, fm: dict) -> str:
