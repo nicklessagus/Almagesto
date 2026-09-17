@@ -253,6 +253,56 @@ def test_la_ronda_ACOTADA_arrastra_los_pares_de_afuera_con_el_ancla_recalculada(
         "ni vencido por edición ni huérfano: la partición de #282 cerró"
 
 
+# ── #480 · re-anclar SIN ronda tiene comando ─────────────────────────────────────────────────────
+
+def test_480_reanclar_lleva_las_filas_con_el_ancla_recalculada_y_conserva_la_fecha(toy_vault, capsys):
+    """#480 — corregir UNA letra de una cita vence el ancla del par y `reverify_subset` daba «257
+    re-anclables / 0 a re-verificar» sin comando que lo aplicara: la salida era `--from <dir vacío>`,
+    que ningún doc declara, más `--fecha` a mano para no re-fechar. `--reanclar` es eso con nombre:
+    conserva la fecha del bloque (nada se verificó, #395) y el lint no ve un par vencido después."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {"2020Pdf": "no-soportada"}, ronda="r1"), fecha="2026-03-01")
+    hermano_antes = cfg.verif_sidecar(nota).read_text(encoding="utf-8")
+    anclas_viejas = {f.bibcode: f.anchor for f in lb.verif_rows(nota)}
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "La amplitud es 2.5 m/s [[2019Txt]].", "La amplitud es 2.5 m/s, medida en 2019 [[2019Txt]]."),
+        encoding="utf-8")
+    assert lint.collect().por_clave("stale_pairs").items != (), "el fixture: el par venció"
+    assert ws.main([str(nota), "--reanclar", "--dry-run"]) == 0
+    assert cfg.verif_sidecar(nota).read_text(encoding="utf-8") == hermano_antes, "dry-run no escribe"
+    assert ws.main([str(nota), "--reanclar"]) == 0
+    out = capsys.readouterr().out
+    assert "1 re-anclada(s), 0 juzgada(s)" in out and "2026-03-01" in out, out
+    filas = {f.bibcode: f for f in lb.verif_rows(nota)}
+    assert filas["2019Txt"].anchor != anclas_viejas["2019Txt"] and filas["2019Txt"].verdict == "soportada"
+    assert filas["2020Pdf"].anchor == anclas_viejas["2020Pdf"] and filas["2020Pdf"].verdict == "no-soportada", \
+        "la fila que no venció queda igual, con su veredicto"
+    assert "## Verificación de citas (2026-03-01)" in nota.read_text(encoding="utf-8"), "la fecha se CONSERVA"
+    assert lint.collect().por_clave("stale_pairs").items == ()
+    assert ws.main([str(nota), "--reanclar"]) == 0
+    assert "0 re-anclada(s)" in capsys.readouterr().out, "idempotente"
+
+
+def test_480_reanclar_REHUSA_el_par_que_hay_que_re_verificar_y_sin_hermano(toy_vault, capsys):
+    """La otra mitad de la partición de #257: un par sin fila que llevar es un par a RE-VERIFICAR, y
+    re-anclarlo publicaría un ancla sobre un veredicto que no existe. Se rehúsa nombrándolo y no se
+    escribe nada; y sin hermano no hay filas que llevar."""
+    nota = _escena(toy_vault)
+    assert ws.main([str(nota), "--reanclar"]) == 1
+    assert "no hay hermano" in capsys.readouterr().out
+    ws.write(nota, _fanout(toy_vault, nota, {}, ronda="r1"), fecha="2026-03-01")
+    hermano = cfg.verif_sidecar(nota).read_text(encoding="utf-8")
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "La amplitud es 2.5 m/s [[2019Txt]].", "El bisector no correlaciona con la RV [[2019Txt]]."),
+        encoding="utf-8")
+    assert ws.main([str(nota), "--reanclar"]) == 1
+    out = capsys.readouterr().out
+    assert "RE-VERIFICAR" in out and "2019Txt" in out and "reverify_subset.py" in out, out
+    assert cfg.verif_sidecar(nota).read_text(encoding="utf-8") == hermano, "no se escribió nada"
+    assert ws.main([str(nota) + ".verif.md", "--reanclar"]) == 2, "el hermano no es una nota"
+    assert ws.main(["--reanclar"]) == 2
+
+
 # ── #430 · la prosa del triage se pierde en silencio ────────────────────────────────────────────
 # `free_text_of` comparaba el arranque de la sub-sección SIN normalizar el markdown (regla de
 # método nº 4, quinta vez: #168, #276, #283, #309). Una sub-sección adornada o con paréntesis

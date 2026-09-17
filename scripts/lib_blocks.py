@@ -1425,24 +1425,6 @@ def chained_verdict(previous: str, current: str) -> str:
     return current
 
 
-def chain_from_reanchor(rows: list, re_anclaje: list) -> list:
-    """Apply `chained_verdict` to the rows whose anchor a re-anchoring proposal maps to (#366).
-
-    `re_anclaje` is what `reverify_subset --json` writes (#285): `ancla_vieja`, `ancla_nueva`,
-    `veredicto` and `bibcode` per pair. The old→new map already existed and was thrown away at the
-    only place it could have been used. ⛔ Never crosses `bibcode`: carrying a verdict from one
-    source to another would fabricate the attribution this framework most pursues."""
-    por_ancla = {(e.get("bibcode"), e.get("ancla_nueva")): e.get("veredicto", "")
-                 for e in re_anclaje if e.get("ancla_nueva")}
-    out = []
-    for r in rows:
-        prev = por_ancla.get((r.bibcode, r.anchor))
-        if prev:
-            r = replace(r, verdict=chained_verdict(prev, r.verdict))
-        out.append(r)
-    return out
-
-
 #: Las cinco columnas de la tabla de una vista. Las escribe `harvest_views.render_view` y las lee
 #: `second_hand_rows`: una sola definición, o el lector y el escritor divergen (regla de método 2).
 VISTA_COLS = ("Qué", "Valor", "Localizador", "Régimen", "Segunda mano")

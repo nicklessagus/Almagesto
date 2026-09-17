@@ -339,7 +339,7 @@ escribe prosa citada. Tres hábitos nuevos y un chequeo:
 |---|---|---|
 | repartir el fan-out | prompts armados a mano, `--esperados` contado a ojo | `python scripts/verify_fanout.py <nota> --out build/<slug>/verif/<ronda>` escribe un prompt por fuente y el manifiesto; la barrera se corre **sin** `--esperados` y nombra la fuente que falta (#369) |
 | copiar una cita a la PROSA | transcribir a mano | `python scripts/contrast.py <slug> --cita --grep "<re>"` emite `«valor» (loc) [[bibcode]]` pegable (#385) |
-| reconstruir el bloque tras re-anclar | la cadena se perdía con el ancla | pasar las filas por `lib_blocks.chain_from_reanchor(filas, re_anclaje)` con el JSON de `reverify_subset` (#366) |
+| reconstruir el bloque tras re-anclar | la cadena se perdía con el ancla | el escritor empareja cada par con su fila previa y encadena (#366/#407); sin ronda, `write_verif_sidecar.py <nota> --reanclar` (#480 — `chain_from_reanchor` se borró: nunca tuvo llamador) |
 | corregir | reescribir con más cuidado | **sacar** la parte equivocada primero; `apply_fixes` avisa si un fix agrega citas (#389) |
 
 **Chequeo nuevo del lint (backlog):** un `[[bibcode]]` dentro del blockquote de alcance de

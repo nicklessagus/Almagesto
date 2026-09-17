@@ -283,7 +283,7 @@ que falla* de `.claude/skills/verify-citations/SKILL.md`.
 ⛔ El re-anclaje es una **propuesta**: dice que la afirmación sigue siendo reconociblemente la misma,
 **no** que la corrección haya sido fiel. Quien lo acepta **lo declara en el bloque** — de qué ronda
 viene el veredicto, y que el texto es posterior a la corrección. Sin esa línea, el bloque afirma una
-frescura que no tiene.
+frescura que no tiene. `re_verificar` vacío → `write_verif_sidecar.py <nota> --reanclar` (#480).
 
 ### 5. Cerrar
 

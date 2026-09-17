@@ -2,6 +2,7 @@
 
     python scripts/write_verif_sidecar.py <nota.md> --from build/<slug>/verif/<ronda> [--fecha AAAA-MM-DD] [--dry-run]
     python scripts/write_verif_sidecar.py [<nota.md> | --todo] --restamp-section    # #430
+    python scripts/write_verif_sidecar.py <nota.md> --reanclar [--fecha AAAA-MM-DD] [--dry-run]   # #480
 
 The missing link of the `verify-citations` chain. It had a generator (`verify_fanout.py`, #369), a
 barrier (`check_verify_fanout.py`, #259) and a re-anchoring proposer (`reverify_subset.py`, #257),
@@ -47,6 +48,13 @@ goes through the reader and only ever sees what the reader recognises.
 
 `--restamp-section` is the migration half: it re-stamps the note's section from the sibling that
 already exists, with no fan-out, keeping the block's date and the table byte for byte.
+
+`--reanclar` (#480) is the other write without a round: the correction DERIVED from the
+verification itself —one letter of a quote, the verifier's own wording— expires the pair's anchor
+and nothing else, and #282/#257 say it is re-anchored, not re-asked. `reverify_subset` proposed it
+and no command applied it: the only way was `--from <empty dir>`, which nothing documents. It
+carries every row with its anchor recalculated, keeps the block's date (re-anchoring is not
+re-verifying, #395) and REFUSES if any pair has no row to carry — that pair needs the fan-out.
 """
 from __future__ import annotations
 
@@ -621,6 +629,68 @@ def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = Fals
             "encadenadas": c["cadenas"], "hermano": cfg.verif_sidecar(note).name}
 
 
+def reanchor(note: Path, fecha: str | None = None, dry_run: bool = False) -> dict:
+    """Re-anchor the sibling WITHOUT a round (#480): every row carried, anchor recalculated.
+
+    Same matching as a scoped round (`match_rows_to_pairs`, #407: exact anchor first, then extract
+    coverage, never across `bibcode`) and the same writer (`build_rows` with an empty fan-out), so
+    it is byte for byte what `--from <empty dir>` did — with a name, and with two refusals that
+    trick had not: a pair with NO row to carry is a pair to RE-VERIFY (the other half of
+    `reverify_subset`'s partition, and re-anchoring it would publish an anchor over a verdict that
+    does not exist), and a note without a sibling has nothing to re-anchor. The block's date is
+    PRESERVED unless `fecha` says otherwise: nothing was verified (#395). Orphan rows —the claim is
+    no longer in the body— are dropped and DECLARED."""
+    text = note.read_text(encoding="utf-8")
+    rows = lb.verif_rows(note)
+    if not rows:
+        raise SidecarError(f"{note.name}: no hay hermano `.verif.md` con filas que llevar — "
+                           f"re-anclar es llevar filas, y no hay ninguna")
+    d = fecha or cfg.verification_date(text)[1]
+    if not d:
+        raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado y no se pasó "
+                           f"`--fecha`: re-fechar es una decisión, no un default")
+    pares = lb.pairs_of(text)
+    _asignado, sin_fila, huerfanas = lb.match_rows_to_pairs(pares, rows)
+    if sin_fila:
+        raise SidecarError(
+            f"{len(sin_fila)} par(es) del cuerpo sin fila que llevar: eso es RE-VERIFICAR, no "
+            f"re-anclar (#257) — `python scripts/reverify_subset.py {note} --json <out>` y el "
+            f"fan-out sobre `re_verificar`; no se escribe nada:\n  "
+            + "\n  ".join(f"{p.bibcode} · ancla {p.anchor}" for p in sin_fila))
+    viejas = {(r.bibcode, r.anchor) for r in rows}
+    nuevas = build_rows(note, text, {}, rows)
+    emit(note, text, nuevas, d, dry_run=dry_run)
+    return {"filas": len(nuevas), "pares_cuerpo": len(pares), "fecha": d,
+            "reancladas": sum(1 for r in nuevas if (r.bibcode, r.anchor) not in viejas),
+            "huerfanas": [(h.bibcode, h.claim) for h in huerfanas],
+            "hermano": cfg.verif_sidecar(note).name}
+
+
+def _main_reanclar(args) -> int:
+    """`--reanclar` on one note (#480). Declares what moved and what was dropped (D-43)."""
+    if not args.nota:
+        cfg.print_seguro("⛔ `--reanclar` necesita la nota")
+        return 2
+    nota = Path(args.nota)
+    if not nota.exists() or cfg.is_verif_sidecar(nota):
+        cfg.print_seguro(f"⛔ {nota} no es una nota")
+        return 2
+    try:
+        r = reanchor(nota, fecha=args.fecha, dry_run=args.dry_run)
+    except SidecarError as exc:
+        cfg.print_seguro(f"⛔ {exc}")
+        return 1
+    accion = "se escribiría" if args.dry_run else "escrito"
+    cfg.print_seguro(f"{accion} {r['hermano']}: {r['filas']} fila(s) sobre {r['pares_cuerpo']} "
+                     f"par(es) del cuerpo — {r['reancladas']} re-anclada(s), 0 juzgada(s) (sin "
+                     f"ronda, #480); fecha del bloque {r['fecha']} (conservada: nada se verificó)")
+    if r["huerfanas"]:
+        cfg.print_seguro(f"⚠ {len(r['huerfanas'])} fila(s) huérfana(s) descartada(s) — la "
+                         f"afirmación ya no está en el cuerpo:"
+                         + "".join(f"\n  {b} · «{(c or '')[:70]}»" for b, c in r["huerfanas"]))
+    return 0
+
+
 def _split_address(spec: str) -> tuple:
     """`<ancla>[:<bibcode>]` → `(ancla, bibcode|"")` (#434).
 
@@ -739,15 +809,20 @@ def main(argv=None) -> int:
                          "conserva la fecha del bloque y no toca la tabla")
     ap.add_argument("--todo", action="store_true",
                     help="con --restamp-section: barre toda la bóveda (notas con hermano)")
+    ap.add_argument("--reanclar", action="store_true",
+                    help="#480: sin ronda — lleva todas las filas con el ancla recalculada, "
+                         "conserva la fecha del bloque y REHÚSA si algún par hay que re-verificar")
     ap.add_argument("--fecha", default=None, help="fecha del bloque (default: hoy)")
     ap.add_argument("--dry-run", action="store_true", help="no escribe: dice qué haría")
     args = ap.parse_args(argv)
     if args.restamp:
         return _main_restamp(args)
+    if args.reanclar:
+        return _main_reanclar(args)
     if args.resolver or args.resoluciones or args.migrate_cond:
         return _main_condiciones(args)
     if not args.nota or not args.fanout:
-        cfg.print_seguro("⛔ hace falta la nota y `--from <dir>` (o `--restamp-section`)")
+        cfg.print_seguro("⛔ hace falta la nota y `--from <dir>` (o `--restamp-section` / `--reanclar`)")
         return 2
     nota, fanouts = Path(args.nota), [Path(x) for x in args.fanout]
     if not nota.exists() or cfg.is_verif_sidecar(nota):

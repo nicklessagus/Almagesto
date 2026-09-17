@@ -161,6 +161,10 @@ def main() -> int:
         print("\n⚠ El re-anclaje es una PROPUESTA: dice que la afirmación sigue siendo reconociblemente\n"
               "  la misma, no que la corrección haya sido fiel. Quien lo acepte lo declara en el bloque\n"
               "  (de qué ronda viene el veredicto, y que el texto es posterior a la corrección).")
+        if not r["sin_fila"]:
+            # #480 — con 0 a re-verificar, la escritura tiene comando; con alguno, primero el fan-out
+            print(f"  → sin pares a re-verificar: `python scripts/write_verif_sidecar.py {nota} "
+                  f"--reanclar` lleva las {len(r['asignado'])} filas con el ancla recalculada (#480)")
     return 0
 
 

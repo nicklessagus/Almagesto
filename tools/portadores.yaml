@@ -1712,3 +1712,19 @@ portadores:
       - modulo: scripts/proposals.py
         estado: fuera-de-alcance
         motivo: "Consume `declared_scopes`, derivada de `config_items`; no re-enumera carriles."
+  - issue: 480
+    regla: >-
+      Una corrección DERIVADA de la verificación se RE-ANCLA, no se re-pregunta (#282/#257), y
+      re-anclar es una escritura serial CON COMANDO: `reverify_subset` proponía (257 re-anclables /
+      0 a re-verificar) y la única forma de aplicarlo era `--from <directorio vacío>`, que ningún
+      doc declara, más `--fecha` a mano. Y el consumidor por JSON (`chain_from_reanchor`) nunca tuvo
+      llamador: el skill lo afirmaba (mapa que atribuye mal, regla nº 4) y se borró.
+    funcion: write_verif_sidecar.reanchor
+    patron: 'match_rows_to_pairs'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "Es el DUEÑO de `match_rows_to_pairs`, el emparejamiento que `reanchor` usa; no re-ancla nada."
+      - modulo: scripts/reverify_subset.py
+        estado: fuera-de-alcance
+        motivo: "PROPONE la partición (re-anclables / a re-verificar) y nombra el comando; no escribe (#257)."

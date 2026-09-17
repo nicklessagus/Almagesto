@@ -524,11 +524,14 @@ vigente»*), subida acá a la ronda **obligatoria**.
   se le pasa al verificador **`re_verificar[<bibcode>][].texto`** —el texto vigente— y **nada más de
   ese JSON**. `re_anclaje` lleva `ancla_vieja` y `veredicto`: eso es **la historia**, y es
   exactamente lo que no se le manda.
-- **Y esa historia se CONSUME al reconstruir el bloque (#366):** las filas nuevas pasan por
-  `lib_blocks.chain_from_reanchor(filas, re_anclaje)`, que le pone a la fila re-anclada su
-  cadena (`contradice→corregida`). Sin eso, un `contradice` resuelto corrigiendo la afirmación
-  cambia el ancla por definición, el viejo queda huérfano y el bloque publica **0 contradicen**
-  sobre una nota que afirmó lo contrario de su fuente — medido: 1 en 10 rondas, 62 huérfanos.
+- **Y esa historia la CONSUME el escritor, no vos (#366/#407):** `write_verif_sidecar` empareja
+  cada par del cuerpo con su fila previa (ancla exacta, después cobertura del extracto, nunca
+  cruzando `bibcode`) y encadena el veredicto (`contradice→corregida`). Sin eso, un `contradice`
+  resuelto corrigiendo la afirmación cambia el ancla por definición, el viejo queda huérfano y el
+  bloque publica **0 contradicen** sobre una nota que afirmó lo contrario de su fuente — medido: 1
+  en 10 rondas, 62 huérfanos. ⛔ **Con 0 a re-verificar no hay ronda: el comando es
+  `write_verif_sidecar.py <nota> --reanclar` (#480)** — conserva la fecha del bloque (nada se
+  verificó, #395) y **rehúsa** si algún par no tiene fila que llevar.
 - **Dirigir la pregunta, no la respuesta.** Si hace falta orientar la atención, se orienta al lugar
   donde mirar, nunca al veredicto esperado. Legítimo: *«prestá atención a qué método atribuye la
   fuente a cada valor de la Tabla 2»*. Prohibido: *«la nota dice que son estimados de calibración,

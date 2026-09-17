@@ -1481,34 +1481,9 @@ def test_verif_pointer_es_un_link_markdown_y_no_un_wikilink(tmp_path):
     assert puntero.lstrip().startswith(">"), "va en blockquote: no lo mira el scan de fuga"
 
 
-# ── #366 · la cadena de veredictos sobrevive al cambio de ancla ──
-
-def test_la_cadena_se_forma_cuando_el_re_anclaje_dice_de_donde_viene_la_fila():
-    """#366 — la cadena de #232 sólo se formaba cuando el ancla sobrevivía, y un `contradice`
-    que se resuelve corrigiendo lo que la afirmación dice cambia el ancla POR DEFINICIÓN. El viejo
-    quedaba huérfano y el bloque publicaba `0 contradicen` sobre una nota que había afirmado algo
-    que su fuente contradecía: medido, 10 rondas, 1 contradice en la ronda 1, 62 pares huérfanos.
-
-    `reverify_subset` ya emitía el mapeo ancla vieja → nueva con el veredicto (#285); lo que faltaba
-    era consumirlo al re-emitir la fila."""
-    fila = lb.Row(n="3", claim="x", bibcode="2008Yang", verdict="soportada",
-                  anchor="7b71e4a71d", source_hash="pdf:abc", condition="")
-    re_anclaje = [{"bibcode": "2008Yang", "ancla_vieja": "94b7bdb9e8", "ancla_nueva": "7b71e4a71d",
-                   "veredicto": "contradice", "score": 0.9}]
-    [out] = lb.chain_from_reanchor([fila], re_anclaje)
-    assert out.verdict == "contradice→corregida"
-    assert lb.verdict_chain(out.verdict)[0] == "contradice", "la partición sigue por el PRIMERO"
-    assert lb.resueltos(out.verdict), "y la anotación cuenta como resuelta"
-
-
-def test_la_cadena_NO_cruza_bibcode():
-    """Llevar un veredicto de una fuente a otra sería fabricar la atribución que este framework más
-    persigue: misma ancla nueva, otro bibcode, no se toca."""
-    fila = lb.Row(n="3", claim="x", bibcode="2021Zhao", verdict="soportada",
-                  anchor="7b71e4a71d", source_hash="pdf:abc", condition="")
-    re_anclaje = [{"bibcode": "2008Yang", "ancla_nueva": "7b71e4a71d", "veredicto": "contradice"}]
-    assert lb.chain_from_reanchor([fila], re_anclaje)[0].verdict == "soportada"
-
+# ── #366 · la cadena de veredictos sobrevive al cambio de ancla (la forma `chained_verdict`;
+# el consumidor por JSON `chain_from_reanchor` nunca tuvo llamador y se borró en #480: el
+# re-anclaje lo hace `write_verif_sidecar` emparejando filas, #407) ──
 
 def test_un_re_anclaje_de_una_fila_SANA_no_inventa_cadena():
     """El recorte: re-anclar una fila soportada es el caso normal de #282 (la corrección derivada de
