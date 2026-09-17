@@ -393,11 +393,11 @@ def bibtex_for(fm: dict, stem: str, ads_cache: dict, sin_consultar=()) -> tuple:
     faltan = [c for c, v in (("bibcode ADS", ads_cache.get(bib)), ("doi", fm.get("doi")),
                              ("arxiv_id", fm.get("arxiv_id"))) if not v]
     motivo = "sin exportación oficial (sin " + ", sin ".join(faltan) + ")"
-    # #484 — el hueco NO es permanente si el venue publica el BibTeX en su sitio: el motivo lo
-    # nombra, porque la acción es pegarlo con `bibtex_source: venue` + `bibtex_url`, no re-preguntar.
-    if (venue := cfg.bibtex_venue(fm.get("bibstem"))):
-        motivo += (f" · {venue[0]} publica el BibTeX oficial en {venue[1]}: pegalo con "
-                   f"`bibtex_source: venue` y `bibtex_url` (#484)")
+    # #484 — el hueco NO es permanente si el venue publica el BibTeX en su sitio. ⛔ #485 — y el
+    # aviso NUNCA calla: `bibtex_venue` devuelve uno de cuatro estados y este bloque no decide nada,
+    # sólo lo pega. Un silencio acá se leía como «ese venue no lo publica» sobre venues que la tabla
+    # ni conoce.
+    motivo += " · " + cfg.bibtex_venue(fm.get("bibstem"), fm.get("year"))[1]
     return "", "", motivo, sin_medir
 
 

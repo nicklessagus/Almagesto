@@ -2404,11 +2404,16 @@
   {
    "number": 483,
    "title": "El drift `bibtex` ↔ frontmatter (#397) no se puede FIRMAR cuando el equivocado es el catálogo: #463 cubrió `sources:` y `check_paper_bibtex` no lleva la misma regla (2 de 2 drifts son del catálogo)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 484,
    "title": "La exportación oficial del VENUE (JMLR, NeurIPS, PMLR) no entra en `BIBTEX_SOURCES`: los papers sin DOI ni arXiv quedan en hueco permanente aunque su BibTeX canónico esté publicado (5 de 14, 3 citados por la tesis)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 485,
+   "title": "El motivo del hueco de `bibtex` afirma o calla sin haber medido: `BIBTEX_VENUES` necesita cobertura declarada y un tercer estado \"no evaluado\" (1 falso positivo + 1 silencio sobre 6, #484)",
    "state": "OPEN"
   }
  ]

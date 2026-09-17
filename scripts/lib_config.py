@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.281.0"
+ALMAGESTO_VERSION = "1.282.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2133,26 +2133,70 @@ BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv", "venue")
 
 #: #484 — `venue`: la exportación oficial que publica el SITIO del venue (JMLR, NeurIPS, PMLR),
 #: referencia canónica de los papers SIN DOI ni arXiv id —la población que cae al hueco de #467—.
-#: Es el único carril que pega una persona, así que exige `bibtex_url` (de dónde se copió): sin
-#: ella vuelve a ser «un bloque que escribió alguien» y el lint la bloquea como `bibtex_sin_fuente`.
-#: `(nombre, regex sobre bibstem, dónde)`; `bibtex_venue` la consulta para nombrar el venue en el
-#: motivo del hueco.
+#: Es el único carril que pega una persona, así que exige `bibtex_url` (la página de donde se
+#: copió): sin ella vuelve a ser «un bloque que escribió alguien» y el lint la bloquea.
+#:
+#: ⛔ #485 — `(nombre, regex sobre bibstem, dónde, desde_anio)`. La COBERTURA se declara y se compara
+#: contra el `year` de la nota, **nunca contra el volumen**: un `bibstem` es texto libre de catálogo
+#: y casi nunca lo trae (medido: los cuatro de una bóveda real dicen `JMLR`/`AISTATS`/`NIPS (…)` a
+#: secas), mientras que el año está siempre en el frontmatter. `desde_anio` es lo MEDIDO índice por
+#: índice el 2026-09-17, no lo estimado —JMLR: v1-v5 dan 0 links `.bib`, v6 (2005) da 73; NeurIPS
+#: contesta desde 1987; PMLR desde su v1 (2007)—: si mañana un venue retro-publica, el campo miente
+#: hacia el lado seguro (manda a mirar de más, no de menos).
 BIBTEX_VENUES = (
-    ("JMLR", r"(?i)\bjmlr\b|journal of machine learning research", "jmlr.org/papers"),
-    ("NeurIPS", r"(?i)\bn(eur)?ips\b|neural information processing", "proceedings.neurips.cc"),
-    ("PMLR", r"(?i)\bpmlr\b|\baistats\b|\bicml\b|\bcolt\b|\buai\b", "proceedings.mlr.press"),
+    ("JMLR", r"(?i)\bjmlr\b|journal of machine learning research", "jmlr.org/papers", 2005),
+    ("NeurIPS", r"(?i)\bn(eur)?ips\b|neural information processing", "proceedings.neurips.cc", 1987),
+    ("PMLR", r"(?i)\bpmlr\b|\baistats\b|\bicml\b|\bcolt\b|\buai\b", "proceedings.mlr.press", 2007),
 )
 
+#: #485 — los CUATRO estados del aviso, vocabulario cerrado. No son grados: son cuatro cosas
+#: distintas que el motivo tenía colapsadas de a dos en cada extremo (medido cerrando #484: sobre 6
+#: notas la tabla acertó 4, **afirmó de más 1** —`2003Sarela`, JMLR vol. 4, mandado a una página que
+#: no lo tiene— y **calló 1** —`2001Vollgraf`, `bibstem` vacío, cuyo silencio salía idéntico a «ese
+#: venue no lo publica»—).
+BIBTEX_VENUE_ESTADOS = ("publica", "fuera_de_cobertura", "no_evaluado", "no_consta")
 
-def bibtex_venue(bibstem) -> tuple | None:
-    """`(name, where)` of the venue that publishes its official BibTeX on its own site and that
-    `bibstem` names (#484), or `None`. Decides on `bibstem` —what the note declares—, never on the
-    title (title matching is what this repo forbids, `discover`: 2 of 25 pointed to another work)."""
+
+def bibtex_venue(bibstem, year=None) -> tuple:
+    """`(state, reason)` on whether the venue named by `bibstem` publishes its own BibTeX (#485).
+
+    ⛔ Returns a STATE, never a binary, and NEVER silence. This is D-43 one level down: on the text
+    somebody is going to act on. The four (`BIBTEX_VENUE_ESTADOS`):
+
+    * `publica` — in the table and the year falls inside its coverage → the URL, the actionable bit.
+    * `fuera_de_cobertura` — in the table, year outside. Saying «publishes» here sends the reader to
+      an empty page: they spend the trip and come back unsure whether they searched wrong.
+    * `no_evaluado` — an input is missing (`bibstem`, or the `year` that decides coverage): it
+      COULD NOT BE LOOKED AT, which is not a verdict. Without this state the silence reads as «does
+      not publish» — measured in `2001Vollgraf`, whose venue does publish.
+    * `no_consta` — `bibstem` declared and no entry matches. ⛔ The table is the list of venues this
+      framework KNOWS, **not** the list of those that publish: `Kybernetika`, `ICA'99` or
+      `MIT Press` are not in it, and that says nothing about them. Staying silent here turns *I do
+      not know it* into *it does not publish it* — harmless while the whole notice was optional, and
+      a claim about the world as soon as the other three are written.
+
+    The rule lives HERE and nowhere else: whoever composes the hole's reason (`fetch_bibtex`)
+    decides nothing, or the next consumer repeats the collapse from the other side."""
     b = str(bibstem or "").strip()
-    for nombre, patron, donde in BIBTEX_VENUES:
-        if b and re.search(patron, b):
-            return nombre, donde
-    return None
+    if not b or b.lower() == "null":
+        return "no_evaluado", ("no se pudo mirar si el venue publica su BibTeX: la nota no declara "
+                               "`bibstem` → declaralo (o `venue:` en el item de `sources:`) y "
+                               "re-corré (#485)")
+    for nombre, patron, donde, desde in BIBTEX_VENUES:
+        if not re.search(patron, b):
+            continue
+        anio = re.search(r"\b(1[89]\d\d|20\d\d)\b", str(year or ""))
+        if not anio:
+            return "no_evaluado", (f"{nombre} publica su BibTeX desde {desde}, y no se pudo mirar "
+                                   f"si este trabajo entra: la nota no declara `year` (#485)")
+        if int(anio.group(1)) < desde:
+            return "fuera_de_cobertura", (f"{nombre} publica el BibTeX oficial desde {desde} y este "
+                                          f"trabajo es de {anio.group(1)}: fuera de la cobertura "
+                                          f"conocida, no hay `.bib` que pegar (#485)")
+        return "publica", (f"{nombre} publica el BibTeX oficial en {donde}: pegalo con "
+                           f"`bibtex_source: venue` y `bibtex_url` (#484)")
+    return "no_consta", (f"no consta si «{b[:40]}» publica su BibTeX: no está en la tabla de venues "
+                         f"conocidos, que NO es la lista de los que publican (#485)")
 
 #: #471 — `journal = {\\aap}`: la revista como macro de AASTeX. Es lo que ADS exporta por defecto
 #: (`journalformat: 1`), y sin `aas_macros.sty` el campo compila VACÍO. Un bloque con macro no es

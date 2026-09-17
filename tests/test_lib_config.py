@@ -3814,12 +3814,41 @@ def test_la_clave_de_cita_sale_de_la_cabecera_y_solo_de_una_entrada():
     assert cfg.bibtex_citekey("no es una entrada") == "" and cfg.bibtex_citekey("") == ""
 
 
-def test_484_bibtex_venue_decide_sobre_el_bibstem_y_nombra_donde():
-    """#484 — el hueco de `bibtex` no es permanente si el venue publica el BibTeX oficial en su
-    sitio (JMLR, NeurIPS, PMLR): se reconoce por `bibstem` —lo que la nota declara, no el título—
-    y devuelve DÓNDE, que es lo que el motivo del hueco tiene que nombrar."""
-    assert cfg.bibtex_venue("JMLR") == ("JMLR", "jmlr.org/papers")
-    assert cfg.bibtex_venue("NIPS (Advances in Neural Information Processing Systems 26)")[0] == "NeurIPS"
-    assert cfg.bibtex_venue("AISTATS")[0] == "PMLR"
-    assert cfg.bibtex_venue("ApJ") is None and cfg.bibtex_venue(None) is None
-    assert "venue" in cfg.BIBTEX_SOURCES, "el vocabulario admite el carril que pega una persona"
+def test_485_bibtex_venue_devuelve_CUATRO_estados_y_nunca_calla():
+    """#485 — el aviso del hueco es D-43 un nivel más abajo: sobre el texto que alguien va a seguir.
+    Los dos estados de #484 (nombra / no nombra) colapsaban dos cosas en cada extremo — medido al
+    cerrarlo: afirmó de más en `2003Sarela` (JMLR vol. 4, mandado a una página que no lo tiene) y
+    calló en `2001Vollgraf` (`bibstem` vacío), cuyo silencio salía idéntico a «no lo publica»."""
+    # publica: está en la tabla y el año entra en la cobertura MEDIDA
+    est, mot = cfg.bibtex_venue("JMLR", 2019)
+    assert est == "publica" and "jmlr.org/papers" in mot and "bibtex_url" in mot
+    assert cfg.bibtex_venue("NIPS (Advances in Neural Information Processing Systems 26)", 2013)[0] == "publica"
+    assert cfg.bibtex_venue("AISTATS", 2017)[0] == "publica"
+    # fuera de cobertura: el venue publica, pero no para este año → NO manda a la página
+    est, mot = cfg.bibtex_venue("JMLR", 2003)
+    assert est == "fuera_de_cobertura" and "desde 2005" in mot and "2003" in mot
+    assert "jmlr.org/papers" not in mot, "mandar a una página vacía es el falso positivo de #484"
+    # no evaluado: falta el insumo (el campo, o el año que decide la cobertura). No es un veredicto.
+    assert cfg.bibtex_venue(None, 2007)[0] == "no_evaluado"
+    assert cfg.bibtex_venue("", 2007)[0] == "no_evaluado"
+    assert cfg.bibtex_venue("JMLR", None)[0] == "no_evaluado"
+    # no consta: la tabla es la lista de los venues que el framework CONOCE, no la de los que
+    # publican. Callar acá convierte «no lo conozco» en «no lo publica».
+    for bs in ("Kybernetika", "ICA'99", "MIT Press", "PhD thesis, UCL", "ESO-331895"):
+        est, mot = cfg.bibtex_venue(bs, 2011)
+        assert est == "no_consta" and "no consta" in mot and bs[:20] in mot, (bs, mot)
+    assert all(cfg.bibtex_venue(b, y)[0] in cfg.BIBTEX_VENUE_ESTADOS
+               for b, y in (("JMLR", 2019), (None, None), ("x", 1999))), "vocabulario cerrado"
+    assert all(cfg.bibtex_venue(b, y)[1].strip()
+               for b, y in (("JMLR", 2019), (None, None), ("x", 1999))), "ninguno devuelve silencio"
+
+
+def test_485_la_cobertura_se_compara_contra_el_ANIO_y_no_contra_el_volumen():
+    """#485 — un `bibstem` es texto libre de catálogo y casi nunca trae el volumen (medido: los
+    cuatro de una bóveda real dicen `JMLR`/`AISTATS`/`NIPS (…)` a secas); el `year` está siempre en
+    el frontmatter. El año se lee de donde esté, incluso pegado a otro texto."""
+    assert cfg.bibtex_venue("JMLR", "2019")[0] == "publica"
+    assert cfg.bibtex_venue("JMLR", "2004-11-02")[0] == "fuera_de_cobertura"
+    # el volumen del bibstem NO decide: JMLR 4 es de 2003, y lo que manda es el año declarado
+    assert cfg.bibtex_venue("JMLR 4", 2019)[0] == "publica"
+    assert all(len(v) == 4 for v in cfg.BIBTEX_VENUES), "(nombre, regex, dónde, desde_anio)"

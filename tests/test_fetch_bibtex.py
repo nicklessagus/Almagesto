@@ -264,8 +264,8 @@ def test_484_venue_NO_se_rebaja_ni_con_force_y_el_hueco_nombra_el_venue(tmp_path
                              "bibtex": "@article{2019Pfister,\n  title = {X},\n  author = {P},\n}\n",
                              "bibtex_source": "venue",
                              "bibtex_url": "https://www.jmlr.org/papers/v20/19-034.html"})
-    hueco = _nota(tmp_path, {"bibcode": "2003Sarela", "tags": ["paper"], "bibstem": "JMLR",
-                             "title": "Denoising", "first_author": "Sarela"})
+    hueco = _nota(tmp_path, {"bibcode": "2019Voss", "tags": ["paper"], "bibstem": "JMLR",
+                             "year": 2019, "title": "Denoising", "first_author": "Voss"})
     antes = venue.read_text(encoding="utf-8")
     monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--force"])
     fb.main()
@@ -274,6 +274,34 @@ def test_484_venue_NO_se_rebaja_ni_con_force_y_el_hueco_nombra_el_venue(tmp_path
     assert "2019Pfister" not in pedidos and "1 con `bibtex_source: venue`" in out, out
     fm = cfg.split_fm(hueco.read_text(encoding="utf-8")) or {}
     assert "JMLR publica el BibTeX oficial en jmlr.org/papers" in str(fm.get("sin_bibtex") or ""), fm
+
+
+def test_485_el_motivo_del_hueco_declara_el_estado_y_nunca_calla(tmp_path, monkeypatch, capsys):
+    """#485 — el motivo pega el estado que decide `cfg.bibtex_venue` y no decide nada por su cuenta.
+    Las tres notas que #484 dejaba mal: el año fuera de cobertura no puede mandar a la página, el
+    `bibstem` vacío no puede callar, y el venue que la tabla no conoce tampoco."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    fake_net(monkeypatch, post=lambda *a, **k: Resp(200, payload={"export": ""}))
+    monkeypatch.setattr(fb, "doi_candidate", lambda *a, **k: ("", "sin candidato en Crossref", ""))
+    notas = {
+        "2003Sarela": {"bibstem": "JMLR", "year": 2003},          # fuera de cobertura
+        "2007GomezHerrero": {"bibstem": None, "year": 2007},      # no evaluado
+        "2011Tichavsky": {"bibstem": "Kybernetika", "year": 2011},  # no consta
+    }
+    for bib, extra in notas.items():
+        _nota(tmp_path, {"bibcode": bib, "tags": ["paper"], "title": "T", "first_author": "A", **extra})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    fb.main()
+    capsys.readouterr()
+    motivos = {b: str((cfg.split_fm((tmp_path / f"{b}.md").read_text(encoding="utf-8")) or {})
+                      .get("sin_bibtex") or "") for b in notas}
+    assert "desde 2005" in motivos["2003Sarela"] and "2003" in motivos["2003Sarela"]
+    assert "jmlr.org" not in motivos["2003Sarela"], "no manda a una página que no lo tiene"
+    assert "no declara `bibstem`" in motivos["2007GomezHerrero"], motivos["2007GomezHerrero"]
+    assert "no consta" in motivos["2011Tichavsky"] and "Kybernetika" in motivos["2011Tichavsky"]
+    for b, m in motivos.items():
+        assert "sin exportación oficial" in m and m.count(" · ") >= 1, (b, m)
 
 
 def test_484_stamp_bibtex_rehusa_una_fuente_fuera_del_vocabulario(tmp_path):

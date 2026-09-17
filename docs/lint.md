@@ -173,8 +173,18 @@ Deben quedar en **0**:
   población que hoy cae al hueco de #467 (medido: 5 de 14, 3 citados por la tesis). Es el único
   carril que pega una persona, así que exige **`bibtex_url`** (la página de donde se copió): sin
   ella cae en ESTA categoría. `fetch_bibtex` no la re-baja ni con `--force` (ningún carril la
-  regenera) y, cuando el `bibstem` es uno de esos venues, el motivo del hueco lo nombra
-  (`cfg.bibtex_venue`).
+  regenera) y el motivo del hueco (#467) dice qué pasa con el venue de esa nota.
+  ⛔ **Y ese aviso tiene CUATRO estados, nunca silencio (#485)** — es D-43 un nivel más abajo, sobre
+  el texto que alguien va a seguir: **publica** (la URL, que es lo accionable) · **fuera de la
+  cobertura conocida** (el venue publica, pero no para ese año: decirle «publica» manda a una página
+  vacía) · **no evaluado** (falta el `bibstem`, o el `year` que decide la cobertura — no se pudo
+  mirar, que no es un veredicto) · **no consta** (`bibstem` declarado y ninguna entrada matchea).
+  ⛔ El cuarto no pide agregar venues: `BIBTEX_VENUES` es la lista de los que el framework
+  **conoce**, no la de los que publican, así que callar ahí convierte *no lo conozco* en *no lo
+  publica*. Medido cerrando #484 sobre 6 notas: la tabla acertó 4, **afirmó de más 1** (`2003Sarela`,
+  JMLR vol. 4) y **calló 1** (`2001Vollgraf`, `bibstem` vacío). La cobertura va por **año** y no por
+  volumen (un `bibstem` casi nunca trae el volumen; el año está siempre en el frontmatter), y es
+  medida índice por índice el 2026-09-17: JMLR desde 2005, NeurIPS desde 1987, PMLR desde 2007.
   ⚠ Antes de declarar el hueco, `fetch_bibtex` pregunta si el **DOI existe**: con `title` y
   `first_author` consulta Crossref y, **sólo con título exacto normalizado + apellido del primer
   autor**, PROPONE el DOI para que alguien lo popule (nunca lo estampa — el matcheo por título es lo

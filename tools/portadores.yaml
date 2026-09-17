@@ -1744,3 +1744,18 @@ portadores:
       - modulo: scripts/fetch_bibtex.py
         estado: usa
         motivo: "`stamp_bibtex` cruza el literal del carril contra la lista antes de escribir; `venue` no se re-baja."
+  - issue: 485
+    regla: >-
+      Un aviso derivado de una tabla PARCIAL declara sus estados y nunca calla: la tabla es la lista
+      de lo que el framework CONOCE, no la de lo que existe. `BIBTEX_VENUES` tenía dos estados
+      (nombra / no nombra) y colapsaba dos cosas en cada extremo — medido cerrando #484 sobre 6
+      notas: afirmó de más en 1 (`2003Sarela`, JMLR vol. 4, mandado a una página que no lo tiene) y
+      calló en 1 (`2001Vollgraf`, `bibstem` vacío), y ese silencio se lee igual que «ese venue no lo
+      publica». Son cuatro (`BIBTEX_VENUE_ESTADOS`), y la cobertura se compara contra el `year`, no
+      contra el volumen, porque el `bibstem` es texto libre de catálogo y casi nunca lo trae.
+    funcion: lib_config.bibtex_venue
+    patron: 'bibtex_venue|BIBTEX_VENUES'
+    consumidores:
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: "Pega el estado que devuelve `bibtex_venue` en el motivo del hueco (#467) y no decide nada por su cuenta."
