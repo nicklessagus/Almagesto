@@ -3085,6 +3085,39 @@ def test_declared_pdf_sources_junta_lo_declarado_y_rechaza_lo_que_no_es_vocabula
     assert cfg.declared_pdf_sources() == {}
 
 
+def test_479_extra_core_declara_pdf_source_por_los_DOS_carriles(monkeypatch, capsys):
+    """#479 — #415 cubrió `sources:` y el otro carril que trae PDFs del usuario (`extra_core`,
+    bibcode ADS, PDF puesto a mano en `raw/pdfs/`) quedaba `null` para siempre: 22 de 59. UNA
+    enumeración (`config_items`) para los dos; el valor fuera de vocabulario se avisa y no se
+    escribe (#296); ante la misma clave en dos carriles gana la primera declaración."""
+    monkeypatch.setattr(cfg, "load_themes", lambda: {
+        "ica-ruido": {"sources": [{"key": "1997Wentzell", "pdf_source": "publisher"}],
+                      "extra_core": [{"bibcode": "1999ISPL....6..145H", "via": "usuario",
+                                      "motivo": "m", "pdf_source": "publisher"},
+                                     {"bibcode": "2000NN.....13..411H", "via": "usuario",
+                                      "motivo": "m", "pdf_source": "revista"},
+                                     {"bibcode": "1997Wentzell", "via": "usuario", "motivo": "m",
+                                      "pdf_source": "eprint"},
+                                     {"bibcode": "2013Sin", "via": "usuario", "motivo": "m"}]}})
+    monkeypatch.setattr(cfg, "load_stars", lambda: {
+        "tau Cet": {"slug": "tau_cet",
+                    "extra_core": [{"bibcode": "1995Natur.378..355M", "via": "triage",
+                                    "motivo": "m", "pdf_source": "ads"}]}})
+    assert cfg.declared_pdf_sources() == {"1997Wentzell": "publisher",
+                                          "1999ISPL....6..145H": "publisher",
+                                          "1995Natur.378..355M": "ads"}
+    out = capsys.readouterr().out
+    assert "extra_core de `ica-ruido` (themes.yaml) / `2000NN.....13..411H`" in out and "fuera del vocabulario" in out
+    assert cfg.config_rail("1995Natur.378..355M") == "extra_core de `tau_cet` (stars.yaml)"
+    assert cfg.config_rail("1997Wentzell") == "sources[] de `ica-ruido`", "la primera declaración"
+    assert cfg.config_rail("2020nadie") is None
+    # y el snippet que pega el triage trae la clave vacía (= desconocido, se ignora) con el vocabulario
+    import yaml
+    snippet = cfg.extra_core_snippet([{"bibcode": "2020x....1A"}], via="triage")
+    assert "pdf_source:" in snippet and "|".join(cfg.PDF_SOURCE_OK) in snippet
+    assert cfg.load_extra_core(yaml.safe_load(snippet), entry="t")[0].get("pdf_source") is None
+
+
 #: Exportación REAL de Crossref para `10.1002/hbm.20432`, traída con
 #: `curl -H "Accept: application/x-bibtex" https://doi.org/10.1002/hbm.20432` el 2026-09-06.
 #: Regla de método nº 1: el parser se prueba contra lo que el servicio manda, no contra un doble

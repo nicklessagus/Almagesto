@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.277.0"
+ALMAGESTO_VERSION = "1.278.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3140,19 +3140,9 @@ def declared_scopes() -> dict:
     in force» cannot disagree. `restamp_scope` enumerated them inline, and a second copy in the
     proposals surface would be the duplicated-rule family this repo measures as its largest."""
     out: dict = {}
-    for slug, meta in (load_themes() or {}).items():
-        for item in as_list(as_map(meta).get("sources")):
-            if isinstance(item, dict) and str(item.get("key") or "").strip():
-                out[str(item["key"]).strip()] = (item.get("alcance"), item.get("unidad_cita"),
-                                                 f"sources[] de `{slug}`")
-    for archivo, sujetos in (("themes.yaml", load_themes() or {}),
-                             ("stars.yaml", load_stars() or {})):
-        for clave, meta in sujetos.items():
-            # #435 — en `stars.yaml` la clave es el nombre y el slug un campo (segundo portador,
-            # nombrado por la instancia): la procedencia se escribe con el slug, como en el tema.
-            slug = str(as_map(meta).get("slug") or clave) if archivo == "stars.yaml" else clave
-            for bib, (alc, uni) in extra_core_scope(as_map(meta), entry=slug).items():
-                out[str(bib)] = (alc, uni, f"extra_core de `{slug}` ({archivo})")
+    for k, item, origen in config_items():          # #479: la enumeración es UNA
+        if origen.startswith("sources[]") or item.get("alcance") or item.get("unidad_cita"):
+            out[k] = (item.get("alcance"), item.get("unidad_cita"), origen)
     return out
 
 
@@ -3389,7 +3379,9 @@ def extra_core_snippet(recs, via: str = "usuario") -> str:
     out = ["extra_core:"]
     for r in recs[:EXTRA_CORE_SNIPPET_TOPE]:
         out.append(f"  - bibcode: {r['bibcode']}\n    via: {via}\n    fecha: {hoy}\n"
-                   f"    motivo: {EXTRA_CORE_MOTIVO_PLACEHOLDER}")
+                   f"    motivo: {EXTRA_CORE_MOTIVO_PLACEHOLDER}\n"
+                   f"    pdf_source:   # {'|'.join(PDF_SOURCE_OK)} — mirá la portada del PDF que "
+                   f"trajiste (#479); vacío = desconocido")
     if len(recs) > EXTRA_CORE_SNIPPET_TOPE:
         out.append(f"  # … {len(recs) - EXTRA_CORE_SNIPPET_TOPE} candidato(s) más (snippet acotado "
                    f"a los {EXTRA_CORE_SNIPPET_TOPE} primeros del orden en que se listaron)")
@@ -3397,7 +3389,7 @@ def extra_core_snippet(recs, via: str = "usuario") -> str:
 
 
 def load_extra_core(meta: dict, *, entry: str = "?") -> list:
-    """`extra_core` en su forma canónica: lista de mapas `{bibcode, via, motivo[, fecha]}`.
+    """`extra_core` en su forma canónica: lista de mapas `{bibcode, via, motivo[, fecha, pdf_source]}`.
 
     **R-2 (decidida con el usuario, 2026-08-24): forma dura con detector**, no lector tolerante.
     Hasta 1.26.0 el atajo `extra_core: [2020X]` (y hasta el escalar `extra_core: 2020X`) se aceptaba
@@ -3459,8 +3451,39 @@ def abstract_pending(text: str) -> bool:
     return i >= 0 and ABSTRACT_PLACEHOLDER in text[i:i + 200]
 
 
+def config_items() -> list:
+    """`[(key, item, origen)]` — every config item that carries per-source fields (#479).
+
+    ONE enumeration of the two rails a source enters the vault by: the `sources[]` of a theme
+    (off-ADS, keyed by `key`) and the `extra_core[]` of themes and stars (ADS bibcode, hard form
+    D-58). #415 gave `pdf_source` to the first rail only and left the second —the PDF the user
+    drops in `raw/pdfs/` because the fetcher could not get it— with no place to declare it:
+    measured, 22 of the 59 notes with a PDF and `pdf_source: null`. Any reader of «what does the
+    config say about this source» enumerates through here, so the two rails cannot disagree."""
+    out: list = []
+    themes = load_themes() or {}
+    for slug, meta in themes.items():
+        for item in as_list(as_map(meta).get("sources")):
+            if isinstance(item, dict) and (k := str(item.get("key") or "").strip()):
+                out.append((k, item, f"sources[] de `{slug}`"))
+    for archivo, sujetos in (("themes.yaml", themes), ("stars.yaml", load_stars() or {})):
+        for clave, meta in sujetos.items():
+            # #435 — en `stars.yaml` la clave es el nombre y el slug un campo: la procedencia se
+            # escribe con el slug, como en el tema.
+            slug = str(as_map(meta).get("slug") or clave) if archivo == "stars.yaml" else clave
+            for x in load_extra_core(as_map(meta), entry=slug):
+                out.append((str(x["bibcode"]).strip(), x, f"extra_core de `{slug}` ({archivo})"))
+    return out
+
+
+def config_rail(key: str) -> str | None:
+    """Where the config declares this source (`origen` of `config_items`), or None (#479)."""
+    return next((origen for k, _, origen in config_items() if k == key), None)
+
+
 def declared_pdf_sources() -> dict:
-    """`{key: pdf_source}` declared in the `sources:` of every theme (#415).
+    """`{key: pdf_source}` declared in the `sources:` of every theme (#415) and in the
+    `extra_core[]` of themes and stars (#479). First declaration wins.
 
     ⛔ `pdf_source` DECIDES READINGS —with `eprint` a numeric discrepancy against a published value
     is a candidate version difference, not an error of the note— and the `sources:` rail was the
@@ -3475,17 +3498,14 @@ def declared_pdf_sources() -> dict:
     `PDF_SOURCE_OK` are dropped with a warning rather than written: a value outside the vocabulary
     falls through every `== "eprint"` in silence (#296)."""
     out: dict = {}
-    for slug, meta in (load_themes() or {}).items():
-        for item in as_list(as_map(meta).get("sources")):
-            if not isinstance(item, dict) or not (k := str(item.get("key") or "").strip()):
-                continue
-            if not (v := str(item.get("pdf_source") or "").strip()):
-                continue
-            if v not in PDF_SOURCE_OK:
-                print_seguro(f"  ⚠ `{slug}`/`{k}`: `pdf_source: {v}` fuera del vocabulario "
-                             f"({'|'.join(PDF_SOURCE_OK)}) — se ignora (#296)")
-                continue
-            out[k] = v
+    for k, item, origen in config_items():
+        if not (v := str(item.get("pdf_source") or "").strip()):
+            continue
+        if v not in PDF_SOURCE_OK:
+            print_seguro(f"  ⚠ {origen} / `{k}`: `pdf_source: {v}` fuera del vocabulario "
+                         f"({'|'.join(PDF_SOURCE_OK)}) — se ignora (#296)")
+            continue
+        out.setdefault(k, v)
     return out
 
 

@@ -50,6 +50,9 @@
 ## ⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto) (0)
 > sobre 3 ground-truth de `raw/ground_truth/`
 
+## 📄 PDF en disco con `pdf_source: null` (desconocido): el campo decide lecturas y no se re-deriva — declaralo en su carril de config (#415/#479, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## ⛔ `pdf_source` de editor con `eprint_version`: contradicción interna, la nota manda a re-verificar contra el documento equivocado (#383) (0)
 > sobre 60 notas de `papers/`
 

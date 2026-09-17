@@ -720,6 +720,13 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
 - **Duplicado sin `doi` ni `arxiv_id`** (#216): comparación por el arranque del `## Abstract`
   verbatim; **reporta, no fusiona** (la distinción «mismo trabajo en dos congresos» vs «dos etapas
   del mismo programa» es real). Salida: `--rename-paper` + `versions[]`, o `--drop-core` con motivo.
+- **PDF en disco con `pdf_source: null`** (#415/#479, `pdf_sin_procedencia`, backlog): el campo
+  decide lecturas y para el PDF que trajo el usuario no se re-deriva (medido: 59 de 254 notas, 37
+  por `sources[]` y 22 por `extra_core`). El hallazgo nombra el **carril** de config donde
+  declararlo (`sources[]` de un tema o `extra_core` de un tema/estrella, ambos con la clave
+  `pdf_source: eprint|ads|publisher|web`, mirando la portada — #392) y el comando que lo propaga
+  (`extract_fulltext.py <slug>`); sin carril lo dice: sólo queda la marca de arXiv, `pdf_reemplazo`
+  o el registro del fetcher en `build/`.
 - **`fulltext: null` + `fulltext_source: <valor>`** (#230): afirma cómo se extrajo un texto que no
   existe. El par `pdf: null` + `pdf_source: <valor>` **no** es hallazgo (la procedencia de la
   lectura que ocurrió sobrevive al archivo). ⚠ No tiene clave propia: se publica dentro de

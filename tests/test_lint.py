@@ -84,6 +84,27 @@ def test_la_cabecera_DESPLAZADA_se_reporta_aunque_tenga_link(toy_vault, capsys):
     assert "movela" in items["2020z....1Z"], "mover no es reconstruir: el mensaje los distingue"
 
 
+def test_479_pdf_en_disco_sin_procedencia_nombra_el_CARRIL_donde_declararla(toy_vault, monkeypatch):
+    """#479 — `pdf_source: null` con PDF en disco es «desconocido», y para el PDF que trajo el
+    usuario no se re-deriva: el lint lo lista nombrando el carril de config (`sources[]` o
+    `extra_core`), o dice que no hay carril. Con valor, no dispara."""
+    from conftest import mk_note
+    (cfg.PDFS / "s").mkdir(parents=True, exist_ok=True)
+    for stem in ("2020a....1A", "2020b....1B", "2020c....1C"):
+        (cfg.PDFS / "s" / f"{stem}.pdf").write_bytes(b"%PDF-1.4\n")
+    base = {"tags": ["paper"], "stars": ["Estrella Test"]}
+    mk_note(cfg.PAPERS, "2020a....1A", {**base, "bibcode": "2020a....1A", "pdf": "../../raw/pdfs/s/2020a....1A.pdf"}, "# a\n\n## Abstract\n_(no disponible)_\n")
+    mk_note(cfg.PAPERS, "2020b....1B", {**base, "bibcode": "2020b....1B", "pdf": "../../raw/pdfs/s/2020b....1B.pdf"}, "# b\n\n## Abstract\n_(no disponible)_\n")
+    mk_note(cfg.PAPERS, "2020c....1C", {**base, "bibcode": "2020c....1C", "pdf": "../../raw/pdfs/s/2020c....1C.pdf", "pdf_source": "publisher"}, "# c\n\n## Abstract\n_(no disponible)_\n")
+    monkeypatch.setattr(cfg, "load_stars", lambda: {
+        "Estrella Test": {"slug": "test_star", "extra_core": [
+            {"bibcode": "2020a....1A", "via": "usuario", "motivo": "m"}]}})
+    items = dict(lint.collect().por_clave("pdf_sin_procedencia").items)
+    assert set(items) == {"2020a....1A", "2020b....1B"}, items
+    assert "extra_core de `test_star` (stars.yaml)" in items["2020a....1A"] and "extract_fulltext" in items["2020a....1A"]
+    assert "sin item de config" in items["2020b....1B"]
+
+
 def test_la_cabecera_AUSENTE_manda_a_reconstruir_no_a_restampar(toy_vault, capsys):
     """El otro de los tres estados, y su mensaje: `--restamp-pdf-links` **no puede** repararlo —
     `stamp_pdf_link` necesita una cabecera que ya no existe, así que se saltea—. Recetarlo es el
@@ -7031,7 +7052,11 @@ def test_source_ausente_o_null_es_DESCONOCIDO_y_no_bloquea(toy_vault, capsys):
     paper_extraido(toy_vault, "2020okA....1A", pdf_source=None)
     rc, out = run_lint(capsys)
     assert rc == 0
-    assert "`pdf_source:" not in out
+    assert "`pdf_source: None`" not in out and "pdf_source` fuera" not in out
+    # #479 — desconocido sigue sin ser error; lo que sí es, con PDF en disco, es BACKLOG que nombra
+    # dónde declararlo (y sin PDF ni siquiera eso)
+    cat = lint.collect().por_clave("pdf_sin_procedencia")
+    assert cat.severidad == lint.SEV_BACKLOG
 
 
 # ── #297 · el reuso D-18 y la pasada de red que nunca corrió ─────────────────

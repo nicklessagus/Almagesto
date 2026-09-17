@@ -732,12 +732,12 @@ una traducción no es una afirmación de la bóveda. La red está aguas abajo �
 
 #### Notas off-ADS y fuentes largas
 
-⛔ **Y el item de `sources:` declara `pdf_source` (#415), que es el único campo del schema que
-DECIDE LECTURAS.** Para un PDF que trajo el usuario no corre ningún fetcher y no hay marca de arXiv,
-así que el campo quedaba `null` = *desconocido* para siempre (medido: 38 de 57 notas con PDF sin
-procedencia). Precedencia: marca de arXiv → **lo declarado** → `build/` — entre una declaración
-versionada y un archivo gitignored que no viaja, manda la que viaja. Vocabulario cerrado (#296): el
-valor fuera de lista se avisa y **no se escribe**.
+⛔ **Y el item de `sources:` —y el de `extra_core` (#479)— declara `pdf_source` (#415), el único
+campo del schema que DECIDE LECTURAS.** Para un PDF que trajo el usuario no corre ningún fetcher ni
+hay marca de arXiv, así que el campo quedaba `null` = *desconocido* para siempre (medido: 59 de 254
+notas con PDF; 22 por `extra_core`). Precedencia: marca de arXiv → **lo declarado** → `build/` —
+entre una declaración versionada y un archivo gitignored que no viaja, manda la que viaja. Vocabulario
+cerrado (#296): el valor fuera de lista se avisa y **no se escribe**; el lint lista el `null` por carril.
 
 En notas **off-ADS** el schema suma `source_url` (URL de la fuente web; `null` si es PDF local),
 `accessed` (la cita "Retrieved <fecha>") y, si la fuente no se pudo conseguir, `pending_source:

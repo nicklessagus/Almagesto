@@ -5461,6 +5461,19 @@ def test_el_carril_sources_puede_declarar_pdf_source(toy_vault, monkeypatch, cap
     assert mn.pdf_source_info("test_star", "2020unk....1..1U") == (None, None), "sin declarar, igual"
 
 
+def test_479_pdf_source_info_lee_lo_declarado_en_extra_core(toy_vault, monkeypatch):
+    """#479 — el mismo escalón de #415, ahora también desde `extra_core` de temas y estrellas.
+    La marca de arXiv sigue mandando; `build/` sigue perdiendo contra lo declarado."""
+    cfg.record_pdf_source("test_star", "1999ISPL....6..145H", "ads")
+    monkeypatch.setattr(cfg, "load_themes", lambda: {})
+    monkeypatch.setattr(cfg, "load_stars", lambda: {
+        "Estrella Test": {"slug": "test_star",
+                          "extra_core": [{"bibcode": "1999ISPL....6..145H", "via": "usuario",
+                                          "motivo": "m", "pdf_source": "publisher"}]}})
+    assert mn.pdf_source_info("test_star", "1999ISPL....6..145H") == ("publisher", None)
+    assert mn.pdf_source_info("test_star", "2020unk....1..1U") == (None, None)
+
+
 def test_la_FIRMA_del_reemplazo_gana_sobre_build_y_cae_si_el_pdf_cambio(toy_vault, monkeypatch):
     """⛔ #446 — lo que un comando FIRMA en un artefacto versionado no lo puede revertir un scratch
     gitignored. `build/<slug>/pdf_source.json` describe la PRIMERA descarga (el preprint) y nadie

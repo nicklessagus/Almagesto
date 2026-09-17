@@ -6105,6 +6105,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     alcance_wikilink: list = []        # (stem, motivo) — #368: `[[link]]` dentro del blockquote de alcance
     vista_con_plantilla: list = []     # (stem, motivo) — #398: la `## Vista` publica el prompt
     pdf_source_contra: list = []       # (stem, motivo) — #383: `pdf_source` de editor + `eprint_version`
+    pdf_sin_procedencia: list = []     # (stem, motivo) — #479: PDF en disco y `pdf_source: null`
     bibtex_sin_fuente: list = []       # (stem, motivo) — #397: `bibtex` sin `bibtex_source`
     data_mal_formada: list = []        # (stem, motivo) — #424: `data_availability` inusable
     bibtex_drift: list = []            # (stem, motivo) — #397: frontmatter ≠ exportación oficial
@@ -6614,6 +6615,20 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             bad_roles += _c1
             incomplete += _c2
             pdf_source_contra += _c3
+            # #479 — PDF en disco y procedencia DESCONOCIDA. El valor decide lecturas (#296) y no
+            # es re-derivable para el PDF que trajo el usuario: nadie lo recupera salvo mirando la
+            # portada. Backlog que nombra el CARRIL donde declararlo (`sources[]` o `extra_core`);
+            # sin carril, la procedencia sólo puede venir de la marca de arXiv, de `pdf_reemplazo` o
+            # del registro del fetcher en `build/`, y eso se dice.
+            if stem in pdf_on_disk and not str(fm.get("pdf_source") or "").strip():
+                _rail = cfg.config_rail(stem)
+                pdf_sin_procedencia.append(
+                    (stem, (f"declaralo en {_rail} con `pdf_source: {'|'.join(cfg.PDF_SOURCE_OK)}` "
+                            f"mirando la portada (`pdftotext -f 1 -l 1 <pdf> -`, #392) y re-corré "
+                            f"`python scripts/extract_fulltext.py <slug>`" if _rail else
+                            "sin item de config donde declararlo: la procedencia sólo puede venir "
+                            "de la marca de arXiv, de `pdf_reemplazo` (`replace_pdf`) o del "
+                            "registro del fetcher en `build/` (re-corré `fetch_pdf`)")))
             # #397 — el BibTeX de la ficha, que es lo que termina IMPRESO en un informe. Dos
             # chequeos que sólo existen desde que el campo existe:
             # (a) una entrada sin procedencia es, por definición, un bloque que escribió alguien —
@@ -7007,6 +7022,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   '(#252: visible, no es deuda)', SEV_BACKLOG, tuple(alias_rechazados), poblacion='ground_truth'),
         Categoria('foreign_alias', '⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto)',
                   SEV_WARN, tuple(alias_ajenos), poblacion='ground_truth'),
+        Categoria('pdf_sin_procedencia', '📄 PDF en disco con `pdf_source: null` (desconocido): el campo decide lecturas y no se re-deriva — declaralo en su carril de config (#415/#479, backlog)', SEV_BACKLOG, tuple(pdf_sin_procedencia), poblacion='papers'),
         Categoria('pdf_source_contradictorio', '⛔ `pdf_source` de editor con `eprint_version`: contradicción interna, la nota manda a re-verificar contra el documento equivocado (#383)',
                   SEV_BLOQUEANTE, tuple(pdf_source_contra), poblacion='papers'),
         Categoria('vista_con_plantilla', '🧩 `## Vista` que sigue publicando la PLANTILLA del stub: el prompt al extractor, visible como si fuera contenido (#398, backlog)',

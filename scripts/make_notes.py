@@ -120,7 +120,7 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
             return "eprint", (ver or None)
     if (src := signed_pdf_source(slug, stem)):
         return src, None
-    # #415 — lo DECLARADO en `sources:`. Va después de la marca de arXiv (que manda por el
+    # #415/#479 — lo DECLARADO en `sources:` o en `extra_core`. Va después de la marca de arXiv (que manda por el
     # argumento de #57: un ADS_PDF que sirve el eprint ES el eprint) y antes del registro de
     # `build/`, que es scratch gitignored: entre una declaración versionada y un archivo que no
     # viaja, manda la que viaja.

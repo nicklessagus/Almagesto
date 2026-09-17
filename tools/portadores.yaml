@@ -1693,3 +1693,22 @@ portadores:
         motivo: >-
           Matchea sólo por un COMENTARIO que cita la doctrina al explicar la exención del `log.md`
           (#391); su exención sale de `Block.kind`, no de recorrer encabezados.
+  - issue: 479
+    regla: >-
+      Un campo POR FUENTE que la config declara (`pdf_source`, `alcance`/`unidad_cita`) se lee por
+      UNA enumeración de los dos carriles —`sources[]` del tema y `extra_core[]` de temas y
+      estrellas—: #415 le dio `pdf_source` al primero solo y el PDF que el usuario trae por
+      `extra_core` quedaba `null` para siempre (22 de 59). Quien pregunta «qué dice la config de
+      esta fuente» pasa por `config_items`, así los carriles no pueden discrepar.
+    funcion: lib_config.config_items
+    patron: 'extra_core_scope|declared_scopes|declared_pdf_sources|config_rail'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Consume `config_rail`, la lectura derivada que ya enumera por `config_items`; no re-enumera carriles."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Consume `declared_pdf_sources`/`declared_scopes` (derivadas de `config_items`) y `extra_core_scope` sobre UN sujeto al estampar su stub: no enumera la config entera."
+      - modulo: scripts/proposals.py
+        estado: fuera-de-alcance
+        motivo: "Consume `declared_scopes`, derivada de `config_items`; no re-enumera carriles."
