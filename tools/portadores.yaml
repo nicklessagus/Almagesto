@@ -415,8 +415,8 @@ portadores:
           así que no hay veredicto que quede bloqueando sin salida. La pieza que falta es la misma
           el día que alguna de esas ramas bloquee.
       - modulo: scripts/fetch_bibtex.py
-        estado: fuera-de-alcance
-        motivo: "Trae la exportación oficial y no juzga al repo contra ella: quien juzga es `bibtex_drift` (lint), y es backlog."
+        estado: usa
+        motivo: "`--firmar` (#483): la consulta antes de proponer la firma del drift `bibtex` ↔ frontmatter, como `check_sources --firmar`."
       - modulo: scripts/discover.py
         estado: fuera-de-alcance
         motivo: "Descubre y propone candidatos; no compara nada declarado por el repo contra el catálogo."
@@ -1339,10 +1339,11 @@ portadores:
         estado: usa
         motivo: El cruce de #392/#353 lee el `.bib` del usuario con el mismo parser.
       - modulo: scripts/fetch_bibtex.py
-        estado: fuera-de-alcance
+        estado: usa
         motivo: >-
-          TRAE la exportación y no la parsea — su contrato es guardarla verbatim (#397). Que el
-          formato de una línea llegue intacto es asunto suyo; interpretarlo, del comparador.
+          TRAE la exportación verbatim (#397) y no la interpreta al guardarla; `--firmar` (#483) sí
+          la parsea, con el MISMO parser que el lint, para que la firma lleve el valor que el
+          drift compara y no uno tipeado de memoria (#392).
       - modulo: scripts/ingest_star.py
         estado: fuera-de-alcance
         motivo: Nombra el paso `fetch_bibtex` en la cadena; no toca el formato.

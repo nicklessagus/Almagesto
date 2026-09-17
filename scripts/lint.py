@@ -4617,7 +4617,7 @@ def check_paper_citation_unit(stem: str, fm: dict) -> tuple:
 
 def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     """`(bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo,
-    bibtex_hueco_contradictorio)` — the BibTeX
+    bibtex_hueco_contradictorio, bibtex_drift_firmado)` — the BibTeX
     entry and the two closed vocabularies of the artefact fields (#397/#296/#467).
 
     Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
@@ -4630,6 +4630,7 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     sin_bibtex: list = []
     sin_bibtex_mudo: list = []
     bibtex_hueco_contradictorio: list = []
+    bibtex_drift_firmado: list = []
     _btx = str(fm.get("bibtex") or "").strip()
     # #467 — las dos categorías que FALTABAN: las de abajo miran notas que YA tienen `bibtex`, así
     # que la nota SIN entrada no aparecía en ningún reporte y el lint daba rc 0 con ella adentro
@@ -4695,10 +4696,32 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
             # `fold_tex`, no una exención), pero el único acierto duro que tuvo esta categoría fue
             # un paper con el título de OTRO (#392, declarado de memoria). Saltear el título para
             # bajar el ruido costaría justo ese hallazgo.
+            # #483 — la MISMA regla de #463: cuando el equivocado es el CATÁLOGO se firma, no se
+            # corrige el dato correcto. Medido: 2 de 2 drifts eran del catálogo (`2008Yang`:
+            # Crossref da el año online-first; `2006Tichavsky`: residuo SGML en el título) y no
+            # había dónde escribirlo. La firma vive en la NOTA (el drift es de la nota, no de un
+            # item de config) y cubre un ESTADO: si el `bibtex` se re-baja y cambia, vuelve.
+            if _c in cfg.METADATA_CAMPOS:
+                _estado, _firma = cfg.metadata_review(fm, _c, _nota, _oficial, quien="la nota")
+                if _estado == "firmada":
+                    bibtex_drift_firmado.append(
+                        (stem, f"`{_c}`: el catálogo es el equivocado, firmado el "
+                               f"{_firma.get('fecha')} — {_firma.get('motivo')}"))
+                    continue
+                if _estado in ("vencida", "rota"):
+                    bibtex_drift.append(
+                        (stem, f"`{_c}`: la firma `metadata_revisada` NO cubre este hallazgo "
+                               f"({_firma}) → re-firmala con `python scripts/fetch_bibtex.py "
+                               f"--paper {stem} --firmar --campo {_c} --motivo \"<por qué>\"` "
+                               f"(#483)"))
+                    continue
             bibtex_drift.append(
                 (stem, f"`{_c}` del frontmatter dice «{_nota[:60]}» y la exportación "
                        f"oficial dice «{_oficial[:60]}» — uno de los dos está mal, y el "
-                       f"que viaja al informe es el BibTeX (#397)"))
+                       f"que viaja al informe es el BibTeX (#397)"
+                       + (f"; si el equivocado es el CATÁLOGO, firmalo: `python scripts/"
+                          f"fetch_bibtex.py --paper {stem} --firmar --campo {_c} --motivo "
+                          f"\"<por qué>\"` (#483)" if _c in cfg.METADATA_CAMPOS else "")))
     for _campo, _ok in (("pdf_source", cfg.PDF_SOURCE_OK),
                         ("fulltext_source", cfg.FULLTEXT_SOURCE_OK),
                         ("bibtex_source", cfg.BIBTEX_SOURCES)):
@@ -4713,7 +4736,7 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                                     f"`pending_motivo` o a `salvedades`. Migrador: "
                                     f"`python scripts/make_notes.py --migrate-source-fields`"))
     return (bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo,
-            bibtex_hueco_contradictorio)
+            bibtex_hueco_contradictorio, bibtex_drift_firmado)
 
 
 def check_bibtex_no_pegable(stem: str, fm: dict) -> tuple:
@@ -6109,6 +6132,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     bibtex_sin_fuente: list = []       # (stem, motivo) — #397: `bibtex` sin `bibtex_source`
     data_mal_formada: list = []        # (stem, motivo) — #424: `data_availability` inusable
     bibtex_drift: list = []            # (stem, motivo) — #397: frontmatter ≠ exportación oficial
+    bibtex_drift_firmado: list = []    # (stem, motivo) — #483: el catálogo es el equivocado, firmado
     old_bearing: list = []             # `bearing` en nota de paper: schema pre-D-21
     sin_destino: list = []             # paper sin stars/thesis_links/methods (D-23)
     cadena_incompleta: list = []       # (slug, "se cortó en <paso>") — D-57
@@ -6638,8 +6662,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
             # (b) el frontmatter y la exportación oficial no pueden decir cosas distintas del mismo
             #     paper. El caso que lo motivó: una ficha `2011Naik` con `year: 2012` adentro.
             # El BibTeX y los dos vocabularios cerrados viven en `check_paper_bibtex` (#396).
-            _b1, _b2, _b3, _b4, _b5, _b6 = check_paper_bibtex(stem, fm)
+            _b1, _b2, _b3, _b4, _b5, _b6, _b7 = check_paper_bibtex(stem, fm)
             bibtex_sin_fuente += _b1
+            bibtex_drift_firmado += _b7
             bibtex_drift += _b2
             bad_roles += _b3
             sin_bibtex += _b4
@@ -7036,6 +7061,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('sin_bibtex', '📇 Hueco de `bibtex` DECLARADO con su motivo (#467) — decisión registrada, no es deuda', SEV_BACKLOG, tuple(sin_bibtex), poblacion='papers'),
         Categoria('bibtex_drift', '📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog)',
                   SEV_BACKLOG, tuple(bibtex_drift), poblacion='papers'),
+        Categoria('bibtex_drift_firmado', '✍ Drift `bibtex` ↔ frontmatter FIRMADO: el equivocado es el catálogo (#483) — declarado, no es deuda',
+                  SEV_BACKLOG, tuple(bibtex_drift_firmado), poblacion='papers'),
         Categoria('bibtex_hueco_contradictorio', '⛔ Nota con `bibtex` Y `sin_bibtex`: el hueco declarado contradice a la entrada que la misma nota publica, y un consumidor no puede saber cuál rige (#475)',
                   SEV_BLOQUEANTE, tuple(bibtex_hueco_contradictorio), poblacion='papers'),
         Categoria('bibtex_no_pegable', '📇 `bibtex` que NO se pega tal cual y re-correr la cadena lo cierra (#471/#473, backlog)',

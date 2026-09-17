@@ -535,7 +535,13 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   adentro del `bibtex`. Es un gate de deriva de metadatos que antes no se podía hacer — el caso que
   lo motivó es una ficha `2011Naik` que declara `year: 2012` en su propio frontmatter. Backlog
   porque cuál de los dos está mal es **juicio**; lo que no es juicio es que el que viaja al informe
-  es el BibTeX. Se compara **normalizado** (`cfg.method_key`, #243): un DOI en mayúsculas no es una
+  es el BibTeX. ⛔ **Y ese juicio tiene dónde escribirse (#483):** cuando el equivocado es el
+  **catálogo** —medido, 2 de 2: `2008Yang` (Crossref da el año online-first) y `2006Tichavsky`
+  (residuo SGML en el título)— se firma con `metadata_revisada` **en la nota de paper**, la misma
+  regla de #463 (`cfg.metadata_review`), que `fetch_bibtex.py --paper <bib> --firmar --campo <c>
+  --motivo "<por qué>"` imprime lista para pegar (propone, no escribe). La firmada pasa a
+  **`bibtex_drift_firmado`** (declarado, no es deuda, AUD-207); cubre un ESTADO: si el `bibtex` se
+  re-baja y cambia, la firma vence y el drift vuelve a reportar nombrándola. Se compara **normalizado** (`cfg.method_key`, #243): un DOI en mayúsculas no es una
   discrepancia, y un falso positivo acá manda a revisar a mano una cita correcta. ⚠ Un campo que
   una de las dos partes no dice **no se reporta**: eso es un hueco de schema (INV-63), no un
   desacuerdo.

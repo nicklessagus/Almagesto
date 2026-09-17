@@ -134,6 +134,9 @@
 ## 📇 El frontmatter y la exportación oficial dicen cosas distintas del mismo paper (#397, backlog) (0)
 > sobre 60 notas de `papers/`
 
+## ✍ Drift `bibtex` ↔ frontmatter FIRMADO: el equivocado es el catálogo (#483) — declarado, no es deuda (0)
+> sobre 60 notas de `papers/`
+
 ## ⛔ Nota con `bibtex` Y `sin_bibtex`: el hueco declarado contradice a la entrada que la misma nota publica, y un consumidor no puede saber cuál rige (#475) (0)
 > sobre 60 notas de `papers/`
 

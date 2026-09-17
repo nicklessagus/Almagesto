@@ -5,6 +5,7 @@ Uso:
     python scripts/fetch_bibtex.py --slug <slug>      # sólo los papers de un ingest
     python scripts/fetch_bibtex.py --paper <bibcode>  # uno solo
     python scripts/fetch_bibtex.py --force            # re-bajar también los que ya lo tienen
+    python scripts/fetch_bibtex.py --paper <bibcode> --firmar --campo year --motivo "<por qué>"  # #483
 
 #397 — la ficha guardaba campos sueltos (`title`, `first_author`, `year`, `doi`, `bibstem`) y no la
 REFERENCIA. Quien escribe un informe tenía que rearmar la entrada BibTeX, y el material del que la
@@ -452,13 +453,71 @@ def notes_to_check(args) -> list:
     return cfg.note_paths(cfg.PAPERS)
 
 
+def firmar(stem: str, campo: str, motivo: str) -> int:
+    """Print the `metadata_revisada` block for the note's `bibtex` drift — when the CATALOGUE is
+    the wrong one (#483, the rule of #463 on the rail of #397).
+
+    PROPOSES and does not write. The two values are what the lint compares: the note's field and
+    the field inside the `bibtex` export — never typed from memory (#392). Same three states as
+    `check_sources --firmar`, decided by the same function (`cfg.metadata_review`)."""
+    if campo not in cfg.METADATA_CAMPOS:
+        cfg.print_seguro(f"⛔ `--campo {campo}` fuera del vocabulario ({', '.join(cfg.METADATA_CAMPOS)})")
+        return 2
+    if not str(motivo or "").strip():
+        cfg.print_seguro("⛔ `--motivo` vacío: la firma sin motivo no es auditable (#463)")
+        return 2
+    f = cfg.PAPERS / f"{stem}.md"
+    if not f.exists():
+        cfg.print_seguro(f"⛔ no existe la nota {f}")
+        return 2
+    fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
+    declarado = str(fm.get(campo) or "").strip()
+    catalogo = str(cfg.bibtex_fields(str(fm.get("bibtex") or "")).get(campo) or "").strip()
+    if not declarado or not catalogo:
+        cfg.print_seguro(f"⛔ `{stem}`: no hay drift de `{campo}` que firmar — la nota "
+                         f"{'no declara el campo' if not declarado else 'no tiene `bibtex` con ese campo'}")
+        return 2
+    if cfg.catalog_compare_key(declarado) == cfg.catalog_compare_key(catalogo):
+        cfg.print_seguro(f"⛔ `{stem}`: `{campo}` coincide normalizado («{declarado}» ≡ «{catalogo}»): "
+                         f"no hay nada que firmar")
+        return 2
+    estado, detalle = cfg.metadata_review(fm, campo, declarado, catalogo, quien="la nota")
+    if estado == "firmada":
+        cfg.print_seguro(f"✓ `{stem}`/`{campo}` YA está firmada el {detalle.get('fecha')}: "
+                         f"{detalle.get('motivo')}\n  → no hay nada que hacer; el lint ya la "
+                         f"reporta como declarada")
+        return 0
+    if estado in ("vencida", "rota"):
+        cfg.print_seguro(f"⚠ hay una firma que NO cubre el hallazgo de hoy: {detalle}\n"
+                         f"  → reemplazá esa entrada por la de abajo (no agregues una segunda)\n")
+    cfg.print_seguro(f"Drift de `{campo}`: la nota dice «{declarado}», la exportación oficial "
+                     f"(`{fm.get('bibtex_source')}`) dice «{catalogo}»\n")
+    cfg.print_seguro(cfg.metadata_revisada_snippet(stem, campo, declarado, catalogo, motivo,
+                                                   _dt.date.today().isoformat(),
+                                                   destino=f"`vault/wiki/papers/{stem}.md`"))
+    cfg.print_seguro("\n⚠ Se PROPONE y no se escribe. Pegalo, y el lint baja el hallazgo a "
+                     "backlog declarado (`bibtex_drift_firmado`); si el `bibtex` se re-baja y "
+                     "cambia, la firma vence y vuelve a reportar.")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--paper", help="un solo bibcode (default: todas las notas de `papers/`)")
     ap.add_argument("--slug", help="sólo los papers de un ingest (modo de la cadena)")
     ap.add_argument("--force", action="store_true",
                     help="re-bajar también las notas que ya tienen `bibtex`")
+    ap.add_argument("--firmar", action="store_true",
+                    help="#483: con --paper, imprime la firma `metadata_revisada` del drift "
+                         "(el catálogo es el equivocado); propone, no escribe")
+    ap.add_argument("--campo", choices=cfg.METADATA_CAMPOS, help="qué campo firma `--firmar`")
+    ap.add_argument("--motivo", help="por qué el catálogo se equivoca (obligatorio con `--firmar`)")
     args = ap.parse_args()
+    if args.firmar:
+        if not args.paper or not args.campo:
+            ap.error("`--firmar` necesita `--paper <bibcode>` y `--campo` (el chequeo compara "
+                     "campo por campo)")
+        return firmar(args.paper, args.campo, args.motivo or "")
 
     notas = notes_to_check(args)
     if not notas:

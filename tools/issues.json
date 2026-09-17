@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-16",
+ "fetched": "2026-09-17",
  "issues": [
   {
    "number": 2,
@@ -2384,21 +2384,31 @@
   {
    "number": 479,
    "title": "`extra_core` no tiene dónde declarar `pdf_source`: #415 cubrió `sources:` y el otro carril que trae PDFs del usuario queda `null` para siempre (22 de 59 notas)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 480,
    "title": "Re-anclar sin ronda no tiene comando: `reverify_subset` propone, `write_verif_sidecar` sólo escribe desde un fan-out, y `chain_from_reanchor` no lo llama nadie",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 481,
    "title": "Los tres menores de #472 (fecha de vista sin comillas, snippet truncado a mitad de palabra, `## Excluidos` sin corrida) quedaron sin issue al cerrarse",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 482,
    "title": "`carriers --propose` muestra igual al consumidor firmado `fuera-de-alcance` y al que nadie declaró: el bloque que se pega en los issues no dice cuál es deuda",
+   "state": "CLOSED"
+  },
+  {
+   "number": 483,
+   "title": "El drift `bibtex` ↔ frontmatter (#397) no se puede FIRMAR cuando el equivocado es el catálogo: #463 cubrió `sources:` y `check_paper_bibtex` no lleva la misma regla (2 de 2 drifts son del catálogo)",
+   "state": "OPEN"
+  },
+  {
+   "number": 484,
+   "title": "La exportación oficial del VENUE (JMLR, NeurIPS, PMLR) no entra en `BIBTEX_SOURCES`: los papers sin DOI ni arXiv quedan en hueco permanente aunque su BibTeX canónico esté publicado (5 de 14, 3 citados por la tesis)",
    "state": "OPEN"
   }
  ]

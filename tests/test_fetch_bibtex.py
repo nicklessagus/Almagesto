@@ -211,6 +211,39 @@ def test_main_no_estampa_nada_sobre_el_hueco(tmp_path, monkeypatch):
     assert "bibtex" not in (cfg.split_fm(f.read_text(encoding="utf-8")) or {})
 
 
+def test_483_firmar_arma_el_bloque_desde_la_NOTA_y_no_escribe(tmp_path, monkeypatch, capsys):
+    """#483 — `--firmar` propone la firma del drift `bibtex` ↔ frontmatter con los DOS valores que
+    el lint compara (la nota y el campo de adentro del `bibtex`), nunca de memoria (#392); rehúsa
+    si no hay drift; dice cuál de los tres estados encontró (#463); y no escribe la nota."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    btx = "@article{2008Yang,\n  year = {2007},\n  title = {Ranking ICA},\n}\n"
+    f = _nota(tmp_path, {"bibcode": "2008Yang", "tags": ["paper"], "year": 2008,
+                         "title": "Ranking ICA", "bibtex": btx, "bibtex_source": "crossref"})
+    antes = f.read_text(encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--paper", "2008Yang", "--firmar",
+                                      "--campo", "year", "--motivo", "el impreso dice 2008: HBM 29(6), 2008"])
+    assert fb.main() == 0
+    out = capsys.readouterr().out
+    assert "metadata_revisada:" in out and "declarado: '2008'" in out and "catalogo: '2007'" in out, out
+    assert "papers/2008Yang.md" in out and "no se escribe" in out
+    assert f.read_text(encoding="utf-8") == antes, "propone, no escribe"
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--paper", "2008Yang", "--firmar",
+                                      "--campo", "title", "--motivo", "m"])
+    assert fb.main() == 2, "sin drift en `title` no hay nada que firmar"
+    assert "coincide" in capsys.readouterr().out
+    assert fb.firmar("2008Yang", "year", "") == 2, "sin motivo no es auditable"
+    assert fb.firmar("2008Yang", "doi", "m") == 2, "sin el campo en la nota no hay drift que firmar"
+    # ya firmada → lo dice y no propone otra
+    _nota(tmp_path, {"bibcode": "2008Yang", "tags": ["paper"], "year": 2008, "title": "Ranking ICA",
+                     "bibtex": btx, "bibtex_source": "crossref",
+                     "metadata_revisada": [{"campo": "year", "declarado": "2008", "catalogo": "2007",
+                                            "motivo": "m", "fecha": "2026-09-16"}]})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--paper", "2008Yang", "--firmar",
+                                      "--campo", "year", "--motivo", "m"])
+    assert fb.main() == 0
+    assert "YA está firmada" in capsys.readouterr().out
+
+
 def test_main_sin_notas_no_sale_verde(tmp_path, monkeypatch):
     """D-43 — «no había nada que mirar» no es «está todo bien»: rc 2, como `check_retractions`."""
     monkeypatch.setattr(cfg, "PAPERS", tmp_path)

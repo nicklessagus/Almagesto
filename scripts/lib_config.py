@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.279.0"
+ALMAGESTO_VERSION = "1.280.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3276,7 +3276,7 @@ def _metadata_val(v) -> str:
     return "" if v is None else " ".join(str(v).split())
 
 
-def metadata_review(item, campo: str, declarado, catalogo) -> tuple:
+def metadata_review(item, campo: str, declarado, catalogo, quien: str = "`sources:`") -> tuple:
     """Does a signed `metadata_revisada` entry cover THIS disagreement? (#463)
 
     Returns one of three states —never two— because each asks for a different action (D-43):
@@ -3296,7 +3296,9 @@ def metadata_review(item, campo: str, declarado, catalogo) -> tuple:
 
     The rule lives HERE and nowhere else: `lint` reads the verdict offline from the registry and
     `check_sources` prints the snippet, and two implementations of one rule already cost this repo
-    a measured defect (#324).
+    a measured defect (#324). ⛔ #483: the SAME rule carries the `bibtex` ↔ frontmatter drift of
+    #397 — `item` is then the paper note's frontmatter, `declarado` its field and `catalogo` the
+    field inside the `bibtex` export; `quien` names the side in the «vencida» message.
     """
     campo = str(campo or "").strip()
     # ⛔ La FORMA se juzga sobre TODAS las entradas, no sobre la que matchea el campo pedido: un
@@ -3320,7 +3322,7 @@ def metadata_review(item, campo: str, declarado, catalogo) -> tuple:
             continue
         if _metadata_val(e.get("declarado")) != _metadata_val(declarado):
             return "vencida", (f"la firma de `{campo}` dice que se declaraba "
-                               f"«{_metadata_val(e.get('declarado'))}» y hoy `sources:` declara "
+                               f"«{_metadata_val(e.get('declarado'))}» y hoy {quien} declara "
                                f"«{_metadata_val(declarado)}»")
         if _metadata_val(e.get("catalogo")) != _metadata_val(catalogo):
             return "vencida", (f"la firma de `{campo}` dice que el catálogo devolvía "
@@ -3331,20 +3333,24 @@ def metadata_review(item, campo: str, declarado, catalogo) -> tuple:
 
 
 def metadata_revisada_snippet(key: str, campo: str, declarado, catalogo, motivo: str,
-                              fecha: str) -> str:
-    """The `metadata_revisada:` block ready to paste into that `sources:` item (#463).
+                              fecha: str, destino: str | None = None) -> str:
+    """The `metadata_revisada:` block ready to paste into that `sources:` item (#463) — or, with
+    `destino`, into the frontmatter of the paper note `key` (#483: the `bibtex` drift is of the
+    note, not of a config item, so the signature lives there, at column 0).
 
     Printed, never written: `sources:` is curated, versioned config and the framework reports on it
     without rewriting it (same doctrine as `triage --accept-source`). The two values come from the
     REGISTRY —what the check actually compared—, never from memory (#392)."""
+    sangria = "" if destino else "    "
     return "\n".join([
+        f"# pegar en el frontmatter de {destino}" if destino else
         f"# pegar DENTRO del item `key: {key}` de `sources:` en vault/config/themes.yaml",
-        "    metadata_revisada:",
-        f"      - campo: {campo}",
-        f"        declarado: {yaml_scalar(_metadata_val(declarado))}",
-        f"        catalogo: {yaml_scalar(_metadata_val(catalogo))}",
-        f"        motivo: {yaml_scalar(motivo)}",
-        f'        fecha: "{fecha}"',
+        f"{sangria}metadata_revisada:",
+        f"{sangria}  - campo: {campo}",
+        f"{sangria}    declarado: {yaml_scalar(_metadata_val(declarado))}",
+        f"{sangria}    catalogo: {yaml_scalar(_metadata_val(catalogo))}",
+        f"{sangria}    motivo: {yaml_scalar(motivo)}",
+        f'{sangria}    fecha: "{fecha}"',
     ])
 
 
