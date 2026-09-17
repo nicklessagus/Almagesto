@@ -702,6 +702,10 @@ def test_extra_core_lista_de_strings_detectada(toy_vault):
 
 
 def test_extra_core_sin_via_o_sin_motivo_detectado(toy_vault):
+    """El lado ACEPTADO del juicio de curación no entra sin `via` y sin `motivo` (D-58).
+
+    Marcado por #489: INV-48 tenía sus tests sobre `triage.drop` y sobre la cabecera, y ninguno
+    rompía `load_extra_core` — la fila afirmaba una cobertura que no existía.  @inv INV-48"""
     for meta in ({"extra_core": [{"bibcode": "2020X", "motivo": "m"}]},
                  {"extra_core": [{"bibcode": "2020X", "via": "triage"}]},
                  {"extra_core": [{"via": "triage", "motivo": "m"}]}):
@@ -1498,7 +1502,10 @@ def test_load_reviewed_second_hand_forma_canonica_y_no_muta(toy_vault):
 def test_reviewed_second_hand_sin_motivo_o_sin_par_detectado(toy_vault):
     """Forma dura como `extra_core` (D-58): el escalar y la lista de strings abortan. Sin `ref`/`que`
     la escotilla no dice QUÉ cruce se revisó —apagaría todos los de la nota, que es el `noqa` de
-    archivo que `no_vista` evitó pidiendo el sujeto— y sin `motivo` no dice si alguien lo miró."""
+    archivo que `no_vista` evitó pidiendo el sujeto— y sin `motivo` no dice si alguien lo miró.
+
+    Es el test que rompe `_reviewed_second_hand_error`: los otros cuatro de INV-142 prueban los
+    loaders y el helper del mensaje pasaba por otro camino (#489).  @inv INV-142"""
     # ⚠ el `3` no es decorativo: es el único valor que distingue la cláusula «no es una lista» de
     # la otra mitad del `or` —sobre un string, `any(… for x in v)` recorre los caracteres y también
     # aborta— y sin él la guarda sobrevive a la mutación (#393).

@@ -515,7 +515,10 @@ def test_pending_fuera_del_vocabulario_aborta(toy_vault, fake_run, fake_notes, m
     (`paywal`) entraba mudo y el lint lo listaba como precondición legítima.
 
     Es la familia de `role` y de `via`: un campo con vocabulario cerrado que nadie valida deja al
-    consumidor leyendo un valor que no significa nada."""
+    consumidor leyendo un valor que no significa nada.
+
+    La otra mitad de INV-108 —el vocabulario cerrado— sobre el símbolo que la cumple (#489).
+    @inv INV-108"""
     topic(source="web", sources=[{"key": "1999Typo", "pending": "paywal", "doi": "10.1/x"}])
     with pytest.raises(SystemExit, match="pending"):
         run_main(monkeypatch)
@@ -540,7 +543,11 @@ def test_pending_adquisicion_no_es_un_fallo_y_lleva_motivo(toy_vault, fake_run, 
 
 def test_pending_sin_motivo_aborta(toy_vault, fake_run, fake_notes, monkeypatch):
     """Sin motivo, `pending` vuelve a ser una categoría pelada: en seis meses nadie sabe si la
-    fuente se pidió, se descartó o se olvidó. Es la asimetría que #51 cerró del otro lado."""
+    fuente se pidió, se descartó o se olvidó. Es la asimetría que #51 cerró del otro lado.
+
+    ⛔ La marca va acá, y no sólo en los tests del lint (#489): INV-108 tiene símbolos en DOS
+    módulos, y un test de `test_lint.py` no toca `ingest_theme.ingest_offads` — con la fila
+    afirmando esa cobertura, vaciar `ingest_offads` dejaba pasar los tests marcados.  @inv INV-108"""
     topic(source="web", sources=[{"key": "2001Libro", "pending": "adquisicion", "doi": "10.1/x"}])
     with pytest.raises(SystemExit, match="motivo"):
         run_main(monkeypatch)

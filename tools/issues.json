@@ -2414,6 +2414,26 @@
   {
    "number": 485,
    "title": "El motivo del hueco de `bibtex` afirma o calla sin haber medido: `BIBTEX_VENUES` necesita cobertura declarada y un tercer estado \"no evaluado\" (1 falso positivo + 1 silencio sobre 6, #484)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 486,
+   "title": "Una tabla partida por una línea en blanco deja filas que NO renderizan, y ningún chequeo lo ve: los de tabla comparan contra un encabezado que ahí no existe (17 filas en 2 notas, 2 condiciones dadas por resueltas apuntando a ellas)",
+   "state": "OPEN"
+  },
+  {
+   "number": 487,
+   "title": "`--extra-only` + `make_notes` borra el apéndice `## Excluidos por el filtro` en silencio: la guarda de #481 no dispara porque la corrida parcial coincide consigo misma (medido: 913 no-core perdidos, lint rc 0)",
+   "state": "OPEN"
+  },
+  {
+   "number": 488,
+   "title": "`_pegado` no acepta `«…» ([[bib]], p. 4)` —el link DENTRO del paréntesis—, así que 46 citas bien atribuidas de la bóveda se reportan como ambiguas (3 de las 11 de una nota)",
+   "state": "OPEN"
+  },
+  {
+   "number": 489,
+   "title": "El mapa de trazabilidad atribuye cobertura que no existe: 7 filas cuyo test marcado pasa con la implementación VACÍA (0/165 → 7/223)",
    "state": "OPEN"
   }
  ]

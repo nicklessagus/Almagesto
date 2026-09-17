@@ -6748,7 +6748,10 @@ def _nota_con_lente(toy_vault, lente, ejes_contestados):
 
 def test_la_vista_que_contesta_menos_ejes_que_su_lente_los_NOMBRA(toy_vault, capsys):
     """#270 — #254 arregló el prompt (los ejes salen de `relevance.facets`) y no dejó red: nada
-    compara los ejes CONTESTADOS contra la lente DECLARADA. Medido: 257 huecos sobre 79 vistas."""
+    compara los ejes CONTESTADOS contra la lente DECLARADA. Medido: 257 huecos sobre 79 vistas.
+
+    ⛔ Es el lado LINT de INV-146 (#489): el invariante estaba marcado sólo con un test de
+    `test_harvest_views.py`, que no puede tocar `lint.check_paper_views`.  @inv INV-146"""
     _nota_con_lente(toy_vault, ["rv", "activity", "ml"], ["rv"])
     rc, rep = run_lint_reporte(capsys)
     assert rc == 0, "es backlog"

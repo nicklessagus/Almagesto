@@ -51,6 +51,9 @@ def test_reflow_no_mueve_ancla():
 
 
 def test_cambiar_numero_mueve_ancla():
+    """La dirección que DISCRIMINA, y por eso es la que prueba `block_anchor` (#489): su hermano
+    `test_reflow_no_mueve_ancla` afirma una igualdad, que con la función vacía se cumple sola."""
+    # @inv INV-78
     assert lb.block_anchor(PARRAFO) != lb.block_anchor(PARRAFO.replace("34 días", "36 días"))
 
 
@@ -168,6 +171,10 @@ def test_fila_con_cita_propia_no_hereda():
 # ── source_hash ──────────────────────────────────────────────────────────────────────────────────
 
 def test_source_hash_estable_y_sensible(tmp_path):
+    """Las DOS direcciones: mismo archivo → mismo hash, y un byte distinto → otro hash.
+
+    La segunda es la que prueba la función (#489): un test que sólo afirma la igualdad de dos
+    llamadas pasa con la implementación vacía, porque `None == None`.  @inv INV-78"""
     p = tmp_path / "2019Autor.txt"
     p.write_text("El período es de 34 días.\n", encoding="utf-8")
     h = lb.source_hash(p)

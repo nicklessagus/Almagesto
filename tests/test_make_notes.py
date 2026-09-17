@@ -1752,6 +1752,9 @@ def test_stamp_header_sin_generator_no_inventa_version(toy_vault):
     intención de este test— y esa parte de más producía el deadlock que el ensayo de deploy midió
     sobre un corpus real: sin el ancla la nota queda permanentemente fuera del alcance de
     `stamp_search_line` (`if i < 0: return False`), así que el lint la reporta para siempre y
+    Marcado por #489: es el test que rompe `stamp_header`, el símbolo que INV-62 marca y que los
+    tres tests marcados antes no tocaban.  @inv INV-62
+
     `--restamp-headers` informa éxito en cada corrida. Lo que este test protege es que no se
     **invente** una versión, no que falte el ancla."""
     dest = cfg.STARS / "vieja.md"
