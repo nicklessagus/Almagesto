@@ -1729,3 +1729,18 @@ portadores:
       - modulo: scripts/reverify_subset.py
         estado: fuera-de-alcance
         motivo: "PROPONE la partición (re-anclables / a re-verificar) y nombra el comando; no escribe (#257)."
+  - issue: 484
+    regla: >-
+      `bibtex_source` es vocabulario CERRADO (#296) y lo escriben dos lados: el lint que lo juzga y
+      el carril que lo estampa como literal. Un valor nuevo —`venue`, la exportación oficial del
+      sitio del venue para papers SIN DOI ni arXiv id (5 de 14 huecos)— toca los dos, o el que
+      falta lo deja caer por su `else`; y el carril que pega una persona exige `bibtex_url`.
+    funcion: lib_config.BIBTEX_SOURCES
+    patron: 'bibtex_source'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: Juzga el campo contra el vocabulario y bloquea `venue` sin `bibtex_url`.
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: "`stamp_bibtex` cruza el literal del carril contra la lista antes de escribir; `venue` no se re-baja."

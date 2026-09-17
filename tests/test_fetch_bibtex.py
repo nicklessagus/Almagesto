@@ -7,6 +7,8 @@ orden pedido, y que `doi.org` contesta su «DOI Not Found» como **HTML**.
 """
 import json
 import sys
+
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -242,6 +244,44 @@ def test_483_firmar_arma_el_bloque_desde_la_NOTA_y_no_escribe(tmp_path, monkeypa
                                       "--campo", "year", "--motivo", "m"])
     assert fb.main() == 0
     assert "YA está firmada" in capsys.readouterr().out
+
+
+def test_484_venue_NO_se_rebaja_ni_con_force_y_el_hueco_nombra_el_venue(tmp_path, monkeypatch, capsys):
+    """#484 — el bloque pegado del sitio del venue no lo regenera ningún carril: re-bajarlo cambiaría
+    la referencia oficial por un hueco, así que se saltea aun con `--force` y se cuenta. Y el hueco
+    de un paper cuyo `bibstem` es un venue con exportación conocida la NOMBRA: la acción es pegar,
+    no re-preguntar."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    pedidos = []
+
+    def post(url, **k):
+        pedidos.extend(k.get("json", {}).get("bibcode", []))
+        return Resp(200, payload={"export": ""})
+    fake_net(monkeypatch, post=post)
+    monkeypatch.setattr(fb, "doi_candidate", lambda *a, **k: ("", "sin candidato en Crossref", ""))
+    venue = _nota(tmp_path, {"bibcode": "2019Pfister", "tags": ["paper"], "bibstem": "JMLR",
+                             "bibtex": "@article{2019Pfister,\n  title = {X},\n  author = {P},\n}\n",
+                             "bibtex_source": "venue",
+                             "bibtex_url": "https://www.jmlr.org/papers/v20/19-034.html"})
+    hueco = _nota(tmp_path, {"bibcode": "2003Sarela", "tags": ["paper"], "bibstem": "JMLR",
+                             "title": "Denoising", "first_author": "Sarela"})
+    antes = venue.read_text(encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--force"])
+    fb.main()
+    out = capsys.readouterr().out
+    assert venue.read_text(encoding="utf-8") == antes, "el pegado a mano no se toca"
+    assert "2019Pfister" not in pedidos and "1 con `bibtex_source: venue`" in out, out
+    fm = cfg.split_fm(hueco.read_text(encoding="utf-8")) or {}
+    assert "JMLR publica el BibTeX oficial en jmlr.org/papers" in str(fm.get("sin_bibtex") or ""), fm
+
+
+def test_484_stamp_bibtex_rehusa_una_fuente_fuera_del_vocabulario(tmp_path):
+    """#296/#484 — el carril escribe un literal; uno fuera de `BIBTEX_SOURCES` caería por el `else`
+    de todo lector en silencio, así que se cruza contra la lista antes de estampar."""
+    f = _nota(tmp_path, {"bibcode": "2001X", "tags": ["paper"]})
+    with pytest.raises(ValueError):
+        fb.stamp_bibtex(f, {}, "", ENTRADA_ADS, "scholar", "2026-09-17")
 
 
 def test_main_sin_notas_no_sale_verde(tmp_path, monkeypatch):

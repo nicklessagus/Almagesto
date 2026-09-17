@@ -3812,3 +3812,14 @@ def test_la_clave_de_cita_sale_de_la_cabecera_y_solo_de_una_entrada():
     assert cfg.bibtex_citekey("@article sin llave") == ""
     assert cfg.bibtex_citekey("texto con {llaves} que no es una entrada") == ""
     assert cfg.bibtex_citekey("no es una entrada") == "" and cfg.bibtex_citekey("") == ""
+
+
+def test_484_bibtex_venue_decide_sobre_el_bibstem_y_nombra_donde():
+    """#484 — el hueco de `bibtex` no es permanente si el venue publica el BibTeX oficial en su
+    sitio (JMLR, NeurIPS, PMLR): se reconoce por `bibstem` —lo que la nota declara, no el título—
+    y devuelve DÓNDE, que es lo que el motivo del hueco tiene que nombrar."""
+    assert cfg.bibtex_venue("JMLR") == ("JMLR", "jmlr.org/papers")
+    assert cfg.bibtex_venue("NIPS (Advances in Neural Information Processing Systems 26)")[0] == "NeurIPS"
+    assert cfg.bibtex_venue("AISTATS")[0] == "PMLR"
+    assert cfg.bibtex_venue("ApJ") is None and cfg.bibtex_venue(None) is None
+    assert "venue" in cfg.BIBTEX_SOURCES, "el vocabulario admite el carril que pega una persona"

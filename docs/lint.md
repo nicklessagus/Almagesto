@@ -166,8 +166,15 @@ Deben quedar en **0**:
   de memoria sale plausible, con volumen y páginas verosímiles, sobre el dato que termina **impreso**
   en un informe. Se cierra bajándola de su exportación oficial (`python scripts/fetch_bibtex.py
   --paper <bibcode> --force`) o borrando el campo: el hueco es un estado correcto, la cita inventada
-  no. ⚠ `bibtex_source` es **vocabulario cerrado** (`ads|crossref|datacite|doi|arxiv`) y cae en la
-  misma categoría que `pdf_source`/`fulltext_source` fuera de vocabulario (#296).
+  no. ⚠ `bibtex_source` es **vocabulario cerrado** (`ads|crossref|datacite|doi|arxiv|venue`) y cae
+  en la misma categoría que `pdf_source`/`fulltext_source` fuera de vocabulario (#296).
+  ⛔ **`venue` es la exportación oficial del SITIO del venue (#484)** —JMLR, NeurIPS, PMLR la
+  publican por paper— y es la referencia canónica de los trabajos **sin DOI ni arXiv id**, la
+  población que hoy cae al hueco de #467 (medido: 5 de 14, 3 citados por la tesis). Es el único
+  carril que pega una persona, así que exige **`bibtex_url`** (la página de donde se copió): sin
+  ella cae en ESTA categoría. `fetch_bibtex` no la re-baja ni con `--force` (ningún carril la
+  regenera) y, cuando el `bibstem` es uno de esos venues, el motivo del hueco lo nombra
+  (`cfg.bibtex_venue`).
   ⚠ Antes de declarar el hueco, `fetch_bibtex` pregunta si el **DOI existe**: con `title` y
   `first_author` consulta Crossref y, **sólo con título exacto normalizado + apellido del primer
   autor**, PROPONE el DOI para que alguien lo popule (nunca lo estampa — el matcheo por título es lo

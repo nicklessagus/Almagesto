@@ -392,7 +392,13 @@ def bibtex_for(fm: dict, stem: str, ads_cache: dict, sin_consultar=()) -> tuple:
                         + " · ".join(descartadas)), sin_medir
     faltan = [c for c, v in (("bibcode ADS", ads_cache.get(bib)), ("doi", fm.get("doi")),
                              ("arxiv_id", fm.get("arxiv_id"))) if not v]
-    return "", "", "sin exportación oficial (sin " + ", sin ".join(faltan) + ")", sin_medir
+    motivo = "sin exportación oficial (sin " + ", sin ".join(faltan) + ")"
+    # #484 — el hueco NO es permanente si el venue publica el BibTeX en su sitio: el motivo lo
+    # nombra, porque la acción es pegarlo con `bibtex_source: venue` + `bibtex_url`, no re-preguntar.
+    if (venue := cfg.bibtex_venue(fm.get("bibstem"))):
+        motivo += (f" · {venue[0]} publica el BibTeX oficial en {venue[1]}: pegalo con "
+                   f"`bibtex_source: venue` y `bibtex_url` (#484)")
+    return "", "", motivo, sin_medir
 
 
 def stamp_bibtex(path: Path, fm: dict, body: str, entrada: str, fuente: str, fecha: str) -> None:
@@ -402,6 +408,11 @@ def stamp_bibtex(path: Path, fm: dict, body: str, entrada: str, fuente: str, fec
 
     ⚠ `bibtex_accessed` es la fecha de ESTA descarga, no la de hoy en una corrida que no bajó nada
     (#34): sin eso el campo afirma un snapshot que nadie tomó."""
+    # #296/#484 — el carril escribe un literal, y un literal fuera del vocabulario cae por el
+    # `else` de todo lector en silencio: se cruza contra la lista ANTES de estampar.
+    if fuente not in cfg.BIBTEX_SOURCES:
+        raise ValueError(f"`bibtex_source: {fuente}` fuera del vocabulario "
+                         f"({' | '.join(cfg.BIBTEX_SOURCES)})")
     cfg.stamp_fm_fields(path, fm, body,
                         {"bibtex": entrada, "bibtex_source": fuente, "bibtex_accessed": fecha})
 
@@ -525,10 +536,16 @@ def main() -> int:
                          "(¿`--paper`/`--slug` equivocado, o bóveda vacía?)")
         return 2
 
-    pendientes, fms, n_no_pegable = [], {}, 0
+    pendientes, fms, n_no_pegable, n_venue = [], {}, 0, 0
     for f in notas:
         text = f.read_text(encoding="utf-8")
         fm = cfg.split_fm(text) or {}
+        # #484 — `venue` lo pegó una persona desde el sitio del venue y ningún carril de la
+        # cascada lo regenera: re-bajarlo (aun con `--force`) cambiaría la referencia oficial por
+        # un hueco. Se saltea y se cuenta.
+        if str(fm.get("bibtex_source") or "").strip() == "venue":
+            n_venue += 1
+            continue
         # #471/#473 — un bloque que NO SE PEGA no está cerrado, y `cfg.bibtex_no_pegable` dice de
         # cuántas maneras puede no pegarse. Cuenta como pendiente sin `--force`, para que re-correr
         # la cadena (idempotente) cierre el backlog que el lint nombra.
@@ -643,7 +660,9 @@ def main() -> int:
     cfg.print_seguro(f"bibtex: {n_ok} de {len(pendientes)} nota(s) con exportación oficial "
                      f"({detalle}) — sobre {len(notas)} nota(s) de paper miradas"
                      + (f"; {n_no_pegable} re-bajada(s) porque su bloque no se pegaba tal cual "
-                        f"(#471/#473)" if n_no_pegable else ""))
+                        f"(#471/#473)" if n_no_pegable else "")
+                     + (f"; {n_venue} con `bibtex_source: venue` (pegado del sitio del venue) "
+                        f"NO se re-bajan (#484)" if n_venue else ""))
     for s in sacados:
         cfg.print_seguro(f"  ⚠ `bibtex` SACADO y hueco declarado — lo que había no imprimía "
                          f"ninguna referencia y ningún carril trajo otra (#473): {s}")

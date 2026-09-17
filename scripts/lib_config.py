@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.280.0"
+ALMAGESTO_VERSION = "1.281.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2129,7 +2129,30 @@ def is_ads_bibcode(clave) -> bool:
 LOG_SUPERSEDED_MARK = "⚠ corregido"
 
 
-BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv")
+BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv", "venue")
+
+#: #484 — `venue`: la exportación oficial que publica el SITIO del venue (JMLR, NeurIPS, PMLR),
+#: referencia canónica de los papers SIN DOI ni arXiv id —la población que cae al hueco de #467—.
+#: Es el único carril que pega una persona, así que exige `bibtex_url` (de dónde se copió): sin
+#: ella vuelve a ser «un bloque que escribió alguien» y el lint la bloquea como `bibtex_sin_fuente`.
+#: `(nombre, regex sobre bibstem, dónde)`; `bibtex_venue` la consulta para nombrar el venue en el
+#: motivo del hueco.
+BIBTEX_VENUES = (
+    ("JMLR", r"(?i)\bjmlr\b|journal of machine learning research", "jmlr.org/papers"),
+    ("NeurIPS", r"(?i)\bn(eur)?ips\b|neural information processing", "proceedings.neurips.cc"),
+    ("PMLR", r"(?i)\bpmlr\b|\baistats\b|\bicml\b|\bcolt\b|\buai\b", "proceedings.mlr.press"),
+)
+
+
+def bibtex_venue(bibstem) -> tuple | None:
+    """`(name, where)` of the venue that publishes its official BibTeX on its own site and that
+    `bibstem` names (#484), or `None`. Decides on `bibstem` —what the note declares—, never on the
+    title (title matching is what this repo forbids, `discover`: 2 of 25 pointed to another work)."""
+    b = str(bibstem or "").strip()
+    for nombre, patron, donde in BIBTEX_VENUES:
+        if b and re.search(patron, b):
+            return nombre, donde
+    return None
 
 #: #471 — `journal = {\\aap}`: la revista como macro de AASTeX. Es lo que ADS exporta por defecto
 #: (`journalformat: 1`), y sin `aas_macros.sty` el campo compila VACÍO. Un bloque con macro no es

@@ -4664,6 +4664,14 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                    "procedencia es un bloque escrito a mano, y una cita inventada sale "
                    "plausible → `python scripts/fetch_bibtex.py --paper "
                    f"{stem} --force`, o borrá el campo (#397)"))
+    # #484 — `venue` es el único carril que pega una persona: sin la URL de donde se copió, la
+    # entrada vuelve a ser «un bloque que escribió alguien», o sea la misma categoría de arriba.
+    if _btx and str(fm.get("bibtex_source") or "").strip() == "venue" \
+            and not str(fm.get("bibtex_url") or "").strip().startswith("http"):
+        bibtex_sin_fuente.append(
+            (stem, "`bibtex_source: venue` sin `bibtex_url`: el BibTeX del sitio del venue lo pega "
+                   "una persona, y sin la URL de donde se copió no hay procedencia → poblá "
+                   "`bibtex_url: https://…` (#484)"))
     if _btx:
         _campos = cfg.bibtex_fields(_btx)
         for _c in ("doi", "year", "title"):

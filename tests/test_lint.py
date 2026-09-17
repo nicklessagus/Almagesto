@@ -7952,6 +7952,19 @@ def test_bibtex_source_fuera_de_vocabulario_BLOQUEA(toy_vault, capsys):
     assert rc != 0 and "bibtex_source" in _seccion(rep, "fuera del vocabulario"), rep
 
 
+def test_484_venue_sin_bibtex_url_BLOQUEA_y_con_url_pasa(toy_vault, capsys):
+    """#484 — `venue` es el único carril donde el bloque lo pega una persona: sin la URL de donde
+    se copió vuelve a ser «un bloque que escribió alguien» (misma categoría que #397); con
+    `bibtex_url` es una exportación oficial con procedencia."""
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "venue"})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0 and "bibtex_url" in _seccion(rep, "sin `bibtex_source`"), rep
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "venue",
+                                  "bibtex_url": "https://www.jmlr.org/papers/v20/19-034.html"})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0 and "2020aaa" not in _seccion(rep, "sin `bibtex_source`"), rep
+
+
 def test_el_drift_entre_el_frontmatter_y_la_exportacion_se_reporta(toy_vault, capsys):
     """#397 — el caso que lo motivó: una ficha `2011Naik` con `year: 2012` en su propio frontmatter,
     y la clave sintética contradiciendo al campo que tiene al lado. Backlog: cuál de los dos está
