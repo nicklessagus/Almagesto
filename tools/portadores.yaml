@@ -1759,3 +1759,14 @@ portadores:
       - modulo: scripts/fetch_bibtex.py
         estado: usa
         motivo: "Pega el estado que devuelve `bibtex_venue` en el motivo del hueco (#467) y no decide nada por su cuenta."
+  - issue: 488
+    regla: >-
+      La adyacencia que decide de QUIÉN es una cita se define UNA vez (`lib_blocks._ADYACENTE`) y
+      acepta las formas que de hecho atribuyen: el link pegado, el link tras el paréntesis del
+      localizador y —#488— el link que ABRE un paréntesis corto (`«…» ([[bib]], p. 4)`). Una forma
+      que atribuye bien y el regex no admite no se pierde: sale como AMBIGUA, que es el ruido que
+      #316/#325 abrieron el chequeo para evitar (medido: 46 ocurrencias en 4 archivos, 3 de las 11
+      ambiguas de una nota). Lo que no se afloja es la prosa en el medio.
+    funcion: lib_blocks._ADYACENTE
+    patron: '_ADYACENTE|_pegado'
+    consumidores: []

@@ -1577,8 +1577,8 @@ otra palabra que empiece igual (`inferencial`).
 
 **Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va **citada `[[bibcode]]`
 o marcada `inferencia`** — nada sin respaldo. ⛔ **Y la cita textual lleva su `[[bibcode]]` PEGADO
-(#316/#325):** `«…» [[bib]]`, `«…» (p. 4) [[bib]]`, o en una fila la celda *Fuente*; con prosa en el
-medio se declara ambigua — una **mención** posterior le robaba la atribución (6 de 12 bloqueantes).
+(#316/#325):** `«…» [[bib]]`, `«…» (p. 4) [[bib]]`, `«…» ([[bib]], p. 4)` (#488) o, en una fila,
+la celda *Fuente*; con prosa en el medio es ambigua (la **mención** posterior robaba la cita: 6/12).
 ⚠ La matemática **parte** el chequeo como la elipsis (#326). Excepción: los valores de ground-truth (NEA) en
 `stars/` no se verifican contra papers (su consistencia la chequea el lint); sólo se verifican
 disputas y afirmaciones atribuidas a un paper. El lint reporta como backlog los conceptos e

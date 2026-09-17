@@ -565,7 +565,15 @@ def _solo_separadores(gap: str) -> bool:
 #: #325 · lo que puede haber entre el cierre de la cita y su `[[bibcode]]` sin que dejen de estar
 #: pegados: el markup de cierre (`»*`, `_`, comillas), puntuación, y **un** paréntesis de
 #: localizador —`(p. 4)`, `(Fig. 3, p. 7)`—, que es la forma que la bóveda escribe de verdad.
-_ADYACENTE = re.compile(r"^[\s*_`»”\"'.,;:—–-]*(?:\([^()]{0,40}\))?[\s*_`.,;:—–-]*$")
+#: #488 — the link may also OPEN a short parenthesis: `«…» ([[bib]], p. 4)`, which is what somebody
+#: writes when the locator and the source travel together (natural in Spanish prose, and the shape
+#: the vault itself uses: 46 occurrences in 4 files). Without the second optional group those 46
+#: were reported AMBIGUOUS —«probada contra TODAS las fuentes del bloque»—, which is exactly the
+#: noise #316/#325 opened this check to avoid: a real attribution finding drowned among forms that
+#: attribute correctly (measured: 3 of the 11 ambiguous ones in a single note).
+#: ⛔ It does NOT loosen #325: prose in the gap still has no adjacent owner, because letters are in
+#: neither character class (`', y más prosa '` stays False — the measured 131-character case).
+_ADYACENTE = re.compile(r"^[\s*_`»”\"'.,;:—–-]*(?:\([^()]{0,40}\))?(?:\(\s*)?[\s*_`.,;:—–-]*$")
 
 
 #: #325 · la rama «antes» es ASIMÉTRICA a propósito: la bóveda escribe de verdad `[[bib]] dice:

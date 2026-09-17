@@ -1366,6 +1366,27 @@ def test_el_bibcode_LEJANO_no_es_dueno_de_la_cita():
                           "c de largo", bibs) == "2015Voss"
 
 
+def test_488_el_link_que_ABRE_el_parentesis_tambien_atribuye():
+    """#488 — `«…» ([[bib]], p. 4)`: el link DENTRO del paréntesis atribuye igual de bien que
+    `«…» (p. 4) [[bib]]`, y el regex de adyacencia no lo aceptaba. Esas citas salían **ambiguas**,
+    que es el ruido que #316/#325 abrieron el chequeo para evitar — medido en una bóveda real: 46
+    ocurrencias en 4 archivos, 3 de las 11 ambiguas de una sola nota.
+
+    ⛔ Y no afloja #325: con prosa en el medio sigue sin haber dueño (las letras no están en ninguna
+    de las dos clases de caracteres)."""
+    bibs = ["2015Voss", "2013Voss"]
+    assert lb.quote_owner("*«c de largo»* ([[2015Voss]], p. 4), contra [[2013Voss]]",
+                          "c de largo", bibs) == "2015Voss"
+    assert lb.quote_owner("«c de largo» ([[2015Voss]]) y después [[2013Voss]]",
+                          "c de largo", bibs) == "2015Voss"
+    # el caso de #325 NO se afloja: prosa en el medio → sin dueño adyacente
+    assert lb.quote_owner("«c de largo», y la discusión sigue hasta [[2013Voss]]",
+                          "c de largo", bibs) is None
+    # un paréntesis CON prosa adentro tampoco abre la puerta
+    assert lb.quote_owner("«c de largo» (véase la discusión en [[2013Voss]])",
+                          "c de largo", bibs) is None
+
+
 def test_en_una_FILA_la_columna_Fuente_le_gana_a_la_mencion():
     """#325, el caso claro medido: la celda *Fuente* es `[[2015Voss]]` y la celda de prosa termina
     *«…atribuyendo ese paso a [[2013Voss]]»*. La nota atribuye bien; el dueño es el de la fila.
