@@ -1659,6 +1659,9 @@ portadores:
         motivo: >-
           Usa `method_key` como normalizador de TÍTULOS para cruzar la exportación contra el
           frontmatter (#397); nada que ver con métodos ni con roll-ups.
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "Matchea porque el pre-flight de #490 normaliza con `cfg.method_key` para comparar un `role` contra el que declara el paper — la misma clave, otro eje: no arma ninguna fila de la matriz método × estrella."
   - issue: 432
     regla: >-
       El ALCANCE de una sección estampada termina en el próximo `## `, nunca en cualquier `#`: un
@@ -1769,4 +1772,60 @@ portadores:
       ambiguas de una nota). Lo que no se afloja es la prosa en el medio.
     funcion: lib_blocks._ADYACENTE
     patron: '_ADYACENTE|_pegado'
+    consumidores: []
+  - issue: 486
+    regla: >-
+      Un chequeo de tabla que compara cada fila CONTRA SU ENCABEZADO no puede ver la fila que no
+      tiene encabezado: una línea en blanco parte la tabla y las de abajo dejan de renderizar. Las
+      dos mitades —la fila mal formada (#227) y la tabla partida (#486)— son el mismo efecto
+      (contenido citado y verificado que el lector no ve) y se reportan juntas, cada una con su
+      salida. Medido: 17 filas en 2 notas de 287, con el lint en rc 0 y dos condiciones `acota`
+      dadas por resueltas sobre filas ilegibles.
+    funcion: lib_config.split_table_rows
+    patron: 'split_table_rows|table_shape_issues'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: Reporta las dos mitades en la misma categoría bloqueante de forma del artefacto.
+  - issue: 487
+    regla: >-
+      Una corrida PARCIAL no puede borrar ni reemplazar el snapshot de una completa, y que lo sea
+      lo DECLARA el archivo —no se infiere de un conteo: la parcial coincide consigo misma, que es
+      por lo que la guarda de #481 (`n_total` del registro contra los registros del archivo) no la
+      ve—. Medido con `--extra-only`: 963 registros / 52 core → 25 / 25, apéndice «Excluidos por el
+      filtro» VACÍO y `lint` rc 0 antes y después.
+    funcion: lib_config.ads_parcial
+    patron: 'ads_parcial|extra_only|extra-only'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: Sus dos lectores del `ads.json` la consultan — `excluded_table` no publica un snapshot parcial y `stamp_excluded` no borra el que ya está.
+      - modulo: scripts/query_ads.py
+        estado: fuera-de-alcance
+        motivo: "Es el PRODUCTOR: escribe `cfg.ADS_PARCIAL_KEY` con el motivo de `cfg.ADS_PARCIAL_EXTRA_ONLY` —los dos viven al lado del predicado, así que la clave no queda en dos archivos— y no decide nada, por eso no llama al predicado."
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: Pasa el flag a la sub-cadena (`ads_subchain`) y no lee ni escribe el `ads.json`; quien declara y quien consulta son los otros dos.
+  - issue: 491
+    regla: >-
+      «Lo que esta tanda tocó» se resuelve con UNA función (`archivos_del_diff`), que incluye el
+      archivo untracked —el caso exacto de la regla «toda función nueva pasa por el gate»—, y los
+      modos que acotan por diff la reciben parametrizada en vez de re-implementarla: dos
+      definiciones y una de las dos no ve el archivo nuevo. Y el acotado es por LÍNEA cuando lo que
+      se audita vive en una línea (una marca `@inv`): por archivo, tocar `lib_config.py` auditaría
+      ~120 invariantes y el paso barato dejaría de correrse.
+    funcion: mutar.archivos_del_diff
+    patron: 'archivos_del_diff|invariants_in_diff'
+    consumidores: []
+  - issue: 490
+    regla: >-
+      Corregir es ESCRIBIR, y lo escrito no hereda la evidencia del diagnóstico: el corrector
+      produce clases de defecto que son decidibles sobre el DIFF —la negativa o superlativa
+      agregada, la cita que su extracción contradice, el `role` que el paper no declara—, así que
+      se chequean sobre las líneas agregadas y antes de gastar un subagente por fuente. Medido: 14
+      defectos introducidos en una auditoría de 3 notas, `lint` 0 y el fan-out a ciegas 11. ⚠ No
+      afloja la re-verificación: los 7 de «condición que se cae al transcribir» no son decidibles
+      sin abrir la fuente.
+    funcion: contrast.preflight
+    patron: 'preflight|added_lines'
     consumidores: []

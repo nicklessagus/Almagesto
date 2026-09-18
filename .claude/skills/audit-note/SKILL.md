@@ -244,6 +244,12 @@ A escala, las correcciones **no se aplican a mano**: `python scripts/apply_fixes
 sin verificar —el ancla se movió— y toda cita que la corrección haya agregado es un **par nuevo**:
 correr `verify-citations` sobre **ese subconjunto**. No sobre la nota entera: sobre lo que cambió.
 
+⛔ **Y ANTES del fan-out, `python scripts/contrast.py --preflight` (#490):** tres clases de defecto
+del corrector son decidibles sobre las líneas AGREGADAS —negativa o superlativa (fuera de `##
+Huecos` y de un blockquote), cita que su extracción contradice, `role` que el paper no declara—, sin
+gastar un subagente. Medido: 14 defectos introducidos, `lint` 0, fan-out a ciegas 11. ⚠ No
+reemplaza la re-verificación: los 7 de «condición que se cae al transcribir» piden abrir la fuente.
+
 ⛔ **El subconjunto lo emite un comando, no se arma a ojo:**
 
 ```bash

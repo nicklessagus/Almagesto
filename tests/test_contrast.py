@@ -1024,3 +1024,93 @@ def test_454_la_misma_cita_en_PROSA_de_la_nota_sigue_aprobandose(toy_vault, caps
                     f"## Vista — ICA ruidosa\n\nEl paper dice «{LARGA}».\n", encoding="utf-8")
     r = ct.validar(nota, mostrar=True)
     assert r["copiadas"] == 0 and not r["discrepan"] and not r["alteradas"]
+
+
+# ── #490 · pre-flight sobre el DIFF de la corrección ────────────────────────────────────────────
+
+def test_490_la_negativa_AGREGADA_se_reporta_y_Huecos_y_blockquote_no(toy_vault, monkeypatch,
+                                                                      capsys):
+    """#490 — corregir es ESCRIBIR, y lo escrito no hereda la evidencia del diagnóstico. La clase
+    más barata de chequear es la afirmación negativa o superlativa: medido, 2 de los 14 defectos que
+    introdujo un corrector, y `lint` las ve **cero**.
+
+    ⛔ Dos exenciones estructurales, no de vocabulario: `## Huecos` ya declara su alcance (D-34) y
+    un blockquote es mención, no afirmación (#387)."""
+    f = _nota_323("ica", "Es el único método que converge.\n"
+                         "> «ningún algoritmo fue testeado» dice la fuente.\n\n"
+                         "## Huecos\n\nNadie midió el régimen de SNR bajo.\n")
+    agregadas = {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
+    monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: agregadas})
+    monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
+        "alteradas": [], "discrepan": [], "no_evaluables": [], "resueltas": [],
+        "citas": 0, "solo_extraccion": 0})
+
+    assert ct.preflight() == 0, "las tres categorías son backlog: el pre-flight no bloquea"
+    out = capsys.readouterr().out
+    assert "único" in out and "Es el único método" in out
+    assert "ningún algoritmo" not in out, "un blockquote es mención, no afirmación (#387)"
+    assert "Nadie midió" not in out, "`## Huecos` ya declara su alcance (D-34)"
+
+
+def test_490_el_rol_AGREGADO_que_el_paper_no_declara_se_reporta(toy_vault, monkeypatch, capsys):
+    """Tercera categoría: la celda de `Rol` que una fila le pone a un paper cuyo frontmatter declara
+    otra cosa. Se cruzaba a mano."""
+    _nota_paper("2013Voss", "prosa")
+    pf = cfg.PAPERS / "2013Voss.md"
+    pf.write_text(pf.read_text(encoding="utf-8").replace(
+        "---\n", "---\nrole: [aplicacion]\n", 1), encoding="utf-8")
+    f = _nota_323("ica", "| [[2013Voss]] | fundacional | lo introduce |\n")
+    agregadas = {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
+    monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: agregadas})
+    monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
+        "alteradas": [], "discrepan": [], "no_evaluables": [], "resueltas": [],
+        "citas": 0, "solo_extraccion": 0})
+
+    assert ct.preflight() == 0
+    out = capsys.readouterr().out
+    assert "fundacional" in out and "2013Voss" in out and "aplicacion" in out
+
+
+def test_490_la_cita_alterada_AGREGADA_bloquea_y_la_vieja_no(toy_vault, monkeypatch, capsys):
+    """La segunda categoría es #333 **acotada al diff**, y el rc sigue la regla vigente (#323): sólo
+    la evidencia POSITIVA de alteración bloquea. Y lo que no toca esta corrección no entra: el
+    pre-flight mira las líneas AGREGADAS, que es donde vive el defecto del corrector."""
+    f = _nota_323("ica", "linea uno\nlinea dos\n")
+    monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: {7: "linea dos"}})
+    monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
+        "alteradas": [(7, "cita cambiada"), (99, "otra vieja")],
+        "discrepan": [(7, "el `.txt` dice otra cosa", "⚠verificar en el PDF")],
+        "no_evaluables": [], "resueltas": [], "citas": 2, "solo_extraccion": 0})
+
+    assert ct.preflight() == 1, "una sola: la de la línea agregada"
+    out = capsys.readouterr().out
+    assert "cita cambiada" in out and "otra vieja" not in out
+    assert "verificar en el PDF" in out
+
+
+def test_490_un_diff_SIN_lineas_agregadas_no_es_un_verde(toy_vault, monkeypatch, capsys):
+    """D-43: «esta corrección no agregó nada» no es «lo agregado está bien» — no se miró nada."""
+    monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {})
+    assert ct.preflight() == 2
+    assert "no evaluado" in capsys.readouterr().out
+
+
+def test_490_added_lines_lee_los_HUNKS_y_el_untracked_cuenta_entero(tmp_path, monkeypatch):
+    """La red 4 sobre el parser: los otros tests lo doblan. Repo de juguete real, porque un
+    off-by-one acá deja la línea corregida fuera del alcance y el paso sale verde sin mirarla."""
+    import subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    for k, v in (("user.email", "t@t"), ("user.name", "t")):
+        subprocess.run(["git", "-C", str(tmp_path), "config", k, v], check=True)
+    d = tmp_path / "vault" / "wiki"
+    d.mkdir(parents=True)
+    (d / "a.md").write_text("uno\ndos\ntres\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "x"], check=True)
+    (d / "a.md").write_text("uno\nDOS\ntres\n", encoding="utf-8")
+    (d / "b.md").write_text("nueva\n", encoding="utf-8")
+    monkeypatch.setattr(cfg, "ROOT", tmp_path)
+
+    out = ct.added_lines()
+    assert out[d / "a.md"] == {2: "DOS"}, "sólo la línea agregada, con su número nuevo"
+    assert out[d / "b.md"][1] == "nueva", "la nota untracked cuenta entera"

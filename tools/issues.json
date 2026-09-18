@@ -2434,6 +2434,16 @@
   {
    "number": 489,
    "title": "El mapa de trazabilidad atribuye cobertura que no existe: 7 filas cuyo test marcado pasa con la implementación VACÍA (0/165 → 7/223)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 490,
+   "title": "Corregir es escribir, y el corrector produce clases de defecto DECIDIBLES sobre el diff: 14 introducidos en una auditoría de 3 notas, 11 los cazó recién el fan-out a ciegas",
+   "state": "OPEN"
+  },
+  {
+   "number": 491,
+   "title": "La auditoría de atribución no tiene paso de tanda: `--trazabilidad --solo` existe y nada lo dispara, así que 7 marcas falsas tardaron 14 días en aparecer",
    "state": "OPEN"
   }
  ]

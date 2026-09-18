@@ -55,7 +55,7 @@ sale_obligatorio_desde: "2026-09-14"
 
 skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de CLAUDE.md
   append-knowledge: 12200
-  audit-note: 18000
+  audit-note: 18500
   auditar: 18400
   find-contradictions: 21500
   ingest-star: 32000
@@ -67,6 +67,21 @@ skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de
   verify-citations: 66500
 
 crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por suba
+  - fecha: "2026-09-17"
+    skill: audit-note
+    ancla: "#490"
+    motivo: >-
+      El paso 4 mandaba re-verificar lo corregido y no decía que tres clases de defecto del
+      corrector se deciden ANTES, sobre el diff: medido en una auditoría de tres notas, el corrector
+      introdujo 14 defectos, el `lint` vio 0 y el fan-out a ciegas 11 — o sea tres rondas de
+      subagentes para lo que un `grep` sobre las líneas agregadas contesta. Un comando que el skill
+      no nombra no lo corre nadie (es el defecto que #323 midió sobre `--validar`).
+    sale: >-
+      La mitad de lo que escribí primero: la explicación de las tres categorías pasó de un párrafo
+      con sus porqués a una cláusula con sus nombres, porque el porqué ya vive en el issue y en
+      `contrast.preflight`. Del resto del skill no sale nada: se revisó y sus siete frentes son la
+      operación misma, no color — sacar uno cambiaría lo que la auditoría cubre, no cómo se cuenta.
+    techo_bytes: 18500
   - fecha: "2026-09-14"
     skill: append-knowledge
     ancla: "#463"

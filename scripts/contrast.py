@@ -473,6 +473,137 @@ def save_ultima_pasada_citas(poblacion: dict, alteradas: int) -> None:
         {"ultima_pasada_citas": pasada}, sort_keys=False, allow_unicode=True))
 
 
+#: #490 — el patrón MEDIDO de la afirmación negativa o superlativa (114 en una bóveda de 8 notas
+#: de entidad). No se amplía sin volver a medir: cada término nuevo cambia la población sobre la que
+#: el issue prometió su número.
+NEGATIVA_RE = re.compile(r"(?i)\b(?:el|la|lo)\s+únic[oa]\b|\bningun[oa]s?\b|\bnadie\b|"
+                         r"\bnunca\b|\bno existe\b|\bsólo\s+(?:dos|tres|cuatro|cinco|seis)\b")
+
+_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def added_lines(ref: str = "HEAD") -> dict:
+    """`{nota: {nº de línea: texto}}` — the lines THIS diff adds under `vault/wiki/` (#490).
+
+    ⛔ The pre-flight looks at the **added lines**, not at the note: that is where the corrector's
+    defect lives and where the noise is smallest. Measured on an `audit-note` over three notes: the
+    corrector introduced **14** defects, `lint` caught **0** and the blind fan-out **11** — three
+    rounds of subagents for classes that are decidable on the diff.
+
+    An untracked note counts whole: it has nothing to diff against, and a note written in this pass
+    is all «added».
+    """
+    import subprocess
+    out: dict = {}
+    r = subprocess.run(["git", "diff", "-U0", ref, "--", "vault/wiki"],
+                       cwd=cfg.ROOT, capture_output=True, text=True)
+    actual, n = None, 0
+    for ln in r.stdout.split("\n"):
+        if ln.startswith("+++ b/"):
+            actual, n = cfg.ROOT / ln[6:], 0
+        elif (m := _HUNK_RE.match(ln)):
+            n = int(m.group(1))
+        elif ln.startswith("+") and actual is not None and actual.suffix == ".md":
+            out.setdefault(actual, {})[n] = ln[1:]
+            n += 1
+    r = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "vault/wiki"],
+                       cwd=cfg.ROOT, capture_output=True, text=True)
+    for rel in r.stdout.split():
+        f = cfg.ROOT / rel
+        if f.suffix == ".md" and f.exists():
+            out[f] = dict(enumerate(f.read_text(encoding="utf-8").split("\n"), 1))
+    return out
+
+
+def _row_role_claims(fila: str) -> list:
+    """`[(bibcode, rol escrito)]` for an added table row that assigns a `role` to a paper (#490)."""
+    bibs = lb.BIBCODE_LINK_RE.findall(fila) if hasattr(lb, "BIBCODE_LINK_RE") else \
+        re.findall(r"\[\[([^\]]+)\]\]", fila)
+    celdas = [c.strip(" *_`") for c in fila.split("|")]
+    roles = [c for c in celdas if cfg.method_key(c) in cfg.ROLES]
+    return [(b, r) for b in bibs[:1] for r in roles]
+
+
+def preflight(ref: str = "HEAD") -> int:
+    """Pre-flight over the DIFF of a correction, BEFORE the fan-out (#490).
+
+    ⛔ **Correcting is WRITING, and what gets written does not inherit the diagnosis's evidence.**
+    #203 says what is corrected gets re-verified and #282 that the cycle does not converge by
+    itself; what neither says is WHICH class of sentence the corrector produces — and those classes
+    are decidable on the diff, before spending one subagent per source. Three, none needing an LLM:
+
+    1. **negative or superlative added** — outside `## Huecos`, which declares its scope (D-34), and
+       outside a blockquote, which is a mention and not a claim (#387);
+    2. **quote added** that its source's extraction contradicts — the rule of #333 restricted to the
+       diff, where a false positive costs a look and not an operation;
+    3. **`role` added in a row** that the cited paper's frontmatter does not declare — crossed by
+       hand until now.
+
+    ⚠ **What it does NOT promise**, and it is the larger half: the 7 «condition that falls off while
+    transcribing» of the same measurement are **not decidable without reading the source**, so they
+    stay in blind verification. This does not loosen it.
+
+    The exit code follows the rule already in force (#323): only POSITIVE evidence of alteration
+    blocks; the three categories are backlog, which is what a pre-flight is for."""
+    diff = added_lines(ref)
+    if not diff:
+        cfg.print_seguro(f"⛔ no evaluado: el diff contra `{ref}` no agrega ni una línea bajo "
+                         f"`vault/wiki/` — no hay corrección que mirar (no es un verde)")
+        return 2
+    negativas: list = []
+    roles: list = []
+    citas: list = []
+    bloqueantes = 0
+    for nota, agregadas in sorted(diff.items()):
+        seccion = ""
+        for i, linea in enumerate(nota.read_text(encoding="utf-8").split("\n"), 1):
+            if linea.startswith("## "):
+                seccion = linea[3:].strip()
+            if i not in agregadas:
+                continue
+            txt = agregadas[i]
+            if (m := NEGATIVA_RE.search(txt)) and not seccion.startswith("Huecos") \
+                    and not txt.lstrip().startswith(">"):
+                negativas.append((nota, i, m.group(0), txt.strip()[:90]))
+            for bib, rol in _row_role_claims(txt):
+                f = cfg.PAPERS / f"{cfg.note_stem(bib)}.md"
+                if not f.exists():
+                    continue
+                declarado = (cfg.split_fm(f.read_text(encoding="utf-8")) or {}).get("role") or []
+                if cfg.method_key(rol) not in {cfg.method_key(x) for x in declarado}:
+                    roles.append((nota, i, bib, rol, ", ".join(declarado) or "(vacío)"))
+        r = validar(nota, mostrar=False)
+        for ln, motivo in r["alteradas"]:
+            if ln in agregadas:
+                citas.append((nota, ln, "⛔ " + motivo))
+                bloqueantes += 1
+        for ln, motivo, marca in r["discrepan"]:
+            if ln in agregadas:
+                citas.append((nota, ln, f"⚠ {motivo}\n     → {marca}"))
+
+    for titulo, filas, fmt in (
+            ("Afirmación negativa o superlativa AGREGADA (backlog: ¿está acotada?)", negativas,
+             lambda x: f"L{x[1]}: «{x[2]}» — {x[3]}"),
+            ("`role` AGREGADO que el paper no declara (backlog)", roles,
+             lambda x: f"L{x[1]}: la fila le pone `{x[3]}` a [[{x[2]}]], que declara {x[4]}"),
+            ("Cita AGREGADA contra la extracción de su fuente (#333 acotado al diff)", citas,
+             lambda x: f"L{x[1]}: {x[2]}")):
+        cfg.print_seguro(f"\n## {titulo} ({len(filas)})")
+        actual = None
+        for x in filas:
+            if x[0] != actual:
+                actual = x[0]
+                cfg.print_seguro(f"\n{actual.relative_to(cfg.ROOT)}")
+            cfg.print_seguro(f"  {fmt(x)}")
+    n_lineas = sum(len(v) for v in diff.values())
+    cfg.print_seguro(f"\n> sobre {n_lineas} línea(s) agregada(s) en {len(diff)} nota(s), contra "
+                     f"`{ref}`")
+    cfg.print_seguro("  ⚠ Lo que ESTE paso NO mira: la condición o el localizador que se cae al "
+                     "transcribir (7 de los 14 defectos medidos). No son decidibles sin abrir la "
+                     "fuente y siguen donde estaban: en la verificación a ciegas (#203/#282).")
+    return bloqueantes
+
+
 def validar_todo(slug: str | None = None) -> int:
     """Sweep mode: every note of the vault (or of one subject) against its extractions (#323).
 
@@ -561,10 +692,15 @@ def main(argv=()) -> int:
     ap.add_argument("--validar", metavar="NOTA",
                     help="cruza esa nota contra las extracciones: la cita que aparece bajo OTRO "
                          "bibcode, o cuya cola diverge, se alteró al sintetizar (#317/#321)")
+    ap.add_argument("--preflight", nargs="?", const="HEAD", metavar="REF",
+                    help="#490: chequea las líneas AGREGADAS bajo vault/wiki/ contra REF "
+                         "(default HEAD), ANTES del fan-out")
     ap.add_argument("--validar-todo", action="store_true",
                     help="barrido: toda la bóveda, o las notas del sujeto si das el slug (#323)")
     args = ap.parse_args(list(argv) or None)
 
+    if args.preflight:
+        return preflight(args.preflight)
     if args.validar_todo:
         return 1 if validar_todo(args.slug) else 0
 
