@@ -1114,3 +1114,35 @@ def test_490_added_lines_lee_los_HUNKS_y_el_untracked_cuenta_entero(tmp_path, mo
     out = ct.added_lines()
     assert out[d / "a.md"] == {2: "DOS"}, "sólo la línea agregada, con su número nuevo"
     assert out[d / "b.md"][1] == "nueva", "la nota untracked cuenta entera"
+
+
+def test_490_el_hermano_de_verificacion_y_el_log_NO_son_prosa_del_corrector(toy_vault, monkeypatch,
+                                                                            capsys):
+    """#490 (validación en la instancia) — el alcance es la PROSA DE NOTA. Medido replayando cuatro
+    commits de una corrección real: **130 de 150** líneas marcadas caían fuera de la prosa —122 en
+    el hermano `.verif.md`, 8 en `log.md`— y la precisión pasaba de 2/20 a 2/150.
+
+    ⛔ Las dos exenciones son ESTRUCTURALES, como `## Huecos` (D-34) y el blockquote (#387): el
+    hermano no lleva prosa nueva —sus filas son el extracto de afirmaciones que ya están en la nota,
+    y el re-anclaje (#407) las reescribe TODAS en cada ronda, así que el mismo texto se contaba dos
+    veces— y `log.md` es la bitácora, donde una negativa narra la operación (#391)."""
+    nota = _nota_323("ica", "Es el único método que converge.\n")
+    hermano = cfg.verif_sidecar(nota)
+    hermano.write_text("| 1 | «el único …» | [[2013Voss]] | soportada |\n", encoding="utf-8")
+    cfg.LOG.parent.mkdir(parents=True, exist_ok=True)
+    cfg.LOG.write_text("## 2026-09-17 — fix\n\nNingún paper del corpus lo dice.\n", encoding="utf-8")
+    monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {
+        f: {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
+        for f in (nota, hermano, cfg.LOG)})
+    monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
+        "alteradas": [], "discrepan": [], "no_evaluables": [], "resueltas": [],
+        "citas": 0, "solo_extraccion": 0})
+
+    assert ct.preflight() == 0
+    out = capsys.readouterr().out
+    assert "Es el único método" in out, "la prosa de la nota SÍ se mira"
+    assert "Ningún paper del corpus" not in out, "la bitácora narra la operación (#391)"
+    assert "AGREGADA (backlog: ¿está acotada?) (1)" in out, ("UN hallazgo: el extracto del hermano "
+                                                             "no es prosa nueva (#344/#407)")
+    assert hermano.name not in out
+    assert "salteada(s) por estructura" in out, "y lo exento se declara, no desaparece"

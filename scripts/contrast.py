@@ -541,11 +541,29 @@ def preflight(ref: str = "HEAD") -> int:
 
     ⚠ **What it does NOT promise**, and it is the larger half: the 7 «condition that falls off while
     transcribing» of the same measurement are **not decidable without reading the source**, so they
-    stay in blind verification. This does not loosen it.
+    stay in blind verification. This does not loosen it. ⛔ Nor does it catch the **re-typed quote**
+    («omit*s*» for «omit*ting*»): that diverges INSIDE a word and the guard of #333 only accuses on
+    a word boundary, on purpose, so as not to catch `pdftotext` breaks. For that class the detector
+    cannot be `contrast`: it is **not re-typing** (#322). Measured net gain: **2**.
 
     The exit code follows the rule already in force (#323): only POSITIVE evidence of alteration
     blocks; the three categories are backlog, which is what a pre-flight is for."""
-    diff = added_lines(ref)
+    todo = added_lines(ref)
+    # ⛔ #490 (validación en la instancia) — el alcance es la PROSA DE NOTA, no «todo `.md` bajo
+    # `vault/wiki/`». Dos exenciones ESTRUCTURALES, de la misma forma que `## Huecos` (D-34) y el
+    # blockquote (#387), y del mismo tamaño: medido replayando los cuatro commits de una corrección
+    # real, **130 de 150** líneas caían fuera de la prosa —122 en el hermano, 8 en la bitácora— y
+    # la precisión de la categoría pasaba de 2/20 a 2/150, que es la definición de la categoría que
+    # se deja de mirar.
+    #   · el hermano `.verif.md` **no lleva prosa nueva**: sus filas son el EXTRACTO de afirmaciones
+    #     que ya están en la nota, y el re-anclaje (#407) las reescribe TODAS en cada ronda — así
+    #     que cada ronda inundaba esto con texto que nadie escribió, y contado dos veces. Un hermano
+    #     no es una nota (#344), y `cfg.note_paths` lo saca de todo enumerador por eso mismo.
+    #   · `log.md` es la bitácora: ahí una negativa es narración de la operación, no una afirmación
+    #     de la bóveda (#391 la trata aparte por lo mismo).
+    diff = {f: v for f, v in todo.items()
+            if not cfg.is_verif_sidecar(f) and f != cfg.LOG}
+    n_exentas = sum(len(v) for f, v in todo.items() if f not in diff)
     if not diff:
         cfg.print_seguro(f"⛔ no evaluado: el diff contra `{ref}` no agrega ni una línea bajo "
                          f"`vault/wiki/` — no hay corrección que mirar (no es un verde)")
@@ -597,7 +615,10 @@ def preflight(ref: str = "HEAD") -> int:
             cfg.print_seguro(f"  {fmt(x)}")
     n_lineas = sum(len(v) for v in diff.values())
     cfg.print_seguro(f"\n> sobre {n_lineas} línea(s) agregada(s) en {len(diff)} nota(s), contra "
-                     f"`{ref}`")
+                     f"`{ref}`"
+                     + (f" · {n_exentas} salteada(s) por estructura: el hermano `.verif.md` "
+                        f"(extracto re-anclado, no prosa nueva) y `log.md` (bitácora)"
+                        if n_exentas else ""))
     cfg.print_seguro("  ⚠ Lo que ESTE paso NO mira: la condición o el localizador que se cae al "
                      "transcribir (7 de los 14 defectos medidos). No son decidibles sin abrir la "
                      "fuente y siguen donde estaban: en la verificación a ciegas (#203/#282).")
