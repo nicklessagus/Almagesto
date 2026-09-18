@@ -1230,3 +1230,72 @@ def test_traceability_pairs_IGNORA_la_marca_huerfana_en_vez_de_reventar(monkeypa
     assert [inv for inv, _, _, _ in pares] == ["INV-01"], (
         "una marca que el contrato no declara no tiene atribución que auditar — y buscarle la fila "
         "es un KeyError")
+
+
+# ── #491 · `--trazabilidad --diff`: el paso de TANDA de la auditoría de atribución ──────────────
+
+def test_491_los_invariantes_del_diff_se_eligen_por_LINEA_no_por_ARCHIVO(monkeypatch):
+    """#491 — una marca vive en UNA línea, y `lib_config.py` sola lleva marcas de ~120 invariantes:
+    acotando por archivo, tocar ese módulo auditaría el mapa entero (120 corridas de pytest) y el
+    paso barato dejaría de correrse, que es como un gate se vuelve decorativo."""
+    from types import SimpleNamespace as NS
+    import trace_invariants as ti
+    monkeypatch.setattr(mutar, "archivos_del_diff",
+                        lambda alcance=None: [mutar.RAIZ / "scripts" / "lib_config.py"])
+    monkeypatch.setattr(mutar, "changed_lines", lambda rel: {10})
+    monkeypatch.setattr(ti, "collect_marks", lambda root: [
+        NS(inv="INV-01", kind="impl", path="scripts/lib_config.py", line=10, symbol="f"),
+        NS(inv="INV-99", kind="impl", path="scripts/lib_config.py", line=4000, symbol="g"),
+        NS(inv="INV-77", kind="test", path="tests/test_otro.py", line=10, symbol="test_x"),
+    ])
+    assert mutar.invariants_in_diff() == {"INV-01"}, "sólo la marca cuya LÍNEA toca el diff"
+
+
+def test_491_un_diff_que_no_toca_marcas_NO_es_un_verde(monkeypatch, capsys):
+    """D-43 otra vez: «el diff no toca ninguna marca» no es «las marcas están bien». Sin la guarda,
+    el modo filtraría a cero pares, imprimiría «0 con atribución FALSA» y devolvería 0 — el falso
+    limpio adentro del detector de falsos limpios."""
+    from types import SimpleNamespace as NS
+    monkeypatch.setattr(mutar, "_traceability_pairs",
+                        lambda: [("INV-01", mutar.RAIZ / "scripts" / "x.py", "f", ["t::t"])])
+    monkeypatch.setattr(mutar, "invariants_in_diff", lambda: set())
+    monkeypatch.setattr(mutar, "_copia_del_repo",
+                        lambda d: pytest.fail("copió el repo para auditar cero filas"))
+
+    assert mutar._trazabilidad(NS(archivos=[], solo="", diff=True)) == 2
+    assert "no evaluado" in capsys.readouterr().out
+
+
+def test_491_el_alcance_del_diff_es_UNA_definicion_y_suma_tests(monkeypatch):
+    """El alcance sale de `archivos_del_diff` —la misma función que usa `--diff` de la mutación, con
+    el archivo untracked adentro, que es justo cuando se escriben marcas— ensanchada a `tests/`,
+    porque la otra mitad de cada marca vive ahí (media corrección de #489 fue mover marcas de test).
+    Re-implementarlo acá serían dos definiciones de «lo que esta tanda tocó»."""
+    vistos = {}
+    monkeypatch.setattr(mutar, "archivos_del_diff",
+                        lambda alcance=None: vistos.setdefault("alcance", alcance) and [] or [])
+    monkeypatch.setattr(mutar, "changed_lines", lambda rel: set())
+    mutar.invariants_in_diff()
+    assert vistos["alcance"] == ("scripts", "tests")
+
+
+def test_491_changed_lines_lee_los_HUNKS_de_git_y_el_untracked_cuenta_entero(tmp_path, monkeypatch):
+    """La red 4 sobre la función nueva: los otros tests de #491 la doblan, así que **nadie la
+    ejecutaba** — y es la que parsea `@@ -a,b +c,d @@`, donde un off-by-one deja la marca nueva
+    fuera del alcance y el paso de tanda sale verde sin auditarla.
+
+    Repo de juguete real: un archivo commiteado con una línea cambiada, y otro untracked."""
+    import subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    for k, v in (("user.email", "t@t"), ("user.name", "t")):
+        subprocess.run(["git", "-C", str(tmp_path), "config", k, v], check=True)
+    f = tmp_path / "a.py"
+    f.write_text("uno\ndos\ntres\ncuatro\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "a.py"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "x"], check=True)
+    f.write_text("uno\nDOS\ntres\ncuatro\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("nuevo\n", encoding="utf-8")
+    monkeypatch.setattr(mutar, "RAIZ", tmp_path)
+
+    assert mutar.changed_lines("a.py") == {2}, "sólo la línea que cambió, 1-based"
+    assert 1 in mutar.changed_lines("b.py"), "el untracked no tiene contra qué diffear: entero"

@@ -69,6 +69,16 @@ no verde. Detalle y ratchets en `tests/README.md`; el resumen operativo:
      `tests/test_<módulo>.py`, sólo los sobrevivientes pagan la suite; `--todo` ≈ 32 min, #345).
      **Cadencia: a pedido, y recomendado al cerrar una tanda**, con el árbol **quieto** (#199: copia
      el repo al arrancar).
+   - **Atribución del mapa** (`python tools/mutar.py --trazabilidad --diff`, #491) — **es un paso
+     al escribir o mover una marca `@inv`**: audita sólo los invariantes cuyas marcas toca el diff
+     (por **línea**, no por archivo: `lib_config.py` sola lleva marcas de ~120, y por archivo el
+     paso costaría 120 corridas en vez de segundos). Vacía el símbolo marcado y corre **sólo** su
+     test marcado; si el test pasa igual, la fila del mapa afirma una cobertura que no existe.
+     Un diff que no toca marcas sale **no evaluado** (D-43), nunca verde. El barrido completo
+     (`--trazabilidad` sin flags, ~20 min sobre las 223 filas) sigue siendo cadencia de cierre —y
+     hasta #491 era la única: las 7 atribuciones falsas de #489 aparecieron **14 días después**,
+     todas juntas. ⚠ Detecta la marca **nueva o movida**; la vieja que se vuelve falsa porque
+     alguien reescribió el test que la sostenía la sigue viendo sólo el barrido.
 2. **Schema compartido** — si N módulos prometen la misma forma, se prueba **una vez parametrizada**
    (`tests/test_backends_schema.py`), no con prosa en N docstrings.
 3. **Doble vs real** — un doble de test no se escribe a ojo: o deriva de la función real, o hay un

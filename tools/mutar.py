@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import shutil
 import subprocess
 import sys
@@ -248,7 +249,7 @@ def mutar_archivo(archivo: Path, copia_raiz: Path, verbose=True, two_stage: bool
     return sobreviven
 
 
-def archivos_del_diff() -> list[Path]:
+def archivos_del_diff(alcance=None) -> list[Path]:
     """Lo que cambió vs HEAD, **incluido lo que todavía no está trackeado**.
 
     `git diff --name-only HEAD` no lista untracked, así que un archivo recién creado en `scripts/`
@@ -268,7 +269,10 @@ def archivos_del_diff() -> list[Path]:
         salida += r.stdout.split()
     vistos, archivos = set(), []
     for f in salida:                                  # `git add` de un archivo nuevo lo pone en los dos
-        en_alcance = any(f.startswith(f"{d}/") for d in ALCANCE)
+        # #491 — el alcance es un parámetro con el default de siempre: la auditoría de atribución
+        # necesita `tests/` (ahí vive la mitad de cada marca) y NO puede tener su propia idea de
+        # «lo que esta tanda tocó» — dos definiciones y una de las dos no ve el archivo untracked.
+        en_alcance = any(f.startswith(f"{d}/") for d in (alcance or ALCANCE))
         if not (en_alcance and f.endswith(".py")) or f in vistos:
             continue
         vistos.add(f)
@@ -602,6 +606,47 @@ def _guards(args) -> int:
     return 0
 
 
+_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def changed_lines(rel: str) -> set:
+    """Lines ADDED or touched by the diff in `rel` (relative to the root), 1-based (#491).
+
+    An untracked file has nothing to diff against, so it counts whole: `git diff` does not list it,
+    and the caller gets it from `archivos_del_diff`, which does include it."""
+    r = subprocess.run(["git", "diff", "-U0", "HEAD", "--", rel],
+                       cwd=RAIZ, capture_output=True, text=True)
+    if not r.stdout.strip():
+        return set(range(1, len((RAIZ / rel).read_text(encoding="utf-8").split("\n")) + 2))
+    out = set()
+    for ln in r.stdout.split("\n"):
+        if (m := _HUNK_RE.match(ln)):
+            ini, n = int(m.group(1)), int(m.group(2) or 1)
+            out |= set(range(ini, ini + max(n, 1)))
+    return out
+
+
+def invariants_in_diff() -> set:
+    """The invariants whose `@inv` marks THIS diff touches, in `scripts/` and in `tests/` (#491).
+
+    ⛔ **Line by line, not file by file.** A mark lives on one line, and `lib_config.py` alone
+    carries marks for ~120 invariants: scoping by FILE would audit the whole map every time anybody
+    touches it — 120 pytest runs instead of the seconds this step exists to cost, which is how a
+    cheap gate stops being run at all.
+
+    The file scope comes from `archivos_del_diff` —ONE definition of «what this tanda touched», with
+    the untracked file included, which is exactly when marks get written— widened to `tests/`,
+    because a mark lives on BOTH sides and moving the test one is half the fix of #489.
+
+    Returns ids, not files: what gets audited is the pair, and one invariant is marked in several
+    files."""
+    import trace_invariants as ti
+    tocados = {f.relative_to(RAIZ).as_posix() for f in archivos_del_diff(("scripts", "tests"))}
+    lineas = {rel: changed_lines(rel) for rel in tocados}
+    return {m.inv for m in ti.collect_marks(RAIZ)
+            if m.path in tocados and m.line in lineas[m.path]}
+
+
 def _traceability_pairs() -> list[tuple[str, Path, str, list[str]]]:
     """`(inv, impl file, impl symbol, [marked tests])` for every invariant marked in BOTH trees.
 
@@ -688,6 +733,20 @@ def _trazabilidad(args) -> int:
         print("⛔ no evaluado: ningún invariante tiene marca de implementación Y de test")
         return 2
     solo = {x.strip() for x in args.solo.split(",") if x.strip()}
+    # #491 — el paso de TANDA, hermano de `--dirigida` en la red 1: auditar los invariantes cuyas
+    # marcas toca ESTE diff, en segundos, al escribirlas. Hasta acá la única cadencia era el barrido
+    # de ~20 min sobre las 223 filas, o sea el momento en que nadie quiere abrir un frente: medido,
+    # 7 atribuciones falsas aparecieron 14 días después, todas juntas (#489).
+    if getattr(args, "diff", False):
+        tocados = invariants_in_diff()
+        if not tocados:
+            # ⛔ D-43 — «el diff no toca marcas» NO es «las marcas están bien»: no se auditó nada.
+            print("⛔ no evaluado: el diff no toca ninguna marca `@inv` en scripts/ ni en tests/ "
+                  "— no hay atribución que auditar (no es un verde)")
+            return 2
+        solo = solo & tocados if solo else tocados
+        print(f"· `--diff`: {len(tocados)} invariante(s) con marcas tocadas — "
+              f"{', '.join(sorted(tocados))}")
     if solo:
         filas, retirados = _contract_rows()
         fuera = unmarked_reasons(solo, filas, retirados, {p[0] for p in pares})
