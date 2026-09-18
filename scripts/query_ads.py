@@ -1979,7 +1979,11 @@ def main() -> int:
     # inundan el apéndice "Excluidos" de make_notes) — son juicio pendiente. Ver triage.py.
     # `truncated_glyph` (#43) es la marca HERMANA de `truncated`, pero del superset del rescate por
     # glifo: ahí el corte pasa antes del filtro, así que la cola puede esconder papers del sujeto.
+    # #487 — el archivo DICE si esta corrida es el universo del sujeto. Con `--extra-only` no lo
+    # es (sólo los bibcodes de `extra_core`), y sin decirlo el `make_notes` siguiente re-estampaba
+    # el apéndice de excluidos VACÍO sobre el snapshot de una corrida completa.
     payload = {**head, "n_total": len(recs), "n_relevant": len(rel),
+               cfg.ADS_PARCIAL_KEY: (cfg.ADS_PARCIAL_EXTRA_ONLY if args.extra_only else None),
                "truncated": truncated,
                "truncated_glyph": gmeta.get("truncated_glyph") or None,
                "records": recs,

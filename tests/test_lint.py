@@ -5399,6 +5399,32 @@ def test_una_tabla_bien_formada_no_es_hallazgo(toy_vault, capsys):
     assert "nota" not in _seccion(rep, "fila de tabla que NO renderiza"), rep
 
 
+def test_486_la_tabla_PARTIDA_por_una_linea_en_blanco_bloquea(toy_vault, capsys):
+    """#486 — una tabla es una tabla por su ENCABEZADO: las filas que quedan del otro lado de una
+    línea en blanco no tienen contra qué compararse, así que pasaban limpias por TODOS los chequeos
+    de tabla (#227 compara contra un encabezado que ahí no existe) y el lector ve un párrafo con
+    `|` literales. Medido en una bóveda real: 17 filas en 2 notas de 287 con `lint` en rc 0, y dos
+    condiciones `acota` dadas por RESUELTAS apuntando a filas que no se leen."""
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\n| A | B |\n|---|---|\n| uno | dos |\n\n| tres | cuatro |\n| cinco | seis |\n")
+    link_from_log(toy_vault, "nota")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "fila de tabla que NO renderiza")
+    assert "nota" in sec and "2 fila(s)" in sec and "línea en blanco" in sec, rep
+    assert rc == 1, "bloqueante: es contenido que el lector no ve, como #227"
+
+
+def test_486_una_tabla_entera_y_una_en_un_fence_no_son_hallazgo(toy_vault, capsys):
+    """El simétrico: la tabla bien formada no dispara, y una tabla DENTRO de un bloque de código es
+    un ejemplo, no un artefacto — reportarla sería pedir que se arregle lo que no se renderiza a
+    propósito."""
+    mk_note(cfg.CONCEPTS / "methods", "nota", {"tags": ["concept"], "name": "nota"},
+            "# nota\n\n| A | B |\n|---|---|\n| uno | dos |\n\n```\n| x | y |\n| 1 | 2 |\n```\n")
+    link_from_log(toy_vault, "nota")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "nota" not in _seccion(rep, "fila de tabla que NO renderiza"), rep
+
+
 def test_backtick_sin_cerrar_es_backlog(toy_vault, capsys):
     """#227 — un `` ` `` abierto se traga el texto que sigue. Medido: uno abierto en la línea 104
     cuyo siguiente backtick estaba en la **372**."""

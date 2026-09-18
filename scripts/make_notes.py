@@ -2234,6 +2234,8 @@ def excluded_table(slug: str) -> str:
         data = json.loads(adsfile.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return ""                             # JSON truncado/corrupto: sin snapshot confiable
+    if cfg.ads_parcial(data):
+        return ""                             # #487: una corrida parcial no es el universo
     records = data.get("records") if isinstance(data, dict) else None
     if not isinstance(records, list):
         return ""
@@ -2321,6 +2323,16 @@ def stamp_excluded(slug: str, dest) -> bool:
             f"  ⚠ {dest.name}: `build/{slug}/ads.json` no se puede leer "
             f"({type(exc).__name__}) → NO se re-estampa «Excluidos por el filtro» (dejarlo vacío "
             f"borraría el snapshot del ingest); re-corré `python scripts/query_ads.py {slug}`",
+            file=sys.stderr)
+        return False
+    # #487 — una corrida PARCIAL no borra el snapshot de una completa. Sin esto, `--extra-only`
+    # dejaba el apéndice vacío y la guarda de #481 no avisaba (25 == 25: la corrida parcial
+    # coincide consigo misma). Se avisa y se deja la sección como está.
+    if (_motivo := cfg.ads_parcial(json.loads(adsfile.read_text(encoding="utf-8")))):
+        cfg.print_seguro(
+            f"  ⚠ {dest.name}: `build/{slug}/ads.json` es de una corrida PARCIAL ({_motivo}) → NO "
+            f"se re-estampa «Excluidos por el filtro» (dejarlo vacío borraría el snapshot del "
+            f"ingest completo); re-corré `python scripts/query_ads.py {slug}` sin `--extra-only`",
             file=sys.stderr)
         return False
     new = excluded_table(slug)                  # "" si la corrida no dejó excluidos

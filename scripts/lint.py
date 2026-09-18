@@ -4009,6 +4009,17 @@ def check_table_shape(stem: str, body_full: str, offset: int) -> tuple:
                 (stem, f"L{_ln + offset}: fila de tabla con {_got} celda(s) y su encabezado "
                        f"tiene {_want} → las de más NO se renderizan (¿dos filas empalmadas en "
                        f"una línea?)"))
+        # #486 — la tabla PARTIDA por una línea en blanco: las filas de abajo quedan sin
+        # encabezado, así que dejan de renderizar y **ningún chequeo de tabla las ve** (todos
+        # comparan contra un encabezado que ahí no existe). Misma familia que #227 y mismo efecto
+        # —contenido citado y verificado que el lector no ve—, otra salida: borrar la línea en
+        # blanco. Medido: 17 filas en 2 notas de 287, con el lint en rc 0, y dos condiciones
+        # `acota` dadas por resueltas apuntando a filas ilegibles.
+        for _ln, _n in cfg.split_table_rows(body_full):
+            forma_rota.append(
+                (stem, f"L{_ln + offset}: {_n} fila(s) de tabla SIN encabezado —una línea en "
+                       f"blanco partió la tabla— así que NO renderizan: el lector ve un párrafo "
+                       f"con `|` literales. Salida: borrar la línea en blanco (#486)"))
         # AUD-227 — las SECCIONES ESTAMPADAS quedan fuera del chequeo de marcadores, mismo
         # criterio que el detector de fuga (#214): `## Abstract` es copia **verbatim** de
         # catálogo, y ADS devuelve comillas tipo LaTeX (``cleaning'`` con un solo backtick) que

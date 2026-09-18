@@ -120,6 +120,23 @@ Deben quedar en **0**:
 - **Fila de tabla con más celdas que su encabezado (#227)**: GFM descarta el excedente, así que el
   contenido queda **invisible para el lector** mientras toda herramienta que parsea el archivo lo
   sigue viendo — y puede estar certificado como par verificado.
+  ⛔ **Y la tabla PARTIDA por una línea en blanco (#486), misma categoría porque es el mismo efecto
+  y otra salida** (borrar la línea, no escapar un `|`): *una tabla es una tabla por su ENCABEZADO*,
+  así que las filas que quedan del otro lado no tienen contra qué compararse y **pasaban limpias
+  por todos los chequeos de tabla** —incluido el de arriba, que compara contra un encabezado que
+  ahí no existe—; `split_blocks` las sigue clasificando `kind='fila'`, o sea que el ancla,
+  `verif_rows` y el bloqueante de #227 las daban por buenas. Medido en una bóveda real: **17 filas
+  en 2 notas de 287** con `lint` en rc 0, y en una de ellas **dos condiciones `acota` figuraban
+  como RESUELTAS apuntando a filas que el lector no puede leer**. El criterio es el separador
+  `|---|` bajo la primera fila de cada corrida, y un bloque ``` queda afuera (ahí una tabla es un
+  ejemplo, no un artefacto).
+- **Snapshot del apéndice «Excluidos por el filtro»**: lo re-estampa `make_notes` desde
+  `build/<slug>/ads.json`, y ese archivo **declara si la corrida fue parcial** (#487). Con
+  `--extra-only` lo es —sólo los bibcodes de `extra_core`—, así que el estampador **avisa y no
+  toca la sección**: una corrida parcial que deja el apéndice vacío borra el único canal interno
+  para cazar un falso negativo de la lente. ⚠ La guarda de #481 no cubre este caso y no es un bug
+  suyo: compara el `n_total` del registro contra los registros del archivo, y acá **los dos son el
+  mismo número**.
 - **Registro que no se puede leer** (YAML roto o forma inválida — AUD-131/INV-139): **revierte la
   curación entera** (los `--drop` dejan de aplicarse, los `--drop-core` vuelven a ser core, el
   triage re-propone sin el motivo). `load_decisiones` **rehúsa operar** (doctrina de la lente

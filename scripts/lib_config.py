@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.283.0"
+ALMAGESTO_VERSION = "1.287.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -347,6 +347,76 @@ def missing_schema_fields(tipo: str, fm: dict) -> list:
     Presence, not value: see the comment on `SCHEMA_NOTA`. An unknown type returns `[]` — there is
     no schema to measure it against, and inventing one would be worse than not checking."""
     return [k for k in SCHEMA_NOTA.get(tipo, ()) if k not in fm]
+
+
+_TABLE_SEP_RE = re.compile(r"^\s*\|[\s:\-|]+\|\s*$")
+
+
+def split_table_rows(body: str) -> list:
+    """Runs of `|`-rows with NO separator line under their first one: a SPLIT table (#486).
+    `[(line_no, n_rows)]`, 1-based over the whole file (the `grep -n` convention, #29).
+
+    ⛔ A table is a table because of its HEADER. A blank line in the middle leaves the rows below
+    without one, so they stop rendering: the reader sees a paragraph with literal pipes. And no
+    layer saw it, because every table check compares each row **against its header** (#227) and
+    there is none — `split_blocks` still labels them `kind='fila'`, so the anchor, `verif_rows` and
+    the blocking check of #227 all take them for good rows. Measured on a real vault: **17 rows in
+    2 notes of 287**, with `lint` at rc 0 — and in one of them **two `acota` conditions were marked
+    RESOLVED pointing at rows the reader cannot read**.
+
+    Fenced blocks are skipped: a pipe table inside ``` is an example, not an artefact.
+
+    @inv INV-149"""
+    out, fenced, i = [], False, 0
+    lineas = body.split("\n")
+    while i < len(lineas):
+        ln = lineas[i].strip()
+        if ln.startswith("```"):
+            fenced = not fenced
+            i += 1
+            continue
+        if fenced or not ln.startswith("|"):
+            i += 1
+            continue
+        j = i
+        while j < len(lineas) and lineas[j].strip().startswith("|"):
+            j += 1
+        bloque = lineas[i:j]
+        # ⛔ Una corrida de UNA sola fila también es huérfana: es el caso de la fila suelta que
+        # quedó del otro lado de la línea en blanco, no un encabezado al que le falta el separador.
+        if not (len(bloque) > 1 and _TABLE_SEP_RE.match(bloque[1].strip())):
+            out.append((i + 1, len(bloque)))
+        i = j
+    return out
+
+
+#: #487 — el motivo que `query_ads --extra-only` escribe en el `ads.json`. Vive acá, al lado del
+#: predicado que lo lee, para que la clave y su texto no queden en dos archivos: el productor la
+#: escribiría igual con otro nombre y el lector se volvería mudo sin que nada fallara.
+ADS_PARCIAL_KEY = "parcial"
+ADS_PARCIAL_EXTRA_ONLY = ("`--extra-only`: sólo los bibcodes de `extra_core`, NO el universo "
+                          "del tema")
+
+
+def ads_parcial(data) -> str:
+    """Why this `ads.json` is NOT the subject's universe, or `""` (#487).
+
+    ⛔ A PARTIAL run cannot erase the snapshot of a complete one. `--extra-only` re-fetches only the
+    bibcodes of `extra_core`, so its `ads.json` is legitimate and its universe is **not** the
+    theme's: the next `make_notes` re-stamped `## Excluidos por el filtro` **empty** and the note
+    lost the only in-note channel for catching a false negative of the lens. Measured: 963 records
+    / 52 core → 25 / 25, empty appendix, `lint` rc 0 before and after.
+
+    The guard of #481 cannot see it, and that is not a bug of its own: it compares
+    `busquedas[-1].n_total` against the file's records, i.e. it catches *«this `ads.json` is from
+    ANOTHER run»*. Here both numbers are the same —the partial run agrees with itself— so what is
+    missing is **declared** in the file instead of inferred from a count.
+
+    One predicate, two readers (`excluded_table` does not publish a partial snapshot as if it were
+    the universe; `stamp_excluded` does not erase the one already there)."""
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get(ADS_PARCIAL_KEY) or "").strip()
 
 
 def table_shape_issues(body: str) -> list:

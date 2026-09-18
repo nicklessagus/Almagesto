@@ -3859,3 +3859,24 @@ def test_485_la_cobertura_se_compara_contra_el_ANIO_y_no_contra_el_volumen():
     # el volumen del bibstem NO decide: JMLR 4 es de 2003, y lo que manda es el año declarado
     assert cfg.bibtex_venue("JMLR 4", 2019)[0] == "publica"
     assert all(len(v) == 4 for v in cfg.BIBTEX_VENUES), "(nombre, regex, dónde, desde_anio)"
+
+
+def test_486_split_table_rows_pide_el_SEPARADOR_bajo_la_primera_fila():
+    """#486 — el criterio es el separador `|---|`, no «parece una tabla»: sin él, esas filas no
+    tienen encabezado y no renderizan. Una corrida de UNA sola fila también es huérfana."""
+    entera = "| A | B |\n|---|---|\n| 1 | 2 |\n"
+    assert cfg.split_table_rows(entera) == []
+    assert cfg.split_table_rows(entera + "\n| 3 | 4 |\n| 5 | 6 |\n") == [(5, 2)]
+    assert cfg.split_table_rows(entera + "\n| sola |\n") == [(5, 1)]
+    # alineación con `:` en el separador es una tabla válida
+    assert cfg.split_table_rows("| A | B |\n|:--|--:|\n| 1 | 2 |\n") == []
+    # dentro de un fence es un ejemplo
+    assert cfg.split_table_rows("```\n| x | y |\n| 1 | 2 |\n```\n") == []
+
+
+def test_487_ads_parcial_es_UN_predicado_y_devuelve_el_motivo():
+    """#487 — lo declara el archivo, no se infiere de un conteo: la corrida parcial coincide
+    consigo misma, que es por lo que la guarda de #481 no la ve."""
+    assert cfg.ads_parcial({"parcial": "`--extra-only`: sólo extra_core"}).startswith("`--extra")
+    assert cfg.ads_parcial({"parcial": None}) == "" and cfg.ads_parcial({}) == ""
+    assert cfg.ads_parcial(None) == "" and cfg.ads_parcial([1, 2]) == ""

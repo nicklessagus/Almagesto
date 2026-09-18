@@ -288,6 +288,33 @@ def test_ads_json_corrupto_no_borra_el_apendice_de_excluidos(toy_vault):
     assert nota.read_text(encoding="utf-8") == apendice        # no se tocó nada
 
 
+def test_487_una_corrida_PARCIAL_no_borra_el_apendice_ni_lo_publica(toy_vault, capsys):
+    """#487 — `--extra-only` re-trae sólo los bibcodes de `extra_core`: su `ads.json` es legítimo y
+    su universo NO es el del tema. Sin declararlo, el `make_notes` siguiente re-estampaba el
+    apéndice VACÍO y la ficha perdía el snapshot de lo que la lente dejó afuera —el único canal
+    interno para cazar un falso negativo—. Medido: 963 registros / 52 core → 25 / 25, apéndice
+    vacío, `lint` rc 0 antes y después.
+
+    ⛔ La guarda de #481 no puede verlo y no es un bug suyo: compara el `n_total` del registro
+    contra los registros del archivo, y en una corrida parcial **los dos son el mismo número**."""
+    nota = toy_vault.STARS / "test_star.md"
+    toy_vault.STARS.mkdir(parents=True, exist_ok=True)
+    apendice = ("---\ntags: [star]\n---\n# Test Star\n\nprosa\n\n"
+                "## Excluidos por el filtro\n\n| Bibcode | Motivo |\n|---|---|\n| 2019X | ruido |\n")
+    nota.write_text(apendice, encoding="utf-8")
+    build = cfg.ROOT / "build" / "test_star"
+    build.mkdir(parents=True, exist_ok=True)
+    (build / "ads.json").write_text(
+        '{"parcial": "`--extra-only`: s\u00f3lo los bibcodes de `extra_core`", '
+        '"records": [{"bibcode": "2020Y", "relevant": true}]}', encoding="utf-8")
+
+    assert mn.stamp_excluded("test_star", nota) is False
+    assert nota.read_text(encoding="utf-8") == apendice, "no borra el snapshot de la completa"
+    assert "PARCIAL" in capsys.readouterr().err, "y lo dice: un borrado que no pasó se avisa"
+    # y tampoco lo PUBLICA como si fuera el universo, en la nota que nace de esa corrida
+    assert mn.excluded_table("test_star") == ""
+
+
 def test_excluded_table_no_voltea_la_generacion_de_notas(toy_vault):
     """`excluded_table` se llama desde `write_star_note`/`write_concept_note`: si revienta, la
     cadena muere DESPUÉS de gastar la red. Un `ads.json` truncado por un Ctrl-C en `query_ads` es
