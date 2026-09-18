@@ -1095,6 +1095,25 @@ def test_490_un_diff_SIN_lineas_agregadas_no_es_un_verde(toy_vault, monkeypatch,
     assert "no evaluado" in capsys.readouterr().out
 
 
+def test_490_el_motivo_del_NO_EVALUADO_distingue_las_dos_causas(toy_vault, monkeypatch, capsys):
+    """El veredicto es el mismo y el motivo no: «no agregaste nada» y «lo que agregaste lo sacó el
+    filtro» piden cosas distintas, y la segunda es información (la corrección tocó sólo el hermano y
+    la bitácora). Decir que el diff no agregó ni una línea cuando agregó 254 es una afirmación falsa
+    sobre el disco, aunque el rc esté bien."""
+    nota = _nota_323("ica", "prosa\n")
+    hermano = cfg.verif_sidecar(nota)
+    hermano.write_text("| 1 | «x» | [[2013Voss]] |\n", encoding="utf-8")
+    monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {hermano: {1: "| 1 | «x» |", 2: ""}})
+    assert ct.preflight() == 2
+    out = capsys.readouterr().out
+    assert "agrega 2 línea(s)" in out and "SALTEA" in out and "no es un verde" in out
+    assert "no agrega ni una línea" not in out
+
+    monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {})
+    assert ct.preflight() == 2
+    assert "no agrega ni una línea" in capsys.readouterr().out
+
+
 def test_490_added_lines_lee_los_HUNKS_y_el_untracked_cuenta_entero(tmp_path, monkeypatch):
     """La red 4 sobre el parser: los otros tests lo doblan. Repo de juguete real, porque un
     off-by-one acá deja la línea corregida fuera del alcance y el paso sale verde sin mirarla."""

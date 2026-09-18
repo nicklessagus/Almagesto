@@ -565,8 +565,18 @@ def preflight(ref: str = "HEAD") -> int:
             if not cfg.is_verif_sidecar(f) and f != cfg.LOG}
     n_exentas = sum(len(v) for f, v in todo.items() if f not in diff)
     if not diff:
-        cfg.print_seguro(f"⛔ no evaluado: el diff contra `{ref}` no agrega ni una línea bajo "
-                         f"`vault/wiki/` — no hay corrección que mirar (no es un verde)")
+        # ⛔ El veredicto es el mismo (no evaluado) y el MOTIVO no: «no agregaste nada» y «lo que
+        # agregaste lo sacó el filtro» piden cosas distintas —la segunda dice que la corrección
+        # tocó sólo el hermano y la bitácora, que es información—, y el conteo ya está calculado.
+        # Un mensaje que afirma algo falso sobre el disco es el defecto que este repo persigue,
+        # aunque el rc esté bien.
+        cfg.print_seguro(
+            f"⛔ no evaluado: el diff contra `{ref}` " + (
+                f"agrega {n_exentas} línea(s) bajo `vault/wiki/` y las SALTEA todas por estructura "
+                f"(hermano `.verif.md` y `log.md`): no hay prosa de nota que mirar"
+                if n_exentas else
+                "no agrega ni una línea bajo `vault/wiki/` — no hay corrección que mirar")
+            + " (no es un verde)")
         return 2
     negativas: list = []
     roles: list = []
