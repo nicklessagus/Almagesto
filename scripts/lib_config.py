@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.293.0"
+ALMAGESTO_VERSION = "1.294.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3779,6 +3779,16 @@ SALVEDAD_TIPOS = {
     # quién habla la oración, y midió 5 hallazgos con precisión 0/5 sobre 268 notas. Estructurada,
     # el bibcode va adentro y no hay nada que adivinar.
     "pdf_leido": "documento",
+    # #497 · la CUARTA clase de artefacto sobre el que un extractor escribe salvedades: la bóveda
+    # misma (`literal` + `presente: bool`). Es la MÁS decidible de las cuatro —el archivo está a un
+    # `grep`— y era la única que ningún chequeo miraba: `verify-citations` la saltea por
+    # construcción (no lleva `[[bibcode]]`), el gate de citas también (no es una cita de la fuente)
+    # y `check_salvedad` sólo evaluaba los tres de arriba. ⛔ Y envejece por construcción, que es lo
+    # que la distingue: el extractor anota «la nota todavía publica X» PORQUE X está mal, la
+    # operación siguiente lo arregla, y la extracción es inmutable y versionada (#311) — así que la
+    # nota queda estampando para siempre una afirmación falsa SOBRE SÍ MISMA (medido: `2011Remes`
+    # afirma un bloque de pendiente y un `## Abstract` vacío que hace rato no tiene).
+    "nota_estado": "literal",
 }
 
 #: #456 · el SEGUNDO eje de `pdf_leido`, opcional: de qué documento se construyó la VISTA. No lo

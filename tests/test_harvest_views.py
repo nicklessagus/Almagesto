@@ -991,6 +991,78 @@ def test_txt_pierde_sin_cadena_no_es_verificable(toy_vault):
     assert hv.check_salvedad(BIB, {"tipo": "txt_pierde"}) == (None, "sin `cadena`: no hay qué buscar")
 
 
+def _nota_del_paper(texto: str):
+    """La nota del paper en disco — el archivo sobre el que predica una salvedad `nota_estado`."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    nota = cfg.PAPERS / f"{cfg.note_stem(BIB)}.md"
+    nota.write_text(texto, encoding="utf-8")
+    return nota
+
+
+def test_497_nota_estado_FALSA_se_rechaza_y_se_nombra(toy_vault):
+    """⛔ #497 — la CUARTA clase de salvedad: la que predica sobre la BÓVEDA. Es la más decidible de
+    todas —el archivo está a un `grep`— y era la única que no miraba nadie: `verify-citations` la
+    saltea por construcción (no lleva `[[bibcode]]`), el gate de citas también (no es una cita de la
+    fuente) y `check_salvedad` sólo evaluaba los tres tipos de PDF/`.txt`. Y envejece por
+    construcción: el extractor la anota PORQUE algo está mal, la operación siguiente lo arregla, y
+    la extracción es inmutable (#311) — medido en una bóveda real, `2011Remes` publica que su nota
+    «todavía» trae un bloque de pendiente y un `## Abstract` vacío que hace rato no tiene."""
+    _nota_del_paper("---\nbibcode: x\n---\n\n## Abstract\n\nel abstract transcripto del PDF.\n")
+    ok, det = hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "(no disponible)",
+                                      "presente": True})
+    assert ok is False and "(no disponible)" in det and "FALSA" in det, det
+
+
+def test_497_nota_estado_VERDADERA_se_publica_verificada(toy_vault):
+    """El control simétrico, para que no sea un apagador: con el literal presente en la nota la
+    salvedad es cierta y se publica `⚙ verificada`. Y las dos direcciones se chequean igual —
+    `presente: False` afirma que la nota NO lo publica, que es el mismo hecho decidible."""
+    _nota_del_paper("---\nbibcode: x\n---\n\n## Abstract\n\n_(no disponible)_\n")
+    ok, det = hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "(no disponible)",
+                                      "presente": True})
+    assert ok is True and "SÍ publica" in det, det
+    assert hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "⏳ Fuente pendiente",
+                                   "presente": False})[0] is True
+
+
+def test_497_la_salvedad_no_se_aprueba_a_si_misma(toy_vault):
+    """⛔ El bloque de salvedades se estampa DENTRO de la nota de la que habla, así que grepear el
+    archivo entero encontraría el literal en el bullet de la propia salvedad —o en la `evidencia`
+    que lo cita— y toda afirmación saldría verdadera: el chequeo se aprobaría solo. El recorte es
+    estructural (las marcas de `SALVEDAD_MARCAS_LEIDAS`), no una adivinanza sobre la prosa."""
+    _nota_del_paper(
+        "---\nbibcode: x\n---\n\n## Abstract\n\nel abstract transcripto.\n\n"
+        "## Vista — tema\n\n" + cfg.SALVEDAD_MARCAS[0] + "\n\n"
+        "- ⚙ verificada: la nota SÍ publica `(no disponible)` — lo vi en el `## Abstract`\n")
+    ok, det = hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "(no disponible)",
+                                      "presente": True})
+    assert ok is False, det
+    # ⛔ y el recorte es SÓLO el bloque: un bullet de la nota que está FUERA de él sigue contando
+    # —si no, el chequeo pasaría de aprobarse solo a no ver media nota, y el literal de un `##
+    # Huecos` se leería como ausente—, y el bloque termina donde termina, no en el fin del archivo
+    _nota_del_paper(
+        "---\nbibcode: x\n---\n\n## Abstract\n\nel abstract transcripto.\n\n"
+        "## Vista — tema\n\n" + cfg.SALVEDAD_MARCAS[0] + "\n\n"
+        "- ⚙ verificada: la nota SÍ publica `(no disponible)` — lo vi en el `## Abstract`\n\n"
+        "## Huecos\n\n- falta el abstract: la sección dice (no disponible)\n")
+    assert hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "(no disponible)",
+                                   "presente": True})[0] is True
+
+
+def test_497_nota_estado_sin_literal_o_sin_presente_NO_es_verificable(toy_vault):
+    """D-43 — el chequeo que no pudo correr sale *no evaluable con su motivo*, nunca «verificada».
+    `presente` es obligatorio y booleano: sin él la salvedad no dice QUÉ afirma sobre la nota, y
+    deducirlo de la prosa es lo que #452 midió con precisión 0/5."""
+    _nota_del_paper("---\nbibcode: x\n---\n\ncuerpo\n")
+    assert hv.check_salvedad(BIB, {"tipo": "nota_estado", "presente": True})[0] is None
+    ok, det = hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "x"})
+    assert ok is None and "`presente`" in det, det
+    # y sin nota en disco tampoco se resuelve en contra
+    (cfg.PAPERS / f"{cfg.note_stem(BIB)}.md").unlink()
+    ok, det = hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "x", "presente": True})
+    assert ok is None and "no hay nota en disco" in det, det
+
+
 def test_pdf_paginas_se_chequea_contra_el_pdf(toy_vault, monkeypatch):
     """#213 — el segundo tipo del vocabulario: «el PDF tiene N páginas» lo decide el propio PDF,
     vía `pdfinfo` (la MISMA dependencia de sistema que ya usa `pdftotext`: sin librería nueva)."""

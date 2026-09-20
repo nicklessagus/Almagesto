@@ -149,8 +149,8 @@ de la bóveda — reportalo, o el próximo consumidor tropieza con lo mismo.
 citadas?* Si la respuesta es **no → no entra al vault**, sin excepciones — ni por útil ni por obvio.
 
 **Prohibido inlinear en `vault/wiki/` (no es bibliografía):** parámetros, perillas o **dials** de un
-generador/pipeline; nombres de variables o estructura de código; reparametrizaciones y **decisiones de
-diseño** de una implementación; recetas operativas de "cómo correr" que no sean un hecho citable.
+generador/pipeline; nombres de variables o estructura de código; reparametrizaciones y **decisiones
+de diseño** de una implementación; recetas operativas de "cómo correr" que no sean un hecho citable.
 **Sí es citable (entra):** resultados publicados —**incluidos papers de simulación**: rangos
 medidos, mecanismos, signos, escalas temporales, fórmulas de la fuente. La distinción es
 **publicado-y-citable vs implementación de código**, no "simulación sí/no". **Si detectás
@@ -422,7 +422,8 @@ no sobre el paper—, así que `verify-citations` la deja afuera **por construcc
 
 - La salvedad **decidible sobre un archivo** se emite **estructurada**, con vocabulario cerrado
   (`lib_config.SALVEDAD_TIPOS`: `txt_pierde` + `cadena`, `pdf_paginas` + `n`, **`pdf_leido` +
-  `documento`** —#452, con `bibcode` opcional si habla del PDF de OTRA fuente—), y la chequea el
+  `documento`** —#452, con `bibcode` opcional si habla del PDF de OTRA fuente— y **`nota_estado` +
+  `literal` + `presente`**, la que predica sobre LA NOTA —#497—), y la chequea el
   **cosechador** con `grep` o `pdfinfo` — máquina, no LLM. La **falsa NO se publica** y el cosechador
   la grita con su archivo; ⚠ pero **no tira la extracción** (a diferencia de #207: aquello es una
   contradicción sobre *qué se abrió*). El chequeo que **no pudo correr** sale **no evaluable con su

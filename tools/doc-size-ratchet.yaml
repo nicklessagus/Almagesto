@@ -43,9 +43,9 @@
 #   - Y la red barata del hallazgo secundario: claves `ancla:` contadas contra las entradas
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
-medido_en: "2026-09-16"
+medido_en: "2026-09-20"
 techo_lineas: 1865
-techo_bytes: 152930
+techo_bytes: 153015
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -667,3 +667,24 @@ crecimientos:
       queda la convención y su escotilla, que es lo único que decide antes de escribir.
     techo_lineas: 1865
     techo_bytes: 152930
+  - fecha: "2026-09-20"
+    ancla: "#497"
+    motivo: >-
+      El CUARTO valor del vocabulario cerrado de `SALVEDAD_TIPOS` (`nota_estado` + `literal` +
+      `presente`), en la misma enumeración donde ya viven los otros tres. Es lo que un extractor
+      necesita ANTES de escribir una salvedad: si lo que va a decir es sobre LA NOTA y no sobre el
+      PDF o el `.txt`, va estructurado y un `grep` lo chequea. Sin el valor en la lista, la única
+      forma de escribirlo es la prosa, que es exactamente lo que el issue mide como el agujero:
+      ninguna capa la mira y además envejece sola, porque se anota PORQUE algo está mal y la
+      extracción es inmutable (#311).
+    sale: >-
+      Nada, y el motivo es que la suba son 85 bytes en una línea que ya existe: agregar un valor a
+      un vocabulario cerrado no tiene parte redundante que sacar. Se intentó pagarlo quitando la
+      glosa de `bibcode` opcional del `pdf_leido` de al lado y se revirtió: ese dato NO está
+      repetido en el párrafo de #452/#456 —dice que los dos ejes son `documento` y `leido`, no que
+      la salvedad puede hablar del PDF de otro bibcode—, así que sacarlo cambiaba 85 bytes por una
+      regla de schema perdida. El porqué medido (1497 salvedades en prosa, 149 sobre la nota, el
+      caso nominado que NO reproduce y el que sí) va al issue y a `docs/mediciones.md`; el detalle
+      del chequeo y su trampa de auto-aprobación, al docstring de `_check_note_state`.
+    techo_lineas: 1865
+    techo_bytes: 153015

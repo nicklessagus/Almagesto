@@ -1900,3 +1900,29 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Es el módulo donde viven la etiqueta y sus siete funciones; `lib_config` las re-exporta (AUD-306) y los consumidores las llaman por ahí."
+  - issue: 497
+    regla: >-
+      `SALVEDAD_TIPOS` enumera los ARTEFACTOS sobre los que una salvedad puede predicar algo
+      decidible, y la bóveda misma —la nota, su frontmatter, sus secciones— es uno de ellos
+      (`nota_estado`). Es la más decidible de las cuatro (el archivo está a un `grep`) y era la
+      única que no miraba ninguna capa: `verify-citations` la saltea por construcción (no lleva
+      `[[bibcode]]`), el gate de citas también (no es una cita de la fuente) y `check_salvedad`
+      sólo evaluaba las tres de PDF/`.txt`. ⛔ Y envejece por construcción, que es lo que la
+      distingue: el extractor la anota PORQUE algo está mal, la operación siguiente lo arregla y la
+      extracción es inmutable y versionada (#311), así que la nota queda estampando para siempre
+      una afirmación falsa sobre sí misma. ⛔ Estructurada y no detectada: un detector de prosa con
+      tres reglas decidibles midió 4 hallazgos con 3 falsos positivos —los tres matchearon el
+      disclaimer de capa-LLM de la propia nota—, la misma precisión que #449 (0/5) y la misma
+      conclusión que #452.
+    funcion: lib_config.SALVEDAD_TIPOS
+    patron: 'SALVEDAD_TIPOS'
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`check_salvedad` resuelve cada tipo contra el archivo del que habla, y `split_salvedades` parte las tres poblaciones de #213 con ese veredicto."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Nombra el vocabulario en el texto de la categoría que pide estructurar una salvedad en prosa; no se ramifica por tipo ni chequea ninguno (`looks_decidable` es una heurística sobre la prosa, y por eso es WARN)."
+      - modulo: scripts/proposals.py
+        estado: fuera-de-alcance
+        motivo: "Lo nombra para explicar por qué una salvedad ESTRUCTURADA no es un pedido a una persona: mira `tipo` presente o ausente, nunca cuál."

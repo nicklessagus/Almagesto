@@ -7,6 +7,52 @@
 > Regla de la casa: **lo medido y lo derivado van separados**, y una salvedad que invalida un número
 > se escribe al lado del número, no en otro lado (regla de método #5).
 
+## #497 · la cuarta clase de salvedad: la que predica sobre la BÓVEDA (2026-09-20)
+
+`SALVEDAD_TIPOS` eran tres —`txt_pierde`, `pdf_paginas`, `pdf_leido`— y las tres predican sobre el
+**PDF o el `.txt`**. Faltaba el cuarto artefacto sobre el que un extractor escribe salvedades: **la
+nota misma**. Es la **más decidible de todas** —el archivo está a un `grep`— y era la única que
+**ningún chequeo miraba**: `verify-citations` la saltea por construcción (no lleva `[[bibcode]]`),
+el gate de citas también (no es una cita de la fuente) y `check_salvedad` sólo evaluaba los tres
+estructurados. Caía en el bloque *«⚠ NO VERIFICADAS — juicio del extractor»* y ahí se quedaba.
+
+⛔ **Y envejece por construcción, que es lo que la distingue de las otras tres.** El extractor anota
+*«la nota todavía publica X»* **porque** X está mal; la operación siguiente lo arregla; y la
+extracción es **inmutable y versionada** (#311) — así que la nota sigue estampando para siempre una
+afirmación falsa **sobre sí misma**. Las otras tres describen un archivo que normalmente no cambia;
+ésta describe justo lo que se va a cambiar.
+
+| población (`Almagesto-Tesis`, re-contada al implementar) | resultado |
+|---|---|
+| 2104 salvedades | **1497 en prosa** |
+| de ésas, las que predican sobre la NOTA (`\bla nota\b`, `` `## … `` ) | **149** |
+
+⚠ **El caso nominado en el issue NO reproduce, y se dice:** `2011Remes` tiene **7** salvedades
+(índices 0–6) y **ninguna** habla del estado de la nota, así que el `salvedades[7]` que el issue
+cita no existe en el vault de hoy. El caso real de la clase que sí está es **`2012Naik`
+`salvedades[4]`** —*«la nota conserva su `_(no disponible)_` — no es un hueco de adquisición, es que
+la fuente no lo tiene»*— y hoy es **verdadera** (la nota publica ese literal y declara
+`sin_abstract_motivo`). Corrido contra la bóveda real, el chequeo nuevo la resuelve `True`, resuelve
+`False` su negación, y resuelve `False` la afirmación del issue sobre el bloque de pendiente.
+
+⚠ **Lo que motiva el fix no es el volumen sino el agujero estructural y su asimetría** — la única
+clase de salvedad sobre un artefacto que nadie chequea, siendo la más barata de chequear.
+
+**Por qué ESTRUCTURADA y no un detector, con evidencia propia.** El detector de prosa escrito para
+**medir** la población —tres reglas decidibles— devolvió **4 hallazgos y 3 falsos positivos**: los
+tres matchearon el **disclaimer de capa-LLM de la propia nota** (*«`## Abstract` (copia verbatim del
+catálogo)…»*), no una afirmación del extractor. Misma precisión que midió #449 (0/5) y misma
+conclusión que sacó #452: **emitirla estructurada, no adivinar de qué habla la oración.**
+
+**Lo que entró.** `nota_estado` + `literal` + `presente: bool`, que `check_salvedad` resuelve con un
+`grep` sobre la nota del bibcode igual que `txt_pierde` resuelve sobre el `.txt`: la **falsa no se
+publica** y el cosechador la grita con su archivo; la que no se pudo evaluar sale *no evaluable con
+su motivo* (D-43). ⛔ **Y el grep recorta el bloque de salvedades antes de mirar**: ese bloque se
+estampa **dentro de la nota de la que habla**, así que sobre el archivo entero el literal aparecería
+en el bullet de la propia salvedad —o en su `evidencia`— y **toda afirmación saldría verdadera: el
+chequeo se aprobaría solo**. El recorte es estructural (las marcas de `SALVEDAD_MARCAS_LEIDAS`), no
+una heurística sobre la prosa.
+
 ## #496 · la página impresa no siempre es un entero (2026-09-20)
 
 **Cómo apareció.** Cerrando la relectura de #494 en `Almagesto-Tesis` (285 notas, 6339

@@ -162,6 +162,50 @@ def _check_pdf_leido(stem: str, item: dict) -> tuple[bool | None, str]:
     return dicho == disco, detalle
 
 
+def _note_without_caveats(texto: str) -> str:
+    """The note's own text with its CAVEAT blocks cut out (#497).
+
+    A `nota_estado` caveat is stamped into the very note it talks about, so grepping the whole file
+    would find the literal inside the caveat's own bullet —or inside the `evidencia` that quotes
+    it— and every such claim would come out true: the check would be approving itself. The cut is
+    structural, not a guess: the block opens with one of `SALVEDAD_MARCAS_LEIDAS` and runs while
+    the lines are bullets or blank, the same shape `_salvedades_span` recognises."""
+    out, dentro = [], False
+    for ln in texto.splitlines():
+        b = ln.strip()
+        if b in cfg.SALVEDAD_MARCAS_LEIDAS:
+            dentro = True
+            continue
+        if dentro and (not b or b.startswith("- ")):
+            continue
+        dentro = False
+        out.append(ln)
+    return "\n".join(out)
+
+
+def _check_note_state(bibcode: str, item: dict) -> tuple[bool | None, str]:
+    """Check a caveat about the NOTE itself: does it still publish `literal`? (#497)
+
+    `presente` is what the caveat CLAIMS, so both directions are checkable: «the note still says X»
+    and «the note does not say X yet» are the same kind of decidable statement about the same file.
+    It is required and boolean — without it the caveat does not say what it asserts, and guessing
+    from the prose is what #452 measured at 0/5."""
+    literal = str(item.get("literal") or "")
+    if not literal:
+        return None, "sin `literal`: no hay qué buscar"
+    if not isinstance(item.get("presente"), bool):
+        return None, "sin `presente` booleano: la salvedad no dice QUÉ afirma sobre la nota"
+    nota = cfg.PAPERS / f"{cfg.note_stem(bibcode)}.md"
+    if not nota.exists():
+        return None, "no hay nota en disco contra la cual chequear"
+    hay = literal in _note_without_caveats(nota.read_text(encoding="utf-8", errors="replace"))
+    dicho = bool(item["presente"])
+    dice = f"la nota {'SÍ' if hay else 'NO'} publica `{literal}`"
+    if hay == dicho:
+        return True, dice
+    return False, f"{dice} — la salvedad dice que {'sí' if dicho else 'no'}: es FALSA"
+
+
 def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
     """Check one STRUCTURED caveat against the file it talks about (#213).
 
@@ -184,6 +228,8 @@ def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
     stem = mn.safe_name(bibcode)
     if tipo == "pdf_leido":
         return _check_pdf_leido(stem, item)
+    if tipo == "nota_estado":
+        return _check_note_state(bibcode, item)
     if tipo == "txt_pierde":
         cadena = str(item.get("cadena") or "")
         if not cadena:

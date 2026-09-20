@@ -586,11 +586,19 @@ paper, preferí describirlas en palabras: una fila partida deja la afirmación *
 lector** aunque el lint la siga contando como verificada.
 
 ⛔ **Las `salvedades` que afirman algo DECIDIBLE sobre un archivo van ESTRUCTURADAS (#213),
-porque un script las chequea.** Vocabulario cerrado, tres formas:
+porque un script las chequea.** Vocabulario cerrado, cuatro formas:
 
     {{"tipo":"txt_pierde","cadena":"ζ_{{×+×}}"}}     → el `.txt` NO contiene esa cadena
     {{"tipo":"pdf_paginas","n":17}}                 → el PDF tiene N páginas
     {{"tipo":"pdf_leido","documento":"eprint"}}     → QUÉ documento leíste (#452)
+    {{"tipo":"nota_estado","literal":"(no disponible)","presente":true}}
+                                                   → qué publica LA NOTA hoy (#497)
+
+⛔ **Lo que digas sobre la BÓVEDA —la nota, su frontmatter, sus secciones— va en `nota_estado`,
+nunca en prosa.** Es la más decidible de las cuatro (el archivo está a un `grep`) y la que más
+rápido **envejece**: la anotás porque algo está mal, la operación siguiente lo arregla, y tu
+extracción es inmutable (#311) — así que en prosa la nota queda afirmando para siempre algo falso
+sobre sí misma. `presente` es lo que AFIRMÁS: `true` = «la nota todavía lo publica».
 
 ⛔ **La del documento leído va SIEMPRE que el PDF sea un preprint** (`documento`: `eprint` |
 `publisher` | `ads` | `web`, el mismo vocabulario que `pdf_source`), y lleva `"bibcode":"<otro>"`

@@ -2470,6 +2470,11 @@
    "number": 496,
    "title": "La página impresa no siempre es un entero: `PAGE_LOC_RE` no lee `p. L45`, y una fuente de A&A Letters publicada queda sin auditar en las dos direcciones (57 localizadores)",
    "state": "OPEN"
+  },
+  {
+   "number": 497,
+   "title": "Falta la cuarta clase de salvedad: la que predica sobre la BÓVEDA (la nota) — la más decidible y la única que nadie chequea",
+   "state": "OPEN"
   }
  ]
 }
