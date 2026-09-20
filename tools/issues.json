@@ -2464,16 +2464,21 @@
   {
    "number": 495,
    "title": "El cierre de `_paginacion` apaga la exención de #437: la extracción del PDF reemplazado vuelve a acusar (4 citas, rc 0 → 1)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 496,
    "title": "La página impresa no siempre es un entero: `PAGE_LOC_RE` no lee `p. L45`, y una fuente de A&A Letters publicada queda sin auditar en las dos direcciones (57 localizadores)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 497,
    "title": "Falta la cuarta clase de salvedad: la que predica sobre la BÓVEDA (la nota) — la más decidible y la única que nadie chequea",
+   "state": "CLOSED"
+  },
+  {
+   "number": 498,
+   "title": "El tier 2 (`instancia`) está rojo en toda instancia que no sea la semilla: 6 de 79 fallan, en tres clases (hermanos `.verif.md`, título de ratchet vencido, y dos tests que asertan sobre la bóveda del template)",
    "state": "OPEN"
   }
  ]
