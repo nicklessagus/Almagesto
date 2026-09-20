@@ -757,17 +757,23 @@ def test_492_el_localizador_adyacente_no_se_roba_el_de_la_cita_siguiente(toy_vau
     de OTRA cita no es el de ésta. Sin el corte en el `«` siguiente, una cita sin localizador se
     quedaba con el de su vecina y salía reportada por una página que nunca declaró."""
     bloque = "dice «una frase larga que alcanza el mínimo de la regla» y después «otra frase larga que también lo alcanza» (p. 9)"
-    assert cfg.page_locator_after(bloque, "una frase larga que alcanza el mínimo de la regla") is None
+    assert cfg.page_locators_after(bloque, "una frase larga que alcanza el mínimo de la regla") is None
     # …y una cita que NO está en el bloque no hereda ningún localizador: sin el `find` mandando,
     # la ventana arrancaría en un offset arbitrario y devolvería el primer `p. N` que encuentre
-    assert cfg.page_locator_after("una prosa cualquiera (p. 9) y más", "ausente") is None
-    assert cfg.page_locator_after(bloque, "otra frase larga que también lo alcanza")[:2] == (9, 9)
+    assert cfg.page_locators_after("una prosa cualquiera (p. 9) y más", "ausente") is None
+    assert cfg.page_locators_after(bloque, "otra frase larga que también lo alcanza")[0] == [(9, 9)]
     # las tres formas que la bóveda escribe de verdad, incluida la de #488 y la celda de una fila
-    for texto, esperado in ((f"«{CITA_492}» (p. 4) [[2020X]]", (4, 4)),
-                            (f"«{CITA_492}» ([[2020X]], p. 4)", (4, 4)),
-                            (f"| «{CITA_492}» | p. 4 | x |", (4, 4)),
-                            (f"«{CITA_492}» (pp. 12-14) [[2020X]]", (12, 14))):
-        assert cfg.page_locator_after(texto, CITA_492)[:2] == esperado, texto
+    for texto, esperado in ((f"«{CITA_492}» (p. 4) [[2020X]]", [(4, 4)]),
+                            (f"«{CITA_492}» ([[2020X]], p. 4)", [(4, 4)]),
+                            (f"| «{CITA_492}» | p. 4 | x |", [(4, 4)]),
+                            (f"«{CITA_492}» (pp. 12-14) [[2020X]]", [(12, 14)]),
+                            # ⛔ defecto A del validador: el localizador COMPUESTO trae TODAS sus
+                            # páginas (132 + 143 en una bóveda real) — quedarse con la primera
+                            # marcaba MAL localizadores correctos
+                            (f"«{CITA_492}» (p. 9 y p. 6) [[2020X]]", [(9, 9), (6, 6)]),
+                            (f"«{CITA_492}» (pp. 179 y 190) [[2020X]]", [(179, 179), (190, 190)]),
+                            (f"«{CITA_492}» (pp. 3, 7 and 9) [[2020X]]", [(3, 3), (7, 7), (9, 9)])):
+        assert cfg.page_locators_after(texto, CITA_492)[0] == esperado, texto
 
 
 def test_492_el_offset_de_la_pagina_impresa_se_deriva_o_no_se_inventa(toy_vault):
@@ -793,11 +799,11 @@ def test_492_el_localizador_que_apunta_a_otra_pagina_sale_MAL_con_la_suya(toy_va
                                  _pagina(2, f"prosa. {CITA_492}. más prosa.", impresa=2),
                                  _pagina(3, "otra cosa", impresa=3),
                                  _pagina(4, "cierre", impresa=4)])
-    assert cfg.quote_page_verdict(CITA_492, "2017Kairov", (2, 2))[0] == "impresa"
-    estado, det = cfg.quote_page_verdict(CITA_492, "2017Kairov", (3, 3))
+    assert cfg.quote_page_verdict(CITA_492, "2017Kairov", [(2, 2)])[0] == "impresa"
+    estado, det = cfg.quote_page_verdict(CITA_492, "2017Kairov", [(3, 3)])
     assert estado == "mal" and det["impresas"] == [2] and det["paginas"] == [2]
     # y el rango `pp. 1-3` la cubre: un localizador de rango no es un hallazgo
-    assert cfg.quote_page_verdict(CITA_492, "2017Kairov", (1, 3))[0] == "impresa"
+    assert cfg.quote_page_verdict(CITA_492, "2017Kairov", [(1, 3)])[0] == "impresa"
 
 
 def test_492_la_otra_convencion_se_distingue_del_error_y_de_lo_declarado(toy_vault):
@@ -809,9 +815,9 @@ def test_492_la_otra_convencion_se_distingue_del_error_y_de_lo_declarado(toy_vau
                                    _pagina(2, f"prosa. {CITA_492}. fin", impresa=1210),
                                    _pagina(3, _sin_digitos(3), impresa=1211),
                                    _pagina(4, _sin_digitos(4), impresa=1212)])
-    assert cfg.quote_page_verdict(CITA_492, "2002Meinecke", (1210, 1210))[0] == "impresa"
-    assert cfg.quote_page_verdict(CITA_492, "2002Meinecke", (2, 2))[0] == "indice"
-    assert cfg.quote_page_verdict(CITA_492, "2002Meinecke", (7, 7))[0] == "mal"
+    assert cfg.quote_page_verdict(CITA_492, "2002Meinecke", [(1210, 1210)])[0] == "impresa"
+    assert cfg.quote_page_verdict(CITA_492, "2002Meinecke", [(2, 2)])[0] == "indice"
+    assert cfg.quote_page_verdict(CITA_492, "2002Meinecke", [(7, 7)])[0] == "mal"
 
 
 def test_492_sin_txt_sin_cita_y_sin_numeracion_impresa_es_NO_EVALUABLE(toy_vault):
@@ -819,21 +825,21 @@ def test_492_sin_txt_sin_cita_y_sin_numeracion_impresa_es_NO_EVALUABLE(toy_vault
     (#205), así que no encontrar la cita NO es «el localizador está mal»; y sin numeración impresa
     derivable, acertarle al índice puede ser coincidencia — decidir la convención ahí sería
     adivinarla."""
-    estado, det = cfg.quote_page_verdict(CITA_492, "2013SinTxt", (4, 4))
+    estado, det = cfg.quote_page_verdict(CITA_492, "2013SinTxt", [(4, 4)])
     assert estado == "no_evaluable" and "no tiene `.txt` en disco" in det["motivo"], \
         "sin artefacto y sin la cita son dos silencios distintos: el motivo los distingue"
     _txt_paginado("2011Remes", [_pagina(1, "intro"), _pagina(2, f"prosa. {CITA_492}. fin"),
                                 _pagina(3, "fin")])
-    estado, det = cfg.quote_page_verdict(CITA_492, "2011Remes", (2, 2))
+    estado, det = cfg.quote_page_verdict(CITA_492, "2011Remes", [(2, 2)])
     assert estado == "no_evaluable" and "convención" in det["motivo"]
     # …salvo que el localizador DECLARE que es el índice del PDF (la escotilla de #492)
-    assert cfg.quote_page_verdict(CITA_492, "2011Remes", (2, 2, "indice"))[0] == "indice"
+    assert cfg.quote_page_verdict(CITA_492, "2011Remes", [(2, 2)], "indice")[0] == "indice"
     # …y sin numeración impresa, un localizador que NO coincide con el índice tampoco es `mal`:
     # no hay contra qué decidirlo (el `.txt` podría estar numerando de otra manera)
-    estado, det = cfg.quote_page_verdict(CITA_492, "2011Remes", (7, 7))
+    estado, det = cfg.quote_page_verdict(CITA_492, "2011Remes", [(7, 7)])
     assert estado == "no_evaluable" and "no se puede decidir" in det["motivo"]
     _txt_paginado("2014Du", [_pagina(1, "intro"), _pagina(2, "nada de esto"), _pagina(3, "fin")])
-    estado, det = cfg.quote_page_verdict(CITA_492, "2014Du", (2, 2))
+    estado, det = cfg.quote_page_verdict(CITA_492, "2014Du", [(2, 2)])
     assert estado == "no_evaluable" and "índice degradado" in det["motivo"]
 
 
@@ -858,4 +864,38 @@ def test_492_la_pagina_se_busca_con_las_COLUMNAS_partidas(toy_vault):
                                    _pagina(3, _sin_digitos(3), impresa=3)])
     assert not any(CITA_492 in lectura for lectura in cfg.source_texts(pag.replace("\n", " "))), \
         "el fixture tiene que exigir el de-interleave: en el texto plano la cita NO está"
-    assert cfg.quote_page_verdict(CITA_492, "2020Columnas", (2, 2))[0] == "impresa"
+    assert cfg.quote_page_verdict(CITA_492, "2020Columnas", [(2, 2)])[0] == "impresa"
+
+
+def test_492_B_la_pagina_impresa_se_lee_DONDE_cae_la_cita_no_de_un_offset_global(toy_vault):
+    """⛔ Defecto B del validador: un libro cuya numeración se reinicia por capítulo no tiene UN
+    offset. Con el global (+1 en Comon–Jutten) el chequeo marcó **94 MAL, los 94 falsos** — el 14 %
+    de la categoría, sobre la fuente más citada del hub. El número se lee del pie de la página donde
+    cae la cita, desambiguado por consecutividad con la vecina.  @inv INV-155"""
+    # cap. 1 numera 1..3 en las páginas 1..3; cap. 2 REINICIA en 1 en las páginas 4..6
+    pags = [_pagina(1, "uno", impresa=1), _pagina(2, "dos", impresa=2), _pagina(3, "tres", impresa=3),
+            _pagina(4, "cuatro", impresa=1), _pagina(5, f"prosa. {CITA_492}. fin", impresa=2),
+            _pagina(6, "seis", impresa=3)]
+    assert cfg.printed_pages(pags) == [1, 2, 3, 1, 2, 3]
+    _txt_paginado("2010ComonJutten", pags)
+    # la cita está en la p. 5 del PDF, impresa «2» del cap. 2: el offset global (0, por el cap. 1)
+    # diría «5» y la marcaría MAL
+    assert cfg.quote_page_verdict(CITA_492, "2010ComonJutten", [(2, 2)])[0] == "impresa"
+    assert cfg.quote_page_verdict(CITA_492, "2010ComonJutten", [(5, 5)])[0] == "indice"
+    assert cfg.quote_page_verdict(CITA_492, "2010ComonJutten", [(7, 7)])[0] == "mal"
+
+
+def test_492_B_el_offset_global_se_DESCARTA_si_una_pagina_lo_contradice(toy_vault):
+    """La página sin número propio no hereda un offset que el documento mismo desmiente: sale
+    `None` —no evaluable—, no `índice + offset`. Y sin contradicción, el global sigue siendo el
+    respaldo de la página muda (una cabecera que el OCR se comió)."""
+    con_muda = [_pagina(1, "uno", impresa=101), _pagina(2, "dos", impresa=102),
+                _pagina(3, "muda"), _pagina(4, "cuatro", impresa=104)]
+    assert cfg.printed_pages(con_muda) == [101, 102, 103, 104]
+    contradicho = [_pagina(1, "uno", impresa=101), _pagina(2, "dos", impresa=102),
+                   _pagina(3, "tres", impresa=103), _pagina(4, "muda"),
+                   _pagina(5, "cinco", impresa=7), _pagina(6, "seis", impresa=8)]
+    assert cfg.printed_pages(contradicho) == [101, 102, 103, None, 7, 8]
+    # y la ambigüedad local no se adivina: dos candidatos consecutivos en la misma página → None
+    ambigua = [f"10\n\nprosa\n\n{200}", f"11\n\nprosa\n\n{201}", f"12\n\nprosa\n\n{202}"]
+    assert cfg.printed_pages(ambigua) == [None, None, None]

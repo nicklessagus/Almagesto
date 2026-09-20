@@ -260,19 +260,21 @@ def _page_check(b, cita: str, duenio: str | None, out: dict) -> None:
     against the wrong source, which is how the finding this repo hunts the most gets fabricated. It
     comes out *not evaluable*, which is what it is.
     """
-    loc = cfg.page_locator_after(b.text, cita)
+    loc = cfg.page_locators_after(b.text, cita)
     if not loc:
         return
+    rangos, declarado = loc
     out["pag_total"] += 1
+    out["pag_consumidos"] += len(rangos)
     if not duenio:
         out["pag_no_eval"] += 1
         return
-    estado, det = cfg.quote_page_verdict(cita, duenio, loc)
+    estado, det = cfg.quote_page_verdict(cita, duenio, rangos, declarado)
     corte = cita if len(cita) <= 70 else cita[:70] + "…"
-    decl = f"p. {loc[0]}" if loc[0] == loc[1] else f"pp. {loc[0]}-{loc[1]}"
+    decl = ", ".join(f"p. {a}" if a == b_ else f"pp. {a}-{b_}" for a, b_ in rangos)
     if estado == "impresa":
         out["pag_impresa"] += 1
-    elif estado == "indice" and loc[2] == "indice":
+    elif estado == "indice" and declarado == "indice":
         # la escotilla de `REGLA_LOCALIZADOR`: el localizador DICE que es el índice del PDF. Es la
         # convención declarada, no la usada en silencio, y las dos no piden lo mismo.
         out["pag_declarado"] += 1
@@ -357,7 +359,11 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
            # `quote_page_verdict`): este gate frena operaciones (#323) y la población que mira es la
            # más grande de la bóveda.
            "pag_total": 0, "pag_impresa": 0, "pag_indice": [], "pag_mal": [],
-           "pag_no_eval": 0, "pag_declarado": 0}
+           "pag_no_eval": 0, "pag_declarado": 0,
+           # #492 — y la población que este chequeo NO alcanza por construcción: el localizador sin
+           # cita textual adyacente (el caso de `Almagesto-Tesis#8` mismo). Sin cita no hay qué buscar
+           # en el `.txt`; se cuenta para que un «0 MAL» no se lea como «todo mirado» (INV-40).
+           "pag_consumidos": 0, "pag_sin_cita": 0}
     bibs_nota = set(lb._bibcodes(texto))
     # #373/#394 — en una nota de PAPER el bibcode es la nota, no un link, y desde #394 la regla
     # (y su medición) vive en `cfg.note_own_bibcode`/`cfg.with_own_bibcode`, compartida con el lint:
@@ -377,7 +383,9 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                 out["resueltas"].append((b.first_line, f"{exento}: visible, no es deuda"))
             continue
         bibs = cfg.with_own_bibcode(lb._bibcodes(b.text) or lb._bibcodes(b.intro or ""), propio)
-        for cita in cfg.quotes_in(b.text):
+        antes = out["pag_consumidos"]
+        citas_bloque = cfg.quotes_in(b.text)
+        for cita in citas_bloque:
             out["citas"] += 1
             duenio = lb.quote_owner(b.text, cita, bibs)          # #316
             candidatos = [duenio] if duenio else bibs
@@ -469,6 +477,8 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                                    f"dicen, y ninguna es evidencia positiva: la transcripción es "
                                    f"SELECTIVA y el `.txt` un índice degradado (#321/#205). "
                                    f"Confirmala en el PDF"))
+        out["pag_sin_cita"] += max(0, len(cfg.page_locators(b.text))
+                                   - (out["pag_consumidos"] - antes))
     if mostrar:
         for ln, motivo in out["alteradas"]:
             cfg.print_seguro(f"  ⛔ L{ln}: {motivo}. Copiala del JSON con `contrast.py <slug> "
@@ -716,7 +726,8 @@ def validar_todo(slug: str | None = None) -> int:
     counts moves it."""
     notas = _notes_of(slug)
     alteradas = no_eval = citas = solo_ext = resueltas = 0
-    pag = {"pag_total": 0, "pag_impresa": 0, "pag_no_eval": 0, "pag_declarado": 0}
+    pag = {"pag_total": 0, "pag_impresa": 0, "pag_no_eval": 0, "pag_declarado": 0,
+           "pag_sin_cita": 0}
     pag_mal: list = []
     pag_indice: list = []
     discrepan: list = []
@@ -764,7 +775,8 @@ def validar_todo(slug: str | None = None) -> int:
         f"IMPRESA · {len(pag_indice)} en el índice del PDF SIN decirlo · "
         f"{pag['pag_declarado']} declarado(s) como índice · "
         f"{len(pag_mal)} MAL · {pag['pag_no_eval']} no evaluable(s) (sin `.txt`, la cita no está "
-        f"en él, atribución ambigua, o sin numeración impresa derivable)"
+        f"en él, atribución ambigua, o sin numeración impresa derivable) · "
+        f"{pag['pag_sin_cita']} FUERA DE ALCANCE (sin cita textual adyacente con la que ubicarlos)"
         + ("" if pag["pag_total"] else " — NO EVALUADO: ninguna cita lleva localizador"))
     if pag_mal:
         cfg.print_seguro(f"  ⚠ {len(pag_mal)} localizador(es) apuntan a otra página. No mueve el rc "
@@ -779,7 +791,8 @@ def validar_todo(slug: str | None = None) -> int:
                                   "pagina_impresa": pag["pag_impresa"],
                                   "pagina_indice": len(pag_indice), "pagina_mal": len(pag_mal),
                                   "pagina_indice_declarado": pag["pag_declarado"],
-                                  "pagina_no_evaluables": pag["pag_no_eval"]}, alteradas)
+                                  "pagina_no_evaluables": pag["pag_no_eval"],
+                                  "pagina_sin_cita": pag["pag_sin_cita"]}, alteradas)
     if solo_ext:
         cfg.print_seguro(f"  ⚠ de las aprobadas, {solo_ext} se apoyan en UN SOLO TESTIGO: la "
                          f"extracción de su fuente las dice y el `.txt` de esa misma fuente no. Es "

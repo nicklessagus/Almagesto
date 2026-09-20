@@ -232,10 +232,15 @@ python scripts/contrast.py [<slug>] --validar-todo
                                     #   página. Cada `«…» (p. N)` se busca en el `.txt` partido por
                                     #   form feed y se contrasta — página impresa OK · índice del
                                     #   PDF (otra convención, a declarar) · MAL con la página que
-                                    #   es · no evaluable con su motivo. Tampoco mueve el rc: la
+                                    #   es · no evaluable con su motivo · FUERA DE ALCANCE (sin
+                                    #   cita textual con la que ubicarlo). Tampoco mueve el rc: la
                                     #   población es la más grande de la bóveda. Medido: 104 de 893
                                     #   apuntaban al PDF REEMPLAZADO (#436), o sea que la deuda
-                                    #   global de `_paginacion` sale acá con su página nueva
+                                    #   global de `_paginacion` sale acá con su página nueva. El
+                                    #   localizador compuesto (`pp. 179 y 190`) vale por CUALQUIERA
+                                    #   de sus páginas, y la impresa se lee DONDE cae la cita, no de
+                                    #   un offset global (1.290.0: un libro numerado por capítulo
+                                    #   daba 94 MAL, los 94 falsos)
 python scripts/proposals.py [<slug>]
                                     # las PROPUESTAS pendientes (#328): ampliar un `alcance`
                                     #   (#241), un `refuta` (#212) y las celdas vacías del

@@ -1847,8 +1847,8 @@ portadores:
         estado: usa
         motivo: "Cruza la página de la `Evidencia` contra la del cuerpo del par (#492): las dos mitades se leen con esta función."
       - modulo: scripts/contrast.py
-        estado: fuera-de-alcance
-        motivo: "Lee el localizador ADYACENTE a la cita con `page_locator_after`, que delega en esta función; no re-parsea la forma."
+        estado: usa
+        motivo: "Cuenta los localizadores del bloque que quedan FUERA DE ALCANCE (sin cita adyacente) y lee los adyacentes con `page_locators_after`, que delega en esta función."
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Es el módulo donde vive la implementación; `lib_config` la re-exporta (AUD-306) y los consumidores la llaman por ahí."

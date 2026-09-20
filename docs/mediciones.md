@@ -45,6 +45,21 @@ localizador», pasó a llamar a la única (#409: `tools/portadores.yaml`, entrad
 devuelve `None`: elegir sería inventar la convención que el chequeo existe para auditar, y sin
 numeración derivable acertarle al índice puede ser coincidencia.
 
+**Devuelto por el validador (2026-09-20, sobre el vault pre-fix `55c07ea`):** global 6335
+localizadores · 819 índice sin decirlo · 678 MAL · 2502 no evaluables · 366 MAL nombrando
+`_paginacion`. Los «12 de `icasso` como MAL» **no se reproducen: da 5** — seis de los 12 no tienen
+cita textual (entre ellos el caso de `#8` que motivó todo) y quedan **fuera de alcance por
+construcción**; de los 6 con cita: 4 detectados, 1 no evaluable correcto, 1 bajo `QUOTE_MIN`, 1
+falso positivo. Y dos defectos con mecanismo leído en el código, ambos cerrados en **1.290.0**:
+
+| | defecto | medido | salida |
+|---|---|---|---|
+| A | `page_locator_after` se quedaba con el **primero** de `(p. 9 y p. 6)`, y `pp. 179 y 190` ni era rango | 132 + 143 formas así → MAL sobre localizadores correctos | `page_locators_after` devuelve **todos**; la cita vale si está en cualquiera |
+| B | **un solo offset** por `.txt`; en Comon–Jutten el desfasaje cambia por capítulo | +1 derivado → **94 MAL, los 94 falsos** (14 % de la categoría) | `printed_pages`: el número impreso se lee **donde cae la cita**, desambiguado por consecutividad con la vecina; el offset global es respaldo y se descarta si una página lo contradice |
+
+Y la población fuera de alcance se **declara** en la línea de población («FUERA DE ALCANCE: sin
+cita textual adyacente con la que ubicarlos»): un «0 MAL» no se lee como «todo mirado» (INV-40).
+
 ## 2026-08-25 · Extracción de τ Ceti (79 papers) — el fan-out con prompt escrito a mano
 
 **Qué era.** Ingest completo de τ Ceti con `ingest-star`: 79 fulltexts, un subagente por paper. El

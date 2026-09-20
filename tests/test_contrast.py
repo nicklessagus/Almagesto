@@ -1255,3 +1255,18 @@ def test_492_el_PDF_REEMPLAZADO_se_nombra_como_causa(toy_vault, capsys):
     nota = _nota_492(f"Dice «{LARGA}» (p. 3) [[2013Voss]].\n")
     assert ct.main(["--validar", str(nota)]) == 0
     assert "PDF REEMPLAZADO" in capsys.readouterr().out
+
+
+def test_492_el_localizador_SIN_cita_textual_queda_fuera_de_alcance_y_se_DECLARA(toy_vault, capsys):
+    """El validador midió que 6 de los 12 de `icasso` —incluido el caso de `Almagesto-Tesis#8` que
+    motivó el issue— no tienen cita textual: sin «…» no hay qué buscar en el `.txt`, así que están
+    fuera de alcance POR CONSTRUCCIÓN. Lo que no puede pasar es que un «0 MAL» se lea como «todo
+    mirado» (INV-40): se cuentan aparte."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt_paginas("ica_ruido", "2013Voss", ["intro sin nada", f"prosa. {LARGA}. fin", "cierre"])
+    nota = _nota_492(f"Dice «{LARGA}» (p. 2) [[2013Voss]].\n\n"
+                     f"La taxonomía tiene cinco clases (p. 3) [[2013Voss]].\n")
+    assert ct.main(["--validar-todo"]) == 0
+    out = capsys.readouterr().out
+    assert "localizadores de página: 1 · 1 en la página IMPRESA" in out
+    assert "1 FUERA DE ALCANCE" in out

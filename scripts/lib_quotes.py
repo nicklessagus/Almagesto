@@ -604,7 +604,13 @@ def fulltext_readings(bibcode: str) -> list:
 #: definición para sus dos lectores —`lib_blocks.locator_kinds`, que mira la celda `Evidencia`, y el
 #: chequeo de esa página contra el `.txt`—: dos regex de «un localizador» es la divergencia que
 #: #324 declaró prohibida, y acá una de las dos decide un veredicto.
-PAGE_LOC_RE = re.compile(r"\bp{1,2}\.\s*(\d+)(?:\s*[-–—]\s*(\d+))?", re.I)
+#: …y la forma COMPUESTA (#492, defecto A): `pp. 12-14` es un rango, `pp. 179 y 190` y
+#: `p. 9, p. 6` son DOS localizadores (medido: 132 + 143 en una bóveda real). El número suelto que
+#: sigue a una coma o a una conjunción se toma como otra página; el de más de cuatro cifras no (un
+#: año pegado a la página no es una página).
+PAGE_LOC_RE = re.compile(r"\bp{1,2}\.\s*\d{1,4}(?:\s*(?:[-–—]|,|\by\b|\band\b|\be\b)\s*(?:p{1,2}\.\s*)?\d{1,4}(?!\d))*",
+                         re.I)
+_PAGE_LOC_SEP = re.compile(r"\s*(?:,|\by\b|\band\b|\be\b)\s*", re.I)
 
 #: #492 · cuántas líneas de la cabecera y del pie se miran buscando el número IMPRESO, y en cuántas
 #: páginas tiene que repetirse el desfasaje para darlo por derivado. Tres es lo mínimo que distingue
@@ -617,12 +623,14 @@ _PAGE_INT_RE = re.compile(r"(?<!\S)(\d{1,4})(?!\S)")
 
 
 def page_locators(texto: str) -> list:
-    """`[(desde, hasta)]` — every page locator in a string, `pp. 12-14` kept as its range."""
+    """`[(desde, hasta)]` — every page locator in a string: `pp. 12-14` is one range, `pp. 179 y
+    190` two pages, `p. 9, p. 6` two pages (#492)."""
     out = []
     for m in PAGE_LOC_RE.finditer(texto or ""):
-        a = int(m.group(1))
-        b = int(m.group(2)) if m.group(2) else a
-        out.append((a, max(a, b)))
+        for parte in _PAGE_LOC_SEP.split(m.group(0)):
+            nums = [int(x) for x in re.findall(r"\d+", parte)]
+            if nums:
+                out.append((nums[0], max(nums[0], nums[-1])))
     return out
 
 
@@ -632,8 +640,8 @@ def page_locators(texto: str) -> list:
 PAGE_INDEX_DECLARED = re.compile(r"(?i)\b(?:[ií]ndice|index)\b")
 
 
-def page_locator_after(texto: str, cita: str, ventana: int = 80) -> tuple | None:
-    """`(desde, hasta, declarado)` — the page locator ADJACENT to a quote, or `None` (#492).
+def page_locators_after(texto: str, cita: str, ventana: int = 80) -> tuple | None:
+    """`([(from, to), …], declared)` — the page locators ADJACENT to a quote, or `None`.
 
     Adjacency is the rule of #325 applied to the other half of the pair: the vault writes `«…»
     (p. 4) [[bib]]`, `«…» ([[bib]], p. 4)` and, in a row, `| «…» | p. 4 |`, so the window after the
@@ -641,7 +649,14 @@ def page_locator_after(texto: str, cita: str, ventana: int = 80) -> tuple | None
     ANOTHER quote, and stealing it is the failure mode #325 measured for the bibcode — here it
     would report a correct locator as wrong.
 
-    `declarado` is `"indice"` when the locator itself says it is the PDF index (`p. 7 [índice del
+    ⛔ **ALL of them, not the first one** (#492, defecto A del validador). A quote that spans two
+    pages is written `(p. 9 y p. 6)` or `(pp. 179 y 190)` — 132 + 143 occurrences in a real vault —
+    and keeping only the first turns a CORRECT locator into a finding, in the category that exists
+    to correct locators. The second form is not even a range: `pp. 179 y 190` is two locators, so
+    parsing a range would not have been enough either. The quote satisfies the pair if it is on
+    ANY of the pages named, which is what the locator claims.
+
+    `declarado` is `"indice"` when the locator itself says it is the PDF index (`p. 7 [índice
     PDF]`): a convention DECLARED is not the same finding as one used in silence, and the caller
     needs to tell them apart.
     """
@@ -649,10 +664,27 @@ def page_locator_after(texto: str, cita: str, ventana: int = 80) -> tuple | None
     if pos < 0:
         return None
     ventana_txt = texto[pos + len(cita):pos + len(cita) + ventana].split("«")[0]
-    loc = (page_locators(ventana_txt) or [None])[0]
-    if loc is None:
+    rangos = page_locators(ventana_txt)
+    if not rangos:
         return None
-    return (*loc, "indice" if PAGE_INDEX_DECLARED.search(ventana_txt) else "")
+    return rangos, ("indice" if PAGE_INDEX_DECLARED.search(ventana_txt) else "")
+
+
+def page_number_candidates(paginas: list) -> list:
+    """`[{enteros}]` — the integers in the header and footer of each page (#492).
+
+    The ONE place that decides where a printed page number can live: the first and last
+    `PAGE_EDGE_LINES` non-empty lines. Its two readers —the global offset and the per-page
+    number— have to look at the same thing, or one of them would be auditing a different document.
+    """
+    out = []
+    for pag in paginas:
+        lineas = [l for l in str(pag or "").split("\n") if l.strip()]
+        cand: set = set()
+        for linea in lineas[:PAGE_EDGE_LINES] + lineas[-PAGE_EDGE_LINES:]:
+            cand |= {int(x) for x in _PAGE_INT_RE.findall(linea)}
+        out.append(cand)
+    return out
 
 
 def printed_page_offset(paginas: list) -> int | None:
@@ -666,13 +698,15 @@ def printed_page_offset(paginas: list) -> int | None:
     Takes the RAW pages, not the normalized readings: the number lives in the header or the footer,
     which is exactly what `normalize_source_text` folds into the running text. A TIE between two
     candidate offsets is also `None` — see below.
+
+    ⚠ It describes the WHOLE document with one number, which is false in a book whose chapters
+    restart the numbering: `printed_pages` is the reader that resolves that, and this one is its
+    fallback.
     """
     cuenta: dict = {}
-    for i, pag in enumerate(paginas, 1):
-        lineas = [l for l in str(pag or "").split("\n") if l.strip()]
-        for linea in lineas[:PAGE_EDGE_LINES] + lineas[-PAGE_EDGE_LINES:]:
-            for tok in set(_PAGE_INT_RE.findall(linea)):
-                cuenta[int(tok) - i] = cuenta.get(int(tok) - i, 0) + 1
+    for i, cand in enumerate(page_number_candidates(paginas), 1):
+        for n in cand:
+            cuenta[n - i] = cuenta.get(n - i, 0) + 1
     if not cuenta:
         return None
     techo = max(cuenta.values())
@@ -685,8 +719,43 @@ def printed_page_offset(paginas: list) -> int | None:
     return candidatos[0]
 
 
+def printed_pages(paginas: list) -> list:
+    """`[impresa | None]` — the PRINTED number of each page, one by one (#492, defecto B).
+
+    ⛔ **A document does not have one offset.** A book whose chapters restart the numbering breaks
+    the assumption `impresa = índice + offset` that `printed_page_offset` makes, and the failure is
+    not a rounding error: measured on Comon–Jutten —the most cited source of a real hub— the global
+    offset came out `+1` and the check reported **94 MAL, all 94 false**, 14 % of the whole
+    category. A detector whose false positives concentrate on the biggest source is worse than no
+    detector: it is read once and then ignored.
+
+    So the number is read **where the quote falls**, from that page's own header or footer, and the
+    ambiguity —any page carries other integers— is resolved by **local consecutiveness**: the
+    candidate whose predecessor is on the previous page or whose successor is on the next one, and
+    only when there is exactly ONE such candidate. The global offset stays as the fallback for
+    pages that show nothing, and is **dropped** as soon as any page contradicts it: an offset that
+    the document itself denies cannot be used to judge the pages that stayed silent.
+    """
+    cands = page_number_candidates(paginas)
+    off = printed_page_offset(paginas)
+    locales = []
+    for i, c in enumerate(cands, 1):
+        vecinos: set = set()
+        if i >= 2:
+            vecinos |= {n + 1 for n in cands[i - 2]}
+        if i < len(cands):
+            vecinos |= {n - 1 for n in cands[i]}
+        consecutivos = sorted(c & vecinos)
+        locales.append(consecutivos[0] if len(consecutivos) == 1 else None)
+    contradice = off is not None and any(
+        n is not None and n != i + off for i, n in enumerate(locales, 1))
+    return [n if n is not None else (i + off if off is not None and not contradice else None)
+            for i, n in enumerate(locales, 1)]
+
+
 def fulltext_pagination(bibcode: str) -> dict:
-    """`{"paginas": [[lecturas]], "offset": int|None}` — the `.txt` split by PAGE (#492), memoised.
+    """`{"paginas": [[lecturas]], "impresas": [int|None], "offset": int|None}` — the `.txt` split by
+    PAGE (#492), memoised.
 
     `pdftotext` leaves one form feed per page (AUD-165) and `extract_fulltext` keeps it, so *on
     which page is this quote* is decidable on an artefact the vault already has. Each page is
@@ -694,14 +763,14 @@ def fulltext_pagination(bibcode: str) -> dict:
     whole-file reading uses: a quote that only appears once the columns are split has to be found
     here too, or the check would report the layout as a wrong locator.
 
-    `{"paginas": [], "offset": None}` when there is no `.txt` on disk — *not evaluable*, never «the
+    `{"paginas": [], "impresas": [], "offset": None}` when there is no `.txt` on disk — *not evaluable*, never «the
     page is wrong».
     """
     clave = (str(cfg.FULLTEXT), bibcode)
     if clave in cfg._PAGINAS_CACHE:
         return cfg._PAGINAS_CACHE[clave]
     txts = sorted(cfg.FULLTEXT.glob(f"*/{bibcode}.txt")) if cfg.FULLTEXT.exists() else []
-    out = {"paginas": [], "offset": None}
+    out = {"paginas": [], "impresas": [], "offset": None}
     if txts:
         try:
             crudas = txts[0].read_text(encoding="utf-8", errors="replace").split("\f")
@@ -709,15 +778,17 @@ def fulltext_pagination(bibcode: str) -> dict:
             crudas = []
         if crudas:
             out = {"paginas": [source_texts(p) for p in crudas],
+                   "impresas": printed_pages(crudas),
                    "offset": printed_page_offset(crudas)}
     cfg._PAGINAS_CACHE[clave] = out
     return out
 
 
-def quote_page_verdict(quote: str, bibcode: str, declarado: tuple) -> tuple:
+def quote_page_verdict(quote: str, bibcode: str, rangos: list, declarado: str = "") -> tuple:
     """Is the page locator pointing at the page the quote is ON? (#492)
 
-    `declarado` is the `(from, to, …)` range `page_locator_after` read; a single page is `(N, N)`.
+    `rangos` is the list of `(from, to)` ranges `page_locators_after` read —ALL the pages the
+    locator names, a single page being `(N, N)`— and `declarado` is `"indice"` when it says so.
 
     ⛔ **The most decidable half of a pair, and no layer looked at it.** `verify-citations` judges
     the claim against its source, `quote_verdict` judges the CHAIN of the quote, and #436 says as much
@@ -756,14 +827,19 @@ def quote_page_verdict(quote: str, bibcode: str, declarado: tuple) -> tuple:
         return "no_evaluable", {"motivo": f"la cita no está en ninguna página del `.txt` de "
                                           f"{bibcode} (índice degradado, #205: su silencio no "
                                           f"prueba nada)"}
-    a, b = declarado[0], declarado[1]
-    off = pag["offset"]
-    det = {"paginas": halladas, "offset": off,
-           "impresas": [i + off for i in halladas] if off is not None else []}
-    if off is not None and any(a <= i + off <= b for i in halladas):
+    # #492 (defecto B) — la página impresa se lee DONDE cae la cita, no de un offset global: en un
+    # libro con numeración por capítulo el offset único marcaba 94 MAL, los 94 falsos.
+    impresas = [pag["impresas"][i - 1] for i in halladas]
+    con_numero = [n for n in impresas if n is not None]
+    det = {"paginas": halladas, "offset": pag["offset"], "impresas": con_numero}
+
+    def _en_rango(n):
+        """Is this page inside ANY of the ranges the locator names? (defecto A: all of them count)."""
+        return any(a <= n <= b for a, b in rangos)
+    if any(_en_rango(n) for n in con_numero):
         return "impresa", det
-    if any(a <= i <= b for i in halladas):
-        if off is None and (len(declarado) < 3 or declarado[2] != "indice"):
+    if any(_en_rango(i) for i in halladas):
+        if not con_numero and declarado != "indice":
             # ⚠ Sin numeración impresa derivable, «índice» y «impresa» son el MISMO número aquí: el
             # acierto puede ser coincidencia, y decidir la convención sería adivinarla (D-43). Lo
             # que sí la decide es que el localizador la DECLARE, y entonces es un acierto.
@@ -771,7 +847,7 @@ def quote_page_verdict(quote: str, bibcode: str, declarado: tuple) -> tuple:
                              f"numeración impresa derivable: la convención no se puede decidir")
             return "no_evaluable", det
         return "indice", det
-    if off is None:
+    if not con_numero:
         det["motivo"] = (f"la cita está en la(s) página(s) {', '.join(map(str, halladas))} del PDF "
                          f"de {bibcode} y ese `.txt` no tiene numeración impresa derivable: el "
                          f"localizador no se puede decidir")
