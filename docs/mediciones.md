@@ -79,13 +79,18 @@ afirmación falsa **sobre sí misma**. Las otras tres describen un archivo que n
 | 2104 salvedades | **1497 en prosa** |
 | de ésas, las que predican sobre la NOTA (`\bla nota\b`, `` `## … `` ) | **149** |
 
-⚠ **El caso nominado en el issue NO reproduce, y se dice:** `2011Remes` tiene **7** salvedades
-(índices 0–6) y **ninguna** habla del estado de la nota, así que el `salvedades[7]` que el issue
-cita no existe en el vault de hoy. El caso real de la clase que sí está es **`2012Naik`
-`salvedades[4]`** —*«la nota conserva su `_(no disponible)_` — no es un hueco de adquisición, es que
-la fuente no lo tiene»*— y hoy es **verdadera** (la nota publica ese literal y declara
-`sin_abstract_motivo`). Corrido contra la bóveda real, el chequeo nuevo la resuelve `True`, resuelve
-`False` su negación, y resuelve `False` la afirmación del issue sobre el bloque de pendiente.
+⚠ **El caso nominado existió y la instancia lo sacó entre el reporte y el fix** —`fc32452`, 11:02:
+`salvedades` 8 → 7—, así que al medir yo el `salvedades[7]` ya no estaba. ⛔ **Lo digo porque mi
+primera lectura fue «el issue no reproduce», y eso era una conclusión falsa sobre un reporte
+correcto:** `git log -S` sobre el JSON muestra el texto literal que el issue cita. La regla, que es
+la de siempre: *antes de decir que algo no reproduce, mirar si alguien lo arregló* — un vault vivo
+se mueve entre el reporte y el fix, igual que las 4 → 5 citas de #495.
+
+El caso de la clase que sigue en pie es **`2012Naik` `salvedades[4]`** —*«la nota conserva su
+`_(no disponible)_` — no es un hueco de adquisición, es que la fuente no lo tiene»*— y hoy es
+**verdadera** (la nota publica ese literal y declara `sin_abstract_motivo`). Corrido contra la
+bóveda real, el chequeo nuevo la resuelve `True`, resuelve `False` su negación, y resuelve `False`
+la afirmación que el issue cita sobre el bloque de pendiente.
 
 ⚠ **Lo que motiva el fix no es el volumen sino el agujero estructural y su asimetría** — la única
 clase de salvedad sobre un artefacto que nadie chequea, siendo la más barata de chequear.
