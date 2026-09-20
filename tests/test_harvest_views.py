@@ -1953,3 +1953,45 @@ def test_la_tabla_de_documento_CUBRE_el_vocabulario_o_declara_lo_que_deja_afuera
     assert not (cubiertas & fuera), "un valor no puede estar cubierto Y declarado afuera"
     assert set(hv._DOC_DE_FUENTE.values()) == {"preprint", "publicado"}, (
         "el eje que los testigos deciden tiene dos valores (#452)")
+
+
+def test_494_restamp_exact_text_sustituye_una_vez_y_lista_el_resto(toy_vault):
+    """⛔ #494 — cambiar el localizador dentro de una salvedad ES reescribir prosa ya escrita, y
+    `restamp_salvedades` lo rehúsa por diseño (#453), así que la operación que repagina no podía
+    cerrar su propio último paso: medido en la repaginación real, las notas hubo que arreglarlas
+    por fuera (90 salvedades en 35 notas). La sustitución es por texto EXACTO y sólo si aparece
+    **una** vez; dos o ninguna significa que alguien lo editó, y entonces se lista (18 medidas)."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    nota = cfg.PAPERS / "2020Exacto.md"
+    nota.write_text("---\nbibcode: 2020Exacto\n---\n\n- la cita cae en (p. 3)\n- y otra en (p. 9)\n",
+                    encoding="utf-8")
+    r = hv.restamp_exact_text("2020Exacto", [("la cita cae en (p. 3)", "la cita cae en (p. 2010)")])
+    assert r["cambiados"] == 1 and not r["fuera"]
+    assert "(p. 2010)" in nota.read_text(encoding="utf-8")
+    fuera = hv.restamp_exact_text("2020Exacto", [("un texto que no está", "otro")])
+    assert fuera["cambiados"] == 0 and "0 vez/veces" in fuera["fuera"][0][1]
+    assert hv.restamp_exact_text("2020NoExiste", [("x", "y")])["fuera"][0][1] == \
+        "la nota del paper no existe"
+
+
+def test_494_restamp_view_locators_solo_toca_el_token_del_paquete(toy_vault):
+    """La celda *Localizador* de la `## Vista` la copió la máquina del JSON (#454): re-estampa
+    ACOTADA (doctrina de #453), anclada en la cita y sólo si el token sigue siendo el que el
+    paquete leyó — la celda corregida a mano se lista y se deja."""
+    import json as _j
+    cita = "which requires the latent signals to be whitened before the model can be identified"
+    (cfg.EXTRACCION / "tema").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "tema" / "2020Vista.json").write_text(
+        _j.dumps({"bibcode": "2020Vista", "vista": {"sujeto": "tema", "tipo": "theme"}}),
+        encoding="utf-8")
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    nota = cfg.PAPERS / "2020Vista.md"
+    nota.write_text(f"---\nbibcode: 2020Vista\n---\n\n## Vista — tema\n\n"
+                    f"| Qué | Valor | Localizador |\n|---|---|---|\n| x | «{cita}» | p. 4 |\n",
+                    encoding="utf-8")
+    r = hv.restamp_view_locators("tema", paper="2020Vista",
+                                 cambios=[(f"«{cita}»", "p. 4", "p. 2010")])
+    assert r["cambiados"] == 1 and "| p. 2010 |" in nota.read_text(encoding="utf-8")
+    viejo = hv.restamp_view_locators("tema", paper="2020Vista",
+                                     cambios=[(f"«{cita}»", "p. 4", "p. 2011")])
+    assert viejo["cambiados"] == 0 and "ya no está adyacente" in viejo["fuera"][0][1]

@@ -1099,8 +1099,8 @@ portadores:
           Matchea porque desde #454 hospeda `SALVEDAD_MARCAS` —la leen los dos gates de citas, así
           que vive con `quote_verdict`—; no re-estampa ninguna sección.
       - modulo: scripts/repaginate.py
-        estado: usa
-        motivo: "Tras escribir las páginas releídas re-estampa el bloque de salvedades de la vista, que es lo que la máquina copió de esa extracción: si no, el JSON queda al día y la nota publicando la página del documento reemplazado."
+        estado: fuera-de-alcance
+        motivo: "NO puede usar el re-estampado: cambiar el localizador dentro de una salvedad ES reescribir prosa ya escrita, que es lo que esta regla rehúsa por diseño (medido en la repaginación real: rehusó, y las 90 salvedades de 35 notas hubo que sustituirlas por fuera). Por eso sustituye el texto viejo EXACTO (`restamp_exact_text`), que no renderiza nada del JSON y sólo toca lo que aparece una vez."
 
   - issue: 452
     regla: >-

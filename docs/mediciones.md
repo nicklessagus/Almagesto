@@ -52,6 +52,41 @@ cuando se releen—. El lint contaba deuda con el mismo campo con el que `contra
 hoy `PAGINATION_OPEN_MARKS` (`_paginacion`, `_repaginado_parcial`) responde la primera y
 `REPLACED_DOC_MARKS` la segunda.
 
+⛔ **Devuelto por la repaginación real de la instancia, antes de que nadie mirara el código
+(v1.298.0).** La bóveda cerró la deuda entera a mano el mismo día —**43 extracciones, 2214
+localizadores**, 2179 escritos, 35 no aplicables, 0 pendientes— y ahí se vio lo que el fixture no
+mostraba: **`--restamp-salvedades` rehúsa por diseño justo en esta población.** Cambiar el
+localizador dentro de una salvedad **es** reescribir prosa ya escrita, y esa es exactamente la
+regla de #453 (cuarta vuelta: *«agregar pasa; reescribirla y borrarla se rehúsan»*). O sea que la
+operación **no podía cerrar su propio último paso**: escribía el JSON y dejaba la nota vieja. La
+instancia lo resolvió por fuera, sustituyendo el texto viejo EXACTO con `apply_fixes` — **90
+salvedades en 35 notas, 18 salteadas** por no estar exactamente una vez.
+
+⛔ **Devuelto por el validador al cerrar la tanda: el paquete se indexaba por BIBCODE y la deuda
+vive en el ARCHIVO.** Una fuente con una segunda lectura bajo otra lente (`<bib>__<lente>.json`,
+#371/#308) entregaba **sólo la primera** —medido: **1542 de 2032 localizadores** en una pasada— y
+la extracción por lente **no se podía nombrar** desde la línea de comandos. La identidad de una
+extracción es el `bibcode` de adentro (#374) y su **archivo** es la unidad de trabajo: las dos cosas
+a la vez, que es justo lo que `extraction_identity` existe para no confundir. Hoy `--out` emite un
+paquete por archivo abierto, el paquete y el resultado declaran `lente`, y `--apply` elige por
+`(bibcode, lente)` en vez de por orden de glob.
+
+⛔ **Y el segundo defecto devuelto, que es el más caro de los dos:** el escritor pisaba el campo
+`linea` **entero** y con él el **calificador** — `p. 4 (Tabla 2)` quedaba en `p. 491`, `p. 2056
+(nota al pie de la Tabla 1)` en `p. 2062`. La instancia lo midió en **143 de 563** sobre su propia
+implementación y lo arregló antes de commitear; la mía tenía exactamente el mismo bug. El
+calificador dice **dónde de la página** está el dato y no se re-deriva de ningún lado. Hoy se
+reemplaza **sólo el localizador** y el resto del campo queda; y el caso **colapsado** —el viejo
+nombraba varias páginas y el lector ubicó una— se **cuenta y se declara** (134 y 138 en las dos
+corridas reales), porque el resto del string sigue nombrando las otras.
+
+Eso entró como `restamp_exact_text`, con la exactitud como guarda (una aparición o no se toca), y
+las dos pasadas quedaron **separadas por tipo de ítem**: la fila de `ground_truth` vive en una
+celda y se ancla en la cita de al lado; la salvedad la nota la publica **verbatim** y se sustituye
+entera. Mandarlas por el mismo camino hacía que se pisaran sobre el mismo bullet. Y el `motivo` del
+hueco **viaja al texto** (`no hallado (relectura …: <motivo>)`): es lo que distingue «no lo
+encontré» de «no aplica al documento nuevo», que fueron **35 de 2214**.
+
 **La columna *Localizador* de la `## Vista`.** Se re-estampa **acotada**
 (`restamp_view_locators`), con la doctrina de #453: sólo el token adyacente a la cita que la máquina
 copió del JSON (#454), y **sólo si sigue siendo el que el paquete leyó** —la celda corregida a mano

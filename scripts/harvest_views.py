@@ -1094,6 +1094,38 @@ def _n_verificadas(scope: str) -> int:
     return sum(1 for ln in scope.splitlines() if ln.strip().startswith("- ⚙ verificada"))
 
 
+def restamp_exact_text(paper: str, cambios: list, *, dry_run: bool = False) -> dict:
+    """Swap a caveat's text in the note for the one #494 just wrote in its JSON — EXACT match only.
+
+    ⛔ Why this and not `restamp_salvedades`: changing the locator INSIDE a prose caveat **is**
+    rewriting prose already written, and that re-stamp refuses it by design (#453, fourth return —
+    «agregar pasa; reescribirla y borrarla se rehúsan»). So the operation that repaginates cannot
+    close its own last step through it: measured in the real repagination of the instance, the
+    re-stamp refused and the notes had to be fixed with an exact substitution outside the tool —
+    90 caveats over 35 notes.
+
+    The guard that keeps #453's promise is the exactness: the old text is replaced **only if it
+    appears exactly once**. Twice or none means somebody edited it by hand, and then the note is
+    listed and left alone (the instance measured 18 of those). Nothing is rendered from the JSON,
+    so no other line of the block can move."""
+    nota = cfg.PAPERS / f"{mn.safe_name(paper)}.md"
+    if not nota.exists():
+        return {"nota": nota, "cambiados": 0, "fuera": [(paper, "la nota del paper no existe")]}
+    text = nota.read_text(encoding="utf-8")
+    nuevo, cambiados, fuera = text, 0, []
+    for viejo, nueva in cambios:
+        n = nuevo.count(viejo)
+        if n != 1:
+            fuera.append((viejo[:60], f"el texto aparece {n} vez/veces en la nota (se esperaba 1): "
+                                      f"editado a mano → NO se toca"))
+            continue
+        nuevo = nuevo.replace(viejo, nueva)
+        cambiados += 1
+    if not dry_run and nuevo != text:
+        cfg.write_text_atomic(nota, nuevo)
+    return {"nota": nota, "cambiados": cambiados, "fuera": fuera}
+
+
 def restamp_view_locators(slug: str, *, paper: str, cambios: list, dry_run: bool = False) -> dict:
     """Re-stamp ONLY the page locators of a view's table, from the pages #494 just re-read.
 

@@ -348,3 +348,128 @@ def test_494_apply_sobre_una_extraccion_SIN_deuda_abierta_rehusa(toy_vault, tmp_
     _txt_paginado()
     with pytest.raises(rp.ApplyError, match="no tiene deuda"):
         rp.apply(BIB, _resultado(tmp_path, []))
+
+
+def test_494_la_SALVEDAD_de_la_nota_se_sustituye_por_texto_exacto(toy_vault, tmp_path, capsys):
+    """⛔ Devuelto por la repaginación real de la instancia: `--restamp-salvedades` **rehúsa por
+    diseño** justo en esta población —cambiar el localizador dentro de una salvedad ES reescribir
+    prosa ya escrita (#453, cuarta vuelta)—, así que la operación no podía cerrar su propio último
+    paso y las notas hubo que arreglarlas por fuera: 90 salvedades en 35 notas. La sustitución es
+    por texto EXACTO y sólo si aparece **una** vez; si no, se lista y no se toca (18 medidas)."""
+    _extraccion(vista={"sujeto": "tema", "tipo": "theme"})
+    _txt_paginado()
+    d = json.loads((cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / f"{BIB}.md").write_text(
+        "---\nbibcode: 2013Voss\ntags: [paper]\n---\n\n## Abstract\n\nx\n\n"
+        "## Vista — tema\n\n" + cfg.SALVEDAD_MARCAS[1] + "\n\n"
+        f"- {d['salvedades'][0]}\n", encoding="utf-8")
+    filas = [{"id": it["id"], "pagina": "2010", "evidencia": "Received 3 March 2013", "motivo": ""}
+             for it in rp.items(d)]
+    assert rp.main([BIB, "--apply", str(_resultado(tmp_path, filas))]) == 0
+    nota = (cfg.PAPERS / f"{BIB}.md").read_text(encoding="utf-8")
+    assert "(p. 2010)" in nota and "(p. 3)" not in nota, nota
+    out = capsys.readouterr().out
+    assert "sustituida(s)" in out and "0 sustituida(s)" not in out, out
+
+
+def test_494_la_salvedad_EDITADA_A_MANO_se_lista_y_no_se_toca(toy_vault, tmp_path):
+    """La guarda que mantiene la promesa de #453: si el texto viejo no está **exactamente una vez**
+    en la nota, alguien lo editó y no se pisa."""
+    _extraccion(vista={"sujeto": "tema", "tipo": "theme"})
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / f"{BIB}.md").write_text("---\nbibcode: 2013Voss\n---\n\nnada parecido\n",
+                                          encoding="utf-8")
+    import harvest_views as hv
+    r = hv.restamp_exact_text(BIB, [("un texto que la nota no tiene", "otro")])
+    assert r["cambiados"] == 0 and "0 vez/veces" in r["fuera"][0][1], r
+
+
+def test_494_el_MOTIVO_del_hueco_viaja_al_texto(toy_vault, tmp_path):
+    """⛔ El `motivo` distingue «no lo encontré» de «no aplica al documento nuevo» —la salvedad
+    sobre la marca de agua del preprint que la copia del editor no tiene—, que en la repaginación
+    real fueron **35 de 2214**. Tirarlo dejaba el hueco declarado y mudo (D-43)."""
+    d = _extraccion()
+    _txt_paginado()
+    filas = [{"id": it["id"], "pagina": None, "evidencia": "",
+              "motivo": "no aplica: es sobre la marca de agua del preprint"} for it in rp.items(d)]
+    r = rp.apply(BIB, _resultado(tmp_path, filas))
+    nuevo = json.loads(r["extraccion"].read_text(encoding="utf-8"))
+    assert "no aplica: es sobre la marca de agua" in nuevo["ground_truth"][0]["linea"]
+
+
+def test_494_el_CALIFICADOR_del_localizador_no_se_pisa(toy_vault, tmp_path, capsys):
+    """⛔ Devuelto por la repaginación real: la primera versión del escritor pisaba el campo `linea`
+    ENTERO y con él el calificador —`p. 4 (Tabla 2)` quedaba en `p. 491`—. Medido: **143 de 563**.
+    El calificador dice DÓNDE de la página está el dato y no se re-deriva de ningún lado.
+
+    Y el caso **colapsado** se declara: el localizador viejo nombraba varias páginas, el lector
+    ubicó una, y el resto del campo —que sigue nombrando las otras— queda."""
+    d = _extraccion(ground_truth=[
+        {"que": "blanqueo", "valor": CITA, "linea": "p. 4 (nota al pie de la Tabla 2)"},
+        {"que": "dos", "valor": OTRA, "linea": "pp. 3-4, y también p. 9 si se mira el apéndice"}])
+    _txt_paginado()
+    filas = [{"id": it["id"], "pagina": "2010", "evidencia": "Received 3 March 2013", "motivo": ""}
+             for it in rp.items(d)]
+    assert rp.main([BIB, "--apply", str(_resultado(tmp_path, filas))]) == 0
+    nuevo = json.loads((cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
+    assert nuevo["ground_truth"][0]["linea"] == "p. 2010 (nota al pie de la Tabla 2)"
+    assert nuevo["ground_truth"][1]["linea"] == "p. 2010, y también p. 9 si se mira el apéndice"
+    assert "1 colapsado(s)" in capsys.readouterr().out
+
+
+def _extraccion_lente(lente: str = "orden", slug: str = "ica_ruido", bib: str = BIB):
+    """La SEGUNDA lectura del mismo paper bajo otra lente: `<bib>__<lente>.json` (#371/#239)."""
+    d = {"bibcode": bib, "enfasis": lente,
+         "ground_truth": [{"que": "orden", "valor": OTRA, "linea": "p. 7"}],
+         "_paginacion": {"reemplazo": "2026-09-11", "motivo": "versión del editor",
+                         "pdf_sha": _sha(cfg.PDFS / slug / f"{bib}.pdf")}}
+    (cfg.EXTRACCION / slug / f"{bib}__{lente}.json").write_text(json.dumps(d, ensure_ascii=False),
+                                                                encoding="utf-8")
+    return d
+
+
+def test_494_la_EXTRACCION_POR_LENTE_tiene_su_paquete(toy_vault, tmp_path, capsys):
+    """⛔ Devuelto por el validador: el paquete se indexaba por **bibcode** y la deuda vive en el
+    **archivo**, así que una fuente con una segunda lectura bajo otra lente (#371/#308) entregaba
+    sólo la primera —medido: **1542 de 2032** localizadores en una pasada— y la extracción por
+    lente **no se podía nombrar** desde la línea de comandos. La identidad de una extracción es el
+    `bibcode` de adentro (#374) y su archivo es la unidad de trabajo."""
+    _extraccion()
+    _extraccion_lente()
+    _txt_paginado()
+    paquetes = rp.write_rounds(BIB, tmp_path)
+    assert sorted(p["lente"] for p in paquetes) == ["", "orden"], paquetes
+    assert (tmp_path / BIB / "prompt.md").exists()
+    assert (tmp_path / f"{BIB}__orden" / "prompt.md").exists()
+    # y `--list` nombra la lente, que es lo que hacía falta para poder pedirla
+    assert rp.main(["--list"]) == 0
+    out = capsys.readouterr().out
+    assert "2 extracción(es)" in out and "lente `orden`" in out, out
+
+
+def test_494_apply_vuelve_al_ARCHIVO_que_el_resultado_declara(toy_vault, tmp_path):
+    """El escritor elige por `(bibcode, lente)`, no por orden de glob: con dos lecturas abiertas,
+    aplicar sin decir a cuál volvería sería elegir por accidente. Y una lente que no corresponde a
+    ninguna extracción abierta **rehúsa** nombrando las que hay."""
+    _extraccion()
+    d2 = _extraccion_lente()
+    _txt_paginado()
+    filas = [{"id": it["id"], "pagina": "2010", "evidencia": "Received 3 March 2013", "motivo": ""}
+             for it in rp.items(d2)]
+    res = tmp_path / "r.json"
+    res.write_text(json.dumps({"bibcode": BIB, "lente": "orden", "items": filas,
+                               "pdf_sha": _sha(cfg.PDFS / "ica_ruido" / f"{BIB}.pdf")}),
+                   encoding="utf-8")
+    r = rp.apply(BIB, res)
+    assert r["extraccion"].stem == f"{BIB}__orden", r["extraccion"]
+    assert json.loads(r["extraccion"].read_text(encoding="utf-8"))["ground_truth"][0]["linea"] \
+        == "p. 2010"
+    # el canónico NO se tocó
+    canon = json.loads((cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
+    assert canon["ground_truth"][0]["linea"] == "p. 4" and "_paginacion" in canon
+    res.write_text(json.dumps({"bibcode": BIB, "lente": "inexistente", "items": filas,
+                               "pdf_sha": _sha(cfg.PDFS / "ica_ruido" / f"{BIB}.pdf")}),
+                   encoding="utf-8")
+    with pytest.raises(rp.ApplyError, match="no corresponde a ninguna extracción abierta"):
+        rp.apply(BIB, res)

@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import pathlib
 import sys
 from pathlib import Path
 
@@ -46,10 +47,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lib_config as cfg  # noqa: E402
 import lib_blocks as lb  # noqa: E402
 
+def open_extractions(bibcode: str) -> list:
+    """`[(path, data)]` — EVERY open extraction of this bibcode, canonical and per-lens (#494).
+
+    ⛔ Returned by the validator: the debt lives in the FILE and the package was keyed by bibcode,
+    so a source with a second reading under another lens (`<bib>__<lens>.json`, #371/#308) handed
+    over **only the first** —measured: 1542 of 2032 locators in one pass— and the per-lens
+    extraction **could not be named** from the command line. An extraction's identity is the
+    `bibcode` INSIDE it (#374) and its file is the unit of work: both at once, which is exactly
+    what `extraction_identity` exists to keep apart."""
+    return [(f, d) for f, d in pending() if cfg.extraction_identity(d) == bibcode
+            or f.stem.split("__")[0] == cfg.note_stem(bibcode)]
+
+
+def lens_of(path) -> str:
+    """The lens of an extraction file (`<bib>__<lente>.json` → `lente`), `""` for the canonical one."""
+    stem = pathlib.Path(path).stem if not isinstance(path, str) else path
+    return stem.split("__", 1)[1] if "__" in stem else ""
+
+
 #: #494 · lo que el lector devuelve, y NADA más. Es el contrato que separa el paquete del
 #: resultado: el paquete lleva `guia` y `ruta`, el resultado `pagina` y `evidencia`, así que
 #: devolver el paquete rebota en vez de escribirse.
-RESULT_SCHEMA = {"bibcode": "<bibcode>", "pdf_sha": "<el sha10 que traía el paquete>",
+RESULT_SCHEMA = {"bibcode": "<bibcode>", "lente": "<el `lente` que traía el paquete: '' o su nombre>",
+                 "pdf_sha": "<el sha10 que traía el paquete>",
                  "items": [{"id": "<el id del item, tal cual>",
                             "pagina": "<la página IMPRESA que MUESTRA la hoja, o null>",
                             "evidencia": "<palabras que viste en ESA hoja, distintas del valor>",
@@ -160,7 +181,16 @@ class RoundError(Exception):
     """The package cannot be written, and the message names why."""
 
 
-def write_round(bibcode: str, out_dir: Path) -> dict:
+def write_rounds(bibcode: str, out_dir: Path) -> list:
+    """One package PER open extraction file of this bibcode (#494, devuelto).
+
+    Each lens gets its own directory (`<out_dir>/<stem>/`) because each is a separate reading with
+    its own items: collapsing them into one package is what dropped 490 of 2032 locators."""
+    return [write_round(bibcode, out_dir / f.stem, extraccion=f)
+            for f, _d in open_extractions(bibcode)]
+
+
+def write_round(bibcode: str, out_dir: Path, *, extraccion=None) -> dict:
     """Write `prompt.md` + `_paquete.json` for one source. Refuses rather than guess.
 
     Three refusals, each closing a way of re-reading the wrong document: no open debt (there is
@@ -168,8 +198,8 @@ def write_round(bibcode: str, out_dir: Path) -> dict:
     the one the mark recorded (it was replaced AGAIN, so the package would describe a third
     document)."""
     stem = cfg.note_stem(bibcode)
-    abiertas = [(f, d) for f, d in pending() if str(d.get("bibcode") or f.stem) == bibcode
-                or f.stem == stem]
+    abiertas = [(f, d) for f, d in open_extractions(bibcode)
+                if extraccion is None or f == extraccion]
     if not abiertas:
         raise RoundError(f"{bibcode} no tiene deuda de paginación abierta "
                          f"({' | '.join(cfg.PAGINATION_OPEN_MARKS)})")
@@ -186,7 +216,7 @@ def write_round(bibcode: str, out_dir: Path) -> dict:
                          f"({marca['pdf_sha']}): se reemplazó otra vez, y este paquete describiría "
                          f"un tercer documento")
     los = items(data)
-    paquete = {"bibcode": bibcode, "pdf_sha": sha, "extraccion": f.as_posix(),
+    paquete = {"bibcode": bibcode, "lente": lens_of(f), "pdf_sha": sha, "extraccion": f.as_posix(),
                "items": [{**it, "guia": guide(it, bibcode)} for it in los],
                "version": cfg.ALMAGESTO_VERSION}
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -271,6 +301,24 @@ def _replace_locator(texto: str, ocurrencia: int, viejo: str, nuevo: str) -> str
     return None
 
 
+def _replace_first_locator(texto: str, nuevo: str) -> tuple:
+    """`(texto_nuevo, n_localizadores)` — swap the FIRST locator of a `linea` and keep the rest.
+
+    ⛔ Returned by the real repagination: the writer's first version overwrote the whole field, and
+    with it the **qualifier** — `p. 4 (Tabla 2)` became `p. 491`, `p. 2056 (nota al pie de la Tabla
+    1)` became `p. 2062`. Measured: **143 of 563**. The qualifier is what makes a locator usable —
+    it says WHERE on the page the datum is — and it is re-derivable from nothing.
+
+    `n_localizadores` > 1 is the **collapsed** case: the old value named several pages with prose
+    in between and the reader placed one. It is counted and declared, because the rest of the
+    string —which stays— still names the others."""
+    locs = list(cfg.PAGE_LOC_RE.finditer(texto))
+    if not locs:
+        return texto, 0
+    m = locs[0]
+    return texto[:m.start()] + nuevo + texto[m.end():], len(locs)
+
+
 def _check_item(item: dict, res: dict, bibcode: str) -> str | None:
     """`None` if the answer can be written, or the reason it is REFUSED (#494).
 
@@ -305,17 +353,23 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
     writes `_repaginado_parcial` with their ids, and the lint keeps counting it.
 
     @inv INV-147"""
-    abiertas = [(f, d) for f, d in pending()
-                if str(d.get("bibcode") or f.stem) == bibcode or f.stem == cfg.note_stem(bibcode)]
+    abiertas = open_extractions(bibcode)
     if not abiertas:
         raise ApplyError(f"{bibcode} no tiene deuda de paginación abierta")
-    f, data = abiertas[0]
     try:
         res = json.loads(Path(resultado).read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
         raise ApplyError(f"no se pudo leer {resultado} como JSON: {e}") from e
     if not isinstance(res, dict) or str(res.get("bibcode") or "") != bibcode:
         raise ApplyError(f"el resultado no declara `bibcode: {bibcode}`")
+    # ⛔ la unidad es el ARCHIVO: con varias lecturas del mismo paper (#371) el resultado tiene que
+    # decir a CUÁL vuelve, o el escritor elegiría por orden de glob — que es el defecto devuelto.
+    lente = str(res.get("lente") or "")
+    porlente = [(f, d) for f, d in abiertas if lens_of(f) == lente]
+    if not porlente:
+        raise ApplyError(f"`lente: {lente!r}` no corresponde a ninguna extracción abierta de "
+                         f"{bibcode} ({', '.join(repr(lens_of(f)) for f, _ in abiertas)})")
+    f, data = porlente[0]
     filas = res.get("items")
     if not isinstance(filas, list) or any(not isinstance(x, dict) for x in filas):
         raise ApplyError("`items` tiene que ser una lista de mapas")
@@ -334,7 +388,8 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
         raise ApplyError(f"los `id` del resultado no son los de la extracción "
                          f"({len(filas)} contra {len(los)}): el paquete quedó viejo, re-emitilo")
     hoy = _dt.date.today().isoformat()
-    escritos, no_hallados, rehusados, para_nota = [], [], [], []
+    escritos, no_hallados, rehusados, para_nota, para_nota_texto = [], [], [], [], []
+    colapsados: list = []
     for fila in filas:
         item = los[fila["id"]]
         motivo = _check_item(item, fila, bibcode)
@@ -343,15 +398,27 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
             continue
         ruta, viejo = item["ruta"], item["linea"]
         ocurrencia = int(fila["id"].split("#")[1]) if "#" in fila["id"] else 1
+        # ⛔ el `motivo` del hueco VIAJA al texto: es lo que distingue «no lo encontré» de «no
+        # aplica al documento nuevo» —la salvedad sobre la marca de agua del preprint que la copia
+        # del editor no tiene—, y medido en la repaginación real de la instancia eso fue 35 de
+        # 2214. Tirarlo dejaba el hueco declarado y mudo, que es lo que D-43 no acepta.
+        motivo_hueco = str(fila.get("motivo") or "").strip()
         nuevo = (f"p. {fila['pagina']}" if fila.get("pagina") not in (None, "")
-                 else f"no hallado (relectura {hoy})")
+                 else f"no hallado (relectura {hoy}: {motivo_hueco})")
         actual = dict(_strings(data)).get(ruta, "")
-        texto = (nuevo if ruta.endswith(".linea")
-                 else _replace_locator(actual, ocurrencia, viejo, nuevo))
+        if ruta.endswith(".linea"):
+            texto, n_locs = _replace_first_locator(actual, nuevo)
+            if n_locs > 1:
+                colapsados.append(fila["id"])
+            texto = texto if n_locs else None
+        else:
+            texto = _replace_locator(actual, ocurrencia, viejo, nuevo)
         if texto is None:
             rehusados.append((fila["id"], f"el localizador `{viejo}` ya no está donde el paquete lo "
                                           f"leyó: alguien lo corrigió a mano"))
             continue
+        if not ruta.endswith(".linea") and texto != actual:
+            para_nota_texto.append((actual, texto))
         _set_by_path(data, ruta, texto)
         if fila.get("pagina") in (None, ""):
             no_hallados.append(fila["id"])
@@ -370,7 +437,8 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
     if not dry_run:
         cfg.write_text_atomic(f, json.dumps(data, ensure_ascii=False, indent=1) + "\n")
     return {"extraccion": f, "escritos": escritos, "no_hallados": no_hallados,
-            "rehusados": rehusados, "cerrada": not pendientes, "para_nota": para_nota}
+            "rehusados": rehusados, "cerrada": not pendientes, "para_nota": para_nota,
+            "para_nota_texto": para_nota_texto, "colapsados": colapsados}
 
 
 def print_list() -> int:
@@ -383,7 +451,8 @@ def print_list() -> int:
         bib = str(d.get("bibcode") or f.stem)
         marca = next(m for m in cfg.PAGINATION_OPEN_MARKS if cfg.as_map(d.get(m)))
         pend = cfg.as_list(cfg.as_map(d.get(marca)).get("pendientes"))
-        cfg.print_seguro(f"  · {f.parent.name}/{f.stem}: {len(items(d))} item(s) `{marca}`"
+        lente = f" · lente `{lens_of(f)}`" if lens_of(f) else ""
+        cfg.print_seguro(f"  · {f.parent.name}/{f.stem}: {len(items(d))} item(s) `{marca}`{lente}"
                          + (f" · {len(pend)} pendiente(s) de una ronda previa" if pend else "")
                          + f" → python scripts/repaginate.py {bib} --out build/repag/{f.stem}")
     if not deuda:
@@ -403,12 +472,19 @@ def _apply_cli(args) -> int:
                      f"{len(r['rehusados'])} rehusado(s)")
     for i, motivo in r["rehusados"]:
         cfg.print_seguro(f"  ⚠ {i}: {motivo}")
+    if r.get("colapsados"):
+        cfg.print_seguro(f"  · {len(r['colapsados'])} colapsado(s): el localizador viejo nombraba "
+                         f"varias páginas y el lector ubicó una — el resto del campo queda")
     cfg.print_seguro(f"  deuda {'CERRADA' if r['cerrada'] else 'PARCIAL: sigue abierta'}")
     # la nota copió esos localizadores de la extracción (#454), así que se re-estampan acotado
     import harvest_views as hv
     slug = r["extraccion"].parent.name
+    # ⛔ Sólo las filas de `ground_truth`: su localizador vive en una CELDA de la tabla, donde el
+    # único ancla posible es la cita de al lado. Lo que salió de un campo de texto libre —una
+    # salvedad— la nota lo publica VERBATIM, así que se sustituye entero abajo; mandarlo también
+    # por acá hacía que las dos pasadas se pisaran sobre el mismo bullet.
     cambios = [(it["cita"] or it["valor"], it["linea"], f"p. {f['pagina']}")
-               for it, f in r.get("para_nota", [])]
+               for it, f in r.get("para_nota", []) if it["ruta"].endswith(".linea")]
     if cambios:
         vista = hv.restamp_view_locators(slug, paper=args.bibcode, cambios=cambios,
                                          dry_run=args.dry_run)
@@ -416,7 +492,15 @@ def _apply_cli(args) -> int:
                          f"{len(vista['fuera'])} sin tocar")
         for a_, m in vista["fuera"]:
             cfg.print_seguro(f"    ⚠ «{a_}…»: {m}")
-    hv.restamp_salvedades(slug, paper=args.bibcode, dry_run=args.dry_run)
+    # ⛔ y NO `restamp_salvedades`: cambiar el localizador dentro de una salvedad ES reescribir
+    # prosa ya escrita, y ese re-estampado lo rehúsa por diseño (#453). La sustitución es por texto
+    # EXACTO, que es como la instancia tuvo que cerrarlo a mano (90 salvedades en 35 notas).
+    if r.get("para_nota_texto"):
+        salv = hv.restamp_exact_text(args.bibcode, r["para_nota_texto"], dry_run=args.dry_run)
+        cfg.print_seguro(f"  · salvedades: {salv['cambiados']} sustituida(s), "
+                         f"{len(salv['fuera'])} sin tocar")
+        for t, m in salv["fuera"]:
+            cfg.print_seguro(f"    ⚠ «{t}…»: {m}")
     cfg.print_seguro("  ⛔ los bloques que cambiaron VENCEN sus pares (D-4): "
                      f"`python scripts/reverify_subset.py vault/wiki/papers/"
                      f"{cfg.note_stem(args.bibcode)}.md`")
@@ -440,13 +524,16 @@ def main(argv=None) -> int:
         cfg.print_seguro("⛔ falta `--out <dir>` (o `--apply <resultado.json>`)")
         return 2
     try:
-        paquete = write_round(args.bibcode, Path(args.out))
+        paquetes = write_rounds(args.bibcode, Path(args.out))
     except RoundError as e:
         cfg.print_seguro(f"⛔ {e}")
         return 2
-    con_guia = sum(1 for it in paquete["items"] if it["guia"]["pagina"])
-    cfg.print_seguro(f"→ {Path(args.out) / 'prompt.md'} · {len(paquete['items'])} item(s), "
-                     f"{con_guia} con página de guía (el resto la declara)")
+    for paq in paquetes:
+        con_guia = sum(1 for it in paq["items"] if it["guia"]["pagina"])
+        lente = f" · lente `{paq['lente']}`" if paq["lente"] else ""
+        cfg.print_seguro(f"→ {Path(paq['extraccion']).stem}/prompt.md{lente} · "
+                         f"{len(paq['items'])} item(s), {con_guia} con página de guía "
+                         f"(el resto la declara)")
     return 0
 
 
