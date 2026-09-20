@@ -1640,7 +1640,7 @@ el usuario—. Copia a **todos** los slugs, re-extrae **sólo ese** `.txt` (`ext
 papers del tema), anula `eprint_version` y **emite el alcance de la re-verificación** (medido: 11
 reemplazos → 76 pares). ⛔ La extracción **no se re-pagina**: queda **marcada** `_paginacion` y el
 lint la reporta — es versionada y no regenerable (#311), y sus localizadores son de un documento
-que ya no está (las citas textuales siguen bien: ninguna capa mira el localizador). ⛔ **Y firma
+que ya no está (las citas siguen bien; el localizador lo caza `--validar-todo`, #492). ⛔ **Y firma
 `pdf_reemplazo` en la nota, add-only, y AVISA si el entrante tiene menos páginas (#437):** la copia
 del editor puede ser peor (7 páginas sin Supplementary contra 33 del preprint, con la ficha
 citando §S1.1) — aviso y no rehúse, porque el que decide es quien mira.

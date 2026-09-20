@@ -579,7 +579,8 @@ python scripts/write_verif_sidecar.py <nota.md> --from build/<slug>/verif/<ronda
 Corre la barrera primero y **rehúsa** si no cierra; matchea cada par por `(bibcode, ancla)` —el
 `bibcode` va a nivel de archivo y el `ancla` a nivel de par— y rehúsa nombrando el par cuya ancla
 no está en el cuerpo; hashea por TIPO de archivo (`pdf:` con `bytes_hash`, que es lo que el lint
-recalcula; `txt:` con `source_hash`; y nada para `no verificable por extracción`, #223); antepone
+recalcula; `txt:` con `source_hash`; y nada para `no verificable por extracción`, #223); avisa el
+par cuya *Evidencia* cita OTRA página que el cuerpo (#492: abrí el PDF y corregí la que esté mal); antepone
 `acota:`/`contextualiza:` desde `cond_tipo`; en una segunda ronda **encadena** el veredicto en vez
 de pisarlo (`no-soportada→corregida`, #232); y escribe la cabecera con `verif_summary` y el
 fragmento de conteo de cada sub-sección (#280). Medido antes de que existiera: el armador escrito a
