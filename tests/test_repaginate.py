@@ -148,9 +148,11 @@ def test_494_el_paquete_REHUSA_en_vez_de_describir_otro_documento(toy_vault, tmp
     assert not (tmp_path / "_paquete.json").exists(), "un rehúse no deja artefacto a medias"
 
 
-def _resultado(tmp_path: Path, filas: list, sha: str | None = None, bib: str = BIB) -> Path:
+def _resultado(tmp_path: Path, filas: list, sha: str | None = None, bib: str = BIB,
+               extraccion: str | None = None) -> Path:
     r = tmp_path / f"{bib}.json"
-    r.write_text(json.dumps({"bibcode": bib, "items": filas,
+    r.write_text(json.dumps({"bibcode": bib, "extraccion": extraccion or f"ica_ruido/{bib}",
+                             "items": filas,
                              "pdf_sha": sha if sha is not None
                              else _sha(cfg.PDFS / "ica_ruido" / f"{bib}.pdf")},
                             ensure_ascii=False), encoding="utf-8")
@@ -389,13 +391,19 @@ def test_494_el_MOTIVO_del_hueco_viaja_al_texto(toy_vault, tmp_path):
     """⛔ El `motivo` distingue «no lo encontré» de «no aplica al documento nuevo» —la salvedad
     sobre la marca de agua del preprint que la copia del editor no tiene—, que en la repaginación
     real fueron **35 de 2214**. Tirarlo dejaba el hueco declarado y mudo (D-43)."""
-    d = _extraccion()
+    d = _extraccion(ground_truth=[{"que": "x", "valor": CITA, "linea": "p. 4"},
+                                  {"que": "y", "valor": OTRA, "linea": "p. 5 (Tabla 4)"}])
     _txt_paginado()
     filas = [{"id": it["id"], "pagina": None, "evidencia": "",
               "motivo": "no aplica: es sobre la marca de agua del preprint"} for it in rp.items(d)]
     r = rp.apply(BIB, _resultado(tmp_path, filas))
     nuevo = json.loads(r["extraccion"].read_text(encoding="utf-8"))
     assert "no aplica: es sobre la marca de agua" in nuevo["ground_truth"][0]["linea"]
+    # ⛔ y el hueco TAMPOCO se lleva el calificador (observación del validador): lo único que
+    # caduca es el número — el «(Tabla 4)» sigue diciendo dónde de la página estaba el dato, y es
+    # lo que hace barata la próxima relectura
+    assert nuevo["ground_truth"][1]["linea"].endswith(" (Tabla 4)"), \
+        nuevo["ground_truth"][1]["linea"]
 
 
 def test_494_el_CALIFICADOR_del_localizador_no_se_pisa(toy_vault, tmp_path, capsys):
@@ -440,8 +448,10 @@ def test_494_la_EXTRACCION_POR_LENTE_tiene_su_paquete(toy_vault, tmp_path, capsy
     _txt_paginado()
     paquetes = rp.write_rounds(BIB, tmp_path)
     assert sorted(p["lente"] for p in paquetes) == ["", "orden"], paquetes
-    assert (tmp_path / BIB / "prompt.md").exists()
-    assert (tmp_path / f"{BIB}__orden" / "prompt.md").exists()
+    assert sorted(p["extraccion"] for p in paquetes) == [f"ica_ruido/{BIB}",
+                                                         f"ica_ruido/{BIB}__orden"]
+    assert (tmp_path / "ica_ruido" / BIB / "prompt.md").exists()
+    assert (tmp_path / "ica_ruido" / f"{BIB}__orden" / "prompt.md").exists()
     # y `--list` nombra la lente, que es lo que hacía falta para poder pedirla
     assert rp.main(["--list"]) == 0
     out = capsys.readouterr().out
@@ -458,7 +468,8 @@ def test_494_apply_vuelve_al_ARCHIVO_que_el_resultado_declara(toy_vault, tmp_pat
     filas = [{"id": it["id"], "pagina": "2010", "evidencia": "Received 3 March 2013", "motivo": ""}
              for it in rp.items(d2)]
     res = tmp_path / "r.json"
-    res.write_text(json.dumps({"bibcode": BIB, "lente": "orden", "items": filas,
+    res.write_text(json.dumps({"bibcode": BIB, "extraccion": f"ica_ruido/{BIB}__orden",
+                               "items": filas,
                                "pdf_sha": _sha(cfg.PDFS / "ica_ruido" / f"{BIB}.pdf")}),
                    encoding="utf-8")
     r = rp.apply(BIB, res)
@@ -468,8 +479,46 @@ def test_494_apply_vuelve_al_ARCHIVO_que_el_resultado_declara(toy_vault, tmp_pat
     # el canónico NO se tocó
     canon = json.loads((cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
     assert canon["ground_truth"][0]["linea"] == "p. 4" and "_paginacion" in canon
-    res.write_text(json.dumps({"bibcode": BIB, "lente": "inexistente", "items": filas,
+    res.write_text(json.dumps({"bibcode": BIB, "extraccion": "otro_slug/inexistente",
+                               "items": filas,
                                "pdf_sha": _sha(cfg.PDFS / "ica_ruido" / f"{BIB}.pdf")}),
                    encoding="utf-8")
     with pytest.raises(rp.ApplyError, match="no corresponde a ninguna extracción abierta"):
         rp.apply(BIB, res)
+
+
+def test_494_el_MISMO_PAPER_bajo_DOS_SLUGS_no_colisiona_y_converge(toy_vault, tmp_path):
+    """⛔ Devuelto por SEGUNDA vez: el stem **no identifica** al archivo. El mismo paper leído bajo
+    dos sujetos vive bajo dos slugs (`gj_581/` y `hd_40307/`, 16 pares en la bóveda real), y con el
+    directorio de salida en `out_dir / stem` los dos paquetes caían en el mismo lugar — medido:
+    **68 emitidos, 52 en disco, 1641 de 2032**.
+
+    ⛔ Y peor que perderlos: **no convergía**. El escritor dejaba el último del glob y el aplicador
+    tomaba el primero, así que el resultado del paquete que sobrevivía rebotaba siempre por los
+    `id` (7 contra 30) y re-emitirlo reproducía la colisión: esos 391 localizadores no se cerraban
+    con NINGUNA secuencia de comandos. La lente era una mitad de la identidad; el slug es la otra.
+    """
+    _extraccion(slug="gj_581")
+    d2 = _extraccion(slug="hd_40307", ground_truth=[{"que": "otra", "valor": OTRA, "linea": "p. 7"}],
+                     salvedades=[], ejes={})
+    _txt_paginado(slug="gj_581")
+    _txt_paginado(slug="hd_40307")
+    paquetes = rp.write_rounds(BIB, tmp_path)
+    assert sorted(p["extraccion"] for p in paquetes) == [f"gj_581/{BIB}", f"hd_40307/{BIB}"]
+    # los DOS prompts en disco, cada uno con sus items: nada se pisa
+    assert (tmp_path / "gj_581" / BIB / "prompt.md").exists()
+    assert (tmp_path / "hd_40307" / BIB / "prompt.md").exists()
+    assert sorted(len(p["items"]) for p in paquetes) == [1, 4]
+    # y converge: el resultado de cada paquete vuelve a SU archivo. ⚠ En orden INVERSO al del glob
+    # a propósito: si el aplicador eligiera por orden —que es lo que hacía— el primer resultado
+    # iría al archivo equivocado, y con los dos abiertos eso no lo tapa ningún accidente.
+    for paq in reversed(paquetes):
+        filas = [{"id": it["id"], "pagina": "2010", "evidencia": "Received 3 March 2013",
+                  "motivo": ""} for it in paq["items"]]
+        res = tmp_path / f"{paq['extraccion'].replace('/', '_')}.json"
+        res.write_text(json.dumps({"bibcode": BIB, "extraccion": paq["extraccion"],
+                                   "items": filas, "pdf_sha": paq["pdf_sha"]}), encoding="utf-8")
+        r = rp.apply(BIB, res)
+        assert r["cerrada"] and not r["rehusados"], (paq["extraccion"], r["rehusados"])
+        assert rp.file_id(r["extraccion"]) == paq["extraccion"]
+    assert not rp.pending(), "las dos deudas quedaron cerradas en una pasada"

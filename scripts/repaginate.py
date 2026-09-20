@@ -66,10 +66,25 @@ def lens_of(path) -> str:
     return stem.split("__", 1)[1] if "__" in stem else ""
 
 
+def file_id(path) -> str:
+    """`<slug>/<stem>` — what IDENTIFIES an extraction file (#494, devuelto por segunda vez).
+
+    ⛔ The stem does not identify it: the same paper read under two subjects lives under two slugs
+    (`gj_581/` and `hd_40307/`), and keying by stem made the two packages land in the same
+    directory — measured on the real vault: 68 emitted, **52 on disk**, 1641 of 2032 locators. And
+    worse than losing them, it did not CONVERGE: the writer kept the last of the glob and the
+    applier took the first, so the surviving package's result bounced on the ids and re-emitting
+    reproduced the collision. The lens (#371) is one half of the identity; the slug is the other,
+    and only both together name a file."""
+    f = pathlib.Path(path)
+    return f"{f.parent.name}/{f.stem}"
+
+
 #: #494 · lo que el lector devuelve, y NADA más. Es el contrato que separa el paquete del
 #: resultado: el paquete lleva `guia` y `ruta`, el resultado `pagina` y `evidencia`, así que
 #: devolver el paquete rebota en vez de escribirse.
-RESULT_SCHEMA = {"bibcode": "<bibcode>", "lente": "<el `lente` que traía el paquete: '' o su nombre>",
+RESULT_SCHEMA = {"bibcode": "<bibcode>",
+                 "extraccion": "<el `extraccion` que traía el paquete: `<slug>/<stem>`>",
                  "pdf_sha": "<el sha10 que traía el paquete>",
                  "items": [{"id": "<el id del item, tal cual>",
                             "pagina": "<la página IMPRESA que MUESTRA la hoja, o null>",
@@ -186,7 +201,7 @@ def write_rounds(bibcode: str, out_dir: Path) -> list:
 
     Each lens gets its own directory (`<out_dir>/<stem>/`) because each is a separate reading with
     its own items: collapsing them into one package is what dropped 490 of 2032 locators."""
-    return [write_round(bibcode, out_dir / f.stem, extraccion=f)
+    return [write_round(bibcode, out_dir / f.parent.name / f.stem, extraccion=f)
             for f, _d in open_extractions(bibcode)]
 
 
@@ -216,7 +231,8 @@ def write_round(bibcode: str, out_dir: Path, *, extraccion=None) -> dict:
                          f"({marca['pdf_sha']}): se reemplazó otra vez, y este paquete describiría "
                          f"un tercer documento")
     los = items(data)
-    paquete = {"bibcode": bibcode, "lente": lens_of(f), "pdf_sha": sha, "extraccion": f.as_posix(),
+    paquete = {"bibcode": bibcode, "extraccion": file_id(f), "lente": lens_of(f),
+               "ruta": f.as_posix(), "pdf_sha": sha,
                "items": [{**it, "guia": guide(it, bibcode)} for it in los],
                "version": cfg.ALMAGESTO_VERSION}
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -362,14 +378,16 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
         raise ApplyError(f"no se pudo leer {resultado} como JSON: {e}") from e
     if not isinstance(res, dict) or str(res.get("bibcode") or "") != bibcode:
         raise ApplyError(f"el resultado no declara `bibcode: {bibcode}`")
-    # ⛔ la unidad es el ARCHIVO: con varias lecturas del mismo paper (#371) el resultado tiene que
-    # decir a CUÁL vuelve, o el escritor elegiría por orden de glob — que es el defecto devuelto.
-    lente = str(res.get("lente") or "")
-    porlente = [(f, d) for f, d in abiertas if lens_of(f) == lente]
-    if not porlente:
-        raise ApplyError(f"`lente: {lente!r}` no corresponde a ninguna extracción abierta de "
-                         f"{bibcode} ({', '.join(repr(lens_of(f)) for f, _ in abiertas)})")
-    f, data = porlente[0]
+    # ⛔ la unidad es el ARCHIVO y lo identifica `<slug>/<stem>`: con el mismo paper bajo dos
+    # sujetos —o con una segunda lente (#371)— el resultado tiene que decir a CUÁL vuelve, o el
+    # escritor elegiría por orden de glob. Devuelto dos veces: la primera por la lente, la segunda
+    # por el slug, que es la otra mitad de la misma identidad.
+    cual = str(res.get("extraccion") or "")
+    elegidas = [(f, d) for f, d in abiertas if file_id(f) == cual]
+    if not elegidas:
+        raise ApplyError(f"`extraccion: {cual!r}` no corresponde a ninguna extracción abierta de "
+                         f"{bibcode} ({', '.join(file_id(f) for f, _ in abiertas)})")
+    f, data = elegidas[0]
     filas = res.get("items")
     if not isinstance(filas, list) or any(not isinstance(x, dict) for x in filas):
         raise ApplyError("`items` tiene que ser una lista de mapas")
@@ -402,6 +420,10 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
         # aplica al documento nuevo» —la salvedad sobre la marca de agua del preprint que la copia
         # del editor no tiene—, y medido en la repaginación real de la instancia eso fue 35 de
         # 2214. Tirarlo dejaba el hueco declarado y mudo, que es lo que D-43 no acepta.
+        # ⛔ …y el hueco tampoco se lleva el CALIFICADOR (observación del validador): `p. 5 (Tabla
+        # 4)` sin hallar queda `no hallado (…) (Tabla 4)`, porque el calificador sigue siendo
+        # cierto —dice dónde de la página estaba el dato— y es lo que hace barata la próxima
+        # relectura. Lo único que caduca es el número.
         motivo_hueco = str(fila.get("motivo") or "").strip()
         nuevo = (f"p. {fila['pagina']}" if fila.get("pagina") not in (None, "")
                  else f"no hallado (relectura {hoy}: {motivo_hueco})")

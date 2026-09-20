@@ -62,8 +62,22 @@ operación **no podía cerrar su propio último paso**: escribía el JSON y deja
 instancia lo resolvió por fuera, sustituyendo el texto viejo EXACTO con `apply_fixes` — **90
 salvedades en 35 notas, 18 salteadas** por no estar exactamente una vez.
 
-⛔ **Devuelto por el validador al cerrar la tanda: el paquete se indexaba por BIBCODE y la deuda
-vive en el ARCHIVO.** Una fuente con una segunda lectura bajo otra lente (`<bib>__<lente>.json`,
+⛔ **Devuelto por SEGUNDA vez, y el arreglo anterior cubría sólo media identidad: el `stem` no
+identifica al archivo.** El mismo paper leído bajo dos sujetos vive bajo dos slugs (`gj_581/` y
+`hd_40307/`, **16 pares** en la bóveda real), y con el directorio de salida en `out_dir / stem` los
+dos paquetes caían en el mismo lugar: **68 emitidos, 52 en disco, 1641 de 2032**. ⛔ **Y peor que
+perderlos: NO CONVERGÍA.** El escritor dejaba el último del glob y el aplicador tomaba el primero,
+así que el resultado del paquete que sobrevivía rebotaba siempre por los `id` (7 contra 30) y
+re-emitirlo reproducía la colisión — esos **391 localizadores no se cerraban con ninguna secuencia
+de comandos**. Con la versión anterior (`abiertas[0]` en las dos puntas) las dos coincidían y la
+población cerraba en dos pasadas: el arreglo de la lente había roto la convergencia mientras
+arreglaba la cobertura. Hoy la identidad es **`<slug>/<stem>`** (`file_id`), la declaran el paquete
+y el resultado, y `--apply` elige por ella. ⚠ Mi copia de scratch **no podía verlo**: 64 archivos
+sobre 49 fuentes, sin dos archivos del mismo stem — la medición que lo encontró es la de la bóveda
+entera.
+
+⛔ **La primera mitad, devuelta antes: el paquete se indexaba por BIBCODE y la deuda vive en el
+ARCHIVO.** Una fuente con una segunda lectura bajo otra lente (`<bib>__<lente>.json`,
 #371/#308) entregaba **sólo la primera** —medido: **1542 de 2032 localizadores** en una pasada— y
 la extracción por lente **no se podía nombrar** desde la línea de comandos. La identidad de una
 extracción es el `bibcode` de adentro (#374) y su **archivo** es la unidad de trabajo: las dos cosas
