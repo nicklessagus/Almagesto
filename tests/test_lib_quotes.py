@@ -681,6 +681,19 @@ def test_quote_verdict_495_la_exencion_SOBREVIVE_al_cierre_de_la_deuda(toy_vault
 
 
 @pytest.mark.parametrize("marca", ["_repaginado", "_repaginado_parcial"])
+def test_quote_verdict_495_la_nota_CORREGIDA_hacia_la_fuente_tampoco_bloquea(toy_vault, marca):
+    """⛔ La segunda dirección, que el validador midió desde el otro lado: **corregir una nota HACIA
+    la fuente sumaba un bloqueante**. En `1998Cardoso` la nota transcribía la redacción del preprint
+    y la copia del editor dice otra cosa; al corregir los tres bloques, `contrast --validar-todo`
+    pasó de 4 a 5 alteradas — la fila **correcta** bloqueaba y la incorrecta pasaba, porque coincide
+    con el PDF en disco y diverge de la extracción, que conserva la redacción vieja. Un fix que sólo
+    mirara la nota sin corregir dejaba viva justo la que castiga corregir."""
+    _txt_324("citado", f"prosa. {_PUBLICADA_437}. más prosa.")
+    _extr_vieja("citado", _PREPRINT_437, marca=marca)
+    assert _ver_437()[0] == "en_su_txt"
+
+
+@pytest.mark.parametrize("marca", ["_repaginado", "_repaginado_parcial"])
 def test_quote_verdict_495_no_es_un_apagador_el_txt_NUEVO_sigue_bloqueando(toy_vault, marca):
     """El control simétrico: con la marca nueva, el `.txt` del documento EN DISCO trayendo el
     arranque y siguiendo distinto acusa igual (`txt_nuevo`). Lo que sobrevive al repaginado es la
