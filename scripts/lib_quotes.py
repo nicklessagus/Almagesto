@@ -1077,15 +1077,28 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
     return "no_evaluable", {}
 
 
-def extraction_depaginated(bibcode: str) -> bool:
-    """Does any extraction of this bibcode carry `_paginacion` — i.e. describe a REPLACED PDF? (#437)
+#: #495 — every mark that declares «this extraction describes a document that is NO LONGER on
+#: disk». `_paginacion` opens the debt (`replace_pdf`, #436) and the repagination of #494 closes
+#: it with `_repaginado` / `_repaginado_parcial` — but closing it only updates the LOCATORS, never
+#: the transcription: the prose keeps the wording the extractor read off the replaced PDF. Keying
+#: the exemption on the opening mark alone switched it off exactly when the debt was paid well
+#: (measured in a live vault: 0 → 4 altered quotes, rc 0 → 1, three notes that nobody had touched,
+#: all four of them preprint→published copyediting — the very population #437 exists not to accuse).
+REPLACED_DOC_MARKS = ("_paginacion", "_repaginado", "_repaginado_parcial")
 
-    `replace_pdf` stamps it (#436) because `raw/extraccion/**` is versioned and not regenerable
-    (#311): the reading stays, the document it read is gone. For `quote_verdict` that means the
-    extraction can still prove a quote is in that paper, but its divergent tail cannot accuse the
-    document on disk — the tail may be the preprint's wording against the publisher's."""
-    return any(cfg.as_map(d.get("_paginacion")) for d in _extraction_index().get(bibcode, [])
-               if isinstance(d, dict))
+
+def extraction_depaginated(bibcode: str) -> bool:
+    """Does any extraction of this bibcode describe a REPLACED PDF? (#437, family per #495)
+
+    `replace_pdf` stamps `_paginacion` (#436) because `raw/extraccion/**` is versioned and not
+    regenerable (#311): the reading stays, the document it read is gone. For `quote_verdict` that
+    means the extraction can still prove a quote is in that paper, but its divergent tail cannot
+    accuse the document on disk — the tail may be the preprint's wording against the publisher's.
+
+    ⛔ Any of `REPLACED_DOC_MARKS` answers yes, because repaginating (#494) rewrites the locators
+    and leaves the transcription untouched: the reason the tail cannot judge survives the debt."""
+    return any(any(cfg.as_map(d.get(m)) for m in REPLACED_DOC_MARKS)
+               for d in _extraction_index().get(bibcode, []) if isinstance(d, dict))
 
 
 def quote_found(quote: str, source_norm: str) -> bool:

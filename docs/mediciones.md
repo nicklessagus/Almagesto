@@ -7,6 +7,40 @@
 > Regla de la casa: **lo medido y lo derivado van separados**, y una salvedad que invalida un número
 > se escribe al lado del número, no en otro lado (regla de método #5).
 
+## #495 · la exención de #437 se apagaba al cerrar bien la deuda de paginación (2026-09-20)
+
+**Cómo apareció.** Cerrando la deuda de `_paginacion` en `Almagesto-Tesis` (285 notas, 10493 citas):
+repaginar por relectura las 68 extracciones marcadas y pasarlas a `_repaginado` llevó
+`contrast.py --validar-todo` de **0 citas alteradas a 4** (rc 0 → **rc 1**), en 3 notas de concepto,
+**sin que ninguna de esas notas ni ninguna de esas citas cambiara** (verificado con `git log -S`
+sobre las notas y `git diff` sobre los JSON: las cadenas no se tocaron desde `5395ecc`).
+
+| nota | fuente | dice la nota (y el `.txt` del documento EN DISCO) | dice la extracción |
+|---|---|---|---|
+| `concepts/instruments/harps-drs.md:681` | `2007A&A...468.1115L` | «falls **within** the gap» | «falls **in** the gap» |
+| `concepts/methods/icasso.md:688` y `:782` | `2019AJ....158..161D` | «one of the **drivers**» | «one of the **driver**» |
+| `concepts/methods/rv-doppler.md:129` | `2002A&A...388..632P` | «**a** precision on the fitted» | «**an** precision on the fitted» |
+
+Los cuatro son copyedición preprint→publicado, o sea **la población exacta que #437 existe para no
+acusar** (medida entonces en 23 pares), bloqueando a la nota correcta.
+
+**El mecanismo.** `lib_quotes.extraction_depaginated` es la única puerta de la exención y preguntaba
+**sólo por `_paginacion`**. El error de modelo: **repaginar actualiza los LOCALIZADORES, no la
+transcripción.** La extracción es versionada y no regenerable (#311), así que después del repaginado
+sigue describiendo el documento reemplazado exactamente como antes —su prosa es la que leyó del
+preprint— pero la marca que lo decía se fue. La exención se apagaba justo cuando la deuda se cerraba
+bien.
+
+**Lo que entró.** `REPLACED_DOC_MARKS = ("_paginacion", "_repaginado", "_repaginado_parcial")` y la
+puerta mirando la familia. ⛔ **La marca de apertura sigue sola donde la pregunta es otra:** la
+categoría de backlog del lint **cuenta la deuda**, y ahí `_paginacion` es lo correcto —repaginar la
+cierra—; `replace_pdf` la **estampa**. Los dos leían el mismo campo para decidir cosas distintas, y
+ésa es la razón de que la familia se declare en un solo lugar (entrada 495 de `portadores.yaml`).
+La red es el par de tests de `test_lib_quotes.py`: con la marca nueva el veredicto sigue siendo
+`extraccion_vieja` (hoy cae con la puerta vieja), y el control simétrico —el `.txt` del documento en
+disco trayendo el arranque y siguiendo distinto— sigue devolviendo `alterada`, para que la familia
+no sea un apagador.
+
 ## #492 · el localizador de página: la mitad más decidible del par, y nadie la miraba (2026-09-19)
 
 **Cómo apareció.** Escribiendo un informe desde la bóveda (`Almagesto-Tesis#8`): la taxonomía de

@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-19",
+ "fetched": "2026-09-20",
  "issues": [
   {
    "number": 2,
@@ -2455,6 +2455,16 @@
    "number": 493,
    "title": "Localizador (residuo de #492): en la página muda el offset global espurio gana al número impreso de la página donde cae la cita",
    "state": "CLOSED"
+  },
+  {
+   "number": 494,
+   "title": "Cerrar `_paginacion` RELEYENDO el PDF: falta la operación (paquete de relectura por fuente + escritura serial al JSON + re-estampa); la página del `.txt` es guía, no respuesta",
+   "state": "OPEN"
+  },
+  {
+   "number": 495,
+   "title": "El cierre de `_paginacion` apaga la exención de #437: la extracción del PDF reemplazado vuelve a acusar (4 citas, rc 0 → 1)",
+   "state": "OPEN"
   }
  ]
 }

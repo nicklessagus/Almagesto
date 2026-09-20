@@ -1852,3 +1852,31 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Es el módulo donde vive la implementación; `lib_config` la re-exporta (AUD-306) y los consumidores la llaman por ahí."
+  - issue: 495
+    regla: >-
+      Toda marca que declara «esta extracción describe un documento que YA NO ESTÁ en disco»
+      —`_paginacion` abre la deuda (#436), `_repaginado`/`_repaginado_parcial` la cierran (#494)—
+      tiene que sobrevivir al cierre de la deuda, porque repaginar actualiza los LOCALIZADORES y
+      nunca la transcripción: la prosa sigue siendo la que el extractor leyó del PDF reemplazado.
+      La puerta de la exención de #437 mira la FAMILIA (`REPLACED_DOC_MARKS`), no la marca de
+      apertura. Medido en una bóveda real: cerrar la deuda bien llevó `contrast --validar-todo` de
+      0 a 4 citas alteradas (rc 0 → 1) en tres notas que nadie tocó, las cuatro copyedición
+      preprint→publicado, o sea la población exacta que #437 existe para no acusar.
+    funcion: lib_config.extraction_depaginated
+    patron: '_paginacion|_repaginado'
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "Nombra la causa del localizador MAL y emite la marca `⚠verificar en el PDF` del `extraccion_vieja`: las dos preguntan si la extracción describe el documento en disco."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Sus dos sitios leen `_paginacion` para preguntas distintas: la categoría de backlog CUENTA LA DEUDA (y ahí la marca de apertura es lo correcto: repaginar la cierra) y la exención de la cita consume el veredicto ya decidido por esta función."
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "Es el que ESTAMPA `_paginacion` al reemplazar el PDF; abrir la deuda es una marca sola, no la familia que la puerta lee."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "La nombra en un docstring para explicar el eje `leido` de `pdf_leido` (#456); no decide nada sobre la extracción."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Es el módulo donde vive la implementación junto con `REPLACED_DOC_MARKS`; `lib_config` la re-exporta (AUD-306) y los consumidores la llaman por ahí."

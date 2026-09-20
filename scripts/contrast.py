@@ -288,8 +288,8 @@ def _page_check(b, cita: str, duenio: str | None, out: dict) -> None:
         # #436/#437 — el PDF reemplazado es la causa MEDIDA de la mayoría (104 de 893 en una bóveda
         # real), y es la que convierte la deuda global de `_paginacion` en esta lista con su página
         # nueva. Se nombra acá porque cambia qué hay que hacer: no es un error de transcripción.
-        causa = (" · la extracción de esa fuente es de un PDF REEMPLAZADO (`_paginacion`, #436): el "
-                 "localizador es del documento anterior"
+        causa = (" · la extracción de esa fuente es de un PDF REEMPLAZADO (#436): el localizador "
+                 "es del documento anterior"
                  if cfg.extraction_depaginated(duenio) else "")
         out["pag_mal"].append(
             (b.first_line, f"«{corte}» ({decl}) — la cita está en la p. "
@@ -427,7 +427,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                 # así que no «pasa»: sale con la marca, como el `txt_acusa` de #341.
                 out["discrepan"].append(
                     (b.first_line, f"«{corte}» — la extracción de {', '.join(det['bibs'])} es de un "
-                                   f"PDF REEMPLAZADO (`_paginacion`) y el `.txt` del nuevo no la "
+                                   f"PDF REEMPLAZADO (#436) y el `.txt` del nuevo no la "
                                    f"encuentra: no se puede decidir desde acá. Abrí el PDF nuevo "
                                    f"(#437)",
                      cfg.verificar_pdf_mark(

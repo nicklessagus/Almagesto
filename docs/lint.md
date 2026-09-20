@@ -469,7 +469,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   LLM—, así que lo único cierto es *andá a mirar esta página*. Existe porque una cita alterada que
   nace **en la extracción** es invisible para `contrast --validar` por construcción: su juez **es**
   la extracción (#315/#317), y hasta 1.161.0 el `.txt` sólo podía absolver.
-  ⛔ **Y la extracción de un PDF REEMPLAZADO no acusa sola (#437):** con `_paginacion`, su cola
+  ⛔ **Y la extracción de un PDF REEMPLAZADO no acusa sola (#437):** con cualquiera de las marcas
+  de `REPLACED_DOC_MARKS` —`_paginacion`, que abre la deuda, y `_repaginado`/`_repaginado_parcial`,
+  que la cierran (#495: repaginar actualiza los LOCALIZADORES y nunca la transcripción, así que la
+  razón por la que la cola no puede juzgar sobrevive al cierre)—, su cola
   distinta es la redacción del preprint contra la del publicado (medido: 23 pares de copyedición,
   la nota correcta bloqueaba y la incorrecta pasaba). Ahí «cambiada» se mide contra el PDF que está
   en disco: la cita verbatim en el `.txt` nuevo pasa; el `.txt` nuevo que trae el arranque y sigue

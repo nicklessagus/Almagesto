@@ -7,6 +7,7 @@ import importlib
 import pathlib
 import json
 import sys
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -569,13 +570,15 @@ def test_verificar_pdf_mark_lleva_el_MOTIVO_y_la_FECHA():
 # ── #437 · la extracción de un PDF REEMPLAZADO no es juez del documento en disco ─────────────────
 
 
-def _extr_vieja(bib: str, valor: str, slug: str = "tema"):
-    """Una extracción marcada `_paginacion`: describe un PDF que se REEMPLAZÓ (#436)."""
+def _extr_vieja(bib: str, valor: str, slug: str = "tema", marca: str = "_paginacion"):
+    """Una extracción que describe un PDF que se REEMPLAZÓ (#436), con la marca de la familia
+    `REPLACED_DOC_MARKS` que se pida (#495: la deuda se abre con `_paginacion` y se cierra con
+    `_repaginado`, y la transcripción sigue siendo la del documento viejo en los tres casos)."""
     import json
     (cfg.EXTRACCION / slug).mkdir(parents=True, exist_ok=True)
     (cfg.EXTRACCION / slug / f"{bib}.json").write_text(json.dumps(
         {"bibcode": bib, "ground_truth": [{"que": "x", "valor": valor}],
-         "_paginacion": {"reemplazo": "2026-09-10", "motivo": "versión del editor"}}),
+         marca: {"reemplazo": "2026-09-10", "fecha": "2026-09-20", "motivo": "versión del editor"}}),
         encoding="utf-8")
 
 
@@ -660,6 +663,32 @@ def test_quote_verdict_437_una_extraccion_VIGENTE_con_el_prefijo_sigue_siendo_ju
                                  {"citado": cfg.fulltext_readings("citado"),
                                   "vigente": cfg.fulltext_readings("vigente")})
     assert ver == "alterada" and det["prefijo"] and not det.get("txt_nuevo"), (ver, det)
+
+
+@pytest.mark.parametrize("marca", ["_repaginado", "_repaginado_parcial"])
+def test_quote_verdict_495_la_exencion_SOBREVIVE_al_cierre_de_la_deuda(toy_vault, marca):
+    """⛔ #495 — repaginar (#494) actualiza los LOCALIZADORES, no la transcripción: la extracción
+    sigue describiendo el documento reemplazado, pero la marca que lo decía cambia de nombre. Con
+    la puerta mirando sólo `_paginacion`, la exención de #437 se apagaba justo cuando la deuda se
+    cerraba BIEN — medido en una bóveda real: 0 → 4 citas alteradas (rc 0 → 1) en tres notas que
+    nadie tocó, las cuatro copyedición preprint→publicado, o sea la población exacta que #437
+    existe para no acusar. La nota correcta volvía a bloquear."""
+    _txt_324("citado", "prosa que no dice la cita")
+    _extr_vieja("citado", _PREPRINT_437, marca=marca)
+    ver, det = _ver_437()
+    assert ver == "extraccion_vieja" and det["bibs"] == ["citado"], (ver, det)
+    assert cfg.extraction_depaginated("citado")
+
+
+@pytest.mark.parametrize("marca", ["_repaginado", "_repaginado_parcial"])
+def test_quote_verdict_495_no_es_un_apagador_el_txt_NUEVO_sigue_bloqueando(toy_vault, marca):
+    """El control simétrico: con la marca nueva, el `.txt` del documento EN DISCO trayendo el
+    arranque y siguiendo distinto acusa igual (`txt_nuevo`). Lo que sobrevive al repaginado es la
+    exención de la extracción, no la de la cita."""
+    _txt_324("citado", f"prosa. {CITA_324} under Gaussian noise of unknown covariance. y sigue.")
+    _extr_vieja("citado", _PREPRINT_437, marca=marca)
+    ver, det = _ver_437()
+    assert ver == "alterada" and det.get("txt_nuevo") == "citado", (ver, det)
 
 
 def test_source_texts_no_parte_una_oracion_continua_entre_dos_lecturas():
