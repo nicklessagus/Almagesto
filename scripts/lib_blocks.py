@@ -175,7 +175,6 @@ def split_source_ref(cell: str) -> tuple[str | None, str]:
     return None, cell
 
 
-_LOC_PAGINA = re.compile(r"\bp{1,2}\.\s*\d+", re.I)     # `p. 628`, `pp. 12-14`
 _LOC_LINEA = re.compile(r"\bL\s?\d+\b")                  # `L320`, `L 320`
 
 
@@ -371,7 +370,10 @@ def locator_kinds(evidencia: str) -> set:
     como veredicto."""
     # @inv INV-113
     out = set()
-    if _LOC_PAGINA.search(evidencia or ""):
+    # #492 — la MISMA función que lee un localizador de página en el resto del repo: dos lecturas
+    # de «`p. 628`» en un repo donde una de ellas decide un veredicto es la divergencia que #324
+    # declaró prohibida.
+    if cfg.page_locators(evidencia or ""):
         out.add("pdf")
     if _LOC_LINEA.search(evidencia or ""):
         out.add("txt")

@@ -1165,3 +1165,93 @@ def test_490_el_hermano_de_verificacion_y_el_log_NO_son_prosa_del_corrector(toy_
                                                              "no es prosa nueva (#344/#407)")
     assert hermano.name not in out
     assert "salteada(s) por estructura" in out, "y lo exento se declara, no desaparece"
+
+
+# ── #492 · el eje del LOCALIZADOR de página, dentro del mismo barrido ─────────────────────────
+def _txt_paginas(slug: str, bib: str, paginas: list):
+    """`.txt` con un form feed por página y el número IMPRESO en el pie (AUD-165)."""
+    _txt(slug, bib, "\f".join(f"A&A proofs\n\n{cuerpo}\n\n{n}"
+                              for n, cuerpo in enumerate(paginas, 1)))
+
+
+def _nota_492(cuerpo: str):
+    return _nota_323("ica-ruido", cuerpo)
+
+
+def test_492_el_localizador_que_apunta_a_OTRA_pagina_se_reporta_y_NO_bloquea(toy_vault, capsys):
+    """El caso de `Almagesto-Tesis#8`: «p. 3» sobre un pasaje que arranca en la p. 2, con la nota
+    cerrada. ⛔ No mueve el rc: la población es la más grande de la bóveda y este barrido es paso de
+    cierre obligatorio (#323), así que un falso positivo acá frena operaciones."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt_paginas("ica_ruido", "2013Voss", ["intro sin nada", f"prosa. {LARGA}. fin", "cierre"])
+    nota = _nota_492(f"Dice «{LARGA}» (p. 3) [[2013Voss]].\n")
+    assert ct.main(["--validar", str(nota)]) == 0
+    out = capsys.readouterr().out
+    assert "la cita está en la p. 2" in out and "Corregí el localizador" in out
+
+
+def test_492_el_localizador_CORRECTO_no_dice_nada_y_cuenta(toy_vault, capsys):
+    """El control, y la población: un `0` sin denominador no distingue «miré» de «no miré» (INV-40),
+    así que el barrido declara los cuatro estados aunque no haya hallazgos."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt_paginas("ica_ruido", "2013Voss", ["intro sin nada", f"prosa. {LARGA}. fin", "cierre"])
+    nota = _nota_492(f"Dice «{LARGA}» (p. 2) [[2013Voss]].\n")
+    assert ct.main(["--validar-todo"]) == 0
+    out = capsys.readouterr().out
+    assert "Corregí el localizador" not in out
+    assert "localizadores de página: 1 · 1 en la página IMPRESA" in out
+
+
+def test_492_la_ATRIBUCION_AMBIGUA_no_se_juzga(toy_vault, capsys, monkeypatch):
+    """#316/#325 — con dos fuentes en el bloque y ninguna adyacente, el localizador se contrastaría
+    contra la fuente equivocada. Sale *no evaluable* y **no se consulta el veredicto**: preguntarlo
+    sobre un dueño que no existe devolvería «sin `.txt` en disco», que es otro motivo."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt_paginas("ica_ruido", "2013Voss", ["intro sin nada", f"prosa. {LARGA}. fin", "cierre"])
+    nota = _nota_492(f"[[2004Davies]] y [[2013Voss]] dicen «{LARGA}», y más prosa (p. 3).\n")
+    def _no_preguntar(*a, **k):
+        raise AssertionError("sin dueño no hay a quién preguntarle la página")
+    monkeypatch.setattr(ct.cfg, "quote_page_verdict", _no_preguntar)
+    assert ct.main(["--validar", str(nota)]) == 0
+    out = capsys.readouterr().out
+    assert "Corregí el localizador" not in out
+
+
+def test_492_la_OTRA_CONVENCION_se_lista_aparte_y_la_DECLARADA_no(toy_vault, capsys):
+    """Las 44 de 190: el localizador usa el índice del PDF sobre un documento que SÍ tiene número
+    impreso. No es un hecho falso —no va con las `mal`— y sí se lista: el consumidor copia ese
+    número. ⛔ Y si el localizador declara que es el índice, es la escotilla de
+    `REGLA_LOCALIZADOR` y no hay nada que decir."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss", "\f".join(
+        f"A&A proofs\n\n{cuerpo}\n\n{1208 + n}"
+        for n, cuerpo in enumerate(["intro sin nada", f"prosa. {LARGA}. fin", "cierre", "refs"], 1)))
+    nota = _nota_492(f"Dice «{LARGA}» (p. 2) [[2013Voss]].\n")
+    assert ct.main(["--validar", str(nota)]) == 0
+    out = capsys.readouterr().out
+    assert "apunta al ÍNDICE del PDF" in out and "la 1210" in out
+    assert "Corregí el localizador" not in out, "otra convención no es una página equivocada"
+
+    nota2 = _nota_492(f"Dice «{LARGA}» (p. 2 [índice del PDF]) [[2013Voss]].\n")
+    assert ct.main(["--validar-todo"]) == 0
+    out2 = capsys.readouterr().out
+    assert "1 declarado(s) como índice" in out2, out2
+    assert "apunta al ÍNDICE" not in out2, out2
+
+    # ⛔ y declarar la convención no exime del chequeo: un localizador que DICE «índice del PDF» y
+    # apunta a otra página sigue estando MAL
+    _nota_492(f"Dice «{LARGA}» (p. 7 [índice del PDF]) [[2013Voss]].\n")
+    assert ct.main(["--validar-todo"]) == 0
+    out3 = capsys.readouterr().out
+    assert "1 MAL" in out3 and "0 declarado(s) como índice" in out3, out3
+
+
+def test_492_el_PDF_REEMPLAZADO_se_nombra_como_causa(toy_vault, capsys):
+    """#436/#437 — la causa MEDIDA de la mayoría (104 de 893): la extracción es de otro documento,
+    así que el localizador es del anterior. Nombrarla cambia qué hay que hacer, y convierte la deuda
+    global de `_paginacion` en esta lista con su página nueva."""
+    _extraccion("ica_ruido", "2013Voss", _paginacion={"motivo": "PDF reemplazado"})
+    _txt_paginas("ica_ruido", "2013Voss", ["intro sin nada", f"prosa. {LARGA}. fin", "cierre"])
+    nota = _nota_492(f"Dice «{LARGA}» (p. 3) [[2013Voss]].\n")
+    assert ct.main(["--validar", str(nota)]) == 0
+    assert "PDF REEMPLAZADO" in capsys.readouterr().out

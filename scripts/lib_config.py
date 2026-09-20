@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.288.1"
+ALMAGESTO_VERSION = "1.289.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -315,8 +315,16 @@ def _es_estampada(linea: str) -> bool:
 #: prompt de extracción y la plantilla de la vista que se estampa en la nota— y divergieron: el
 #: stub siguió mandando citar por nº de línea del `.txt` durante 40 versiones después de que #205
 #: hiciera del PDF la fuente, publicando dentro del vault la doctrina retirada.
+#: #492 · y QUÉ numeración es esa página: la **impresa**. El campo no lo decía, así que el
+#: extractor elegía por paper —medido: 44 de 190 localizadores de una nota en el índice del PDF,
+#: consistentes por extracción e inconsistentes por bóveda—, y el consumidor copia ese número a su
+#: `\citep[p.~N]` y cita una página que el documento no muestra. El índice del PDF sirve cuando el
+#: documento NO tiene número impreso (un preprint), y ahí se declara, porque si no las dos
+#: convenciones se leen igual.
 REGLA_LOCALIZADOR = (
-    "el **localizador** es la **página** del PDF (`p. 7`); `L1234` sólo en fuente web o documento "
+    "el **localizador** es la **página IMPRESA** del PDF (la que muestra la hoja: `p. 7`) — si el "
+    "documento no la tiene, el índice del PDF y **lo decís** (`p. 7 [índice del PDF]`, #492); "
+    "`L1234` sólo en fuente web o documento "
     "largo (#80/#200), y `Fig. N, p. M` en lectura de gráfico (#195). El `grep -n` sobre el `.txt` "
     "sirve para **ubicar** dónde mirar, no para citar")
 
@@ -850,6 +858,10 @@ _LEAK_MAX = 4
 _EXTRACCION_CACHE: dict = {}
 _EXTRACTION_INDEX: dict = {}
 _FULLTEXT_CACHE: dict = {}
+#: #492 · lo mismo por PÁGINA, para el chequeo del localizador: el `.txt` se parte por
+#: form feed y cada página se normaliza, o sea el mismo costo de `_FULLTEXT_CACHE` otra vez,
+#: y el chequeo corre por cita.
+_PAGINAS_CACHE: dict = {}
 
 
 def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
@@ -5365,6 +5377,10 @@ from lib_quotes import (  # noqa: E402,F401
     CITA_COLA_MIN,
     CITA_PREFIJO,
     GUTTER,
+    PAGE_EDGE_LINES,
+    PAGE_INDEX_DECLARED,
+    PAGE_LOC_RE,
+    PAGE_OFFSET_MIN,
     QUOTE_FRAG_MIN,
     QUOTE_MIN,
     VERIFICAR_PDF_MARK,
@@ -5387,14 +5403,19 @@ from lib_quotes import (  # noqa: E402,F401
     extraction_identity,
     extraction_texts,
     extraction_depaginated,
+    fulltext_pagination,
     fulltext_readings,
     log_quote_exempt,
     normalize_quote,
     normalize_source_text,
     note_own_bibcode,
+    page_locator_after,
+    page_locators,
+    printed_page_offset,
     quote_found,
     quote_found_degraded,
     quote_fragments,
+    quote_page_verdict,
     quote_variants,
     quote_from_stamped_block,
     quote_verdict,

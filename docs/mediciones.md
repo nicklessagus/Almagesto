@@ -7,6 +7,44 @@
 > Regla de la casa: **lo medido y lo derivado van separados**, y una salvedad que invalida un número
 > se escribe al lado del número, no en otro lado (regla de método #5).
 
+## #492 · el localizador de página: la mitad más decidible del par, y nadie la miraba (2026-09-19)
+
+**Cómo apareció.** Escribiendo un informe desde la bóveda (`Almagesto-Tesis#8`): la taxonomía de
+Kairov 2017 estaba localizada en «p. 3» en `icasso.md` y el pasaje arranca en la p. 2. O sea, se
+detectó **aguas abajo de todas las capas**: la ficha había pasado `audit-note` dos días antes,
+`lint --cierre` rc 0, `contrast --validar-todo` rc 0 y **239/239** pares `soportada`.
+
+**Cómo se midió.** Cada cita `«…»` seguida de `(p. N)` se busca en el `.txt` de su fuente **partido
+por form feed** (`extract_fulltext` deja uno por página, AUD-165) y el número impreso se deriva del
+entero de cabecera/pie que crece de a uno.
+
+| población | resultado |
+|---|---|
+| `icasso.md`, 190 localizadores con cita (revisado a mano) | **12 mal** (6 %) · **44** (23 %) en el ÍNDICE del PDF en vez de la impresa |
+| toda la bóveda, 9 notas de entidad, 893 localizadores | 714 OK · **104** apuntan al documento REEMPLAZADO (`_paginacion`, 50 bibcodes: el 12 % del total) · 13 «mal» sin esa causa · 43 en libros (el offset no se deriva) · 19 no evaluables (matemática dentro de la cita) |
+
+⚠ **Sólo `icasso` está revisado a mano.** Los 13 «mal» del resto pueden tener falsos positivos del
+script de scratch —atribución del bibcode en bloques con varias citas: en `icasso`, ~la mitad de los
+flags de la primera pasada eran eso—. Por eso la categoría **no mueve el rc**: `--validar-todo` es
+paso de cierre obligatorio (#323) y su población es la más grande de la bóveda.
+
+**Las 44 no son un error de hecho.** Son **otra convención** —índice del PDF, no página impresa— y
+eran **consistentes por extracción e inconsistentes por bóveda**: sólo tres papers (Meinecke 2002,
+Remes 2011, Du 2014), o sea que cada extractor eligió una y el campo nunca dijo cuál. El número es
+el que el consumidor **copia** a su `\citep[p.~N]`, así que citaría una página que el paper no
+muestra.
+
+**Lo que entró (1.289.0).** `cfg.quote_page_verdict` con cuatro estados y los dos que no son
+hallazgo con su motivo (D-43) · `REGLA_LOCALIZADOR` fija la convención —página **impresa**, y el
+índice se **declara** cuando el documento no tiene número— y viaja al prompt y al stub · el escritor
+del hermano avisa cuando la página de la *Evidencia* difiere de la del cuerpo (el caso 1209/1210,
+que estaba a la vista y no lo cruzaba nadie) · y `_LOC_PAGINA`, la segunda lectura de «qué es un
+localizador», pasó a llamar a la única (#409: `tools/portadores.yaml`, entrada 492).
+
+⛔ **El empate no se desempata.** Si dos offsets candidatos se repiten lo mismo, `printed_page_offset`
+devuelve `None`: elegir sería inventar la convención que el chequeo existe para auditar, y sin
+numeración derivable acertarle al índice puede ser coincidencia.
+
 ## 2026-08-25 · Extracción de τ Ceti (79 papers) — el fan-out con prompt escrito a mano
 
 **Qué era.** Ingest completo de τ Ceti con `ingest-star`: 79 fulltexts, un subagente por paper. El

@@ -730,3 +730,132 @@ def test_454_el_predicado_del_bloque_estampado_es_UNO_SOLO():
     assert not cfg.quote_from_stamped_block("- «una cita»", intro="**Ejes:**")
     assert not cfg.quote_from_stamped_block("prosa de la ficha con «una cita» [[2020X]]")
     assert not cfg.quote_from_stamped_block("")
+
+
+# ── #492 · el localizador de PÁGINA contra el `.txt` partido por form feed ────────────────────
+CITA_492 = "the taxonomy of stability indices is not settled in the literature"
+
+
+def _txt_paginado(bib: str, paginas: list, slug: str = "tema"):
+    """Un `.txt` con un form feed por página, como el que deja `extract_fulltext` (AUD-165)."""
+    _txt_324(bib, "\f".join(paginas), slug)
+
+
+def _pagina(n: int, cuerpo: str, impresa: int | None = None) -> str:
+    """Una página con su número IMPRESO en el pie — la cabecera/pie de la que sale el offset."""
+    pie = "" if impresa is None else f"\n\n{impresa}"
+    return f"A&A proofs\n\n{cuerpo}{pie}"
+
+
+def _sin_digitos(i: int) -> str:
+    """Cuerpo de página sin enteros: el offset se deriva del pie, no de la prosa."""
+    return "prosa de relleno de esta página"
+
+
+def test_492_el_localizador_adyacente_no_se_roba_el_de_la_cita_siguiente(toy_vault):
+    """#492/#325 — la adyacencia es la misma regla que para el bibcode: el número que está después
+    de OTRA cita no es el de ésta. Sin el corte en el `«` siguiente, una cita sin localizador se
+    quedaba con el de su vecina y salía reportada por una página que nunca declaró."""
+    bloque = "dice «una frase larga que alcanza el mínimo de la regla» y después «otra frase larga que también lo alcanza» (p. 9)"
+    assert cfg.page_locator_after(bloque, "una frase larga que alcanza el mínimo de la regla") is None
+    # …y una cita que NO está en el bloque no hereda ningún localizador: sin el `find` mandando,
+    # la ventana arrancaría en un offset arbitrario y devolvería el primer `p. N` que encuentre
+    assert cfg.page_locator_after("una prosa cualquiera (p. 9) y más", "ausente") is None
+    assert cfg.page_locator_after(bloque, "otra frase larga que también lo alcanza")[:2] == (9, 9)
+    # las tres formas que la bóveda escribe de verdad, incluida la de #488 y la celda de una fila
+    for texto, esperado in ((f"«{CITA_492}» (p. 4) [[2020X]]", (4, 4)),
+                            (f"«{CITA_492}» ([[2020X]], p. 4)", (4, 4)),
+                            (f"| «{CITA_492}» | p. 4 | x |", (4, 4)),
+                            (f"«{CITA_492}» (pp. 12-14) [[2020X]]", (12, 14))):
+        assert cfg.page_locator_after(texto, CITA_492)[:2] == esperado, texto
+
+
+def test_492_el_offset_de_la_pagina_impresa_se_deriva_o_no_se_inventa(toy_vault):
+    """⛔ El desfasaje índice→impresa sale del entero de cabecera/pie que se repite, y si no se
+    repite en `PAGE_OFFSET_MIN` páginas la respuesta es `None` — *no evaluable*, nunca un veredicto
+    (D-43). Es la diferencia entre una numeración y dos enteros que coinciden."""
+    impresas = [_pagina(i, _sin_digitos(i), impresa=1208 + i) for i in range(1, 5)]
+    assert cfg.printed_page_offset(impresas) == 1208
+    assert cfg.printed_page_offset([_pagina(i, _sin_digitos(i)) for i in range(1, 5)]) is None
+    # ⛔ y el EMPATE tampoco se desempata: dos numeraciones igual de repetidas no se distinguen
+    empatadas = [f"{100 + i}\n\n{_sin_digitos(i)}\n\n{1208 + i}" for i in range(1, 5)]
+    assert cfg.printed_page_offset(empatadas) is None
+    assert cfg.printed_page_offset([]) is None
+    # dos páginas no son una numeración: por debajo de `PAGE_OFFSET_MIN` no se deriva nada
+    assert cfg.printed_page_offset(impresas[:2]) is None
+
+
+def test_492_el_localizador_que_apunta_a_otra_pagina_sale_MAL_con_la_suya(toy_vault):
+    """El caso de `Almagesto-Tesis#8`: la cita estaba localizada en «p. 3» y el pasaje arranca en la
+    p. 2, con la nota cerrada —`audit-note`, `lint --cierre` 0, 239/239 `soportada`—. El `.txt`
+    sabe en qué página está, y el detalle trae la página que hay que escribir.  @inv INV-155"""
+    _txt_paginado("2017Kairov", [_pagina(1, "intro", impresa=1),
+                                 _pagina(2, f"prosa. {CITA_492}. más prosa.", impresa=2),
+                                 _pagina(3, "otra cosa", impresa=3),
+                                 _pagina(4, "cierre", impresa=4)])
+    assert cfg.quote_page_verdict(CITA_492, "2017Kairov", (2, 2))[0] == "impresa"
+    estado, det = cfg.quote_page_verdict(CITA_492, "2017Kairov", (3, 3))
+    assert estado == "mal" and det["impresas"] == [2] and det["paginas"] == [2]
+    # y el rango `pp. 1-3` la cubre: un localizador de rango no es un hallazgo
+    assert cfg.quote_page_verdict(CITA_492, "2017Kairov", (1, 3))[0] == "impresa"
+
+
+def test_492_la_otra_convencion_se_distingue_del_error_y_de_lo_declarado(toy_vault):
+    """Las 44 de 190: el localizador usa el ÍNDICE del PDF sobre un documento que SÍ tiene número
+    impreso. No es un hecho falso y no se mezcla con `mal` — el consumidor copia ese número y cita
+    una página que el paper no muestra. ⛔ Y si el localizador DECLARA que es el índice, es la
+    escotilla de `REGLA_LOCALIZADOR` y no hay nada que reportar."""
+    _txt_paginado("2002Meinecke", [_pagina(1, _sin_digitos(1), impresa=1209),
+                                   _pagina(2, f"prosa. {CITA_492}. fin", impresa=1210),
+                                   _pagina(3, _sin_digitos(3), impresa=1211),
+                                   _pagina(4, _sin_digitos(4), impresa=1212)])
+    assert cfg.quote_page_verdict(CITA_492, "2002Meinecke", (1210, 1210))[0] == "impresa"
+    assert cfg.quote_page_verdict(CITA_492, "2002Meinecke", (2, 2))[0] == "indice"
+    assert cfg.quote_page_verdict(CITA_492, "2002Meinecke", (7, 7))[0] == "mal"
+
+
+def test_492_sin_txt_sin_cita_y_sin_numeracion_impresa_es_NO_EVALUABLE(toy_vault):
+    """⛔ Los tres silencios, cada uno con su motivo (D-43/#321): el `.txt` es un índice degradado
+    (#205), así que no encontrar la cita NO es «el localizador está mal»; y sin numeración impresa
+    derivable, acertarle al índice puede ser coincidencia — decidir la convención ahí sería
+    adivinarla."""
+    estado, det = cfg.quote_page_verdict(CITA_492, "2013SinTxt", (4, 4))
+    assert estado == "no_evaluable" and "no tiene `.txt` en disco" in det["motivo"], \
+        "sin artefacto y sin la cita son dos silencios distintos: el motivo los distingue"
+    _txt_paginado("2011Remes", [_pagina(1, "intro"), _pagina(2, f"prosa. {CITA_492}. fin"),
+                                _pagina(3, "fin")])
+    estado, det = cfg.quote_page_verdict(CITA_492, "2011Remes", (2, 2))
+    assert estado == "no_evaluable" and "convención" in det["motivo"]
+    # …salvo que el localizador DECLARE que es el índice del PDF (la escotilla de #492)
+    assert cfg.quote_page_verdict(CITA_492, "2011Remes", (2, 2, "indice"))[0] == "indice"
+    # …y sin numeración impresa, un localizador que NO coincide con el índice tampoco es `mal`:
+    # no hay contra qué decidirlo (el `.txt` podría estar numerando de otra manera)
+    estado, det = cfg.quote_page_verdict(CITA_492, "2011Remes", (7, 7))
+    assert estado == "no_evaluable" and "no se puede decidir" in det["motivo"]
+    _txt_paginado("2014Du", [_pagina(1, "intro"), _pagina(2, "nada de esto"), _pagina(3, "fin")])
+    estado, det = cfg.quote_page_verdict(CITA_492, "2014Du", (2, 2))
+    assert estado == "no_evaluable" and "índice degradado" in det["motivo"]
+
+
+def test_492_la_paginacion_del_txt_se_lee_UNA_vez(toy_vault):
+    """El chequeo corre POR CITA y normaliza cada página por separado: sin caché, el mismo `.txt`
+    se parte y se normaliza decenas de veces en la pasada que `CLAUDE.md` describe como barata
+    (misma asimetría que #320 arregló en `extraction_texts`)."""
+    _txt_paginado("2020Cache", [_pagina(1, "intro", impresa=1), _pagina(2, "medio", impresa=2),
+                                _pagina(3, "fin", impresa=3)])
+    primero = cfg.fulltext_pagination("2020Cache")
+    assert primero["paginas"] and cfg.fulltext_pagination("2020Cache") is primero
+
+
+def test_492_la_pagina_se_busca_con_las_COLUMNAS_partidas(toy_vault):
+    """La cita que sólo aparece una vez de-interleaveadas las columnas (#275/#332) tiene que
+    encontrarse acá también: si no, el chequeo reportaría el LAYOUT como un localizador mal."""
+    izq = "ruido de la otra columna que no dice nada de esto en absoluto".split(" ")
+    der = CITA_492.split(" ")
+    pag = "\n".join(f"{a:<40}{b}" for a, b in zip(izq, der))
+    _txt_paginado("2020Columnas", [_pagina(1, _sin_digitos(1), impresa=1),
+                                   _pagina(2, pag, impresa=2),
+                                   _pagina(3, _sin_digitos(3), impresa=3)])
+    assert not any(CITA_492 in lectura for lectura in cfg.source_texts(pag.replace("\n", " "))), \
+        "el fixture tiene que exigir el de-interleave: en el texto plano la cita NO está"
+    assert cfg.quote_page_verdict(CITA_492, "2020Columnas", (2, 2))[0] == "impresa"

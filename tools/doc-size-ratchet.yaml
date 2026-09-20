@@ -44,8 +44,8 @@
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
 medido_en: "2026-09-16"
-techo_lineas: 1862
-techo_bytes: 152700
+techo_lineas: 1865
+techo_bytes: 152930
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -651,3 +651,19 @@ crecimientos:
       el catálogo de las dos categorías nuevas, a `docs/lint.md`.
     techo_lineas: 1862
     techo_bytes: 152700
+  - fecha: "2026-09-19"
+    ancla: "#492"
+    motivo: >-
+      Tres líneas que vuelven DECIDIBLE la regla que ya estaba: «con la página del PDF» no dice
+      cuál de las dos numeraciones, y el extractor elegía por paper — medido, 44 de 190
+      localizadores de una nota en el índice del PDF, consistentes por extracción e inconsistentes
+      por bóveda, más 12 mal en la misma nota cerrada con `audit-note` y 239/239 `soportada`. Es lo
+      que un agente necesita ANTES de escribir la fila: el número que anota es el que el consumidor
+      copia a su `\citep[p.~N]`, y desde #492 hay un chequeo que lo contrasta contra el `.txt`.
+    sale: >-
+      Nada, y el motivo es que la suba ES el recorte que corresponde: la regla vieja ocupaba media
+      línea y no se podía cumplir de una sola manera. El caso, la medición completa y los cuatro
+      estados del chequeo van al issue, a `docs/mediciones.md` y a `docs/contrato.md` (INV-155); acá
+      queda la convención y su escotilla, que es lo único que decide antes de escribir.
+    techo_lineas: 1865
+    techo_bytes: 152930

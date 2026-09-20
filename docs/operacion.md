@@ -228,6 +228,14 @@ python scripts/contrast.py [<slug>] --validar-todo
                                     #   el `.txt` de esa misma fuente no (medido: 45 de 242). No
                                     #   es un hallazgo y NO mueve el rc; exit ≠ 0 sólo con
                                     #   evidencia positiva de alteración, así sirve de gate
+                                    # ⛔ y desde #492 juzga el OTRO eje del par: el LOCALIZADOR de
+                                    #   página. Cada `«…» (p. N)` se busca en el `.txt` partido por
+                                    #   form feed y se contrasta — página impresa OK · índice del
+                                    #   PDF (otra convención, a declarar) · MAL con la página que
+                                    #   es · no evaluable con su motivo. Tampoco mueve el rc: la
+                                    #   población es la más grande de la bóveda. Medido: 104 de 893
+                                    #   apuntaban al PDF REEMPLAZADO (#436), o sea que la deuda
+                                    #   global de `_paginacion` sale acá con su página nueva
 python scripts/proposals.py [<slug>]
                                     # las PROPUESTAS pendientes (#328): ampliar un `alcance`
                                     #   (#241), un `refuta` (#212) y las celdas vacías del

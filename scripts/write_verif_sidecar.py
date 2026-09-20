@@ -235,7 +235,7 @@ def chained_verdict(previous: str | None, new: str) -> str:
 
 def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
                descartar_muertas: bool = False, descartadas: list | None = None,
-               cond_fuera: list | None = None) -> list:
+               cond_fuera: list | None = None, pag_fuera: list | None = None) -> list:
     """One `Row` per body pair that the fan-out judged, in body order (#403).
 
     Matching is by `(bibcode, ancla)`, the two keys the fan-out schema carries at file and pair
@@ -253,6 +253,12 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
     instance: 3 rounds, 77 pairs, 72 with a live verdict, and no way to write any of them.
     It is **opt-in and declared** (D-43): dropping in silence would be the tolerant reader this
     repo does not carry; declaring it lets the operator see what stayed out and decide.
+
+    ⛔ `pag_fuera` (#492) collects the pairs whose *Evidencia* cites a PAGE and whose body cites
+    another one. Nothing crossed those two columns, and the case was in plain sight: measured on a
+    real note, a sibling whose evidence said «(p. 1209)» for a pair whose body said «(p. 1210)».
+    It is a WARNING, never a rewrite: which of the two is right is decided by whoever opens the
+    PDF, and the locator the consumer copies is the body's.
 
     ⛔ `cond_fuera` (#451) collects the round's conditions that did NOT reach their cell, **with
     their reason** — the round repeated what the row already said, or it declared none over a
@@ -323,10 +329,18 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
                  else "la fila ya declaraba esta condición, resuelta"))
         # la fila SIN archivo (#223) se escribe `—`, que es lo que el parser devuelve para esa
         # celda: con `""` el round-trip de `render_verif_table` rehúsa, y con razón
+        evidencia = str(par.get("evidencia") or "").strip()
+        # #492 — las dos columnas que nadie cruzaba: la página que cita la EVIDENCIA y la que cita
+        # el cuerpo. Sólo con las dos pobladas y disjuntas: un cuerpo sin localizador no contradice
+        # nada, y una evidencia que cita varias páginas cubre la del cuerpo.
+        cuerpo_pags = {x for lo, hi in cfg.page_locators(p.block.text) for x in range(lo, hi + 1)}
+        evid_pags = {x for lo, hi in cfg.page_locators(evidencia) for x in range(lo, hi + 1)}
+        if pag_fuera is not None and cuerpo_pags and evid_pags and not (cuerpo_pags & evid_pags):
+            pag_fuera.append((p.bibcode, p.anchor, sorted(cuerpo_pags), sorted(evid_pags)))
         rows.append(lb.Row(n=str(n), claim=lb.truncate_claim(lb.normalize_ws(p.block.text)),
                            bibcode=p.bibcode, verdict=celda, anchor=p.anchor, source_hash=h or "—",
                            condition=cond, source_kind=kind,
-                           evidence=str(par.get("evidencia") or "").strip()))
+                           evidence=evidencia))
     return rows
 
 
@@ -613,10 +627,11 @@ def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = Fals
     dirs = [fanout_dir] if isinstance(fanout_dir, (str, Path)) else list(fanout_dir)
     text = note.read_text(encoding="utf-8")
     rows = lb.verif_rows(note) if cfg.verif_sidecar(note).exists() else None
-    juzgados, descartadas, cond_fuera = 0, [], []
+    juzgados, descartadas, cond_fuera, pag_fuera = 0, [], [], []
     for d in dirs:
         fanout = load_fanout(Path(d))
-        rows = build_rows(note, text, fanout, rows, descartar_muertas, descartadas, cond_fuera)
+        rows = build_rows(note, text, fanout, rows, descartar_muertas, descartadas, cond_fuera,
+                          pag_fuera)
         juzgados += sum(len(ps) for ps in fanout.values())
     juzgados -= len(descartadas)
     if not rows:
@@ -625,7 +640,7 @@ def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = Fals
     c = lb.verif_counts(rows)
     return {"filas": len(rows), "pares_cuerpo": len(lb.pairs_of(text)), "juzgadas": juzgados,
             "arrastradas": max(0, len(rows) - juzgados), "rondas": len(dirs),
-            "descartadas": descartadas, "cond_fuera": cond_fuera,
+            "descartadas": descartadas, "cond_fuera": cond_fuera, "pag_fuera": pag_fuera,
             "encadenadas": c["cadenas"], "hermano": cfg.verif_sidecar(note).name}
 
 
@@ -850,6 +865,14 @@ def main(argv=None) -> int:
         cfg.print_seguro(
             f"{len(r['cond_fuera'])} condición(es) de esta ronda NO entraron a su celda (#451)"
             + "".join(f"\n  {b} · ancla {a} · «{c}» — {por}" for b, a, c, por in r["cond_fuera"]))
+    # ⛔ #492 — avisa y NO reescribe: cuál de las dos páginas vale lo decide quien abra el PDF, y
+    # la que el consumidor copia es la del cuerpo.
+    if r.get("pag_fuera"):
+        cfg.print_seguro(
+            f"{len(r['pag_fuera'])} par(es) con la PÁGINA de la evidencia distinta de la del "
+            f"cuerpo (#492) — abrí el PDF y corregí la que esté mal"
+            + "".join(f"\n  {b} · ancla {a} · cuerpo p. {', '.join(map(str, c))} · evidencia "
+                      f"p. {', '.join(map(str, e))}" for b, a, c, e in r["pag_fuera"]))
     cfg.print_seguro(f"{accion} {r['hermano']}: {r['filas']} fila(s) sobre {r['pares_cuerpo']} "
                      f"par(es) del cuerpo — {r['juzgadas']} juzgada(s) en "
                      + (f"{r['rondas']} ronda(s)" if r["rondas"] > 1 else "esta ronda")

@@ -3190,7 +3190,9 @@ def test_la_regla_de_anotacion_nombra_las_tres_cosas_que_previene(toy_vault):
     b = mn._BULLET_ANOTACION
     # #269 — el localizador es la PÁGINA del PDF desde #205; el `grep -n` sobre el `.txt` sirve para
     # ubicar, no para citar. Hasta 1.116.x este bullet mandaba lo contrario, publicado en la nota.
-    assert "página** del PDF" in b and "grep -n" in b, "sin localizador nada se puede re-chequear"
+    # #492 — y desde 1.289.0 dice CUÁL de las dos numeraciones: la impresa, con su escotilla.
+    assert "página IMPRESA** del PDF" in b and "grep -n" in b, \
+        "sin localizador nada se puede re-chequear, y sin la convención no se puede decidir"
     assert "pegá el **nº de línea**" not in b, "es la doctrina que #205 retiró"
     assert "segunda mano" in b, "el mecanismo con más casos medidos"
     assert "régimen" in b, "los 11 `parcial` eran casi todos régimen faltante"
@@ -4363,7 +4365,8 @@ def test_el_stub_y_el_prompt_no_divergen_sobre_el_localizador(toy_vault):
     import extraction_prompt as ep
     assert cfg.REGLA_LOCALIZADOR.split(";")[0] in mn._BULLET_ANOTACION
     prompt = ep.build_prompt("tau-cet", "2020aaa...1..1A", "tau Cet", [])
-    assert "la **página** del PDF (`p. 7`)" in prompt
+    assert "la **página IMPRESA** del PDF (la que muestra la hoja: `p. 7`)" in prompt
+    assert "índice del PDF" in prompt, "#492: la escotilla viaja con la regla, o no se puede cumplir"
 
 
 def test_el_migrador_deja_la_vista_cosechable(toy_vault):

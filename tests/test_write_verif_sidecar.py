@@ -995,3 +995,44 @@ def test_451_la_fila_RE_ANCLADA_recibe_la_condicion_de_la_ronda(toy_vault):
     fila = {f.bibcode: f for f in lb.verif_rows(nota)}["2020Pdf"]
     assert fila.condition == "acota: sólo con SNR > 50", "la condición de la ronda ENTRA"
     assert fila.anchor != viejo, "y la fila queda re-anclada al bloque de hoy"
+
+
+def test_492_la_pagina_de_la_EVIDENCIA_distinta_de_la_del_cuerpo_se_avisa(toy_vault, capsys):
+    """#492 — las dos columnas que nadie cruzaba. Medido en una nota real: el hermano decía
+    «(p. 1209)» en su *Evidencia* para un par cuyo cuerpo decía «(p. 1210)», a la vista de
+    cualquiera. ⛔ Avisa y NO reescribe: cuál de las dos vale lo decide quien abra el PDF, y la que
+    el consumidor copia es la del cuerpo."""
+    cuerpo = ("# Concepto\n\nEl período es de 34.5 días (p. 1210) [[2020Pdf]].\n\n"
+              "La amplitud es 2.5 m/s (p. 7) [[2019Txt]].\n")
+    nota = _escena(toy_vault, cuerpo)
+    d = _fanout(toy_vault, nota, {})       # la evidencia del fan-out cita siempre «(p. 4)»
+    r = ws.write(nota, d, fecha="2026-03-01")
+    fuera = {b: (c, e) for b, _a, c, e in r["pag_fuera"]}
+    assert fuera == {"2020Pdf": ([1210], [4]), "2019Txt": ([7], [4])}
+    assert ws.main([str(nota), "--from", str(d), "--dry-run"]) == 0
+    salida = capsys.readouterr().out
+    assert "PÁGINA de la evidencia distinta" in salida and "cuerpo p. 1210" in salida
+
+
+def test_492_sin_localizador_en_un_lado_no_hay_contradiccion(toy_vault):
+    """El control: un cuerpo que no cita página no contradice a la evidencia que sí —no dice nada—,
+    y una evidencia que cita la misma página tampoco. Un aviso que se imprime siempre se deja de
+    leer."""
+    nota = _escena(toy_vault)                      # `CUERPO` no lleva localizador
+    r = ws.write(nota, _fanout(toy_vault, nota, {}), fecha="2026-03-01")
+    assert r["pag_fuera"] == []
+    nota2 = _escena(toy_vault, "# Concepto\n\nEl período es de 34.5 días (p. 4) [[2020Pdf]].\n")
+    r2 = ws.write(nota2, _fanout(toy_vault, nota2, {}, ronda="r2"), fecha="2026-03-01")
+    assert r2["pag_fuera"] == []
+    # …y una EVIDENCIA sin página sobre un cuerpo que sí la cita tampoco contradice: no dice nada
+    nota3 = _escena(toy_vault, "# Concepto\n\nEl período es de 34.5 días (p. 9) [[2020Pdf]].\n")
+    d3 = _fanout(toy_vault, nota3, {}, ronda="r3", evidencia='"cita textual sin localizador"')
+    r3 = ws.write(nota3, d3, fecha="2026-03-01")
+    assert r3["pag_fuera"] == []
+    # ⛔ y el modo que NO pide la lista (`--reanclar`, #480) no revienta por no pedirla, ni
+    # siquiera sobre el par que SÍ discrepa
+    nota4 = _escena(toy_vault, "# Concepto\n\nEl período es de 34.5 días (p. 9) [[2020Pdf]].\n")
+    d4 = _fanout(toy_vault, nota4, {}, ronda="r4")           # la evidencia cita «(p. 4)»
+    ws.write(nota4, d4, fecha="2026-03-01")
+    texto = nota4.read_text(encoding="utf-8")
+    assert ws.build_rows(nota4, texto, ws.load_fanout(d4), lb.verif_rows(nota4))

@@ -1829,3 +1829,26 @@ portadores:
     funcion: contrast.preflight
     patron: 'preflight|added_lines'
     consumidores: []
+  - issue: 492
+    regla: >-
+      Un localizador de página es una afirmación CHEQUEABLE por máquina —el `.txt` partido por form
+      feed sabe en qué página está la cita— y qué cuenta como localizador lo decide UNA función
+      (`page_locators`), no una regex por lector: la que mira la celda `Evidencia` y la que decide
+      el veredicto no pueden diferir. Medido: 104 de 893 localizadores de una bóveda apuntan al PDF
+      REEMPLAZADO y 12 de 190 estaban mal en una nota cerrada con `audit-note`, `lint --cierre` 0 y
+      239/239 pares `soportada`.
+    funcion: lib_config.page_locators
+    patron: 'p\{1,2\}\\\.|_LOC_PAGINA|PAGE_LOC_RE|page_locator'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: usa
+        motivo: "`locator_kinds` decide si la celda `Evidencia` cita una PÁGINA o una línea (#122): es la misma pregunta sobre el mismo texto."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "Cruza la página de la `Evidencia` contra la del cuerpo del par (#492): las dos mitades se leen con esta función."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "Lee el localizador ADYACENTE a la cita con `page_locator_after`, que delega en esta función; no re-parsea la forma."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Es el módulo donde vive la implementación; `lib_config` la re-exporta (AUD-306) y los consumidores la llaman por ahí."

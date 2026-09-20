@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-17",
+ "fetched": "2026-09-19",
  "issues": [
   {
    "number": 2,
@@ -2419,17 +2419,17 @@
   {
    "number": 486,
    "title": "Una tabla partida por una línea en blanco deja filas que NO renderizan, y ningún chequeo lo ve: los de tabla comparan contra un encabezado que ahí no existe (17 filas en 2 notas, 2 condiciones dadas por resueltas apuntando a ellas)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 487,
    "title": "`--extra-only` + `make_notes` borra el apéndice `## Excluidos por el filtro` en silencio: la guarda de #481 no dispara porque la corrida parcial coincide consigo misma (medido: 913 no-core perdidos, lint rc 0)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 488,
    "title": "`_pegado` no acepta `«…» ([[bib]], p. 4)` —el link DENTRO del paréntesis—, así que 46 citas bien atribuidas de la bóveda se reportan como ambiguas (3 de las 11 de una nota)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 489,
@@ -2439,11 +2439,16 @@
   {
    "number": 490,
    "title": "Corregir es escribir, y el corrector produce clases de defecto DECIDIBLES sobre el diff: 14 introducidos en una auditoría de 3 notas, 11 los cazó recién el fan-out a ciegas",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 491,
    "title": "La auditoría de atribución no tiene paso de tanda: `--trazabilidad --solo` existe y nada lo dispara, así que 7 marcas falsas tardaron 14 días en aparecer",
+   "state": "CLOSED"
+  },
+  {
+   "number": 492,
+   "title": "Ningún chequeo mira el LOCALIZADOR de página: 104/893 apuntan al PDF reemplazado, 12/190 mal en una ficha auditada, y la convención (índice vs impresa) no está declarada",
    "state": "OPEN"
   }
  ]

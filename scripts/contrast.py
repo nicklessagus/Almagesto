@@ -249,6 +249,54 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
     return n
 
 
+def _page_check(b, cita: str, duenio: str | None, out: dict) -> None:
+    """This quote's page locator, contrasted against the `.txt` of its source (#492).
+
+    ⛔ Runs **before** any `continue` of the chain verdict: they are two different axes of one pair
+    —*is this the sentence?* and *is it on that page?*— and the quote that IS verbatim in its `.txt`
+    (the normal case, `en_su_txt`) is precisely the one this check can decide.
+
+    ⛔ With AMBIGUOUS attribution it does not judge (#316/#325): the locator would be contrasted
+    against the wrong source, which is how the finding this repo hunts the most gets fabricated. It
+    comes out *not evaluable*, which is what it is.
+    """
+    loc = cfg.page_locator_after(b.text, cita)
+    if not loc:
+        return
+    out["pag_total"] += 1
+    if not duenio:
+        out["pag_no_eval"] += 1
+        return
+    estado, det = cfg.quote_page_verdict(cita, duenio, loc)
+    corte = cita if len(cita) <= 70 else cita[:70] + "…"
+    decl = f"p. {loc[0]}" if loc[0] == loc[1] else f"pp. {loc[0]}-{loc[1]}"
+    if estado == "impresa":
+        out["pag_impresa"] += 1
+    elif estado == "indice" and loc[2] == "indice":
+        # la escotilla de `REGLA_LOCALIZADOR`: el localizador DICE que es el índice del PDF. Es la
+        # convención declarada, no la usada en silencio, y las dos no piden lo mismo.
+        out["pag_declarado"] += 1
+    elif estado == "indice":
+        out["pag_indice"].append(
+            (b.first_line, f"«{corte}» ({decl}) apunta al ÍNDICE del PDF de {duenio}; la página "
+                           f"IMPRESA de esa cita es la {', '.join(map(str, det['impresas']))}. La "
+                           f"convención de la bóveda es la impresa: el consumidor copia este número "
+                           f"(`\\citep[p.~N]`) y cita una página que el paper no muestra"))
+    elif estado == "mal":
+        # #436/#437 — el PDF reemplazado es la causa MEDIDA de la mayoría (104 de 893 en una bóveda
+        # real), y es la que convierte la deuda global de `_paginacion` en esta lista con su página
+        # nueva. Se nombra acá porque cambia qué hay que hacer: no es un error de transcripción.
+        causa = (" · la extracción de esa fuente es de un PDF REEMPLAZADO (`_paginacion`, #436): el "
+                 "localizador es del documento anterior"
+                 if cfg.extraction_depaginated(duenio) else "")
+        out["pag_mal"].append(
+            (b.first_line, f"«{corte}» ({decl}) — la cita está en la p. "
+                           f"{', '.join(map(str, det['impresas']))} de {duenio} (índice "
+                           f"{', '.join(map(str, det['paginas']))} del PDF){causa}"))
+    else:
+        out["pag_no_eval"] += 1
+
+
 def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     """Cross-check one note against the extractions of the bibcodes it cites (#317/#321/#323).
 
@@ -292,14 +340,24 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     evidence. ⛔ It is **emitted, never applied**: `contrast` proposes and does not write in
     `vault/`, and which of the two readings wins is decided by whoever opens the page.
 
+    ⛔ **And it judges the OTHER half of the pair: the page LOCATOR** (#492, `_page_check`). Same walk,
+    same attribution, a different axis — *is this the sentence* and *is it on that page* are two
+    questions, and until now nobody asked the second one.
+
     Returns `{"alteradas": [(línea, motivo)], "no_evaluables": [(línea, motivo)],
-    "discrepan": [(línea, motivo, marca)], "citas": N, "solo_extraccion": J}` — counts, so the sweep
-    can declare its population (INV-40) instead of printing a bare zero."""
+    "discrepan": [(línea, motivo, marca)], "citas": N, "solo_extraccion": J}` plus the page axis
+    (`pag_total`, `pag_impresa`, `pag_indice`, `pag_mal`, `pag_no_eval`) — counts, so the sweep can
+    declare its population (INV-40) instead of printing a bare zero."""
     texto = nota.read_text(encoding="utf-8")
     out = {"alteradas": [], "no_evaluables": [], "discrepan": [], "resueltas": [],
            # #454 — población propia: las citas que viven en un bloque estampado desde la
            # extracción. Contarlas dentro de `solo_extraccion` mezclaba dos cosas distintas.
-           "citas": 0, "solo_extraccion": 0, "copiadas": 0}
+           "citas": 0, "solo_extraccion": 0, "copiadas": 0,
+           # #492 — el otro eje del par: la PÁGINA que el localizador declara. No mueve el rc (ver
+           # `quote_page_verdict`): este gate frena operaciones (#323) y la población que mira es la
+           # más grande de la bóveda.
+           "pag_total": 0, "pag_impresa": 0, "pag_indice": [], "pag_mal": [],
+           "pag_no_eval": 0, "pag_declarado": 0}
     bibs_nota = set(lb._bibcodes(texto))
     # #373/#394 — en una nota de PAPER el bibcode es la nota, no un link, y desde #394 la regla
     # (y su medición) vive en `cfg.note_own_bibcode`/`cfg.with_own_bibcode`, compartida con el lint:
@@ -324,6 +382,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
             duenio = lb.quote_owner(b.text, cita, bibs)          # #316
             candidatos = [duenio] if duenio else bibs
             ambiguo = not duenio and len(bibs) > 1
+            _page_check(b, cita, duenio, out)
             txts = {x: cfg.fulltext_readings(x) for x in candidatos}
             # #324 — la MISMA función que usa el lint, no una re-implementación: con código separado
             # daban 13 y 12 sobre el mismo corpus, y el de más era una cita CORRECTA cuya extracción
@@ -417,6 +476,11 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
         for ln, motivo, marca in out["discrepan"]:
             cfg.print_seguro(f"  ⚠ L{ln}: {motivo}\n     → si no podés abrirlo ahora, pegá al final "
                              f"de la afirmación:  {marca}")
+        for ln, motivo in out["pag_mal"]:
+            cfg.print_seguro(f"  ⚠ L{ln}: {motivo}. Corregí el localizador — es el número que el "
+                             f"consumidor copia (#492)")
+        for ln, motivo in out["pag_indice"]:
+            cfg.print_seguro(f"  · L{ln}: {motivo}")
         for ln, motivo in out["no_evaluables"]:
             cfg.print_seguro(f"  · L{ln}: {motivo}")
         for ln, motivo in out["resueltas"]:
@@ -652,9 +716,16 @@ def validar_todo(slug: str | None = None) -> int:
     counts moves it."""
     notas = _notes_of(slug)
     alteradas = no_eval = citas = solo_ext = resueltas = 0
+    pag = {"pag_total": 0, "pag_impresa": 0, "pag_no_eval": 0, "pag_declarado": 0}
+    pag_mal: list = []
+    pag_indice: list = []
     discrepan: list = []
     for f in notas:
         r = validar(f, mostrar=False)
+        for k in pag:
+            pag[k] += r[k]
+        pag_mal += [(f, ln, m) for ln, m in r["pag_mal"]]
+        pag_indice += [(f, ln, m) for ln, m in r["pag_indice"]]
         citas += r["citas"]
         no_eval += len(r["no_evaluables"])
         solo_ext += r["solo_extraccion"]
@@ -669,6 +740,11 @@ def validar_todo(slug: str | None = None) -> int:
         cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}\n  ⚠ L{ln}: {motivo}"
                          f"\n     → si no podés abrirlo ahora, pegá al final de la afirmación:"
                          f"  {marca}")
+    for titulo, filas in (("⚠ localizador de página que no es la página de la cita (#492)", pag_mal),
+                          ("· localizador en el ÍNDICE del PDF, no en la página impresa (#492)",
+                           pag_indice)):
+        for f, ln, motivo in filas:
+            cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}\n  {titulo[0]} L{ln}: {motivo}")
     ambito = f"las notas de `{slug}`" if slug else "toda la bóveda"
     cfg.print_seguro(f"\n> sobre {len(notas)} nota(s) de {ambito} · {citas} cita(s) «…» · "
                      f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla) · "
@@ -683,11 +759,27 @@ def validar_todo(slug: str | None = None) -> int:
     cfg.print_seguro(f"  {alteradas} cita(s) con evidencia POSITIVA de alteración"
                      + (" ✅" if not alteradas else " ⛔ — corregilas contra el JSON de extracción, "
                         "no contra el `.txt`"))
+    cfg.print_seguro(
+        f"  > localizadores de página: {pag['pag_total']} · {pag['pag_impresa']} en la página "
+        f"IMPRESA · {len(pag_indice)} en el índice del PDF SIN decirlo · "
+        f"{pag['pag_declarado']} declarado(s) como índice · "
+        f"{len(pag_mal)} MAL · {pag['pag_no_eval']} no evaluable(s) (sin `.txt`, la cita no está "
+        f"en él, atribución ambigua, o sin numeración impresa derivable)"
+        + ("" if pag["pag_total"] else " — NO EVALUADO: ninguna cita lleva localizador"))
+    if pag_mal:
+        cfg.print_seguro(f"  ⚠ {len(pag_mal)} localizador(es) apuntan a otra página. No mueve el rc "
+                         f"—la población es la más grande de la bóveda y un falso positivo acá "
+                         f"frena operaciones (#323)— y sí se corrige: es el número que el consumidor "
+                         f"copia a su `\\citep[p.~N]` (#492)")
     if not slug:
         # #386 — sólo la pasada GLOBAL cuenta como pasada: con slug se miró un rincón.
         save_ultima_pasada_citas({"notas": len(notas), "citas": citas, "no_evaluables": no_eval,
                                   "solo_extraccion": solo_ext, "discrepan": len(discrepan),
-                                  "resueltas": resueltas}, alteradas)
+                                  "resueltas": resueltas, "localizadores": pag["pag_total"],
+                                  "pagina_impresa": pag["pag_impresa"],
+                                  "pagina_indice": len(pag_indice), "pagina_mal": len(pag_mal),
+                                  "pagina_indice_declarado": pag["pag_declarado"],
+                                  "pagina_no_evaluables": pag["pag_no_eval"]}, alteradas)
     if solo_ext:
         cfg.print_seguro(f"  ⚠ de las aprobadas, {solo_ext} se apoyan en UN SOLO TESTIGO: la "
                          f"extracción de su fuente las dice y el `.txt` de esa misma fuente no. Es "
