@@ -43,6 +43,12 @@ el glob crudo, con las 5 excepciones declaradas una por una con su motivo.
 **Resultado sobre la instancia real: 6 failed / 73 passed → 13 passed / 1 skipped.** El skip declara
 por qué no aplica, que es lo que lo distingue de un verde.
 
+⛔ **Y la exención lleva su guarda, devuelta por el validador:** una entrada de `_GLOB_CRUDO_EXENTO`
+cuyo archivo ya migró a `note_paths` es un **permiso muerto** —autoriza algo que nadie hace, y el
+día que alguien vuelva a escribir el glob ahí la red lo deja pasar sin que nadie haya decidido
+nada—. Es la misma doctrina que el repo le aplica a un flag retirado: la exención se chequea en las
+dos direcciones.
+
 ## #494 · cerrar `_paginacion` releyendo el PDF: la operación que faltaba (2026-09-20)
 
 **El caso.** Tras #492/#493 la bóveda quedó con **75 localizadores MAL** (de 455). 391 se

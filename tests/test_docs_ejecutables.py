@@ -775,3 +775,22 @@ def test_498_ningun_test_enumera_notas_con_el_glob_crudo():
     assert not ofensores, (
         f"enumeran notas con el glob crudo (los hermanos `.verif.md` entran como notas, #344): "
         f"{ofensores} → usá `cfg.note_paths(...)`, o declaralo en `_GLOB_CRUDO_EXENTO` con su motivo")
+
+    # ⛔ Y la guarda del otro lado, que es la misma que el repo le pone a un flag retirado: una
+    # exención cuyo archivo ya migró a `note_paths` es un PERMISO MUERTO — sigue autorizando algo
+    # que nadie hace, y el día que alguien vuelva a escribir el glob ahí la red lo deja pasar sin
+    # que nadie haya decidido nada.
+    muertas = []
+    for rel in _GLOB_CRUDO_EXENTO:
+        f = RAIZ / rel
+        if not f.exists():
+            muertas.append(f"{rel}: el archivo ya no existe")
+            continue
+        arbol = ast.parse(f.read_text(encoding="utf-8"))
+        if not any(isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                   and n.func.attr == "glob" and isinstance(n.func.value, ast.Attribute)
+                   and n.func.value.attr in ("PAPERS", "STARS", "CONCEPTS")
+                   for n in ast.walk(arbol)):
+            muertas.append(f"{rel}: ya no usa el glob crudo")
+    assert not muertas, (f"exenciones MUERTAS en `_GLOB_CRUDO_EXENTO` (autorizan algo que nadie "
+                         f"hace, y dejarían pasar al próximo que lo escriba): {muertas} → borralas")

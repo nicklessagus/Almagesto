@@ -671,6 +671,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   del sujeto tiene pasos de `cadena` con fecha y `log.md` no tiene un encabezado `## <fecha> — …`
   de esa fecha que **nombre** al sujeto (slug, nombre canónico, `concept` o alias, por palabra —
   AUD-216: `ica` está dentro de «verificación»). Se cierra appendeando lo que se hizo.
+- **Ground-truth sin su ficha de estrella** (#498, `gt_sin_ficha`, backlog): el **espejo inverso**
+  del barrido de #70, que va ficha→GT. Un `raw/ground_truth/<slug>.json` colgado —la estrella se
+  borró, o el ingest quedó a medias— **no lo mira nadie**: es un snapshot de NEA que nadie publica
+  y que ninguna nota cita. La salida es recrear la ficha (`make_notes.py <slug>`) o borrar el GT.
+  Población: `raw/ground_truth/`. ⚠ Vivía como un `xfail(strict=True)` del **tier 2** sobre el
+  hueco de la bóveda semilla, o sea un hecho de UNA bóveda en el gate que corre contra OTRA: en una
+  instancia sana el test pasaba y el tier se ponía rojo **por haberse arreglado** (XPASS strict).
+  Acá viaja y se mide donde esté.
+
 - **Ground-truth que cambió bajo la prosa** (AUD-42, `gt_cambiado` / `gt_cambiado_marcado`,
   backlog las dos): `sweep_external` deja `_cambios` en `raw/ground_truth/<slug>.json` al aplicar
   un diff de NEA, y el ancla de fuente (D-20) **no** hashea ese JSON, así que la frase que citaba el

@@ -2459,7 +2459,7 @@
   {
    "number": 494,
    "title": "Cerrar `_paginacion` RELEYENDO el PDF: falta la operación (paquete de relectura por fuente + escritura serial al JSON + re-estampa); la página del `.txt` es guía, no respuesta",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 495,
@@ -2479,7 +2479,7 @@
   {
    "number": 498,
    "title": "El tier 2 (`instancia`) está rojo en toda instancia que no sea la semilla: 6 de 79 fallan, en tres clases (hermanos `.verif.md`, título de ratchet vencido, y dos tests que asertan sobre la bóveda del template)",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
