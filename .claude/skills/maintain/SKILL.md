@@ -367,8 +367,22 @@ Copia a **todos** los slugs donde vive el PDF, re-extrae **sólo ese** `.txt`
 (`extract_fulltext --bibcode`: el `--force` del slug entero vencería las anclas de **todos** los
 papers del tema), escribe `pdf_sha`/`pdf_source`, anula `eprint_version` y **emite el alcance de la
 re-verificación** listo para `verify_fanout --fuentes`. ⛔ **No re-verifica ni re-pagina**: la
-extracción queda marcada `_paginacion` —es versionada y no regenerable (#311)— y el lint la reporta;
-al re-leer esas páginas se actualizan los localizadores y se saca la marca. Medido: 11 reemplazos →
+extracción queda marcada `_paginacion` —es versionada y no regenerable (#311)— y el lint la reporta.
+
+⛔ **Esa deuda se cierra RELEYENDO EL PDF (#494)**, nunca con la página que el `.txt` deduce:
+
+```bash
+python scripts/repaginate.py --list                            # la deuda, por fuente
+python scripts/repaginate.py <bib> --out build/repag/<bib>     # paquete: items + guía + PDF
+#   → un subagente lector por fuente (fan-out para LEER, regla 6)
+python scripts/repaginate.py <bib> --apply build/repag/<bib>/<bib>.json   # SERIAL, de a uno
+python scripts/reverify_subset.py vault/wiki/papers/<bib>.md   # lo tocado vence sus pares (D-4)
+```
+
+La `guia` dice **dónde abrir**, no qué escribir: cada página confirmada vuelve con `evidencia`
+—palabras vistas en ESA hoja— que el escritor cruza contra el `.txt`; la no hallada se declara
+`pagina: null` + `motivo`. La ronda con ítems rehusados deja `_repaginado_parcial` y el lint la
+sigue contando. Medido: 11 reemplazos →
 **76 pares** por re-verificar, así que el reemplazo se decide de a uno, mirando el `--dry-run`.
 ⛔ **Y mirá el aviso de PÁGINAS del `--dry-run` (#437):** la copia del editor puede ser peor que el
 preprint (medido: 7 páginas sin Supplementary contra 33, con la ficha citando §S1.1). Es aviso, no

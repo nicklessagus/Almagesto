@@ -1991,7 +1991,13 @@ def check_depaginated_extractions() -> tuple:
         if not isinstance(data, dict):
             continue
         poblacion += 1
-        marca = cfg.as_map(data.get("_paginacion"))
+        # #494 — la deuda está ABIERTA mientras quede una marca de `PAGINATION_OPEN_MARKS`: la
+        # ronda parcial cerró unos localizadores y dejó los otros nombrados en `pendientes`, así
+        # que la extracción sigue publicando localizadores del documento anterior. `_repaginado`
+        # NO cuenta —ahí la relectura los actualizó—, y ésa es la pregunta contraria a la que
+        # contesta la exención de #437/#495, que mira la familia entera.
+        abierta = [m for m in cfg.PAGINATION_OPEN_MARKS if cfg.as_map(data.get(m))]
+        marca = cfg.as_map(data.get(abierta[0])) if abierta else {}
         if marca:
             # #437 — las dos mitades del mismo evento: `replace_pdf` marca la extracción Y firma
             # `pdf_reemplazo` en la nota. Una sin la otra es un reemplazo hecho a mano, y la nota
@@ -2001,11 +2007,15 @@ def check_depaginated_extractions() -> tuple:
             fm_nota = cfg.split_fm(nota.read_text(encoding="utf-8")) if nota and nota.exists() else {}
             sin_firma = ("" if cfg.as_list((fm_nota or {}).get("pdf_reemplazo"))
                          else " ⚠ y la nota del paper NO lo declara en `pdf_reemplazo` (#437)")
+            pendientes = cfg.as_list(marca.get("pendientes"))
+            parcial = (f" ⚠ ronda PARCIAL: quedan {len(pendientes)} localizador(es) sin releer"
+                       if pendientes else "")
             out.append((f"{f.parent.name}/{f.stem}",
                         f"los localizadores son del documento ANTERIOR (PDF reemplazado el "
-                        f"{marca.get('reemplazo') or '?'}: {marca.get('motivo') or 'sin motivo'}) "
-                        f"→ al re-leer esas páginas, actualizá `linea`/`p.` y sacá `_paginacion`; "
-                        f"la cita textual sigue valiendo (#436){sin_firma}"))
+                        f"{marca.get('reemplazo') or '?'}: {marca.get('motivo') or 'sin motivo'})"
+                        f"{parcial} → `python scripts/repaginate.py {f.stem} --out "
+                        f"build/repag/{f.stem}` y releé esas páginas EN EL PDF (#494); la cita "
+                        f"textual sigue valiendo (#436){sin_firma}"))
     return out, poblacion
 
 

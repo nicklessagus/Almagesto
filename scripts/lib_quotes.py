@@ -890,6 +890,36 @@ def fulltext_pagination(bibcode: str) -> dict:
     return out
 
 
+def quote_pages(quote: str, bibcode: str) -> dict:
+    """`{"paginas": [índice], "impresas": [etiqueta], "motivo": str|None}` — where in the `.txt` the
+    quote falls and what those pages PRINT (#492, extracted by #494).
+
+    One implementation for its two readers: the verdict of #492 judges a locator against it, and the
+    re-reading package of #494 uses it as the **GUIDE** of which page to open. They have to look at
+    the same thing, or the guide would point somewhere the check does not (#324).
+
+    ⛔ `motivo` carries the reason it could NOT be located (D-43), which is not the same as «the
+    locator is wrong»: no `.txt` on disk, or a quote the degraded INDEX does not have (#205, whose
+    silence proves nothing, #321). The caller decides what to do with the difference.
+
+    ⚠ `impresas` leaves out the pages that print nothing, so it can be shorter than `paginas` — and
+    the pairing is by position among the pages that DO carry a number, never by index."""
+    pag = fulltext_pagination(bibcode)
+    paginas = pag["paginas"]
+    if not paginas:
+        return {"paginas": [], "impresas": [], "motivo": f"{bibcode} no tiene `.txt` en disco"}
+    halladas = [i for i, lecturas in enumerate(paginas, 1)
+                if any(quote_found(quote, lectura) for lectura in lecturas)]
+    if not halladas:
+        return {"paginas": [], "impresas": [],
+                "motivo": f"la cita no está en ninguna página del `.txt` de {bibcode} (índice "
+                          f"degradado, #205: su silencio no prueba nada)"}
+    # #492 (defecto B) — la página impresa se lee DONDE cae la cita, no de un offset global: en un
+    # libro con numeración por capítulo el offset único marcaba 94 MAL, los 94 falsos.
+    impresas = [pag["impresas"][i - 1] for i in halladas]
+    return {"paginas": halladas, "impresas": [n for n in impresas if n is not None], "motivo": None}
+
+
 def quote_page_verdict(quote: str, bibcode: str, rangos: list, declarado: str = "") -> tuple:
     """Is the page locator pointing at the page the quote is ON? (#492)
 
@@ -923,20 +953,11 @@ def quote_page_verdict(quote: str, bibcode: str, rangos: list, declarado: str = 
     largest of the vault.
 
     @inv INV-155"""
+    ubic = quote_pages(quote, bibcode)
+    if ubic["motivo"]:
+        return "no_evaluable", {"motivo": ubic["motivo"]}
     pag = fulltext_pagination(bibcode)
-    paginas = pag["paginas"]
-    if not paginas:
-        return "no_evaluable", {"motivo": f"{bibcode} no tiene `.txt` en disco"}
-    halladas = [i for i, lecturas in enumerate(paginas, 1)
-                if any(quote_found(quote, lectura) for lectura in lecturas)]
-    if not halladas:
-        return "no_evaluable", {"motivo": f"la cita no está en ninguna página del `.txt` de "
-                                          f"{bibcode} (índice degradado, #205: su silencio no "
-                                          f"prueba nada)"}
-    # #492 (defecto B) — la página impresa se lee DONDE cae la cita, no de un offset global: en un
-    # libro con numeración por capítulo el offset único marcaba 94 MAL, los 94 falsos.
-    impresas = [pag["impresas"][i - 1] for i in halladas]
-    con_numero = [n for n in impresas if n is not None]
+    halladas, con_numero = ubic["paginas"], ubic["impresas"]
     det = {"paginas": halladas, "offset": pag["offset"], "impresas": con_numero}
 
     def _en_rango(pagina):
@@ -1156,6 +1177,26 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
 #: (measured in a live vault: 0 → 4 altered quotes, rc 0 → 1, three notes that nobody had touched,
 #: all four of them preprint→published copyediting — the very population #437 exists not to accuse).
 REPLACED_DOC_MARKS = ("_paginacion", "_repaginado", "_repaginado_parcial")
+
+#: #494 · el subconjunto que dice que la deuda de paginación sigue ABIERTA: sus localizadores son
+#: los del documento anterior. `_repaginado` no está —ahí la relectura ya los actualizó—, y ésa es
+#: justo la pregunta que NO se puede contestar con `REPLACED_DOC_MARKS`: aquélla dice «la
+#: transcripción describe un documento que ya no está» (y sobrevive al cierre, #495), ésta «los
+#: localizadores todavía no se releyeron». Dos preguntas distintas sobre la misma marca, que es por
+#: lo que el lint contaba deuda con el mismo campo con el que `contrast` eximía una cita.
+PAGINATION_OPEN_MARKS = ("_paginacion", "_repaginado_parcial")
+
+
+def extraction_pagination_open(bibcode: str) -> bool:
+    """Does any extraction of this bibcode still owe the re-reading of its LOCATORS? (#494)
+
+    The twin of `extraction_depaginated` on the other question: that one asks whether the
+    TRANSCRIPTION describes a replaced document (and stays true after the debt is paid, #495), this
+    one whether the LOCATORS are still the old document's (and stops being true when they are
+    re-read). `_repaginado_parcial` counts: a round that closed some items and left others named in
+    `pendientes` has not closed the debt."""
+    return any(any(cfg.as_map(d.get(m)) for m in PAGINATION_OPEN_MARKS)
+               for d in _extraction_index().get(bibcode, []) if isinstance(d, dict))
 
 
 def extraction_depaginated(bibcode: str) -> bool:

@@ -60,7 +60,7 @@ skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de
   find-contradictions: 21500
   ingest-star: 32000
   ingest-theme: 51800
-  maintain: 36300
+  maintain: 36803
   query-corpus: 6000
   setup: 15300
   test-hypothesis: 15700
@@ -94,6 +94,26 @@ crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por
       Nada. El párrafo de #392 ya está en regla-y-consecuencia y las dos líneas son el puntero
       más corto posible: el comando y su ancla, con el porqué en `docs/lint.md` § #463.
     techo_bytes: 12200
+
+  - fecha: "2026-09-20"
+    skill: maintain
+    ancla: "#494"
+    motivo: >-
+      La operación que cierra la deuda de paginación no existía, y `maintain` es el skill que la
+      manda a resolver: hasta acá el sub-modo decía «al re-leer esas páginas se actualizan los
+      localizadores y se saca la marca» sin ningún comando detrás, o sea una instrucción que nadie
+      podía seguir sobre 68 extracciones y 1653 localizadores. Entra la cadena de cuatro comandos
+      —paquete, fan-out para LEER, escritor SERIAL, re-anclaje— y la regla que la gobierna: la
+      página del `.txt` es GUÍA de dónde abrir y la hoja es la que responde. La mecánica de una
+      operación va a su skill (#465), y sin ella el backlog más grande del repo queda nombrado y
+      sin salida ejecutable, que es lo que #436 ya había corregido del otro lado.
+    sale: >-
+      El párrafo que explicaba en prosa qué había que hacer al re-leer, reemplazado por el bloque
+      de comandos que lo hace; y la versión larga de este mismo bloque se recortó a la mitad antes
+      de firmar (las tres garantías del escritor —testigo de la hoja, hueco declarado, ronda
+      parcial— pasaron de un párrafo con sus porqués a una cláusula con sus nombres, porque el
+      porqué vive en el issue, en `docs/mediciones.md` y en el docstring de `repaginate.py`).
+    techo_bytes: 36803
 
 crecimientos:
   - fecha: "2026-08-31"

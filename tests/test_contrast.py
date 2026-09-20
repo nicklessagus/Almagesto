@@ -1257,6 +1257,36 @@ def test_492_el_PDF_REEMPLAZADO_se_nombra_como_causa(toy_vault, capsys):
     assert "PDF REEMPLAZADO" in capsys.readouterr().out
 
 
+def test_494_con_la_deuda_CERRADA_la_causa_ya_no_se_nombra(toy_vault, capsys):
+    """⛔ #494 — la causa es la deuda ABIERTA, no la familia de marcas: tras `_repaginado` la
+    relectura actualizó los localizadores de la extracción, así que decir «el localizador es del
+    documento anterior» sería FALSO. La exención de #437/#495 sí mira la familia entera, porque
+    contesta la otra pregunta —la TRANSCRIPCIÓN—, que el repaginado no toca: una marca, dos
+    preguntas, y confundirlas es lo que hacía que el lint contara deuda con el mismo campo con el
+    que `contrast` eximía una cita."""
+    _extraccion("ica_ruido", "2013Voss", _repaginado={"fecha": "2026-09-21", "pdf_sha": "b" * 10})
+    _txt_paginas("ica_ruido", "2013Voss", ["intro sin nada", f"prosa. {LARGA}. fin", "cierre"])
+    nota = _nota_492(f"Dice «{LARGA}» (p. 3) [[2013Voss]].\n")
+    assert ct.main(["--validar", str(nota)]) == 0
+    assert "PDF REEMPLAZADO" not in capsys.readouterr().out
+
+
+def test_494_la_ronda_PARCIAL_sigue_siendo_deuda_abierta(toy_vault, capsys):
+    """Una deuda a medio cerrar es deuda: la ronda que dejó localizadores en `pendientes` sigue
+    publicando los del documento anterior, así que la causa se nombra igual.
+
+    ⚠ Test aparte y no una segunda mitad del anterior: el índice de extracciones se memoiza por
+    ruta, así que reescribir el JSON dentro del mismo test lee la versión vieja (la misma razón por
+    la que #437 tiene cuatro tests y no uno)."""
+    _extraccion("ica_ruido", "2013Voss",
+                _repaginado_parcial={"motivo": "PDF reemplazado",
+                                     "pendientes": ["ground_truth[0].linea"]})
+    _txt_paginas("ica_ruido", "2013Voss", ["intro sin nada", f"prosa. {LARGA}. fin", "cierre"])
+    nota = _nota_492(f"Dice «{LARGA}» (p. 3) [[2013Voss]].\n")
+    assert ct.main(["--validar", str(nota)]) == 0
+    assert "PDF REEMPLAZADO" in capsys.readouterr().out
+
+
 def test_492_el_localizador_SIN_cita_textual_queda_fuera_de_alcance_y_se_DECLARA(toy_vault, capsys):
     """El validador midió que 6 de los 12 de `icasso` —incluido el caso de `Almagesto-Tesis#8` que
     motivó el issue— no tienen cita textual: sin «…» no hay qué buscar en el `.txt`, así que están

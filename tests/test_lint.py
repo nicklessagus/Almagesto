@@ -10323,6 +10323,21 @@ def test_check_depaginated_extractions_ve_la_marca_de_un_PDF_reemplazado(toy_vau
     (cfg.EXTRACCION / "gj_581" / "roto.json").write_text("{no", encoding="utf-8")
     (cfg.EXTRACCION / "gj_581" / "lista.json").write_text("[1]", encoding="utf-8")
     assert lint.check_depaginated_extractions()[1] == 2
+    # ⛔ #494 — la deuda se CIERRA releyendo: con `_repaginado` la extracción sale de la categoría…
+    (cfg.EXTRACCION / "gj_581" / "2011X.json").write_text(
+        _j.dumps({"bibcode": "2011X", "_repaginado": {"fecha": "2026-09-21", "pdf_sha": "b" * 10}}),
+        encoding="utf-8")
+    assert lint.check_depaginated_extractions()[0] == []
+    # …y la ronda PARCIAL sigue contando, nombrando cuántos localizadores quedaron sin releer: una
+    # deuda a medio cerrar es deuda, y sin el número no se sabe cuánta
+    (cfg.EXTRACCION / "gj_581" / "2011X.json").write_text(
+        _j.dumps({"bibcode": "2011X", "_repaginado_parcial": {
+            "reemplazo": "2026-09-11", "motivo": "versión del editor",
+            "pendientes": ["ground_truth[3].linea", "salvedades[1]#2"]}}),
+        encoding="utf-8")
+    hall, _p = lint.check_depaginated_extractions()
+    assert len(hall) == 1 and "PARCIAL" in hall[0][1] and "2 localizador(es)" in hall[0][1], hall
+    assert "repaginate.py 2011X" in hall[0][1], "el backlog nombra el comando que lo cierra"
 
 
 def test_check_prosa_retractada_exige_la_marca_en_LINEA(toy_vault):

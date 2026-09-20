@@ -1094,6 +1094,58 @@ def _n_verificadas(scope: str) -> int:
     return sum(1 for ln in scope.splitlines() if ln.strip().startswith("- ⚙ verificada"))
 
 
+def restamp_view_locators(slug: str, *, paper: str, cambios: list, dry_run: bool = False) -> dict:
+    """Re-stamp ONLY the page locators of a view's table, from the pages #494 just re-read.
+
+    ⛔ Same doctrine as `restamp_salvedades` (#453): what a script stamped from an artefact gets an
+    ACOTADO re-stamp. The alternative was `--force`, which **re-dates the reading** (#395), and
+    leaving it alone means the JSON is right and the table still points at the replaced document —
+    ~1653 cells to fix by hand, which is what #494 exists not to do.
+
+    `cambios` is `[(ancla, viejo, nuevo)]`: the anchor is the text the locator sits next to (the
+    quote, or the row's value), and the swap happens **only if the token there is still `viejo`**.
+    A cell corrected by hand does not match, so it is listed and left alone — the same rule that
+    keeps somebody's correction from being overwritten. It does NOT touch `vistas[]` and does not
+    re-date anything."""
+    nota = cfg.PAPERS / f"{mn.safe_name(paper)}.md"
+    fuera = [(paper, "la nota del paper no existe")] if not nota.exists() else []
+    if fuera:
+        return {"nota": nota, "cambiados": 0, "fuera": fuera}
+    text = nota.read_text(encoding="utf-8")
+    d = cfg.EXTRACCION / slug
+    sujetos = [str(cfg.as_map(json.loads(j.read_text(encoding="utf-8")).get("vista")).get("sujeto")
+                   or "").strip()
+               for j in sorted(d.glob(f"{mn.safe_name(paper)}*.json")) if d.exists()]
+    nuevo, cambiados = text, 0
+    for ancla, viejo, nueva_pag in cambios:
+        hecho = False
+        for sujeto in [x for x in sujetos if x]:
+            span = section_span(nuevo, f"## Vista — {sujeto}")
+            if span is None:
+                continue
+            ini, fin = span
+            seccion = nuevo[ini:fin]
+            pos = seccion.find(ancla)
+            if pos < 0:
+                continue
+            arranque = pos + len(ancla)
+            ventana = seccion[arranque:arranque + 80].split("«")[0]
+            m = cfg.PAGE_LOC_RE.search(ventana)
+            if not m or m.group(0) != viejo:
+                continue
+            abs_i = ini + arranque + m.start()
+            nuevo = nuevo[:abs_i] + nueva_pag + nuevo[abs_i + len(m.group(0)):]
+            cambiados += 1
+            hecho = True
+            break
+        if not hecho:
+            fuera.append((ancla[:60], f"el localizador `{viejo}` ya no está adyacente en la vista: "
+                                      f"corregido a mano o la prosa cambió — NO se toca"))
+    if not dry_run and nuevo != text:
+        cfg.write_text_atomic(nota, nuevo)
+    return {"nota": nota, "cambiados": cambiados, "fuera": fuera}
+
+
 def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = False) -> dict:
     """Re-stamp ONLY the caveat block of each view, from its extraction JSON (#453).
 

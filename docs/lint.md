@@ -885,7 +885,13 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   alcance de la re-verificación** listo para `verify_fanout --fuentes`. Rehúsa el archivo idéntico y
   el preprint declarado `publisher`. Medido: 11 reemplazos → **76 pares** vencidos en 6 notas.
 - **Extracción con los localizadores del documento ANTERIOR** (#436, backlog): `replace_pdf` marca
-  con `_paginacion` la extracción de un PDF reemplazado. `raw/extraccion/**` es versionado y **no
+  con `_paginacion` la extracción de un PDF reemplazado. ⛔ **La deuda está ABIERTA mientras quede
+  una marca de `PAGINATION_OPEN_MARKS` (#494)** —`_paginacion` o `_repaginado_parcial`—: la ronda
+  parcial cerró unos localizadores y dejó los otros nombrados en `pendientes`, y la categoría los
+  cuenta. `_repaginado` **sale** de la categoría: ahí la relectura los actualizó. ⚠ Es la pregunta
+  **contraria** a la que contesta la exención de cita de #437/#495, que mira la familia entera
+  porque habla de la **transcripción** —que el repaginado no toca—; leer las dos con el mismo campo
+  era el defecto. `raw/extraccion/**` es versionado y **no
   regenerable** (#311), así que no se reescribe: la cita textual sigue valiendo —medido,
   `contrast --validar` dio **0 alteraciones** en las cinco notas tocadas— y **todos los
   localizadores apuntan a un documento que ya no está** (la copia del editor pagina por volumen:

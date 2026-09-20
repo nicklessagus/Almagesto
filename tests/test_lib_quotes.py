@@ -704,6 +704,40 @@ def test_quote_verdict_495_no_es_un_apagador_el_txt_NUEVO_sigue_bloqueando(toy_v
     assert ver == "alterada" and det.get("txt_nuevo") == "citado", (ver, det)
 
 
+def test_494_quote_pages_ubica_la_cita_y_declara_por_que_no_pudo(toy_vault):
+    """⛔ #494 — UNA implementación de «dónde cae la cita y qué imprime esa página», porque tiene
+    dos lectores que no pueden mirar cosas distintas (#324): el veredicto de #492, que juzga el
+    localizador contra ella, y el paquete de relectura, que la usa como **GUÍA de dónde abrir el
+    PDF**. Si divergieran, la guía mandaría a una página que el chequeo no reconoce.
+
+    Y `motivo` es la otra mitad: *no se pudo ubicar* NO es *el localizador está mal* (D-43) — sin
+    `.txt` en disco, o con una cita que el índice degradado no tiene (#205), el silencio no prueba
+    nada (#321) y quien llama decide qué hacer con la diferencia."""
+    pags = [_pagina(i, f"prosa. {CITA_492}. fin" if i == 2 else "relleno", impresa=100 + i)
+            for i in range(1, 5)]
+    _txt_paginado("2020Ubica", pags)
+    assert cfg.quote_pages(CITA_492, "2020Ubica") == {"paginas": [2], "impresas": ["102"],
+                                                      "motivo": None}
+    sin_txt = cfg.quote_pages(CITA_492, "2020SinTxt")
+    assert sin_txt["paginas"] == [] and "no tiene `.txt` en disco" in sin_txt["motivo"]
+    ausente = cfg.quote_pages("una frase que el `.txt` no dice en ninguna página", "2020Ubica")
+    assert ausente["paginas"] == [] and "índice degradado" in ausente["motivo"]
+
+
+@pytest.mark.parametrize("marca,abierta", [("_paginacion", True), ("_repaginado_parcial", True),
+                                           ("_repaginado", False)])
+def test_494_la_deuda_ABIERTA_es_otra_pregunta_que_la_exencion(toy_vault, marca, abierta):
+    """⛔ #494 — una marca, DOS preguntas. `extraction_depaginated` (#437/#495) pregunta si la
+    TRANSCRIPCIÓN describe un documento que ya no está, y sobrevive al cierre de la deuda porque
+    repaginar actualiza los localizadores y nunca la prosa. `extraction_pagination_open` pregunta si
+    los LOCALIZADORES siguen sin releerse, y deja de ser cierta cuando se releen. Leer las dos con
+    el mismo campo es lo que hacía que el lint contara deuda con el mismo dato con el que `contrast`
+    eximía una cita. La ronda PARCIAL cuenta como abierta: cerró unos ítems y nombró los otros."""
+    _extr_vieja("citado", _PREPRINT_437, marca=marca)
+    assert cfg.extraction_pagination_open("citado") is abierta
+    assert cfg.extraction_depaginated("citado") is True, "la exención mira la familia ENTERA"
+
+
 def test_496_la_pagina_impresa_de_LETTERS_se_lee_y_se_juzga(toy_vault):
     """⛔ #496 — la página que IMPRIME la hoja no siempre es un entero: A&A Letters pagina `L43`–`L47`,
     ApJL `L24`, MNRAS Letters `L1`. Con la regex pidiendo dígitos pegados al `p.`, el localizador

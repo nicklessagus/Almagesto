@@ -236,6 +236,10 @@ portadores:
       - modulo: scripts/replace_pdf.py
         estado: usa
         motivo: "Marca `_paginacion` en la extracción del PDF reemplazado: es versionada y no regenerable (#311/#436)."
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "Enumera los JSON de extracción para juntar la deuda de paginación abierta y su ruta, que es lo que el escritor necesita (el índice por bibcode no la guarda)."
+
   - issue: 474
     regla: >-
       El bloque de una clave del frontmatter incluye el escalar entre comillas HASTA su comilla de
@@ -779,6 +783,9 @@ portadores:
         motivo: >-
           Copia el PDF local que el usuario declaró en `sources[]` hacia el slug del tema: es una
           escritura, y el destino es por definición el slug del sujeto.
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "Resuelve bajo qué slug está el PDF que hay que releer: la relectura es del PDF (#205) y el paper puede vivir bajo otro sujeto."
 
   - issue: 403
     regla: >-
@@ -1091,6 +1098,10 @@ portadores:
         motivo: >-
           Matchea porque desde #454 hospeda `SALVEDAD_MARCAS` —la leen los dos gates de citas, así
           que vive con `quote_verdict`—; no re-estampa ninguna sección.
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "Tras escribir las páginas releídas re-estampa el bloque de salvedades de la vista, que es lo que la máquina copió de esa extracción: si no, el JSON queda al día y la nota publicando la página del documento reemplazado."
+
   - issue: 452
     regla: >-
       Toda afirmación de una nota sobre el ARTEFACTO que una máquina puede decidir se emite
@@ -1269,6 +1280,9 @@ portadores:
       - modulo: scripts/contrast.py
         estado: fuera-de-alcance
         motivo: Lo nombra en `CAMPOS` para agrupar el digest por campo; no interpreta su forma.
+      - modulo: scripts/repaginate.py
+        estado: fuera-de-alcance
+        motivo: "Nombra `hueco` sólo como uno de los campos de texto libre donde puede vivir un localizador; no lo lee como pedido ni lo propone (#328)."
 
   - issue: 407
     regla: >-
@@ -1852,6 +1866,13 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Es el módulo donde vive la implementación; `lib_config` la re-exporta (AUD-306) y los consumidores la llaman por ahí."
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "Enumera los localizadores de cada campo con `page_locators` y los ubica con `quote_pages`: la guía tiene que salir de la misma función que juzga el localizador, o mandaría a una página que el chequeo no reconoce."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "`restamp_view_locators` necesita el SPAN del token para reemplazarlo y `page_locators` devuelve etiquetas, no posiciones; usa `PAGE_LOC_RE`, que es la única definición sobre la que esta regla ancla, así que no hay segunda regex."
+
   - issue: 495
     regla: >-
       Toda marca que declara «esta extracción describe un documento que YA NO ESTÁ en disco»
@@ -1866,8 +1887,8 @@ portadores:
     patron: '_paginacion|_repaginado'
     consumidores:
       - modulo: scripts/contrast.py
-        estado: usa
-        motivo: "Nombra la causa del localizador MAL y emite la marca `⚠verificar en el PDF` del `extraccion_vieja`: las dos preguntan si la extracción describe el documento en disco."
+        estado: fuera-de-alcance
+        motivo: "Consume el veredicto `extraccion_vieja` que esta puerta decide (la marca `⚠verificar en el PDF`), pero no la llama: desde #494 la causa del localizador MAL la decide `extraction_pagination_open`, que es la otra pregunta sobre la misma marca."
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "Sus dos sitios leen `_paginacion` para preguntas distintas: la categoría de backlog CUENTA LA DEUDA (y ahí la marca de apertura es lo correcto: repaginar la cierra) y la exención de la cita consume el veredicto ya decidido por esta función."
@@ -1880,6 +1901,10 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Es el módulo donde vive la implementación junto con `REPLACED_DOC_MARKS`; `lib_config` la re-exporta (AUD-306) y los consumidores la llaman por ahí."
+      - modulo: scripts/repaginate.py
+        estado: fuera-de-alcance
+        motivo: "Cierra la deuda de los LOCALIZADORES (`PAGINATION_OPEN_MARKS`, entrada #494) y no toca la transcripción, que es de lo que habla esta regla: por eso la exención sobrevive al repaginado."
+
   - issue: 496
     regla: >-
       El número de página IMPRESO no es necesariamente un entero —A&A Letters imprime `L43`, ApJL
@@ -1900,6 +1925,13 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Es el módulo donde viven la etiqueta y sus siete funciones; `lib_config` las re-exporta (AUD-306) y los consumidores las llaman por ahí."
+      - modulo: scripts/repaginate.py
+        estado: fuera-de-alcance
+        motivo: "Lee y reescribe el TOKEN del localizador con `page_locators`/`PAGE_LOC_RE` —que ya respetan el prefijo— y no compara ni expande rangos, que es lo que esta regla obliga a hacer con `page_span`."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Reescribe el token tal cual lo leyó `PAGE_LOC_RE` —que ya respeta el prefijo— y no compara ni expande rangos, que es lo que esta regla obliga a hacer con `page_span`."
+
   - issue: 497
     regla: >-
       `SALVEDAD_TIPOS` enumera los ARTEFACTOS sobre los que una salvedad puede predicar algo
@@ -1926,3 +1958,28 @@ portadores:
       - modulo: scripts/proposals.py
         estado: fuera-de-alcance
         motivo: "Lo nombra para explicar por qué una salvedad ESTRUCTURADA no es un pedido a una persona: mira `tipo` presente o ausente, nunca cuál."
+  - issue: 494
+    regla: >-
+      Una marca de PDF reemplazado contesta DOS preguntas distintas y cada una tiene su predicado:
+      `extraction_depaginated` (#437/#495) dice si la TRANSCRIPCIÓN describe un documento que ya no
+      está —y sobrevive al cierre de la deuda, porque repaginar actualiza los localizadores y nunca
+      la prosa—, y `extraction_pagination_open` dice si los LOCALIZADORES siguen sin releerse —y
+      deja de ser cierta cuando se releen—. Leer las dos con el mismo campo es lo que hacía que el
+      lint contara deuda con el mismo dato con el que `contrast` eximía una cita, que es el defecto
+      que #495 midió del otro lado. `_repaginado_parcial` cuenta como deuda ABIERTA: una ronda que
+      cerró unos ítems y nombró los otros en `pendientes` no cerró nada.
+    funcion: lib_config.extraction_pagination_open
+    patron: 'PAGINATION_OPEN_MARKS|extraction_pagination_open|_repaginado'
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "Nombra la causa del localizador MAL sólo mientras la deuda esté abierta: con `_repaginado` decir «el localizador es del documento anterior» sería falso."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Lleva la misma regla pero por la constante (`PAGINATION_OPEN_MARKS`) y no por el predicado, porque su pregunta es por ARCHIVO de extracción y no por bibcode: necesita saber CUÁL marca está puesta para nombrar cuántos localizadores dejó pendientes la ronda parcial, que es lo que el predicado —booleano y por bibcode— no puede decir."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Es el módulo donde viven la constante y los dos predicados; `lib_config` los re-exporta (AUD-306) y los consumidores los llaman por ahí."
+      - modulo: scripts/repaginate.py
+        estado: fuera-de-alcance
+        motivo: "Es el único ESCRITOR de la deuda y la lleva por la constante (`PAGINATION_OPEN_MARKS`), no por el predicado, por lo mismo que el lint: trabaja por ARCHIVO de extracción y necesita saber CUÁL marca está puesta para reescribirla, que es lo que un booleano por bibcode no dice."

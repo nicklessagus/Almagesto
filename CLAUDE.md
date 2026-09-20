@@ -1639,9 +1639,9 @@ tener una salida ejecutable, y la de la categoría más grande del repo (161 de 
 el usuario—. Copia a **todos** los slugs, re-extrae **sólo ese** `.txt` (`extract_fulltext
 --bibcode`: con el `--force` del slug entero, cambiar UN archivo vence las anclas de **todos** los
 papers del tema), anula `eprint_version` y **emite el alcance de la re-verificación** (medido: 11
-reemplazos → 76 pares). ⛔ La extracción **no se re-pagina**: queda **marcada** `_paginacion` y el
-lint la reporta — es versionada y no regenerable (#311), y sus localizadores son de un documento
-que ya no está (las citas siguen bien; el localizador lo caza `--validar-todo`, #492). ⛔ **Y firma
+reemplazos → 76 pares). ⛔ La extracción queda **marcada** `_paginacion` —sus localizadores son de
+un documento que ya no está— y se **re-pagina RELEYENDO el PDF** (`repaginate.py`, #494: el `.txt`
+dice dónde ABRIR, la hoja responde), nunca con la página que el `.txt` deduce. ⛔ **Y firma
 `pdf_reemplazo` en la nota, add-only, y AVISA si el entrante tiene menos páginas (#437):** la copia
 del editor puede ser peor (7 páginas sin Supplementary contra 33 del preprint, con la ficha
 citando §S1.1) — aviso y no rehúse, porque el que decide es quien mira.

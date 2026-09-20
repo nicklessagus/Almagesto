@@ -7,6 +7,58 @@
 > Regla de la casa: **lo medido y lo derivado van separados**, y una salvedad que invalida un número
 > se escribe al lado del número, no en otro lado (regla de método #5).
 
+## #494 · cerrar `_paginacion` releyendo el PDF: la operación que faltaba (2026-09-20)
+
+**El caso.** Tras #492/#493 la bóveda quedó con **75 localizadores MAL** (de 455). 391 se
+relocalizaron en las notas; **64 de los 75 restantes viven en los bloques de salvedades que
+`harvest_views` estampa desde el JSON** y no se pueden corregir en la nota. La deuda de fondo es
+`_paginacion`: **68 extracciones, 1653 valores `linea`** apuntando al documento anterior.
+
+**La regla, decidida por el usuario el 2026-09-20:** `_paginacion` se cierra **releyendo el PDF**,
+no con la página que `quote_page_verdict` deduce del `.txt`. La página del `.txt` es la **guía de
+dónde abrir** (ubica la cita en segundos), no la respuesta: el `.txt` es índice degradado (#205) y
+la extracción es una lectura del PDF (#311). Vale para cualquier corrección de un `linea` en
+`raw/extraccion/`.
+
+**Cómo se impone, por FORMA y no pidiéndolo.** Es la parte que el issue pedía explícitamente («que
+no sea sólo prosa del prompt»), y son cinco cosas independientes:
+
+| # | mecanismo | qué cierra |
+|---|---|---|
+| 1 | el paquete (`guia`) y el resultado (`pagina` + `evidencia`) son **schemas distintos**, validados contra `RESULT_SCHEMA` | devolver el paquete **rebota** |
+| 2 | `--apply` **no lee el paquete**: recomputa los ítems desde la extracción | no existe camino de código de `guia` a `linea` (el test lo prueba **borrando** el paquete) |
+| 3 | cada página confirmada viaja con `evidencia` —palabras de esa hoja— que el escritor cruza contra el `.txt` partido por página | quien copió la guía sin abrir no tiene qué poner ahí; quien abrió la hoja equivocada se contradice con el índice |
+| 4 | `pdf_sha` del resultado == disco == el de la marca | se leyó el documento que hay, no un tercero |
+| 5 | `pagina: null` → `no hallado (relectura …)`, **nunca** la guía | el hueco se declara |
+
+⚠ **El límite honesto, dicho en el docstring:** que un LLM abrió el PDF es **infalsificable desde
+afuera** — la misma naturaleza que `verify-citations` (#205). Lo garantizado es que la guía no se
+puede escribir por ningún camino automático y que la respuesta lleva un testigo local a la hoja.
+
+**Medido sobre la bóveda real, antes de pushear** (12 extracciones de `Almagesto-Tesis` copiadas a
+un árbol de scratch con la deuda RE-ABIERTA; la instancia no se tocó): **329 localizadores** en 12
+fuentes, de 5 a 45 por fuente. ⚠ **Y la guía cubre poco, que es un hecho de los datos y no un
+defecto:** 8 de 45, 3 de 27, 3 de 5. La razón es estructural — el `valor` de una fila de
+`ground_truth` es una **paráfrasis del extractor** (castellano, o LaTeX: `$M_\star = 0.31 M_\odot$`)
+que el `.txt` no puede ubicar por construcción; medido, **26 de 33 filas** de una fuente no traen
+nada buscable. Se mejoró lo que se podía —la guía busca primero la «cita» que el valor lleve
+adentro, 5 → 8 y 2 → 3— y el resto **se declara con su motivo** (D-43). La guía es una comodidad;
+el mecanismo es la relectura.
+
+**Las dos preguntas que una marca contestaba a la vez.** `extraction_depaginated` (#437/#495) dice
+si la **transcripción** describe un documento que ya no está —y **sobrevive** al cierre—;
+`extraction_pagination_open` dice si los **localizadores** siguen sin releerse —y deja de ser cierta
+cuando se releen—. El lint contaba deuda con el mismo campo con el que `contrast` eximía una cita;
+hoy `PAGINATION_OPEN_MARKS` (`_paginacion`, `_repaginado_parcial`) responde la primera y
+`REPLACED_DOC_MARKS` la segunda.
+
+**La columna *Localizador* de la `## Vista`.** Se re-estampa **acotada**
+(`restamp_view_locators`), con la doctrina de #453: sólo el token adyacente a la cita que la máquina
+copió del JSON (#454), y **sólo si sigue siendo el que el paquete leyó** —la celda corregida a mano
+se lista y no se toca—. Las otras dos opciones eran peores: `--force` **re-fecha la lectura** (#395)
+y no tocarla deja el JSON bien y la tabla apuntando al documento reemplazado, o sea ~1653 celdas a
+mano, que es lo que esta operación existe para no hacer.
+
 ## #497 · la cuarta clase de salvedad: la que predica sobre la BÓVEDA (2026-09-20)
 
 `SALVEDAD_TIPOS` eran tres —`txt_pierde`, `pdf_paginas`, `pdf_leido`— y las tres predican sobre el

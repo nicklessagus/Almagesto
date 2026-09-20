@@ -288,9 +288,13 @@ def _page_check(b, cita: str, duenio: str | None, out: dict) -> None:
         # #436/#437 — el PDF reemplazado es la causa MEDIDA de la mayoría (104 de 893 en una bóveda
         # real), y es la que convierte la deuda global de `_paginacion` en esta lista con su página
         # nueva. Se nombra acá porque cambia qué hay que hacer: no es un error de transcripción.
-        causa = (" · la extracción de esa fuente es de un PDF REEMPLAZADO (#436): el localizador "
-                 "es del documento anterior"
-                 if cfg.extraction_depaginated(duenio) else "")
+        # #494 — la causa es la deuda ABIERTA, no la familia: tras `_repaginado` la relectura ya
+        # actualizó los localizadores de la extracción, así que decir «es del documento anterior»
+        # sería falso. La exención de #437/#495 mira la familia entera porque contesta la otra
+        # pregunta —la transcripción—, que el repaginado no toca.
+        causa = (" · la extracción de esa fuente es de un PDF REEMPLAZADO (#436) y su deuda de "
+                 "paginación sigue ABIERTA: el localizador es del documento anterior"
+                 if cfg.extraction_pagination_open(duenio) else "")
         out["pag_mal"].append(
             (b.first_line, f"«{corte}» ({decl}) — la cita está en la p. "
                            f"{', '.join(map(str, det['impresas']))} de {duenio} (índice "
