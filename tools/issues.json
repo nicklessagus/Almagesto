@@ -2449,6 +2449,11 @@
   {
    "number": 492,
    "title": "Ningún chequeo mira el LOCALIZADOR de página: 104/893 apuntan al PDF reemplazado, 12/190 mal en una ficha auditada, y la convención (índice vs impresa) no está declarada",
+   "state": "CLOSED"
+  },
+  {
+   "number": 493,
+   "title": "Localizador (residuo de #492): en la página muda el offset global espurio gana al número impreso de la página donde cae la cita",
    "state": "OPEN"
   }
  ]

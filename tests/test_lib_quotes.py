@@ -892,6 +892,11 @@ def test_492_B_el_offset_global_se_DESCARTA_si_una_pagina_lo_contradice(toy_vaul
     con_muda = [_pagina(1, "uno", impresa=101), _pagina(2, "dos", impresa=102),
                 _pagina(3, "muda"), _pagina(4, "cuatro", impresa=104)]
     assert cfg.printed_pages(con_muda) == [101, 102, 103, 104]
+    # …y la cita que cae en la página MUDA se juzga con ese respaldo: «p. 103» es `impresa` aunque
+    # la página no lleve número propio (#493: el respaldo sólo vale con secuencia real)
+    con_muda[2] = _pagina(3, f"prosa. {CITA_492}. fin")
+    _txt_paginado("2020Muda", con_muda)
+    assert cfg.quote_page_verdict(CITA_492, "2020Muda", [(103, 103)])[0] == "impresa"
     contradicho = [_pagina(1, "uno", impresa=101), _pagina(2, "dos", impresa=102),
                    _pagina(3, "tres", impresa=103), _pagina(4, "muda"),
                    _pagina(5, "cinco", impresa=7), _pagina(6, "seis", impresa=8)]
@@ -899,3 +904,48 @@ def test_492_B_el_offset_global_se_DESCARTA_si_una_pagina_lo_contradice(toy_vaul
     # y la ambigüedad local no se adivina: dos candidatos consecutivos en la misma página → None
     ambigua = [f"10\n\nprosa\n\n{200}", f"11\n\nprosa\n\n{201}", f"12\n\nprosa\n\n{202}"]
     assert cfg.printed_pages(ambigua) == [None, None, None]
+
+
+def test_493_el_numero_IMPRESO_en_la_pagina_hallada_gana_a_cualquier_offset(toy_vault):
+    """#493 — el residuo de #492 en `2012Naik`: la página 8 lleva «10» en la cabecera, sus vecinas
+    llevan el título corrido sin número (la consecutividad no confirma), y el offset global era `0`
+    por coincidencia de enteros que no son páginas. El número declarado, impreso EN la página donde
+    cae la cita, es evidencia más fuerte que todo lo demás.  @inv INV-155"""
+    # 22 páginas: enteros de ecuación en los bordes que dan offset 0 tres veces; sólo la p. 8 lleva
+    # su número impreso (10); las vecinas, título corrido
+    pags = []
+    for i in range(1, 23):
+        borde = f"({i})" if i in (3, 12, 20) else "Introduction:        Independent"
+        cuerpo = f"prosa. {CITA_492}. fin" if i == 8 else "prosa de relleno"
+        pie = "\n\n10" if i == 8 else ""
+        pags.append(f"{borde}\n\n{cuerpo}{pie}")
+    assert cfg.printed_page_offset(pags) is None, \
+        "un offset que ningún par de páginas vecinas sostiene no es una paginación"
+    _txt_paginado("2012Naik", pags)
+    assert cfg.quote_page_verdict(CITA_492, "2012Naik", [(10, 10)])[0] == "impresa"
+    # …y el offset con secuencia real sigue derivándose
+    con_secuencia = [_pagina(i, _sin_digitos(i), impresa=100 + i) for i in range(1, 5)]
+    assert cfg.printed_page_offset(con_secuencia) == 100
+
+
+def test_493_la_evidencia_de_pagina_NO_es_cualquier_entero_del_borde(toy_vault):
+    """Devuelto por el validador: aceptar cualquier entero del borde flipeó 19 hallazgos a
+    «impresa», **18 falsos** — el total del artículo en el pie de A&A (`A2, page 22 of 23`: toda
+    cita con «p. 23» pasaba), una fecha del pie (Cambiaso 2024), un `4` suelto (Mayor 2009). Sólo
+    cuenta la X de «page X of Y» y la línea que es sólo un entero; un año, no.  @inv INV-155"""
+    assert cfg.page_number_evidence(["A2, page 22 of 23\n\nprosa\n\nA&A 680, A2 (2023)"]) == [{22}]
+    assert cfg.page_number_evidence(["10\n\nprosa"]) == [{10}]
+    assert cfg.page_number_evidence(["Received 10 January 2024\n\nprosa\n\n2024"]) == [set()]
+    assert cfg.page_number_evidence(["Fig. 4 shows\n\nprosa"]) == [set()]
+    # …y en el veredicto: la cita en la p. 22 de 23 — «p. 22» impresa, «p. 23» MAL, no «impresa»
+    pags = [f"A2, page {i} of 23\n\n" + (f"prosa. {CITA_492}. fin" if i == 22 else "prosa")
+            for i in range(1, 24)]
+    _txt_paginado("2023Cretignier", pags)
+    assert cfg.quote_page_verdict(CITA_492, "2023Cretignier", [(22, 22)])[0] == "impresa"
+    assert cfg.quote_page_verdict(CITA_492, "2023Cretignier", [(23, 23)])[0] == "mal"
+    # una fecha en el pie no rescata al localizador del preprint (índice 3, «p. 10» declarado)
+    pags = [f"Draft version\n\n" + (f"prosa. {CITA_492}. fin" if i == 3 else "prosa")
+            + "\n\nReceived 10 January 2024" for i in range(1, 6)]
+    _txt_paginado("2024Cambiaso", pags)
+    estado, det = cfg.quote_page_verdict(CITA_492, "2024Cambiaso", [(10, 10)])
+    assert estado != "impresa", (estado, det)

@@ -687,6 +687,37 @@ def page_number_candidates(paginas: list) -> list:
     return out
 
 
+#: #493 · las DOS formas en que un entero del borde ES el número de página, y no otra cosa: la X
+#: de «page X of Y» (A&A: `A2, page 22 of 23` — la Y es el total del artículo, y toda cita con
+#: localizador igual al total pasaba a «impresa»: 8 casos medidos) y la línea que es SÓLO un
+#: entero (`'10'`, el caso Naik). Un entero dentro de otra línea —una fecha del pie, un `4` suelto—
+#: sólo cuenta si forma secuencia con la vecina (`printed_pages`), y un año, nunca.
+_PAGE_OF_RE = re.compile(r"(?i)\b(?:page|p[áa]g(?:ina)?\.?|p\.)\s*(\d{1,4})\s*(?:of|de)\s*\d{1,4}\b")
+_ONLY_INT_RE = re.compile(r"^\s*(\d{1,4})\s*$")
+
+
+def page_number_evidence(paginas: list) -> list:
+    """`[{enteros}]` — per page, the edge integers that ARE a page number on their own (#493).
+
+    ⛔ Stricter than `page_number_candidates` on purpose. The verdict uses this set to accept a
+    declared page BEFORE consecutiveness and offset, so it has to be evidence and not a number:
+    measured on a real vault, accepting any edge integer flipped **19** findings to «impresa» and
+    **18 were false** — the article total of A&A's footer, a date, a bare `4`. Only two shapes
+    qualify: `X` in «page X of Y», and a line that is nothing but an integer; a four-digit year on
+    its own line does not.
+    """
+    out = []
+    for pag in paginas:
+        lineas = [l for l in str(pag or "").split("\n") if l.strip()]
+        ev: set = set()
+        for linea in lineas[:PAGE_EDGE_LINES] + lineas[-PAGE_EDGE_LINES:]:
+            ev |= {int(x) for x in _PAGE_OF_RE.findall(linea)}
+            if (m := _ONLY_INT_RE.match(linea)) and not 1900 <= int(m.group(1)) <= 2099:
+                ev.add(int(m.group(1)))
+        out.append(ev)
+    return out
+
+
 def printed_page_offset(paginas: list) -> int | None:
     """`impresa = índice + offset`, derived from the header/footer number — or `None` (#492).
 
@@ -703,14 +734,20 @@ def printed_page_offset(paginas: list) -> int | None:
     restart the numbering: `printed_pages` is the reader that resolves that, and this one is its
     fallback.
     """
+    cands = page_number_candidates(paginas)
     cuenta: dict = {}
-    for i, cand in enumerate(page_number_candidates(paginas), 1):
+    for i, cand in enumerate(cands, 1):
         for n in cand:
             cuenta[n - i] = cuenta.get(n - i, 0) + 1
     if not cuenta:
         return None
     techo = max(cuenta.values())
-    candidatos = [k for k, v in cuenta.items() if v == techo]
+    # ⛔ #493 — un offset que ningún par de páginas VECINAS sostiene no es una paginación: es una
+    # coincidencia de enteros que no son páginas (números de ecuación, valores en los bordes). En
+    # `2012Naik`, `0` alcanzaba el techo 3 sobre 22 páginas así, y le ganaba al `10` impreso en la
+    # página donde caía la cita.
+    candidatos = [k for k, v in cuenta.items() if v == techo and any(
+        (i + k) in cands[i - 1] and (i + 1 + k) in cands[i] for i in range(1, len(cands)))]
     # ⛔ Un EMPATE no se desempata: dos numeraciones que se repiten lo mismo son dos lecturas del
     # mismo documento, y elegir una sería inventar la convención que este chequeo existe para
     # auditar. Sale `None` —no evaluable con su motivo (D-43)—, no la más chica ni la primera.
@@ -763,14 +800,15 @@ def fulltext_pagination(bibcode: str) -> dict:
     whole-file reading uses: a quote that only appears once the columns are split has to be found
     here too, or the check would report the layout as a wrong locator.
 
-    `{"paginas": [], "impresas": [], "offset": None}` when there is no `.txt` on disk — *not evaluable*, never «the
+    `{"paginas": [], "impresas": [], "evidencia": [], "offset": None}` when there is no `.txt` on
+    disk — *not evaluable*, never «the
     page is wrong».
     """
     clave = (str(cfg.FULLTEXT), bibcode)
     if clave in cfg._PAGINAS_CACHE:
         return cfg._PAGINAS_CACHE[clave]
     txts = sorted(cfg.FULLTEXT.glob(f"*/{bibcode}.txt")) if cfg.FULLTEXT.exists() else []
-    out = {"paginas": [], "impresas": [], "offset": None}
+    out = {"paginas": [], "impresas": [], "evidencia": [], "offset": None}
     if txts:
         try:
             crudas = txts[0].read_text(encoding="utf-8", errors="replace").split("\f")
@@ -779,6 +817,7 @@ def fulltext_pagination(bibcode: str) -> dict:
         if crudas:
             out = {"paginas": [source_texts(p) for p in crudas],
                    "impresas": printed_pages(crudas),
+                   "evidencia": page_number_evidence(crudas),
                    "offset": printed_page_offset(crudas)}
     cfg._PAGINAS_CACHE[clave] = out
     return out
@@ -836,6 +875,13 @@ def quote_page_verdict(quote: str, bibcode: str, rangos: list, declarado: str = 
     def _en_rango(n):
         """Is this page inside ANY of the ranges the locator names? (defecto A: all of them count)."""
         return any(a <= n <= b for a, b in rangos)
+    # #493 — el número que el localizador declara está IMPRESO como número de página en la cabecera
+    # o el pie de la página donde cae la cita (`page_number_evidence`, no cualquier entero):
+    # evidencia más fuerte que la consecutividad y que cualquier offset, y se mira antes. Es el caso
+    # del capítulo con título corrido en la cabecera: la página lleva su número y las vecinas no,
+    # así que la consecutividad no lo confirma y el offset lo desmentía.
+    if any(_en_rango(n) for i in halladas for n in pag["evidencia"][i - 1]):
+        return "impresa", det
     if any(_en_rango(n) for n in con_numero):
         return "impresa", det
     if any(_en_rango(i) for i in halladas):

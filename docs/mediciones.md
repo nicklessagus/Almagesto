@@ -60,6 +60,23 @@ falso positivo. Y dos defectos con mecanismo leído en el código, ambos cerrado
 Y la población fuera de alcance se **declara** en la línea de población («FUERA DE ALCANCE: sin
 cita textual adyacente con la que ubicarlos»): un «0 MAL» no se lee como «todo mirado» (INV-40).
 
+**Cierre del validador (v1.290.0 sobre el vault real):** `icasso` 4 MAL, los 4 verdaderos ·
+Comon–Jutten **94 → 3** (dos plausibles para leer, uno un *título citado* y no una cita: falso por
+clase) · global MAL 678 → **470**, impresa 2332 → 2620, fuera de alcance declarado 12008 · y **7
+localizadores mal que la revisión a mano no había visto**, 6 corregidos. El séptimo es **#493**
+(1.291.0): `2012Naik` «p. 10» → la p. 8 del PDF lleva «10» en la cabecera, las vecinas el título
+corrido sin número —la consecutividad no confirma— y el offset global era `0` por coincidencia de
+enteros que no son páginas. Dos salidas, sin adivinar: el número declarado **impreso como número de
+página en la página hallada** gana a todo y se mira primero; y el offset global exige **secuencia**
+(dos vecinas que lo den). ⚠ La primera versión (working tree, no commiteada) aceptaba **cualquier
+entero del borde** y el validador la devolvió medida: 470 → 451 MAL, **19 flipeados a «impresa», 18
+falsos** —el total del artículo en el pie de A&A (`A2, page 22 of 23`: 8 casos con «p. 23»/«p. 22»),
+una fecha del pie (Cambiaso 2024, tapando 4 que 1.290 reportaba bien), un `4` suelto (Mayor 2009)—.
+La regla que entró (`page_number_evidence`): la X de «page X of Y» · la línea que es **sólo** un
+entero (el `'10'` de Naik) · el entero dentro de otra línea sólo por secuencia con la vecina · los
+años, fuera. Naik entra; los 18 vuelven a MAL. ⚠ Y la secuencia **no rescata** el offset de Naik
+—lo sostienen números de ecuación en páginas vecinas—: es la primera salida la que lo decide.
+
 ## 2026-08-25 · Extracción de τ Ceti (79 papers) — el fan-out con prompt escrito a mano
 
 **Qué era.** Ingest completo de τ Ceti con `ingest-star`: 79 fulltexts, un subagente por paper. El
