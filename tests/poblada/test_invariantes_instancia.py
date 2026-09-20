@@ -195,7 +195,7 @@ def test_bibcode_es_el_stem_en_todos_los_papers(instancia_real):
     lo que usa `verify-citations` para encontrar el `.txt`. Medido hoy: 908/908. Un mismatch
     (nota renombrada a mano sin actualizar el campo, o viceversa) desincroniza las dos mitades del
     contrato sin que el lint lo note (no hay categoría dedicada)."""
-    papers = sorted(cfg.PAPERS.glob("*.md"))
+    papers = cfg.note_paths(cfg.PAPERS)
     assert papers, "no se encontró ningún paper bajo vault/wiki/papers/ — ¿ALMAGESTO_INSTANCIA apunta a la instancia correcta?"
     mismatches = []
     for p in papers:
@@ -211,7 +211,7 @@ def test_todo_paper_en_papers_lleva_tag_paper(instancia_real):
     `fm_broken` (bloqueante), así que ya está cubierta por `test_todo_frontmatter_parsea` de forma
     indirecta; este test la aísla para que un fallo diga exactamente "falta el tag", no "frontmatter
     roto" genérico. Medido hoy: 908/908 con el tag."""
-    papers = sorted(cfg.PAPERS.glob("*.md"))
+    papers = cfg.note_paths(cfg.PAPERS)
     sin_tag = [p.stem for p in papers
                if "paper" not in (cfg.split_fm(p.read_text(encoding="utf-8")).get("tags") or [])]
     assert sin_tag == [], f"papers sin `tags: [paper]`: {sin_tag}"
@@ -233,7 +233,7 @@ def test_vocabularios_cerrados_en_todo_el_corpus(instancia_real):
     DISPUTE_SOURCES = {"ground_truth"}
 
     malos = []
-    for p in sorted(cfg.PAPERS.glob("*.md")):
+    for p in cfg.note_paths(cfg.PAPERS):
         fm = cfg.split_fm(p.read_text(encoding="utf-8"))
         b = fm.get("bearing")
         if b is not None and str(b) not in BEARINGS:
@@ -263,7 +263,7 @@ def test_vocabularios_cerrados_en_todo_el_corpus(instancia_real):
                     if src and str(src) not in DISPUTE_SOURCES:
                         malos.append((p.stem, "disputes.source", src))
 
-    for p in sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []:
+    for p in cfg.note_paths(cfg.STARS):
         fm = cfg.split_fm(p.read_text(encoding="utf-8"))
         for pl in (fm.get("planets") or []):
             if not isinstance(pl, dict):
@@ -291,7 +291,7 @@ def test_campos_obligatorios_100_por_ciento_por_tipo(instancia_real):
     "Presente" es `campo in frontmatter`, NO "no nulo": `teff_K: null` es el caso NORMAL del
     espejo #70 (NEA sin el valor) y no es lo que este test vigila — eso es un problema de VALOR, no
     de FORMA, y lo vigila el propio lint (contradicciones ground-truth ↔ ficha, en el ratchet)."""
-    # `facets` NO va acá: lo aísla `test_papers_declaran_facets_no_topics` (xfail), porque en una
+    # `facets` NO va acá: lo aísla `test_papers_declaran_facets_no_topics`, porque en una
     # instancia pre-R-5 el campo se llama `topics` y mezclarlo taparía los otros catorce.
     PAPER_FIELDS = ("bibcode", "title", "first_author", "n_authors", "year", "arxiv_id", "doi",
                     "bibstem", "stars", "methods", "relevance", "citation_count", "pdf",
@@ -302,17 +302,17 @@ def test_campos_obligatorios_100_por_ciento_por_tipo(instancia_real):
     CONCEPT_FIELDS = ("name", "aliases", "tags")
 
     faltantes = []
-    for p in sorted(cfg.PAPERS.glob("*.md")):
+    for p in cfg.note_paths(cfg.PAPERS):
         fm = cfg.split_fm(p.read_text(encoding="utf-8"))
         for campo in PAPER_FIELDS:
             if campo not in fm:
                 faltantes.append((p.stem, "papers", campo))
-    for p in sorted(cfg.STARS.glob("*.md")) if cfg.STARS.exists() else []:
+    for p in cfg.note_paths(cfg.STARS):
         fm = cfg.split_fm(p.read_text(encoding="utf-8"))
         for campo in STAR_FIELDS:
             if campo not in fm:
                 faltantes.append((p.stem, "stars", campo))
-    for p in sorted(cfg.CONCEPTS.glob("**/*.md")) if cfg.CONCEPTS.exists() else []:
+    for p in cfg.note_paths(cfg.CONCEPTS, "**/*.md"):
         fm = cfg.split_fm(p.read_text(encoding="utf-8"))
         for campo in CONCEPT_FIELDS:
             if campo not in fm:
@@ -322,19 +322,11 @@ def test_campos_obligatorios_100_por_ciento_por_tipo(instancia_real):
         f" (+{len(faltantes) - 30} más)" if len(faltantes) > 30 else "")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="R-5 (framework 1.30.0) renombró el campo `topics:` de la nota de paper a `facets:`. La "
-           "instancia de referencia sigue en Almagesto v1.11.0, donde TODAS las notas traen "
-           "`topics` y NINGUNA `facets` (medido: 908/908 y 0/908) — el deploy 1.11.0→1.30.x todavía "
-           "no corrió. strict=True: cuando este test empiece a pasar, el deploy se hizo y hay que "
-           "borrar el xfail. Mientras tanto el lint bloquea el campo viejo (categoría `topics:` "
-           "schema pre-R-5), que es el detector que hace visible la brecha.")
 def test_papers_declaran_facets_no_topics(instancia_real):
     """@inv INV-64 — el campo de facetas de la nota de paper es `facets`; `topics` es el schema
     pre-R-5, que el lector ya no mira. Aislado del balde de campos obligatorios a propósito: es una
     brecha de VERSIÓN de la instancia, no un defecto de forma nota por nota."""
-    sin_facets = [p.name for p in sorted(cfg.PAPERS.glob("*.md"))
+    sin_facets = [p.name for p in cfg.note_paths(cfg.PAPERS)
                   if "facets" not in cfg.split_fm(p.read_text(encoding="utf-8"))]
     assert sin_facets == [], f"notas de paper sin `facets:` (schema pre-R-5): {len(sin_facets)}"
 
@@ -359,26 +351,23 @@ def test_ningun_txt_del_corpus_devuelve_mas_de_dos_lecturas(instancia_real):
                         f"dos lecturas — {dict(sorted(peores.items(), key=lambda kv: -kv[1])[:5])}")
 
 
-# ── el hueco documentado que SÍ falla hoy: se escribe como test del hallazgo, no se esconde ──────
+# ── el espejo inverso de #70, que desde #498 vive en el lint y viaja ─────────────────────────────
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="hueco medido 2026-08-23: raw/ground_truth/ds_tuc.json existe sin su stars/ds_tuc.md — "
-           "el espejo #70 barre por GT→ficha (`for gtf in ground_truth/*.json: ... if sf.exists()`) "
-           "así que un GT sin ficha nunca lo mira nadie (la inversa, ficha sin GT, sí es hallazgo). "
-           "Se cierra creando `stars/ds_tuc.md` (`make_notes.py ds_tuc`) o borrando el GT colgado; "
-           "strict=True: si este test empieza a PASAR sin que se haya tocado, es una señal de que "
-           "alguien cerró el hueco y hay que borrar el xfail (o de que un lint nuevo lo detecta y "
-           "el chequeo directo de acá quedó redundante).")
 def test_gt_y_fichas_apareados(instancia_real):
     """Todo `raw/ground_truth/<slug>.json` debería tener su `stars/<slug>.md` (y viceversa — la
-    inversa la vigila `incomplete` del lint hoy: "ficha sin GT"). Es el chequeo SIMÉTRICO que hoy no
-    existe: el barrido de #70 en `lint.py` itera `ground_truth/*.json` y hace `if sf.exists(): ...
+    inversa la vigila `incomplete` del lint hoy: "ficha sin GT").
+
+    ⛔ #498 — hasta acá el test llevaba `xfail(strict=True)` sobre el hueco de la bóveda SEMILLA
+    (`ds_tuc`), o sea un hecho de UNA bóveda codificado en el gate que corre contra OTRA: en una
+    instancia sana el test pasaba y el tier 2 se ponía rojo **por haberse arreglado** (XPASS
+    strict). Un gate que no puede pasar en la población para la que existe no es un gate. El hallazgo
+    se mudó a una categoría del lint (`gt_sin_ficha`), que viaja y se mide donde esté; acá queda el
+    invariante pelado. Era el chequeo SIMÉTRICO que no existía: el barrido de #70 en `lint.py` itera `ground_truth/*.json` y hace `if sf.exists(): ...
     else: incomplete.append(...)` — así que si la ficha falta SÍ se reporta (dentro de "Campos
     incompletos", agregado con otras 769 cosas); lo que este test aísla es que la contraparte
     exacta (ds_tuc) está documentada y nombrada, no perdida en el ruido del balde grande."""
     gts = {p.stem for p in cfg.GROUND_TRUTH.glob("*.json")} if cfg.GROUND_TRUTH.exists() else set()
-    fichas = {p.stem for p in cfg.STARS.glob("*.md")} if cfg.STARS.exists() else set()
+    fichas = {p.stem for p in cfg.note_paths(cfg.STARS)}
     sin_ficha = sorted(gts - fichas)
     assert sin_ficha == [], (
         f"ground-truth sin su ficha de estrella: {sin_ficha} — recreá la ficha "
@@ -400,6 +389,12 @@ BLOQUEANTE_TITULOS = (
     "Contradicciones ground-truth", "masa inconsistente con m", "thesis_links sin página destino",
     "disputes: ref de una posición", "`role` fuera del vocabulario", "disputes mal formadas",
     "disputes en el schema viejo", "Juicio de triage en build",
+    # ⛔ #498 — «No evaluado» faltaba, y CUENTA para el exit (D-43: un chequeo que no pudo correr
+    # suprime su categoría normal, así que un `(0)` que nadie midió se leería como veredicto). Sin
+    # él, un lint con rc 1 por esa vía hacía fallar este test con «alguna categoría bloqueante no
+    # está en la lista» — el recálculo daba 0 sobre un reporte que bloqueaba. Es la misma deriva
+    # título↔lista que rompía el ratchet, en la otra mitad del mismo test.
+    "No evaluado",
 )
 
 
@@ -427,19 +422,34 @@ def test_ratchet_categorias_no_superan_el_techo(reporte):
     rc, txt = reporte
     categorias = _cargar_ratchet()
 
-    excedidos = []
-    bajaron = []
+    # ⛔ #498 — el techo de una categoría de BACKLOG es un hecho de UNA bóveda (cuánta deuda de
+    # contenido tiene hoy), y este archivo viaja con el framework a instancias que no son ésa: con
+    # el assert sobre todas, el tier 2 salía rojo en cualquier bóveda con más contenido que la de
+    # referencia —medido: `citas_no_verificables` 12 contra techo 1, y de esos 12 sólo 3 venían de
+    # que la categoría cambió de definición; los otros 9 son deuda legítima de otra bóveda—. Lo que
+    # SÍ es invariante en toda instancia es que los BLOQUEANTES estén en cero, y eso se sigue
+    # afirmando. El drift del backlog se avisa con sus números, y el `-W error::UserWarning` que el
+    # encabezado del ratchet ya receta lo vuelve a convertir en falla para quien cuide ESA bóveda.
+    excedidos, backlog_excedido, bajaron = [], [], []
     for clave, meta in categorias.items():
         n, _ = _categoria(txt, meta["titulo"])
         techo = meta["techo"]
         if n > techo:
-            excedidos.append(f"{clave} ({meta['titulo']!r}): {n} > techo {techo}")
+            destino = (excedidos if meta.get("severidad") == "bloqueante" else backlog_excedido)
+            destino.append(f"{clave} ({meta['titulo']!r}): {n} > techo {techo}")
         elif n < techo:
             bajaron.append(f"{clave}: {n} < techo {techo}")
 
     assert excedidos == [], (
-        "categorías del ratchet por encima de su techo — regresión o deuda nueva sin revisar:\n  "
-        + "\n  ".join(excedidos))
+        "categorías BLOQUEANTES del ratchet por encima de su techo — en una instancia sana tienen "
+        "que estar en cero:\n  " + "\n  ".join(excedidos))
+
+    if backlog_excedido:
+        warnings.warn(
+            "categorías de BACKLOG por encima del techo medido en la bóveda de referencia. Si ésta "
+            "es esa bóveda, es una regresión y hay que mirarla; si es otra instancia, es su deuda "
+            "de contenido y el techo no le aplica (#498):\n  " + "\n  ".join(backlog_excedido),
+            UserWarning, stacklevel=2)
 
     if bajaron:
         warnings.warn(
@@ -565,9 +575,15 @@ def test_idempotencia_ciclo_de_migradores_sobre_datos_reales(instancia_real, tmp
     categorias = _cargar_ratchet()
     bloqueantes = {c: m for c, m in categorias.items() if m["severidad"] == "bloqueante"}
     antes_conteo = {c: _categoria(reporte0, m["titulo"])[0] for c, m in bloqueantes.items()}
-    assert sum(antes_conteo.values()) > 0, (
-        "el corpus de arranque no tiene ningún bloqueante de los tres del ratchet — este test no "
-        "prueba nada así (¿la instancia ya fue migrada? actualizá el ratchet)")
+    # ⛔ #498 — una instancia YA MIGRADA no tiene ninguno de los tres bloqueantes, y eso es lo
+    # normal y lo deseable: el test no aplica, no falla. Con el `assert` el tier 2 salía rojo en
+    # toda bóveda sana —el mismo defecto que el `xfail` de `ds_tuc`, codificar el estado de un
+    # vault en el gate de otro—. Se saltea DECLARANDO el motivo (D-43): un skip con su razón no se
+    # lee igual que un verde.
+    if sum(antes_conteo.values()) == 0:
+        pytest.skip(f"el corpus de arranque no trae ninguno de los tres bloqueantes del ratchet "
+                    f"({antes_conteo}) — la instancia ya está migrada, así que este test no tiene "
+                    f"qué medir: NO es un fallo (#498)")
 
     # el ciclo del deploy real, mismo orden que `test_upgrade.py::_correr_ciclo` y que CLAUDE.md
     # (plan §5, pasos 6-9): disputas → cabeceras → espejo → triage legacy del único sujeto que lo trae.

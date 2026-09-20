@@ -10891,3 +10891,24 @@ def test_la_clave_de_cita_repetida_se_NOMBRA_de_los_dos_lados():
     assert sorted(s for s, _ in hall) == ["1998Hyvarinen", "1998HyvarinenICANN"]
     assert "1998HyvarinenICANN" in dict(hall)["1998Hyvarinen"]
     assert lint.check_bibtex_claves_repetidas({}) == []
+
+
+def test_498_ground_truth_sin_su_ficha_es_el_espejo_INVERSO_de_70(toy_vault):
+    """⛔ #498 — el barrido de #70 va ficha→GT, así que un `raw/ground_truth/<slug>.json` colgado
+    —la estrella se borró, o el ingest quedó a medias— no lo mira NADIE: es un snapshot de NEA que
+    nadie publica y que ninguna nota cita.
+
+    Vivía como un `xfail(strict=True)` del tier 2 sobre el hueco de la bóveda SEMILLA (`ds_tuc`),
+    o sea un hecho de UNA bóveda codificado en el gate que corre contra OTRA: en una instancia sana
+    el test pasaba y el tier 2 se ponía rojo **por haberse arreglado** (XPASS strict). Acá viaja y
+    se mide donde esté, con su población declarada (INV-40)."""
+    import json as _j
+    cfg.GROUND_TRUTH.mkdir(parents=True, exist_ok=True)
+    cfg.STARS.mkdir(parents=True, exist_ok=True)
+    (cfg.GROUND_TRUTH / "gj_581.json").write_text(_j.dumps({"slug": "gj_581"}), encoding="utf-8")
+    mk_note(cfg.STARS, "gj_581", {"name": "GJ 581", "slug": "gj_581", "tags": ["star"]}, "# x\n")
+    assert lint.check_gt_without_star() == ([], 1), "con su ficha NO es hallazgo, y la población se declara"
+    (cfg.GROUND_TRUTH / "ds_tuc.json").write_text(_j.dumps({"slug": "ds_tuc"}), encoding="utf-8")
+    hall, pob = lint.check_gt_without_star()
+    assert pob == 2 and [h[0] for h in hall] == ["ds_tuc"], hall
+    assert "make_notes.py ds_tuc" in hall[0][1], "el backlog nombra la salida ejecutable"

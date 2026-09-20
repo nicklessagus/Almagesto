@@ -424,6 +424,10 @@ def test_494_el_CALIFICADOR_del_localizador_no_se_pisa(toy_vault, tmp_path, caps
     assert nuevo["ground_truth"][0]["linea"] == "p. 2010 (nota al pie de la Tabla 2)"
     assert nuevo["ground_truth"][1]["linea"] == "p. 2010, y también p. 9 si se mira el apéndice"
     assert "1 colapsado(s)" in capsys.readouterr().out
+    # ⛔ y queda en la MARCA, no sólo en pantalla: en pantalla se lo lleva la corrida, y es lo único
+    # que queda dicho sobre un campo cuyo localizador viejo nombraba varias páginas (medido: 765 de
+    # 5627 `ground_truth[].linea`)
+    assert nuevo["_repaginado"]["colapsados"] == ["ground_truth[1].linea"], nuevo["_repaginado"]
 
 
 def _extraccion_lente(lente: str = "orden", slug: str = "ica_ruido", bib: str = BIB):
@@ -505,6 +509,15 @@ def test_494_el_MISMO_PAPER_bajo_DOS_SLUGS_no_colisiona_y_converge(toy_vault, tm
     _txt_paginado(slug="hd_40307")
     paquetes = rp.write_rounds(BIB, tmp_path)
     assert sorted(p["extraccion"] for p in paquetes) == [f"gj_581/{BIB}", f"hd_40307/{BIB}"]
+    # ⛔ y el stdout NOMBRA el archivo: con `Path(...).stem` tiraba el slug y cortaba el bibcode en
+    # el último punto, así que las dos líneas del par salían idénticas —justo sobre el eje que este
+    # issue existe para separar— y no se podía saber cuál paquete se acababa de escribir
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rp.main([BIB, "--out", str(tmp_path / "cli")])
+    salida = buf.getvalue()
+    assert f"gj_581/{BIB}/prompt.md" in salida and f"hd_40307/{BIB}/prompt.md" in salida, salida
     # los DOS prompts en disco, cada uno con sus items: nada se pisa
     assert (tmp_path / "gj_581" / BIB / "prompt.md").exists()
     assert (tmp_path / "hd_40307" / BIB / "prompt.md").exists()

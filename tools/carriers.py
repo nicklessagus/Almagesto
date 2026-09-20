@@ -43,6 +43,13 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 DECLARACION = ROOT / "tools" / "portadores.yaml"
+#: #498 · los árboles que el gate recorre. ⛔ **`tests/` NO entra, y el motivo se declara** (la
+#: alternativa que el issue ofrece): un test lleva reglas como cualquier código —la que rompió el
+#: tier 2 en toda instancia era «todo enumerador de notas pasa por `cfg.note_paths`» (#344), con el
+#: glob crudo en 7 archivos y `--propose` devolviendo CERO—, pero sumarlo acá produce **319
+#: hallazgos** de golpe: un gate que nadie puede cerrar se apaga, y apagado no protege ninguna de
+#: las 73 reglas que hoy sí protege. La regla que faltaba tiene su propia red, más chica y más
+#: precisa, en `tests/test_docs_ejecutables.py` (`::test_498_ningun_test_enumera_notas_con_el_glob_crudo`).
 ARBOLES = ("scripts", "tools")
 ESTADOS = ("usa", "fuera-de-alcance")
 

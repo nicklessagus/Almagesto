@@ -689,3 +689,89 @@ def test_el_mapa_de_trazabilidad_commiteado_esta_al_dia():
     assert rc == 0, ("`docs/trazabilidad.md` está desactualizado respecto de las marcas `@inv` del "
                      "código — correr `python scripts/trace_invariants.py` y commitear el archivo:\n"
                      + salida.getvalue())
+
+
+def test_498_los_titulos_del_ratchet_de_instancia_existen_en_el_lint():
+    """⛔ #498 — el ratchet del tier 2 nombra categorías del lint por su TÍTULO, y el título se
+    edita: `Citas no verificables en query/concepto/hipótesis` ganó un `ficha/` y `Sin verificar:
+    query/concepto con citas` se reescribió entero, así que el ratchet quedó apuntando a dos
+    categorías que nadie emite.
+
+    El test de allá falla duro (`assert start is not None`), que está bien —un techo que no
+    encuentra su categoría no está midiendo nada—, pero **sólo se entera corriendo el tier 2 contra
+    una bóveda poblada**, que es lo que en esta instancia no se había corrido nunca. Acá el drift se
+    ve en tier 0, sin bóveda: es la misma doctrina que la paridad doc↔código del resto del archivo.
+    """
+    import yaml
+    ratchet = yaml.safe_load((RAIZ / "tests/poblada/ratchet_instancia.yaml").read_text(
+        encoding="utf-8"))
+    lint = (RAIZ / "scripts/lint.py").read_text(encoding="utf-8")
+
+    def titulos(obj, out=None):
+        out = [] if out is None else out
+        if isinstance(obj, dict):
+            if isinstance(obj.get("titulo"), str):
+                out.append(obj["titulo"])
+            for v in obj.values():
+                titulos(v, out)
+        elif isinstance(obj, list):
+            for v in obj:
+                titulos(v, out)
+        return out
+
+    declarados = titulos(ratchet)
+    assert declarados, "el ratchet no declara ninguna categoría: el gate no mediría nada"
+    huerfanos = [t for t in declarados if t not in lint]
+    assert not huerfanos, (f"títulos que `lint.py` ya no emite (el techo que cuidan no se mide): "
+                           f"{huerfanos}")
+
+
+#: #498 · los usos del glob crudo en `tests/` que NO son un enumerador de notas de una bóveda real,
+#: con su motivo. Todos operan sobre corpus SINTÉTICO —el generador no fabrica hermanos `.verif.md`—
+#: o cuentan archivos a propósito, hermanos incluidos.
+_GLOB_CRUDO_EXENTO = {
+    "tests/test_make_notes.py": "asserta que el directorio quedó VACÍO: contar hermanos ahí es lo "
+                                "correcto — `note_paths` los escondería y el assert pasaría en "
+                                "falso",
+    "tests/poblada/test_escala.py": "cuenta ARCHIVOS de una bóveda generada para medir escala, no "
+                                    "enumera notas para leerlas",
+    "tests/test_sweep_external.py": "compara el listado de archivos antes/después para probar que "
+                                    "la pasada no renombra nada: el hermano cuenta igual",
+    "tests/poblada/test_generador.py": "cruza lo que el generador escribió contra su censo, sobre "
+                                        "corpus sintético sin hermanos",
+    "tests/poblada/test_upgrade.py": "corre sobre corpus sintético vintage, anterior a #344: no hay "
+                                      "hermanos que esconder",
+}
+
+
+def test_498_ningun_test_enumera_notas_con_el_glob_crudo():
+    """⛔ #498 — «todo enumerador de notas pasa por `cfg.note_paths`» (#344) es una regla que los
+    tests llevan como cualquier código, y era donde estaba el punto ciego: `tests/poblada/
+    test_invariantes_instancia.py` enumeraba con `cfg.PAPERS.glob("*.md")`, los 4 hermanos
+    `.verif.md` entraban como notas de paper y **6 de 79 del tier 2 fallaban en toda instancia que
+    tuviera verificación**. El gate de #409 no lo veía: `carriers.py` sólo recorre `scripts/` y
+    `tools/`, así que `--propose` devolvía 11 llamadores y **cero** de los 7 archivos de `tests/`.
+
+    ⚠ Sumar `tests/` a `ARBOLES` era la otra salida y **se midió**: 319 hallazgos de golpe, o sea un
+    gate que nadie cierra — y apagado no protege ninguna de las 73 reglas que hoy sí protege. Ésta
+    es la red chica que cubre la regla que faltaba; lo exento se declara con su motivo, uno por uno.
+    """
+    # ⛔ por AST y no por regex: la mención en un docstring o en un string —como el de este mismo
+    # test— no es una llamada, y una red que confunde las dos cosas es la que se apaga (regla de
+    # método #4: un mapa que atribuye mal es peor que uno vacío).
+    import ast
+    ofensores = {}
+    for f in sorted((RAIZ / "tests").rglob("test_*.py")):
+        rel = f.relative_to(RAIZ).as_posix()
+        if rel in _GLOB_CRUDO_EXENTO:
+            continue
+        arbol = ast.parse(f.read_text(encoding="utf-8"))
+        hits = [n.lineno for n in ast.walk(arbol)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr == "glob" and isinstance(n.func.value, ast.Attribute)
+                and n.func.value.attr in ("PAPERS", "STARS", "CONCEPTS")]
+        if hits:
+            ofensores[rel] = hits
+    assert not ofensores, (
+        f"enumeran notas con el glob crudo (los hermanos `.verif.md` entran como notas, #344): "
+        f"{ofensores} → usá `cfg.note_paths(...)`, o declaralo en `_GLOB_CRUDO_EXENTO` con su motivo")

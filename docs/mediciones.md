@@ -7,6 +7,42 @@
 > Regla de la casa: **lo medido y lo derivado van separados**, y una salvedad que invalida un número
 > se escribe al lado del número, no en otro lado (regla de método #5).
 
+## #498 · el tier 2 estaba rojo en toda instancia que no fuera la semilla (2026-09-20)
+
+`pytest.ini` declara el tier 2 como **«gate del deploy»**, y corrido por primera vez contra
+`Almagesto-Tesis`: **6 failed / 73 passed**. El gate estaba roto desde antes y nadie lo vio, porque
+se venía corriendo `-m poblada` **sin** la env var, o sea con el tier 2 **nunca invocado** — el modo
+de falla que el propio `pytest.ini` nombra dos líneas más abajo.
+
+| clase | qué | cómo se cerró |
+|---|---|---|
+| **A** | los hermanos `.verif.md` (#344) entraban como notas de paper: el archivo enumeraba con `cfg.PAPERS.glob("*.md")` en 9 lugares | los 9 pasan por `cfg.note_paths` |
+| **B** | el ratchet nombraba una categoría del lint que ya no existe | eran **dos** títulos vencidos, no uno; y el drift se caza ahora en **tier 0**, sin bóveda, cruzando todos los `titulo:` contra lo que `lint.py` emite |
+| **C** | dos tests asertaban sobre hechos de la bóveda **semilla** | el `xfail` de `ds_tuc` se mudó a **categoría del lint** (`gt_sin_ficha`, el espejo inverso de #70, que viaja y se mide donde esté); la idempotencia **skipea declarando** que la instancia ya está migrada (D-43) |
+
+**Y dos que el issue no listaba, que aparecieron al correrlo:** un **tercer** `xfail(strict=True)`
+con la misma enfermedad (*«la instancia sigue en v1.11.0, con `topics`»* — ya migrada, XPASS →
+rojo), y **`BLOQUEANTE_TITULOS` sin «No evaluado»**, que sí cuenta para el exit (D-43): con un lint
+rc 1 por esa vía el recálculo daba 0 y el test fallaba acusando a la lista. Es la misma deriva
+título↔lista que rompía el ratchet, en la otra mitad del mismo test.
+
+⛔ **El techo de una categoría de BACKLOG es un hecho de UNA bóveda, y el ratchet viaja.** Medido:
+`citas_no_verificables` daba **12 contra techo 1**, y de esos 12 **sólo 3** venían de que la
+categoría cambió de definición (ganó `ficha/`); los otros **9** son deuda legítima de otra bóveda.
+Subir el techo habría tapado los 9. Hoy el ratchet **afirma sobre las bloqueantes** —eso sí es
+invariante en toda instancia— y **avisa con sus números** sobre el backlog; el `-W error::UserWarning`
+que su encabezado ya receta lo vuelve a convertir en falla para quien cuide esa bóveda.
+
+⚠ **Lo que NO se hizo, medido:** extender `carriers.py` a `tests/` —la otra salida que el issue
+ofrece para que la regla «todo enumerador pasa por `note_paths`» tenga portadores enumerables— da
+**319 hallazgos de golpe**, o sea un gate que nadie cierra; y apagado no protege ninguna de las 73
+reglas que hoy sí protege. En su lugar entró la red chica que cubre esa regla: un test **por AST**
+(no por regex: la mención en un docstring no es una llamada) que falla si un test enumera notas con
+el glob crudo, con las 5 excepciones declaradas una por una con su motivo.
+
+**Resultado sobre la instancia real: 6 failed / 73 passed → 13 passed / 1 skipped.** El skip declara
+por qué no aplica, que es lo que lo distingue de un verde.
+
 ## #494 · cerrar `_paginacion` releyendo el PDF: la operación que faltaba (2026-09-20)
 
 **El caso.** Tras #492/#493 la bóveda quedó con **75 localizadores MAL** (de 455). 391 se

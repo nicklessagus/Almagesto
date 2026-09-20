@@ -576,3 +576,6 @@
 - 2024Alm00033A → paper extraído sin `role` (fundacional/aplicacion/arbitro) → sin rol, contrastarlo contra otro no está definido
 - star01 → sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado → buscarlo en la literatura y dejarlo en la prosa con su `[[bibcode]]` (el frontmatter NO se rellena)
 - star02 → sin P_rot: NEA no lo trae y el cuerpo no documenta uno citado → buscarlo en la literatura y dejarlo en la prosa con su `[[bibcode]]` (el frontmatter NO se rellena)
+
+## Ground-truth sin su ficha de estrella (espejo inverso de #70) (0)
+> sobre 3 ground-truth de `raw/ground_truth/`

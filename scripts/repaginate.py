@@ -448,8 +448,13 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
             escritos.append(fila["id"])
             para_nota.append((item, fila))
     pendientes = sorted([i for i, _m in rehusados])
+    # ⛔ `colapsados` va en la MARCA y no sólo por pantalla: es lo único que queda dicho sobre un
+    # campo cuyo localizador viejo nombraba varias páginas y el lector ubicó una — medido sobre la
+    # bóveda real, 765 de 5627 `ground_truth[].linea`. En pantalla se lo lleva la corrida; en el
+    # artefacto sobrevive, que es donde lo va a buscar quien lea ese campo dentro de seis meses.
     marca = {"fecha": hoy, "pdf_sha": sha_disco, "n": len(escritos),
-             "no_hallados": len(no_hallados), "fuente": "relectura del PDF (#494)"}
+             "no_hallados": len(no_hallados), "colapsados": colapsados,
+             "fuente": "relectura del PDF (#494)"}
     for m in cfg.PAGINATION_OPEN_MARKS:
         data.pop(m, None)
     if pendientes:
@@ -553,7 +558,11 @@ def main(argv=None) -> int:
     for paq in paquetes:
         con_guia = sum(1 for it in paq["items"] if it["guia"]["pagina"])
         lente = f" · lente `{paq['lente']}`" if paq["lente"] else ""
-        cfg.print_seguro(f"→ {Path(paq['extraccion']).stem}/prompt.md{lente} · "
+        # ⛔ la línea nombra `<slug>/<stem>`, que es la identidad (#494): `Path(...).stem` tiraba
+        # el slug Y cortaba el bibcode en el último punto (`2009A&A...507./prompt.md`), así que las
+        # dos líneas de un par salían IDÉNTICAS — justo sobre el eje que este issue existe para
+        # separar.
+        cfg.print_seguro(f"→ {paq['extraccion']}/prompt.md{lente} · "
                          f"{len(paq['items'])} item(s), {con_guia} con página de guía "
                          f"(el resto la declara)")
     return 0

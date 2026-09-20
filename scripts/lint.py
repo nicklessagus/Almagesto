@@ -5592,6 +5592,24 @@ def check_verification_coverage(stem: str, f, text: str, nbib: int, in_verifiabl
     return unverified, verif_blocks
 
 
+def check_gt_without_star() -> tuple:
+    """`(hallazgos, población)` — a ground-truth snapshot with NO star note of its own (#498).
+
+    ⛔ The INVERSE sweep of the #70 mirror, which walks ficha→GT: a dangling
+    `raw/ground_truth/<slug>.json` —the star was deleted, or the ingest stopped halfway— is looked
+    at by NOBODY. It is a NEA snapshot nothing publishes and no note cites.
+
+    It used to live as an `xfail(strict=True)` in the tier-2 suite, i.e. encoded over the SEED
+    vault: in a healthy instance the test passed and the gate went red **for having been fixed**
+    (XPASS strict). A gate that cannot pass on the population it exists for is not a gate. Here it
+    travels and is measured wherever the vault is."""
+    gts = sorted(cfg.GROUND_TRUTH.glob("*.json")) if cfg.GROUND_TRUTH.exists() else []
+    return ([(gt.stem, f"`raw/ground_truth/{gt.stem}.json` no tiene su `stars/{gt.stem}.md` → "
+                       f"recreá la ficha (`python scripts/make_notes.py {gt.stem}`) o borrá el "
+                       f"ground-truth colgado")
+             for gt in gts if not (cfg.STARS / f"{gt.stem}.md").exists()], len(gts))
+
+
 def check_simbad_aliases() -> tuple:
     """`(alias_faltantes, alias_rechazados, alias_ajenos)` — the aliases SIMBAD does or does not
     back (#82).
@@ -6113,6 +6131,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     unverified: list = []              # query/concept CON citas pero SIN bloque de verify-citations
     # Los alias contra SIMBAD viven en `check_simbad_aliases` (#396).
     alias_faltantes, alias_rechazados, alias_ajenos = check_simbad_aliases()
+    gt_sin_ficha, _gt_total = check_gt_without_star()
 
     # ── "no evaluado" (D-43 / INV-87) ────────────────────────────────────────────────────────────
     # Un chequeo que NO PUDO correr no aporta un cero: reporta error. La diferencia no es
@@ -7240,6 +7259,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_decisions', 'Decisión del registro con forma inválida — load_decisiones la descarta en silencio, el triage la vuelve a proponer sin el motivo (backlog)', SEV_BACKLOG, tuple(bad_decisions), poblacion='registros'),
         Categoria('schema_incompleto', 'Nota sin campos del schema de su tipo (INV-63: el campo ausente no se lee igual que el vacío)', SEV_BACKLOG, tuple(schema_incompleto), poblacion='notas'),
         Categoria('incomplete', 'Campos incompletos', SEV_BACKLOG, tuple(incomplete)),
+        Categoria('gt_sin_ficha', 'Ground-truth sin su ficha de estrella (espejo inverso de #70)',
+                  SEV_BACKLOG, tuple(gt_sin_ficha), poblacion='ground_truth'),
     ]
     for i, c in enumerate(categorias):
         if any(c.titulo.startswith(s) for s in suprimidas):

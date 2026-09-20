@@ -75,11 +75,11 @@ categorias:
 
   # ── backlog (no bloquean; trabajo de contenido pendiente, no bug de framework) ─────────────────
   citas_no_verificables:
-    titulo: "Citas no verificables en query/concepto/hipótesis"
+    titulo: "Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext)"
     severidad: backlog
     techo: 1               # medido: 2026-08-23 — una cita sin su .txt en fulltext/.
   sin_verificar:
-    titulo: "Sin verificar: query/concepto con citas"
+    titulo: "Sin verificar: nota con citas y sin bloque verify-citations"
     severidad: backlog
     techo: 1                # medido: 2026-08-23 — una nota con citas que nunca pasó por
                              # verify-citations.
