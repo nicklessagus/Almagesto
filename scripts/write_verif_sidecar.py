@@ -333,8 +333,11 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
         # #492 — las dos columnas que nadie cruzaba: la página que cita la EVIDENCIA y la que cita
         # el cuerpo. Sólo con las dos pobladas y disjuntas: un cuerpo sin localizador no contradice
         # nada, y una evidencia que cita varias páginas cubre la del cuerpo.
-        cuerpo_pags = {x for lo, hi in cfg.page_locators(p.block.text) for x in range(lo, hi + 1)}
-        evid_pags = {x for lo, hi in cfg.page_locators(evidencia) for x in range(lo, hi + 1)}
+        # #496 — el rango lo expande `page_span`, que sabe que `L43`–`L45` son tres páginas y que
+        # `45` y `L45` no son la misma: acá se comparan dos conjuntos, o sea el lugar donde plegar
+        # el prefijo haría pasar por coincidencia lo que son numeraciones distintas.
+        cuerpo_pags = {x for lo, hi in cfg.page_locators(p.block.text) for x in cfg.page_span(lo, hi)}
+        evid_pags = {x for lo, hi in cfg.page_locators(evidencia) for x in cfg.page_span(lo, hi)}
         if pag_fuera is not None and cuerpo_pags and evid_pags and not (cuerpo_pags & evid_pags):
             pag_fuera.append((p.bibcode, p.anchor, sorted(cuerpo_pags), sorted(evid_pags)))
         rows.append(lb.Row(n=str(n), claim=lb.truncate_claim(lb.normalize_ws(p.block.text)),

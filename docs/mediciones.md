@@ -7,6 +7,65 @@
 > Regla de la casa: **lo medido y lo derivado van separados**, y una salvedad que invalida un número
 > se escribe al lado del número, no en otro lado (regla de método #5).
 
+## #496 · la página impresa no siempre es un entero (2026-09-20)
+
+**Cómo apareció.** Cerrando la relectura de #494 en `Almagesto-Tesis` (285 notas, 6339
+localizadores). La página que **imprime la hoja** es `L43`–`L47` en A&A Letters, `L24` en ApJL,
+`L1` en MNRAS Letters, y `PAGE_LOC_RE` exigía dígitos pegados al `p.`: ese localizador **no se
+podía escribir de forma que ninguna capa lo leyera**.
+
+`2007A&A...469L..43U` es la única copia de *Letters* de la bóveda que es la del **editor**
+(`pdf_source: publisher`, `pdf_reemplazo` del 09-12), y ahí aparecieron las dos mitades:
+
+| dirección | qué pasaba |
+|---|---|
+| **de ida** | `page_locators_after` no matchea `p. L45`, así que el par **nunca llega** a `quote_page_verdict`: sus **57 localizadores caen FUERA DE ALCANCE**. No son `mal`: son **invisibles**, y la categoría no los cuenta en ninguna de sus cinco clases |
+| **de vuelta** | `printed_pages` devuelve `[None] * 5`: `page_number_evidence` y `page_number_candidates` cosechaban **enteros** y el pie dice `L45`, así que tampoco se podía juzgar la forma con dígitos |
+
+El escritor de la relectura rechazó el paquete entero: **57 de 57** ítems inválidos, porque validaba
+con `page_locators`. O sea que la bóveda elegía entre **escribir la verdad y perder el chequeo** o
+**escribir un número que el paper no muestra y conservarlo** — y la segunda **pasa en verde**.
+
+⚠ **Lo que NO era el defecto** (verificado antes de reportar): las otras cuatro fuentes de *Letters*
+—`2005A&A...443L..15B`, `2011A&A...528L...5T`, `2014ApJ...793L..24R`, `2016ApJ...821L..19N`— se
+citan `p. 1`…`p. 5` y **está bien**: las cuatro son `pdf_source: eprint` y el manuscrito imprime 1,
+2, 3 en su propia cabecera. No hay una segunda convención silenciosa; el problema aparece **sólo**
+cuando la copia en disco es la publicada.
+
+**Lo que entró.** Una página es su **etiqueta** (`"45"`, `"L45"`) y la aritmética —rango,
+consecutividad, offset— corre sobre el número **dentro de un mismo prefijo**: `page_parts` /
+`page_label` / `page_span`, `printed_page_offset` devolviendo `(prefijo, offset)` y `printed_pages`
+etiquetas. ⛔ **El prefijo no se pliega**: `page_span("12", "L14")` no es un rango, y `p. 45` sobre
+la página que imprime `L45` **no** es `impresa` — plegarlo habría convertido el chequeo en un
+aprobador de la convención equivocada, que es el defecto que #492 existe para terminar. El descarte
+del **año** de #493 queda acotado al entero pelado: `L1998` es una página, no un año.
+
+**Y los DOS frenos que la medición sobre la bóveda real agregó, antes de pushear.** La primera
+versión —prefijo alfabético a secas— se midió sobre las 255 fuentes de `Almagesto-Tesis`
+comparando `printed_pages` antes y después, y **perdía 34 páginas impresas y leía 2 mal**:
+
+| freno | qué pasaba sin él |
+|---|---|
+| el prefijo es **MAYÚSCULA** (decidido en **un** lugar, `page_parts`) | en minúscula es una variable de la matemática: `= E { s1 s2 }` en el pie de una fórmula hacía que las páginas 3 y 4 de un libro se leyeran **`S1`/`S2`** (`2012Naik`, el caso de #493) y que `2004Stone` perdiera 9 |
+| entre dos candidatos consecutivos gana el de la **numeración del documento** (el prefijo del offset) | el par `J1`/`J2` de una fórmula volvía **ambigua** la página que la cabecera imprime al lado: `2010ComonJutten` perdía 4 y `2001HyvarinenKarhunenOja` 2. Sin numeración dominante la ambigüedad **no se adivina** (D-43) |
+
+Con los dos, el barrido sobre las mismas 255 fuentes da **0 páginas perdidas** y **18 ganadas**, en
+las únicas dos fuentes que de verdad paginan con prefijo: `2007A&A...469L..43U` (`L43`–`L47`) y
+`2006Vrabie` (GEOPHYSICS, `V133`–`V143` — una segunda familia que el issue no había visto).
+
+**El efecto en el chequeo** (`contrast --validar-todo`, misma bóveda, mismas notas):
+
+| | antes | después |
+|---|---|---|
+| localizadores juzgados | 6339 | **6340** |
+| en la página impresa | 3096 | 3096 |
+| en el índice del PDF sin decirlo | 598 | **599** |
+| MAL | 68 | **70** |
+| no evaluables | 2573 | **2571** |
+
+Los **3 hallazgos nuevos** son los de la fuente de Letters, que antes no era auditable: dos `p. 4`
+donde la hoja imprime `L45` y un `p. 2` donde imprime `L44`. **Ninguna categoría perdió nada.**
+
 ## #495 · la exención de #437 se apagaba al cerrar bien la deuda de paginación (2026-09-20)
 
 **Cómo apareció.** Cerrando la deuda de `_paginacion` en `Almagesto-Tesis` (285 notas, 10493 citas):
@@ -30,6 +89,10 @@ transcripción.** La extracción es versionada y no regenerable (#311), así que
 sigue describiendo el documento reemplazado exactamente como antes —su prosa es la que leyó del
 preprint— pero la marca que lo decía se fue. La exención se apagaba justo cuando la deuda se cerraba
 bien.
+
+⚠ **Re-medido el 2026-09-20 sobre el vault de ese día**, con el fix del template contra la bóveda
+real: **5** citas, no 4 (la bóveda siguió andando entre el reporte y el fix), y `contrast
+--validar-todo` pasa de **rc 1 a rc 0** con las 285 notas sin tocar.
 
 **Lo que entró.** `REPLACED_DOC_MARKS = ("_paginacion", "_repaginado", "_repaginado_parcial")` y la
 puerta mirando la familia. ⛔ **La marca de apertura sigue sola donde la pregunta es otra:** la

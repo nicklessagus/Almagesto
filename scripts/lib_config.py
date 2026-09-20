@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.292.0"
+ALMAGESTO_VERSION = "1.293.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -321,8 +321,12 @@ def _es_estampada(linea: str) -> bool:
 #: `\citep[p.~N]` y cita una página que el documento no muestra. El índice del PDF sirve cuando el
 #: documento NO tiene número impreso (un preprint), y ahí se declara, porque si no las dos
 #: convenciones se leen igual.
+#: #496 · y esa página no siempre es un ENTERO: A&A Letters imprime `L43`, ApJL `L24`, MNRAS
+#: Letters `L1`. Se escribe como la muestra la hoja, con su prefijo — plegarlo a `45` sería citar
+#: otra página del mismo documento (A&A numera el cuerpo y las Letters por separado).
 REGLA_LOCALIZADOR = (
-    "el **localizador** es la **página IMPRESA** del PDF (la que muestra la hoja: `p. 7`) — si el "
+    "el **localizador** es la **página IMPRESA** del PDF (la que muestra la hoja: `p. 7`), con su "
+    "**prefijo** si lo lleva (`p. L45` en Letters, #496) — si el "
     "documento no la tiene, el índice del PDF y **lo decís** (`p. 7 [índice del PDF]`, #492); "
     "`L1234` sólo en fuente web o documento "
     "largo (#80/#200), y `Fig. N, p. M` en lectura de gráfico (#195). El `grep -n` sobre el `.txt` "
@@ -5409,10 +5413,13 @@ from lib_quotes import (  # noqa: E402,F401
     normalize_quote,
     normalize_source_text,
     note_own_bibcode,
+    page_label,
     page_locators,
     page_locators_after,
     page_number_candidates,
     page_number_evidence,
+    page_parts,
+    page_span,
     printed_page_offset,
     printed_pages,
     quote_found,

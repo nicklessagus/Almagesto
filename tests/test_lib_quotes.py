@@ -691,6 +691,74 @@ def test_quote_verdict_495_no_es_un_apagador_el_txt_NUEVO_sigue_bloqueando(toy_v
     assert ver == "alterada" and det.get("txt_nuevo") == "citado", (ver, det)
 
 
+def test_496_la_pagina_impresa_de_LETTERS_se_lee_y_se_juzga(toy_vault):
+    """⛔ #496 — la página que IMPRIME la hoja no siempre es un entero: A&A Letters pagina `L43`–`L47`,
+    ApJL `L24`, MNRAS Letters `L1`. Con la regex pidiendo dígitos pegados al `p.`, el localizador
+    correcto de esa fuente no se podía escribir de forma que ninguna capa lo leyera: los 57 de
+    `2007A&A...469L..43U` caían FUERA DE ALCANCE —no `mal`: invisibles, y la categoría no los
+    contaba en ninguna de sus cinco clases— y `printed_pages` devolvía `[None] * 5`, o sea que
+    tampoco se podía juzgar la forma con dígitos. La bóveda elegía entre escribir la verdad y
+    perder el chequeo, o escribir un número que el paper no muestra y conservarlo — que pasa en
+    verde, y es la peor de las dos.  @inv INV-155"""
+    pags = [f"A&A 469, L43 (2007)\n\n" + (f"prosa. {CITA_492}. fin" if i == 3 else "prosa")
+            + f"\n\nU. et al.: GJ 674, page L{42 + i} of 5" for i in range(1, 6)]
+    # de vuelta: la numeración impresa se deriva CON su prefijo
+    assert cfg.printed_pages(pags) == ["L43", "L44", "L45", "L46", "L47"]
+    _txt_paginado("2007Udry", pags)
+    # de ida: el par llega al veredicto y la página impresa se acepta
+    assert cfg.quote_page_verdict(CITA_492, "2007Udry", [("L45", "L45")])[0] == "impresa"
+
+
+def test_496_el_prefijo_NO_se_pliega_ni_afloja_el_veredicto(toy_vault):
+    """El control simétrico, que es lo que prueba que el fix no es un apagador: `p. 45` y `p. L45`
+    son páginas DISTINTAS del mismo documento —A&A numera el cuerpo y las Letters por separado—,
+    así que normalizar `L45 → 45` para poder comparar convertiría el chequeo en un aprobador de la
+    convención equivocada. La vecina equivocada sigue saliendo `mal`.  @inv INV-155"""
+    pags = [f"A&A 469, L43 (2007)\n\n" + (f"prosa. {CITA_492}. fin" if i == 3 else "prosa")
+            + f"\n\nU. et al.: GJ 674, page L{42 + i} of 5" for i in range(1, 6)]
+    _txt_paginado("2007Udry", pags)
+    assert cfg.quote_page_verdict(CITA_492, "2007Udry", [("L44", "L44")])[0] == "mal"
+    assert cfg.quote_page_verdict(CITA_492, "2007Udry", [("45", "45")])[0] != "impresa"
+    # y el rango tampoco cruza numeraciones: `L43`–`L45` son tres páginas, `12`–`L14` no es rango
+    assert cfg.page_span("L43", "L45") == {"L43", "L44", "L45"}
+    assert cfg.page_span("12", "L14") == {"12"}
+    # lo que no es una etiqueta no nombra ninguna página, y el rango invertido vale por su
+    # arranque — la misma semántica que `page_locators` le da a `pp. 14-12`
+    assert cfg.page_span("s/n", "5") == set()
+    assert cfg.page_span("5", "s/n") == {"5"}
+    assert cfg.page_span("14", "12") == {"14"}
+
+
+def test_496_el_prefijo_es_MAYUSCULA_y_la_numeracion_del_documento_desempata(toy_vault):
+    """⛔ Los dos frenos que la medición sobre la bóveda real (255 fuentes) hizo falta agregar, y sin
+    los cuales el fix cambiaba un hueco por un dato falso:
+
+    1. el prefijo es **mayúscula** — en minúscula es una variable de la matemática (`= E {s1 s2}` en
+       el pie de una fórmula), y leerlo con `re.I` hacía que dos páginas de un libro se leyeran
+       `S1`/`S2` y que 34 perdieran su número;
+    2. entre dos candidatos consecutivos gana el de la numeración **del documento** (el prefijo del
+       offset): el par `J1`/`J2` de una fórmula volvía ambigua la página que la cabecera imprime al
+       lado. Sin numeración dominante la ambigüedad NO se adivina (D-43).
+
+    Resultado medido tras los dos frenos: **0 páginas perdidas** y 18 ganadas, las 18 en las dos
+    fuentes que de verdad paginan con prefijo (A&A Letters y GEOPHYSICS).  @inv INV-155"""
+    # (1) como el libro real: la página par imprime su número, la impar lleva título corrido, y el
+    # pie de dos páginas seguidas arrastra `s1` y `s2` de una fórmula. En minúscula NO son páginas
+    naik = [(f"{i}   Independent Component Analysis" if i % 2 == 0 else "Introduction: Independent")
+            + "\n\nprosa de esta página\n\n"
+            + ("= E { s1 s2 } - E { s1 }" if i == 3 else
+               "kurt(s1 s2 ) = kurt( s2 )" if i == 4 else "fin")
+            for i in range(1, 9)]
+    assert cfg.printed_pages(naik)[2:4] == [None, None], "`s1`/`s2` se leyeron como páginas"
+    # (2) el desempate: la cabecera imprime 453, 454… el pie arrastra los conjuntos J1/J2 de una
+    # fórmula, y el offset global está CONTRADICHO (capítulo nuevo), así que no hay respaldo que
+    # tape la ambigüedad — la numeración del documento es la que decide
+    libro = [f"{452 + i}   CHAPTER 11\n\nprosa de esta página" +
+             (f"\n\npara el conjunto J{i} ." if i in (1, 2) else "") for i in range(1, 6)] \
+        + ["999   CHAPTER 12\n\nprosa\n\nfin"]
+    assert cfg.printed_pages(libro)[:2] == ["453", "454"]
+
+
 def test_source_texts_no_parte_una_oracion_continua_entre_dos_lecturas():
     """#332 — la oración vive ENTERA en la columna derecha; el cortador la partía en dos lecturas.
 
@@ -790,18 +858,23 @@ def test_492_el_localizador_adyacente_no_se_roba_el_de_la_cita_siguiente(toy_vau
     # …y una cita que NO está en el bloque no hereda ningún localizador: sin el `find` mandando,
     # la ventana arrancaría en un offset arbitrario y devolvería el primer `p. N` que encuentre
     assert cfg.page_locators_after("una prosa cualquiera (p. 9) y más", "ausente") is None
-    assert cfg.page_locators_after(bloque, "otra frase larga que también lo alcanza")[0] == [(9, 9)]
+    assert cfg.page_locators_after(bloque, "otra frase larga que también lo alcanza")[0] \
+        == [("9", "9")]
     # las tres formas que la bóveda escribe de verdad, incluida la de #488 y la celda de una fila
-    for texto, esperado in ((f"«{CITA_492}» (p. 4) [[2020X]]", [(4, 4)]),
-                            (f"«{CITA_492}» ([[2020X]], p. 4)", [(4, 4)]),
-                            (f"| «{CITA_492}» | p. 4 | x |", [(4, 4)]),
-                            (f"«{CITA_492}» (pp. 12-14) [[2020X]]", [(12, 14)]),
+    for texto, esperado in ((f"«{CITA_492}» (p. 4) [[2020X]]", [("4", "4")]),
+                            (f"«{CITA_492}» ([[2020X]], p. 4)", [("4", "4")]),
+                            (f"| «{CITA_492}» | p. 4 | x |", [("4", "4")]),
+                            (f"«{CITA_492}» (pp. 12-14) [[2020X]]", [("12", "14")]),
                             # ⛔ defecto A del validador: el localizador COMPUESTO trae TODAS sus
                             # páginas (132 + 143 en una bóveda real) — quedarse con la primera
                             # marcaba MAL localizadores correctos
-                            (f"«{CITA_492}» (p. 9 y p. 6) [[2020X]]", [(9, 9), (6, 6)]),
-                            (f"«{CITA_492}» (pp. 179 y 190) [[2020X]]", [(179, 179), (190, 190)]),
-                            (f"«{CITA_492}» (pp. 3, 7 and 9) [[2020X]]", [(3, 3), (7, 7), (9, 9)])):
+                            (f"«{CITA_492}» (p. 9 y p. 6) [[2020X]]", [("9", "9"), ("6", "6")]),
+                            (f"«{CITA_492}» (pp. 179 y 190) [[2020X]]",
+                             [("179", "179"), ("190", "190")]),
+                            (f"«{CITA_492}» (pp. 3, 7 and 9) [[2020X]]",
+                             [("3", "3"), ("7", "7"), ("9", "9")]),
+                            # #496 — la página IMPRESA de A&A/ApJ/MNRAS Letters lleva prefijo
+                            (f"«{CITA_492}» (pp. L43-L45) [[2020X]]", [("L43", "L45")])):
         assert cfg.page_locators_after(texto, CITA_492)[0] == esperado, texto
 
 
@@ -810,7 +883,7 @@ def test_492_el_offset_de_la_pagina_impresa_se_deriva_o_no_se_inventa(toy_vault)
     repite en `PAGE_OFFSET_MIN` páginas la respuesta es `None` — *no evaluable*, nunca un veredicto
     (D-43). Es la diferencia entre una numeración y dos enteros que coinciden."""
     impresas = [_pagina(i, _sin_digitos(i), impresa=1208 + i) for i in range(1, 5)]
-    assert cfg.printed_page_offset(impresas) == 1208
+    assert cfg.printed_page_offset(impresas) == ("", 1208)
     assert cfg.printed_page_offset([_pagina(i, _sin_digitos(i)) for i in range(1, 5)]) is None
     # ⛔ y el EMPATE tampoco se desempata: dos numeraciones igual de repetidas no se distinguen
     empatadas = [f"{100 + i}\n\n{_sin_digitos(i)}\n\n{1208 + i}" for i in range(1, 5)]
@@ -830,7 +903,7 @@ def test_492_el_localizador_que_apunta_a_otra_pagina_sale_MAL_con_la_suya(toy_va
                                  _pagina(4, "cierre", impresa=4)])
     assert cfg.quote_page_verdict(CITA_492, "2017Kairov", [(2, 2)])[0] == "impresa"
     estado, det = cfg.quote_page_verdict(CITA_492, "2017Kairov", [(3, 3)])
-    assert estado == "mal" and det["impresas"] == [2] and det["paginas"] == [2]
+    assert estado == "mal" and det["impresas"] == ["2"] and det["paginas"] == [2]
     # y el rango `pp. 1-3` la cubre: un localizador de rango no es un hallazgo
     assert cfg.quote_page_verdict(CITA_492, "2017Kairov", [(1, 3)])[0] == "impresa"
 
@@ -905,7 +978,7 @@ def test_492_B_la_pagina_impresa_se_lee_DONDE_cae_la_cita_no_de_un_offset_global
     pags = [_pagina(1, "uno", impresa=1), _pagina(2, "dos", impresa=2), _pagina(3, "tres", impresa=3),
             _pagina(4, "cuatro", impresa=1), _pagina(5, f"prosa. {CITA_492}. fin", impresa=2),
             _pagina(6, "seis", impresa=3)]
-    assert cfg.printed_pages(pags) == [1, 2, 3, 1, 2, 3]
+    assert cfg.printed_pages(pags) == ["1", "2", "3", "1", "2", "3"]
     _txt_paginado("2010ComonJutten", pags)
     # la cita está en la p. 5 del PDF, impresa «2» del cap. 2: el offset global (0, por el cap. 1)
     # diría «5» y la marcaría MAL
@@ -920,7 +993,7 @@ def test_492_B_el_offset_global_se_DESCARTA_si_una_pagina_lo_contradice(toy_vaul
     respaldo de la página muda (una cabecera que el OCR se comió)."""
     con_muda = [_pagina(1, "uno", impresa=101), _pagina(2, "dos", impresa=102),
                 _pagina(3, "muda"), _pagina(4, "cuatro", impresa=104)]
-    assert cfg.printed_pages(con_muda) == [101, 102, 103, 104]
+    assert cfg.printed_pages(con_muda) == ["101", "102", "103", "104"]
     # …y la cita que cae en la página MUDA se juzga con ese respaldo: «p. 103» es `impresa` aunque
     # la página no lleve número propio (#493: el respaldo sólo vale con secuencia real)
     con_muda[2] = _pagina(3, f"prosa. {CITA_492}. fin")
@@ -929,7 +1002,7 @@ def test_492_B_el_offset_global_se_DESCARTA_si_una_pagina_lo_contradice(toy_vaul
     contradicho = [_pagina(1, "uno", impresa=101), _pagina(2, "dos", impresa=102),
                    _pagina(3, "tres", impresa=103), _pagina(4, "muda"),
                    _pagina(5, "cinco", impresa=7), _pagina(6, "seis", impresa=8)]
-    assert cfg.printed_pages(contradicho) == [101, 102, 103, None, 7, 8]
+    assert cfg.printed_pages(contradicho) == ["101", "102", "103", None, "7", "8"]
     # y la ambigüedad local no se adivina: dos candidatos consecutivos en la misma página → None
     ambigua = [f"10\n\nprosa\n\n{200}", f"11\n\nprosa\n\n{201}", f"12\n\nprosa\n\n{202}"]
     assert cfg.printed_pages(ambigua) == [None, None, None]
@@ -954,7 +1027,7 @@ def test_493_el_numero_IMPRESO_en_la_pagina_hallada_gana_a_cualquier_offset(toy_
     assert cfg.quote_page_verdict(CITA_492, "2012Naik", [(10, 10)])[0] == "impresa"
     # …y el offset con secuencia real sigue derivándose
     con_secuencia = [_pagina(i, _sin_digitos(i), impresa=100 + i) for i in range(1, 5)]
-    assert cfg.printed_page_offset(con_secuencia) == 100
+    assert cfg.printed_page_offset(con_secuencia) == ("", 100)
 
 
 def test_493_la_evidencia_de_pagina_NO_es_cualquier_entero_del_borde(toy_vault):
@@ -962,8 +1035,8 @@ def test_493_la_evidencia_de_pagina_NO_es_cualquier_entero_del_borde(toy_vault):
     «impresa», **18 falsos** — el total del artículo en el pie de A&A (`A2, page 22 of 23`: toda
     cita con «p. 23» pasaba), una fecha del pie (Cambiaso 2024), un `4` suelto (Mayor 2009). Sólo
     cuenta la X de «page X of Y» y la línea que es sólo un entero; un año, no.  @inv INV-155"""
-    assert cfg.page_number_evidence(["A2, page 22 of 23\n\nprosa\n\nA&A 680, A2 (2023)"]) == [{22}]
-    assert cfg.page_number_evidence(["10\n\nprosa"]) == [{10}]
+    assert cfg.page_number_evidence(["A2, page 22 of 23\n\nprosa\n\nA&A 680, A2 (2023)"]) == [{"22"}]
+    assert cfg.page_number_evidence(["10\n\nprosa"]) == [{"10"}]
     assert cfg.page_number_evidence(["Received 10 January 2024\n\nprosa\n\n2024"]) == [set()]
     assert cfg.page_number_evidence(["Fig. 4 shows\n\nprosa"]) == [set()]
     # …y en el veredicto: la cita en la p. 22 de 23 — «p. 22» impresa, «p. 23» MAL, no «impresa»

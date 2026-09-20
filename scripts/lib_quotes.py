@@ -608,9 +608,55 @@ def fulltext_readings(bibcode: str) -> list:
 #: `p. 9, p. 6` son DOS localizadores (medido: 132 + 143 en una bóveda real). El número suelto que
 #: sigue a una coma o a una conjunción se toma como otra página; el de más de cuatro cifras no (un
 #: año pegado a la página no es una página).
-PAGE_LOC_RE = re.compile(r"\bp{1,2}\.\s*\d{1,4}(?:\s*(?:[-–—]|,|\by\b|\band\b|\be\b)\s*(?:p{1,2}\.\s*)?\d{1,4}(?!\d))*",
+#: …y el número puede llevar PREFIJO (#496): la página que imprime la hoja no siempre es un entero
+#: —A&A Letters imprime `L43`, ApJL `L24`, MNRAS Letters `L1`—, así que un localizador correcto de
+#: esa fuente no se podía escribir de forma que ninguna capa lo leyera: sus 57 localizadores caían
+#: FUERA DE ALCANCE del chequeo, que no es `mal` sino invisible, y del otro lado `printed_pages`
+#: devolvía `[None]*5`. La bóveda elegía entre escribir la verdad y perder el chequeo, o escribir
+#: un número que el paper no muestra y conservarlo — la segunda pasa en verde.
+PAGE_LOC_RE = re.compile(r"\bp{1,2}\.\s*[A-Z]?\d{1,4}(?:\s*(?:[-–—]|,|\by\b|\band\b|\be\b)\s*(?:p{1,2}\.\s*)?[A-Z]?\d{1,4}(?!\d))*",
                          re.I)
 _PAGE_LOC_SEP = re.compile(r"\s*(?:,|\by\b|\band\b|\be\b)\s*", re.I)
+
+#: #496 · una página es su ETIQUETA (`"45"`, `"L45"`) y la aritmética —rango, consecutividad,
+#: offset— corre sobre el número DENTRO de un mismo prefijo. ⛔ El prefijo viaja con el número y
+#: NUNCA se descarta: `p. 45` y `p. L45` son páginas distintas del mismo documento (A&A numera el
+#: cuerpo y las Letters por separado), así que plegar `L45 → 45` para poder comparar convertiría el
+#: chequeo en un aprobador de la convención equivocada. ⛔ El prefijo es MAYÚSCULA: en minúscula
+#: es una variable de la matemática, no una página (`= E { s1 s2 }` en el pie de una fórmula), y
+#: leerlo con `re.I` costó —medido sobre una bóveda real de 255 fuentes— 34 páginas impresas
+#: perdidas por ambigüedad y 2 leídas como `S1`/`S2` en tres documentos largos.
+_PAGE_LABEL_RE = re.compile(r"^([A-Z]?)(\d{1,4})$")
+_PAGE_LABEL_IN = re.compile(r"(?i)[A-Z]?\d{1,4}")
+_PAGE_LOC_PREFIX = re.compile(r"(?i)\bp{1,2}\.\s*")
+
+
+def page_parts(etiqueta) -> tuple | None:
+    """`(prefix, number)` of a page label — `("L", 45)` for `L45`, `("", 45)` for `45` (#496).
+
+    ⛔ The ONE place that decides what a page label is, so the prefix's case is decided ONCE: the
+    harvesting regexes stay permissive and everything they find comes through here. An UPPERCASE
+    prefix is a page (`L45`, `V133`); a lowercase one is a variable of the maths (`= E { s1 s2 }`
+    in the footer of a formula) — measured over a real 255-source corpus, reading it case-blind
+    cost 34 printed pages to ambiguity and misread 2 as `S1`/`S2`."""
+    m = _PAGE_LABEL_RE.match(str(etiqueta or "").strip())
+    return (m.group(1).upper(), int(m.group(2))) if m else None
+
+
+def page_label(partes) -> str:
+    """`("L", 45)` → `"L45"` — the inverse of `page_parts`, so the prefix survives every round trip."""
+    return f"{partes[0]}{partes[1]}"
+
+
+def page_span(desde, hasta) -> set:
+    """Every page LABEL a locator range names: `L43`–`L45` → `{L43, L44, L45}` (#496).
+
+    Empty when the two ends are not the same numbering (`12`–`L14` names no range): comparing
+    across prefixes is the one thing this type exists to prevent."""
+    a, b = page_parts(desde), page_parts(hasta)
+    if not a or not b or a[0] != b[0] or b[1] < a[1]:
+        return {page_label(a)} if a else set()
+    return {page_label((a[0], n)) for n in range(a[1], b[1] + 1)}
 
 #: #492 · cuántas líneas de la cabecera y del pie se miran buscando el número IMPRESO, y en cuántas
 #: páginas tiene que repetirse el desfasaje para darlo por derivado. Tres es lo mínimo que distingue
@@ -619,18 +665,23 @@ _PAGE_LOC_SEP = re.compile(r"\s*(?:,|\by\b|\band\b|\be\b)\s*", re.I)
 PAGE_EDGE_LINES = 2
 PAGE_OFFSET_MIN = 3
 
-_PAGE_INT_RE = re.compile(r"(?<!\S)(\d{1,4})(?!\S)")
+_PAGE_EDGE_RE = re.compile(r"(?i)(?<!\S)([A-Z]?\d{1,4})(?!\S)")
 
 
 def page_locators(texto: str) -> list:
-    """`[(desde, hasta)]` — every page locator in a string: `pp. 12-14` is one range, `pp. 179 y
-    190` two pages, `p. 9, p. 6` two pages (#492)."""
+    """`[(desde, hasta)]` — every page locator in a string, as LABELS: `pp. 12-14` is one range,
+    `pp. 179 y 190` two pages, `p. 9, p. 6` two pages (#492), `pp. L43-L47` one range (#496)."""
     out = []
     for m in PAGE_LOC_RE.finditer(texto or ""):
         for parte in _PAGE_LOC_SEP.split(m.group(0)):
-            nums = [int(x) for x in re.findall(r"\d+", parte)]
-            if nums:
-                out.append((nums[0], max(nums[0], nums[-1])))
+            # el `p.`/`pp.` se saca ANTES de buscar la etiqueta: si no, su `p` se leería como el
+            # prefijo del número que introduce (#496)
+            partes = [x for x in (page_parts(e) for e in
+                                  _PAGE_LABEL_IN.findall(_PAGE_LOC_PREFIX.sub(" ", parte))) if x]
+            if partes:
+                a, b = partes[0], partes[-1]
+                out.append((page_label(a),
+                            page_label(b if b[0] == a[0] and b[1] >= a[1] else a)))
     return out
 
 
@@ -671,7 +722,7 @@ def page_locators_after(texto: str, cita: str, ventana: int = 80) -> tuple | Non
 
 
 def page_number_candidates(paginas: list) -> list:
-    """`[{enteros}]` — the integers in the header and footer of each page (#492).
+    """`[{etiquetas}]` — the page labels in the header and footer of each page (#492/#496).
 
     The ONE place that decides where a printed page number can live: the first and last
     `PAGE_EDGE_LINES` non-empty lines. Its two readers —the global offset and the per-page
@@ -682,7 +733,7 @@ def page_number_candidates(paginas: list) -> list:
         lineas = [l for l in str(pag or "").split("\n") if l.strip()]
         cand: set = set()
         for linea in lineas[:PAGE_EDGE_LINES] + lineas[-PAGE_EDGE_LINES:]:
-            cand |= {int(x) for x in _PAGE_INT_RE.findall(linea)}
+            cand |= {page_label(x) for x in map(page_parts, _PAGE_EDGE_RE.findall(linea)) if x}
         out.append(cand)
     return out
 
@@ -692,12 +743,12 @@ def page_number_candidates(paginas: list) -> list:
 #: localizador igual al total pasaba a «impresa»: 8 casos medidos) y la línea que es SÓLO un
 #: entero (`'10'`, el caso Naik). Un entero dentro de otra línea —una fecha del pie, un `4` suelto—
 #: sólo cuenta si forma secuencia con la vecina (`printed_pages`), y un año, nunca.
-_PAGE_OF_RE = re.compile(r"(?i)\b(?:page|p[áa]g(?:ina)?\.?|p\.)\s*(\d{1,4})\s*(?:of|de)\s*\d{1,4}\b")
-_ONLY_INT_RE = re.compile(r"^\s*(\d{1,4})\s*$")
+_PAGE_OF_RE = re.compile(r"(?i)\b(?:page|p[áa]g(?:ina)?\.?|p\.)\s*([A-Z]?\d{1,4})\s*(?:of|de)\s*[A-Z]?\d{1,4}\b")
+_ONLY_INT_RE = re.compile(r"^\s*([A-Z]?\d{1,4})\s*$")
 
 
 def page_number_evidence(paginas: list) -> list:
-    """`[{enteros}]` — per page, the edge integers that ARE a page number on their own (#493).
+    """`[{etiquetas}]` — per page, the edge labels that ARE a page number on their own (#493/#496).
 
     ⛔ Stricter than `page_number_candidates` on purpose. The verdict uses this set to accept a
     declared page BEFORE consecutiveness and offset, so it has to be evidence and not a number:
@@ -711,15 +762,22 @@ def page_number_evidence(paginas: list) -> list:
         lineas = [l for l in str(pag or "").split("\n") if l.strip()]
         ev: set = set()
         for linea in lineas[:PAGE_EDGE_LINES] + lineas[-PAGE_EDGE_LINES:]:
-            ev |= {int(x) for x in _PAGE_OF_RE.findall(linea)}
-            if (m := _ONLY_INT_RE.match(linea)) and not 1900 <= int(m.group(1)) <= 2099:
-                ev.add(int(m.group(1)))
+            ev |= {page_label(x) for x in map(page_parts, _PAGE_OF_RE.findall(linea)) if x}
+            # el descarte del AÑO vale para el entero pelado: `L1998` no es un año, es una página
+            # de Letters (#496)
+            if (m := _ONLY_INT_RE.match(linea)) and (x := page_parts(m.group(1))) \
+                    and not (x[0] == "" and 1900 <= x[1] <= 2099):
+                ev.add(page_label(x))
         out.append(ev)
     return out
 
 
-def printed_page_offset(paginas: list) -> int | None:
-    """`impresa = índice + offset`, derived from the header/footer number — or `None` (#492).
+def printed_page_offset(paginas: list) -> tuple | None:
+    """`(prefix, offset)` with `impresa = prefix + (índice + offset)` — or `None` (#492/#496).
+
+    ⛔ The prefix travels with the offset because it is part of the numbering: a Letters document
+    numbers `L43, L44, …`, so `índice + offset` alone would reconstruct a page the paper does not
+    show (#496). Counting is per `(prefix, desfasaje)`, so two numberings never add up into one.
 
     ⛔ It does not guess. A `.txt` whose pages carry no number (a preprint, a scan whose header the
     OCR ate) has NO derivable printed numbering, and that is a different answer from «the locator is
@@ -734,11 +792,11 @@ def printed_page_offset(paginas: list) -> int | None:
     restart the numbering: `printed_pages` is the reader that resolves that, and this one is its
     fallback.
     """
-    cands = page_number_candidates(paginas)
+    cands = [{x for x in map(page_parts, c) if x} for c in page_number_candidates(paginas)]
     cuenta: dict = {}
     for i, cand in enumerate(cands, 1):
-        for n in cand:
-            cuenta[n - i] = cuenta.get(n - i, 0) + 1
+        for pref, n in cand:
+            cuenta[(pref, n - i)] = cuenta.get((pref, n - i), 0) + 1
     if not cuenta:
         return None
     techo = max(cuenta.values())
@@ -747,7 +805,8 @@ def printed_page_offset(paginas: list) -> int | None:
     # `2012Naik`, `0` alcanzaba el techo 3 sobre 22 páginas así, y le ganaba al `10` impreso en la
     # página donde caía la cita.
     candidatos = [k for k, v in cuenta.items() if v == techo and any(
-        (i + k) in cands[i - 1] and (i + 1 + k) in cands[i] for i in range(1, len(cands)))]
+        (k[0], i + k[1]) in cands[i - 1] and (k[0], i + 1 + k[1]) in cands[i]
+        for i in range(1, len(cands)))]
     # ⛔ Un EMPATE no se desempata: dos numeraciones que se repiten lo mismo son dos lecturas del
     # mismo documento, y elegir una sería inventar la convención que este chequeo existe para
     # auditar. Sale `None` —no evaluable con su motivo (D-43)—, no la más chica ni la primera.
@@ -757,7 +816,7 @@ def printed_page_offset(paginas: list) -> int | None:
 
 
 def printed_pages(paginas: list) -> list:
-    """`[impresa | None]` — the PRINTED number of each page, one by one (#492, defecto B).
+    """`[etiqueta | None]` — the PRINTED page of each page, one by one (#492, defecto B).
 
     ⛔ **A document does not have one offset.** A book whose chapters restart the numbering breaks
     the assumption `impresa = índice + offset` that `printed_page_offset` makes, and the failure is
@@ -773,20 +832,28 @@ def printed_pages(paginas: list) -> list:
     pages that show nothing, and is **dropped** as soon as any page contradicts it: an offset that
     the document itself denies cannot be used to judge the pages that stayed silent.
     """
-    cands = page_number_candidates(paginas)
+    cands = [{x for x in map(page_parts, c) if x} for c in page_number_candidates(paginas)]
     off = printed_page_offset(paginas)
     locales = []
     for i, c in enumerate(cands, 1):
         vecinos: set = set()
         if i >= 2:
-            vecinos |= {n + 1 for n in cands[i - 2]}
+            vecinos |= {(pref, n + 1) for pref, n in cands[i - 2]}
         if i < len(cands):
-            vecinos |= {n - 1 for n in cands[i]}
+            vecinos |= {(pref, n - 1) for pref, n in cands[i]}
         consecutivos = sorted(c & vecinos)
+        # #496 — un documento tiene UNA numeración, así que entre dos candidatos consecutivos gana
+        # el que está en la del documento (el prefijo del offset). Sin este desempate, el par
+        # `J1`/`J2` de una fórmula —o `G1`/`G2`— hace ambigua la página que la cabecera imprime al
+        # lado: medido sobre una bóveda real, 6 páginas de dos libros perdían su número. Si el
+        # documento no tiene numeración dominante, la ambigüedad NO se adivina (D-43).
+        if off is not None:
+            consecutivos = [x for x in consecutivos if x[0] == off[0]] or consecutivos
         locales.append(consecutivos[0] if len(consecutivos) == 1 else None)
     contradice = off is not None and any(
-        n is not None and n != i + off for i, n in enumerate(locales, 1))
-    return [n if n is not None else (i + off if off is not None and not contradice else None)
+        n is not None and n != (off[0], i + off[1]) for i, n in enumerate(locales, 1))
+    return [page_label(n) if n is not None else
+            (page_label((off[0], i + off[1])) if off is not None and not contradice else None)
             for i, n in enumerate(locales, 1)]
 
 
@@ -872,9 +939,13 @@ def quote_page_verdict(quote: str, bibcode: str, rangos: list, declarado: str = 
     con_numero = [n for n in impresas if n is not None]
     det = {"paginas": halladas, "offset": pag["offset"], "impresas": con_numero}
 
-    def _en_rango(n):
-        """Is this page inside ANY of the ranges the locator names? (defecto A: all of them count)."""
-        return any(a <= n <= b for a, b in rangos)
+    def _en_rango(pagina):
+        """Is this page inside ANY of the ranges the locator names? (defecto A: all of them count).
+
+        ⛔ Across NUMBERINGS nothing is inside anything (#496): `p. 45` over the page that prints
+        `L45` is not a hit — they are different pages of the same document."""
+        lab = page_label(pagina) if isinstance(pagina, tuple) else str(pagina)
+        return any(lab in page_span(a, b) for a, b in rangos)
     # #493 — el número que el localizador declara está IMPRESO como número de página en la cabecera
     # o el pie de la página donde cae la cita (`page_number_evidence`, no cualquier entero):
     # evidencia más fuerte que la consecutividad y que cualquier offset, y se mira antes. Es el caso

@@ -2465,6 +2465,11 @@
    "number": 495,
    "title": "El cierre de `_paginacion` apaga la exención de #437: la extracción del PDF reemplazado vuelve a acusar (4 citas, rc 0 → 1)",
    "state": "OPEN"
+  },
+  {
+   "number": 496,
+   "title": "La página impresa no siempre es un entero: `PAGE_LOC_RE` no lee `p. L45`, y una fuente de A&A Letters publicada queda sin auditar en las dos direcciones (57 localizadores)",
+   "state": "OPEN"
   }
  ]
 }

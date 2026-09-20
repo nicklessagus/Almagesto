@@ -1008,7 +1008,7 @@ def test_492_la_pagina_de_la_EVIDENCIA_distinta_de_la_del_cuerpo_se_avisa(toy_va
     d = _fanout(toy_vault, nota, {})       # la evidencia del fan-out cita siempre «(p. 4)»
     r = ws.write(nota, d, fecha="2026-03-01")
     fuera = {b: (c, e) for b, _a, c, e in r["pag_fuera"]}
-    assert fuera == {"2020Pdf": ([1210], [4]), "2019Txt": ([7], [4])}
+    assert fuera == {"2020Pdf": (["1210"], ["4"]), "2019Txt": (["7"], ["4"])}
     assert ws.main([str(nota), "--from", str(d), "--dry-run"]) == 0
     salida = capsys.readouterr().out
     assert "PÁGINA de la evidencia distinta" in salida and "cuerpo p. 1210" in salida

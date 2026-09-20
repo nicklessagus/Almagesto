@@ -1880,3 +1880,23 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Es el módulo donde vive la implementación junto con `REPLACED_DOC_MARKS`; `lib_config` la re-exporta (AUD-306) y los consumidores la llaman por ahí."
+  - issue: 496
+    regla: >-
+      El número de página IMPRESO no es necesariamente un entero —A&A Letters imprime `L43`, ApJL
+      `L24`, MNRAS Letters `L1`—, así que una página es su ETIQUETA y el prefijo VIAJA con el
+      número: `p. 45` y `p. L45` son páginas distintas del mismo documento (A&A numera el cuerpo y
+      las Letters por separado), y plegar `L45 → 45` para poder comparar convertiría el chequeo en
+      un aprobador de la convención equivocada. Toda capa que compare o expanda un rango de páginas
+      lo hace con `page_span`, que devuelve vacío entre numeraciones distintas. Medido: la única
+      copia del EDITOR de Letters de una bóveda real tenía sus 57 localizadores FUERA DE ALCANCE
+      del chequeo de #492 —invisibles, no `mal`— y `printed_pages` devolvía `[None] * 5`, o sea que
+      no era auditable en ninguna de las dos direcciones.
+    funcion: lib_config.page_span
+    patron: 'page_span|page_parts|page_label|printed_page|PAGE_LOC_RE'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "Cruza el conjunto de páginas de la celda `Evidencia` contra el del cuerpo (#492): es el otro lugar donde se expande un rango, y plegar el prefijo haría pasar por coincidencia dos numeraciones distintas."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Es el módulo donde viven la etiqueta y sus siete funciones; `lib_config` las re-exporta (AUD-306) y los consumidores las llaman por ahí."
