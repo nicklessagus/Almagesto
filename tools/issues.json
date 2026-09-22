@@ -2490,6 +2490,16 @@
    "number": 500,
    "title": "El localizador es para VERIFICAR, no para citar: el gate de #492 chequea «está en esa página» y deja de dictaminar índice vs impresa (438 de 518 hallazgos sin PDF reemplazado)",
    "state": "CLOSED"
+  },
+  {
+   "number": 501,
+   "title": "La ventana del localizador corta a mitad del número: «p. 2021» se lee «p. 2» — falso MAL en el lector y corrupción en el escritor de repaginate (31 de 13 760 citas; 3 corruptos medidos)",
+   "state": "OPEN"
+  },
+  {
+   "number": 502,
+   "title": "Las WARN con juicio humano no tienen dónde firmarse: la fuga de implementación lista 25 hits revisados y descartados como si nadie los hubiera mirado (y #408: 102, #406: 8)",
+   "state": "OPEN"
   }
  ]
 }

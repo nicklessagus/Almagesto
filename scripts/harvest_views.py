@@ -1161,8 +1161,8 @@ def restamp_view_locators(slug: str, *, paper: str, cambios: list, dry_run: bool
             if pos < 0:
                 continue
             arranque = pos + len(ancla)
-            ventana = seccion[arranque:arranque + 80].split("«")[0]
-            m = cfg.PAGE_LOC_RE.search(ventana)
+            ms = cfg.locator_matches(seccion, arranque)
+            m = ms[0] if ms else None
             if not m or m.group(0) != viejo:
                 continue
             abs_i = ini + arranque + m.start()

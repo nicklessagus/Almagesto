@@ -685,6 +685,19 @@ def page_locators(texto: str) -> list:
     return out
 
 
+def locator_matches(texto: str, desde: int, ventana: int = 80) -> list:
+    """Every `PAGE_LOC_RE` match that STARTS within `ventana` chars of `desde`, read WHOLE (#501).
+
+    ⛔ The window bounds where a locator may START, never where it ends: cut at a fixed width,
+    `p. 2021` on the border was read `p. 2` — a false `MAL` for a reader and, for a writer that
+    compares against what it read with the same cut, a corrupted number (`p. 13` → `p. 20213`).
+    It still stops at the next `«`: past it the number belongs to ANOTHER quote (#325). The ONE
+    implementation of the window: the gate, the repaginator and the view re-stamper all read here.
+    Match positions are relative to `desde`."""
+    cola = str(texto or "")[desde:].split("«")[0]
+    return [m for m in PAGE_LOC_RE.finditer(cola) if m.start() < ventana]
+
+
 def page_locators_after(texto: str, cita: str, ventana: int = 80) -> list | None:
     """`[(from, to), …]` — the page locators ADJACENT to a quote, or `None`.
 
@@ -707,7 +720,8 @@ def page_locators_after(texto: str, cita: str, ventana: int = 80) -> list | None
     pos = str(texto or "").find(cita)
     if pos < 0:
         return None
-    return page_locators(texto[pos + len(cita):pos + len(cita) + ventana].split("«")[0]) or None
+    return [loc for m in locator_matches(texto, pos + len(cita), ventana)
+            for loc in page_locators(m.group(0))] or None
 
 
 def page_number_candidates(paginas: list) -> list:

@@ -538,3 +538,15 @@ def test_494_el_MISMO_PAPER_bajo_DOS_SLUGS_no_colisiona_y_converge(toy_vault, tm
         assert r["cerrada"] and not r["rehusados"], (paq["extraccion"], r["rehusados"])
         assert rp.file_id(r["extraccion"]) == paq["extraccion"]
     assert not rp.pending(), "las dos deudas quedaron cerradas en una pasada"
+
+
+def test_501_el_escritor_no_corrompe_el_localizador_en_el_borde_de_la_ventana(toy_vault):
+    """⛔ #501 — lector y escritor cortaban a 80 caracteres fijos, así que con el localizador en el
+    borde leían un PREFIJO (`p. 1` de `p. 13`), la guarda `== viejo` pasaba y se reemplazaba sólo
+    el prefijo: `p. 13` → `p. 20213` → `p. 20210213` (medido: tres así en una bóveda real)."""
+    c = "this is a long enough quotation to be recognized by the parser"
+    t = "| «" + c + "» | " + "x" * 69 + " | p. 13 |"
+    assert rp._loc_token(t, c) == "p. 13"
+    for _ in range(3):
+        t = rp._replace_locator(t, 1, rp._loc_token(t, c), "p. 2021") or t
+    assert t.endswith("| p. 2021 |"), t

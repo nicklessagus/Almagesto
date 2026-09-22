@@ -3654,3 +3654,16 @@ re-export. **Hallazgo aparte sobre `carriers.py`**, no de este issue: la regla s
 símbolo re-exportado (`lib_config.quote_page_verdict`), que sí los ve — **2 `usa`** (`contrast`,
 `repaginate`) + **2 `fuera-de-alcance`** (`extraction_prompt` y `make_notes` sólo *rinden*
 `REGLA_LOCALIZADOR`) + el propio `lib_config`, en la entrada 500 de `tools/portadores.yaml`.
+
+## #501 — la ventana del localizador corta a mitad del número (v1.303.1)
+
+**Medido en Almagesto-Tesis (`bac5653`, v1.303.0):** 31 de 13 760 citas `«…»` con el localizador
+partido por la ventana de 80 caracteres fijos; 2 de los 62 `MAL` de `contrast --validar-todo` eran
+sólo eso (`p. 2021` leído `p. 2`, `p. 11` leído `p. 1`); 3 localizadores corruptos (`p.
+20210210210213`, `p. 14111`, `p. 11110`) de un script de scratch que copiaba el mismo corte que el
+escritor de `repaginate`. Reproducido con el código del template: tres pasadas de
+`_replace_locator` sobre `p. 13` en el borde dan `p. 20210210213`.
+
+**Fix:** `lib_quotes.locator_matches` —la ventana acota dónde ARRANCA el token, que se lee entero
+hasta el `«` siguiente— y la usan los cuatro portadores (`page_locators_after`, `_loc_token`,
+`_replace_locator`, `restamp_view_locators`). Entrada 501 de `tools/portadores.yaml`.

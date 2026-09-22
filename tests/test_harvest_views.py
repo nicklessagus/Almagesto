@@ -1995,3 +1995,22 @@ def test_494_restamp_view_locators_solo_toca_el_token_del_paquete(toy_vault):
     viejo = hv.restamp_view_locators("tema", paper="2020Vista",
                                      cambios=[(f"«{cita}»", "p. 4", "p. 2011")])
     assert viejo["cambiados"] == 0 and "ya no está adyacente" in viejo["fuera"][0][1]
+
+
+def test_501_restamp_view_locators_no_toma_el_prefijo_de_la_celda_por_el_token(toy_vault):
+    """⛔ #501 — con la ventana cortada a 80 fijos, una celda `p. 13` en el borde se leía `p. 1`, y
+    un JSON que traía `p. 1` la «re-estampaba» dejando `p. 20103`. El token es el número entero."""
+    import json as _j
+    cita = "which requires the latent signals to be whitened before the model can be identified"
+    (cfg.EXTRACCION / "tema").mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "tema" / "2020Vista.json").write_text(
+        _j.dumps({"bibcode": "2020Vista", "vista": {"sujeto": "tema", "tipo": "theme"}}),
+        encoding="utf-8")
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    nota = cfg.PAPERS / "2020Vista.md"
+    nota.write_text(f"---\nbibcode: 2020Vista\n---\n\n## Vista — tema\n\n"
+                    f"| Qué | Valor | Localizador |\n|---|---|---|\n"
+                    f"| x | «{cita}» | " + "y" * 70 + " | p. 13 |\n", encoding="utf-8")
+    r = hv.restamp_view_locators("tema", paper="2020Vista",
+                                 cambios=[(f"«{cita}»", "p. 1", "p. 2010")])
+    assert r["cambiados"] == 0 and "| p. 13 |" in nota.read_text(encoding="utf-8"), r

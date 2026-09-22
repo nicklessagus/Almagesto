@@ -1113,3 +1113,18 @@ def test_493_la_evidencia_de_pagina_NO_es_cualquier_entero_del_borde(toy_vault):
     _txt_paginado("2024Cambiaso", pags)
     estado, det = cfg.quote_page_verdict(CITA_492, "2024Cambiaso", [(10, 10)])
     assert estado != "ok", (estado, det)
+
+
+def test_501_la_ventana_del_localizador_termina_en_borde_de_token(toy_vault):
+    """⛔ #501 — la ventana de 80 caracteres acota dónde ARRANCA el localizador, no dónde termina:
+    cortada a mitad del número, `p. 2021` se leía `p. 2` (medido: 31 de 13 760 citas de una bóveda
+    real, 2 de sus 62 `MAL`)."""
+    for pagina in ("13", "2021"):
+        for relleno in range(60, 80):
+            texto = f"| «{CITA_492}» | " + "x" * relleno + f" | p. {pagina} |"
+            loc = cfg.page_locators_after(texto, CITA_492)
+            if loc is not None:
+                assert loc == [(pagina, pagina)], (relleno, loc)
+    # …y lo que ARRANCA fuera de la ventana sigue sin ser adyacente
+    lejos = f"«{CITA_492}» " + "x" * 90 + " (p. 4)"
+    assert cfg.page_locators_after(lejos, CITA_492) is None

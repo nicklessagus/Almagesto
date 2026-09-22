@@ -2055,3 +2055,23 @@ portadores:
       - modulo: scripts/contrast.py
         estado: usa
         motivo: "Es el único reportero del eje: consume los tres estados y declara la población («N en la página que dicen · M MAL · K no evaluables»). Perdió `pag_indice`/`pag_declarado` y sus claves en `_citas.yaml`."
+
+  - issue: 501
+    regla: >-
+      Una ventana de texto que se lee para extraer un localizador acota dónde ARRANCA el token, no
+      dónde termina: cortada a ancho fijo, `p. 2021` en el borde se leía `p. 2` —falso `MAL` para
+      el lector— y el escritor que compara contra lo leído con el mismo corte reemplazaba sólo el
+      prefijo (`p. 13` → `p. 20213`). Medido: 31 de 13 760 citas de una bóveda real, 2 de sus 62
+      `MAL` y 3 localizadores corruptos por un script que copiaba el corte.
+    funcion: lib_config.locator_matches
+    patron: '\+ ?(ventana|80)\]\.split\("«"\)|locator_matches'
+    consumidores:
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "`_loc_token` lee el token viejo y `_replace_locator` lo reemplaza: lector y escritor tienen que ver el MISMO token entero, o la guarda `== viejo` aprueba un prefijo."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`restamp_view_locators` reemplaza el token adyacente a la cita en la `## Vista`; con el corte fijo, un `viejo` del JSON que fuera prefijo de la celda la corrompía."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Es el módulo donde vive la implementación; `page_locators_after` (el lector de `contrast`) delega en ella, y `lib_config` la re-exporta (AUD-306)."
