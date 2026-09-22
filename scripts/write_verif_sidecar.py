@@ -92,6 +92,7 @@ def load_fanout(directory: Path) -> dict:
 
     Raises `SidecarError` listing the barrier's findings otherwise: building the sibling from a
     fan-out that did not close is exactly the derived work #199 measured going unread."""
+    # @inv INV-161
     _pairs, errors = check_verify_fanout.check_dir(directory)
     if errors:
         raise SidecarError("el fan-out no pasa la barrera (#259) — no se arma nada:\n  "
@@ -370,6 +371,7 @@ def note_section(note: Path, text: str, rows: list, fecha: str,
     prosa = cfg.solo_prosa(fm[1] if fm else text)
     frags = lb.verif_subsection_lines(rows, prosa)
     vieja = lb.verif_section(text)
+    # @inv INV-82
     sufijo = f" · re-anclado {reanclado}" if reanclado and reanclado != fecha else ""
     lineas = [f"{lb.VERIFY_HEADER} ({fecha}{sufijo})", f"{INTRO} {lb.verif_summary(rows)}", "",
               lb.verif_pointer(note), ""]
@@ -412,6 +414,7 @@ def _residual_prose(seccion: str, sub: str) -> str:
     recognise it», and only the second destroys something. `lb.subsection_residual` answers it
     without going through the reader, so a reader that stops recognising a form makes the writer
     REFUSE instead of stamping the placeholder over the round's triage."""
+    # @inv INV-162
     for ln in seccion.split("\n"):
         resto = lb.subsection_residual(ln.strip(), sub)
         if resto:
@@ -456,6 +459,7 @@ def _lost_prose(vieja: str, nueva: str) -> list:
         s = s.replace(lb._plain_line(PENDIENTE), " ")
         return re.sub(r"\s+", " ", s).strip(" .:—-()")
 
+    # @inv INV-162
     nueva_plana = " ".join(_contenido(ln) for ln in nueva.split("\n"))
     perdidas = []
     for ln in vieja.split("\n"):
@@ -659,6 +663,7 @@ def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = Fals
     juzgados -= len(descartadas)
     if not rows:
         raise SidecarError("el fan-out no juzgó ningún par del cuerpo: no hay tabla que escribir")
+    # @inv INV-82
     emit(note, text, rows, fecha or dt.date.today().isoformat(), dry_run=dry_run)
     c = lb.verif_counts(rows)
     return {"filas": len(rows), "pares_cuerpo": len(lb.pairs_of(text)), "juzgadas": juzgados,

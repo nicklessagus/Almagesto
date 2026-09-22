@@ -46,6 +46,7 @@ def check_dir(directory: Path) -> tuple[dict, list[str]]:
     Files are read in sorted order so that two runs over the same directory report in the same
     order — a report whose lines move around gets diffed by nobody.
     """
+    # @inv INV-161
     pairs, errors = {}, []
     for f in sorted(directory.glob("*.json")):
         name = f.name
@@ -76,6 +77,7 @@ def manifest_errors(pairs: dict, manifest: dict, expected: int | None) -> list[s
     plan — a miscount in the same direction as a missing source would pass ✅ — and (b) names the
     source, which is what the count cannot."""
     out = []
+    # @inv INV-161
     plan = manifest.get("fuentes") or {}
     if expected is not None and expected != manifest.get("pares"):
         out.append(f"⛔ `--esperados {expected}` contradice el manifiesto ({manifest.get('pares')} pares "
@@ -98,6 +100,7 @@ def pair_count_errors(pairs: dict, expected: int) -> list[str]:
     contributes an unknown number of pairs, so folding it in as zero would turn one loud finding
     into a quieter, wrong one.
     """
+    # @inv INV-161
     total = sum(pairs.values())
     if total == expected:
         return []

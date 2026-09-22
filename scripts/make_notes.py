@@ -263,6 +263,7 @@ def stamp_pdf(dest, stem: str) -> bool:
         # sobre el PDF del editor, con `eprint_version: v1` al lado. Medido: las dos versiones
         # diferían en RESULTADOS, no en redacción. El hash es lo que distingue «se mantiene» de
         # «se reemplazó», y se guarda en `pdf_sha:` al estampar.
+        # @inv INV-157
         if guardado and guardado != sha:
             for campo in ("pdf_source", "eprint_version"):
                 if any(ln.startswith(f"{campo}:") for ln in lines):
@@ -3768,6 +3769,7 @@ def _move_extraction(old_stem: str, new_bibcode: str) -> int:
     alone: choosing between two paid readings is judgement, not mechanics.
     """
     movidos = 0
+    # @inv INV-160
     for viejo in sorted(cfg.EXTRACCION.glob(f"*/{safe_name(old_stem)}.json")):
         nuevo = viejo.with_name(f"{safe_name(new_bibcode)}.json")
         if nuevo.exists():

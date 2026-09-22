@@ -171,6 +171,7 @@ def test_el_slug_SIN_txt_no_se_re_extrae_y_la_nota_que_falta_se_AVISA(toy_vault,
 
 
 def test_la_EXTRACCION_queda_marcada_des_paginada(toy_vault, tmp_path, monkeypatch):
+    # @inv INV-160
     """⛔ El hueco que no tenía forma en ninguna parte: `raw/extraccion/**` es versionado y no
     regenerable (#311), así que después del reemplazo la bóveda tiene una extracción que cita
     `p. 5` de un documento que ya no está, mientras el PDF nuevo pagina por volumen (Cardoso 1998

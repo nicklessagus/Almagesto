@@ -231,6 +231,7 @@ def test_494_la_GUIA_no_puede_llegar_al_linea_por_ningun_camino(toy_vault, tmp_p
                                   "ids_de_otra_corrida", "items_no_es_lista_de_mapas",
                                   "items_no_es_lista", "no_es_un_mapa"])
 def test_494_apply_REHUSA_el_archivo_entero_y_no_escribe_nada(toy_vault, tmp_path, caso):
+    # @inv INV-160
     """Cuatro rehúses de archivo, cada uno cerrando una forma de escribir la respuesta equivocada.
     En los cuatro la extracción queda byte-idéntica: un rehúse no deja una escritura a medias, que
     sobre un artefacto versionado y no regenerable (#311) sería el peor resultado posible."""

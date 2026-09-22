@@ -189,6 +189,7 @@ def stamp_depagination(bibcode: str, sha_viejo: str, sha_nuevo: str, motivo: str
             continue
         if not isinstance(data, dict) or not (propio or cfg.extraction_identity(data) == bibcode):
             continue
+        # @inv INV-160
         data["_paginacion"] = {
             "reemplazo": _dt.date.today().isoformat(), "pdf_sha_anterior": sha_viejo,
             "pdf_sha": sha_nuevo, "motivo": motivo,

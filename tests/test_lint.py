@@ -123,6 +123,7 @@ def test_la_cabecera_AUSENTE_manda_a_reconstruir_no_a_restampar(toy_vault, capsy
 
 
 def test_pdf_source_de_editor_con_eprint_version_es_una_contradiccion_y_BLOQUEA(toy_vault):
+    # @inv INV-157
     """#383 — `pdf_source: publisher` + `eprint_version: v1` es una contradicción INTERNA del
     frontmatter, no un valor viejo: lo detectó el extractor al releer, no el lint. Y no es
     cosmético: la nota manda a re-verificar contra el documento equivocado."""
@@ -238,6 +239,7 @@ def test_campo_de_lista_escrito_como_escalar_se_reporta_una_vez(toy_vault, capsy
 
 
 def test_huerfanas_solo_conceptos_sueltos(toy_vault, capsys):
+    # @inv INV-163
     mk_note(toy_vault.CONCEPTS / "methods", "suelta", {"tags": ["methods"]}, "sin links entrantes\n")
     mk_note(toy_vault.PAPERS, "2020papA...1..1A", {"tags": ["paper"]}, "")
     mk_note(toy_vault.STARS, "test_star", {"tags": ["star"]}, "")
@@ -6310,6 +6312,7 @@ def _pdf_en_disco(bib="2020aaa...1..1A"):
 
 
 def test_paper_sin_abstract_bloquea(toy_vault, capsys):
+    # @inv INV-156
     """#277 — `## Abstract` es la única capa AUDITABLE del cuerpo y `classify_offline` la lee para
     re-clasificar sin `build/` (D-49). Medido: **39 de 138** notas de una bóveda real ya no la
     tenían, con el lint en rc 0 — el stub off-ADS nunca la escribió."""
@@ -7822,6 +7825,7 @@ def _registro_fuente(via="crossref", veredicto="autor", detalle="declarado «Yan
 
 
 def test_autor_desmentido_por_crossref_bloquea(toy_vault):
+    # @inv INV-159
     """#353 — medido: una nota publicaba autor y título de OTRO paper, derivados del nombre del
     archivo. Sólo el `doi` y el PDF eran correctos. Es la regla de método nº 4 en su forma pura."""
     _tema_con_fuente(); _registro_fuente()
@@ -7832,6 +7836,7 @@ def test_autor_desmentido_por_crossref_bloquea(toy_vault):
 
 
 def test_anio_a_uno_es_backlog_y_a_dos_bloquea(toy_vault):
+    # @inv INV-159
     """#353 — medido: un año a ±1 es online-first vs impreso (Crossref «issued» 2007, la revista
     2008): no es falso. A ≥2 sí."""
     _tema_con_fuente(year=2008); _registro_fuente(veredicto="anio", detalle="2008 vs 2007",
@@ -8706,6 +8711,7 @@ def test_check_sources_metadata_separa_lo_que_bloquea_de_lo_que_es_backlog(toy_v
 
 
 def test_la_firma_de_catalogo_equivocado_baja_el_bloqueante_a_declarado(toy_vault):
+    # @inv INV-159
     """#463 — cuando el equivocado es el CATÁLOGO, las tres salidas que prescribía el mensaje
     piden publicar una atribución FALSA (medido: `2012Naik`, cuyo registro de Crossref trae
     `given: Ganesh, family: R.` y perdió «Naik»). La cuarta salida es la firma versionada.
@@ -10921,6 +10927,7 @@ def test_el_bibtex_con_macro_de_revista_es_backlog_y_nombra_el_comando(toy_vault
 # ── #475 · el campo lleno y su hueco declarado no conviven ────────────────────────────────────
 
 def test_bibtex_Y_sin_bibtex_a_la_vez_BLOQUEA(toy_vault, capsys):
+    # @inv INV-158
     """#475 — son dos afirmaciones contradictorias sobre el mismo campo, y ninguna de las dos
     categorías vecinas lo veía: «hueco declarado» exige `bibtex` vacío y «no pegable» sólo mira el
     bloque, así que la nota salía en **rc 0** contándose en la categoría equivocada. Lo produce un

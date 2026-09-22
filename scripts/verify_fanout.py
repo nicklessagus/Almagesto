@@ -112,6 +112,7 @@ def write_round(nota: Path, out_dir: Path, fuentes: list | None = None,
     for bib, pares in grupos.items():
         (out_dir / "prompts" / f"{bib}.md").write_text(prompt_for(nota, bib, pares, out_dir),
                                                        encoding="utf-8")
+    # @inv INV-161
     manifest = {"nota": nota.as_posix(),
                 "fuentes": {bib: len(pares) for bib, pares in grupos.items()},
                 "pares": sum(len(pares) for pares in grupos.values()),

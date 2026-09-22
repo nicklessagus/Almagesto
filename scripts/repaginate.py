@@ -462,6 +462,7 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
     marca = {"fecha": hoy, "pdf_sha": sha_disco, "n": len(escritos),
              "no_hallados": len(no_hallados), "colapsados": colapsados,
              "fuente": "relectura del PDF (#494)"}
+    # @inv INV-160
     for m in cfg.PAGINATION_OPEN_MARKS:
         data.pop(m, None)
     if pendientes:

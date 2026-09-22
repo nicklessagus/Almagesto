@@ -1673,6 +1673,7 @@ def test_453c_el_restamp_REHUSA_reescribir_una_salvedad_en_prosa(toy_vault):
 
 
 def test_453c_agregar_pasa_y_PERDER_una_prosa_se_rehusa(toy_vault):
+    # @inv INV-162
     """⛔ #453, cuarta devolución — la regla es simétrica: agregar pasa, **reescribir y BORRAR se
     rehúsan**. Con el bloque marcado la corrección a mano quedaba como línea distinta → reescritura
     → rehusada (56 veces); con el bloque pelado no tenía contraparte en el render, así que no era

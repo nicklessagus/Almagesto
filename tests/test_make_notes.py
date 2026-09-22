@@ -3032,6 +3032,7 @@ def test_rename_paper_sin_fix_key_sigue_escribiendo_el_alias(toy_vault):
 
 
 def test_reemplazar_el_PDF_por_otro_de_distinta_procedencia_deja_pdf_source_en_null(toy_vault, capsys):
+    # @inv INV-157
     """#383 — #230 decide que `pdf_source` SOBREVIVE al archivo, porque describe la procedencia de
     la lectura que ocurrió, no el archivo. Son dos casos (desaparece / se mantiene) y había un
     tercero: el archivo se REEMPLAZA por otro de distinta procedencia. Ahí la lectura vieja se está

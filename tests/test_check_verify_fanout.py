@@ -78,6 +78,7 @@ def test_el_json_que_no_parsea_es_un_hallazgo_como_cualquier_otro(tmp_path, monk
 
 
 def test_el_conteo_de_pares_aborta_si_no_coincide(tmp_path, monkeypatch, capsys):
+    # @inv INV-161
     """La red barata de #222 (contar antes y después, como la guarda «los pares no bajaron» de
     `apply_fixes`) en el otro extremo de la cadena: un subagente que devolvió **la mitad** de sus
     pares escribe un archivo perfectamente VÁLIDO — la forma no lo ve, el conteo sí."""
@@ -113,6 +114,7 @@ def _manifiesto(d: Path, fuentes: dict):
 
 
 def test_la_barrera_NOMBRA_la_fuente_que_falta(tmp_path):
+    # @inv INV-161
     """#369 — con `--esperados 60` la barrera decía «faltan 1»; saber CUÁL requirió un script
     ad-hoc. El generador ya sabía el reparto: ahora lo escribe y la barrera lo lee."""
     d = _dir_con(tmp_path, **{"2020ApJ...900....1A": _ok()})

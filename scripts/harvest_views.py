@@ -1297,6 +1297,7 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
         # estructuró no es un borrado — su texto sigue en la nota, adentro de la salvedad
         # estructurada (`evidencia`). Lo que no tiene contraparte en ninguna parte, sí lo es.
         se_van = {x for x in viejos - nuevos if not _estructurada(x, data)}
+        # @inv INV-162
         if se_van:
             verbo = "REESCRIBIRÍA" if nuevos - viejos else "BORRARÍA"
             rehusadas.append((bib, f"el re-estampado {verbo} {len(se_van)} salvedad(es) en prosa "

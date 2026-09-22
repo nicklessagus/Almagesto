@@ -2558,6 +2558,7 @@ def check_sources_metadata() -> tuple:
             _estado, _firma = cfg.metadata_review(
                 _it, _campo, _decl_hoy.get(_campo),
                 _hallado.get("family" if _campo == "author" else _campo))
+            # @inv INV-159
             _no_usadas((_campo,))
             if _estado == "firmada":
                 fuente_metadata_firmada.append(
@@ -3046,6 +3047,7 @@ def check_orphans(incoming: dict, kinds: dict, refs_stems) -> list:
         tags = kinds.get(n, [])
         return (not ({"paper", "star", "matrix"} & set(tags))
                 and n not in NON_ORPHAN and n not in refs_stems)
+    # @inv INV-163
     return sorted(n for n, c in incoming.items() if c == 0 and candidato(n))
 
 
@@ -4575,6 +4577,7 @@ def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf
     sin_conclusiones_ok: list = []
     sin_aviso_llm: list = []
     vista_solo_abstract: list = []
+    # @inv INV-156
     if cfg.section_start(text, "## Abstract") < 0:
         sin_abstract.append(
             (stem, "sin `## Abstract`: es la única capa AUDITABLE del cuerpo (copia de "
@@ -4663,6 +4666,7 @@ def check_paper_citation_unit(stem: str, fm: dict) -> tuple:
     # #383 — `pdf_source: publisher|ads|web` + `eprint_version` es una contradicción INTERNA
     # del frontmatter, no un valor viejo: la nota manda a re-verificar contra el documento
     # equivocado. Lo detectó el extractor al releer; el lint no lo miraba.
+    # @inv INV-157
     if (str(fm.get("pdf_source") or "") in ("publisher", "ads", "web")
             and str(fm.get("eprint_version") or "").strip()):
         pdf_source_contra.append(
@@ -4710,6 +4714,7 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     # `bibtex` vacío y «no pegable» sólo mira el bloque, así que la nota salía en rc 0 contándose
     # en la categoría equivocada. Lo produce un borrado que rehusó (#244) con su retorno ignorado
     # —el defecto de #475— y también lo produciría una edición a mano.
+    # @inv INV-158
     if _btx and _motivo_hueco:
         bibtex_hueco_contradictorio.append(
             (stem, f"tiene `bibtex` Y `sin_bibtex: {_motivo_hueco[:60]}`: el hueco declarado dice "
@@ -7185,6 +7190,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # La faceta que no clasifica nada vive en `check_dead_facets` (#396).
     faceta_muerta = check_dead_facets(paper_lens_text)
 
+    # @inv INV-164
     categorias = [
         Categoria('not_evaluated', '⛔ No evaluado: el chequeo no pudo correr (hecho del ENTORNO, no de la bóveda — cuenta para el exit)', SEV_BLOQUEANTE, tuple(not_evaluated)),
         Categoria('broken', 'Wikilinks rotos (página faltante)', SEV_BLOQUEANTE, tuple(broken), poblacion='notas'),

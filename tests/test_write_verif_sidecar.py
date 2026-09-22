@@ -10,6 +10,7 @@ import lib_config as cfg
 import lib_blocks as lb
 import lint
 import write_verif_sidecar as ws
+import check_verify_fanout
 from conftest import mk_note
 
 
@@ -147,6 +148,7 @@ def test_preserva_el_triage_que_el_agente_ya_escribio(toy_vault):
 
 
 def test_REHUSA_el_fanout_que_no_cerro_el_par_que_no_esta_y_la_fuente_que_no_existe(toy_vault):
+    # @inv INV-161
     """Tres rechazos, cada uno nombrando qué. La barrera (#259) primero: un hermano armado desde un
     fan-out que no cerró es el trabajo derivado que #199 midió sin que nadie lo mirara. Después el
     par cuya ancla no está en el cuerpo — la nota cambió después de generar los prompts, y una fila
@@ -363,6 +365,7 @@ def test_el_fragmento_DUPLICADO_se_colapsa_y_la_prosa_es_la_del_ULTIMO(toy_vault
 
 
 def test_si_la_prosa_ENTRA_y_SALE_vacia_se_ABORTA_en_vez_de_escribir(toy_vault, monkeypatch):
+    # @inv INV-162
     """#430/#222 — la red barata: un triage que desaparece no puede pasar en silencio. Si el lector
     no reconoce la prosa que la línea vieja tenía, se rehúsa; no se escribe el placeholder."""
     nota = _escena(toy_vault)
@@ -482,6 +485,7 @@ def test_la_prosa_se_preserva_con_el_nombre_en_OTRA_CAPITALIZACION(toy_vault):
 
 
 def test_NINGUNA_prosa_de_la_seccion_vieja_desaparece_sin_aviso(toy_vault):
+    # @inv INV-162
     """#430/#222 — la red que NO depende del lector, y la razón de que exista: la guarda por
     sub-sección sólo ve lo que el lector reconoce, así que una línea con el nombre mal escrito —o un
     párrafo que el agente agregó y que la plantilla no contempla— se evaporaba con la guarda
@@ -1085,3 +1089,66 @@ def test_499_el_arrastre_lo_BORRA_la_ronda_y_lo_CONSERVAN_los_reescritores(toy_v
     assert cfg.reanchor_date(texto) is None, "la ronda nueva BORRA el arrastre: se verificó de nuevo"
     assert cfg.verification_date(texto) == (True, "2026-03-05")
 
+
+# ── INV-161 · la barrera del fan-out de verificación (AUD-437) ────────────────────────────────────
+
+def test_el_par_que_el_fanout_NO_devolvio_lo_nombra_la_barrera_y_no_cierra(toy_vault):
+    # @inv INV-161
+    """AUD-437 (D-9): el subagente que no escribió su JSON deja un directorio VÁLIDO en forma. La
+    barrera lo nombra contra el plan (#369); el escritor sólo re-corre la FORMA (#259), así que si
+    igual se arma el hermano, el par que falta sale «sin verificar» y bloquea con `--cierre` (D-5).
+    Medido al escribir esto: el escritor arma 1 fila sobre 2 pares sin quejarse — la red es el par
+    barrera + cierre, no el escritor solo."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    (d / "2019Txt.json").unlink()
+    pares, errores = check_verify_fanout.check_dir(d)
+    assert errores == [], "la forma no lo ve: por eso existe el conteo"
+    plan = json.loads((d / check_verify_fanout.MANIFEST).read_text(encoding="utf-8"))
+    faltan = check_verify_fanout.manifest_errors(pares, plan, None)
+    assert any("2019Txt" in e for e in faltan), faltan
+    assert check_verify_fanout.pair_count_errors(pares, plan["pares"]), "el conteo contra el plan tampoco cierra"
+
+    r = ws.write(nota, d, fecha="2026-03-01")
+    assert r["filas"] < r["pares_cuerpo"]
+    cat = lint.collect(cierre=True).por_clave("stale_pairs")
+    assert cat.severidad == lint.SEV_CIERRE
+    assert any(n == "concepto" and "2019Txt" in m and "sin verificar" in m for n, m in cat.items), \
+        cat.items
+
+
+# ── INV-82 · la fecha del bloque de verificación (AUD-428, AUD-467) ───────────────────────────────
+
+def test_la_ronda_ACOTADA_re_fecha_el_bloque_y_la_arrastrada_conserva_su_fila(toy_vault):
+    # @inv INV-82
+    """AUD-428 (C-14): la fecha del bloque es la de la ÚLTIMA ronda que verificó algo, aunque la
+    ronda haya sido acotada; lo que la ronda no juzgó se ARRASTRA con su veredicto y su ancla, y su
+    vigencia la dice el ancla (D-4), no la fecha. Y una ronda no es un re-anclaje: no declara
+    arrastre (#499)."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}, ronda="r1"), fecha="2026-03-01")
+    antes = {r.bibcode: (r.anchor, r.verdict) for r in lb.verif_rows(nota)}
+    d2 = _fanout(toy_vault, nota, {}, ronda="r2")
+    (d2 / "2019Txt.json").unlink()                     # la ronda juzga sólo 2020Pdf
+    r = ws.write(nota, d2, fecha="2026-03-05")
+    assert r["juzgadas"] == 1 and r["arrastradas"] == 1, r
+    texto = nota.read_text(encoding="utf-8")
+    assert cfg.verification_date(texto) == (True, "2026-03-05")
+    assert cfg.reanchor_date(texto) is None, "una ronda verificó: no hay arrastre que declarar"
+    despues = {r.bibcode: (r.anchor, r.verdict) for r in lb.verif_rows(nota)}
+    assert despues["2019Txt"] == antes["2019Txt"], "la fila arrastrada lleva su ancla y su veredicto"
+
+
+def test_re_anclar_el_MISMO_dia_de_la_verificacion_NO_estampa_el_sufijo(toy_vault):
+    # @inv INV-82
+    """AUD-467 (F-13): `· re-anclado AAAA-MM-DD` declara un arrastre POSTERIOR a la verificación.
+    Re-anclar el mismo día no agrega información —la fecha ya es ésa— y el sufijo duplicaría la
+    fecha en el encabezado. El mutante `if reanclado` (sin `!= fecha`) sobrevivía la suite."""
+    nota = _escena(toy_vault)
+    hoy = dt.date.today().isoformat()
+    ws.write(nota, _fanout(toy_vault, nota, {}), fecha=hoy)
+    r = ws.reanchor(nota)
+    texto = nota.read_text(encoding="utf-8")
+    assert r["reanclado"] is None
+    assert "re-anclado" not in texto and cfg.reanchor_date(texto) is None
+    assert cfg.verification_date(texto) == (True, hoy)
