@@ -550,3 +550,16 @@ def test_501_el_escritor_no_corrompe_el_localizador_en_el_borde_de_la_ventana(to
     for _ in range(3):
         t = rp._replace_locator(t, 1, rp._loc_token(t, c), "p. 2021") or t
     assert t.endswith("| p. 2021 |"), t
+
+
+def test_504_el_escritor_no_reescribe_el_localizador_de_la_afirmacion_vecina(toy_vault):
+    """⛔ #504 — el escritor usa la misma adyacencia que el gate: con prosa entre la cita y el
+    número, ese número es de OTRA afirmación y no se toca; con el localizador ANTES de la cita, se
+    reescribe ése."""
+    c = "this is a long enough quotation to be recognized by the parser"
+    vecino = f"dice «{c}», pero la Tabla 1 (p. 6) lista otra cosa"
+    assert rp._loc_token(vecino, c) == ""
+    assert rp._replace_locator(vecino, 1, "p. 6", "p. 9") is None
+    previo = f"la p. 5 dice que «{c}», y sigue"
+    assert rp._loc_token(previo, c) == "p. 5"
+    assert rp._replace_locator(previo, 1, "p. 5", "p. 8") == f"la p. 8 dice que «{c}», y sigue"

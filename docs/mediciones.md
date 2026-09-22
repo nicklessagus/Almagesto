@@ -3667,3 +3667,28 @@ escritor de `repaginate`. Reproducido con el código del template: tres pasadas 
 **Fix:** `lib_quotes.locator_matches` —la ventana acota dónde ARRANCA el token, que se lee entero
 hasta el `«` siguiente— y la usan los cuatro portadores (`page_locators_after`, `_loc_token`,
 `_replace_locator`, `restamp_view_locators`). Entrada 501 de `tools/portadores.yaml`.
+
+## #504 — el localizador es el de AL LADO, no el de la afirmación vecina (v1.306.0)
+
+**Medido en Almagesto-Tesis (`9b3be08`, v1.305.0), `contrast --validar-todo` antes → después, con
+el código del template sobre un worktree de la instancia:** MAL **65 → 14** · en la página que
+dicen 3968 → 3893 · localizadores mirados 6393 → 6244 · no evaluables 2360 → 2337 · rc 0.
+
+- **Salen 60.** Muestra de 14 (10 ubicables): los 10 eran el número de la afirmación vecina; en 6
+  la regla ahora lee el correcto —el que introduce la cita (`p. 293 («…»)`, `conclusiones (p. 21):
+  «…»`) o el de su celda— y en 4 queda sin localizador (no evaluable, nunca MAL).
+- **Entran 9.** 7 son localizadores que la regla vieja no leía porque van ANTES de la cita («en la
+  p. 1 («…»)» con la cita en la p. 3): candidatos a errores reales de la bóveda. 2 son entradas del
+  `log.md` que registran una corrección («p. 12 → **p. 11**»): toma el primero.
+- **Los 10 realmente mal que la instancia corrigió hoy, re-introducidos (`bac5653^`):** siguen MAL
+  los 6 que el gate puede juzgar; los 3 de `688A.112V` no tienen cita al lado (fuera de alcance,
+  igual que antes) y el de `1998Cardoso` (`p. 20210210210213`) lo lee `PAGE_LOC_RE` como `p. 2021`
+  —límite previo del regex, no de esta regla—.
+- **Iteración medida.** La primera versión estricta subió los MAL a 84: el énfasis markdown alrededor
+  de la cita (`*«…»*`, 234 casos — la ceguera de la regla de método nº 4), los rótulos de
+  localizador (`§2.2,`, «en el margen de la p.»), la fila de tabla (el localizador en otra celda es
+  de su cita) y quedarse con el primer número de «p. 27 PDF (tesis p. 3)». Y «(Ec. 14, p. 18), «…»»
+  no introduce la cita: el número cierra la ecuación.
+
+**Fix:** `lib_quotes.adjacent_locators` —la adyacencia en los dos sentidos—, usada por
+`page_locators_after` (gate) y por los dos escritores. Entrada 504 de `tools/portadores.yaml`.

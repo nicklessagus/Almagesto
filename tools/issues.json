@@ -2499,11 +2499,16 @@
   {
    "number": 502,
    "title": "Las WARN con juicio humano no tienen dónde firmarse: la fuga de implementación lista 25 hits revisados y descartados como si nadie los hubiera mirado (y #408: 102, #406: 8)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 503,
    "title": "bibtex_source no tiene carril para la exportación INSTITUCIONAL (repositorio de los autores) cuando el venue no publica ninguna: 2 de 8 huecos tienen BibTeX real y no se pueden declarar sin mentir la procedencia",
+   "state": "CLOSED"
+  },
+  {
+   "number": 504,
+   "title": "El gate de páginas toma el localizador de la afirmación VECINA: 53 de 68 MAL releídos en el PDF eran eso, y la forma «la p. N dice «…»» (localizador ANTES de la cita) no se mira nunca",
    "state": "OPEN"
   }
  ]

@@ -2078,8 +2078,8 @@ portadores:
       el lector— y el escritor que compara contra lo leído con el mismo corte reemplazaba sólo el
       prefijo (`p. 13` → `p. 20213`). Medido: 31 de 13 760 citas de una bóveda real, 2 de sus 62
       `MAL` y 3 localizadores corruptos por un script que copiaba el corte.
-    funcion: lib_config.locator_matches
-    patron: '\+ ?(ventana|80)\]\.split\("«"\)|locator_matches'
+    funcion: lib_config.adjacent_locators
+    patron: '\+ ?(ventana|80)\]\.split\("«"\)|adjacent_locators'
     consumidores:
       - modulo: scripts/repaginate.py
         estado: usa
@@ -2090,6 +2090,27 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Es el módulo donde vive la implementación; `page_locators_after` (el lector de `contrast`) delega en ella, y `lib_config` la re-exporta (AUD-306)."
+
+  - issue: 504
+    regla: >-
+      Un localizador pertenece a la cita que tiene AL LADO, no a la más cercana por delante: con
+      prosa entre la `»` y el número, el número es de otra afirmación (no evaluable, nunca `MAL`), y
+      el que INTRODUCE la cita («la p. 5 dice «…»») cuenta cuando nada la sigue. Medido: 53 de 68
+      `MAL` releídos eran el número de la afirmación vecina; con la regla, 65 → 14. Los dos
+      escritores usan la misma adyacencia: con la vieja, `repaginate` habría reescrito el número de
+      la afirmación de al lado.
+    funcion: lib_config.adjacent_locators
+    patron: 'adjacent_locators|PAGE_LOC_RE\.(search|finditer)'
+    consumidores:
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "`_loc_token` y `_replace_locator`: el escritor sólo reescribe el localizador que el gate le atribuye a la cita."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`restamp_view_locators` re-estampa la celda adyacente a la cita con la misma regla."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Vive ahí la implementación; `page_locators_after` (el lector de `contrast`) delega en ella."
 
   - issue: 502
     regla: >-

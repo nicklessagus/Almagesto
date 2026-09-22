@@ -1160,13 +1160,14 @@ def restamp_view_locators(slug: str, *, paper: str, cambios: list, dry_run: bool
             pos = seccion.find(ancla)
             if pos < 0:
                 continue
-            arranque = pos + len(ancla)
-            ms = cfg.locator_matches(seccion, arranque)
-            m = ms[0] if ms else None
-            if not m or m.group(0) != viejo:
+            # el ancla es la cita con sus «» o el `valor` pelado: la adyacencia se mide desde el
+            # texto de adentro, igual que en el gate (#504)
+            spans = cfg.adjacent_locators(seccion, pos + ancla.startswith("«"),
+                                          pos + len(ancla) - ancla.endswith("»"))
+            if not spans or seccion[spans[0][0]:spans[0][1]] != viejo:
                 continue
-            abs_i = ini + arranque + m.start()
-            nuevo = nuevo[:abs_i] + nueva_pag + nuevo[abs_i + len(m.group(0)):]
+            a, b = ini + spans[0][0], ini + spans[0][1]
+            nuevo = nuevo[:a] + nueva_pag + nuevo[b:]
             cambiados += 1
             hecho = True
             break

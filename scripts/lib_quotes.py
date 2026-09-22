@@ -685,17 +685,56 @@ def page_locators(texto: str) -> list:
     return out
 
 
-def locator_matches(texto: str, desde: int, ventana: int = 80) -> list:
-    """Every `PAGE_LOC_RE` match that STARTS within `ventana` chars of `desde`, read WHOLE (#501).
+#: #504 · qué puede haber ENTRE la cita y su localizador. Después de la `»`: puntuación y énfasis
+#: markdown (`*«…»*`, regla de método nº 4), un rótulo de localizador (`§2.2,`, `Conclusion,`,
+#: «en la», «en el margen de la»), un
+#: `[[bibcode]]` (se saca antes de mirar), o un
+#: paréntesis abierto con lo que sea adentro —`(Tabla 5, p. 12)`, `([[bib]], p. 4)`—. En una FILA
+#: vale cualquier cosa hasta otra celda: la fila es UNA afirmación y su localizador es de su cita. Antes de la
+#: `«`: el verbo que introduce la cita —«la p. 5 dice que «…»», «p. 293 («…»)», «(p. 5): «…»»—; ⛔ NO
+#: «(…, p. 18), «…»»: ahí el número cierra lo anterior (medido: `(Ec. 14, p. 18), «…»` con la cita en la 19).
+_LOC_WORD = (r"(?:§\s*[\w.]+|(?:Sect?|Secci[oó]n|Section|Conclusi(?:on|ones|ón)|Abstract|Tabla|"
+             r"Table|Fig|Figura|Figure|Ec|Eq|Ap[eé]ndice|Appendix)\.?(?:\s*[\w.]+)?)")
+_GAP_AFTER_RE = re.compile(r"^»?[*_\s,;:.—–-]*"
+                           r"(?:" + _LOC_WORD + r"[\s,;:]*|en\s+(?:el\s+margen(?:\s+\w+)?\s+de\s+)?la\s+)*"
+                           r"(?:\([^()«»]*)?$|^»?[^«»|]*(?:\|[^|«»]*)+$", re.I)
+_GAP_BEFORE_RE = re.compile(r"^\s*\)?\s*:?\s*(?:(?:dice|dicen|afirma|afirman|escribe|lee|"
+                            r"says|states|reads|writes|notes)(?:\s+que)?)?\s*[(:]?\s*$", re.I)
+_WIKILINK_RE = re.compile(r"\[\[[^\]]*\]\]")
+LOCATOR_BEFORE_MAX = 90
 
-    ⛔ The window bounds where a locator may START, never where it ends: cut at a fixed width,
-    `p. 2021` on the border was read `p. 2` — a false `MAL` for a reader and, for a writer that
-    compares against what it read with the same cut, a corrupted number (`p. 13` → `p. 20213`).
-    It still stops at the next `«`: past it the number belongs to ANOTHER quote (#325). The ONE
-    implementation of the window: the gate, the repaginator and the view re-stamper all read here.
-    Match positions are relative to `desde`."""
-    cola = str(texto or "")[desde:].split("«")[0]
-    return [m for m in PAGE_LOC_RE.finditer(cola) if m.start() < ventana]
+
+def adjacent_locators(texto: str, ini: int, fin: int, ventana: int = 80) -> list:
+    """`[(start, end)]` — the spans of the page locators that belong to the quote `texto[ini:fin]`.
+
+    The ONE rule of adjacency for the gate and for the two writers (`repaginate`,
+    `harvest_views.restamp_view_locators`), so none of them can judge or rewrite a number the others
+    would not attribute to this quote.
+
+    ⛔ #504 — a locator belongs to the quote BESIDE it, not to the nearest one ahead. Reading every
+    `p. N` in the 80 chars after the `»` took, in prose, the locator of the NEXT claim —««…», pero
+    la Tabla 1 (p. 6)»— and never the one written BEFORE —«la p. 5 dice «…»»—: 53 of 68 `MAL` re-read
+    in a real vault. So: after the `»` only punctuation, a `[[bibcode]]`, a cell border or an open
+    parenthesis may stand between quote and number (`_GAP_AFTER_RE`); with prose in between the
+    number is another claim's, and the quote has NO locator (not evaluable, never `MAL`). When
+    nothing follows, the locator that introduces the quote counts (`_GAP_BEFORE_RE`). After wins:
+    in «(p. 3), «…» (p. 4)» the `p. 3` closes the previous claim.
+
+    ⛔ #501 — the window bounds where a locator may START, never where it ends; and the search stops
+    at the next `«` / the previous `»` (#325: past them the number belongs to ANOTHER quote)."""
+    texto = str(texto or "")
+    cola = texto[fin:].split("«")[0]
+    despues = [(fin + m.start(), fin + m.end()) for m in PAGE_LOC_RE.finditer(cola)
+               if m.start() < ventana and _GAP_AFTER_RE.match(_WIKILINK_RE.sub("", cola[:m.start()]))]
+    if despues:
+        return despues
+    pre = texto[:ini]
+    pre = pre[:-1] if pre.endswith("«") else pre
+    base = max(pre.rfind("»") + 1, len(pre) - LOCATOR_BEFORE_MAX)
+    trozo = pre[base:]
+    antes = [(base + m.start(), base + m.end()) for m in PAGE_LOC_RE.finditer(trozo)
+             if _GAP_BEFORE_RE.match(_WIKILINK_RE.sub("", trozo[m.end():]))]
+    return antes[-1:]
 
 
 def page_locators_after(texto: str, cita: str, ventana: int = 80) -> list | None:
@@ -720,8 +759,8 @@ def page_locators_after(texto: str, cita: str, ventana: int = 80) -> list | None
     pos = str(texto or "").find(cita)
     if pos < 0:
         return None
-    return [loc for m in locator_matches(texto, pos + len(cita), ventana)
-            for loc in page_locators(m.group(0))] or None
+    return [loc for a, b in adjacent_locators(texto, pos, pos + len(cita), ventana)
+            for loc in page_locators(texto[a:b])] or None
 
 
 def page_number_candidates(paginas: list) -> list:

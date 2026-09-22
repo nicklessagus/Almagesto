@@ -1128,3 +1128,34 @@ def test_501_la_ventana_del_localizador_termina_en_borde_de_token(toy_vault):
     # …y lo que ARRANCA fuera de la ventana sigue sin ser adyacente
     lejos = f"«{CITA_492}» " + "x" * 90 + " (p. 4)"
     assert cfg.page_locators_after(lejos, CITA_492) is None
+
+
+def test_504_el_localizador_es_el_de_AL_LADO_no_el_de_la_afirmacion_vecina(toy_vault):
+    """⛔ #504 — un localizador pertenece a la cita que tiene al lado. Mirando sólo los 80
+    caracteres POSTERIORES, en prosa se tomaba el `(p. N)` de la afirmación siguiente (53 de 68 MAL
+    releídos en una bóveda real) y nunca el que va ANTES («la p. 5 dice «…»»)."""
+    c = CITA_492
+    casos = (
+        # el previo es el de la cita; el de después es de otra afirmación
+        (f"el texto de la p. 5 dice que «{c}», pero la Tabla 1 (p. 6) lista otra cosa", [("5", "5")]),
+        (f"p. 293 («{c}»), p. 303 («otra frase larga que también alcanza el mínimo»)", [("293", "293")]),
+        (f"de pp. 6-7 dice «{c}» (p. 7)", [("7", "7")]),       # los dos adyacentes: manda el de después
+        # prosa entre la cita y el número → de otra afirmación → no evaluable (None), nunca MAL
+        (f"el abstract dice «{c}», y el cuerpo lo desarrolla (p. 9)", None),
+        (f"«{c}», mientras que la Tabla 1 (p. 6) lista otra cosa", None),
+        # las formas adyacentes que la bóveda escribe siguen funcionando
+        (f"«{c}» (p. 27) [[2023X]]", [("27", "27")]),
+        (f"«{c}» [[2023X]] (p. 27)", [("27", "27")]),
+        (f"«{c}» ([[2023X]], p. 4)", [("4", "4")]),
+        (f"«{c}» (Tabla 5, p. 12)", [("12", "12")]),
+        (f"«{c}» (Fig. 3, p. 7)", [("7", "7")]),
+        (f"| «{c}» | p. 4 | x |", [("4", "4")]),
+        (f"| «{c}» | Tabla 2, p. 4 | x |", [("4", "4")]),
+        (f"el cuerpo lo explica en p. 4: «{c}»", [("4", "4")]),
+        # ⛔ «(…, p. N), «…»»: el número cierra la afirmación ANTERIOR (la ecuación), no es de ésta
+        (f"la CCF (Ec. 14, p. 18), «{c}». Sigue", None),
+        # el `(p. 3)` que cierra la afirmación ANTERIOR, separado por punto, no es de ésta
+        (f"otra cosa (p. 3). Luego «{c}» sin localizador", None),
+    )
+    for texto, esperado in casos:
+        assert cfg.page_locators_after(texto, c) == esperado, texto

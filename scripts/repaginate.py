@@ -161,8 +161,8 @@ def items(data: dict) -> list:
 def _loc_token(texto: str, cita: str) -> str:
     """The locator EXACTLY as it is written after this quote — the string `--apply` has to replace."""
     pos = texto.find(cita)
-    ms = cfg.locator_matches(texto, pos + len(cita))
-    return ms[0].group(0) if ms else ""
+    spans = cfg.adjacent_locators(texto, pos, pos + len(cita))
+    return texto[spans[0][0]:spans[0][1]] if spans else ""
 
 
 def guide(item: dict, bibcode: str) -> dict:
@@ -308,12 +308,11 @@ def _replace_locator(texto: str, ocurrencia: int, viejo: str, nuevo: str) -> str
         desde = pos + len(cita)
         if n != ocurrencia:
             continue
-        ms = cfg.locator_matches(texto, desde)
-        m = ms[0] if ms else None
-        if not m or m.group(0) != viejo:
+        spans = cfg.adjacent_locators(texto, pos, desde)
+        if not spans or texto[spans[0][0]:spans[0][1]] != viejo:
             return None
-        i = desde + m.start()
-        return texto[:i] + nuevo + texto[i + len(m.group(0)):]
+        a, b = spans[0]
+        return texto[:a] + nuevo + texto[b:]
     return None
 
 
