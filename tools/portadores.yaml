@@ -1766,6 +1766,21 @@ portadores:
       - modulo: scripts/fetch_bibtex.py
         estado: usa
         motivo: "`stamp_bibtex` cruza el literal del carril contra la lista antes de escribir; `venue` no se re-baja."
+  - issue: 503
+    regla: >-
+      Los carriles de `bibtex_source` que pega una PERSONA —`venue` (#484) y `institucional`
+      (#503, la exportación de la institución de los autores)— comparten contrato: exigen
+      `bibtex_url` y ningún carril los re-baja. Comparar contra el literal `"venue"` dejaba al
+      carril nuevo cayendo por el `else`: re-bajado con `--force` y sin exigirle la URL.
+    funcion: lib_config.BIBTEX_PEGADO_A_MANO
+    patron: 'BIBTEX_PEGADO_A_MANO|== "venue"'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Bloquea el carril pegado a mano sin `bibtex_url`."
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: "Saltea el carril pegado a mano aun con `--force` y lo cuenta por fuente."
   - issue: 485
     regla: >-
       Un aviso derivado de una tabla PARCIAL declara sus estados y nunca calla: la tabla es la lista

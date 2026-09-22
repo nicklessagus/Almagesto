@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.303.1"
+ALMAGESTO_VERSION = "1.304.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2219,7 +2219,16 @@ def is_ads_bibcode(clave) -> bool:
 LOG_SUPERSEDED_MARK = "⚠ corregido"
 
 
-BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv", "venue")
+BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv", "venue", "institucional")
+
+#: #484/#503 — los carriles que pega una PERSONA: exigen `bibtex_url` (la página de donde se copió)
+#: y ningún carril de la cascada los re-baja, ni con `--force`. `institucional` (#503) es la
+#: exportación que publica la INSTITUCIÓN de los autores —Pure, DSpace, la página del laboratorio—
+#: cuando el venue no publica ninguna (actas sin sitio, revistas extintas). ⚠ Es MENOS autoridad
+#: que las otras: la exporta quien escribió el paper, no quien lo publicó; declararla `venue`
+#: publicaría una procedencia falsa. Como `venue`, no se post-procesa (#473): sus defectos se
+#: nombran, no se corrigen.
+BIBTEX_PEGADO_A_MANO = ("venue", "institucional")
 
 #: #484 — `venue`: la exportación oficial que publica el SITIO del venue (JMLR, NeurIPS, PMLR),
 #: referencia canónica de los papers SIN DOI ni arXiv id —la población que cae al hueco de #467—.

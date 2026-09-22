@@ -4699,12 +4699,13 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                    f"{stem} --force`, o borrá el campo (#397)"))
     # #484 — `venue` es el único carril que pega una persona: sin la URL de donde se copió, la
     # entrada vuelve a ser «un bloque que escribió alguien», o sea la misma categoría de arriba.
-    if _btx and str(fm.get("bibtex_source") or "").strip() == "venue" \
+    _src = str(fm.get("bibtex_source") or "").strip()
+    if _btx and _src in cfg.BIBTEX_PEGADO_A_MANO \
             and not str(fm.get("bibtex_url") or "").strip().startswith("http"):
         bibtex_sin_fuente.append(
-            (stem, "`bibtex_source: venue` sin `bibtex_url`: el BibTeX del sitio del venue lo pega "
-                   "una persona, y sin la URL de donde se copió no hay procedencia → poblá "
-                   "`bibtex_url: https://…` (#484)"))
+            (stem, f"`bibtex_source: {_src}` sin `bibtex_url`: ese BibTeX lo pega una persona, y "
+                   "sin la URL de donde se copió no hay procedencia → poblá "
+                   "`bibtex_url: https://…` (#484/#503)"))
     if _btx:
         _campos = cfg.bibtex_fields(_btx)
         for _c in ("doi", "year", "title"):

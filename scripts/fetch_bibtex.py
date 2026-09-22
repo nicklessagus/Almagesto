@@ -536,15 +536,16 @@ def main() -> int:
                          "(¿`--paper`/`--slug` equivocado, o bóveda vacía?)")
         return 2
 
-    pendientes, fms, n_no_pegable, n_venue = [], {}, 0, 0
+    pendientes, fms, n_no_pegable, n_venue = [], {}, 0, {}
     for f in notas:
         text = f.read_text(encoding="utf-8")
         fm = cfg.split_fm(text) or {}
-        # #484 — `venue` lo pegó una persona desde el sitio del venue y ningún carril de la
-        # cascada lo regenera: re-bajarlo (aun con `--force`) cambiaría la referencia oficial por
+        # #484/#503 — `venue`/`institucional` los pegó una persona y ningún carril de la
+        # cascada los regenera: re-bajarlo (aun con `--force`) cambiaría la referencia oficial por
         # un hueco. Se saltea y se cuenta.
-        if str(fm.get("bibtex_source") or "").strip() == "venue":
-            n_venue += 1
+        _src = str(fm.get("bibtex_source") or "").strip()
+        if _src in cfg.BIBTEX_PEGADO_A_MANO:
+            n_venue[_src] = n_venue.get(_src, 0) + 1
             continue
         # #471/#473 — un bloque que NO SE PEGA no está cerrado, y `cfg.bibtex_no_pegable` dice de
         # cuántas maneras puede no pegarse. Cuenta como pendiente sin `--force`, para que re-correr
@@ -661,8 +662,8 @@ def main() -> int:
                      f"({detalle}) — sobre {len(notas)} nota(s) de paper miradas"
                      + (f"; {n_no_pegable} re-bajada(s) porque su bloque no se pegaba tal cual "
                         f"(#471/#473)" if n_no_pegable else "")
-                     + (f"; {n_venue} con `bibtex_source: venue` (pegado del sitio del venue) "
-                        f"NO se re-bajan (#484)" if n_venue else ""))
+                     + "".join(f"; {n} con `bibtex_source: {src}` (pegado a mano) NO se "
+                               f"re-bajan (#484/#503)" for src, n in sorted(n_venue.items())))
     for s in sacados:
         cfg.print_seguro(f"  ⚠ `bibtex` SACADO y hueco declarado — lo que había no imprimía "
                          f"ninguna referencia y ningún carril trajo otra (#473): {s}")

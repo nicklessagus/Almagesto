@@ -10945,3 +10945,17 @@ def test_498_ground_truth_sin_su_ficha_es_el_espejo_INVERSO_de_70(toy_vault):
     hall, pob = lint.check_gt_without_star()
     assert pob == 2 and [h[0] for h in hall] == ["ds_tuc"], hall
     assert "make_notes.py ds_tuc" in hall[0][1], "el backlog nombra la salida ejecutable"
+
+
+def test_503_institucional_es_vocabulario_y_como_venue_exige_bibtex_url(toy_vault, capsys):
+    """#503 — la exportación que publica la INSTITUCIÓN de los autores (Pure, DSpace, la página del
+    laboratorio) es un carril propio, no `venue`: declararla `venue` publica una procedencia falsa.
+    La pega una persona, así que lleva el contrato de `venue`: sin `bibtex_url` bloquea."""
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "institucional"})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc != 0 and "bibtex_url" in _seccion(rep, "sin `bibtex_source`"), rep
+    assert "bibtex_source" not in _seccion(rep, "fuera del vocabulario"), rep
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "institucional",
+                                  "bibtex_url": "https://research.aalto.fi/en/publications/x"})
+    rc, rep = run_lint_reporte(capsys)
+    assert rc == 0 and "2020aaa" not in _seccion(rep, "sin `bibtex_source`"), rep

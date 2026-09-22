@@ -1020,3 +1020,28 @@ def test_main_SACA_el_cascaron_al_declarar_el_hueco_y_lo_AVISA(tmp_path, monkeyp
     assert "no trae una referencia imprimible" in fm["sin_bibtex"]
     assert "2010ComonJutten" in capsys.readouterr().out
     assert "prosa que no se toca" in nota.read_text(encoding="utf-8")
+
+
+def test_503_institucional_no_se_re_baja_aun_con_force(tmp_path, monkeypatch, capsys):
+    """#503 — el bloque institucional lo pegó una persona y ningún carril de la cascada lo
+    regenera: igual que `venue`, se saltea aun con `--force`. Y el estampador lo acepta como
+    literal del vocabulario."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    pedidos = []
+
+    def post(url, **k):
+        pedidos.extend(k.get("json", {}).get("bibcode", []))
+        return Resp(200, payload={"export": ""})
+    fake_net(monkeypatch, post=post)
+    monkeypatch.setattr(fb, "doi_candidate", lambda *a, **k: ("", "sin candidato en Crossref", ""))
+    inst = _nota(tmp_path, {"bibcode": "1999HyvarinenSurvey", "tags": ["paper"],
+                            "bibtex": "@article{h99,\n  title = {Survey},\n  author = {H},\n}\n",
+                            "bibtex_source": "institucional",
+                            "bibtex_url": "https://research.aalto.fi/en/publications/survey"})
+    antes = inst.read_text(encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--force"])
+    fb.main()
+    assert inst.read_text(encoding="utf-8") == antes, "el pegado a mano no se toca"
+    assert "1999HyvarinenSurvey" not in pedidos, pedidos
+    assert "institucional" in cfg.BIBTEX_SOURCES

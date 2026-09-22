@@ -183,7 +183,7 @@ Deben quedar en **0**:
   de memoria sale plausible, con volumen y páginas verosímiles, sobre el dato que termina **impreso**
   en un informe. Se cierra bajándola de su exportación oficial (`python scripts/fetch_bibtex.py
   --paper <bibcode> --force`) o borrando el campo: el hueco es un estado correcto, la cita inventada
-  no. ⚠ `bibtex_source` es **vocabulario cerrado** (`ads|crossref|datacite|doi|arxiv|venue`) y cae
+  no. ⚠ `bibtex_source` es **vocabulario cerrado** (`ads|crossref|datacite|doi|arxiv|venue|institucional`) y cae
   en la misma categoría que `pdf_source`/`fulltext_source` fuera de vocabulario (#296).
   ⛔ **`venue` es la exportación oficial del SITIO del venue (#484)** —JMLR, NeurIPS, PMLR la
   publican por paper— y es la referencia canónica de los trabajos **sin DOI ni arXiv id**, la
@@ -191,6 +191,11 @@ Deben quedar en **0**:
   carril que pega una persona, así que exige **`bibtex_url`** (la página de donde se copió): sin
   ella cae en ESTA categoría. `fetch_bibtex` no la re-baja ni con `--force` (ningún carril la
   regenera) y el motivo del hueco (#467) dice qué pasa con el venue de esa nota.
+  ⛔ **`institucional` (#503) es el mismo contrato para la exportación que publica la INSTITUCIÓN
+  de los autores** (Pure, DSpace, la página del laboratorio) cuando el venue no publica ninguna —
+  actas sin sitio, revistas extintas—. Declararla `venue` publicaría una procedencia falsa. ⚠ Es
+  **menos autoridad** que las otras: la exporta quien escribió el paper, no quien lo publicó; y como
+  `venue` no se post-procesa (#473): sus defectos se nombran, no se corrigen.
   ⛔ **Y ese aviso tiene CUATRO estados, nunca silencio (#485)** — es D-43 un nivel más abajo, sobre
   el texto que alguien va a seguir: **publica** (la URL, que es lo accionable) · **fuera de la
   cobertura conocida** (el venue publica, pero no para ese año: decirle «publica» manda a una página
