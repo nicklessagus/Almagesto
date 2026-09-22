@@ -563,3 +563,50 @@ def test_504_el_escritor_no_reescribe_el_localizador_de_la_afirmacion_vecina(toy
     previo = f"la p. 5 dice que «{c}», y sigue"
     assert rp._loc_token(previo, c) == "p. 5"
     assert rp._replace_locator(previo, 1, "p. 5", "p. 8") == f"la p. 8 dice que «{c}», y sigue"
+
+
+def test_AUD420_apply_SIN_PDF_en_disco_rehusa_y_no_cierra_la_deuda(toy_vault, tmp_path):
+    """⛔ AUD-420 — sin PDF en disco el cotejo de `pdf_sha` comparaba `"" == ""` y cerraba la deuda
+    de una relectura que no pudo ocurrir (la relectura es del PDF, #205/#494)."""
+    d = _extraccion()
+    _txt_paginado()
+    (cfg.PDFS / "ica_ruido" / f"{BIB}.pdf").unlink()
+    antes = (cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_bytes()
+    filas = [{"id": it["id"], "pagina": None, "evidencia": "", "motivo": "no lo busqué"}
+             for it in rp.items(d)]
+    with pytest.raises(rp.ApplyError, match="PDF"):
+        rp.apply(BIB, _resultado(tmp_path, filas, sha=""))
+    assert (cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_bytes() == antes
+
+
+def test_AUD421_out_sin_deuda_abierta_lo_DECLARA_y_no_sale_en_verde(toy_vault, tmp_path, capsys):
+    """⛔ AUD-421 — `--out` de un bibcode sin deuda (o mal tipeado) salía rc 0 y mudo: el «0 que
+    nadie midió» (D-43)."""
+    _txt_paginado()
+    _extraccion(marca="_repaginado")
+    assert rp.main([BIB, "--out", str(tmp_path / "o")]) == 2
+    assert "0 extracción(es) con deuda" in capsys.readouterr().out
+
+
+def test_AUD459_la_SEGUNDA_ronda_cierra_la_deuda_PARCIAL(toy_vault, tmp_path):
+    """⛔ AUD-459 — INV-147 de vuelta: la ronda que completa una `_repaginado_parcial` la saca, o
+    la deuda no cierra nunca (mutante `PAGINATION_OPEN_MARKS[:1]`)."""
+    d = _extraccion()
+    _txt_paginado()
+    filas = [{"id": it["id"], "pagina": "2010", "evidencia": "Received 3 March 2013", "motivo": ""}
+             for it in rp.items(d)]
+    filas[0] = {**filas[0], "evidencia": ""}
+    assert not rp.apply(BIB, _resultado(tmp_path, filas))["cerrada"]
+    parcial = json.loads((cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
+    filas = [{"id": it["id"], "pagina": "2010", "evidencia": "Received 3 March 2013", "motivo": ""}
+             for it in rp.items(parcial)]
+    r = rp.apply(BIB, _resultado(tmp_path, filas))
+    final = json.loads(r["extraccion"].read_text(encoding="utf-8"))
+    assert r["cerrada"] and "_repaginado_parcial" not in final and "_repaginado" in final
+    assert rp.open_extractions(BIB) == []
+
+
+def test_AUD460_pagina_null_SIN_motivo_se_rehusa(toy_vault):
+    """⛔ AUD-460 — la guarda D-43 de `_check_item`: un hueco se declara, no se deja mudo."""
+    assert "sin `motivo`" in rp._check_item({}, {"pagina": None, "motivo": " "}, BIB)
+    assert rp._check_item({}, {"pagina": None, "motivo": "no está en la hoja"}, BIB) is None

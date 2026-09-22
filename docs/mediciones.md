@@ -3692,3 +3692,32 @@ dicen 3968 → 3893 · localizadores mirados 6393 → 6244 · no evaluables 2360
 
 **Fix:** `lib_quotes.adjacent_locators` —la adyacencia en los dos sentidos—, usada por
 `page_locators_after` (gate) y por los dos escritores. Entrada 504 de `tools/portadores.yaml`.
+
+## AUD-474 / AUD-402 — el localizador que introduce la cita siguiente, y el número tras la coma (v1.309.0)
+
+**Medido en Almagesto-Tesis (`30b4b75`, v1.306.0), `contrast --validar-todo` antes → después, con
+`lib_quotes`/`contrast` del template sobre un worktree de la instancia:** MAL **8 → 5** · en la
+página que dicen 3899 → 3900 · localizadores mirados 6244 → 6242 · fuera de alcance 12389 → 12375 ·
+no evaluables 2337 → 2337 · rc 0.
+
+- **AUD-474 (cierre de #504). Salen 3, entran 0.** Son los tres casos que el validador midió y
+  verificó correctos en la nota: `2009A&A...497..563N` L161 («Abstract: «…»; conclusiones (p. 21):
+  «…»») y `2018A&A...609A..12Z` L171 («…»; §4.5 (p. 11), sobre…, dice «…») quedan sin localizador
+  (no evaluables: el correcto va antes, con prosa en el medio); `2018MNRAS.476.4584K` L131 («p. 4:
+  «…»; … p. 8: «…»») pasa a leer `p. 4` y sale en la página que dice.
+- **Iteración medida.** La primera versión metió 1 MAL nuevo (`1999NeCom..11..803A` L146): en una
+  FILA, el `:` que presenta la cita siguiente estaba en otra celda y le quitaba a ésta el `p. 15` de
+  la suya. Un borde de celda entre el número y la cita siguiente la deja afuera de la firma.
+- **AUD-402. 15 localizadores cambian, revisados uno por uno:** 10 años de referencia bibliográfica
+  (`pp. 582-585, 1996`), `p. 12, 150 corridas`, `p. 5, 8 parámetros`, la figura `p. 7, 5a`, la coma
+  decimal `p. 9, 0,45 km/s` (antes, páginas 0 y 45) y tres localizadores CORRUPTOS del `log.md`
+  (`p. 20210210210213`, `p. 14111`) que se leían `p. 2021`/`p. 1411`. La primera versión perdía
+  además 6 páginas reales (`pp. 2056, 2061`, `p. 139, 144 PDF`, `p. 16, 18 (Figs.…)`, `pp. 8-9, 12
+  ni…`): el borde suma paréntesis, `PDF` y conjunciones, y un `20xx` tras una página de cuatro
+  cifras sigue siendo página.
+- ⚠ **Límite declarado:** tras una primera página de cuatro cifras un año no se distingue de una
+  página (`pp. 1045-1056, 2003` sigue leyendo 2003): de los 5 así en la instancia, 4 son años en
+  referencias bibliográficas y 1 una página real (`pp. 2056, 2061`).
+
+**Fix:** `lib_quotes.adjacent_locators` (`_introduce_la_siguiente`) y `PAGE_LOC_RE`
+(`_page_loc_re`, `_PAGE_BORDER`).

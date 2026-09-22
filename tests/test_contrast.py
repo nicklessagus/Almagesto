@@ -925,6 +925,21 @@ def test_la_divergencia_decidible_EMITE_la_marca_lista_para_pegar(toy_vault, cap
     assert cfg.VERIFICAR_PDF_MARK in capsys.readouterr().out, "y también en el barrido"
 
 
+def test_AUD427_la_marca_pegable_NO_lleva_una_cita_CORTADA(toy_vault):
+    """⛔ AUD-427 — `--validar` cortaba las colas a 70/40 caracteres DENTRO de la marca lista para
+    pegar, entre comillas: la forma exacta que #314/#226 prohíben. La cola de la extracción va
+    entera; lo que es fragmento (la ventana del `.txt`, el arranque en el reporte) se declara con
+    la elipsis FUERA de las comillas."""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss", "prosa. " + LARGA[:LARGA.index("and that")]
+         + "but the noise covariance has to be estimated first. más prosa.")
+    nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
+    _ln, motivo, marca = ct.validar(nota, mostrar=False)["discrepan"][0]
+    assert f"«{LARGA[LARGA.index('and that'):]}»" in marca, marca
+    for texto in (motivo, marca):
+        assert "…»" not in texto and "«…" not in texto, texto
+
+
 def test_la_marca_que_emite_es_LA_QUE_EL_LINT_LEVANTA(toy_vault, capsys):
     """El cierre del circuito, y la razón por la que el string vive en `lib_config` desde 1.162.0: la
     marca que esta herramienta ofrece y la que el detector del lint busca son **la misma

@@ -606,16 +606,38 @@ def fulltext_readings(bibcode: str) -> list:
 #: #324 declaró prohibida, y acá una de las dos decide un veredicto.
 #: …y la forma COMPUESTA (#492, defecto A): `pp. 12-14` es un rango, `pp. 179 y 190` y
 #: `p. 9, p. 6` son DOS localizadores (medido: 132 + 143 en una bóveda real). El número suelto que
-#: sigue a una coma o a una conjunción se toma como otra página; el de más de cuatro cifras no (un
-#: año pegado a la página no es una página).
+#: sigue a una coma o a una conjunción se toma como otra página; el de más de cuatro cifras no.
+#: ⛔ AUD-402 · tras una COMA el número pelado es página sólo si lo sigue un BORDE de localizador
+#: —fin, paréntesis, `]`, `»`, `|`, puntuación (no una coma decimal), un guion de rango, una
+#: conjunción, `p.`, `PDF`—, nunca una palabra o unidad (`(p. 7, 3 sigma)` leía las páginas 7 y 3;
+#: `p. 7, 5a` es la figura 5a), y un año (`19xx`/`20xx`) no es página salvo junto a una de cuatro
+#: cifras (`(p. 4, 2012)` no, `pp. 2056, 2061` sí). El primer número tampoco se corta: `p. 20210`
+#: no es `p. 2021`. Medido sobre la instancia: 23 localizadores cambian, todos a mano en
+#: `docs/mediciones.md`.
 #: …y el número puede llevar PREFIJO (#496): la página que imprime la hoja no siempre es un entero
 #: —A&A Letters imprime `L43`, ApJL `L24`, MNRAS Letters `L1`—, así que un localizador correcto de
 #: esa fuente no se podía escribir de forma que ninguna capa lo leyera: sus 57 localizadores caían
 #: FUERA DE ALCANCE del chequeo, que no es `mal` sino invisible, y del otro lado `printed_pages`
 #: devolvía `[None]*5`. La bóveda elegía entre escribir la verdad y perder el chequeo, o escribir
 #: un número que el paper no muestra y conservarlo — la segunda pasa en verde.
-PAGE_LOC_RE = re.compile(r"\bp{1,2}\.\s*[A-Z]?\d{1,4}(?:\s*(?:[-–—]|,|\by\b|\band\b|\be\b)\s*(?:p{1,2}\.\s*)?[A-Z]?\d{1,4}(?!\d))*",
-                         re.I)
+_PAGE_NUM = r"[A-Z]?\d{1,4}(?!\d)"
+_PAGE_BORDER = (r"(?=\s*(?:$|[)(\]»|;:\[–—-]|,(?!\d)|\.(?!\d)|\b(?:y|e|ni|o|and|or)\b|p{1,2}\."
+                r"|PDF\b))")
+
+
+def _page_loc_re(first: str, bare: str) -> str:
+    """One page locator whose FIRST number is `first` and whose bare after-comma number is
+    `bare` — two forms so a year is only a year next to a page that is not one (AUD-402)."""
+    return (first + r"(?:\s*(?:(?:[-–—]|\by\b|\band\b|\be\b)\s*(?:p{1,2}\.\s*)?" + _PAGE_NUM +
+            r"|,\s*p{1,2}\.\s*" + _PAGE_NUM + r"|,\s*" + bare + _PAGE_BORDER + r"))*")
+
+
+# ⛔ AUD-402 · con cuatro cifras en la primera página (`pp. 2056, 2061`, paginación por volumen) un
+# `20xx` tras la coma ES una página; con menos (`p. 4, 2012`) es el año de la referencia.
+PAGE_LOC_RE = re.compile(r"\bp{1,2}\.\s*(?:"
+                         + _page_loc_re(r"[A-Z]?\d{4}(?!\d)", _PAGE_NUM) + "|"
+                         + _page_loc_re(r"[A-Z]?\d{1,3}(?!\d)", r"(?!(?:19|20)\d\d(?!\d))" + _PAGE_NUM)
+                         + ")", re.I)
 _PAGE_LOC_SEP = re.compile(r"\s*(?:,|\by\b|\band\b|\be\b)\s*", re.I)
 
 #: #496 · una página es su ETIQUETA (`"45"`, `"L45"`) y la aritmética —rango, consecutividad,
@@ -698,8 +720,14 @@ _LOC_WORD = (r"(?:§\s*[\w.]+|(?:Sect?|Secci[oó]n|Section|Conclusi(?:on|ones|ó
 _GAP_AFTER_RE = re.compile(r"^»?[*_\s,;:.—–-]*"
                            r"(?:" + _LOC_WORD + r"[\s,;:]*|en\s+(?:el\s+margen(?:\s+\w+)?\s+de\s+)?la\s+)*"
                            r"(?:\([^()«»]*)?$|^»?[^«»|]*(?:\|[^|«»]*)+$", re.I)
-_GAP_BEFORE_RE = re.compile(r"^\s*\)?\s*:?\s*(?:(?:dice|dicen|afirma|afirman|escribe|lee|"
-                            r"says|states|reads|writes|notes)(?:\s+que)?)?\s*[(:]?\s*$", re.I)
+_INTRO_VERB = (r"(?:dice|dicen|afirma|afirman|escribe|lee|says|states|reads|writes|notes)"
+               r"(?:\s+que)?")
+_GAP_BEFORE_RE = re.compile(r"^\s*\)?\s*:?\s*(?:" + _INTRO_VERB + r")?\s*[(:]?\s*$", re.I)
+#: AUD-474 · el localizador que va DESPUÉS de una cita pero INTRODUCE la siguiente: pegado a ella
+#: con `):` / `: «`, o —tras un `;` que separa afirmaciones— con un verbo que la presenta
+#: («; §4.5 (p. 11), sobre…, dice «…»»). Es de la cita siguiente, no de la anterior.
+_INTRODUCES_TIGHT_RE = re.compile(r"^\s*\)?\s*:\s*$")
+_INTRODUCES_LOOSE_RE = re.compile(r"(?::|\b" + _INTRO_VERB + r")\s*$", re.I)
 _WIKILINK_RE = re.compile(r"\[\[[^\]]*\]\]")
 LOCATOR_BEFORE_MAX = 90
 
@@ -720,12 +748,27 @@ def adjacent_locators(texto: str, ini: int, fin: int, ventana: int = 80) -> list
     nothing follows, the locator that introduces the quote counts (`_GAP_BEFORE_RE`). After wins:
     in «(p. 3), «…» (p. 4)» the `p. 3` closes the previous claim.
 
+    ⛔ AUD-474 — …unless that after-locator INTRODUCES the next quote: `«A»; Conclusions (p. 21):
+    «B»`, or after a `;` a verb that presents it (`«A»; §4.5 (p. 11), on…, says «B»`). It is the
+    next quote's prefix, so it is not A's — except across a cell border.
+
     ⛔ #501 — the window bounds where a locator may START, never where it ends; and the search stops
     at the next `«` / the previous `»` (#325: past them the number belongs to ANOTHER quote)."""
     texto = str(texto or "")
     cola = texto[fin:].split("«")[0]
+    hay_siguiente = len(cola) < len(texto) - fin
+
+    def _introduces_next(m) -> bool:
+        """Whether the locator `m` after this quote is the prefix of the NEXT one (AUD-474)."""
+        resto = _WIKILINK_RE.sub("", cola[m.end():])
+        # un borde de celda en el medio: la cita siguiente vive en OTRA celda y no la presenta
+        # este número (medido en la instancia, la fila `p. 13 (…); p. 15 (…) | … excepción: «…»`)
+        return hay_siguiente and "|" not in resto and bool(_INTRODUCES_TIGHT_RE.match(resto) or (
+            ";" in cola[:m.start()] and _INTRODUCES_LOOSE_RE.search(resto)))
+
     despues = [(fin + m.start(), fin + m.end()) for m in PAGE_LOC_RE.finditer(cola)
-               if m.start() < ventana and _GAP_AFTER_RE.match(_WIKILINK_RE.sub("", cola[:m.start()]))]
+               if m.start() < ventana and _GAP_AFTER_RE.match(_WIKILINK_RE.sub("", cola[:m.start()]))
+               and not _introduces_next(m)]
     if despues:
         return despues
     pre = texto[:ini]

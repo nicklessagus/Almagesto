@@ -8,6 +8,7 @@ usuario). Medido reemplazando 11 preprints a mano, desde un script de scratch no
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,11 @@ def _entrante(tmp_path, datos: bytes = EDITOR) -> Path:
     return f
 
 
+def _ok(cmd=None, *a, **k):
+    """El doble de `subprocess.run` que TERMINÓ bien: `replace` lee el rc (AUD-423)."""
+    return subprocess.CompletedProcess(cmd or [], 0)
+
+
 def _paginas(monkeypatch, saliente: int | None = 33, entrante: int | None = 33) -> None:
     """El conteo de páginas es la frontera con `pdfinfo` (#437): se fija por archivo, no se corre."""
     monkeypatch.setattr(rp.cfg, "pdf_page_count",
@@ -62,7 +68,7 @@ def test_las_copias_se_enumeran_POR_SLUG_no_por_la_que_resuelve(toy_vault, tmp_p
     corridas = []
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
     _paginas(monkeypatch)
-    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd) or _ok(cmd))
     assert [p.parent.name for p in rp.pdf_copies("2010D")] == ["gj_581", "rv-doppler"]
     r = rp.replace("2010D", _entrante(tmp_path), "publisher", "el editor lo mandó por mail")
     assert r["slugs"] == ["gj_581", "rv-doppler"]
@@ -122,7 +128,7 @@ def test_el_frontmatter_queda_coherente_con_el_documento_nuevo(toy_vault, tmp_pa
     _copia("gj_581", "2010D"); nota = _nota("2010D")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
     _paginas(monkeypatch)
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(rp.subprocess, "run", _ok)
     rp.replace("2010D", _entrante(tmp_path), "publisher", "lo trajo el usuario")
     fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
     assert fm["pdf_source"] == "publisher"
@@ -140,7 +146,7 @@ def test_reemplazar_por_OTRO_eprint_conserva_la_version(toy_vault, tmp_path, mon
     _copia("gj_581", "2010D"); nota = _nota("2010D")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "arXiv:1234.5678v2")
     _paginas(monkeypatch)
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(rp.subprocess, "run", _ok)
     rp.replace("2010D", _entrante(tmp_path), "eprint", "la v2, que corrige la tabla 3")
     fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
     assert fm["pdf_source"] == "eprint" and fm["eprint_version"] == "v1", \
@@ -158,7 +164,7 @@ def test_el_slug_SIN_txt_no_se_re_extrae_y_la_nota_que_falta_se_AVISA(toy_vault,
     corridas = []
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
     _paginas(monkeypatch)
-    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd) or _ok(cmd))
     r = rp.replace("2010D", _entrante(tmp_path), "publisher", "m")
     assert r["txts"] == [] and corridas == [], "sin `.txt` no se re-extrae nada"
     assert "no hay nota" in capsys.readouterr().out
@@ -184,7 +190,7 @@ def test_la_EXTRACCION_queda_marcada_des_paginada(toy_vault, tmp_path, monkeypat
     lente.write_text(json.dumps({"bibcode": "2010D"}), encoding="utf-8")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
     _paginas(monkeypatch)
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(rp.subprocess, "run", _ok)
     r = rp.replace("2010D", _entrante(tmp_path), "publisher", "versión del editor")
     assert len(r["extracciones"]) == 2, "también la de la lente (#371), que es otra lectura"
     marca = json.loads(ext.read_text(encoding="utf-8"))["_paginacion"]
@@ -220,7 +226,7 @@ def test_emite_el_ALCANCE_de_la_re_verificacion_listo_para_pegar(toy_vault, tmp_
     assert rp.reverification_scope("2010D") == [(ficha, 1)]
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
     _paginas(monkeypatch)
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(rp.subprocess, "run", _ok)
     assert rp.main(["2010D", str(_entrante(tmp_path)), "--source", "publisher",
                     "--reason", "el editor"]) == 0
     salida = capsys.readouterr().out
@@ -253,7 +259,7 @@ def test_el_dry_run_no_escribe_NADA(toy_vault, tmp_path, monkeypatch, capsys):
     corridas = []
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
     _paginas(monkeypatch)
-    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd) or _ok(cmd))
     assert rp.main(["2010D", str(_entrante(tmp_path)), "--source", "publisher",
                     "--reason", "m", "--dry-run"]) == 0
     assert (nota.read_bytes(), ext.read_bytes(),
@@ -302,7 +308,7 @@ def test_el_reemplazo_queda_FIRMADO_en_la_nota_y_es_add_only(toy_vault, tmp_path
     se reemplazó ni por qué. Ese motivo es justo lo que hizo falta cuando hubo que REVERTIR uno."""
     _copia("gj_581", "2010D"); nota = _nota("2010D")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(rp.subprocess, "run", _ok)
     _paginas(monkeypatch, saliente=33, entrante=33)
     rp.replace("2010D", _entrante(tmp_path), "publisher", "lo trajo el usuario por mail")
     fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
@@ -330,7 +336,7 @@ def test_AVISA_si_el_entrante_tiene_menos_paginas_y_no_rehusa(toy_vault, tmp_pat
     reconstruir después — el PDF saliente está en disco sólo en ese instante."""
     _copia("gj_581", "2014R"); _nota("2014R")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(rp.subprocess, "run", _ok)
     _paginas(monkeypatch, saliente=33, entrante=7)
     assert rp.main(["2014R", str(_entrante(tmp_path)), "--source", "publisher",
                     "--reason", "Science Express"]) == 0, "AVISA, no rehúsa"
@@ -476,6 +482,7 @@ def test_el_txt_de_un_slug_SIN_pdf_tambien_se_regenera(toy_vault, tmp_path, monk
     def _extrae(cmd, **k):          # el doble de `extract_fulltext --bibcode`: reescribe ESE `.txt`
         corridas.append(cmd)
         (cfg.FULLTEXT / cmd[2] / f"{cmd[4]}.txt").write_text("texto del editor\n", encoding="utf-8")
+        return _ok(cmd)
     monkeypatch.setattr(rp.subprocess, "run", _extrae)
     r = rp.replace("2015Voss", _entrante(tmp_path), "publisher", "copia del editor")
     assert [c[2] for c in corridas] == ["ica"], "sin PDF en `ica-ruido` no hay qué re-extraer ahí"
@@ -503,7 +510,7 @@ def test_si_NINGUN_slug_con_pdf_tenia_txt_se_extrae_en_el_primero_y_se_copia(toy
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
     _paginas(monkeypatch)
     corridas = []
-    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd))
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: corridas.append(cmd) or _ok(cmd))
     rp.replace("2015Voss", _entrante(tmp_path), "publisher", "m")
     assert corridas and corridas[0][2:] == ["ica", "--bibcode", "2015Voss"], "sin `--force`: no existía"
     assert "no se pudo regenerar" in capsys.readouterr().out
@@ -511,6 +518,7 @@ def test_si_NINGUN_slug_con_pdf_tenia_txt_se_extrae_en_el_primero_y_se_copia(toy
 
     def _extrae(cmd, **k):
         (cfg.FULLTEXT / cmd[2] / f"{cmd[4]}.txt").write_text("texto del editor\n", encoding="utf-8")
+        return _ok(cmd)
     monkeypatch.setattr(rp.subprocess, "run", _extrae)
     r = rp.replace("2015Voss", _entrante(tmp_path, b"%PDF-1.7\notra\n"), "publisher", "m")
     assert (cfg.FULLTEXT / "ica-ruido" / "2015Voss.txt").read_text(encoding="utf-8") == "texto del editor\n"
@@ -528,7 +536,7 @@ def test_449_avisa_que_la_PROSA_sigue_diciendo_preprint(toy_vault, tmp_path, mon
                    "# p\n\n## Abstract\n\nx\n\n## Vista — Test\n\n"
                    "El PDF en disco es el PREPRINT de arXiv, coherente con `pdf_source: eprint`.\n")
     monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(rp.subprocess, "run", _ok)
     _paginas(monkeypatch)
     r = rp.replace("2010D", _entrante(tmp_path), "publisher", "la copia del editor")
     assert len(r["prosa_preprint"]) == 1
@@ -553,3 +561,36 @@ def test_AUD447_el_comando_que_sugiere_el_lint_para_el_documento_en_disco_se_peg
     cmd = re.search(r"`replace_pdf\.py ([^`]*)`", msg).group(1)
     assert "--source" in cmd and "--reason" in cmd, msg
     assert rp.main(shlex.split(cmd)) == 2, "llega al comando (sin nota rehúsa), no muere en argparse"
+
+
+def test_AUD423_la_re_extraccion_que_FALLA_no_se_cuenta_como_re_extraida(toy_vault, tmp_path,
+                                                                           monkeypatch, capsys):
+    """⛔ AUD-423 — el rc de `extract_fulltext` se descartaba y el reporte contaba los `.txt` que
+    EXISTÍAN como re-extraídos: con la extracción caída, el `.txt` seguía describiendo el PDF
+    anterior mientras el reporte decía lo contrario."""
+    _copia("gj_581", "2010D"); _copia("rv-doppler", "2010D")
+    _nota("2010D")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(
+        cmd, 1 if cmd[2] == "rv-doppler" else 0))
+    r = rp.replace("2010D", _entrante(tmp_path), "publisher", "m")
+    assert [Path(t).parent.name for t in r["txts"]] == ["gj_581"]
+    assert [Path(t).parent.name for t in r["txts_fallidos"]] == ["rv-doppler"]
+    rp.print_report(r, "publisher", "m")
+    out = capsys.readouterr().out
+    assert "re-extraídos: 1" in out and "FALLÓ" in out and "rv-doppler" in out, out
+
+
+def test_AUD422_la_marca_de_paginacion_va_por_la_IDENTIDAD_de_adentro(toy_vault):
+    """⛔ AUD-422 — el glob por prefijo `*/{stem}*.json` marcaba la extracción de OTRO paper cuyo
+    stem extiende el prefijo (`2011Naika` al reemplazar `2011Naik`); la identidad de una extracción
+    es el `bibcode` de adentro (#374)."""
+    d = cfg.EXTRACCION / "t"
+    d.mkdir(parents=True, exist_ok=True)
+    for nombre, bib in (("2011Naik", "2011Naik"), ("2011Naik__ruido", "2011Naik"),
+                        ("2011Naika", "2011Naika")):
+        (d / f"{nombre}.json").write_text(json.dumps({"bibcode": bib}), encoding="utf-8")
+    tocadas = rp.stamp_depagination("2011Naik", "a" * 10, "b" * 10, "m")
+    assert sorted(Path(t).stem for t in tocadas) == ["2011Naik", "2011Naik__ruido"]
+    assert "_paginacion" not in json.loads((d / "2011Naika.json").read_text(encoding="utf-8"))

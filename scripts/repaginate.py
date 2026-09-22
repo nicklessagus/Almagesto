@@ -200,9 +200,16 @@ def write_rounds(bibcode: str, out_dir: Path) -> list:
     """One package PER open extraction file of this bibcode (#494, devuelto).
 
     Each lens gets its own directory (`<out_dir>/<stem>/`) because each is a separate reading with
-    its own items: collapsing them into one package is what dropped 490 of 2032 locators."""
+    its own items: collapsing them into one package is what dropped 490 of 2032 locators.
+
+    ⛔ AUD-421 — with no open extraction it REFUSES, naming the zero: an empty list went out rc 0
+    and silent, the «0 nobody measured» of D-43 (a mistyped bibcode read as «nothing to do»)."""
+    abiertas = open_extractions(bibcode)
+    if not abiertas:
+        raise RoundError(f"{bibcode}: 0 extracción(es) con deuda de paginación abierta "
+                         f"({' | '.join(cfg.PAGINATION_OPEN_MARKS)}) — nada que releer")
     return [write_round(bibcode, out_dir / f.parent.name / f.stem, extraccion=f)
-            for f, _d in open_extractions(bibcode)]
+            for f, _d in abiertas]
 
 
 def write_round(bibcode: str, out_dir: Path, *, extraccion=None) -> dict:
@@ -395,9 +402,12 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
         raise ApplyError(f"claves que el resultado no declara: {', '.join(sorted(sobran))} — "
                          f"¿devolviste el `_paquete.json` en vez del resultado?")
     slug = cfg.pdf_slug(cfg.note_stem(bibcode))
-    sha_disco = lb.sha10((cfg.PDFS / slug / f"{cfg.note_stem(bibcode)}.pdf").read_bytes()) \
-        if slug else None
-    if str(res.get("pdf_sha") or "") != (sha_disco or ""):
+    # ⛔ AUD-420 · sin PDF en disco no hubo relectura posible: comparar `"" == ""` cerraba la deuda
+    if not slug:
+        raise ApplyError(f"no hay PDF de {bibcode} en disco: la relectura es del PDF (#205), así "
+                         f"que ningún resultado puede cerrar la deuda")
+    sha_disco = lb.sha10((cfg.PDFS / slug / f"{cfg.note_stem(bibcode)}.pdf").read_bytes())
+    if str(res.get("pdf_sha") or "") != sha_disco:
         raise ApplyError(f"el `pdf_sha` del resultado ({res.get('pdf_sha')}) no es el del PDF en "
                          f"disco ({sha_disco}): se leyó otro documento")
     los = {it["id"]: it for it in items(data)}

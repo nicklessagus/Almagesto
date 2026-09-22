@@ -1159,3 +1159,50 @@ def test_504_el_localizador_es_el_de_AL_LADO_no_el_de_la_afirmacion_vecina(toy_v
     )
     for texto, esperado in casos:
         assert cfg.page_locators_after(texto, c) == esperado, texto
+
+
+def test_AUD474_el_localizador_que_INTRODUCE_la_cita_siguiente_no_es_de_la_anterior(toy_vault):
+    """⛔ AUD-474 (cierre de #504) — el simétrico de #504: el `(p. N)` que va seguido de `):`, `: «`
+    o de un verbo que introduce («dice «») es el PREFIJO de la cita siguiente, y adjudicárselo a la
+    anterior la acusaba con la página de otra (tres casos medidos en una bóveda real, los tres
+    correctos en la nota)."""
+    c, otra = CITA_492, "another quotation long enough to be a quote of its own right"
+    casos = (
+        (f"Abstract: «{c}»; conclusiones (p. 21): «{otra}»", None, [("21", "21")]),
+        (f"Conclusions (p. 1) dice que el índice «{c}»; §4.5 (p. 11), sobre el único par, "
+         f"dice «{otra}»", None, None),
+        (f"p. 4: «{c}»; y en la discusión p. 8: «{otra}»", [("4", "4")], [("8", "8")]),
+        # sin `;` ni `):` el número pegado a la cita sigue siendo de ella
+        (f"«{c}» (p. 4), y la conclusión dice «{otra}»", [("4", "4")], None),
+        # ⛔ medido en la instancia: en una FILA el `:` que presenta la cita siguiente está en OTRA
+        # celda, así que no le quita a ésta el localizador de su celda
+        (f"| «{c}» | p. 13 (ec. 41); p. 15 (rango) | el paper marca una excepción: «{otra}» (p. 15) |",
+         [("13", "13"), ("15", "15")], [("15", "15")]),
+    )
+    for texto, esperado, esperado_otra in casos:
+        assert cfg.page_locators_after(texto, c) == esperado, texto
+        assert cfg.page_locators_after(texto, otra) == esperado_otra, texto
+
+
+def test_AUD402_el_numero_tras_coma_es_pagina_solo_con_BORDE_de_localizador():
+    """⛔ AUD-402 — `(p. 7, 3 sigma)` leía las páginas 7 y 3 (un `ok` por coincidencia si la cita
+    está en la 3), `(p. 4, 2012)` tomaba el año y `p. 20210` se leía `p. 2021`."""
+    assert cfg.page_locators("«x» (p. 7, 3 sigma)") == [("7", "7")]
+    assert cfg.page_locators("«x» (p. 4, 2012) [[b]]") == [("4", "4")]
+    assert cfg.page_locators("en p. 20210 del catálogo") == []
+    # lo que sí es compuesto sigue siéndolo
+    assert cfg.page_locators("(p. 9, 6)") == [("9", "9"), ("6", "6")]
+    assert cfg.page_locators("(pp. 179, 190 y 191)") == [("179", "179"), ("190", "190"),
+                                                           ("191", "191")]
+    assert cfg.page_locators("p. 9, p. 6 del PDF") == [("9", "9"), ("6", "6")]
+    assert cfg.page_locators("(pp. 12-14 del PDF)") == [("12", "14")]
+    # medido sobre la instancia (255 fuentes): lo que el borde NO puede perder…
+    assert cfg.page_locators("pp. 2056, 2061") == [("2056", "2056"), ("2061", "2061")]
+    assert cfg.page_locators("| p. 139, 144 PDF (tesis p. 115, 119) |")[:2] == [
+        ("139", "139"), ("144", "144")]
+    assert cfg.page_locators("| p. 16, 18 (Figs. 7 y 9) |") == [("16", "16"), ("18", "18")]
+    assert cfg.page_locators("no se leyeron pp. 8-9, 12 ni el apéndice") == [("8", "9"),
+                                                                            ("12", "12")]
+    # …y lo que sí tiene que soltar: una coma decimal y la figura `5a`
+    assert cfg.page_locators("0,36 km/s en p. 9, 0,45 km/s en p. 6") == [("9", "9"), ("6", "6")]
+    assert cfg.page_locators("las Figs. 4a p. 7, 5a p. 9") == [("7", "7"), ("9", "9")]
