@@ -38,9 +38,12 @@ campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
   **check_sources** (#353/#392: cruza lo DECLARADO en `sources:` contra su `doi` en Crossref, un
   `.bib` junto al `pdf:` declarado, la primera página del PDF o el snapshot web; registra el
   veredicto en el registro versionado y NO reescribe `sources:`; si falla, avisa y las fuentes
-  quedan sin cruzar) → check_retractions. Sin query_ads / fetch_ground_truth (no aplican fuera de
-  ADS); check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo cubre igual), o
-  cuando el tema trae `extra_core:`/`query:` — sin ninguno de los tres se declara salteado (AUD-159).
+  quedan sin cruzar) → check_retractions → fetch_bibtex. Sin query_ads / fetch_ground_truth (no
+  aplican fuera de ADS); check_retractions SÍ corre cuando algún item declara `doi` (Crossref lo
+  cubre igual), o cuando el tema trae `extra_core:`/`query:` — sin ninguno de los tres se declara
+  salteado (AUD-159) y fetch_bibtex corre IGUAL (AUD-407: la nota off-ADS sin `doi` es la
+  población de su carril `doi_candidate`). Un rc 1 de check_retractions (hay retractados) no es
+  fallo de la cadena: fetch_bibtex corre y el rc se propaga al final (AUD-417).
   **Tema MIXTO:** un tema off-ADS puede además traer papers del tema que SÍ están en ADS (un
   método no-astro casi siempre tiene aplicaciones publicadas en revista astro), por dos vías que
   se excluyen entre sí, la primera con prioridad:
@@ -111,23 +114,32 @@ def run(script: str, *args: str, flags=()) -> int:
                           cwd=cfg.ROOT / "scripts", env=env).returncode
 
 
-def _cierre_retracciones(slug: str) -> None:
-    """Cierre de cadena: chequeo de retracciones de ESTE ingest, distinguiendo los tres códigos
-    (issue 0.1). `1` = hay retractados (revisar las notas marcadas). `2` = el chequeo **no pudo
-    correr** — aborta igual, porque la cadena no certifica lo que no miró, pero sin la frase falsa
-    "detectó papers retractados", que mandaba al operador a buscar marcas inexistentes."""
-    rc = run("check_retractions.py", "--slug", slug)
+def _cierre_bibtex(slug: str, flags=()) -> None:
+    """#397 — the official BibTeX of each paper: last, because it needs the notes already created
+    and because its gap invalidates nothing (a book with no official export leaves the field EMPTY,
+    which is the correct state). An rc 2 is the network down, not papers without a citation: it
+    warns and does NOT abort; what was left unfetched is closed by the `maintain` pass."""
+    if run("fetch_bibtex.py", "--slug", slug, flags=flags):
+        print("⚠ fetch_bibtex no pudo traer todo (¿red, token?) — cerralo con "
+              "`python scripts/fetch_bibtex.py` (idempotente).")
+
+
+def _cierre_retracciones(slug: str, flags=()) -> None:
+    """Cierre de cadena: chequeo de retracciones de ESTE ingest y después `fetch_bibtex` — UNA
+    definición para los dos orquestadores (`ingest_star` la importa). Distingue los tres códigos
+    (issue 0.1). `2` = el chequeo **no pudo correr** — aborta, porque la cadena no certifica lo que
+    no miró, pero sin la frase falsa "detectó papers retractados". `1` = hay retractados, que NO es
+    un fallo de la cadena (AUD-417): `fetch_bibtex` corre igual y el rc se propaga AL FINAL. Salir
+    antes dejaba el registro con `check_retractions` estampado y sin `fetch_bibtex` —`_estampar`
+    estampa en rc 0 y 1—, o sea una cadena cortada fabricada por un hallazgo."""
+    rc = run("check_retractions.py", "--slug", slug, flags=flags)
+    if rc not in (0, 1):
+        sys.exit(f"check_retractions no pudo chequear (rc={rc}) — la cadena no certifica lo que no "
+                 "miró. Revisá el motivo que imprimió arriba y re-corré (es idempotente).")
+    _cierre_bibtex(slug, flags)
     if rc == 1:
         sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
                  "(el lint las surface como bloqueante).")
-    if rc:
-        sys.exit(f"check_retractions no pudo chequear (rc={rc}) — la cadena no certifica lo que no "
-                 "miró. Revisá el motivo que imprimió arriba y re-corré (es idempotente).")
-
-    # #397 — mismo cierre que `ingest_star`: avisa y no aborta (el hueco es un estado correcto).
-    if run("fetch_bibtex.py", "--slug", slug):
-        print("⚠ fetch_bibtex no pudo traer todo (¿red, token?) — cerralo con "
-              "`python scripts/fetch_bibtex.py` (idempotente).")
 
 
 # ── guardia de expansión (#37) ───────────────────────────────────────────────
@@ -491,7 +503,10 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             f"  ⚠ chequeo de retracciones NO EVALUADO para `{slug}`: ninguna fuente declara "
             f"`doi` ni hay `extra_core`, así que no hay clave que consultarle a Crossref. La "
             f"frontera dura queda sin vigilancia acá — completá los `doi` que existan, o "
-            f"cubrilo con la pasada periódica (`python scripts/check_retractions.py`).")
+            f"cubrilo con la pasada periódica (`python scripts/check_retractions.py`). "
+            f"fetch_bibtex corre igual: sin `doi` es justo la población de su carril "
+            f"`doi_candidate` y de `sin_bibtex` (AUD-407).")
+        _cierre_bibtex(slug)
 
 
 def main() -> int:

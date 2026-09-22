@@ -140,6 +140,7 @@ def test_ads_retraccion_detectada_no_es_fallo(toy_vault, fake_run, fake_notes, m
     with pytest.raises(SystemExit) as exc:
         run_main(monkeypatch)
     assert "retractados" in str(exc.value) and "falló" not in str(exc.value)
+    assert fake_run.calls[-1][0] == "fetch_bibtex.py", "AUD-417: el último paso corre igual"
 
 
 def test_ads_con_sources_aborta(toy_vault, fake_run, monkeypatch, capsys):
@@ -413,6 +414,7 @@ def test_offads_retraccion_detectada_aborta(toy_vault, fake_run, fake_notes, mon
     fake_run.rcs["check_retractions.py"] = 1
     with pytest.raises(SystemExit, match="retractados"):
         run_main(monkeypatch)
+    assert fake_run.calls[-1][0] == "fetch_bibtex.py", "AUD-417: el último paso corre igual"
 
 
 def test_run_exporta_la_via_al_paso(toy_vault, monkeypatch):
@@ -648,6 +650,13 @@ def test_sin_doi_ni_extra_core_el_chequeo_de_retracciones_lo_DICE(toy_vault, fak
     run_main(monkeypatch)
     salida = capsys.readouterr().out
     assert "retracciones NO EVALUADO" in salida and "ninguna fuente declara `doi`" in salida
+    # AUD-407 — y `fetch_bibtex` corre IGUAL: es justo la población de su carril `doi_candidate`
+    # (nota off-ADS sin `doi`) y la que declara `sin_bibtex` (#467). Saltearlo junto con las
+    # retracciones dejaba el hueco sin preguntar ni declarar, y el mensaje no lo decía.
+    assert ("fetch_bibtex.py", "--slug", "gp") in fake_run.calls, fake_run.calls
+    assert "fetch_bibtex corre igual" in salida
+    assert "check_retractions → fetch_bibtex" in " ".join(it.__doc__.split("Orden del carril off-ADS")[1].split()), \
+        "el header (fuente de verdad del orden) lo nombra en el carril off-ADS"
 
 
 # ── #211 · deadlock del tema mixto ───────────────────────────────────────────

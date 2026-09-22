@@ -2518,10 +2518,20 @@ def check_sources_metadata() -> tuple:
                 continue
             _rec = cfg.as_map(_chequeadas.get(_k))
             _cmd = f"`python scripts/check_sources.py {_slug}`"
+            # AUD-472 — la firma se LEE siempre, no sólo dentro del desacuerdo: la rota, o la vieja
+            # sobre un cruce que hoy da `ok`, no la leía nadie. Sale nombrada (backlog), como las
+            # huérfanas de #433; sin hallazgo computable (sin cruzar, o lo declarado cambió) sólo
+            # se juzga su forma.
+            def _no_usadas(consultados, juzgable=True, _k=_k, _it=_it, _slug=_slug):
+                """Report this item's signatures no finding consulted (AUD-472), as backlog."""
+                fuente_metadata_dudosa.extend(
+                    (_k, f"{m} (tema `{_slug}`)")
+                    for m in cfg.metadata_review_unused(_it, consultados, juzgable))
             if not _rec:
                 fuente_metadata_dudosa.append(
                     (_k, f"lo declarado en `sources:` de `{_slug}` nunca se cruzó contra su `doi`/PDF "
                          f"(#353) → {_cmd}"))
+                _no_usadas((), juzgable=False)
                 continue
             _decl_hoy = {"author": str(_it.get("author") or "").strip(),
                          "year": _year_of(_it.get("year")),
@@ -2530,9 +2540,11 @@ def check_sources_metadata() -> tuple:
             if {k: _decl_reg.get(k) for k in _decl_hoy} != _decl_hoy:
                 fuente_metadata_dudosa.append(
                     (_k, f"lo declarado cambió desde el cruce del {_rec.get('fecha')} → {_cmd}"))
+                _no_usadas((), juzgable=False)
                 continue
             _v, _via, _det = str(_rec.get("veredicto") or ""), str(_rec.get("via") or ""), str(_rec.get("detalle") or "")
             if _v == "ok":
+                _no_usadas(())
                 continue
             _bloquea = _via in ("crossref", "bib") and (
                 _v == "autor" or (_v == "anio" and abs(int(_decl_hoy["year"] or 0)
@@ -2546,13 +2558,17 @@ def check_sources_metadata() -> tuple:
             _estado, _firma = cfg.metadata_review(
                 _it, _campo, _decl_hoy.get(_campo),
                 _hallado.get("family" if _campo == "author" else _campo))
+            _no_usadas((_campo,))
             if _estado == "firmada":
                 fuente_metadata_firmada.append(
                     (_k, f"[{_via}] {_v}: el catálogo es el equivocado, firmado el "
                          f"{_firma.get('fecha')} — {_firma.get('motivo')} (tema `{_slug}`)"))
                 continue
             if _estado in ("vencida", "rota"):
-                fuente_metadata_falsa.append(
+                # AUD-429 — la firma que no cubre deja el hallazgo en la severidad que tendría SIN
+                # firma: escalar un título o un año a ±1 al bloqueante «Crossref desmiente autor o
+                # año» dejaba al que firmó peor que al que no. Mismo trato que el gemelo `bibtex`.
+                (fuente_metadata_falsa if _bloquea else fuente_metadata_dudosa).append(
                     (_k, f"{_det} (tema `{_slug}`) → la firma `metadata_revisada` NO cubre este "
                          f"hallazgo: {_firma}. Re-firmala con "
                          f"`python scripts/check_sources.py {_slug} --firmar {_k} --campo {_campo} "
@@ -4715,6 +4731,7 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
             (stem, f"`bibtex_source: {_src}` sin `bibtex_url`: ese BibTeX lo pega una persona, y "
                    "sin la URL de donde se copió no hay procedencia → poblá "
                    "`bibtex_url: https://…` (#484/#503)"))
+    _consultados: set = set()      # AUD-472 — campos cuyo drift consultó la firma
     if _btx:
         _campos = cfg.bibtex_fields(_btx)
         for _c in ("doi", "year", "title"):
@@ -4753,6 +4770,7 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
             # había dónde escribirlo. La firma vive en la NOTA (el drift es de la nota, no de un
             # item de config) y cubre un ESTADO: si el `bibtex` se re-baja y cambia, vuelve.
             if _c in cfg.METADATA_CAMPOS:
+                _consultados.add(_c)
                 _estado, _firma = cfg.metadata_review(fm, _c, _nota, _oficial, quien="la nota")
                 if _estado == "firmada":
                     bibtex_drift_firmado.append(
@@ -4773,6 +4791,9 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                        + (f"; si el equivocado es el CATÁLOGO, firmalo: `python scripts/"
                           f"fetch_bibtex.py --paper {stem} --firmar --campo {_c} --motivo "
                           f"\"<por qué>\"` (#483)" if _c in cfg.METADATA_CAMPOS else "")))
+    # AUD-472 — la firma de la nota se lee aunque ningún drift la consulte (sin `bibtex`, o los
+    # campos coinciden): la rota o la que no cubre nada sale nombrada, no ignorada.
+    bibtex_drift.extend((stem, m) for m in cfg.metadata_review_unused(fm, _consultados))
     for _campo, _ok in (("pdf_source", cfg.PDF_SOURCE_OK),
                         ("fulltext_source", cfg.FULLTEXT_SOURCE_OK),
                         ("bibtex_source", cfg.BIBTEX_SOURCES)):

@@ -592,7 +592,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   regla de #463 (`cfg.metadata_review`), que `fetch_bibtex.py --paper <bib> --firmar --campo <c>
   --motivo "<por qué>"` imprime lista para pegar (propone, no escribe). La firmada pasa a
   **`bibtex_drift_firmado`** (declarado, no es deuda, AUD-207); cubre un ESTADO: si el `bibtex` se
-  re-baja y cambia, la firma vence y el drift vuelve a reportar nombrándola. Se compara **normalizado** (`cfg.method_key`, #243): un DOI en mayúsculas no es una
+  re-baja y cambia, la firma vence y el drift vuelve a reportar nombrándola; y la firma que
+  ningún drift consulta —rota, o sobre un campo que hoy coincide— también sale acá, nombrada
+  (AUD-472). Se compara **normalizado** (`cfg.method_key`, #243): un DOI en mayúsculas no es una
   discrepancia, y un falso positivo acá manda a revisar a mano una cita correcta. ⚠ Un campo que
   una de las dos partes no dice **no se reporta**: eso es un hueco de schema (INV-63), no un
   desacuerdo.
@@ -1139,11 +1141,19 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   **listo para pegar** (propone y no escribe: `sources:` es config curada, igual que
   `triage --accept-source`; los dos valores salen del cruce REGISTRADO y no de memoria, #392).
   ⛔ La firma cubre un **estado**, no un campo: vale mientras `declarado` y `catalogo` sigan siendo
-  los que firmó, así que si el catálogo se corrige —o alguien cambia lo declarado— **vuelve a
-  bloquear** nombrando qué se movió (doctrina del ancla, D-4, y de `if_version`). Y la firma
-  **vieja o mal formada no se ignora en silencio**: bloquea, porque una firma que el lector saltea
-  se lee como «esto se revisó» y no cubre nada (#71/#73). `campo` es vocabulario cerrado
-  (`author|year|title`) y `motivo` obligatorio.
+  los que firmó, así que si el catálogo se corrige —o alguien cambia lo declarado— el hallazgo
+  **vuelve** nombrando qué se movió (doctrina del ancla, D-4, y de `if_version`). Y la firma
+  **vieja o mal formada no se ignora en silencio**, porque una firma que el lector saltea se lee
+  como «esto se revisó» y no cubre nada (#71/#73). ⛔ **Vuelve a la severidad que el hallazgo tiene
+  SIN firma (AUD-429):** autor por Crossref o año a ≥2 bloquean; título o año a ±1 son
+  `fuente_metadata_dudosa` —escalarlos al bloqueante que afirma «Crossref desmiente autor o año»
+  dejaba al que firmó peor que al que no—, igual que el gemelo `bibtex_drift`. ⛔ **Y se lee
+  aunque ningún hallazgo la consulte (AUD-472):** la rota, la que no es lista, o la que firma un
+  campo que el cruce de hoy no marca (cruce `ok`, o veredicto de otro campo) sale nombrada en
+  `fuente_metadata_dudosa` —como las huérfanas de #433—; sin cruce computable (nunca se cruzó, o
+  lo declarado cambió) sólo se juzga su forma. Lo mismo en la nota de paper: la firma sin drift que
+  cubrir sale en `bibtex_drift` (`cfg.metadata_review_unused`, una implementación para los dos).
+  `campo` es vocabulario cerrado (`author|year|title`) y `motivo` obligatorio.
 - **Tema de MÉTODO sin `ejes:`** (#360, `tema_ejes_heredados`): el simétrico literal del anterior
   sobre el otro eje de #307. Sin `ejes:` la extracción pregunta los del objetivo —los de una bóveda
   astro— a un tema de otra disciplina; medido: **6 de 8** facetas vacías en 12 extracciones y los

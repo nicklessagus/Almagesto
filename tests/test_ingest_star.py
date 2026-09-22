@@ -22,6 +22,7 @@ def fake_run(monkeypatch):
         state.flags.append((script, list(flags)))
         return state.rcs.get(script, 0)
     monkeypatch.setattr(ist, "run", run)
+    monkeypatch.setattr(it, "run", run)     # el cierre vive en `ingest_theme` (AUD-417)
     return state
 
 
@@ -71,6 +72,10 @@ def test_retraccion_detectada_no_es_fallo_de_cadena(toy_vault, fake_run, monkeyp
     with pytest.raises(SystemExit) as exc:
         run_main(monkeypatch)
     assert "retractados" in str(exc.value) and "falló" not in str(exc.value)
+    # AUD-417 — rc 1 NO es fallo de la cadena, así que su último paso corre igual y el rc de la
+    # retracción se propaga AL FINAL: cortar antes dejaba el registro con la cadena cortada en
+    # `fetch_bibtex` por un hallazgo que el header dice que no es fallo.
+    assert fake_run.calls[-1] == ("fetch_bibtex.py", "--slug", "test_star"), fake_run.calls
 
 
 def test_ingest_star_distingue_rc2(toy_vault, fake_run, monkeypatch):

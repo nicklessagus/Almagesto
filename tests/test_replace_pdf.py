@@ -539,3 +539,17 @@ def test_449_avisa_que_la_PROSA_sigue_diciendo_preprint(toy_vault, tmp_path, mon
     # y el lint lo levanta como backlog, con los testigos ya firmados
     fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
     assert cfg.disk_doc_conflict(nota.read_text(encoding="utf-8"), fm, "2010D") is not None
+
+
+def test_AUD447_el_comando_que_sugiere_el_lint_para_el_documento_en_disco_se_pega(toy_vault):
+    """AUD-447 — todo backlog que el lint nombra tiene que tener una salida ejecutable (#436), y
+    la de #449 mandaba `replace_pdf.py <stem> --backfill` a secas: argparse la rechaza (faltan
+    `--source` y `--reason`, los dos obligatorios). Se toma el comando del mensaje tal cual y se
+    le da al parser: un rechazo de argparse es `SystemExit`, un rehúse del comando es rc 2."""
+    import re
+    import shlex
+    msg = cfg.disk_doc_conflict("El PDF en disco es el PREPRINT de arXiv.",
+                                {"pdf_source": "publisher"}, "2099Y")
+    cmd = re.search(r"`replace_pdf\.py ([^`]*)`", msg).group(1)
+    assert "--source" in cmd and "--reason" in cmd, msg
+    assert rp.main(shlex.split(cmd)) == 2, "llega al comando (sin nota rehúsa), no muere en argparse"

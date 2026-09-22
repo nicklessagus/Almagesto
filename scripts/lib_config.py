@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.307.1"
+ALMAGESTO_VERSION = "1.308.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3509,12 +3509,16 @@ def metadata_review(item, campo: str, declarado, catalogo, quien: str = "`source
       what is on the table: the declared value changed, or the catalogue now says something else
       (it was corrected, or a different rail answered). A signature covers a STATE, not a category
       — same doctrine as the verification anchor (D-4) and `if_version`: what nobody looked at
-      again is not covered. It blocks, naming what moved.
+      again is not covered. The finding comes back, naming what moved, at the SEVERITY IT HAS
+      WITHOUT a signature (AUD-429): a stale signature on a backlog finding (a title, a year off
+      by one) is backlog, never an escalation to the blocking «Crossref contradicts» category.
     - `(None, None)` — nothing signed for this field.
 
-    ⛔ Malformed entries are NOT ignored: they come back as `("rota", motivo)`, which blocks. A
-    signature that the reader skips in silence is worse than an error (same rule as the old
-    `disputes` schema, #71) — it reads as «this was reviewed» while covering nothing.
+    ⛔ Malformed entries are NOT ignored: they come back as `("rota", motivo)` — same severity rule
+    as «vencida». A signature that the reader skips in silence is worse than an error (same rule
+    as the old `disputes` schema, #71) — it reads as «this was reviewed» while covering nothing.
+    A signature that no finding of today consults is read too, by `metadata_review_unused`
+    (AUD-472). `campo=""` judges only the FORM of every entry.
 
     The rule lives HERE and nowhere else: `lint` reads the verdict offline from the registry and
     `check_sources` prints the snippet, and two implementations of one rule already cost this repo
@@ -3523,6 +3527,12 @@ def metadata_review(item, campo: str, declarado, catalogo, quien: str = "`source
     field inside the `bibtex` export; `quien` names the side in the «vencida» message.
     """
     campo = str(campo or "").strip()
+    # AUD-472 — `as_list` devuelve `[]` para un mapa suelto: la firma escrita sin el guion entraba
+    # MUDA, que es exactamente lo que este lector existe para no hacer.
+    _raw = as_map(item).get("metadata_revisada")
+    if _raw not in (None, [], "") and not isinstance(_raw, list):
+        return "rota", (f"`metadata_revisada` no es una lista (es {type(_raw).__name__}): "
+                        f"escribila `- {{campo, declarado, catalogo, motivo, fecha}}`")
     # ⛔ La FORMA se juzga sobre TODAS las entradas, no sobre la que matchea el campo pedido: un
     # `campo: autor` (typo) no matchea ninguna consulta, así que mirando sólo la que matchea el
     # typo entra MUDO — y una firma que nadie lee se lee como «esto se revisó». Es el modo de falla
@@ -3552,6 +3562,30 @@ def metadata_review(item, campo: str, declarado, catalogo, quien: str = "`source
                                f"«{_metadata_val(catalogo)}»")
         return "firmada", e
     return None, None
+
+
+def metadata_review_unused(item, consultados, juzgable: bool = True) -> list:
+    """Messages for the `metadata_revisada` entries that NO finding of today consulted (AUD-472).
+
+    `metadata_review` is only called from inside a disagreement, so a broken signature — or an old
+    one on an item whose cross today is `ok` — was read by nobody, while CLAUDE.md promises «the
+    old or broken signature is not ignored». Same doctrine as the orphans of #433: a signature that
+    covers nothing is said, not skipped. `consultados` = the fields a finding already asked about
+    (their «rota»/«vencida» was reported there); `juzgable=False` when today's finding cannot be
+    known (never crossed, or the declaration changed): then only the FORM is judged."""
+    if as_map(item).get("metadata_revisada") in (None, [], ""):
+        return []
+    estado, det = metadata_review(item, "", None, None)
+    if estado == "rota":
+        return [] if consultados else [f"la firma `metadata_revisada` está ROTA: {det}"]
+    if not juzgable:
+        return []
+    return [f"la firma `metadata_revisada` de `{c}` no corresponde a ningún hallazgo de hoy → o el "
+            f"catálogo se corrigió (sacá la entrada) o el campo no es el que el chequeo compara "
+            f"(la firma no exime nada)"
+            for c in dict.fromkeys(str(e.get("campo") or "").strip()
+                                   for e in as_list(as_map(item).get("metadata_revisada")))
+            if c not in consultados]
 
 
 def metadata_revisada_snippet(key: str, campo: str, declarado, catalogo, motivo: str,
@@ -4485,7 +4519,9 @@ def disk_doc_conflict(text: str, fm: dict, stem: str) -> str | None:
     return (f"la prosa dice que el PDF en disco es el **{'/'.join(sorted(dicho))}** y los testigos "
             f"dicen **{disco}** ({porque}) — corregí la mitad equivocada: la salvedad conserva el "
             f"hecho verdadero («esta vista se leyó del …») y el campo se arregla con "
-            f"`replace_pdf.py {stem} --backfill` o `extract_fulltext.py <slug> --bibcode {stem}`. "
+            f"`replace_pdf.py {stem} --backfill --source <{'|'.join(PDF_SOURCE_OK)}> "
+            f"--reason \"<motivo>\"` (AUD-447: sin los dos obligatorios argparse la rechaza) o "
+            f"`extract_fulltext.py <slug> --bibcode {stem}`. "
             f"⛔ Y emitila ESTRUCTURADA (#452): `{{tipo: pdf_leido, documento: …}}` en las "
             f"`salvedades` de la extracción — en prosa este detector tiene que adivinar de quién "
             f"habla la oración, y ése es su modo de falla medido")

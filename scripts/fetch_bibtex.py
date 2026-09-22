@@ -517,7 +517,9 @@ def main() -> int:
     ap.add_argument("--paper", help="un solo bibcode (default: todas las notas de `papers/`)")
     ap.add_argument("--slug", help="sólo los papers de un ingest (modo de la cadena)")
     ap.add_argument("--force", action="store_true",
-                    help="re-bajar también las notas que ya tienen `bibtex`")
+                    help="re-bajar también las notas que ya tienen `bibtex` — salvo "
+                         "`bibtex_source: venue|institucional`, que pegó una persona y ningún "
+                         "carril regenera (#484/#503, AUD-454)")
     ap.add_argument("--firmar", action="store_true",
                     help="#483: con --paper, imprime la firma `metadata_revisada` del drift "
                          "(el catálogo es el equivocado); propone, no escribe")
@@ -557,8 +559,16 @@ def main() -> int:
         fms[f] = (fm, text)
         pendientes.append(f)
     if not pendientes:
-        cfg.print_seguro(f"bibtex: {len(notas)} nota(s) miradas, todas ya lo tienen "
-                         f"(--force para re-bajar)")
+        # AUD-454 — el motivo va con el conteo: con `--force` puesto, «--force para re-bajar» era
+        # un consejo que no sirve sobre lo que se salteó por pegado a mano (#484/#503).
+        _mano = sum(n_venue.values())
+        _partes = [f"{'todas' if not _mano else len(notas) - _mano} ya lo tienen "
+                   f"(--force para re-bajar)"] if len(notas) > _mano else []
+        if _mano:
+            _partes.append(", ".join(f"{n} con `bibtex_source: {s}`"
+                                     for s, n in sorted(n_venue.items()))
+                           + " (pegado a mano: NO se re-baja ni con --force, #484/#503)")
+        cfg.print_seguro(f"bibtex: {len(notas)} nota(s) miradas, {'; '.join(_partes)}")
         # ⛔ #423 — un paso que corrió y no tenía trabajo IGUAL corrió. Es el caso OPUESTO al que
         # protege la guarda del final (el paso que no pudo mirar todo no deja traza): acá se
         # miraron las N notas y no había nada que hacer. Sin estampar, el sujeto cuyo BibTeX ya
@@ -579,6 +589,11 @@ def main() -> int:
         ads_cache, errores, sin_consultar = ads_bibtex(bibcodes, cfg.get_ads_token())
     except RuntimeError as exc:            # sin token: los otros dos carriles siguen sirviendo
         errores.append(f"sin token ADS, el carril `ads` NO corrió: {exc}")
+        # AUD-416 — y cada bibcode que ADS SÍ habría consultado queda sin consultar (#468): sin
+        # esto la cascada seguía y persistía `sin_bibtex` —o SACABA un bloque que sólo había que
+        # re-bajar— sobre una consulta que no ocurrió. Las claves sintéticas no: a ADS nunca se
+        # le iban a preguntar (`ads_bibtex` las filtra igual).
+        sin_consultar = {b for b in bibcodes if cfg.is_ads_bibcode(b)}
 
     hoy = _dt.date.today().isoformat()
     n_ok, huecos, propuestas, no_evaluadas, sacados = 0, [], [], [], []

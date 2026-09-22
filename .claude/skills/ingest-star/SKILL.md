@@ -59,7 +59,8 @@ Progreso del ingest de <estrella>:
    python scripts/ingest_star.py <slug>
    ```
    Corre la cadena completa (ADS → PDFs arXiv y no-arXiv → ground-truth NEA/SIMBAD → stubs →
-   fulltext → retracciones), abortando al primer fallo. **El orden canónico vive en el header de
+   fulltext → retracciones → BibTeX), abortando al primer fallo (un retractado no es fallo: el
+   BibTeX corre igual y el rc sale al final, AUD-417). **El orden canónico vive en el header de
    `scripts/ingest_star.py`** — puntero, no copia: no lo repliques acá ni en otros docs. Para un
    flag fino (`--rows`, `--all`, `--force` de un paso) corré el script puntual.
 

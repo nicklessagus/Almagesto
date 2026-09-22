@@ -234,7 +234,28 @@ def test_483_firmar_arma_el_bloque_desde_la_NOTA_y_no_escribe(tmp_path, monkeypa
     assert fb.main() == 2, "sin drift en `title` no hay nada que firmar"
     assert "coincide" in capsys.readouterr().out
     assert fb.firmar("2008Yang", "year", "") == 2, "sin motivo no es auditable"
-    assert fb.firmar("2008Yang", "doi", "m") == 2, "sin el campo en la nota no hay drift que firmar"
+    # AUD-462 — cada guarda por SU camino: `doi` está fuera del vocabulario, y ese rc 2 no prueba
+    # la guarda de «sin el campo» (antes el assert pasaba por las dos y no probaba ninguna)
+    assert fb.firmar("2008Yang", "doi", "m") == 2
+    assert "fuera del vocabulario" in capsys.readouterr().out
+    # la nota declara `author` y el `bibtex` no lo trae: sin los dos lados no hay drift
+    _nota(tmp_path, {"bibcode": "2008Yang", "tags": ["paper"], "year": 2008, "author": "Yang",
+                     "title": "Ranking ICA", "bibtex": btx, "bibtex_source": "crossref"})
+    assert fb.firmar("2008Yang", "author", "m") == 2
+    assert "no tiene `bibtex` con ese campo" in capsys.readouterr().out
+    # y «coincide» es NORMALIZADO: la misma cadena en otra caja no es drift
+    _nota(tmp_path, {"bibcode": "2008Yang", "tags": ["paper"], "year": 2008,
+                     "title": "RANKING ica", "bibtex": btx, "bibtex_source": "crossref"})
+    assert fb.firmar("2008Yang", "title", "m") == 2
+    assert "coincide normalizado" in capsys.readouterr().out
+    # la firma VENCIDA (el catálogo firmado ya no es el de hoy) se nombra y se reemplaza
+    _nota(tmp_path, {"bibcode": "2008Yang", "tags": ["paper"], "year": 2008, "title": "Ranking ICA",
+                     "bibtex": btx, "bibtex_source": "crossref",
+                     "metadata_revisada": [{"campo": "year", "declarado": "2008", "catalogo": "2006",
+                                            "motivo": "m", "fecha": "2026-09-16"}]})
+    assert fb.firmar("2008Yang", "year", "m") == 0
+    out = capsys.readouterr().out
+    assert "NO cubre" in out and "no agregues una segunda" in out and "catalogo: '2007'" in out, out
     # ya firmada → lo dice y no propone otra
     _nota(tmp_path, {"bibcode": "2008Yang", "tags": ["paper"], "year": 2008, "title": "Ranking ICA",
                      "bibtex": btx, "bibtex_source": "crossref",
@@ -1045,3 +1066,51 @@ def test_503_institucional_no_se_re_baja_aun_con_force(tmp_path, monkeypatch, ca
     assert inst.read_text(encoding="utf-8") == antes, "el pegado a mano no se toca"
     assert "1999HyvarinenSurvey" not in pedidos, pedidos
     assert "institucional" in cfg.BIBTEX_SOURCES
+
+
+def test_AUD416_sin_token_ADS_no_se_persiste_el_hueco_ni_se_saca_el_bloque(tmp_path, monkeypatch, capsys):
+    """AUD-416 — sin token el carril `ads` NO corrió, así que sobre una nota con bibcode ADS real
+    no hay veredicto que persistir (#468, INV-151): ni `sin_bibtex` estampado ni el bloque no
+    pegable SACADO (sólo había que re-bajarlo). La clave sintética sí se evalúa: a ADS nunca se le
+    iba a preguntar, y su hueco lo deciden los carriles que contestaron."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+
+    def sin_token():
+        raise RuntimeError("no hay token")
+    monkeypatch.setattr(cfg, "get_ads_token", sin_token)
+    fake_net(monkeypatch)
+    monkeypatch.setattr(fb, "doi_candidate", lambda *a, **k: ("", "sin candidato en Crossref", ""))
+    real = _nota(tmp_path, {"bibcode": "1995Natur.378..355M", "tags": ["paper"]})
+    macro = ENTRADA_ADS.replace("year = 1995,", "journal = {\\aap},\n year = 1995,")
+    pendiente = _nota(tmp_path, {"bibcode": "1995Natur.378..356M", "tags": ["paper"],
+                                 "bibtex": macro, "bibtex_source": "ads"})
+    sintetica = _nota(tmp_path, {"bibcode": "2011Naik", "tags": ["paper"]})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 2
+    fm_real = cfg.split_fm(real.read_text(encoding="utf-8"))
+    fm_pend = cfg.split_fm(pendiente.read_text(encoding="utf-8"))
+    assert "sin_bibtex" not in fm_real, "ADS no contestó: el hueco no se midió"
+    assert fm_pend.get("bibtex") == macro and "sin_bibtex" not in fm_pend, "el bloque no se saca"
+    assert "sin_bibtex" in cfg.split_fm(sintetica.read_text(encoding="utf-8")), \
+        "la clave sintética no depende de ADS: su hueco sí es un veredicto"
+    assert "NO EVALUADA" in capsys.readouterr().out
+
+
+def test_AUD454_force_no_rebaja_lo_pegado_a_mano_y_lo_dice(tmp_path, monkeypatch, capsys):
+    """AUD-454 — el help de `--force` prometía re-bajar TODAS, y `venue`/`institucional` (#484/#503)
+    se saltean aun con él. Con `--paper` sobre una nota pegada a mano la corrida decía «todas ya lo
+    tienen (--force para re-bajar)» — con `--force` puesto: el consejo que no sirve, sin el motivo."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    _nota(tmp_path, {"bibcode": "2006Venue", "tags": ["paper"],
+                     "bibtex": "@article{v,\n  title = {T},\n  author = {A},\n}\n",
+                     "bibtex_source": "venue", "bibtex_url": "https://jmlr.org/x"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--paper", "2006Venue", "--force"])
+    assert fb.main() == 0
+    out = capsys.readouterr().out
+    assert "--force para re-bajar" not in out, out
+    assert "venue" in out and "pegado a mano" in out, out
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py", "--help"])
+    with pytest.raises(SystemExit):
+        fb.main()
+    ayuda = " ".join(capsys.readouterr().out.split())
+    assert "venue" in ayuda and "institucional" in ayuda, ayuda

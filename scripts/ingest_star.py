@@ -26,7 +26,8 @@ en el script puntual.
 `check_retractions --slug` cierra la cadena chequeando SÓLO los papers de este ingest (el
 barrido Crossref completo de la bóveda es pasada periódica — skill maintain). Sus tres códigos se
 distinguen acá (issue 0.1): **1** = detectó papers retractados (revisar las notas marcadas; el lint
-lo surface como bloqueante), NO un fallo de la cadena; **2** = el chequeo **no pudo correr**
+lo surface como bloqueante), NO un fallo de la cadena — `fetch_bibtex` corre igual y el rc 1 se
+propaga al final (AUD-417); **2** = el chequeo **no pudo correr**
 (precondición ausente o Crossref caído) — también aborta, porque la cadena no certifica lo que no
 miró, pero con el mensaje honesto.
 
@@ -39,7 +40,7 @@ import argparse
 import sys
 
 import lib_config as cfg
-from ingest_theme import expansion_guard, run
+from ingest_theme import _cierre_retracciones, expansion_guard, run
 
 CHAIN = ("query_ads.py", "fetch_arxiv.py", "fetch_pdf.py", "fetch_ground_truth.py",
          "make_notes.py", "extract_fulltext.py")
@@ -68,25 +69,10 @@ def main() -> int:
                      "re-corré ingest_star.py (lo ya bajado no se re-baja).")
         if script == "query_ads.py":       # checkpoint ANTES del primer paso que gasta red y disco
             expansion_guard(args.slug, args.yes)
-    retr_rc = run("check_retractions.py", "--slug", args.slug, flags=escotillas)
-    if retr_rc == 1:
-        sys.exit("check_retractions detectó papers retractados — revisá las notas marcadas "
-                 "(el lint las surface como bloqueante).")
-    if retr_rc:
-        # rc 2 (issue 0.1) — el chequeo NO corrió: precondición ausente o Crossref caído. Abortar
-        # igual, pero sin la frase falsa: mandar al operador a "revisar las notas marcadas" cuando
-        # no hay ninguna marcada le hace buscar un problema inexistente Y deja el real —la frontera
-        # dura sin verificar— invisible.
-        sys.exit(f"check_retractions no pudo chequear (rc={retr_rc}) — la cadena no certifica lo "
-                 "que no miró. Revisá el motivo que imprimió arriba y re-corré (es idempotente).")
-
-    # #397 — el BibTeX oficial de cada paper, último porque necesita las notas ya creadas y porque
-    # su hueco no invalida nada: un paper sin exportación oficial (un libro, un manual) deja el
-    # campo VACÍO, que es el estado correcto. Un rc 2 es red caída, no papers sin cita, así que
-    # avisa y NO aborta la cadena: lo que quedó sin bajar lo cierra la pasada de `maintain`.
-    if run("fetch_bibtex.py", "--slug", args.slug, flags=escotillas):
-        print("⚠ fetch_bibtex no pudo traer todo (¿red, token?) — el resto de la cadena vale; "
-              "cerralo con `python scripts/fetch_bibtex.py` (idempotente).")
+    # check_retractions → fetch_bibtex: UNA definición del cierre, compartida con `ingest_theme`
+    # (AUD-417: un rc 1 —hay retractados— no es fallo de la cadena, así que `fetch_bibtex` corre
+    # igual y el rc se propaga al final; un rc 2 —no pudo chequear— aborta con su mensaje honesto).
+    _cierre_retracciones(args.slug, escotillas)
     # El hand-off nombra los pasos SALTEABLES con su número del skill: son los que no dejan rastro
     # si se omiten. El contraste (3b) entró con #72 y es el de más apalancamiento — sin él la
     # síntesis se escribe sobre un solo paper por eje.

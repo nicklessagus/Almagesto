@@ -8754,6 +8754,72 @@ def test_la_firma_de_catalogo_equivocado_baja_el_bloqueante_a_declarado(toy_vaul
     _tema({**decl, "metadata_revisada": [{**firma, "motivo": ""}]})
     assert "no declara ['motivo']" in lint.check_sources_metadata()[0][0][1]
 
+
+def test_AUD429_la_firma_vencida_no_escala_la_severidad_del_hallazgo(toy_vault):
+    """AUD-429 — la firma vieja o rota sobre un hallazgo que SIN firma es backlog (título, año a ±1)
+    lo escalaba a BLOQUEANTE `fuente_metadata_falsa`, cuyo rótulo afirma un autor o un año que
+    Crossref DESMIENTE: firmar y que el catálogo cambie dejaba al sujeto peor que no firmar. Queda
+    en la severidad que tendría sin firma, con la firma vencida nombrada (como el gemelo `bibtex`)."""
+    decl = {"key": "2012Naik", "pdf": "x.pdf", "via": "usuario", "motivo": "m",
+            "author": "Naik", "year": 2012, "title": "Introduction: ICA"}
+    write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "fuentes_chequeadas": {"2012Naik": {
+        "fecha": "2026-10-01", "via": "crossref", "veredicto": "titulo", "detalle": "título ≠",
+        "declarado": {"author": "Naik", "year": 2012, "title": "Introduction: ICA"},
+        "encontrado": {"family": "Naik", "year": 2012, "title": "Otro título"}}}})
+    firma = {"campo": "title", "declarado": "Introduction: ICA", "catalogo": "Título viejo",
+             "motivo": "m", "fecha": "2026-09-14"}
+    for rota in (False, True):
+        _f = {**firma, "campo": "titulo"} if rota else firma
+        write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "local-pdfs",
+                                             "sources": [{**decl, "metadata_revisada": [_f]}]}})
+        falsa, dudosa, firmada = lint.check_sources_metadata()
+        assert falsa == [] and firmada == [], (rota, falsa)
+        [(_k, msg)] = dudosa
+        assert "NO cubre" in msg and ("fuera del vocabulario" if rota else "Título viejo") in msg, msg
+
+
+def test_AUD472_la_firma_se_lee_aunque_el_cruce_de_hoy_de_ok(toy_vault):
+    """AUD-472 — `metadata_review` sólo se llamaba dentro de la rama del desacuerdo: una firma rota,
+    o una vieja sobre un item cuyo cruce hoy da `ok`, no la leía nadie — y CLAUDE.md promete que
+    «la firma vieja o rota no se ignora». Sale nombrada (backlog), como las huérfanas de #433."""
+    decl = {"key": "2012Naik", "pdf": "x.pdf", "via": "usuario", "motivo": "m",
+            "author": "Naik", "year": 2012, "title": "ICA"}
+    write_yaml(cfg.REGISTRO / "ica.yaml", {"slug": "ica", "fuentes_chequeadas": {"2012Naik": {
+        "fecha": "2026-10-01", "via": "crossref", "veredicto": "ok",
+        "declarado": {"author": "Naik", "year": 2012, "title": "ICA"}}}})
+    firma = {"campo": "author", "declarado": "Naik", "catalogo": "R.", "motivo": "m",
+             "fecha": "2026-09-14"}
+    for entrada, espera in ((firma, "ningún hallazgo"), ({**firma, "motivo": ""}, "no declara"),
+                            ("no soy un mapa", "no es un mapa")):
+        write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "local-pdfs",
+                                             "sources": [{**decl, "metadata_revisada": [entrada]}]}})
+        falsa, dudosa, _ = lint.check_sources_metadata()
+        assert falsa == [], falsa
+        assert len(dudosa) == 1 and espera in dudosa[0][1], (entrada, dudosa)
+    # y el mapa suelto en vez de lista tampoco entra mudo (`as_list` lo volvía `[]`)
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "local-pdfs",
+                                         "sources": [{**decl, "metadata_revisada": firma}]}})
+    assert "no es una lista" in lint.check_sources_metadata()[1][0][1]
+    # sin firma y con cruce ok: nada que decir
+    write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "local-pdfs",
+                                         "sources": [decl]}})
+    assert lint.check_sources_metadata() == ([], [], [])
+
+
+def test_AUD472_la_firma_de_la_nota_se_lee_aunque_no_haya_drift(toy_vault):
+    """AUD-472, gemelo `bibtex` (#483): la firma en la nota sin drift que cubrir sale nombrada."""
+    firma = {"campo": "year", "declarado": "2011", "catalogo": "2020", "motivo": "m",
+             "fecha": "2026-09-16"}
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "ads", "year": 2020,
+                                  "doi": "10.1/ok", "title": "Un titulo", "metadata_revisada": [firma]})
+    [(_s, msg)] = lint.collect().por_clave("bibtex_drift").items
+    assert "ningún hallazgo" in msg, msg
+    _paper_con_bibtex(toy_vault, {"bibtex": _BTX_OK, "bibtex_source": "ads", "year": 2020,
+                                  "doi": "10.1/ok", "title": "Un titulo",
+                                  "metadata_revisada": [{**firma, "campo": "anio"}]})
+    [(_s, msg)] = lint.collect().por_clave("bibtex_drift").items
+    assert "fuera del vocabulario" in msg, msg
+
 # ── #396 · los dos barridos: `build/*/ads.json` y el registro versionado ─────────────────────────
 
 def _ads_json(slug, **data):
