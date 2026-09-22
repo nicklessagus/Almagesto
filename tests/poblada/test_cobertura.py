@@ -39,7 +39,10 @@ def _sin_ejecutar(tmp_path) -> list[str]:
     r_run = subprocess.run([sys.executable, "-m", "coverage", "run",
                             f"--source={','.join(mutar.ALCANCE)}",
                             f"--data-file={datafile}", "-m", "pytest", "tests/", "-q", "--no-header"],
-                           cwd=RAIZ, capture_output=True, text=True, timeout=900)
+                           cwd=RAIZ, capture_output=True, text=True, timeout=2400)
+    # ⚠ el tope es de la suite SERIAL bajo `coverage` en el runner de CI, que crece con cada tanda:
+    # en v1.311.2 (3216 tests) pasó los 900 s y el test murió por `TimeoutExpired`, que no mide
+    # nada. 2400 s deja ~2× de margen; si vuelve a rozarlo, la salida es paralelizar el barrido.
     salida = tmp_path / "cov.json"
     r_json = subprocess.run([sys.executable, "-m", "coverage", "json", f"--data-file={datafile}",
                              "-o", str(salida)], cwd=RAIZ, capture_output=True, text=True,
