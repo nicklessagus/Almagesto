@@ -2484,12 +2484,12 @@
   {
    "number": 499,
    "title": "«Verificación stale» no tiene comando que la cierre: el detector decide por fecha y `--reanclar` la conserva a propósito (8 de 14 notas, 0 pares a re-verificar)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 500,
    "title": "El localizador es para VERIFICAR, no para citar: el gate de #492 chequea «está en esa página» y deja de dictaminar índice vs impresa (438 de 518 hallazgos sin PDF reemplazado)",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
