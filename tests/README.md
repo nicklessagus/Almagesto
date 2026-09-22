@@ -280,8 +280,9 @@ que ejerza la rama verdadera, no aflojar el gate.
 | 7 | Un símbolo **nuevo con nombre en castellano** | `tests/test_idioma_codigo.py` (tier 0) |
 | 8 | Un condicional que **no decide nada** (una regla escrita a medias, #319) | `tests/test_codigo_muerto.py` (tier 0) |
 | 9 | Una fila del mapa que **atribuye cobertura que no existe** (AUD-212) | `python tools/mutar.py --trazabilidad` (~20 min) |
+| 10 | Un **portador** de la regla que el fix no alcanzó (#409) | `python tools/carriers.py --check` (tier 0, `tests/test_carriers.py`) |
 
-⚠ **La 6 faltaba acá y estaba en `CLAUDE.md`** (#148). El doc normativo titulaba *"las **seis** redes"* (hoy son nueve)
+⚠ **La 6 faltaba acá y estaba en `CLAUDE.md`** (#148). El doc normativo titulaba *"las **seis** redes"* (hoy son diez)
 y delega el detalle en este archivo, que publicaba cinco — así que la regla de idempotencia se caía
 exactamente en la frontera entre los dos. Vale para **todo script que escriba en `vault/`**, no sólo
 para los de `scripts/`: la idempotencia es invariante del framework («la cadena es idempotente:
@@ -320,10 +321,10 @@ nota no puede cambiar si no cambió lo que afirma; el registro tiene que crecer 
 | la plantilla del bloque de verificación no tiene columna de **grado** | `Score` 0–10 reintroducía el eje que `parcial` había dejado |
 | la plantilla que publica la doc la parsea el mismo código que la chequea | ocho columnas en la doc, posiciones fijas 4 y 5 en el parser → `--cierre` en rojo permanente |
 
-**Cuándo**: 2, 5, 7 y 8 corren solas en tier 0. La 4, al cerrar un issue; la 9, a pedido (~20 min).
-**La 1 (barrido de mutación) NO se corre salvo pedido explícito** (decidido 2026-08-27; ver la cadencia en
-`CLAUDE.md`) — es la única que cuesta y la única que distingue "el test pasa" de "el test
-**podría** fallar", y por eso su suspensión está fechada y declarada en vez de ser un olvido.
+**Cuándo**: 2, 5, 7, 8 y 10 corren solas en tier 0. La 4, al cerrar un issue; la 9, a pedido (~20 min).
+**La 1 (barrido de mutación) es a pedido, y recomendada al cerrar una tanda** (cadencia en
+`docs/desarrollo.md` y la medición más abajo; hasta el 2026-08-31 era sólo a pedido, AUD-397) — es
+la única que cuesta y la única que distingue "el test pasa" de "el test **podría** fallar".
 ⚠ Hasta esa corrección la misma frase decía las dos cosas: «NO se corre salvo pedido» y «al
 escribir cada función nueva».
 

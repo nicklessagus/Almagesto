@@ -13,7 +13,9 @@ perfectly valid JSON — that is, in silence.
 What it writes, per paper:
   · the VIEW in the frontmatter (#188) — `sujeto`/`tipo` from the JSON, plus the three fields the
     subagent cannot know for sure: `fecha` (the reading happened), `txt` (which copy was read —
-    the source anchor of D-18) and `lente` (the facets in force, so D-49 can diff at reading level);
+    the source anchor of D-18) and `lente` (the axes that were ASKED, so D-49 can diff at reading
+    level: first the `lente` the extraction declares, written by `extraction_prompt` — #395 —, and
+    only without it the axes in force; harvest time is another question);
   · `methods` / `thesis_links` / `role`, add-only — never overwriting what is already there;
   · the `## Vista — <sujeto>` section, only while it still is the stub template. Redacted prose is
     never overwritten without `--force`: it may already carry verification anchors.

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.307.0"
+ALMAGESTO_VERSION = "1.307.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4898,7 +4898,8 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
 
 # Orden canónico de la cadena de ESTRELLAS. Fuente de verdad del orden: el header de
 # `ingest_star.py` (y su constante `CHAIN`); acá vive la copia que el lint usa para nombrar el paso
-# donde se cortó, con `check_retractions` al final, que el orquestador corre aparte.
+# donde se cortó, con `check_retractions` y `fetch_bibtex` (#397) al final: el orquestador los
+# corre aparte, fuera de `CHAIN`, y `fetch_bibtex` es el último.
 CADENA_ESTRELLA = ("query_ads", "fetch_arxiv", "fetch_pdf", "fetch_ground_truth",
                    "make_notes", "extract_fulltext", "check_retractions", "fetch_bibtex")
 

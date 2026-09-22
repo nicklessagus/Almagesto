@@ -111,6 +111,7 @@ skill `setup` traduce tu foco (en palabras) a `relevance.facets` (los buckets qu
 > **Agente (skill `setup`):** arma los buckets (`rv`, `activity`, `method`…) y corre el preview
 > (`query_ads.py --probe`, no baja nada):
 > ```
+>   fq: database:astronomy (del objetivo)
 >   50 papers · 41 CORE · 9 no-core
 >   costo proyectado de leer el core: ~984k tokens (41 × 24k, mediana del corpus)
 >   regla de combinación vigente: OR (≥1 faceta cualquiera) → 41 CORE.
@@ -326,8 +327,10 @@ y el registro te dice después qué se descartó y por qué.
 (período, semiamplitud, excentricidad, masa) **no** los escribe el modelo: vienen del ground truth, y
 cuando un paper discrepa se marca como disputa en vez de sobreescribir. El lint recalcula la masa
 implícita a partir de K, P, e y la masa estelar, y marca las inconsistencias.
-*Chequeo humano:* cada dato lleva su `[[bibcode]]` y el `.txt` de esa fuente está versionado en el
-repo, así que verificarlo es un `grep` de la frase. El frontmatter es auditable contra el archivo de
+*Chequeo humano:* cada dato lleva su `[[bibcode]]` y su localizador (sección, tabla, figura o
+página), así que verificarlo es abrir el PDF de esa fuente en ese lugar. El `.txt` versionado sirve
+para **ubicar** la frase con `grep`, no para confirmarla: pierde fórmulas, tablas-imagen y figuras,
+y un `grep` vacío no prueba que la ficha esté mal (#205). El frontmatter es auditable contra el archivo de
 la NASA, y el lint lo compara **campo por campo**: vale lo que dice el ground truth o queda vacío.
 Que la NASA no tenga un valor es lo normal (la semiamplitud y la excentricidad faltan seguido), y ese
 hueco **no se rellena** con lo que dice un paper — ese número va a la prosa, con su cita. Si no,
@@ -336,7 +339,7 @@ quedaría con el mismo aspecto que el auditable.
 **Escribir la síntesis.** Toda afirmación va citada o marcada explícitamente como inferencia, cada
 ficha y concepto que genera el template abre avisando que esa prosa es capa LLM, y el lint lista los
 conceptos que no citan ninguna fuente.
-*Chequeo humano:* leerla con los `.txt` al lado. Cada cambio es un diff de git, así que se revisa
+*Chequeo humano:* leerla con los PDF de las fuentes al lado (el `.txt` para ubicar, #205). Cada cambio es un diff de git, así que se revisa
 como se revisa código.
 
 **Verificar las citas.** Acá hay un modelo chequeando a otro modelo, y eso tiene un techo: es juicio

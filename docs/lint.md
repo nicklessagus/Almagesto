@@ -132,13 +132,6 @@ Deben quedar en **0**:
   como RESUELTAS apuntando a filas que el lector no puede leer**. El criterio es el separador
   `|---|` bajo la primera fila de cada corrida, y un bloque ``` queda afuera (ahí una tabla es un
   ejemplo, no un artefacto).
-- **Snapshot del apéndice «Excluidos por el filtro»**: lo re-estampa `make_notes` desde
-  `build/<slug>/ads.json`, y ese archivo **declara si la corrida fue parcial** (#487). Con
-  `--extra-only` lo es —sólo los bibcodes de `extra_core`—, así que el estampador **avisa y no
-  toca la sección**: una corrida parcial que deja el apéndice vacío borra el único canal interno
-  para cazar un falso negativo de la lente. ⚠ La guarda de #481 no cubre este caso y no es un bug
-  suyo: compara el `n_total` del registro contra los registros del archivo, y acá **los dos son el
-  mismo número**.
 - **Registro que no se puede leer** (YAML roto o forma inválida — AUD-131/INV-139): **revierte la
   curación entera** (los `--drop` dejan de aplicarse, los `--drop-core` vuelven a ser core, el
   triage re-propone sin el motivo). `load_decisiones` **rehúsa operar** (doctrina de la lente
@@ -1205,3 +1198,16 @@ Son **trece** sitios (`grep -c "incomplete.append" scripts/lint.py`).
 
 Revisar además a mano: claims stale y conceptos referidos sin página. Si faltan datos, abrir
 queries para imputar (web/ADS).
+
+## Fuera del catálogo — avisos de otros scripts
+
+No son categorías del lint (no están en `lint.py` ni cuentan para el exit); se listan acá porque
+cuidan una sección que el lint sí mira (AUD-406: estaba bajo *Bloqueantes* sin categoría detrás).
+
+- **Snapshot del apéndice «Excluidos por el filtro»** — aviso de `make_notes`: lo re-estampa
+  desde `build/<slug>/ads.json`, y ese archivo **declara si la corrida fue parcial** (#487). Con
+  `--extra-only` lo es —sólo los bibcodes de `extra_core`—, así que el estampador **avisa y no
+  toca la sección**: una corrida parcial que deja el apéndice vacío borra el único canal interno
+  para cazar un falso negativo de la lente. ⚠ La guarda de #481 no cubre este caso y no es un bug
+  suyo: compara el `n_total` del registro contra los registros del archivo, y acá **los dos son el
+  mismo número**.

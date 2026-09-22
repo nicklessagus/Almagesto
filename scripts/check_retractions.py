@@ -257,8 +257,9 @@ def _estampar(args, ap=None) -> None:
     """R-6/D-57: el paso se estampa a sí mismo al salir 0 o 1 (las dos ramas en que **corrió**);
     con rc 2 no, porque el registro no puede afirmar haber mirado lo que no miró.
 
-    Es el último paso de `CADENA_ESTRELLA` y era el único de los siete que no se estampaba: la
-    cadena completa se reportaba como cortada acá, siempre.  @inv INV-91"""
+    Es el penúltimo paso de `CADENA_ESTRELLA` (detrás va el de la exportación oficial de cada cita, #397) y, cuando la
+    cadena tenía siete, era el único que no se estampaba: la cadena completa se reportaba como
+    cortada acá, siempre.  @inv INV-91"""
     if args.slug:
         cfg.save_paso(args.slug, "check_retractions", flags=cfg.flags_usados(args, ap))
 

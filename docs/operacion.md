@@ -96,6 +96,15 @@ python check_sources.py <slug> --firmar <key> --campo author|year|title --motivo
 python check_retractions.py         # Crossref → marca `retracted` (bloqueante) y `corrections`
                                     #   (erratum/corrigendum/EoC: backlog) (red); la cadena usa --slug <slug>,
                                     #   sin --slug barre TODA la bóveda (pasada periódica, skill maintain)
+python fetch_bibtex.py --slug <slug> # #397: ÚLTIMO paso de la cadena — el BibTeX OFICIAL de cada
+                                    #   paper (ADS → doi.org → arXiv), nunca redactado; sin exportación
+                                    #   deja el campo vacío y declara `sin_bibtex` (#467). Sin --slug,
+                                    #   toda la bóveda; --paper <bib> uno; --force re-baja (no `venue`, #484); --paper
+                                    #   --firmar --campo --motivo imprime la firma del drift (#483)
+python repaginate.py --list         # #494: la deuda `_paginacion` que deja `replace_pdf`, por fuente;
+                                    #   `<bib> --out <dir>` arma el paquete de RELECTURA del PDF y
+                                    #   `<bib> --apply <resultado>` lo escribe en la extracción (la
+                                    #   página sale de mirar la hoja, nunca de la que deduce el `.txt`)
 python triage.py <slug> --extraccion todos|subconjunto [--reason "<criterio>"]
                                     #   D-13: declarar QUÉ se leyó de los core (con `subconjunto`
                                     #   el criterio es obligatorio: no curar en silencio)
@@ -230,10 +239,15 @@ python scripts/contrast.py [<slug>] --validar-todo
                                     #   evidencia positiva de alteración, así sirve de gate
                                     # ⛔ y desde #492 juzga el OTRO eje del par: el LOCALIZADOR de
                                     #   página. Cada `«…» (p. N)` se busca en el `.txt` partido por
-                                    #   form feed y se contrasta — página impresa OK · índice del
-                                    #   PDF (otra convención, a declarar) · MAL con la página que
-                                    #   es · no evaluable con su motivo · FUERA DE ALCANCE (sin
-                                    #   cita textual con la que ubicarlo). Tampoco mueve el rc: la
+                                    #   form feed y se contrasta — OK si la cita está en la página
+                                    #   que nombra, por CUALQUIERA de las dos numeraciones (impresa
+                                    #   o índice del PDF: #500 retiró la convención a declarar) ·
+                                    #   MAL con la página que es · no evaluable con su motivo ·
+                                    #   FUERA DE ALCANCE (sin cita textual con la que ubicarlo).
+                                    #   El localizador es el ADYACENTE a la cita (#504): el que la
+                                    #   sigue sin prosa en el medio, o si no el que la introduce;
+                                    #   con prosa entre medio es de otra afirmación → no
+                                    #   evaluable, nunca MAL. Tampoco mueve el rc: la
                                     #   población es la más grande de la bóveda. Medido: 104 de 893
                                     #   apuntaban al PDF REEMPLAZADO (#436), o sea que la deuda
                                     #   global de `_paginacion` sale acá con su página nueva. El
@@ -347,8 +361,8 @@ python scripts/make_notes.py --rename-paper VIEJO NUEVO   # D-19: ciclo preprint
 ```
 
 **La cadena de `verify-citations`** (paso de cierre de toda operación que escriba prosa con
-`[[bibcode]]`; el procedimiento vive en el skill — acá los cuatro scripts, en el orden en que corren:
-generar → barrera → aplicar → re-verificar):
+`[[bibcode]]`; el procedimiento vive en el skill — acá los cinco scripts, en el orden en que corren:
+generar → barrera → aplicar → re-verificar → escribir el hermano):
 
 ```bash
 python scripts/verify_fanout.py <nota> --out build/<slug>/verif/r1
@@ -365,6 +379,13 @@ python scripts/apply_fixes.py <nota> <dir-de-fixes> [--write]
 python scripts/reverify_subset.py <nota> [--json build/<slug>/reverif.json]
                                     # #257/#282: qué pares se re-anclan y cuáles se re-verifican
                                     #   tras una corrección; propone y NO escribe la nota
+python scripts/write_verif_sidecar.py <nota> --from build/<slug>/verif/r1 [--from …/r2]
+                                    # #403: el ÚNICO paso que escribe: el hermano `.verif.md` y la
+                                    #   cabecera de la nota, tras correr la barrera. `--from` es
+                                    #   repetible (#428); `--reanclar` (#480) es el cierre SIN ronda:
+                                    #   lleva las filas con el ancla recalculada, conserva la fecha y
+                                    #   declara `· re-anclado <hoy>` en el encabezado (#499);
+                                    #   `--resolver`/`--restamp-section` (#427/#430), ver el skill
 ```
 
 > **OpenAlex tiene presupuesto (#362):** 1000 créditos por día (US$ 0,10), reset a medianoche UTC.

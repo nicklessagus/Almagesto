@@ -168,7 +168,7 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
    `thesis_links: [<slug-hipotesis>]`. Es un puntero **mecánico y add-only**, como `stars:`: dice
    *"este paper toca esa tesis"*, no qué opina de ella. La opinión ya vive en la tabla del paso 4.
 
-6. **Bookkeeping**: actualizar `vault/wiki/index.md` y appendear a `vault/wiki/log.md`.
+6. **Bookkeeping**: re-estampar `vault/wiki/index.md` (`make_notes.py --restamp-index`) y appendear a `vault/wiki/log.md`.
 
 7. **Verificar citas**: correr el skill `verify-citations` sobre la nota de hipótesis (y, si tocaste
    prosa con citas en otra ficha/concepto, sobre eso también). Chequea afirmación por

@@ -7475,8 +7475,11 @@ def main(argv=()) -> int:
     # era de otra estrella, y hubo que auditar las categorías a ojo, una por una, para verlo. Un
     # gate que se audita a mano dejó de ser un gate.
     ap.add_argument("--cierre", nargs="?", const="", default=None, metavar="SLUG",
-                    help="modo cierre de operación: los pares de verificación vencidos cuentan "
-                         "para el exit (sin el flag son backlog, la pasada periódica). Con un SLUG, "
+                    help="modo cierre de operación: las cuatro categorías SEV_CIERRE cuentan "
+                         "para el exit —pares de verificación vencidos, cobertura de verificación "
+                         "(citas sin bloque), cabecera desincronizada de su hermano `.verif.md` y "
+                         "cita textual inventada (#318)— (sin el flag son backlog, la pasada "
+                         "periódica). Con un SLUG, "
                          "sólo cuentan los de ese sujeto; la deuda ajena se reporta igual pero no "
                          "frena una operación que no la causó")
     args = ap.parse_args(list(argv))

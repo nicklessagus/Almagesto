@@ -31,7 +31,7 @@ Progreso del refresh de <entidad>:
 - [ ] 1b triage de los candidatos nuevos del chaining
 - [ ] 2  stubs nuevos identificados (git status) y extraídos
 - [ ] 2b inventario por eje actualizado con lo nuevo (fila nueva / eje nuevo)
-- [ ] 3  síntesis actualizada con SÓLO lo nuevo (+ disputes / régimen si es concepto / matriz)
+- [ ] 3  síntesis actualizada con SÓLO lo nuevo (+ disputes / régimen si es concepto)
 - [ ] 3b auto-revisión de autosuficiencia sobre la nota COMPLETA
 - [ ] 4  `contrast.py <slug> --validar-todo` (#323) → verify-citations sobre la prosa cambiada (re-fechar el bloque) → lint 0 → log → commit
 ```
@@ -79,7 +79,7 @@ Progreso del refresh de <entidad>:
    los huecos con lo que aportan los papers nuevos, apoyándose en el inventario de 2b — no reescribir
    de cero lo ya destilado. Si un paper
    nuevo discrepa, taguear `disputes` a nivel nota con posiciones explícitas (#71) —o correr
-   `find-contradictions`—. Actualizar la matriz método×estrella si hay métodos nuevos.
+   `find-contradictions`—. La matriz se estampa (`make_notes.py --restamp-matrix`).
    **Si la entidad es un concepto**, el paper nuevo entra además por la puerta del **`## Régimen de
    validez`** (#74): si afirma bajo condiciones (SNR, muestreo, tamaño de muestra, definición del
    observable), la fila va ahí — y si contradice a uno viejo **sólo porque el régimen es otro**, eso
@@ -134,11 +134,10 @@ Y el lint tiene la red del otro lado: **capas colgadas** (registro / `raw/pdfs` 
    también su entrada en `stars.yaml`/`themes.yaml`, su `ground_truth/<slug>.json` y su
    `vault/config/registro/<slug>.yaml` (registro de búsqueda + decisiones de triage del sujeto).
 3. **Reparar los colgados:** quitar/re-apuntar cada `[[wikilink]]`, `thesis_links`,
-   `disputes[].posiciones[].ref` y
-   celda de matriz que apuntaba al borrado. (⚠ La tabla `## Papers` **NO** es Dataview: es una tabla **estampada** (D-10/D-11), así que la
+   `disputes[].posiciones[].ref` que apuntaba al borrado. (⚠ La tabla `## Papers` **NO** es Dataview: es una tabla **estampada** (D-10/D-11), así que la
    fila del paper borrado queda y produce un **wikilink roto** —categoría bloqueante—. Re-estampar
    con `python scripts/make_notes.py <slug>` en cada ficha afectada. Lo que sí se
-   actualiza sola.) Sacar la estrella de la matriz método×estrella.
+   actualiza sola.) Matriz: `--restamp-matrix`.
 4. **Hacer durable el borrado de un paper** (si no, el próximo refresh lo resucita: `make_notes`
    re-escribe el stub de **todo** registro `relevant` sin nota en disco, y los fetchers re-bajan el
    PDF). Según por qué entró:
@@ -173,7 +172,7 @@ El procedimiento manual, por si hay que hacerlo a mano:
    ```bash
    grep -rln "<slug-viejo>" vault/                            # dónde aparece
    ```
-2. Ajustar `data_local` si cambió y el nombre en la matriz. Los wikilinks internos son por **nombre de
+2. Ajustar `data_local` si cambió; matriz: `--restamp-matrix`. Los wikilinks internos son por **nombre de
    nota** (sobreviven a mover carpeta pero **no** a renombrar el archivo) → actualizarlos todos.
 3. Cierre: `lint.py --cierre <slug>` en 0 (con el slug **nuevo**) → `log` → commit → preguntar push.
 
@@ -213,7 +212,7 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
 > **inalcanzable** desde la bóveda, y `lint.py` la cuenta en `n_block` (exit 1, igual que un wikilink
 > roto) — dejarla "para la próxima pasada" traba el cierre de la operación siguiente. Se arregla
 > **en el cierre de la operación que la creó, antes de commitear**: citarla desde donde corresponda
-> (la ficha/concepto que la motivó, `index.md`, el hub si es un radio) o borrarla si sobra. Si
+> (la ficha/concepto que la motivó, el hub si es un radio; `index.md` NO cuenta, #249) o borrarla si sobra. Si
 > aparece en una pasada periódica, resolvela en el momento.
 
 - **Core sin extraer / extraído pero no sintetizado (D-15) — el backlog del ingest a medias.**

@@ -23,7 +23,8 @@ Measured in the same pass: of 78 expired pairs, **72 were of the second kind**.
 ⚠ The split is a **proposal**, not a verdict: `match_rows_to_pairs` compares how much of the row's
 (truncated, #226) extract survives in the current block. A high score means the claim is still
 recognisably the same one; it does **not** prove the correction was faithful. Whoever accepts it
-says so in the block — the round it came from, and that the text is post-correction.
+declares it in the block: the `· re-anclado AAAA-MM-DD` suffix of the heading, which
+`write_verif_sidecar --reanclar` stamps (#499) — not a line written by hand.
 """
 from __future__ import annotations
 

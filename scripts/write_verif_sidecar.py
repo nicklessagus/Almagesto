@@ -858,8 +858,15 @@ def main(argv=None) -> int:
                     help="con --restamp-section: barre toda la bóveda (notas con hermano)")
     ap.add_argument("--reanclar", action="store_true",
                     help="#480: sin ronda — lleva todas las filas con el ancla recalculada, "
-                         "conserva la fecha del bloque y REHÚSA si algún par hay que re-verificar")
-    ap.add_argument("--fecha", default=None, help="fecha del bloque (default: hoy)")
+                         "conserva la fecha del bloque y REHÚSA si algún par hay que re-verificar. "
+                         "#499: DECLARA el arrastre con el sufijo `· re-anclado <hoy>` en el "
+                         "encabezado del bloque (aun con 0 filas re-ancladas), y el lint compara "
+                         "la prosa contra esa fecha")
+    ap.add_argument("--fecha", default=None,
+                    help="fecha del bloque. Default: hoy sólo con `--from` (una ronda de "
+                         "fan-out); con `--reanclar`, `--restamp-section`, `--resolver`/"
+                         "`--resoluciones` y `--migrate-condition-prefix`, la que el bloque ya "
+                         "tiene (nada se verificó, #395) — pasarla re-fecha el bloque")
     ap.add_argument("--dry-run", action="store_true", help="no escribe: dice qué haría")
     args = ap.parse_args(argv)
     if args.restamp:

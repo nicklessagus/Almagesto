@@ -287,9 +287,9 @@ más: `re_anclaje` es la historia. El detalle, con la medición que lo motiva, e
 que falla* de `.claude/skills/verify-citations/SKILL.md`.
 
 ⛔ El re-anclaje es una **propuesta**: dice que la afirmación sigue siendo reconociblemente la misma,
-**no** que la corrección haya sido fiel. Quien lo acepta **lo declara en el bloque** — de qué ronda
-viene el veredicto, y que el texto es posterior a la corrección. Sin esa línea, el bloque afirma una
-frescura que no tiene. `re_verificar` vacío → `write_verif_sidecar.py <nota> --reanclar` (#480).
+**no** que la corrección haya sido fiel. Quien lo acepta lo declara con
+`write_verif_sidecar.py <nota> --reanclar` (#480, con `re_verificar` vacío), que estampa el sufijo
+`· re-anclado AAAA-MM-DD` en el encabezado (#499) — no una línea a mano.
 
 ### 5. Cerrar
 

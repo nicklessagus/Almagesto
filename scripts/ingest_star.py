@@ -30,8 +30,8 @@ lo surface como bloqueante), NO un fallo de la cadena; **2** = el chequeo **no p
 (precondición ausente o Crossref caído) — también aborta, porque la cadena no certifica lo que no
 miró, pero con el mensaje honesto.
 
-La extracción LLM posterior (leer fulltext, poblar notas, síntesis, matriz) NO es de este
-script: la hace el agente siguiendo el skill ingest-star.
+La extracción LLM posterior (leer el PDF, poblar notas, síntesis) NO es de este
+script (la matriz no se escribe: la estampa `make_notes.py`, #429): la hace el agente siguiendo el skill ingest-star.
 """
 from __future__ import annotations
 

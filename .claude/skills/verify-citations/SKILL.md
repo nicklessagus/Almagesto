@@ -88,11 +88,9 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
   dice que el paper existe) y, peor, ata **anclas** a bloques que el próximo `make_notes` reescribe
   — la fila queda «vencida por edición» sin que nadie haya afirmado nada nuevo. La lista canónica es
   `lib_config.SECCIONES_ESTAMPADAS`, y el código ya las excluye; esto lo dice acá, que es donde
-  alguien arma el fan-out a mano. Son: los tres **roll-ups** (`## Papers`, `## Planetas`,
-  `## Métodos aplicados a esta estrella`, y el de concepto), las **ayudas de lectura** de #124
-  (`## Abstract`, `## Conclusiones` y sus dos `## Traducción …` — una traducción no es una
-  afirmación de la bóveda), el apéndice `## Excluidos por el filtro` y el propio bloque
-  `## Verificación de citas`.
+  alguien arma el fan-out a mano. **Leé la constante, no una copia** (la que había acá perdió
+  `## Indicadores…`, `## Datos públicos` y `## Matriz…`, AUD-401):
+  `python -c "import sys;sys.path.insert(0,'scripts');import lib_config as c;print(*c.SECCIONES_ESTAMPADAS,sep='\n')"`.
   ⚠ La `## Vista — <sujeto>` **NO** está en la lista, a propósito: es exactamente lo que hay que
   contrastar contra la fuente.
 - **Valores de ground-truth (NEA) en fichas de estrella** → los parámetros planetarios (P/K/e/m·sin i,

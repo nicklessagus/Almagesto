@@ -20,8 +20,8 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > el ARCHIVO, así que una cirugía de cabecera contaría igual que reescribir el resumen) y
 > **verificación** (fecha del bloque, con la salvedad fija *"vigencia por par: la dicen las anclas"*
 > — sin ella la fecha se lee como "todo verificado a esta fecha", que es lo que el ancla corrige),
-> ⛔ **y el ARRASTRE del re-anclaje se declara al lado: `· re-anclado AAAA-MM-DD`, mismo encabezado
-> (#499)** — `--reanclar` conserva la fecha (nada se verificó, #395) y el lint compara contra ésa.
+> ⛔ **y el ARRASTRE del re-anclaje se declara al lado (#499)**: `· re-anclado AAAA-MM-DD` en el
+> encabezado del bloque, `, re-anclado AAAA-MM-DD` en esta línea — `--reanclar` conserva la fecha (nada se verificó, #395) y el lint compara contra ésa.
 > Con una sola fecha, refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear
 > —y re-sintetizado lo que nadie volvió a escribir (INV-82).
 
@@ -1292,10 +1292,10 @@ cambiar los ejes de un tema produce un **diff computable**, nunca una re-interpr
 **cobertura**, y el detector de #270 pasa de ruido a señal.
 
 2c. **Síntesis a la nota viva**, apoyada en el inventario: la ficha (frontmatter propio, prosa,
-   huecos), los conceptos e hipótesis relacionados y la matriz método×estrella. ⛔ Los campos de
+   huecos) y los conceptos e hipótesis relacionados; la matriz se re-estampa (`--restamp-matrix`). ⛔ Los campos de
    ground-truth **no se tocan** (espejo de NEA, #70).
 
-3. Actualizás `index.md` y appendeás a `log.md`.
+3. Re-estampás `index.md` (`--restamp-index`) y appendeás a `log.md`.
 
 > **Retro-linkeo (papers pre-existentes ↔ entidad nueva) — tres capas:** (a) el roll-up de una
 > ficha-método junta también por `methods`, pero **no acumula solo**: re-correr `make_notes.py <slug>
@@ -1780,7 +1780,7 @@ se trabaja con `maintain`). No existe "informativo" (AUD-207): lo declarado-y-re
   distingue *«miré todo y no hay nada»* de *«no miré nada»*.
 
 **Bloqueantes** (0 para cerrar; detalle y migradores en `docs/lint.md`): wikilinks rotos ·
-frontmatter no parseable o con forma inválida (la nota evade en silencio los chequeos de su tipo) ·
+frontmatter no parseable o con forma inválida ·
 papers retractados · páginas huérfanas (el `index.md` estampado NO cuenta como link entrante, #249)
 · contradicciones ground-truth↔ficha, campo por campo (#70) · masa inconsistente con la m·sini
 implícita · `thesis_links` sin página destino · `disputes` mal formadas, con `ref` sin destino o en
@@ -1796,8 +1796,8 @@ vocabulario (#296) · `pdf_source` de editor con `eprint_version` (#383) · extr
 fuera del vocabulario (D-37) · `sources:` sin `via`/`motivo` (#111) o con autor/año que Crossref
 desmiente (#353) · par nota↔`.verif.md` roto (#344: tabla adentro, cabecera sin hermano, hermano
 huérfano) · lente vacía (ningún paper puede ser core) · mismo bibcode con `.txt` distinto entre
-slugs (D-18/D-20) · driver `merge=ours` registrado (#390) · `bibtex` sin `bibtex_source` (#397:
-una entrada de cita sin procedencia es un bloque escrito a mano) — la lista `SEV_BLOQUEANTE` de
+slugs (D-18/D-20) · driver `merge=ours` registrado (#390) · `bibtex` sin `bibtex_source` (#397)
+o a la vez con `sin_bibtex` (#475) — la lista `SEV_BLOQUEANTE` de
 `scripts/lint.py` (AUD-237): si agregás una, va acá.
 
 **La fuga de implementación** (regla #0) es **WARN**: heurística de alta señal, cada hit se revisa

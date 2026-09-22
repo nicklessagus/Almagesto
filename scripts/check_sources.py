@@ -12,7 +12,8 @@ Four evidence rails, all already at hand, tried in this order (the first that an
 - **`doi`** → Crossref (the same call `check_retractions` makes): first author, year, title. A DOI
   Crossref does not register (`10.48550/arXiv.*`, 5 of 32 in one vault) falls through.
 - **a `.bib` in the directory of the DECLARED `pdf:` path** (#392): the user's own library, matched
-  by DOI or by surname+year — structured and offline; in the measured case it held the four right
+  by DOI, by the PDF's file name in the entry's `file`, or by normalised title — never by author,
+  which is what is being checked (`bib_match`) — structured and offline; in the measured case it held the four right
   answers nobody consulted. Same comparison as Crossref.
 - **a PDF** → its FIRST PAGE via `pdftotext -f 1 -l 1`: author surname and year must appear there
   (title is not judged from a page: too many layout artefacts).
