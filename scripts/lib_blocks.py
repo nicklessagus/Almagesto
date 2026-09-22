@@ -398,6 +398,26 @@ def block_anchor(text: str, intro: str | None = None) -> str:
     return sha10(base)
 
 
+def warn_anchor(lineas: list, i: int) -> str:
+    """The anchor a WARN hit is signed against (#502): the hash of the PARAGRAPH that holds line
+    `i` (0-indexed) — or of the row itself in a table, where a paragraph would be the whole table
+    and editing any row would expire every signature in it. Normalised like `block_anchor`, so a
+    reflow does not expire the signature and changing a word does."""
+    if lineas[i].strip().startswith("|"):
+        return sha10(normalize_ws(lineas[i]))
+
+    def corta(s: str) -> bool:
+        """A line that ends the paragraph: blank, heading, fence or table row."""
+        s = s.strip()
+        return not s or s.startswith(("#", "```", "|"))
+    ini, fin = i, i
+    while ini > 0 and not corta(lineas[ini - 1]):
+        ini -= 1
+    while fin + 1 < len(lineas) and not corta(lineas[fin + 1]):
+        fin += 1
+    return sha10(normalize_ws(" ".join(lineas[ini:fin + 1])))
+
+
 # ── partición ────────────────────────────────────────────────────────────────────────────────────
 
 def _cuerpo(text: str) -> tuple[str, int]:

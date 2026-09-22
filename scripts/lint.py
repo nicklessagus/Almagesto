@@ -791,7 +791,8 @@ LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "facets": False,
                "keywords": False,
                "planets": True, "disputes": True, "corrections": True,
                "versions": True, "vistas": True, "no_vista": True,
-               "segunda_mano_revisada": True, "pdf_reemplazo": True}
+               "segunda_mano_revisada": True, "pdf_reemplazo": True,
+               "warn_revisada": True}
 
 
 def normalize_lists(fm: dict) -> list:
@@ -6048,6 +6049,47 @@ _ANTES_DE_UNIDAD_OK = re.compile(
     r"at|per|to|from|by|for|over|and|or|y|o|u|e)" + _CIERRE + r"$", re.I)
 
 
+def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: dict) -> tuple:
+    """`(impl_leaks, bloque_con_varios_hechos, costura_unidad, revisadas, huerfanas)` (#502).
+
+    Each WARN hit of the three categories that a PERSON decides (`cfg.WARN_REVISABLE`) is matched
+    against the note's `warn_revisada` by `(categoria, ancla)`: a signed one moves to its own list
+    —*«revisado y descartado: visible, no es deuda»* (AUD-207)—; an unsigned one gets its anchor
+    appended, so signing it is pasting what the report says; and a signature that covers no hit is
+    reported, because a hatch that exempts nothing is a false claim about the vault (#256). The
+    anchor hashes the block (`lib_blocks.warn_anchor`): edit the prose and the hit comes back."""
+    try:
+        firmas = cfg.load_reviewed_warn(fm or {}, entry=stem)
+    except cfg.VistasError as e:
+        firmas, huerfanas = [], [(stem, str(e).replace("\n", " "))]
+    else:
+        huerfanas = []
+    lineas = body_full.split("\n")
+    usadas, revisadas, quedan = set(), [], {c: [] for c in cfg.WARN_REVISABLE}
+    for cat in cfg.WARN_REVISABLE:
+        for st, msg in hits.get(cat, []):
+            m = re.match(r"L(\d+)", msg)
+            i = int(m.group(1)) - 1 - offset if m else -1
+            if not 0 <= i < len(lineas):
+                quedan[cat].append((st, msg))
+                continue
+            ancla = lb.warn_anchor(lineas, i)
+            firma = next((f for f in firmas if f["categoria"] == cat and f["ancla"] == ancla), None)
+            if firma:
+                usadas.add((cat, ancla))
+                revisadas.append((st, f"[{cat}] {msg[:120]} — revisado: {firma['motivo']}"))
+            else:
+                quedan[cat].append((st, f"{msg} · ancla `{ancla}`"))
+    for f in firmas:
+        if (f["categoria"], f["ancla"]) not in usadas:
+            huerfanas.append((stem, f"`warn_revisada` firma `{f['categoria']}` · ancla "
+                                    f"`{f['ancla']}` y ningún hit corresponde → o el bloque cambió "
+                                    f"(re-revisalo y firmá el ancla nueva) o ya no dispara (sacá "
+                                    f"la entrada) (#502/#256)"))
+    return (quedan["impl_leaks"], quedan["bloque_con_varios_hechos"], quedan["costura_unidad"],
+            revisadas, huerfanas)
+
+
 def check_block_facts(stem: str, body_full: str, offset: int) -> list:
     """`bloque_con_varios_hechos` — a cited block above the p90 in length or in cited facts (#408).
 
@@ -6259,6 +6301,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     segunda_mano_perdida: list = []    # (stem, motivo) — #279: la ficha se apoya y no lo dice
     segunda_mano_revisada: list = []   # (stem, motivo) — #433: revisado y rechazado, no es deuda
     segunda_mano_huerfana: list = []   # (stem, motivo) — #433: la escotilla no exime nada
+    warn_revisada: list = []           # (stem, motivo) — #502: WARN revisada y firmada
+    warn_revisada_huerfana: list = []  # (stem, motivo) — #502: la firma no cubre ningún hit
     cita_log: list = []                # (stem, motivo) — #238: cita del `log.md` que su fuente no dice
     cita_no_verbatim: list = []        # (stem, motivo) — #220: la cadena no está en el `.txt`
     cita_inventada: list = []          # (stem, motivo) — #318: ni en el `.txt` NI en la extracción
@@ -6519,7 +6563,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # ⛔ El recorte: `## Vista — <sujeto>` NO es estampada (no está en `SECCIONES_ESTAMPADAS`),
         # y ahí una fuga sí sería una fuga real — la escribe el extractor, no la máquina.
         # La fuga de implementación vive en `check_impl_leaks` (#396).
-        impl_leaks += check_impl_leaks(stem, body_full, _offset, leak_patterns, scan_leaks)
+        _il = check_impl_leaks(stem, body_full, _offset, leak_patterns, scan_leaks)
         # #234 — las salvedades de una nota de paper. #213 le dio a la afirmación decidible una
         # forma estructurada y un `grep`; lo que no le dio es nada que haga que el extractor la
         # USE. Medido sobre una bóveda real: 0 de 43 extracciones emitieron una salvedad
@@ -6592,8 +6636,17 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         forma_sospechosa += _f2
         # «Un bloque, un hecho» (#408) y la costura de unidad (#406): los dos WARN que miran la
         # PROSA entre las citas, que hasta acá no miraba nadie.
-        bloque_con_varios_hechos += check_block_facts(stem, body_full, _offset)
-        costura_unidad += check_unit_seams(stem, body_full, _offset)
+        # #502 — y las tres se FIRMAN: el hit revisado y descartado sale aparte, con su motivo.
+        _ir, _bh, _cu, _wr, _wh = split_reviewed_warn(
+            stem, fm, body_full, _offset,
+            {"impl_leaks": _il,
+             "bloque_con_varios_hechos": check_block_facts(stem, body_full, _offset),
+             "costura_unidad": check_unit_seams(stem, body_full, _offset)})
+        impl_leaks += _ir
+        bloque_con_varios_hechos += _bh
+        costura_unidad += _cu
+        warn_revisada += _wr
+        warn_revisada_huerfana += _wh
 
         # Cabecera no estampable (#69, backlog): una ficha/concepto sin la línea
         # `> _Generado con Almagesto v…_` deja SIN EFECTO a todos los estampadores de cabecera
@@ -7278,6 +7331,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('segunda_mano_huerfana', '`segunda_mano_revisada` que no corresponde a ningún '
                   'hallazgo: la escotilla no exime nada (#433/#256, backlog)', SEV_BACKLOG,
                   tuple(segunda_mano_huerfana), poblacion='pares_segunda_mano'),
+        Categoria('warn_revisada', 'Hit de fuga/bloque/costura REVISADO y firmado con motivo '
+                  '(#502: visible, no es deuda)', SEV_BACKLOG, tuple(warn_revisada), poblacion='notas'),
+        Categoria('warn_revisada_huerfana', '`warn_revisada` que no corresponde a ningún hit: la '
+                  'firma no exime nada (#502/#256, backlog)', SEV_BACKLOG,
+                  tuple(warn_revisada_huerfana), poblacion='notas'),
         Categoria('sin_conclusiones_ok', 'Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda)', SEV_BACKLOG, tuple(sin_conclusiones_ok), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(extraccion_no_declarada), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(papers_table_stale), poblacion='registros'),

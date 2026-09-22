@@ -2090,3 +2090,20 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Es el módulo donde vive la implementación; `page_locators_after` (el lector de `contrast`) delega en ella, y `lib_config` la re-exporta (AUD-306)."
+
+  - issue: 502
+    regla: >-
+      Una categoría WARN «se revisa a mano» tiene que tener dónde FIRMARSE la revisión, o el hit
+      revisado y descartado se lista igual que el que nadie miró y la categoría mide su tasa de
+      disparo (medido: 25 de 25 fugas de implementación eran el parámetro del propio paper). Es la
+      forma de #433 (`segunda_mano_revisada`) y #463 (`metadata_revisada`) para las tres WARN de
+      juicio (`cfg.WARN_REVISABLE`); la firma cubre el ESTADO del bloque (su ancla), no el campo.
+    funcion: lib_config.load_reviewed_warn
+    patron: 'warn_revisada|WARN_REVISABLE|warn_anchor'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`split_reviewed_warn` cruza los hits de las tres categorías contra las firmas de la nota, lista aparte las firmadas y nombra las huérfanas."
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "Vive ahí `warn_anchor`, el hash del bloque contra el que se firma; no lee firmas."

@@ -672,6 +672,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   no dispara (sacá la entrada) o el `ref`/`que` no es el que el lint nombra. El `qué` se compara
   **normalizado y por prefijo**, porque la forma canónica de firmar es pegar lo que el reporte dice
   y el reporte lo trunca (`_q[:80]`).
+- **Hit de fuga/bloque/costura REVISADO y firmado con motivo** (#502, backlog): la escotilla de las
+  tres WARN que decide una persona leyendo (fuga de implementación, bloque con más de un hecho,
+  costura de unidad) — `warn_revisada: [{categoria, ancla, motivo}]` en el frontmatter de la nota.
+  El lint imprime el `ancla` al final de cada hit; firmar es pegarla. ⛔ El ancla hashea el BLOQUE
+  (el párrafo, o la fila en una tabla): si la prosa cambia, la firma deja de cubrir y el hit vuelve
+  — lo juzgado ES la prosa. Forma dura (D-58): sin `motivo` o con una categoría fuera de las tres,
+  no exime nada. Las WARN de higiene no se firman: se cierran arreglando.
+- **`warn_revisada` que no corresponde a ningún hit** (#502/#256, backlog): el bloque cambió
+  (re-revisalo y firmá el ancla nueva) o el hit ya no dispara (sacá la entrada).
 - **Cita textual de `log.md` que su fuente no dice** (#238, `cita_log`): la bitácora es
   append-only, así que una cita fabricada ahí es **permanente** — medido, una entrada publicaba
   como cita textual **con página** una frase que invierte el sentido de lo que dice el paper.

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.304.0"
+ALMAGESTO_VERSION = "1.305.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4050,6 +4050,46 @@ def load_reviewed_second_hand(meta: dict, *, entry: str = "?") -> list:
         if faltan:
             raise VistasError(_reviewed_second_hand_error(
                 entry, f"a una entrada de `segunda_mano_revisada` le falta {', '.join(faltan)}"))
+        out.append(dict(x, **campos))
+    return out
+
+
+#: #502 — las WARN cuyo hit decide una PERSONA leyéndolo (regla #0, #408, #406). Las de higiene
+#: (objetivo, áreas, Obsidian, PDF ↔ disco) no llevan juicio: se cierran arreglando.
+WARN_REVISABLE = ("impl_leaks", "bloque_con_varios_hechos", "costura_unidad")
+
+
+def load_reviewed_warn(meta: dict, *, entry: str = "?") -> list:
+    """`warn_revisada: [{categoria, ancla, motivo}]` — a WARN hit REVIEWED AND DISCARDED (#502).
+
+    The sibling of `segunda_mano_revisada` (#433) and `metadata_revisada` (#463) for the three WARN
+    that are «reviewed by hand»: without a place to sign the review, the hit somebody read and
+    discarded is listed exactly like the one nobody looked at, and the category measures its firing
+    rate (measured: 25 of 25 implementation-leak hits were the paper's own parameter, cited with a
+    page). ⛔ The identity is `(categoria, ancla)` and the anchor hashes the BLOCK the hit lives in
+    (`lib_blocks.warn_anchor`): the signature covers a STATE, so if the prose changes the hit comes
+    back — unlike #433, whose `(ref, que)` survives a reflow, here the thing judged IS the prose.
+    Same hard form as its siblings (D-58): no motive or a category outside `WARN_REVISABLE` aborts."""
+    v = meta.get("warn_revisada")
+    if v is None:
+        return []
+    forma = (f"'{entry}': {{}}. Forma canónica:\n\nwarn_revisada:\n"
+             f"  - categoria: <{' | '.join(WARN_REVISABLE)}>\n"
+             f"    ancla: <la que el lint imprime al final del hit>\n"
+             f"    motivo: <por qué NO es deuda>\n")
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        raise VistasError(forma.format("`warn_revisada` no acepta un motivo suelto ni una lista de "
+                                       "strings: sin `categoria` y `ancla` no dice QUÉ hit se revisó"))
+    out = []
+    for x in v:
+        campos = {k: str(x.get(k) or "").strip() for k in ("categoria", "ancla", "motivo")}
+        faltan = [k for k, val in campos.items() if not val]
+        if faltan:
+            raise VistasError(forma.format(f"a una entrada de `warn_revisada` le falta "
+                                           f"{', '.join(faltan)}"))
+        if campos["categoria"] not in WARN_REVISABLE:
+            raise VistasError(forma.format(f"`warn_revisada` declara la categoría "
+                                           f"`{campos['categoria']}`, que no es una WARN de juicio"))
         out.append(dict(x, **campos))
     return out
 

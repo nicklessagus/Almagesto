@@ -517,6 +517,12 @@
 ## `segunda_mano_revisada` que no corresponde a ningún hallazgo: la escotilla no exime nada (#433/#256, backlog) (0)
 > sobre 0 pares (bloque citante, bibcode) que citan una fuente con valores de segunda mano
 
+## Hit de fuga/bloque/costura REVISADO y firmado con motivo (#502: visible, no es deuda) (0)
+> sobre 89 notas de `vault/wiki/`
+
+## `warn_revisada` que no corresponde a ningún hit: la firma no exime nada (#502/#256, backlog) (0)
+> sobre 89 notas de `vault/wiki/`
+
 ## Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda) (0)
 > sobre 60 notas de `papers/`
 

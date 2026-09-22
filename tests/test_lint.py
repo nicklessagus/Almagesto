@@ -10959,3 +10959,46 @@ def test_503_institucional_es_vocabulario_y_como_venue_exige_bibtex_url(toy_vaul
                                   "bibtex_url": "https://research.aalto.fi/en/publications/x"})
     rc, rep = run_lint_reporte(capsys)
     assert rc == 0 and "2020aaa" not in _seccion(rep, "sin `bibtex_source`"), rep
+
+
+def test_502_la_WARN_revisada_se_FIRMA_por_bloque_y_vuelve_si_el_bloque_cambia(toy_vault, capsys):
+    """#502 — una WARN «se revisa a mano» tiene que tener dónde firmarse la revisión: si no, el hit
+    revisado y descartado se lista igual que el que nadie miró (medido: 25 de 25 fugas eran el
+    parámetro del propio paper, citado con página). La firma es `(categoria, ancla)` y el ancla
+    hashea el BLOQUE: si la prosa cambia, la firma deja de cubrir y el hit vuelve."""
+    import re as _re
+    cuerpo = "La perilla ξ de la ec. 33 regula el peso de las variables.\n"
+    mk_note(toy_vault.CONCEPTS / "methods", "nota", {"tags": ["methods"]}, cuerpo)
+    link_from_log(toy_vault, "nota")
+    rc, rep = run_lint_reporte(capsys)
+    fuga = _seccion(rep, "Fuga de implementación")
+    m = _re.search(r"ancla `([0-9a-f]{10})`", fuga)
+    assert m, fuga
+    firma = [{"categoria": "impl_leaks", "ancla": m.group(1),
+              "motivo": "la perilla es el parámetro ξ del paper, citado con página"}]
+    mk_note(toy_vault.CONCEPTS / "methods", "nota",
+            {"tags": ["methods"], "warn_revisada": firma}, cuerpo)
+    rc, rep = run_lint_reporte(capsys)
+    assert "perilla" not in _seccion(rep, "Fuga de implementación"), rep
+    assert "parámetro ξ" in _seccion(rep, "REVISADO y firmado"), rep
+    # la prosa cambia → la firma ya no cubre, el hit vuelve y la firma se nombra huérfana
+    mk_note(toy_vault.CONCEPTS / "methods", "nota",
+            {"tags": ["methods"], "warn_revisada": firma},
+            "La perilla del pipeline se ajusta así.\n")
+    rc, rep = run_lint_reporte(capsys)
+    assert "perilla" in _seccion(rep, "Fuga de implementación"), rep
+    assert m.group(1) in _seccion(rep, "`warn_revisada` que no corresponde"), rep
+
+
+def test_502_warn_revisada_sin_motivo_o_con_categoria_ajena_NO_exime(toy_vault, capsys):
+    """#502 — forma dura (D-58, como `segunda_mano_revisada`): sin `motivo`, o con una categoría que
+    no es una de las tres WARN de juicio, la firma no exime nada y la nota se reporta."""
+    mk_note(toy_vault.CONCEPTS / "methods", "nota",
+            {"tags": ["methods"],
+             "warn_revisada": [{"categoria": "wikilinks_rotos", "ancla": "abcdef0123",
+                                "motivo": "x"}]},
+            "La perilla del contraste.\n")
+    link_from_log(toy_vault, "nota")
+    rc, rep = run_lint_reporte(capsys)
+    assert "perilla" in _seccion(rep, "Fuga de implementación"), rep
+    assert "wikilinks_rotos" in rep, rep
