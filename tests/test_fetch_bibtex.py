@@ -52,6 +52,16 @@ class Resp:
             raise real_requests.RequestException(f"status {self.status_code}")
 
 
+_HAL_FIND_REAL = fb.hal.find if hasattr(fb, "hal") else None
+
+
+@pytest.fixture(autouse=True)
+def _sin_hal(monkeypatch):
+    """#505 — HAL es red: por default, un doble que dice «sin registro». El test de HAL lo repone."""
+    if hasattr(fb, "hal"):
+        monkeypatch.setattr(fb.hal, "find", lambda *a, **k: (None, "HAL: sin registro (doble)", ""))
+
+
 def fake_net(monkeypatch, *, get=None, post=None):
     monkeypatch.setattr(fb, "requests", SimpleNamespace(
         get=get or (lambda *a, **k: Resp(404)),
@@ -1114,3 +1124,36 @@ def test_AUD454_force_no_rebaja_lo_pegado_a_mano_y_lo_dice(tmp_path, monkeypatch
         fb.main()
     ayuda = " ".join(capsys.readouterr().out.split())
     assert "venue" in ayuda and "institucional" in ayuda, ayuda
+
+
+def test_505_antes_de_declarar_el_hueco_se_consulta_HAL_y_se_PROPONE(tmp_path, monkeypatch, capsys):
+    """#505 — HAL tiene la exportación oficial del depósito: el hueco no se estampa, y el bloque
+    sale PROPUESTO con `bibtex_source: institucional` + `bibtex_url` (lo pega una persona, #503).
+    Y cuando HAL no lo tiene, el `sin_bibtex` dice que se consultó."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(fb, "doi_candidate", lambda *a, **k: ("", "sin candidato en Crossref", ""))
+    bloque = "@book{comon2010,\n  title = {Handbook of Blind Source Separation},\n  author = {Comon, Pierre},\n}"
+
+    def get(url, params=None, **k):
+        if "wt=bibtex" in url:
+            return Resp(200, text=bloque)
+        if params and "Handbook" in params.get("q", ""):
+            return Resp(200, payload={"response": {"docs": [
+                {"halId_s": "hal-00460653", "title_s": ["Handbook of Blind Source Separation"],
+                 "authLastName_s": ["Comon"], "producedDateY_i": 2010}]}})
+        return Resp(200, payload={"response": {"docs": []}})
+    fake_net(monkeypatch, get=get, post=lambda *a, **k: Resp(200, payload={"export": ""}))
+    monkeypatch.setattr(fb.hal, "find", _HAL_FIND_REAL)
+    con = _nota(tmp_path, {"bibcode": "2010ComonJutten", "tags": ["paper"], "year": 2010,
+                           "title": "Handbook of blind source separation", "first_author": "Comon, Pierre"})
+    sin = _nota(tmp_path, {"bibcode": "2003Sarela", "tags": ["paper"], "year": 2003,
+                           "title": "Denoising source separation", "first_author": "Särelä, Jaakko"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    fb.main()
+    out = capsys.readouterr().out
+    fm_con = cfg.split_fm(con.read_text(encoding="utf-8")) or {}
+    assert not fm_con.get("sin_bibtex") and not fm_con.get("bibtex"), fm_con
+    assert "hal-00460653" in out and "institucional" in out and "Handbook of Blind" in out, out
+    fm_sin = cfg.split_fm(sin.read_text(encoding="utf-8")) or {}
+    assert "HAL" in str(fm_sin.get("sin_bibtex") or ""), fm_sin

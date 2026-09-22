@@ -1536,7 +1536,7 @@ la cascada y **propone**; nunca clasifica.
   mano, y el framework pide que cada entrada registre **por qué** entró (`extra_core` con
   `via`/`motivo`, o `sources`).
 - **Encontrar ≠ conseguir** (`resolve_pdf`): OpenAlex identificó 8/8 canónicos con `pdf_url = None`
-  **8/8**. La cascada del archivo es **OpenAlex → Unpaywall → Europe PMC → arXiv por título EXACTO**
+  **8/8**. La cascada del archivo es **OpenAlex → Unpaywall → Europe PMC → HAL (#505) → arXiv por título EXACTO**
   (#313/#358, medidos: 2 `pending: paywall` obtenibles, uno en arXiv; 2 de 6 «sin conseguir» open
   access, uno sólo vía Europe PMC) y **propone una URL y para**: no reescribe un `pending:` ni edita
   `sources:`. ⛔ **El carril ADS de `fetch_pdf` la recorre ENTERA al agotar los `esource` (#358)** y

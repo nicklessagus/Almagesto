@@ -436,6 +436,10 @@ portadores:
       - modulo: scripts/ingest_theme.py
         estado: fuera-de-alcance
         motivo: "Ídem: corre `check_sources` al declarar, y es ése el que decide y el que propone la firma."
+      - modulo: scripts/hal.py
+        estado: fuera-de-alcance
+        motivo: "Nombra a Crossref sólo en el docstring (qué carriles ya existen); no compara metadata contra un catálogo ni lee firmas."
+
   - issue: 444
     regla: >-
       «Esto es la cabecera estampada» es UNA función: el blockquote que contiene `GENERATOR_LINE`
@@ -1371,6 +1375,9 @@ portadores:
         estado: fuera-de-alcance
         motivo: >-
           Matchea por la mención de `fetch_bibtex --paper` en un docstring (#420); no toca BibTeX.
+      - modulo: scripts/hal.py
+        estado: fuera-de-alcance
+        motivo: "Trae la exportación de HAL como TEXTO y no la parsea; quien la parsea es `lib_config.bibtex_fields`, aguas abajo."
 
   - issue: 419
     regla: >-
@@ -1393,6 +1400,9 @@ portadores:
         motivo: >-
           Usa `resp.text` sólo para recortar 200 caracteres en un mensaje de error; no guarda ese
           texto en la bóveda. Los demás carriles de ADS consumen `r.json()`, que decodifica solo.
+      - modulo: scripts/hal.py
+        estado: fuera-de-alcance
+        motivo: "Decodifica con el `_utf8` que le INYECTA `fetch_bibtex` (`hal.export(get, halid, decode)`): no puede importarlo sin un ciclo, y así la regla sigue en una sola función."
 
   - issue: 420
     regla: >-
@@ -1679,6 +1689,10 @@ portadores:
       - modulo: scripts/contrast.py
         estado: fuera-de-alcance
         motivo: "Matchea porque el pre-flight de #490 normaliza con `cfg.method_key` para comparar un `role` contra el que declara el paper — la misma clave, otro eje: no arma ninguna fila de la matriz método × estrella."
+      - modulo: scripts/hal.py
+        estado: fuera-de-alcance
+        motivo: "Usa `method_key` sólo para normalizar título y apellido al comparar (#505); no toca `methods` ni la matriz."
+
   - issue: 432
     regla: >-
       El ALCANCE de una sección estampada termina en el próximo `## `, nunca en cualquier `#`: un
@@ -2126,3 +2140,20 @@ portadores:
       - modulo: scripts/lib_blocks.py
         estado: fuera-de-alcance
         motivo: "Vive ahí `warn_anchor`, el hash del bloque contra el que se firma; no lee firmas."
+
+  - issue: 505
+    regla: >-
+      Antes de declarar un hueco —de `bibtex` (`sin_bibtex`, #467) o de PDF (`pending`, la cascada
+      de `resolve_pdf`)— se consultan todos los carriles, y HAL es uno: el depósito del autor
+      publica la exportación BibTeX oficial y, a menudo, el texto completo. Medido: 1 de 8 huecos
+      de una bóveda real estaba en HAL. Una regla de matcheo (DOI, o título EXACTO + primer autor +
+      año ±1) para los dos huecos; lo hallado se PROPONE, no se escribe (#503/#484).
+    funcion: hal.find
+    patron: 'stamp_bibtex_gap|_NO_FREE_COPY|hal\.find'
+    consumidores:
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: "Consulta HAL antes de `stamp_bibtex_gap`: si lo tiene, propone el bloque con `bibtex_source: institucional` + `bibtex_url` y no estampa el hueco; si no, el `sin_bibtex` nombra que se consultó."
+      - modulo: scripts/discover.py
+        estado: usa
+        motivo: "`iter_pdf_candidates` suma HAL (`fileMain_s`, por DOI) entre Europe PMC y arXiv, con `pdf_source` desconocido; `_NO_FREE_COPY` lo nombra entre lo consultado."

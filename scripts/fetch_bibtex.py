@@ -50,6 +50,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lib_config as cfg   # noqa: E402
+import hal                 # noqa: E402  — #505
 
 ADS_EXPORT = "https://api.adsabs.harvard.edu/v1/export/bibtex"
 DOI_RESOLVER = "https://doi.org/{doi}"
@@ -597,6 +598,7 @@ def main() -> int:
 
     hoy = _dt.date.today().isoformat()
     n_ok, huecos, propuestas, no_evaluadas, sacados = 0, [], [], [], []
+    en_hal: list = []
     por_fuente: dict = {}
     for f in pendientes:
         fm, text = fms[f]
@@ -624,6 +626,19 @@ def main() -> int:
                     sin_medir.append(no_medido)
                 else:
                     motivo += f" · {por_que}"
+            # ⛔ #505 — y antes de declararlo, HAL: el depósito del autor publica la exportación
+            # oficial (medido: 1 de 8 huecos de una bóveda real estaba ahí). Lo que encuentre se
+            # PROPONE y no se estampa: es el carril `institucional`, que pega una persona (#503).
+            rec, hal_por_que, hal_no_medido = hal.find(requests.get, fm.get("doi"), fm.get("title"),
+                                                       fm.get("first_author"), fm.get("year"))
+            if rec:
+                bloque, no_bajado = hal.export(requests.get, rec["halid"], _utf8)
+                en_hal.append((f.stem, rec, bloque or no_bajado))
+                continue
+            if hal_no_medido:
+                sin_medir.append(hal_no_medido)
+            else:
+                motivo += f" · {hal_por_que}"
             # ⛔ #468 — una consulta que NO contestó no produce un veredicto PERSISTIDO. El hueco se
             # estampa sólo sobre carriles que contestaron; si alguno se cayó, la nota se queda del
             # lado de la deuda (`sin_bibtex_mudo`, que es lo que es) y la corrida sale en rc 2, así
@@ -684,6 +699,11 @@ def main() -> int:
                          f"ninguna referencia y ningún carril trajo otra (#473): {s}")
     for pr in propuestas:
         cfg.print_seguro(f"  ⚑ el hueco NO es tal — hay DOI y la nota no lo lleva: {pr}")
+    for stem, rec, bloque in en_hal:
+        cfg.print_seguro(f"  ⚑ el hueco NO es tal — HAL tiene el depósito `{rec['halid']}` "
+                         f"({rec['via']}) con exportación oficial. PROPUESTA, no se estampó "
+                         f"(#505/#503): pegalo en {stem} con `bibtex_source: institucional` + "
+                         f"`bibtex_url: {rec['bibtex_url']}`, tal cual (#473):\n{bloque}")
     for h in huecos:
         cfg.print_seguro(f"  · sin BibTeX (campo VACÍO + `sin_bibtex` con el motivo, #467): {h}")
     for ne in no_evaluadas:

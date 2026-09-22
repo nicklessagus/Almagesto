@@ -314,10 +314,9 @@ sin exportación deja el campo **VACÍO** — un hueco es correcto, una cita inv
 la exportación del SITIO del venue (JMLR, NeurIPS, PMLR) (#484): la pega una persona, así que exige
 `bibtex_url`** y no se re-baja. El lint **bloquea** el `bibtex` sin `bibtex_source` y reporta el
 drift frontmatter ↔ exportación.
-⛔ **Y el HUECO se declara: `sin_bibtex: <motivo>` + `bibtex_accessed` del intento (#467)** —misma
-familia que `no_sintetizado`/`pending_motivo`/`sin_conclusiones`/`no_vista`—; lo estampa
+⛔ **Y el HUECO se declara: `sin_bibtex: <motivo>` + `bibtex_accessed` del intento (#467)**; lo estampa
 `fetch_bibtex` y **lo borra** al cerrarse. ⚠ Antes de declararlo pregunta si el DOI existe, en **dos
-etapas** (#466), y el motivo nombra las etapas.
+etapas** (#466), y a **HAL**, que propone el bloque y no lo escribe (#505).
 ⛔ **Y se pide en la forma en que se PEGA: un bloque que NO SE PEGA no está cerrado (#471/#473).** ADS
 se pide con `journalformat: 3` (sin macros AASTeX). ⛔ **NO se post-procesa** (sería redactar la
 cita), y **cada forma de no pegarse declara su consecuencia** (`cfg.BIBTEX_NO_PEGABLE`, #473):
@@ -767,7 +766,7 @@ que `query_ads.to_record`, fijado por `tests/test_backends_schema.py`.
   declara (#293).** Capítulos, actas y papers sin los términos del tema van por curación a mano,
   registrando **por qué** (`extra_core` con `via`/`motivo`, o `sources`).
 - **Encontrar ≠ conseguir** (`resolve_pdf`): la cascada del archivo es **OpenAlex → Unpaywall →
-  Europe PMC → arXiv por título EXACTO** (#313/#358) y **propone una URL y para** (no reescribe un
+  Europe PMC → HAL → arXiv por título EXACTO** (#313/#358/#505) y **propone una URL y para** (no reescribe un
   `pending:` ni edita `sources:`). ⛔ **El carril ADS de `fetch_pdf` la recorre ENTERA al agotar los
   `esource` (#358)** y el residuo distingue «sin copia libre» de «bloqueada» (`estado`). ⛔ Nunca por
   título **aproximado**; el motivo enumera **lo consultado**.

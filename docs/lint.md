@@ -186,6 +186,10 @@ Deben quedar en **0**:
   carril que pega una persona, así que exige **`bibtex_url`** (la página de donde se copió): sin
   ella cae en ESTA categoría. `fetch_bibtex` no la re-baja ni con `--force` (ningún carril la
   regenera) y el motivo del hueco (#467) dice qué pasa con el venue de esa nota.
+  ⛔ **HAL (#505) se consulta ANTES de declarar el hueco** (`hal.find`: por DOI o por título EXACTO +
+  primer autor + año ±1): si tiene el depósito, `fetch_bibtex` imprime su exportación lista para
+  pegar con `bibtex_source: institucional` + `bibtex_url` y NO estampa `sin_bibtex`; si no, el
+  motivo del hueco dice que se consultó. HAL que no contesta no es veredicto (#468).
   ⛔ **`institucional` (#503) es el mismo contrato para la exportación que publica la INSTITUCIÓN
   de los autores** (Pure, DSpace, la página del laboratorio) cuando el venue no publica ninguna —
   actas sin sitio, revistas extintas—. Declararla `venue` publicaría una procedencia falsa. ⚠ Es

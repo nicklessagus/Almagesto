@@ -1234,3 +1234,23 @@ def test_iter_pdf_candidates_sin_doi_no_consulta_nada(monkeypatch):
     monkeypatch.setattr(d.requests, "get", lambda *a, **k: pytest.fail("no debería consultar"))
     monkeypatch.setattr(d, "_json", lambda *a, **k: pytest.fail("no debería consultar"))
     assert list(d.iter_pdf_candidates(None)) == [] and list(d.iter_pdf_candidates("")) == []
+
+
+def test_505_HAL_entra_a_la_cascada_del_PDF_antes_de_arXiv(monkeypatch):
+    """#505 — HAL aloja el texto completo de muchos depósitos (`fileMain_s`) y no estaba en la
+    cascada. Va después de Europe PMC y antes de arXiv (resuelve por DOI, sin adivinar), con
+    `pdf_source` desconocido: el depósito puede ser el manuscrito del autor. Y el motivo del
+    «sin copia libre» lo nombra entre lo consultado."""
+    def fake(url, params=None, **k):
+        if url == d.hal.API:
+            return _Resp({"response": {"docs": [{"halId_s": "hal-1", "doiId_s": "10.1/x",
+                                                 "fileMain_s": "https://hal.science/hal-1/document"}]}})
+        return _Resp({"best_oa_location": {}})
+    monkeypatch.setattr(d.requests, "get", fake)
+    monkeypatch.setattr(d, "_europepmc_pdf", lambda doi: (None, ""))
+    monkeypatch.setattr(d, "_arxiv_pdf", lambda t: ("https://arxiv.org/pdf/1.1", "arXiv"))
+    cands = list(d.iter_pdf_candidates("10.1/x", title="T"))
+    assert [c[0] for c in cands] == ["https://hal.science/hal-1/document", "https://arxiv.org/pdf/1.1"]
+    assert cands[0][2] is None and "HAL" in cands[0][1]
+    monkeypatch.setattr(d.requests, "get", lambda *a, **k: _Resp({}))
+    assert "HAL" in d.resolve_pdf("10.1/x")[1]

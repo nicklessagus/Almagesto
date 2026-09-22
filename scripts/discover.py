@@ -54,6 +54,7 @@ import datetime as dt
 
 import lib_config as cfg
 import openalex as oa
+import hal  # #505
 
 TIMEOUT = 90
 TOPICS_API = "https://api.openalex.org/topics"
@@ -554,7 +555,7 @@ UNPAYWALL = "https://api.unpaywall.org/v2/"
 
 
 EUROPEPMC = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
-_NO_FREE_COPY = "sin copia libre en OpenAlex, Unpaywall, Europe PMC ni arXiv"
+_NO_FREE_COPY = "sin copia libre en OpenAlex, Unpaywall, Europe PMC, HAL ni arXiv"
 
 
 def _oa_source(location: dict) -> str | None:
@@ -593,7 +594,8 @@ def iter_pdf_candidates(doi: str | None, title: str | None = None):
     `resolve_pdf` takes the FIRST (one proposal, no extra calls) and the ADS lane
     of `fetch_pdf` walks ALL of them (#358) — measured, the first URL (OpenAlex → OUP) answered a
     Cloudflare challenge with HTTP 200 and the real copy was the third candidate. Order:
-    OpenAlex → Unpaywall → Europe PMC → arXiv by EXACT title. Never downloads; never writes."""
+    OpenAlex → Unpaywall → Europe PMC → HAL (#505) → arXiv by EXACT title. Never downloads; never
+    writes."""
     doi = oa._bare_doi(doi)
     if not doi:
         return
@@ -624,7 +626,15 @@ def iter_pdf_candidates(doi: str | None, title: str | None = None):
     url, why = _europepmc_pdf(doi)
     if url:
         yield url, why, None
-    # 4. arXiv (#313). El repo tiene dos módulos de arXiv y `fetch_pdf` prueba el eprint PRIMERO en
+    # 4. HAL (#505): el archivo abierto donde depositan los autores, con el texto completo en
+    # `fileMain_s`. Por DOI y con la regla de `hal.find` (la misma que el carril de BibTeX). El
+    # depósito puede ser el manuscrito del autor: `pdf_source` desconocido (`None`), no `publisher`.
+    rec, _por_que, no_medido = hal.find(requests.get, doi)
+    if no_medido:
+        cfg.print_seguro(f"  ⚠ resolve_pdf: {no_medido}")
+    elif rec and rec.get("pdf"):
+        yield rec["pdf"], f"{rec['via']} ({rec['halid']}, fileMain_s)", None
+    # 5. arXiv (#313). El repo tiene dos módulos de arXiv y `fetch_pdf` prueba el eprint PRIMERO en
     # el carril ADS, pero el carril `sources:` (off-ADS) sólo tiene esta función — y no lo miraba.
     # Medido: las 2 fuentes `pending: paywall` de una bóveda eran obtenibles, y una estaba en arXiv
     # con el mismo título y los mismos autores. Un falso «sin copia libre» no es un fallo
