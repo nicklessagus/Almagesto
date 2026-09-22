@@ -53,8 +53,9 @@ Acá se menciona INV-01 en prosa y no debería contar como nada.
 
 
 @pytest.fixture()
-def repo(tmp_path: Path) -> Path:
-    """Repo de juguete: contrato + `scripts/` + `tests/` + ratchet."""
+def repo(tmp_path: Path, monkeypatch) -> Path:
+    """Repo de juguete: contrato + `scripts/` + `tests/` + ratchet (sin la base de CI, AUD-408)."""
+    monkeypatch.delenv("ALMAGESTO_RATCHET_BASE", raising=False)
     (tmp_path / "docs").mkdir()
     (tmp_path / "scripts").mkdir()
     (tmp_path / "tests").mkdir()
@@ -506,6 +507,19 @@ def test_el_mapa_no_mezcla_poblaciones(repo: Path):
     assert "**2** (1 vivos, 1 retirados" in salida
     assert "Con test marcado: **0** de 1" in salida
     assert "Con implementación marcada: **0** de 1" in salida
+    # AUD-430: la CELDA tampoco pinta deuda sobre un retirado — el mapa decía 22, el resumen 21
+    assert salida.count("⚠ hay código sin marcar") == 1, "sólo INV-01, que está vivo"
+
+
+def test_AUD431_la_deuda_se_computa_UNA_vez_para_el_mapa_y_el_rc(repo: Path, capsys):
+    """AUD-431: `render` y `main` implementaban cada uno las tres listas; el día que diverjan, el
+    `rc` y el artefacto dicen cosas distintas. Una sola función, y el resumen del rc la usa."""
+    registro = ti.load_contract(repo)
+    marcas = ti.collect_marks(repo)
+    d = ti.debt(registro, marcas)
+    assert d["sin_marca"] == ["INV-01", "INV-02", "INV-90"] and d["huerfanas"] == []
+    ti.main(["--root", str(repo)])
+    assert f"sin marca: {len(d['sin_marca'])} " in capsys.readouterr().out
 
 
 def test_el_mapa_distingue_pendiente_de_sin_marcar(repo: Path):

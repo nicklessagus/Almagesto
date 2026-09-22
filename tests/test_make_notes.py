@@ -306,7 +306,9 @@ def test_487_una_corrida_PARCIAL_no_borra_el_apendice_ni_lo_publica(toy_vault, c
     build.mkdir(parents=True, exist_ok=True)
     (build / "ads.json").write_text(
         '{"parcial": "`--extra-only`: s\u00f3lo los bibcodes de `extra_core`", '
-        '"records": [{"bibcode": "2020Y", "relevant": true}]}', encoding="utf-8")
+        '"records": [{"bibcode": "2020Y", "relevant": true}, '
+        # AUD-457: un NO-core, o «ni lo publica» pasaba con o sin la guarda (no había qué excluir)
+        '{"bibcode": "2021Z", "relevant": false, "why_excluded": "ruido"}]}', encoding="utf-8")
 
     assert mn.stamp_excluded("test_star", nota) is False
     assert nota.read_text(encoding="utf-8") == apendice, "no borra el snapshot de la completa"
@@ -1718,6 +1720,21 @@ def test_estado_line_publica_la_verificacion_MAS_RECIENTE(toy_vault):
     linea = mn.estado_line("test_star", dest)
     assert "verificación 2026-07-30" in linea
     assert "2026-01-05" not in linea
+
+
+def test_AUD462_estado_line_declara_el_RE_ANCLAJE_al_lado_de_la_verificacion(toy_vault):
+    """AUD-462 — la tercera pieza de #499: la cabecera publica el arrastre declarado AL LADO de la
+    fecha de verificación, nunca en su lugar (#395: re-anclar no es verificar; D-12)."""
+    dest = cfg.STARS / "test_star.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("---\ntags: [star]\n---\n# Test\n\n"
+                    "## Verificación de citas (2026-09-20 · re-anclado 2026-09-22)\n",
+                    encoding="utf-8")
+    linea = mn.estado_line("test_star", dest)
+    assert "verificación 2026-09-20" in linea and "re-anclado 2026-09-22" in linea
+    dest.write_text("---\ntags: [star]\n---\n# Test\n\n## Verificación de citas (2026-09-20)\n",
+                    encoding="utf-8")
+    assert "re-anclado" not in mn.estado_line("test_star", dest), "sin sufijo no se inventa"
 
 
 def test_las_cirugias_usan_EL_MISMO_localizador_que_el_parser(toy_vault):

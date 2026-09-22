@@ -1,6 +1,6 @@
 """Trazabilidad requisito ↔ código: recolecta las marcas `@inv` y genera `docs/trazabilidad.md`.
 
-POR QUÉ ESTE SCRIPT EXISTE. `docs/contrato.md` §3 enuncia 91 invariantes falsables, pero la columna
+POR QUÉ ESTE SCRIPT EXISTE. `docs/contrato.md` §3 enuncia los invariantes falsables, pero la columna
 "cómo se verifica" nombra archivos y líneas sueltas en prosa: no hay mapa consultable de qué función
 implementa cada invariante ni qué test lo prueba. Las dos formas posibles se evaluaron el 2026-08-24
 y se eligió ésta:
@@ -32,8 +32,8 @@ LAS TRES PUERTAS (exit code):
 - `2` — **no evaluado**: el contrato no se pudo leer o §3 no trae ninguna tabla parseable. No se
   reporta "0 sin marcar": un chequeo que no pudo correr nunca contribuye un cero (D-43 / INV-87).
 
-EL RATCHET (`docs/trazabilidad-ratchet.yaml`). Hoy los 91 invariantes están sin marcar y exigir 0
-sería rojo permanente — un rojo permanente se deja de mirar. El techo es deuda MEDIDA y **sólo puede
+EL RATCHET (`docs/trazabilidad-ratchet.yaml`). Exigir 0 invariantes sin marcar desde el
+primer día sería rojo permanente — un rojo permanente se deja de mirar. El techo es deuda MEDIDA y **sólo puede
 bajar**: cada tanda del plan marca los invariantes que cierra y baja el techo. Si el conteo sube por
 encima, alguien tiene que mirarlo; si baja, el artefacto lo dice y pide bajar el techo (un techo
 viejo que nadie ajusta deja de ser ratchet y se vuelve decorativo).
@@ -65,8 +65,6 @@ def contract_path(root: Path) -> Path:
 
 
 CONTRATO = contract_path(ROOT)
-ARTEFACTO = ROOT / "docs" / "trazabilidad.md"
-RATCHET = ROOT / "docs" / "trazabilidad-ratchet.yaml"
 
 # Dónde se buscan marcas. `scripts/` = implementación, `tests/` = prueba; el árbol se decide por el
 # primer componente de la ruta relativa, no por el nombre del archivo (un helper `scripts/lib_x.py`
@@ -376,19 +374,33 @@ def subidas_de_techo(root: Path) -> list:
 
 # ── artefacto ────────────────────────────────────────────────────────────────────────────────────
 
+def debt(registro: dict, marcas: list[Mark]) -> dict:
+    """The coverage debt, computed ONCE for the map and for the `rc` (AUD-431).
+
+    Every list is over the LIVE invariants (AUD-150) except `huerfanas` (marks, not rows): a retired
+    row has no mark on purpose. Until AUD-431 `render` and `main` each spelled the three lists, and
+    the map cell a third time without the retired filter (AUD-430: 22 cells vs a summary of 21)."""
+    vivos = [i for i, meta in registro.items() if not is_retired(meta)]
+    tipos = {i: {m.kind for m in marcas if m.inv == i} for i in vivos}
+    sin_impl = [i for i in vivos if "impl" not in tipos[i]]
+    pendientes = [i for i in sin_impl if declares_no_implementation(registro[i])]
+    return {"huerfanas": [m for m in marcas if m.inv not in registro],
+            "vivos": vivos,
+            "sin_marca": [i for i in vivos if not tipos[i]],
+            "sin_test": [i for i in vivos if "test" not in tipos[i]],
+            "pendientes": pendientes,
+            # INV-133: hay código y nadie lo marcó — cuenta para el `rc` como los otros dos
+            "sin_marcar": [i for i in sin_impl if i not in pendientes]}
+
+
 def render(registro: dict, marcas: list[Mark], techos: dict) -> str:
     """El mapa consultable. Generado — se regenera, no se edita a mano."""
     por_inv: dict[str, list[Mark]] = {}
     for m in marcas:
         por_inv.setdefault(m.inv, []).append(m)
-
-    huerfanas = [m for m in marcas if m.inv not in registro]
-    vivos = [i for i, meta in registro.items() if not is_retired(meta)]
-    sin_marca = [i for i in vivos if i not in por_inv]
-    sin_test = [i for i in vivos if not any(m.kind == "test" for m in por_inv.get(i, []))]
-    sin_impl = [i for i in vivos if not any(m.kind == "impl" for m in por_inv.get(i, []))]
-    pendientes = [i for i in sin_impl if declares_no_implementation(registro[i])]
-    sin_marcar = [i for i in sin_impl if i not in pendientes]
+    d = debt(registro, marcas)
+    huerfanas, vivos, sin_marca, sin_test, pendientes, sin_marcar = (
+        d["huerfanas"], d["vivos"], d["sin_marca"], d["sin_test"], d["pendientes"], d["sin_marcar"])
 
     out = [
         "# Trazabilidad requisito ↔ código",
@@ -459,8 +471,10 @@ def render(registro: dict, marcas: list[Mark], techos: dict) -> str:
         # implementación» (declarado en la fila) y «hay código y nadie lo marcó». Un lector que usa
         # esta columna para responder «¿dónde vive esta garantía?» recibía `—` sobre código que
         # existe: la regla de método #4 aplicada a la ausencia.
+        # AUD-430: un retirado no tiene código a propósito — la celda no le atribuye deuda
         impl = _celda([m for m in ms if m.kind == "impl"],
-                      vacio="⏳ implementación pendiente (declarado)" if declares_no_implementation(meta)
+                      vacio="—" if is_retired(meta)
+                            else "⏳ implementación pendiente (declarado)" if declares_no_implementation(meta)
                             else "⚠ hay código sin marcar")
         test = _celda([m for m in ms if m.kind == "test"])
         out.append(f"| **{inv}** | {meta['prio']} | {meta['estado']} | {impl} | {test} |")
@@ -497,17 +511,9 @@ def main(argv=None) -> int:
     techos = load_techos(root)
     texto = render(registro, marcas, techos)
 
-    huerfanas = [m for m in marcas if m.inv not in registro]
-    por_inv = {m.inv for m in marcas}
-    vivos = [i for i, meta in registro.items() if not is_retired(meta)]
-    sin_marca = [i for i in vivos if i not in por_inv]
-    sin_test = [i for i in vivos
-                if not any(m.kind == "test" and m.inv == i for m in marcas)]
-    # INV-133: el que tiene código y nadie lo marcó. Cuenta para el `rc` como los otros dos — hasta
-    # 1.74.0 este número se imprimía SÓLO dentro del artefacto, así que podía crecer sin gate.
-    sin_marcar = [i for i in vivos
-                  if not any(m.kind == "impl" and m.inv == i for m in marcas)
-                  and not declares_no_implementation(registro[i])]
+    d = debt(registro, marcas)          # AUD-431: la misma deuda que pinta el mapa
+    huerfanas, sin_marca, sin_test, sin_marcar = (
+        d["huerfanas"], d["sin_marca"], d["sin_test"], d["sin_marcar"])
 
     artefacto = root / "docs" / "trazabilidad.md"
     if args.check:

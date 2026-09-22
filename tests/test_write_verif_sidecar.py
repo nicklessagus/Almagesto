@@ -108,9 +108,9 @@ def test_la_segunda_ronda_ENCADENA_y_la_misma_ronda_es_no_op(toy_vault):
     assert lint.collect().por_clave("verif_sin_resolver").items == (), \
         "la cadena anota la resolución: ya no es un veredicto pelado (#91)"
 
-    assert ws.chained_verdict(None, "soportada") == "soportada"
-    assert ws.chained_verdict("no-soportada", "no-soportada") == "no-soportada"
-    assert ws.chained_verdict("a→b", "b") == "a→b" and ws.chained_verdict("a→b", "c") == "a→b→c"
+    assert ws.append_round_verdict(None, "soportada") == "soportada"
+    assert ws.append_round_verdict("no-soportada", "no-soportada") == "no-soportada"
+    assert ws.append_round_verdict("a→b", "b") == "a→b" and ws.append_round_verdict("a→b", "c") == "a→b→c"
 
 
 def test_la_condicion_lleva_su_clase_y_el_no_verificable_no_lleva_archivo(toy_vault):
@@ -914,16 +914,16 @@ def test_el_cli_de_condiciones_rehusa_la_nota_QUE_NO_EXISTE(toy_vault, capsys):
 
 
 def test_450_la_cadena_se_parte_con_el_vocabulario_COMPLETO_de_separadores():
-    """#450 — `chained_verdict` abría la celda a mano sobre `→` y el separador real incluye `->`,
+    """#450 — `append_round_verdict` (ex `chained_verdict`, AUD-442) abría la celda a mano sobre `→` y el separador real incluye `->`,
     `—`, `:` y `(` (`lb._RESOLUCION_SEP`): una celda escrita con cualquiera de ésos se extendía
     repitiendo el veredicto que ya tenía. ⚠ Su pregunta NO es «cuál rige» sino «qué se escribió
     último»: una fila resuelta que vuelve a fallar SÍ se extiende, y así queda abierta."""
-    assert ws.chained_verdict("no-soportada→corregida", "no-soportada") == \
+    assert ws.append_round_verdict("no-soportada→corregida", "no-soportada") == \
         "no-soportada→corregida→no-soportada"
     assert lb.resueltos("no-soportada→corregida→no-soportada") is False, "y queda ABIERTA"
-    assert ws.chained_verdict("contradice", "contradice") == "contradice", "no se repite"
-    assert ws.chained_verdict("soportada -> contradice", "contradice") == "soportada -> contradice"
-    assert ws.chained_verdict(None, "soportada") == "soportada"
+    assert ws.append_round_verdict("contradice", "contradice") == "contradice", "no se repite"
+    assert ws.append_round_verdict("soportada -> contradice", "contradice") == "soportada -> contradice"
+    assert ws.append_round_verdict(None, "soportada") == "soportada"
 
 
 def test_451_la_condicion_de_una_ronda_posterior_NO_se_pierde(toy_vault):

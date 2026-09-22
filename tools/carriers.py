@@ -195,6 +195,16 @@ def existe(fuente: str, simbolo: str) -> bool:
             (a.asname or a.name) == simbolo for a in n.names) for n in ast.walk(arbol))
 
 
+def _reexports(fuente: str, modulo: str, simbolo: str) -> bool:
+    """Does this module re-export `modulo.simbolo` (`from modulo import simbolo`)? (AUD-415)"""
+    try:
+        arbol = ast.parse(fuente)
+    except SyntaxError:
+        return False
+    return any(isinstance(n, ast.ImportFrom) and n.module == modulo
+               and any(a.name == simbolo and not a.asname for a in n.names) for n in arbol.body)
+
+
 def load(path: Path = DECLARACION) -> list:
     """Las entradas declaradas. Levanta si el archivo no se puede leer o no tiene la forma."""
     if not path.exists():
@@ -321,17 +331,27 @@ def propose(ref: str, patron: str | None, root: Path = ROOT, path: Path = DECLAR
     It exists so the list is NOT written from memory, the failure mode this repo chases everywhere:
     `callers` comes from the AST and the other two from the pattern it is given. `signed` is
     `{modulo: motivo}` for the matches already declared `fuera-de-alcance` (#482); `undeclared`
-    is the only list that asks for action."""
+    is the only list that asks for action.
+
+    ⛔ AUD-424 — a `ref` that does not exist raises `ValueError`, like `check` refuses it: a typo
+    answered with «0 carriers» reads as an enumeration that was done (D-43).
+    ⛔ AUD-415 — a consumer that calls the symbol through a FACADE that re-exports it (`lib_config`
+    re-exports `lib_quotes`, AUD-306) is a caller too; otherwise the rule's own module gave 0."""
+    if "." not in ref:
+        raise ValueError(f"`{ref}` no es `modulo.simbolo`")
     modulo, simbolo = ref.rsplit(".", 1)
     fuentes = source_modules(root)
     dueño = next((r for r in fuentes if Path(r).stem == modulo), None)
+    if dueño is None or not existe(fuentes[dueño], simbolo):
+        raise ValueError(f"`{ref}` no existe")
+    fachadas = [Path(r).stem for r, f in fuentes.items() if r != dueño and _reexports(f, modulo, simbolo)]
     rx = re.compile(patron) if patron else None
     firmados = signed_out_of_scope(ref, path)
     llaman, sin_declarar, firmados_matchean = [], [], {}
     for mod, fuente in fuentes.items():
         if mod == dueño:
             continue
-        if carries(fuente, modulo, simbolo, fuentes[dueño] if dueño else ""):   # #476
+        if any(carries(fuente, m, simbolo, fuentes[dueño]) for m in (modulo, *fachadas)):   # #476
             llaman.append(mod)
         elif rx and rx.search(fuente):
             if mod in firmados:
@@ -351,7 +371,11 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.propose:
-        llaman, firmados, sin_declarar = propose(args.propose, args.patron)
+        try:
+            llaman, firmados, sin_declarar = propose(args.propose, args.patron)
+        except ValueError as exc:                                      # AUD-424
+            print(f"⛔ no evaluado: {exc} — ¿typo o se renombró?", file=sys.stderr)
+            return 2
         # #476 — el reporte dice por QUÉ VÍA se lleva la regla, porque son dos y piden acciones
         # distintas: a una función hay que hacerla llamar, a una constante hay que leerla. Decir
         # «LLAMAN» sobre la lectura de una tabla sería el mapa que atribuye mal (regla nº 4).

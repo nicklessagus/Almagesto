@@ -210,7 +210,7 @@ def test_482_propose_SEPARA_el_firmado_fuera_de_alcance_del_que_nadie_declaro(tm
     """#482: el bloque que se pega en cada issue mostraba igual al consumidor ya firmado
     `fuera-de-alcance` y al que nadie miró. Tres listas: el firmado lleva su motivo y no es deuda;
     el `sin declarar` es el único que pide acción, y vacío lo DICE (D-43)."""
-    root = _repo(tmp_path, **{"scripts/lib.py": LIB,
+    root = _repo(tmp_path, **{"scripts/lib.py": LIB + "def otra(x):\n    return x\n",
                               "scripts/firmado.py": "x = 'PATRON'\n",
                               "scripts/deuda.py": "x = 'PATRON'\n"})
     decl = _decl(tmp_path, consumidores=[
@@ -358,3 +358,26 @@ def test_454_el_RE_EXPORT_cuenta_como_simbolo_expuesto(tmp_path):
     assert cr.existe("from lib_quotes import quote_verdict as qv\n", "qv"), "y bajo su alias"
     assert not cr.existe("from lib_quotes import otra_cosa\n", "quote_verdict")
     assert not cr.existe("# quote_verdict en un comentario\n", "quote_verdict")
+
+
+def test_AUD424_propose_con_simbolo_o_modulo_INEXISTENTE_rehusa_como_check(tmp_path, capsys):
+    """AUD-424: un typo daba «0 portadores» rc 0, que se lee como enumeración hecha (D-43). `check`
+    ya rehusaba el mismo caso; `--propose` rehúsa igual."""
+    root = _repo(tmp_path, **{"scripts/lib.py": LIB, "scripts/usa.py": "import lib\nlib.regla(1)\n"})
+    for ref in ("lib.no_existe", "lbi.regla", "sin_punto"):
+        with pytest.raises(ValueError):
+            cr.propose(ref, "PATRON", root, tmp_path / "no-existe.yaml")
+    assert cr.main(["--propose", "lib_config.no_existe_xyz", "--patron", "zzz"]) == 2
+    assert "no existe" in capsys.readouterr().err
+
+
+def test_AUD415_propose_cruza_el_RE_EXPORT_de_la_fachada(tmp_path):
+    """AUD-415: la regla vive en `lib_quotes` y `lib_config` la re-exporta (AUD-306); los
+    consumidores llaman `cfg.X`. `--propose lib_quotes.X` daba 0 llamadores."""
+    root = _repo(tmp_path, **{
+        "scripts/lib_quotes.py": LIB,
+        "scripts/lib_config.py": "from lib_quotes import regla  # noqa\n",
+        "scripts/usa.py": "import lib_config as cfg\ncfg.regla(1)\n",
+        "scripts/ajeno.py": "import lib_config as cfg\ncfg.otra(1)\n"})
+    llaman, _, _ = cr.propose("lib_quotes.regla", None, root, tmp_path / "no-existe.yaml")
+    assert llaman == ["scripts/usa.py"]

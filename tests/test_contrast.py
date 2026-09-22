@@ -1065,6 +1065,11 @@ def test_490_la_negativa_AGREGADA_se_reporta_y_Huecos_y_blockquote_no(toy_vault,
     assert "único" in out and "Es el único método" in out
     assert "ningún algoritmo" not in out, "un blockquote es mención, no afirmación (#387)"
     assert "Nadie midió" not in out, "`## Huecos` ya declara su alcance (D-34)"
+    # AUD-455/456: sin esto el assert del blockquote era vacuo — «ningún» (apocopada, la forma más
+    # común) no la matcheaba el patrón, así que la línea nunca entraba al detector
+    for forma in ("ningún", "Ningún", "ninguno", "ninguna", "ningunas"):
+        assert ct.NEGATIVA_RE.search(f"{forma} paper lo dice"), forma
+    assert not ct.NEGATIVA_RE.search("ningunear"), "palabra entera"
 
 
 def test_490_el_rol_AGREGADO_que_el_paper_no_declara_se_reporta(toy_vault, monkeypatch, capsys):
@@ -1084,6 +1089,27 @@ def test_490_el_rol_AGREGADO_que_el_paper_no_declara_se_reporta(toy_vault, monke
     assert ct.preflight() == 0
     out = capsys.readouterr().out
     assert "fundacional" in out and "2013Voss" in out and "aplicacion" in out
+
+
+def test_AUD465_el_rol_se_compara_NORMALIZADO_y_sólo_contra_el_PRIMER_link(toy_vault, monkeypatch,
+                                                                          capsys):
+    """AUD-465: `Fundacional` en la celda y `fundacional` en el frontmatter son el mismo rol
+    (`method_key`); y el rol de la fila es del paper de la fila —el primer link—, no del que la
+    glosa menciona al pasar."""
+    for bib, rol in (("2013Voss", "fundacional"), ("2020Otro", "aplicacion")):
+        _nota_paper(bib, "prosa")
+        pf = cfg.PAPERS / f"{bib}.md"
+        pf.write_text(pf.read_text(encoding="utf-8").replace("---\n", f"---\nrole: [{rol}]\n", 1),
+                      encoding="utf-8")
+    f = _nota_323("ica", "| [[2013Voss]] | **Fundacional** | como lo retoma [[2020Otro]] |\n")
+    agregadas = {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
+    monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: agregadas})
+    monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
+        "alteradas": [], "discrepan": [], "no_evaluables": [], "resueltas": [],
+        "citas": 0, "solo_extraccion": 0})
+    assert ct.preflight() == 0
+    out = capsys.readouterr().out
+    assert "2013Voss" not in out and "2020Otro" not in out, out
 
 
 def test_490_la_cita_alterada_AGREGADA_bloquea_y_la_vieja_no(toy_vault, monkeypatch, capsys):

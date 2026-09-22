@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.309.0"
+ALMAGESTO_VERSION = "1.310.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2246,9 +2246,6 @@ def is_ads_bibcode(clave) -> bool:
     return len(clave) == ADS_BIBCODE_LEN and bool(BIBCODE_LIKE_RE.match(clave))
 
 
-LOG_SUPERSEDED_MARK = "⚠ corregido"
-
-
 BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv", "venue", "institucional")
 
 #: #484/#503 — los carriles que pega una PERSONA: exigen `bibtex_url` (la página de donde se copió)
@@ -2539,7 +2536,8 @@ def stamp_fm_fields(path, fm: dict, body: str, fields: dict) -> None:
     NO re-serializa el YAML completo → preserva byte a byte comentarios/orden que haya dejado la
     extracción LLM. Si la nota ya traía esas claves (re-chequeo con --force, o una corrección nueva
     sobre un paper ya anotado), las reemplaza —incluidos sus bloques indentados y los ítems `-` de
-    una lista—. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado.
+    una lista—, **en su lugar** (AUD-419); las claves nuevas van al final. Si el texto resultante es
+    idéntico no escribe. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado.
     La publicación en disco es atómica (`cfg.write_text_atomic`, H-01/D-53): un corte a mitad de
     camino nunca deja la nota truncada."""
     text = path.read_text(encoding="utf-8")
@@ -2547,6 +2545,9 @@ def stamp_fm_fields(path, fm: dict, body: str, fields: dict) -> None:
     end = text.find("\n---\n", 4)
     if text.startswith("---\n") and end > 0:
         out, dropping = [], False
+        pendientes = {k: yaml.safe_dump({k: v}, sort_keys=False, allow_unicode=True,
+                                        default_flow_style=False).rstrip("\n")
+                      for k, v in fields.items()}
         # una clave top-level nunca arranca con espacio/tab/`-`: mientras `dropping`, esas líneas
         # son el bloque (mapa indentado o lista) de la clave vieja que estamos reemplazando
         lines = text[4:end].split("\n")
@@ -2578,19 +2579,22 @@ def stamp_fm_fields(path, fm: dict, body: str, fields: dict) -> None:
                     continue
                 dropping = False
             if ln.startswith(keys):
+                # AUD-419: the new value goes WHERE the old key was, not at the end
+                k = ln.split(":", 1)[0]
+                if k in pendientes:
+                    out.append(pendientes.pop(k))
                 dropping = True
                 i += 1
                 continue
             out.append(ln)
             i += 1
-        block = yaml.safe_dump(fields, sort_keys=False, allow_unicode=True,
-                               default_flow_style=False).rstrip("\n")
-        new_text = "---\n" + "\n".join(out + [block]) + text[end:]
+        new_text = "---\n" + "\n".join(out + list(pendientes.values())) + text[end:]
     else:
         dumped = yaml.safe_dump({**fm, **fields}, sort_keys=False, allow_unicode=True,
                                 default_flow_style=False)
         new_text = f"---\n{dumped}---{body}"
-    write_text_atomic(path, new_text)
+    if new_text != text:                         # AUD-419: same state, no rewrite
+        write_text_atomic(path, new_text)
 
 
 def frontmatter_span(text: str) -> tuple[str, str] | None:
@@ -2735,12 +2739,18 @@ def ratchet_raises(rel_path: str, fields, root: Path | None = None) -> list | No
     in silence) and **bound to the concrete transition**. The second half matters as much as the
     first: a generic hatch would sit in the file forever and disable the check from then on, with
     the next rise riding for free on the previous one's reason. Requiring an explicit `2→3` makes
-    the justification **expire by itself**.  @inv INV-140"""
+    the justification **expire by itself**.
+
+    ⛔ AUD-408 — against `HEAD`, a rise already committed is invisible, and CI only sees what was
+    committed. So the reference is `$ALMAGESTO_RATCHET_BASE` when set (CI declares the branch base:
+    the pre-push SHA or `origin/<base>` of the PR) and `HEAD` otherwise (local, before committing).
+    An unresolvable base returns `None`, like every other «could not look».  @inv INV-140"""
     import subprocess
     base = root or ROOT
     path = base / rel_path
+    ref = os.environ.get("ALMAGESTO_RATCHET_BASE") or "HEAD"
     try:
-        r = subprocess.run(["git", "show", f"HEAD:{rel_path}"],
+        r = subprocess.run(["git", "show", f"{ref}:{rel_path}"],
                            cwd=base, capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -4476,6 +4486,30 @@ def doc_claims_on_disk(text: str, stem: str = "") -> list:
     return out
 
 
+def signed_replacement(fm: dict, stem: str, slug: str | None = None) -> str | None:
+    """The `source` that `replace_pdf` SIGNED (`pdf_reemplazo`, #437), if it still describes the
+    PDF on disk — else None (#446). The ONE rule for both readers (AUD-433): `make_notes` stamping
+    `pdf_source` and `doc_on_disk` deciding which document is on disk.
+
+    The guard is the hash: the signature is trusted only if `pdf_sha` is the sha of the PDF under
+    `slug` (or, without one there, of the copy under the smallest slug — `make_notes.best_pdf`'s
+    tie-break). A signature over a file that changed again describes nothing on disk. Only the
+    LAST entry counts (the list is add-only) and only inside the closed vocabulary (#296)."""
+    firmas = [x for x in as_list((fm or {}).get("pdf_reemplazo")) if isinstance(x, dict)]
+    src = str(firmas[-1].get("source") or "").strip() if firmas else ""
+    sha = str((fm or {}).get("pdf_sha") or "").strip()
+    if src not in PDF_SOURCE_OK or not sha:
+        return None
+    pdf = PDFS / (slug or "") / f"{stem}.pdf"
+    if not (slug and pdf.is_file()):
+        cands = sorted(PDFS.glob(f"*/{stem}.pdf"), key=lambda p: p.parent.name) if PDFS.exists() else []
+        if not cands:
+            return None
+        pdf = cands[0]
+    import lib_blocks                                # lazy: lib_blocks imports this module
+    return src if lib_blocks.sha10(pdf.read_bytes()) == sha else None
+
+
 def doc_on_disk(fm: dict, stem: str) -> tuple:
     """`(«preprint»|«publicado»|None, por qué)` — which document is on disk, by its witnesses (#449).
 
@@ -4485,10 +4519,10 @@ def doc_on_disk(fm: dict, stem: str) -> tuple:
     for t in sorted(FULLTEXT.glob(f"*/{stem}.txt")) if FULLTEXT.exists() else []:
         if arxiv_stamp(t.read_text(encoding="utf-8", errors="replace")) is not None:
             return "preprint", f"la marca de arXiv está en `{t.parent.name}/{t.name}`"
-    firmas = [x for x in as_list((fm or {}).get("pdf_reemplazo")) if isinstance(x, dict)]
-    firma = str(firmas[-1].get("source") or "").strip().lower() if firmas else ""
+    firma = signed_replacement(fm, stem)          # AUD-433: sólo si describe el PDF en disco
     if firma in ("publisher", "ads"):
-        return "publicado", f"`pdf_reemplazo` firma `{firma}` ({firmas[-1].get('fecha') or 's/f'})"
+        fecha = as_list(fm.get("pdf_reemplazo"))[-1].get("fecha") or "s/f"
+        return "publicado", f"`pdf_reemplazo` firma `{firma}` ({fecha})"
     campo = str((fm or {}).get("pdf_source") or "").strip().lower()
     if campo in ("publisher", "ads"):
         return "publicado", f"`pdf_source: {campo}`"

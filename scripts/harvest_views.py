@@ -67,8 +67,6 @@ def _safe_links(texto: str) -> str:
 #: #270 · lo que se estampa en un eje que la extracción contestó vacío.
 SIN_DATOS = "_(sin datos)_"
 
-PLACEHOLDER_ABSTRACT = cfg.ABSTRACT_PLACEHOLDER   # #277: una sola definición, en `lib_config`
-
 
 def _resolve_txt_slug(bib: str, declarado: str) -> str | None:
     """Which slug actually holds this bibcode's `.txt`, or `None` when no copy exists (#230).

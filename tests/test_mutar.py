@@ -1299,3 +1299,36 @@ def test_491_changed_lines_lee_los_HUNKS_de_git_y_el_untracked_cuenta_entero(tmp
 
     assert mutar.changed_lines("a.py") == {2}, "sólo la línea que cambió, 1-based"
     assert 1 in mutar.changed_lines("b.py"), "el untracked no tiene contra qué diffear: entero"
+
+
+def test_AUD466_el_hunk_de_SOLO_BORRADO_cuenta_la_linea_donde_estaba(monkeypatch):
+    """AUD-466 — `@@ -3,2 +2,0 @@` borra líneas y no agrega ninguna: `n=0`. Sin el `max(n, 1)` el
+    hunk no aporta línea alguna y una marca `@inv` pegada a un borrado queda fuera del paso de tanda."""
+    from types import SimpleNamespace as NS
+    monkeypatch.setattr(mutar.subprocess, "run", lambda *a, **k: NS(
+        stdout="@@ -3,2 +2,0 @@\n-uno\n-dos\n@@ -9 +8 @@\n-a\n+b\n"))
+    assert mutar.changed_lines("x.py") == {2, 8}
+
+
+def test_AUD466_diff_con_solo_audita_la_INTERSECCION(monkeypatch):
+    """AUD-466 — `--solo X --diff` pide X **dentro** de lo que tocó el diff; sin la intersección,
+    `--solo` se ignoraba y se auditaba el diff entero."""
+    from types import SimpleNamespace as NS
+
+    class _Corte(Exception):
+        pass
+
+    visto = {}
+
+    def _captura(solo, *a, **k):
+        visto["solo"] = set(solo)
+        raise _Corte
+
+    monkeypatch.setattr(mutar, "_traceability_pairs",
+                        lambda: [("INV-01", mutar.RAIZ / "scripts" / "x.py", "f", ["t::t"])])
+    monkeypatch.setattr(mutar, "invariants_in_diff", lambda: {"INV-01", "INV-02"})
+    monkeypatch.setattr(mutar, "_contract_rows", lambda: (set(), set()))
+    monkeypatch.setattr(mutar, "unmarked_reasons", _captura)
+    with pytest.raises(_Corte):
+        mutar._trazabilidad(NS(archivos=[], solo="INV-02,INV-03", diff=True))
+    assert visto["solo"] == {"INV-02"}

@@ -165,7 +165,7 @@ def condition_cell(par: dict, bibcode: str = "") -> str:
 def chained_condition(previous: str | None, new: str) -> str:
     """The condition cell for a pair that may already have a row: a later round ANNOTATES (#451).
 
-    #427/#232/#450, the same doctrine as `chained_verdict` on the column next door, and now the
+    #427/#232/#450, the same doctrine as `append_round_verdict` on the column next door, and now the
     same SHAPE: the chain reads left to right and the link in force is the LAST one
     (`lb.current_condition`). A signed resolution is never undone, and a round that brings a
     DIFFERENT condition is never dropped — the cell chains and the row goes back to counting as
@@ -222,7 +222,7 @@ def collapse_condition(cond: str) -> str:
     return cond
 
 
-def chained_verdict(previous: str | None, new: str) -> str:
+def append_round_verdict(previous: str | None, new: str) -> str:
     """The verdict cell for a pair that may already have a row: annotate, never overwrite (#232).
 
     `no-soportada` then `corregida` → `no-soportada→corregida`; more rounds keep chaining (#274c).
@@ -321,7 +321,7 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
             continue
         n += 1
         veredicto = str(par["veredicto"]).strip()
-        celda = chained_verdict(previa.verdict if previa else None, veredicto)
+        celda = append_round_verdict(previa.verdict if previa else None, veredicto)
         ref = source_ref_for(p.bibcode, veredicto)
         kind, h = lb.split_source_ref(ref)
         anterior = previa.condition if previa else None

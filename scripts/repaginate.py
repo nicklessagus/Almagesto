@@ -372,9 +372,7 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
     on the schema.
 
     The debt closes only when the whole extraction was re-read: a round that leaves items pending
-    writes `_repaginado_parcial` with their ids, and the lint keeps counting it.
-
-    @inv INV-147"""
+    writes `_repaginado_parcial` with their ids, and the lint keeps counting it."""
     abiertas = open_extractions(bibcode)
     if not abiertas:
         raise ApplyError(f"{bibcode} no tiene deuda de paginación abierta")

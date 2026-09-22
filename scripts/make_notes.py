@@ -147,27 +147,12 @@ def signed_pdf_source(slug: str | None, stem: str) -> str | None:
     `pdf_sha`, and it is trusted only if the PDF under this slug (or, without one there, any copy)
     still has that sha. A signature over a file that changed again describes nothing on disk, and
     then the note falls back to the lower steps instead of asserting a provenance it cannot back.
-    Only the LAST entry counts (the list is add-only) and only inside the closed vocabulary (#296)."""
+    Only the LAST entry counts (the list is add-only) and only inside the closed vocabulary (#296).
+    The rule lives in `cfg.signed_replacement` (AUD-433), shared with `cfg.doc_on_disk`."""
     nota = cfg.PAPERS / f"{stem}.md"
     if not nota.exists():
         return None
-    fm = cfg.split_fm(nota.read_text(encoding="utf-8")) or {}
-    firmas = [x for x in cfg.as_list(fm.get("pdf_reemplazo")) if isinstance(x, dict)]
-    if not firmas:
-        return None
-    src = str(firmas[-1].get("source") or "").strip()
-    if src not in cfg.PDF_SOURCE_OK:
-        return None
-    sha = str(fm.get("pdf_sha") or "").strip()
-    if not sha:
-        return None
-    pdf = cfg.PDFS / (slug or "") / f"{stem}.pdf"
-    if not pdf.is_file():
-        rel = best_pdf(stem)
-        if rel is None:
-            return None
-        pdf = (cfg.PAPERS / rel).resolve()
-    return src if lb.sha10(pdf.read_bytes()) == sha else None
+    return cfg.signed_replacement(cfg.split_fm(nota.read_text(encoding="utf-8")) or {}, stem, slug)
 
 
 # Calidad de fulltext para desempatar entre copias del mismo paper bajo distintos slugs (#16):

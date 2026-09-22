@@ -2505,7 +2505,7 @@ partición de la celda, compartida por sus tres lectores); `resueltos` exige que
 **después** del veredicto vigente; `verif_counts`/`verif_summary` particionan por el vigente y
 declaran `revertidas` —lo único que esa partición dejaría de mostrar, y el blanqueo que #232 teme—;
 `lb.chained_verdict` (#366) mira el vigente y no `prev[0]`, con lo que un `soportada→contradice`
-re-anclado y limpio ya no vuelve `soportada` pelada; `write_verif_sidecar.chained_verdict` parte con
+re-anclado y limpio ya no vuelve `soportada` pelada; `write_verif_sidecar.append_round_verdict` (ex `chained_verdict`, AUD-442) parte con
 `lb._cell_parts` en vez de abrir a mano sobre `→` (su pregunta es otra: qué se escribió último). El
 hallazgo del lint nombra el vigente. ⚠ La anotación sigue siendo texto libre, que es cómo se escribe
 el estado del punto 3 del issue (#316) sin abrir `VERDICTS`.

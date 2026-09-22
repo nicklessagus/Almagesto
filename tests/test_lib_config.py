@@ -2847,6 +2847,22 @@ def test_stamp_fm_fields_reemplaza_la_clave_vieja_y_no_toca_el_cuerpo(tmp_path):
     assert "# comentario de la extracción" in salida and "prosa" in salida
 
 
+def test_AUD419_stamp_fm_fields_reemplaza_IN_SITU_y_no_escribe_si_nada_cambio(tmp_path, monkeypatch):
+    """AUD-419 (=AUD-258): el docstring promete preservar el orden, y el cuerpo mandaba la clave
+    reemplazada al FINAL; y re-estampar el mismo estado reescribía la nota igual."""
+    f = tmp_path / "n.md"
+    f.write_text("---\nbibcode: X\nretracted: false\n# de curación sobre tags\ntags: [paper]\n---\n"
+                 "\ncuerpo\n", encoding="utf-8")
+    texto = f.read_text(encoding="utf-8")
+    cfg.stamp_fm_fields(f, cfg.split_fm(texto), "", {"retracted": True})
+    assert f.read_text(encoding="utf-8") == texto.replace("retracted: false", "retracted: true")
+    escrituras = []
+    monkeypatch.setattr(cfg, "write_text_atomic", lambda *a, **k: escrituras.append(a))
+    texto = f.read_text(encoding="utf-8")
+    cfg.stamp_fm_fields(f, cfg.split_fm(texto), "", {"retracted": True})
+    assert escrituras == [], "mismo estado: no se reescribe"
+
+
 def test_bibtex_fields_lee_las_tres_formas_de_valor():
     """`{…}`, `"…"` y pelado (un año va sin llaves). Y desenvuelve las llaves de protección: ADS
     escribe `title = "{A Jupiter-mass…}"`, y comparar eso crudo contra el `title` del frontmatter
@@ -3434,9 +3450,21 @@ def test_449_la_prosa_sobre_QUE_DOCUMENTO_hay_en_disco_se_cruza_contra_el_disco(
                        ("publicado", "El documento en disco es la copia del editor.")], \
         "la línea EN BLANCO cierra el bloque: dos párrafos son dos afirmaciones, no una ambigua"
     # los testigos, en su orden de precedencia
+    import lib_blocks as lb
     firma = [{"fecha": "2026-09-11", "source": "publisher", "sha": "a", "sha_anterior": "b"}]
-    assert cfg.doc_on_disk({"pdf_source": "eprint", "pdf_reemplazo": firma}, "2020X")[0] == "publicado", \
-        "la firma del reemplazo gana sobre un campo viejo"
+    (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "ica" / "2020X.pdf").write_bytes(b"%PDF editor")
+    sha = lb.sha10(b"%PDF editor")
+    assert cfg.doc_on_disk({"pdf_source": "eprint", "pdf_reemplazo": firma, "pdf_sha": sha},
+                           "2020X")[0] == "publicado", "la firma del reemplazo gana sobre un campo viejo"
+    # AUD-433: UNA regla con `make_notes.signed_pdf_source` — la firma vale sólo si `pdf_sha` es el
+    # del PDF en disco. Re-reemplazado a mano, la firma no describe nada y manda el campo.
+    (cfg.PDFS / "ica" / "2020X.pdf").write_bytes(b"%PDF otro, puesto a mano")
+    assert cfg.doc_on_disk({"pdf_source": "eprint", "pdf_reemplazo": firma, "pdf_sha": sha},
+                           "2020X")[0] == "preprint", "firma vencida: no dice qué hay en disco"
+    assert cfg.doc_on_disk({"pdf_source": "eprint", "pdf_reemplazo": firma}, "2020X")[0] == \
+        "preprint", "sin `pdf_sha` la firma no se puede contrastar"
+    (cfg.PDFS / "ica" / "2020X.pdf").write_bytes(b"%PDF editor")
     assert cfg.doc_on_disk({"pdf_source": "publisher"}, "2020X")[0] == "publicado"
     assert cfg.doc_on_disk({"pdf_source": "eprint"}, "2020X")[0] == "preprint"
     assert cfg.doc_on_disk({}, "2020X") == (None, "ningún testigo lo dice")
@@ -3904,6 +3932,12 @@ def test_499_reanchor_date_lee_el_arrastre_y_verification_date_NO_cambia_de_vere
            "## Verificación de citas (2026-07-30 · re-anclado 2026-08-02)\n")
     assert cfg.verification_date(dos) == (True, "2026-07-30")
     assert cfg.reanchor_date(dos) == "2026-08-02"
+    # AUD-461: con el reciente ABAJO, «el último del archivo» y «el de fecha máxima» coinciden y el
+    # caso no decide nada; con el reciente ARRIBA, sólo `max` lo elige
+    arriba = ("## Verificación de citas (2026-07-30 · re-anclado 2026-08-02)\n\n"
+              "## Verificación de citas (2026-01-05 · re-anclado 2026-02-01)\n")
+    assert cfg.verification_date(arriba) == (True, "2026-07-30")
+    assert cfg.reanchor_date(arriba) == "2026-08-02"
     # y el bloque más reciente SIN sufijo no hereda el del viejo: una ronda nueva supersede el
     # arrastre, y leer el de otro encabezado publicaría un arrastre que nadie firmó.
     assert cfg.reanchor_date("## Verificación de citas (2026-01-05 · re-anclado 2026-02-01)\n\n"

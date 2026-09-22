@@ -557,8 +557,10 @@ def save_ultima_pasada_citas(poblacion: dict, alteradas: int) -> None:
 
 #: #490 — el patrón MEDIDO de la afirmación negativa o superlativa (114 en una bóveda de 8 notas
 #: de entidad). No se amplía sin volver a medir: cada término nuevo cambia la población sobre la que
-#: el issue prometió su número.
-NEGATIVA_RE = re.compile(r"(?i)\b(?:el|la|lo)\s+únic[oa]\b|\bningun[oa]s?\b|\bnadie\b|"
+#: el issue prometió su número. ⚠ AUD-456: la apocopada «ningún» —la forma más común— no estaba
+#: (`ningun[oa]s?` no acepta la `ú`), así que el 114 de #490 se midió SIN ella: es un piso, no el
+#: número. Se agrega porque es la misma palabra, no un término nuevo.
+NEGATIVA_RE = re.compile(r"(?i)\b(?:el|la|lo)\s+únic[oa]\b|\bning(?:ún|un[oa]s?)\b|\bnadie\b|"
                          r"\bnunca\b|\bno existe\b|\bsólo\s+(?:dos|tres|cuatro|cinco|seis)\b")
 
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")

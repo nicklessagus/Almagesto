@@ -7,6 +7,7 @@ mismo commit que rompía la cobertura: el agujero que #96 cerró una vez, abiert
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -34,13 +35,17 @@ def test_los_cuatro_ratchets_no_aflojan(rel, campos):
     """El árbol real: ningún techo subió respecto de `HEAD` sin escotilla declarada.  @inv INV-140"""
     subidas = cfg.ratchet_raises(rel, campos, RAIZ)
     if subidas is None:
+        # AUD-408: en CI la base es obligatoria — un checkout sin historia no puede saltear en verde
+        assert not os.environ.get("ALMAGESTO_RATCHET_BASE"), "base declarada pero irresoluble"
         pytest.skip("no evaluable: sin git, o el archivo todavía no está en HEAD")
     assert subidas == [], f"techo(s) subidos sin escotilla en {rel}: {subidas}"
 
 
 @pytest.fixture
-def repo_git(tmp_path: Path) -> Path:
-    """Un repo git de verdad con un ratchet commiteado — `ratchet_raises` compara contra `HEAD`."""
+def repo_git(tmp_path: Path, monkeypatch) -> Path:
+    """Un repo git de verdad con un ratchet commiteado — `ratchet_raises` compara contra `HEAD`
+    (sin la base de CI: su SHA no existe en este repo, AUD-408)."""
+    monkeypatch.delenv("ALMAGESTO_RATCHET_BASE", raising=False)
     (tmp_path / "tools").mkdir()
     yaml_rel = "tools/x-ratchet.yaml"
     (tmp_path / yaml_rel).write_text("techo: 3\n", encoding="utf-8")
@@ -92,3 +97,17 @@ def test_campo_ausente_o_no_numerico_no_inventa_una_subida(repo_git: Path):
     """Un techo que no está no es un techo 0: compararlo contra 0 fabricaría subidas."""
     (repo_git / "tools" / "x-ratchet.yaml").write_text("otra_cosa: 9\n", encoding="utf-8")
     assert cfg.ratchet_raises("tools/x-ratchet.yaml", ("techo",), repo_git) == []
+
+
+def test_AUD408_en_CI_una_subida_ya_commiteada_se_ve_contra_la_base(repo_git: Path, monkeypatch):
+    """AUD-408: contra `HEAD`, una subida ya commiteada es invisible — y CI sólo ve lo commiteado.
+    Con `ALMAGESTO_RATCHET_BASE` (lo declara CI) la comparación va contra la base de la rama.
+    @inv INV-140"""
+    f = repo_git / "tools" / "x-ratchet.yaml"
+    f.write_text("techo: 9\n", encoding="utf-8")
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "sube"],
+                   cwd=repo_git, check=True, capture_output=True)
+    monkeypatch.delenv("ALMAGESTO_RATCHET_BASE", raising=False)
+    assert cfg.ratchet_raises("tools/x-ratchet.yaml", ("techo",), repo_git) == []  # local: HEAD
+    monkeypatch.setenv("ALMAGESTO_RATCHET_BASE", "HEAD~1")
+    assert cfg.ratchet_raises("tools/x-ratchet.yaml", ("techo",), repo_git) == [("techo", 3, 9)]

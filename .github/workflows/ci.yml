@@ -44,8 +44,14 @@ jobs:
   tests:
     if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
+    # AUD-408: los ratchets (INV-140) comparan contra la BASE de la rama, no contra HEAD — en CI
+    # HEAD ya trae la subida commiteada. push → el SHA previo al push; PR → origin/<base>.
+    env:
+      ALMAGESTO_RATCHET_BASE: ${{ github.event.before || format('origin/{0}', github.base_ref) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

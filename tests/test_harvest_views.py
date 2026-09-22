@@ -1057,6 +1057,10 @@ def test_497_nota_estado_sin_literal_o_sin_presente_NO_es_verificable(toy_vault)
     assert hv.check_salvedad(BIB, {"tipo": "nota_estado", "presente": True})[0] is None
     ok, det = hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "x"})
     assert ok is None and "`presente`" in det, det
+    # AUD-464: y BOOLEANO — `"false"` (string) es truthy, así que aceptarlo invertiría el veredicto
+    for no_bool in ("false", "true", 1, 0):
+        ok, det = hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "x", "presente": no_bool})
+        assert ok is None and "`presente`" in det, (no_bool, det)
     # y sin nota en disco tampoco se resuelve en contra
     (cfg.PAPERS / f"{cfg.note_stem(BIB)}.md").unlink()
     ok, det = hv.check_salvedad(BIB, {"tipo": "nota_estado", "literal": "x", "presente": True})

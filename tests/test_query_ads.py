@@ -328,6 +328,7 @@ def test_main_rescate_glifo_siembra_el_chaining(toy_vault, toy_classifier, no_sl
     bibs = {r["bibcode"]: r["via"] for r in data["records"]}
     assert bibs == {"2020dirA....1A": "query", "2000ApJ...544L.145H": "glyph"}
     assert data["truncated_glyph"] is None       # el superset no truncó (mock no llena meta) (#43)
+    assert not cfg.ads_parcial(data), "la corrida completa ES el universo (AUD-458)"
 
 
 def test_glyph_rescue_marca_truncamiento_del_superset(toy_classifier, ads_token, no_sleep,
@@ -956,6 +957,9 @@ def test_main_tema_extra_only(toy_vault, toy_classifier, no_sleep, monkeypatch):
     assert [r["bibcode"] for r in data["records"]] == ["2012PASP..124.1015B"]
     assert data["records"][0]["via"] == "usuario"                     # #303: el declarado
     assert data["records"][0]["puertas"] == ["manual"]
+    # AUD-458: el ÚNICO productor de la marca `parcial` (#487); los tests del consumidor la escriben
+    # a mano, así que sin esto `query_ads` podía dejar de estamparla y #487 volvía en silencio
+    assert cfg.ads_parcial(data) == cfg.ADS_PARCIAL_EXTRA_ONLY
 
 
 def test_main_extra_only_sin_extra_core_error(toy_vault, toy_classifier, monkeypatch):

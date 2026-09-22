@@ -920,22 +920,20 @@ portadores:
       Lo que un comando FIRMA en un artefacto versionado (`pdf_reemplazo` + `pdf_sha`, #437) no lo
       puede revertir un scratch gitignored (`build/<slug>/pdf_source.json`): la firma entra en la
       precedencia de `pdf_source` por encima de `build/`, y vale sólo si su `pdf_sha` describe el
-      PDF en disco.
-    funcion: make_notes.signed_pdf_source
+      PDF en disco. AUD-433: UNA regla para los dos lectores de la firma — el estampador de
+      `pdf_source` y `doc_on_disk` (qué documento hay en disco, #449/#452).
+    funcion: lib_config.signed_replacement
     patron: 'pdf_reemplazo|pdf_source\.json'
     consumidores:
       - modulo: scripts/make_notes.py
         estado: usa
-        motivo: "`pdf_source_info` consulta la firma entre la marca de arXiv y lo declarado en `sources:`."
+        motivo: "`signed_pdf_source` (la consulta `pdf_source_info` entre la marca de arXiv y lo declarado en `sources:`) delega en ella."
       - modulo: scripts/fetch_arxiv.py
         estado: fuera-de-alcance
         motivo: ESCRIBE el registro de `build/` (la mitad que la firma vence); no resuelve la precedencia.
       - modulo: scripts/fetch_pdf.py
         estado: fuera-de-alcance
         motivo: Ídem — registra la rama que entregó el PDF en la corrida.
-      - modulo: scripts/lib_config.py
-        estado: fuera-de-alcance
-        motivo: Define `record_pdf_source` (el escritor de `build/`); no lee la firma.
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: Lee `pdf_reemplazo` para AVISAR el reemplazo a mano sin firma (#437); no resuelve `pdf_source`.
@@ -1189,7 +1187,7 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: >-
-          Su `chained_verdict` pregunta QUÉ SE ESCRIBIÓ ÚLTIMO en la celda (para no extender la
+          Su `append_round_verdict` (ex `chained_verdict`, renombrada en AUD-442) pregunta QUÉ SE ESCRIBIÓ ÚLTIMO en la celda (para no extender la
           cadena repitiendo una ronda), no cuál veredicto rige — son preguntas distintas y dan
           distinto sobre `no-soportada→corregida`. Comparte la PARTICIÓN (`lb._cell_parts`) en vez
           de abrirla a mano sobre `→`, que es lo que hacía.
@@ -2057,7 +2055,7 @@ portadores:
     consumidores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
-        motivo: "Es donde vive `REGLA_LOCALIZADOR` (la forma que se le pide al extractor) y el re-export de `quote_page_verdict` (AUD-306); no juzga ningún localizador. ⚠ La regla se declara por el símbolo RE-EXPORTADO y no por `lib_quotes.quote_page_verdict`, que da **0 llamadores**: los consumidores llaman `cfg.quote_page_verdict` y `carriers` no cruza el re-export — hallazgo aparte sobre `carriers.py`, no de este issue."
+        motivo: "Es donde vive `REGLA_LOCALIZADOR` (la forma que se le pide al extractor) y el re-export de `quote_page_verdict` (AUD-306); no juzga ningún localizador. La regla se declara por el símbolo RE-EXPORTADO: los consumidores llaman `cfg.quote_page_verdict` (desde AUD-415 `--propose` cruza el re-export y da los mismos llamadores por cualquiera de los dos nombres)."
       - modulo: scripts/extraction_prompt.py
         estado: fuera-de-alcance
         motivo: "RINDE la regla al extractor recortándola por el prefijo literal `el **localizador** es `; no decide ningún veredicto. El prefijo es contrato: si cambia, el bullet publica la cadena entera (test en `test_make_notes.py::test_el_stub_y_el_prompt_no_divergen_sobre_el_localizador`)."
