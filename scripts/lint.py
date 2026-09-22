@@ -2252,6 +2252,14 @@ def check_lens_broken(obj_err) -> list:
                 ("vault/config/objective.yaml",
                  f"`relevance.require` exige faceta(s) que no existen en `facets`: {_faltan} — "
                  f"nada puede ser core, y eso se ve igual que «no hay papers»"))
+        else:
+            # AUD-411 — las otras perillas de la MISMA regla (`min_facets` mayor que las facetas,
+            # una faceta vacía o que no compila): `combination_rule` ya las decide (AUD-143) y
+            # `lens_shape` se traga su excepción, así que offline nadie las reportaba.
+            try:
+                cfg.combination_rule(_rel, _lente["facets"])
+            except RuntimeError as exc:
+                lente_rota.append(("vault/config/objective.yaml", str(exc)))
     return lente_rota
 
 
@@ -5339,7 +5347,9 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # @inv INV-153
         # ⚠ Sin `vistas or`: `vistas` sale de `load_vistas(fm)`, así que no vacío implica que el
         # campo tampoco es `None` (red 8, sacado en #396).
-        if fm.get("vistas") is not None:
+        # AUD-412 — `"vistas" in fm`, no `is not None`: `vistas:` sin valor también DECLARA el
+        # campo, y apagaba el chequeo entero por otra forma de escribir `vistas: []`.
+        if "vistas" in fm:
             # Qué cuenta como RECLAMO, y por qué `methods` no entra entero: `stars` y
             # `thesis_links` los siembra el ingest —son «este sujeto pidió que se leyera
             # este paper»—, mientras que `methods` lo puebla la EXTRACCIÓN, o sea que es un

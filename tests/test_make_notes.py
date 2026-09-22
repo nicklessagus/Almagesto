@@ -6072,3 +6072,23 @@ def test_la_tabla_de_calidad_de_fulltext_CUBRE_su_vocabulario():
     assert not (cubiertas & fuera)
     assert min(mn._FULLTEXT_QUALITY.values()) > 0, (
         "una calidad de 0 no se distingue de «desconocido», que es el default")
+
+
+def test_AUD469_la_nota_off_ADS_no_duplica_la_identidad_D19(toy_vault):
+    """AUD-469 — D-19: `make_notes` rehúsa crear una segunda nota del MISMO trabajo, también por el
+    carril off-ADS (un item de `sources:` con el DOI de una nota ADS ya existente)."""
+    mk_note(cfg.PAPERS, "2010ApJ...700..100X", {"tags": ["paper"], "doi": "10.1000/foo.1"}, "")
+    assert mn.write_web_paper_note("2010Foo", slug="gp", doi="10.1000/FOO.1",
+                                   pending="adquisicion", pending_motivo="x") is False
+    assert not (cfg.PAPERS / "2010Foo.md").exists()
+
+
+def test_AUD471_el_motivo_del_excluido_se_escapa(toy_vault):
+    """AUD-471 — el `motivo` sale de un `--reason` en prosa: un `|` crudo partía la fila del
+    apéndice, que es una sección estampada (no se arregla editando) → bloqueante permanente."""
+    r = rec("2020n....01.nA", relevant=False)
+    r["why_excluded"] = "excluido del sujeto por decisión: habla de GJ 1|GJ 2, no de éste"
+    ads_json([r])
+    tabla = mn.excluded_table("test_star")
+    assert r"GJ 1\|GJ 2" in tabla
+    assert cfg.table_shape_issues(tabla) == []

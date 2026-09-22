@@ -11002,3 +11002,24 @@ def test_502_warn_revisada_sin_motivo_o_con_categoria_ajena_NO_exime(toy_vault, 
     rc, rep = run_lint_reporte(capsys)
     assert "perilla" in _seccion(rep, "Fuga de implementación"), rep
     assert "wikilinks_rotos" in rep, rep
+
+
+def test_AUD411_min_facets_mayor_que_las_facetas_es_lente_rota(toy_vault):
+    """AUD-411 — `min_facets: 3` sobre 2 facetas: ningún paper puede ser core. `combination_rule`
+    ya lo sabía (AUD-143) y el lint no lo llamaba, así que cerraba limpio offline.
+    @inv INV-150"""
+    obj = cfg.load_objective()
+    write_yaml(cfg.OBJECTIVE_YAML, {**obj, "relevance": {
+        "facets": {"rv": "radial velocit", "act": "activity"}, "min_facets": 3}})
+    filas = lint.check_lens_broken(None)
+    assert len(filas) == 1 and "min_facets" in filas[0][1], filas
+
+
+def test_AUD412_vistas_nulo_declara_el_campo(toy_vault):
+    """AUD-412 — `vistas:` sin valor DECLARA el campo (INV-153): no puede apagar el chequeo de
+    reclamos que `vistas: []` sí mantiene. @inv INV-153"""
+    def _reclamos(fm):
+        return lint.check_paper_views("p", fm, "", {}, None, {}, {})[9]
+    assert _reclamos({"stars": ["tau Cet"], "vistas": []}), "control: la lista vacía reporta"
+    assert _reclamos({"stars": ["tau Cet"], "vistas": None}), "`vistas:` nulo también"
+    assert _reclamos({"stars": ["tau Cet"]}) == [], "la clave AUSENTE es el schema viejo"

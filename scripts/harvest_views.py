@@ -333,9 +333,12 @@ def render_view(sujeto: str, data: dict) -> str:
     out = [f"## Vista — {sujeto}", ""]
     if enfasis:
         out += [f"### Lente — {enfasis}", ""]
-    if (aporte := _safe_links(str(data.get("aporte") or "").strip())):
+    # AUD-470 — el `$` suelto de TODA prosa que va a la nota se escapa (#457), no sólo el de las
+    # salvedades: se empareja con el siguiente `$` de la nota. El span `$…$` no se toca.
+    if (aporte := cfg.escape_dollars(_safe_links(str(data.get("aporte") or "").strip()))):
         out += [f"**Aporte:** {aporte}", ""]
-    ejes = {k: _safe_links(str(v).strip()) for k, v in (cfg.as_map(data.get("ejes")) or {}).items()}
+    ejes = {k: cfg.escape_dollars(_safe_links(str(v).strip()))
+            for k, v in (cfg.as_map(data.get("ejes")) or {}).items()}
     if ejes:
         # #270 — el eje contestado en VACÍO se estampa igual, con `_(sin datos)_`. Filtrándolo,
         # «se preguntó y no hay nada» era indistinguible de «nunca se preguntó», que es el mismo
@@ -357,11 +360,13 @@ def render_view(sujeto: str, data: dict) -> str:
             # alternación de `grep`) y un `|` crudo PARTE la fila — las celdas de más no se
             # renderizan, así que una afirmación citada y verificada queda invisible para el lector
             # mientras el lint sigue contando su fila. Medido: 19 filas en 13 notas de un tema.
-            celdas = [cfg.escape_cell(_safe_links(str(f.get(k) or "—").strip())) or "—"
+            # ⚠ `escape_cell` PRIMERO: con el `$` ya escapado su regex de span emparejaría el `\$`.
+            celdas = [cfg.escape_dollars(cfg.escape_cell(_safe_links(str(f.get(k) or "—").strip())))
+                      or "—"
                       for k in ("que", "valor", "linea", "regimen", "segunda_mano")]
             out.append("| " + " | ".join(celdas) + " |")
         out.append("")
-    if (hueco := _safe_links(str(data.get("hueco") or "").strip())):
+    if (hueco := cfg.escape_dollars(_safe_links(str(data.get("hueco") or "").strip()))):
         out += [f"**Hueco:** {hueco}", ""]
     # #213 — dos bloques, no uno: la salvedad CHEQUEADA contra el archivo y la que es juicio del
     # extractor no pueden publicarse al mismo nivel visual. Ésta es la sección que el consumidor lee
@@ -491,7 +496,7 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
         # `sin_abstract: true` —que es historia y NO se toca: describe con qué se **clasificó** el
         # paper (título + keywords y nada más), no qué tiene la nota hoy—, así que sin esta línea la
         # nota se contradice a sí misma a la vista.
-        if (_abs := str(data.get("abstract") or "").strip()):
+        if (_abs := cfg.escape_dollars(str(data.get("abstract") or "").strip())):
             _abs = f"{transcribed_note(fm or {})}\n\n{_abs}"
         piezas.append(("## Abstract", _abs))
     piezas.append(("## Traducción del abstract", data.get("abstract_es")))
@@ -504,6 +509,10 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
         # leería como «el paper no concluye nada», que no es lo mismo que «nadie las transcribió».
         if not (limpio := str(texto or "").strip()):
             continue
+        # AUD-470 — prosa que va a la nota: el `$` suelto se escapa (#457). El `## Abstract` que
+        # llega ACÁ lo transcribió el modelo del PDF, no es el verbatim de catálogo; y escapar no
+        # cambia lo que se ve. Idempotente: el `\$` ya escapado no se re-escapa.
+        limpio = cfg.escape_dollars(limpio)
         if upsert_section(dest, header, f"{header}\n{limpio}\n"):
             toco = True
     return toco

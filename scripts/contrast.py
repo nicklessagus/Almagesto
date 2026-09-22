@@ -221,8 +221,10 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
                 # cita sin serlo (686 doblados `««…»»`, que además se caen de la población del gate
                 # de #323, y 315 con la glosa en castellano publicada como palabras del paper).
                 formas[quote_form(texto)] += 1
-                cfg.print_seguro(f"| {cfg.escape_cell(que)} | [[{bib}]] | "
-                                 f"{cfg.escape_cell(texto)} ({loc}){sm} | {GLOSA} |")
+                # AUD-470 — la fila va a una nota: también el `$` suelto (#457), después del `|`.
+                cfg.print_seguro(f"| {cfg.escape_dollars(cfg.escape_cell(que))} | [[{bib}]] | "
+                                 f"{cfg.escape_dollars(cfg.escape_cell(texto))} ({loc}){sm} | "
+                                 f"{GLOSA} |")
             else:
                 cfg.print_seguro(f"[[{bib}]] · {loc}{sm}\n    {mostrado}"
                                  + (f"\n    régimen: {regimen}" if regimen and not campo else ""))

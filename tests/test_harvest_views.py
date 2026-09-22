@@ -2014,3 +2014,27 @@ def test_501_restamp_view_locators_no_toma_el_prefijo_de_la_celda_por_el_token(t
     r = hv.restamp_view_locators("tema", paper="2020Vista",
                                  cambios=[(f"«{cita}»", "p. 1", "p. 2010")])
     assert r["cambiados"] == 0 and "| p. 13 |" in nota.read_text(encoding="utf-8"), r
+
+
+def test_AUD470_render_view_escapa_el_dolar_suelto_de_toda_la_prosa():
+    """AUD-470 — #457 sólo cubría las salvedades; la regla es «cualquier prosa que va a una nota»:
+    el `$` suelto se empareja con el siguiente `$` de la nota y arrastra todo a modo matemático."""
+    out = hv.render_view("ica", {
+        "aporte": "cuesta US$20", "hueco": "precio $5", "ejes": {"rv": "vale $3"},
+        "ground_truth": [{"que": "costo $1", "valor": "v", "linea": "p. 1"}]})
+    for esc in (r"US\$20", r"precio \$5", r"vale \$3", r"costo \$1"):
+        assert esc in out, (esc, out)
+    assert "$x$" in hv.render_view("ica", {"aporte": "mide $x$"}), "la matemática no se toca"
+
+
+def test_AUD470_las_ayudas_de_lectura_escapan_el_dolar(toy_vault):
+    """AUD-470 — abstract transcripto, conclusiones y traducciones: prosa que va a la nota. El
+    abstract que llega por acá lo transcribió el modelo del PDF (no es el verbatim de catálogo), y
+    escapar un `$` no cambia lo que se ve."""
+    mk_note(cfg.PAPERS, "2020X", {"tags": ["paper"]}, "## Vista — ica\n")
+    dest = cfg.PAPERS / "2020X.md"
+    hv.stamp_reading_aids(dest, {"abstract": "costs US$20", "abstract_es": "cuesta US$20",
+                                 "conclusiones": "a $5 fee", "conclusiones_es": "una tasa de $5"})
+    t = dest.read_text(encoding="utf-8")
+    for esc in (r"costs US\$20", r"cuesta US\$20", r"a \$5 fee", r"tasa de \$5"):
+        assert esc in t, (esc, t)

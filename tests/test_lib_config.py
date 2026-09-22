@@ -3911,3 +3911,40 @@ def test_499_reanchor_date_lee_el_arrastre_y_verification_date_NO_cambia_de_vere
     # el encabezado sin fecha no aporta arrastre (no hay contra qué compararlo)
     assert cfg.reanchor_date("## Verificación de citas\n") is None
 
+
+
+# ── AUD-409/410 · una sola regla de «qué es una tabla» (INV-149) ─────────────────────────────────
+
+def test_AUD409_fila_con_MENOS_celdas_no_es_forma_rota():
+    """AUD-409 — GFM completa las celdas que faltan: la fila corta SE RENDERIZA. Lo que se pierde
+    es la fila con MÁS celdas (las de más no se muestran), que es lo que INV-149 enuncia.
+    @inv INV-149"""
+    corta = "| a | b | c |\n|---|---|---|\n| x | y |\n"
+    assert cfg.table_shape_issues(corta) == [], "la fila corta se renderiza: no bloquea"
+    larga = "| a | b |\n|---|---|\n| x | y | z |\n"
+    assert cfg.table_shape_issues(larga) == [(3, 3, 2)]
+
+
+def test_AUD410_tabla_dentro_de_bloque_cercado_no_es_artefacto():
+    """AUD-410 — la hermana `split_table_rows` ya salteaba los bloques ``` (un ejemplo, no un
+    artefacto); `table_shape_issues` no, y el mismo ejemplo bloqueaba por una y pasaba por la
+    otra. @inv INV-149"""
+    ej = "texto\n\n```\n| a | b |\n|---|---|\n| 1 | 2 | 3 |\n```\n"
+    assert cfg.split_table_rows(ej) == []
+    assert cfg.table_shape_issues(ej) == []
+    # y afuera del cerco sigue contando
+    assert cfg.table_shape_issues(ej + "\n| a | b |\n|---|---|\n| 1 | 2 | 3 |\n") == [(11, 3, 2)]
+
+
+def test_AUD413_fm_key_span_toma_el_bloque_literal_con_linea_en_blanco():
+    """AUD-413 — un `clave: |` con una línea en blanco ADENTRO se cortaba ahí: el resto del valor
+    quedaba huérfano y toda operación sobre la clave se rehusaba. @inv INV-147"""
+    import yaml
+    lines = ["bibtex: |", "  @article{x,", "    title = {T}}", "", "  % venue export",
+             "sin_bibtex: foo"]
+    assert yaml.safe_load("\n".join(lines))["sin_bibtex"] == "foo"
+    assert cfg.fm_key_span(lines, "bibtex") == (0, 5)
+    resto = lines[:0] + lines[5:]
+    assert yaml.safe_load("\n".join(resto)) == {"sin_bibtex": "foo"}
+    # la línea en blanco ENTRE dos claves no es del valor
+    assert cfg.fm_key_span(["a: 1", "", "b: 2"], "a") == (0, 1)

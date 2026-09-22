@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.306.1"
+ALMAGESTO_VERSION = "1.307.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -368,6 +368,22 @@ def missing_schema_fields(tipo: str, fm: dict) -> list:
 _TABLE_SEP_RE = re.compile(r"^\s*\|[\s:\-|]+\|\s*$")
 
 
+def _unfenced_lines(body: str) -> list:
+    """The lines of `body` with every fenced block (```, fences included) blanked out, same count.
+
+    ⛔ ONE rule of «what is a table» for the two INV-149 checks (AUD-410): a pipe table inside ```
+    is an example, not an artefact. `split_table_rows` skipped it and `table_shape_issues` did not,
+    so the same example blocked through one and passed through the other."""
+    out, fenced = [], False
+    for ln in body.split("\n"):
+        if ln.strip().startswith("```"):
+            fenced = not fenced
+            out.append("")
+            continue
+        out.append("" if fenced else ln)
+    return out
+
+
 def split_table_rows(body: str) -> list:
     """Runs of `|`-rows with NO separator line under their first one: a SPLIT table (#486).
     `[(line_no, n_rows)]`, 1-based over the whole file (the `grep -n` convention, #29).
@@ -383,15 +399,10 @@ def split_table_rows(body: str) -> list:
     Fenced blocks are skipped: a pipe table inside ``` is an example, not an artefact.
 
     @inv INV-149"""
-    out, fenced, i = [], False, 0
-    lineas = body.split("\n")
+    out, i = [], 0
+    lineas = _unfenced_lines(body)
     while i < len(lineas):
-        ln = lineas[i].strip()
-        if ln.startswith("```"):
-            fenced = not fenced
-            i += 1
-            continue
-        if fenced or not ln.startswith("|"):
+        if not lineas[i].strip().startswith("|"):
             i += 1
             continue
         j = i
@@ -436,7 +447,8 @@ def ads_parcial(data) -> str:
 
 
 def table_shape_issues(body: str) -> list:
-    """Table rows whose cell count does not match their header's (#227). `[(line_no, got, want)]`.
+    """Table rows with MORE cells than their header (#227, AUD-409). `[(line_no, got, want)]`.
+    Fenced blocks are skipped, as in `split_table_rows` (AUD-410).
 
     @inv INV-149
 
@@ -454,7 +466,7 @@ def table_shape_issues(body: str) -> list:
     Line numbers are 1-based over the WHOLE file, the `grep -n` convention of this repo (#29).
     """
     out, header, sep = [], None, False
-    for i, raw in enumerate(body.split("\n"), 1):
+    for i, raw in enumerate(_unfenced_lines(body), 1):
         ln = raw.strip()
         if not ln.startswith("|"):
             header, sep = None, False
@@ -466,7 +478,9 @@ def table_shape_issues(body: str) -> list:
         if not sep:                     # la línea de separación `|---|---|`
             sep = True
             continue
-        if n != header:
+        # AUD-409 — sólo MÁS celdas: GFM completa las que faltan, así que la fila corta se
+        # renderiza y bloquearla describía una pérdida que no ocurre.
+        if n > header:
             out.append((i, n, header))
     return out
 
@@ -887,7 +901,9 @@ def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
     corrupted); what did not work was the operation, and the note kept asserting that material does
     not enter while its view published it.
 
-    A continuation is an indented non-empty line, or a `- ` item of a block list. ⛔ And, **inside a
+    A continuation is an indented non-empty line, or a `- ` item of a block list —plus the blank
+    lines BETWEEN two continuations (AUD-413: a literal block `clave: |` with an empty line inside
+    was cut there)—. ⛔ And, **inside a
     QUOTED scalar, also an empty one** (#474): `yaml.safe_dump` of a value that ends in `\n` emits
     `clave: '…\n\n  '`, so the blank line is part of the value and the rule «indented non-empty»
     stopped one line short of the closing quote. Measured on a real vault: **19 of 259** notes —the
@@ -903,10 +919,24 @@ def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
         if lines[i].startswith(f"{field}:"):
             if (cierre := _quoted_scalar_end(lines, i)) is not None:
                 return i, cierre
+            def _cont(k):
+                """Whether `lines[k]` continues the key: indented non-empty, or a `- ` item."""
+                return lines[k].startswith("- ") or (lines[k][:1] in (" ", "\t")
+                                                     and lines[k].strip())
             j = i + 1
-            while j < len(lines) and (lines[j].startswith("- ")
-                                      or (lines[j][:1] in (" ", "\t") and lines[j].strip())):
-                j += 1
+            while j < len(lines):
+                if _cont(j):
+                    j += 1
+                    continue
+                # AUD-413 — la línea en blanco es del valor si el valor SIGUE abajo: un escalar de
+                # bloque (`clave: |`) con una línea vacía adentro se cortaba ahí, el resto quedaba
+                # huérfano y toda operación sobre la clave se rehusaba.
+                k = j
+                while k < len(lines) and not lines[k].strip():
+                    k += 1
+                if k == j or k == len(lines) or not _cont(k):
+                    break
+                j = k
             return i, j
     return None
 

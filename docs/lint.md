@@ -119,7 +119,9 @@ Deben quedar en **0**:
   buscá la fila `build/`) — AUD-381 lo anota como mapa que atribuye mal.
 - **Fila de tabla con más celdas que su encabezado (#227)**: GFM descarta el excedente, así que el
   contenido queda **invisible para el lector** mientras toda herramienta que parsea el archivo lo
-  sigue viendo — y puede estar certificado como par verificado.
+  sigue viendo — y puede estar certificado como par verificado. La fila con **menos** celdas no
+  entra (AUD-409: GFM completa las que faltan y se renderiza), y un bloque ``` queda afuera en las
+  dos mitades, con UNA regla de qué es una tabla (AUD-410).
   ⛔ **Y la tabla PARTIDA por una línea en blanco (#486), misma categoría porque es el mismo efecto
   y otra salida** (borrar la línea, no escapar un `|`): *una tabla es una tabla por su ENCABEZADO*,
   así que las filas que quedan del otro lado no tienen contra qué compararse y **pasaban limpias
@@ -237,8 +239,9 @@ Deben quedar en **0**:
   escriben `papers/<key>.md` y comparten `.txt`: desambiguar con sufijo). En off-ADS todo entra
   por decisión de alguien; el snippet correcto lo arma `triage.py <slug> --accept-source <doi>`.
 - **Lente vacía o incoherente** (`lente_rota`): `relevance.facets` vacío en `objective.yaml`
-  (típico: `topics:`, el schema pre-R-5) o `relevance.require` exigiendo una faceta que no existe
-  → **nada** puede ser core, y eso se ve igual que «no hay papers»; `query_ads` lo agarraba recién
+  (típico: `topics:`, el schema pre-R-5), `relevance.require` exigiendo una faceta que no existe,
+  o cualquier otra perilla que `combination_rule` rechaza —`min_facets` mayor que las facetas, una
+  faceta vacía o que no compila— (AUD-411) → **nada** puede ser core, y eso se ve igual que «no hay papers»; `query_ads` lo agarraba recién
   al correr. Se cierra migrando `topics:` → `facets:` o con el skill `setup`.
 - **Mismo bibcode con `.txt` DISTINTO entre slugs** (#190/INV-135, `divergent_txt`): las copias
   de D-18 tienen que coincidir byte a byte; dos hashes significan que alguien re-extrajo bajo un

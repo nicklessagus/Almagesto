@@ -2268,7 +2268,10 @@ def excluded_table(slug: str) -> str:
         # la regla de combinación — y ese texto se ESCRIBE en la bóveda, en el apéndice de la ficha.
         motivo = r.get("why_excluded") or ("(motivo no registrado: `ads.json` anterior a #30 — "
                                            "re-corré `query_ads`)")
-        rows.append(f"| [{title}]({url}) | {r.get('year') or ''} | {citas(r)} | {motivo} |")
+        # AUD-471 — el motivo puede traer el `--reason` en prosa de `--drop-core`: un `|` crudo
+        # parte la fila de una sección ESTAMPADA, o sea un bloqueante que no se arregla editando.
+        rows.append(f"| [{title}]({url}) | {r.get('year') or ''} | {citas(r)} | "
+                    f"{cfg.escape_cell(str(motivo))} |")
     extra = len(out) - len(rows)
     tail = f"\n\n_(+ {extra} más excluidos por el filtro)_" if extra > 0 else ""
     # #481 — a qué corrida corresponde el snapshot: la fecha y el `n_total` de la última búsqueda
@@ -3530,6 +3533,17 @@ def identidad(fm: dict) -> tuple | None:
     return None
 
 
+def corpus_identities() -> dict:
+    """`{identidad: stem}` of the paper notes already on disk (D-19). ONE scan for the two rails
+    that create notes —ADS (`write_paper_notes`) and off-ADS (`write_web_paper_note`, AUD-469)—:
+    the promise «make_notes refuses to create the second note» has no rail in it."""
+    out = {}
+    for f in cfg.note_paths(cfg.PAPERS):
+        if (ident := identidad(cfg.split_fm(f.read_text(encoding="utf-8")))):
+            out.setdefault(ident, f.stem)
+    return out
+
+
 def _reescribir_wikilinks(old_stem: str, new_bibcode: str) -> int:
     """Reescribe `[[old_stem]]` → `[[new_bibcode]]` en TODA la bóveda. Devuelve notas tocadas.
 
@@ -4291,10 +4305,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
     # preprint y el publicado tienen bibcodes distintos y el mismo `arxiv_id`) mete doble conteo en
     # todo lo que cuenta papers, y un falso positivo permanente de #75 —la ficha cita una de las
     # dos—. Se atajan acá, que es donde nacen.
-    ya_en_corpus = {}
-    for f in cfg.note_paths(cfg.PAPERS):
-        if (ident := identidad(cfg.split_fm(f.read_text(encoding="utf-8")))):
-            ya_en_corpus.setdefault(ident, f.stem)
+    ya_en_corpus = corpus_identities()
     written = skipped = merged = restamped = duplicados = 0
     for r in recs:
         bib = r["bibcode"]
@@ -4522,6 +4533,16 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
             cfg.print_seguro(f"  papers: {dest.name} — link [📄 PDF] de cabecera re-estampado (#47)")
             return False
         cfg.print_seguro(f"  papers: {dest.name} ya existe (no se pisa sin --force)")
+        return False
+    # AUD-469 — D-19 también en el carril off-ADS: un item de `sources:` con el DOI de una nota
+    # que ya existe es el MISMO trabajo, y la segunda nota recién la veía el lint (bloqueante).
+    # ponytail: re-escanea `papers/` por llamada con DOI; cachear si una ingesta off-ADS grande lo nota.
+    if (not dest.exists() and (ident := identidad({"doi": doi}))
+            and (otro := corpus_identities().get(ident))):
+        cfg.print_seguro(
+            f"  ⊘ {citekey}: mismo trabajo que {otro} ({ident[0]}: {ident[1]}) — NO se crea una "
+            f"segunda nota (D-19). Si {otro} es su bibcode ADS: `triage.py <slug> "
+            f"--promote-source {citekey} --bibcode {otro}`")
         return False
     bibstem = venue or (urlparse(url).netloc if url else None)   # venue: dominio web por default
     if accessed is None and url and not pending:

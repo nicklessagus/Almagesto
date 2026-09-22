@@ -1300,3 +1300,12 @@ def test_492_el_localizador_SIN_cita_textual_queda_fuera_de_alcance_y_se_DECLARA
     out = capsys.readouterr().out
     assert "localizadores de página: 1 · 1 en la página que dicen" in out
     assert "1 FUERA DE ALCANCE" in out
+
+
+def test_AUD470_las_filas_escapan_el_dolar_suelto(toy_vault, capsys):
+    """AUD-470 — la fila de `--filas` va a una nota: el `$` suelto se escapa (#457)."""
+    _extraccion("ica_ruido", "2013Voss", ground_truth=[
+        {"que": "costo $1", "valor": "the fee is US$20 per page", "linea": "p. 4"}])
+    ct.main(["ica_ruido", "--filas"])
+    filas = [l for l in capsys.readouterr().out.splitlines() if l.startswith("| ")]
+    assert filas and r"costo \$1" in filas[0] and r"US\$20" in filas[0], filas
