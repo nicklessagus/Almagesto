@@ -3190,9 +3190,11 @@ def test_la_regla_de_anotacion_nombra_las_tres_cosas_que_previene(toy_vault):
     b = mn._BULLET_ANOTACION
     # #269 — el localizador es la PÁGINA del PDF desde #205; el `grep -n` sobre el `.txt` sirve para
     # ubicar, no para citar. Hasta 1.116.x este bullet mandaba lo contrario, publicado en la nota.
-    # #492 — y desde 1.289.0 dice CUÁL de las dos numeraciones: la impresa, con su escotilla.
-    assert "página IMPRESA** del PDF" in b and "grep -n" in b, \
-        "sin localizador nada se puede re-chequear, y sin la convención no se puede decidir"
+    # #500 — y desde 1.303.0 dice PARA QUÉ: que la afirmación se encuentre en el PDF de disco. Cuál
+    # de las dos numeraciones no se pregunta (cobró 518 hallazgos de valor cero en una bóveda real).
+    assert "encontrable** la afirmación en el PDF" in b and "grep -n" in b, \
+        "sin localizador nada se puede re-chequear"
+    assert "IMPRESA" not in b, "#500: la convención de numeración se retiró"
     assert "pegá el **nº de línea**" not in b, "es la doctrina que #205 retiró"
     assert "segunda mano" in b, "el mecanismo con más casos medidos"
     assert "régimen" in b, "los 11 `parcial` eran casi todos régimen faltante"
@@ -4365,8 +4367,12 @@ def test_el_stub_y_el_prompt_no_divergen_sobre_el_localizador(toy_vault):
     import extraction_prompt as ep
     assert cfg.REGLA_LOCALIZADOR.split(";")[0] in mn._BULLET_ANOTACION
     prompt = ep.build_prompt("tau-cet", "2020aaa...1..1A", "tau Cet", [])
-    assert "la **página IMPRESA** del PDF (la que muestra la hoja: `p. 7`)" in prompt
-    assert "índice del PDF" in prompt, "#492: la escotilla viaja con la regla, o no se puede cumplir"
+    assert "lo que hace **encontrable** la afirmación en el PDF que hay en disco" in prompt
+    assert "índice del PDF" in prompt, "#500: la segunda numeración vale, y el prompt lo dice"
+    # ⛔ #492/#500 — `extraction_prompt` recorta la regla por el prefijo literal `el **localizador**
+    # es `: si el prefijo cambia, el bullet arranca con la cadena entera y el prompt publica basura
+    assert "`linea` del JSON: lo que hace" in prompt, "el recorte por prefijo dejó de matchear"
+    assert "el **localizador** es lo que" not in prompt, "el recorte no sacó el prefijo"
 
 
 def test_el_migrador_deja_la_vista_cosechable(toy_vault):

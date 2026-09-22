@@ -1170,10 +1170,10 @@ re-extraer el `.txt`.
    `thesis_links`, `role`, P/K/indicadores). La ficha se escribe **después** del contraste (2b) — no
    saltar de leer a la prosa. ⚠ **Mirá `pdf_source` antes de copiar un número:** con `eprint` el
    documento es el preprint, así que un valor que contradice al ground-truth es candidato a
-   **diferencia de versión**. **Cómo anotar cada valor (#103):** con **la página IMPRESA del PDF**
-   —la que muestra la hoja; si el documento no la tiene, el índice y **lo decís** (#492: el `.txt`
-   partido por página lo chequea, y 44 de 190 localizadores de una nota usaban la otra
-   convención en silencio)—, **el régimen** en que la fuente lo afirma y —si la fuente lo atribuye a otro trabajo— la marca
+   **diferencia de versión**. **Cómo anotar cada valor (#103):** con el **localizador** —lo que hace
+   **encontrable** la afirmación en el PDF de disco: sección, figura, tabla o ecuación primero
+   (sobreviven al cambio preprint→editor) y la página como pista, en la numeración que sea (#500)—,
+   **el régimen** en que la fuente lo afirma y —si la fuente lo atribuye a otro trabajo— la marca
    **segunda mano** con la cita a X, porque el número **no es de esta fuente** (el mecanismo de
    error nº 1 medido). ⛔ **Y el cruce que la síntesis levanta se acredita NOMBRANDO al dueño —o se
    FIRMA revisado (#433):** el crédito vale por apellido, `[[bibcode]]` linkeado, nombre propio o

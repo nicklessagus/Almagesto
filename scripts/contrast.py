@@ -260,30 +260,19 @@ def _page_check(b, cita: str, duenio: str | None, out: dict) -> None:
     against the wrong source, which is how the finding this repo hunts the most gets fabricated. It
     comes out *not evaluable*, which is what it is.
     """
-    loc = cfg.page_locators_after(b.text, cita)
-    if not loc:
+    rangos = cfg.page_locators_after(b.text, cita)
+    if not rangos:
         return
-    rangos, declarado = loc
     out["pag_total"] += 1
     out["pag_consumidos"] += len(rangos)
     if not duenio:
         out["pag_no_eval"] += 1
         return
-    estado, det = cfg.quote_page_verdict(cita, duenio, rangos, declarado)
+    estado, det = cfg.quote_page_verdict(cita, duenio, rangos)
     corte = cita if len(cita) <= 70 else cita[:70] + "…"
     decl = ", ".join(f"p. {a}" if a == b_ else f"pp. {a}-{b_}" for a, b_ in rangos)
-    if estado == "impresa":
-        out["pag_impresa"] += 1
-    elif estado == "indice" and declarado == "indice":
-        # la escotilla de `REGLA_LOCALIZADOR`: el localizador DICE que es el índice del PDF. Es la
-        # convención declarada, no la usada en silencio, y las dos no piden lo mismo.
-        out["pag_declarado"] += 1
-    elif estado == "indice":
-        out["pag_indice"].append(
-            (b.first_line, f"«{corte}» ({decl}) apunta al ÍNDICE del PDF de {duenio}; la página "
-                           f"IMPRESA de esa cita es la {', '.join(map(str, det['impresas']))}. La "
-                           f"convención de la bóveda es la impresa: el consumidor copia este número "
-                           f"(`\\citep[p.~N]`) y cita una página que el paper no muestra"))
+    if estado == "ok":
+        out["pag_ok"] += 1
     elif estado == "mal":
         # #436/#437 — el PDF reemplazado es la causa MEDIDA de la mayoría (104 de 893 en una bóveda
         # real), y es la que convierte la deuda global de `_paginacion` en esta lista con su página
@@ -352,7 +341,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
 
     Returns `{"alteradas": [(línea, motivo)], "no_evaluables": [(línea, motivo)],
     "discrepan": [(línea, motivo, marca)], "citas": N, "solo_extraccion": J}` plus the page axis
-    (`pag_total`, `pag_impresa`, `pag_indice`, `pag_mal`, `pag_no_eval`) — counts, so the sweep can
+    (`pag_total`, `pag_ok`, `pag_mal`, `pag_no_eval`) — counts, so the sweep can
     declare its population (INV-40) instead of printing a bare zero."""
     texto = nota.read_text(encoding="utf-8")
     out = {"alteradas": [], "no_evaluables": [], "discrepan": [], "resueltas": [],
@@ -362,8 +351,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
            # #492 — el otro eje del par: la PÁGINA que el localizador declara. No mueve el rc (ver
            # `quote_page_verdict`): este gate frena operaciones (#323) y la población que mira es la
            # más grande de la bóveda.
-           "pag_total": 0, "pag_impresa": 0, "pag_indice": [], "pag_mal": [],
-           "pag_no_eval": 0, "pag_declarado": 0,
+           "pag_total": 0, "pag_ok": 0, "pag_mal": [], "pag_no_eval": 0,
            # #492 — y la población que este chequeo NO alcanza por construcción: el localizador sin
            # cita textual adyacente (el caso de `Almagesto-Tesis#8` mismo). Sin cita no hay qué buscar
            # en el `.txt`; se cuenta para que un «0 MAL» no se lea como «todo mirado» (INV-40).
@@ -491,10 +479,8 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
             cfg.print_seguro(f"  ⚠ L{ln}: {motivo}\n     → si no podés abrirlo ahora, pegá al final "
                              f"de la afirmación:  {marca}")
         for ln, motivo in out["pag_mal"]:
-            cfg.print_seguro(f"  ⚠ L{ln}: {motivo}. Corregí el localizador — es el número que el "
-                             f"consumidor copia (#492)")
-        for ln, motivo in out["pag_indice"]:
-            cfg.print_seguro(f"  · L{ln}: {motivo}")
+            cfg.print_seguro(f"  ⚠ L{ln}: {motivo}. Corregí el localizador — es lo que hace "
+                             f"encontrable la afirmación en el PDF (#492/#500)")
         for ln, motivo in out["no_evaluables"]:
             cfg.print_seguro(f"  · L{ln}: {motivo}")
         for ln, motivo in out["resueltas"]:
@@ -730,17 +716,14 @@ def validar_todo(slug: str | None = None) -> int:
     counts moves it."""
     notas = _notes_of(slug)
     alteradas = no_eval = citas = solo_ext = resueltas = 0
-    pag = {"pag_total": 0, "pag_impresa": 0, "pag_no_eval": 0, "pag_declarado": 0,
-           "pag_sin_cita": 0}
+    pag = {"pag_total": 0, "pag_ok": 0, "pag_no_eval": 0, "pag_sin_cita": 0}
     pag_mal: list = []
-    pag_indice: list = []
     discrepan: list = []
     for f in notas:
         r = validar(f, mostrar=False)
         for k in pag:
             pag[k] += r[k]
         pag_mal += [(f, ln, m) for ln, m in r["pag_mal"]]
-        pag_indice += [(f, ln, m) for ln, m in r["pag_indice"]]
         citas += r["citas"]
         no_eval += len(r["no_evaluables"])
         solo_ext += r["solo_extraccion"]
@@ -755,11 +738,8 @@ def validar_todo(slug: str | None = None) -> int:
         cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}\n  ⚠ L{ln}: {motivo}"
                          f"\n     → si no podés abrirlo ahora, pegá al final de la afirmación:"
                          f"  {marca}")
-    for titulo, filas in (("⚠ localizador de página que no es la página de la cita (#492)", pag_mal),
-                          ("· localizador en el ÍNDICE del PDF, no en la página impresa (#492)",
-                           pag_indice)):
-        for f, ln, motivo in filas:
-            cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}\n  {titulo[0]} L{ln}: {motivo}")
+    for f, ln, motivo in pag_mal:  # ⚠ localizador que no es la página de la cita (#492)
+        cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}\n  ⚠ L{ln}: {motivo}")
     ambito = f"las notas de `{slug}`" if slug else "toda la bóveda"
     cfg.print_seguro(f"\n> sobre {len(notas)} nota(s) de {ambito} · {citas} cita(s) «…» · "
                      f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla) · "
@@ -775,26 +755,23 @@ def validar_todo(slug: str | None = None) -> int:
                      + (" ✅" if not alteradas else " ⛔ — corregilas contra el JSON de extracción, "
                         "no contra el `.txt`"))
     cfg.print_seguro(
-        f"  > localizadores de página: {pag['pag_total']} · {pag['pag_impresa']} en la página "
-        f"IMPRESA · {len(pag_indice)} en el índice del PDF SIN decirlo · "
-        f"{pag['pag_declarado']} declarado(s) como índice · "
-        f"{len(pag_mal)} MAL · {pag['pag_no_eval']} no evaluable(s) (sin `.txt`, la cita no está "
-        f"en él, atribución ambigua, o sin numeración impresa derivable) · "
+        f"  > localizadores de página: {pag['pag_total']} · {pag['pag_ok']} en la página que "
+        f"dicen · {len(pag_mal)} MAL · {pag['pag_no_eval']} no evaluable(s) (sin `.txt`, la cita "
+        f"no está en él, atribución ambigua, o el localizador no coincide con ninguna numeración "
+        f"derivable) · "
         f"{pag['pag_sin_cita']} FUERA DE ALCANCE (sin cita textual adyacente con la que ubicarlos)"
         + ("" if pag["pag_total"] else " — NO EVALUADO: ninguna cita lleva localizador"))
     if pag_mal:
         cfg.print_seguro(f"  ⚠ {len(pag_mal)} localizador(es) apuntan a otra página. No mueve el rc "
                          f"—la población es la más grande de la bóveda y un falso positivo acá "
-                         f"frena operaciones (#323)— y sí se corrige: es el número que el consumidor "
-                         f"copia a su `\\citep[p.~N]` (#492)")
+                         f"frena operaciones (#323)— y sí se corrige: es lo que hace encontrable la "
+                         f"afirmación en el PDF de disco (#492/#500)")
     if not slug:
         # #386 — sólo la pasada GLOBAL cuenta como pasada: con slug se miró un rincón.
         save_ultima_pasada_citas({"notas": len(notas), "citas": citas, "no_evaluables": no_eval,
                                   "solo_extraccion": solo_ext, "discrepan": len(discrepan),
                                   "resueltas": resueltas, "localizadores": pag["pag_total"],
-                                  "pagina_impresa": pag["pag_impresa"],
-                                  "pagina_indice": len(pag_indice), "pagina_mal": len(pag_mal),
-                                  "pagina_indice_declarado": pag["pag_declarado"],
+                                  "pagina_ok": pag["pag_ok"], "pagina_mal": len(pag_mal),
                                   "pagina_no_evaluables": pag["pag_no_eval"],
                                   "pagina_sin_cita": pag["pag_sin_cita"]}, alteradas)
     if solo_ext:

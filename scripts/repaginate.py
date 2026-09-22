@@ -87,7 +87,8 @@ RESULT_SCHEMA = {"bibcode": "<bibcode>",
                  "extraccion": "<el `extraccion` que traía el paquete: `<slug>/<stem>`>",
                  "pdf_sha": "<el sha10 que traía el paquete>",
                  "items": [{"id": "<el id del item, tal cual>",
-                            "pagina": "<la página IMPRESA que MUESTRA la hoja, o null>",
+                            "pagina": "<la página en la que está: la que muestra la hoja o el "
+                                      "índice del PDF (#500), o null>",
                             "evidencia": "<palabras que viste en ESA hoja, distintas del valor>",
                             "motivo": "<por qué no la hallaste — sólo si pagina es null>"}]}
 
@@ -248,7 +249,7 @@ def prompt_for(paquete: dict, pdf: Path, out_dir: Path) -> str:
     partes = [f"# Repaginado por RELECTURA — fuente `{bib}` (#494)", "",
               f"El PDF de esta fuente se REEMPLAZÓ y su extracción quedó con los localizadores del "
               f"documento anterior. Abrí **`{pdf.as_posix()}`** y devolvé, para cada item, la "
-              f"página que la hoja MUESTRA.", "",
+              f"página en la que está — la que muestra la hoja, o el índice del PDF (#500).", "",
               f"⛔ **{cfg.REGLA_LOCALIZADOR}.**", "",
               "⛔ **La `guia` dice dónde ABRIR, no qué escribir.** Sale del `.txt`, que es un "
               "índice degradado (#205); la respuesta es lo que ves en la hoja. Si coinciden, "
@@ -351,7 +352,7 @@ def _check_item(item: dict, res: dict, bibcode: str) -> str | None:
     if ev.lower() in str(item.get("valor") or item.get("cita") or "").lower():
         return "la `evidencia` está contenida en el valor del item: no es testigo de la hoja"
     estado, det = cfg.quote_page_verdict(ev, bibcode, [(str(pagina), str(pagina))])
-    if estado in ("mal", "indice"):
+    if estado == "mal":
         return (f"el `.txt` ubica esa `evidencia` en otra página "
                 f"({', '.join(map(str, det.get('impresas') or det.get('paginas') or []))}): "
                 f"la respuesta se contradice con el índice")

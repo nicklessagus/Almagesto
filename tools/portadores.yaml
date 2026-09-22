@@ -2027,3 +2027,31 @@ portadores:
         estado: fuera-de-alcance
         motivo: "Usa la palabra en el conteo de la barrera («114 fuera, re-anclados»), que es sobre los pares del alcance de la ronda; el declarante del encabezado lo escribe el sidecar."
 
+  - issue: 500
+    regla: >-
+      El localizador de una cita existe para VERIFICAR, no para citar: su único trabajo es que quien
+      chequea la afirmación la encuentre en el PDF que hay en disco. Por eso el gate pregunta UNA
+      cosa —¿la cita está en la página que dice?— y no dictamina CUÁL numeración (impresa vs índice
+      del PDF) es la correcta: el consumidor que copiaría el número a un `\citep[p.~N]` no existe en
+      el campo de la bóveda, y la convención cobró 413 correcciones a mano de valor cero (438 de las
+      518 sobre papers cuyo PDF nunca se reemplazó) mientras los 68 MAL —la mitad que sí vale— se
+      ven igual con las dos reglas. La familia que esto nombra: un gate que exige una FORMA tiene
+      que nombrar a quién le sirve esa forma, y si no hay nadie, chequea el HECHO y no la forma.
+    funcion: lib_config.quote_page_verdict
+    patron: 'pag_indice|pag_declarado|PAGE_INDEX_DECLARED|REGLA_LOCALIZADOR'
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Es donde vive `REGLA_LOCALIZADOR` (la forma que se le pide al extractor) y el re-export de `quote_page_verdict` (AUD-306); no juzga ningún localizador. ⚠ La regla se declara por el símbolo RE-EXPORTADO y no por `lib_quotes.quote_page_verdict`, que da **0 llamadores**: los consumidores llaman `cfg.quote_page_verdict` y `carriers` no cruza el re-export — hallazgo aparte sobre `carriers.py`, no de este issue."
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: "RINDE la regla al extractor recortándola por el prefijo literal `el **localizador** es `; no decide ningún veredicto. El prefijo es contrato: si cambia, el bullet publica la cadena entera (test en `test_make_notes.py::test_el_stub_y_el_prompt_no_divergen_sobre_el_localizador`)."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "La rinde en el stub de la nota (`_BULLET_ANOTACION`) desde la misma constante, por #269: la regla vive una sola vez y los dos artefactos que la publican la leen de ahí."
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "Cruza la `evidencia` de cada página releída con `quote_page_verdict` y desde #500 rechaza SÓLO el `mal`: la respuesta que coincide con el índice del PDF ya no contradice nada. También rinde `REGLA_LOCALIZADOR` en el prompt del relector."
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "Es el único reportero del eje: consume los tres estados y declara la población («N en la página que dicen · M MAL · K no evaluables»). Perdió `pag_indice`/`pag_declarado` y sus claves en `_citas.yaml`."

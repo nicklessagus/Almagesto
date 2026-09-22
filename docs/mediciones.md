@@ -325,6 +325,11 @@ Remes 2011, Du 2014), o sea que cada extractor eligió una y el campo nunca dijo
 el que el consumidor **copia** a su `\citep[p.~N]`, así que citaría una página que el paper no
 muestra.
 
+⚠ **Este párrafo y el que sigue quedaron RETIRADOS por #500 (1.303.0, abajo):** el consumidor que
+copia el número a su `\citep[p.~N]` no existe en el campo de la bóveda, así que la convención se
+eligió para un uso que no ocurre. Se conservan porque son el razonamiento que hubo que medir para
+desarmarlo.
+
 **Lo que entró (1.289.0).** `cfg.quote_page_verdict` con cuatro estados y los dos que no son
 hallazgo con su motivo (D-43) · `REGLA_LOCALIZADOR` fija la convención —página **impresa**, y el
 índice se **declara** cuando el documento no tiene número— y viaja al prompt y al stub · el escritor
@@ -3585,3 +3590,67 @@ una deuda nueva: es la cabecera diciendo la verdad.
 ⚠ Lo que este issue **no** resuelve: `scripts/triage.py` sigue sin declarar en la regla de #431
 (preexistente; su `patron` es `last_change_dates|solo_prosa`).
 
+## #500 · el localizador es para VERIFICAR: el gate chequea «está en esa página», no «con qué numeración» (2026-09-22)
+
+Reportado desde `Almagesto-Tesis` con acuerdo explícito del usuario, después de **cobrar** la deuda
+que #492 había encendido. La frase que lo abrió: *«esto de citar el número de página de la
+publicación es medio una fantasía, nadie va a eso»*.
+
+**El razonamiento que se cayó.** INV-155 justificaba la convención —página **impresa**— con que
+*«el localizador es lo que el consumidor COPIA (`\citep[p.~N]`)»*. Ese consumidor **no existe en el
+campo de la bóveda**: en astronomía se cita el paper y, si hace falta, la sección o la figura. El
+que sí usa el localizador es el **verificador que abre el PDF de disco**, y `Read` rasteriza por
+**índice** — o sea que la numeración que el gate castigaba era la *más* útil de las dos. Una
+convención elegida para un uso que no ocurre, cobrando deuda sobre el uso que sí ocurre.
+
+**La factura, medida (bóveda `Almagesto-Tesis`, 2026-09-22).**
+
+| | número | qué dice |
+|---|---|---|
+| localizadores en estado `indice` esa mañana | **518** | la categoría entera |
+| de ésos, en papers cuyo PDF **nunca se reemplazó** | **438 (85 %)** | no es consecuencia de #436/#437: las notas citaron la hoja del archivo desde el día uno y nada lo chequeaba hasta #492 (19/09). El gate encendió una factura **retroactiva de un mes** sobre trabajo que no estaba mal |
+| cobrados con `apply_fixes` | **413** | una sesión entera, 88 filas re-ancladas, dos defectos del corrector, una guarda nueva (numeración impresa incoherente en `2003nnsp.conf...27H` y `1997Wentzell`) y +9 «fuera de alcance» por la ventana de 80 caracteres. **Valor para el consumidor real: cero** — la afirmación era verificable antes y después |
+| residuo que pedía juicio o PDF por unidad | **105** | 73 compuestos, 18 en salvedades, 10 con numeración incoherente, 4 duplicados |
+| **`MAL`** (la cita NO está en la página que dice) | **68 → 68** | la mitad que sí vale se ve **igual** con las dos reglas |
+
+**Lo que entró (1.303.0).** `quote_page_verdict` pasa a **`ok | mal | no_evaluable`** (`impresa` se
+renombra `ok`: un estado llamado «impresa» que acepta el índice miente — regla de método nº 4) y la
+cita en la página que el localizador nombra, **por cualquiera de las dos numeraciones**, es `ok`;
+entra ahí también el caso que antes salía *no evaluable* por «coincide con el índice y ese `.txt` no
+tiene numeración impresa derivable», porque ya no hay convención que decidir. `REGLA_LOCALIZADOR`
+manda **sección, figura, tabla o ecuación primero** —sobreviven al cambio preprint→editor— y la
+página como pista en la numeración que sea, con `[índice del PDF]` **opcional**; se conservan
+`L1234` (#80/#200) y `Fig. N, p. M` (#195). `contrast --validar-todo` pierde `pag_indice` y
+`pag_declarado` (y sus claves `pagina_indice`/`pagina_indice_declarado` en `_citas.yaml`), y
+`repaginate._check_item` deja de rechazar la respuesta que coincide con el índice.
+
+⛔ **Lo que NO se aflojó.** El `mal` y sus dos evidencias —el número impreso en la página hallada
+(#493) y la etiqueta `L45` sin plegar (#496)— quedan intactos: sirven para decidir `mal`, no para
+castigar el índice.
+
+**Medición del cambio, sobre la bóveda ENTERA sin escribirle** (worktree de `Almagesto-Tesis` en
+`9eba04e`, `scripts/` de `c09935d` contra los de 1.303.0; 285 notas, 10541 citas):
+
+| | antes (`c09935d`) | después (1.303.0) |
+|---|---|---|
+| localizadores mirados | 6376 | 6376 |
+| en la página que dicen | 3628 impresa + 105 índice + 4 declarados = **3737** | **3949** |
+| **MAL** | **68** | **68** |
+| no evaluables | 2571 | **2359** |
+| fuera de alcance | 12109 | 12109 |
+
+Los 212 que ganó `ok` salen **de `no_evaluable`**, no de `mal`: son el caso «coincide con el índice
+y no hay numeración impresa derivable». La categoría `indice` desaparece de la pantalla.
+
+**Quién MÁS lleva la regla (#409).** Toda categoría del lint o de `contrast` que convierta **una
+convención de escritura** en deuda sin un consumidor que la necesite. La familia: *un gate que exige
+una FORMA tiene que nombrar a quién le sirve esa forma, y si no hay nadie, chequea el HECHO y no la
+forma.*
+
+**Portadores.** Con el símbolo del issue —`carriers --propose lib_quotes.quote_page_verdict
+--patron 'pag_indice|pag_declarado|PAGE_INDEX_DECLARED|REGLA_LOCALIZADOR'`— salen **0 llamadores**:
+los consumidores invocan `cfg.quote_page_verdict` (re-export, AUD-306) y `carriers` no cruza el
+re-export. **Hallazgo aparte sobre `carriers.py`**, no de este issue: la regla se firma por el
+símbolo re-exportado (`lib_config.quote_page_verdict`), que sí los ve — **2 `usa`** (`contrast`,
+`repaginate`) + **2 `fuera-de-alcance`** (`extraction_prompt` y `make_notes` sólo *rinden*
+`REGLA_LOCALIZADOR`) + el propio `lib_config`, en la entrada 500 de `tools/portadores.yaml`.

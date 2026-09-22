@@ -121,7 +121,10 @@ def test_494_el_paquete_manda_abrir_el_PDF_y_la_guia_va_DECLARADA(toy_vault, tmp
     prompt = (tmp_path / "prompt.md").read_text(encoding="utf-8")
     assert f"pdfs/ica_ruido/{BIB}.pdf" in prompt
     assert "dice dónde ABRIR, no qué escribir" in prompt
-    assert "página IMPRESA" in prompt, "la convención de #492 viaja al lector"
+    # #500 — la convención viaja, y desde 1.303.0 lo que pide es la página EN LA QUE ESTÁ, por
+    # cualquiera de las dos numeraciones: el gate ya no dictamina cuál
+    assert "la que muestra la hoja o el índice del PDF" in prompt, "la regla viaja al lector"
+    assert "IMPRESA" not in prompt, "#500: la convención de numeración se retiró"
     assert "evidencia" in prompt and "pagina" in prompt
     # y el fence pide ESAS claves y ninguna otra: devolver el paquete tiene que rebotar
     assert '"guia"' not in json.dumps(rp.RESULT_SCHEMA)

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.302.0"
+ALMAGESTO_VERSION = "1.303.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -315,20 +315,24 @@ def _es_estampada(linea: str) -> bool:
 #: prompt de extracción y la plantilla de la vista que se estampa en la nota— y divergieron: el
 #: stub siguió mandando citar por nº de línea del `.txt` durante 40 versiones después de que #205
 #: hiciera del PDF la fuente, publicando dentro del vault la doctrina retirada.
-#: #492 · y QUÉ numeración es esa página: la **impresa**. El campo no lo decía, así que el
-#: extractor elegía por paper —medido: 44 de 190 localizadores de una nota en el índice del PDF,
-#: consistentes por extracción e inconsistentes por bóveda—, y el consumidor copia ese número a su
-#: `\citep[p.~N]` y cita una página que el documento no muestra. El índice del PDF sirve cuando el
-#: documento NO tiene número impreso (un preprint), y ahí se declara, porque si no las dos
-#: convenciones se leen igual.
 #: #496 · y esa página no siempre es un ENTERO: A&A Letters imprime `L43`, ApJL `L24`, MNRAS
 #: Letters `L1`. Se escribe como la muestra la hoja, con su prefijo — plegarlo a `45` sería citar
 #: otra página del mismo documento (A&A numera el cuerpo y las Letters por separado).
+#: #500 · PARA QUÉ existe el localizador, que es lo que decide su forma: para que quien chequea la
+#: afirmación la ENCUENTRE en el PDF que hay en disco. #492 lo fijó en la página **impresa**
+#: razonando sobre un consumidor que copia el número a su `\citep[p.~N]` — ese consumidor no
+#: existe en el campo de la bóveda (en astronomía se cita el paper, y a lo sumo la sección o la
+#: figura), y la convención cobró deuda sobre el uso que sí ocurre: medido en una bóveda real, 518
+#: localizadores en el estado `indice`, **438 (85 %) en papers cuyo PDF nunca se reemplazó** y 413
+#: cobrados a mano con valor cero para el lector, mientras los 68 MAL —la mitad que sí vale— se ven
+#: igual con las dos reglas. Por eso manda lo que sobrevive al cambio preprint→editor —sección,
+#: figura, tabla, ecuación— y la página queda como pista, en la numeración que sea.
 REGLA_LOCALIZADOR = (
-    "el **localizador** es la **página IMPRESA** del PDF (la que muestra la hoja: `p. 7`), con su "
-    "**prefijo** si lo lleva (`p. L45` en Letters, #496) — si el "
-    "documento no la tiene, el índice del PDF y **lo decís** (`p. 7 [índice del PDF]`, #492); "
-    "`L1234` sólo en fuente web o documento "
+    "el **localizador** es lo que hace **encontrable** la afirmación en el PDF que hay en disco — "
+    "**sección, figura, tabla o ecuación primero** (sobreviven al cambio preprint→editor) y la "
+    "**página** como pista, en la numeración que sea —la que muestra la hoja o el índice del PDF—, "
+    "con su **prefijo** si lo lleva (`p. L45` en Letters, #496) y, si querés, diciendo cuál "
+    "(`p. 7 [índice del PDF]`, #500); `L1234` sólo en fuente web o documento "
     "largo (#80/#200), y `Fig. N, p. M` en lectura de gráfico (#195). El `grep -n` sobre el `.txt` "
     "sirve para **ubicar** dónde mirar, no para citar")
 
@@ -5418,7 +5422,6 @@ from lib_quotes import (  # noqa: E402,F401
     CITA_PREFIJO,
     GUTTER,
     PAGE_EDGE_LINES,
-    PAGE_INDEX_DECLARED,
     PAGE_LOC_RE,
     PAGE_OFFSET_MIN,
     QUOTE_FRAG_MIN,

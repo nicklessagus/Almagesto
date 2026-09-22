@@ -1199,7 +1199,7 @@ def test_492_el_localizador_CORRECTO_no_dice_nada_y_cuenta(toy_vault, capsys):
     assert ct.main(["--validar-todo"]) == 0
     out = capsys.readouterr().out
     assert "Corregí el localizador" not in out
-    assert "localizadores de página: 1 · 1 en la página IMPRESA" in out
+    assert "localizadores de página: 1 · 1 en la página que dicen · 0 MAL" in out
 
 
 def test_492_la_ATRIBUCION_AMBIGUA_no_se_juzga(toy_vault, capsys, monkeypatch):
@@ -1217,33 +1217,33 @@ def test_492_la_ATRIBUCION_AMBIGUA_no_se_juzga(toy_vault, capsys, monkeypatch):
     assert "Corregí el localizador" not in out
 
 
-def test_492_la_OTRA_CONVENCION_se_lista_aparte_y_la_DECLARADA_no(toy_vault, capsys):
-    """Las 44 de 190: el localizador usa el índice del PDF sobre un documento que SÍ tiene número
-    impreso. No es un hecho falso —no va con las `mal`— y sí se lista: el consumidor copia ese
-    número. ⛔ Y si el localizador declara que es el índice, es la escotilla de
-    `REGLA_LOCALIZADOR` y no hay nada que decir."""
+def test_500_el_indice_del_PDF_NO_es_una_categoria_y_el_MAL_sigue(toy_vault, capsys):
+    """⛔ #500 — las 44 de 190 que #492 listaba aparte («el índice del PDF, no la impresa») dejan de
+    ser hallazgo: el localizador existe para que quien CHEQUEA encuentre la afirmación en el PDF de
+    disco, y por cualquiera de las dos numeraciones la encuentra. Medido en una bóveda real, esa
+    categoría cobró 518 correcciones de valor cero. ⛔ Lo que no se afloja: la página equivocada
+    sigue saliendo MAL, con la suya al lado."""
     _extraccion("ica_ruido", "2013Voss")
     _txt("ica_ruido", "2013Voss", "\f".join(
         f"A&A proofs\n\n{cuerpo}\n\n{1208 + n}"
         for n, cuerpo in enumerate(["intro sin nada", f"prosa. {LARGA}. fin", "cierre", "refs"], 1)))
-    nota = _nota_492(f"Dice «{LARGA}» (p. 2) [[2013Voss]].\n")
-    assert ct.main(["--validar", str(nota)]) == 0
+    _nota_492(f"Dice «{LARGA}» (p. 2) [[2013Voss]].\n")
+    assert ct.main(["--validar-todo"]) == 0
     out = capsys.readouterr().out
-    assert "apunta al ÍNDICE del PDF" in out and "la 1210" in out
+    assert "ÍNDICE del PDF" not in out and "declarado(s) como índice" not in out, out
+    assert "1 en la página que dicen · 0 MAL" in out, out
     assert "Corregí el localizador" not in out, "otra convención no es una página equivocada"
 
-    nota2 = _nota_492(f"Dice «{LARGA}» (p. 2 [índice del PDF]) [[2013Voss]].\n")
+    # …y la página impresa de la misma cita también, con la misma categoría
+    _nota_492(f"Dice «{LARGA}» (p. 1210) [[2013Voss]].\n")
     assert ct.main(["--validar-todo"]) == 0
-    out2 = capsys.readouterr().out
-    assert "1 declarado(s) como índice" in out2, out2
-    assert "apunta al ÍNDICE" not in out2, out2
+    assert "1 en la página que dicen · 0 MAL" in capsys.readouterr().out
 
-    # ⛔ y declarar la convención no exime del chequeo: un localizador que DICE «índice del PDF» y
-    # apunta a otra página sigue estando MAL
-    _nota_492(f"Dice «{LARGA}» (p. 7 [índice del PDF]) [[2013Voss]].\n")
+    # ⛔ el control: una página que la cita no ocupa sigue siendo MAL
+    _nota_492(f"Dice «{LARGA}» (p. 7) [[2013Voss]].\n")
     assert ct.main(["--validar-todo"]) == 0
     out3 = capsys.readouterr().out
-    assert "1 MAL" in out3 and "0 declarado(s) como índice" in out3, out3
+    assert "0 en la página que dicen · 1 MAL" in out3, out3
 
 
 def test_492_el_PDF_REEMPLAZADO_se_nombra_como_causa(toy_vault, capsys):
@@ -1298,5 +1298,5 @@ def test_492_el_localizador_SIN_cita_textual_queda_fuera_de_alcance_y_se_DECLARA
                      f"La taxonomía tiene cinco clases (p. 3) [[2013Voss]].\n")
     assert ct.main(["--validar-todo"]) == 0
     out = capsys.readouterr().out
-    assert "localizadores de página: 1 · 1 en la página IMPRESA" in out
+    assert "localizadores de página: 1 · 1 en la página que dicen" in out
     assert "1 FUERA DE ALCANCE" in out

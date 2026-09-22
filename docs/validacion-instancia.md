@@ -964,3 +964,45 @@ si `--restamp-section`/`--resolver` lo borran.
 **Al cerrar:** los dos conteos (`Verificación stale` antes/después) y cuántas notas te quedaron en
 `Cabecera > _Estado —_ desfasada` antes de re-estampar.
 
+## #500 · v1.303.0 — el localizador es para verificar: el gate chequea «está en esa página»
+
+**Qué cambió.** `quote_page_verdict` pasa de cuatro estados a **`ok | mal | no_evaluable`**
+(`impresa` → `ok`) y acepta la página que el localizador nombra **por cualquiera de las dos
+numeraciones** (la impresa o el índice del PDF). Desaparecen las dos categorías de `contrast
+--validar-todo` que reportaban la convención —«en el índice del PDF SIN decirlo» y «declarado(s)
+como índice»— y sus claves `pagina_indice` / `pagina_indice_declarado` de
+`vault/config/registro/_citas.yaml`. `REGLA_LOCALIZADOR` manda sección/figura/tabla/ecuación primero
+y la página como pista; `[índice del PDF]` queda opcional. ⛔ El `mal` **no se toca**.
+
+**Correr:**
+
+```bash
+python scripts/contrast.py --validar-todo          # ANTES (con el framework viejo), guardá la línea
+# … traer v1.303.0 …
+python scripts/contrast.py --validar-todo          # DESPUÉS
+python scripts/lint.py                             # sin categorías nuevas ni desaparecidas
+```
+
+**Esperado**, mirando la línea `> localizadores de página:` — medido sobre `Almagesto-Tesis`
+(`9eba04e`, 285 notas, 10541 citas):
+
+| | antes | después |
+|---|---|---|
+| localizadores mirados | 6376 | **6376** (igual) |
+| en la página que dicen | 3628 + 105 + 4 = 3737 | **3949** |
+| **MAL** | 68 | **68** (idéntico) |
+| no evaluables | 2571 | **2359** |
+| fuera de alcance | 12109 | **12109** (igual) |
+
+Los +212 salen **de `no_evaluable`**, no de `mal`: son las citas que coincidían con el índice sobre
+un `.txt` sin numeración impresa derivable. Tu bóveda dará otros números, pero **las tres
+propiedades tienen que valer**: el total no se mueve, `MAL` no baja, y lo que gana `ok` sale de
+`indice` + `declarado` + `no_evaluable`.
+
+**Devolver si** algún `MAL` desaparece (la mitad que vale se aflojó), si el total de localizadores
+cambia, si `repaginate --apply` acepta una `evidencia` que el `.txt` ubica en **otra** página (la
+guarda sigue rechazando el `mal`), o si el prompt de extracción arranca con la cadena entera
+`el **localizador** es …` en vez del recorte (`extraction_prompt` corta por ese prefijo literal).
+
+**Al cerrar:** las cinco filas de la tabla con tus números, y si te quedó algún localizador `MAL`
+nuevo que antes salía `indice` (no debería: son estados disjuntos).

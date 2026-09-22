@@ -685,14 +685,8 @@ def page_locators(texto: str) -> list:
     return out
 
 
-#: #492 · cómo se escribe que este localizador NO es la página impresa: la escotilla que
-#: `REGLA_LOCALIZADOR` manda usar cuando el documento no tiene número impreso (un preprint). Sin
-#: ella, la convención declarada y la convención equivocada se leen igual.
-PAGE_INDEX_DECLARED = re.compile(r"(?i)\b(?:[ií]ndice|index)\b")
-
-
-def page_locators_after(texto: str, cita: str, ventana: int = 80) -> tuple | None:
-    """`([(from, to), …], declared)` — the page locators ADJACENT to a quote, or `None`.
+def page_locators_after(texto: str, cita: str, ventana: int = 80) -> list | None:
+    """`[(from, to), …]` — the page locators ADJACENT to a quote, or `None`.
 
     Adjacency is the rule of #325 applied to the other half of the pair: the vault writes `«…»
     (p. 4) [[bib]]`, `«…» ([[bib]], p. 4)` and, in a row, `| «…» | p. 4 |`, so the window after the
@@ -707,18 +701,13 @@ def page_locators_after(texto: str, cita: str, ventana: int = 80) -> tuple | Non
     parsing a range would not have been enough either. The quote satisfies the pair if it is on
     ANY of the pages named, which is what the locator claims.
 
-    `declarado` is `"indice"` when the locator itself says it is the PDF index (`p. 7 [índice
-    PDF]`): a convention DECLARED is not the same finding as one used in silence, and the caller
-    needs to tell them apart.
+    ⚠ It does NOT report which numbering the locator says it uses: since #500 the verdict accepts
+    either one, so `[índice del PDF]` is a courtesy to the reader and no longer a branch.
     """
     pos = str(texto or "").find(cita)
     if pos < 0:
         return None
-    ventana_txt = texto[pos + len(cita):pos + len(cita) + ventana].split("«")[0]
-    rangos = page_locators(ventana_txt)
-    if not rangos:
-        return None
-    return rangos, ("indice" if PAGE_INDEX_DECLARED.search(ventana_txt) else "")
+    return page_locators(texto[pos + len(cita):pos + len(cita) + ventana].split("«")[0]) or None
 
 
 def page_number_candidates(paginas: list) -> list:
@@ -920,33 +909,32 @@ def quote_pages(quote: str, bibcode: str) -> dict:
     return {"paginas": halladas, "impresas": [n for n in impresas if n is not None], "motivo": None}
 
 
-def quote_page_verdict(quote: str, bibcode: str, rangos: list, declarado: str = "") -> tuple:
-    """Is the page locator pointing at the page the quote is ON? (#492)
+def quote_page_verdict(quote: str, bibcode: str, rangos: list) -> tuple:
+    """Is the page locator pointing at the page the quote is ON? (#492/#500)
 
     `rangos` is the list of `(from, to)` ranges `page_locators_after` read —ALL the pages the
-    locator names, a single page being `(N, N)`— and `declarado` is `"indice"` when it says so.
+    locator names, a single page being `(N, N)`—.
 
     ⛔ **The most decidable half of a pair, and no layer looked at it.** `verify-citations` judges
     the claim against its source, `quote_verdict` judges the CHAIN of the quote, and #436 says as much
-    in writing: *«…ninguna capa mira el localizador»*. But the
-    locator is what the consumer COPIES (`\\citep[p.~N]`), and the `.txt` knows which page the quote
-    is on. Measured on a real vault: **104 of 893** locators point at a REPLACED document and 12 of
+    in writing: *«…ninguna capa mira el localizador»*. And the locator is what lets whoever CHECKS
+    the claim find it in the PDF on disk, while the `.txt` knows which page the quote is on.
+    Measured on a real vault: **104 of 893** locators point at a REPLACED document and 12 of
     190 were wrong in a note that had passed `audit-note`, `lint --cierre` at 0 and 239/239 pairs
     `soportada`.
 
-    Four states, and the two that are not findings carry their reason:
+    Three states, and the one that is not a finding carries its reason:
 
-      · `impresa` — the PRINTED page, which is what `REGLA_LOCALIZADOR` fixes as the convention.
-      · `indice` — the PDF page INDEX over a document that HAS printed numbers: a second convention
-        inside one vault (measured: 44 of 190, consistent per extraction, inconsistent per vault).
-        Not a wrong fact; it is reported because whoever copies it cites a page the paper does not
-        show.
+      · `ok` — the quote IS on the page the locator names, by either numbering (the sheet's printed
+        number or the PDF index). ⛔ #500: which of the two is not the question. Asking it cost 413
+        hand-fixed locators on a real vault for zero reader value —the claim was findable before
+        and after— while the half that does matter, `mal`, is identical under both rules.
       · `mal` — the quote sits on another page, and the detail carries the page it sits on. With
         that, the `_paginacion` debt of #436 stops being global and becomes a list of locators with
         their new page.
       · `no_evaluable` — with its reason (D-43): no `.txt` on disk, the quote is not in it (a
-        degraded INDEX, #205, whose silence proves nothing, #321), or no printed numbering can be
-        derived, so the two conventions cannot be told apart.
+        degraded INDEX, #205, whose silence proves nothing, #321), or the locator matches neither
+        numbering and none can be derived, so there is nothing to decide it against.
 
     ⛔ It never accuses on silence, and it is **not** blocking: a false positive on this gate stops
     operations (#323), and the population it looks at —every quote carrying a locator— is the
@@ -967,24 +955,18 @@ def quote_page_verdict(quote: str, bibcode: str, rangos: list, declarado: str = 
         `L45` is not a hit — they are different pages of the same document."""
         lab = page_label(pagina) if isinstance(pagina, tuple) else str(pagina)
         return any(lab in page_span(a, b) for a, b in rangos)
-    # #493 — el número que el localizador declara está IMPRESO como número de página en la cabecera
-    # o el pie de la página donde cae la cita (`page_number_evidence`, no cualquier entero):
-    # evidencia más fuerte que la consecutividad y que cualquier offset, y se mira antes. Es el caso
-    # del capítulo con título corrido en la cabecera: la página lleva su número y las vecinas no,
-    # así que la consecutividad no lo confirma y el offset lo desmentía.
-    if any(_en_rango(n) for i in halladas for n in pag["evidencia"][i - 1]):
-        return "impresa", det
-    if any(_en_rango(n) for n in con_numero):
-        return "impresa", det
-    if any(_en_rango(i) for i in halladas):
-        if not con_numero and declarado != "indice":
-            # ⚠ Sin numeración impresa derivable, «índice» y «impresa» son el MISMO número aquí: el
-            # acierto puede ser coincidencia, y decidir la convención sería adivinarla (D-43). Lo
-            # que sí la decide es que el localizador la DECLARE, y entonces es un acierto.
-            det["motivo"] = (f"coincide con el índice del PDF de {bibcode} y ese `.txt` no tiene "
-                             f"numeración impresa derivable: la convención no se puede decidir")
-            return "no_evaluable", det
-        return "indice", det
+    # #493 — la primera rama: el número que el localizador declara está IMPRESO como número de
+    # página en la cabecera o el pie de la página donde cae la cita (`page_number_evidence`, no
+    # cualquier entero). Es el caso del capítulo con título corrido en la cabecera: la página lleva
+    # su número y las vecinas no, así que la consecutividad no lo confirma y el offset lo desmentía
+    # — y por eso sigue siendo una rama propia aunque hoy las tres devuelvan lo mismo.
+    # ⛔ #500 — las TRES formas de estar en la página que el localizador nombra valen igual: el
+    # número impreso en la hoja donde cae la cita, la numeración impresa derivada, y el índice del
+    # PDF. Distinguirlas era decidir una CONVENCIÓN de escritura, no un hecho.
+    if (any(_en_rango(n) for i in halladas for n in pag["evidencia"][i - 1])
+            or any(_en_rango(n) for n in con_numero)
+            or any(_en_rango(i) for i in halladas)):
+        return "ok", det
     if not con_numero:
         det["motivo"] = (f"la cita está en la(s) página(s) {', '.join(map(str, halladas))} del PDF "
                          f"de {bibcode} y ese `.txt` no tiene numeración impresa derivable: el "
