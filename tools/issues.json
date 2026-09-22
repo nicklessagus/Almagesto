@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-20",
+ "fetched": "2026-09-22",
  "issues": [
   {
    "number": 2,
@@ -2480,6 +2480,16 @@
    "number": 498,
    "title": "El tier 2 (`instancia`) está rojo en toda instancia que no sea la semilla: 6 de 79 fallan, en tres clases (hermanos `.verif.md`, título de ratchet vencido, y dos tests que asertan sobre la bóveda del template)",
    "state": "CLOSED"
+  },
+  {
+   "number": 499,
+   "title": "«Verificación stale» no tiene comando que la cierre: el detector decide por fecha y `--reanclar` la conserva a propósito (8 de 14 notas, 0 pares a re-verificar)",
+   "state": "OPEN"
+  },
+  {
+   "number": 500,
+   "title": "El localizador es para VERIFICAR, no para citar: el gate de #492 chequea «está en esa página» y deja de dictaminar índice vs impresa (438 de 518 hallazgos sin PDF reemplazado)",
+   "state": "OPEN"
   }
  ]
 }
