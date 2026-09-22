@@ -44,8 +44,8 @@
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
 medido_en: "2026-09-20"
-techo_lineas: 1865
-techo_bytes: 153015
+techo_lineas: 1867
+techo_bytes: 153218
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -708,3 +708,22 @@ crecimientos:
       del chequeo y su trampa de auto-aprobación, al docstring de `_check_note_state`.
     techo_lineas: 1865
     techo_bytes: 153015
+  - fecha: "2026-09-22"
+    ancla: "#499"
+    motivo: >-
+      El DECLARANTE de la tercera fecha de D-12, en el párrafo donde ya viven las tres. Es lo que un
+      agente necesita antes de correr `--reanclar` o de leer un encabezado: que el arrastre se
+      escribe como sufijo del MISMO encabezado, que la fecha de verificación no se mueve y que el
+      lint compara contra el sufijo. Sin eso, la única lectura disponible de un
+      `(2026-09-20 · re-anclado 2026-09-22)` es que alguien re-fechó la verificación, que es
+      exactamente lo contrario de lo que dice.
+    sale: >-
+      Nada, y el motivo es que la suba son dos líneas en el párrafo que ya enumera las tres fechas:
+      la de síntesis ya declara ahí su declarante (`cfg.save_sintesis`) y esto es su simétrico para
+      la de verificación — sacarlo de una para pagar la otra dejaría el párrafo diciendo que dos
+      fechas se declaran y una no se sabe. El caso, la medición (9 de 14 notas de entidad, 1499
+      pares, `0 re-ancladas`) y las dos salidas descartadas van al issue, a `docs/mediciones.md` y a
+      `docs/contrato.md` (INV-82); el reparto por modo (`--from` borra, `--resolver` conserva), al
+      docstring de `write_verif_sidecar`.
+    techo_lineas: 1867
+    techo_bytes: 153218

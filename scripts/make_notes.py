@@ -3998,7 +3998,12 @@ def estado_line(slug: str, dest) -> str:
         # La fecha es la de la última PASADA. La vigencia real es **por par** y la dicen las anclas
         # (D-4): sin la salvedad, esta fecha se lee como "todo verificado a esta fecha", que es
         # justamente la lectura que el ancla vino a corregir.
-        partes.append(f"verificación {fecha_verif} (vigencia por par: la dicen las anclas)")
+        # #499 — el re-anclaje declarado va AL LADO de la fecha de verificación, nunca en su lugar:
+        # las filas se llevaron a las anclas de ese día y no se re-verificó nada (#395), que es la
+        # misma distinción que D-12 hace entre las tres fechas.
+        rea = cfg.reanchor_date(texto)
+        partes.append(f"verificación {fecha_verif}" + (f", re-anclado {rea}" if rea else "")
+                      + " (vigencia por par: la dicen las anclas)")
     if not partes:
         return ""
     # el puntero al registro es lo que hace auditable la línea: el detalle (query efectiva,

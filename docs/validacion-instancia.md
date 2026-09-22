@@ -918,3 +918,49 @@ imprime no es el que la firma acepta.
 
 **Al cerrar:** los dos conteos, y si te apareció algún otro caso del mismo tipo entre tus 52
 fuentes (el issue nombra `2006Tichavsky` del lado de `bibtex_drift`, que es backlog y no bloquea).
+
+## #499 · v1.302.0 — el re-anclaje declara su fecha y el lint compara contra ella
+
+**Qué entró.** `--reanclar` (#480) estampa `· re-anclado <hoy>` en el encabezado del bloque
+—`## Verificación de citas (2026-09-20 · re-anclado 2026-09-22)`— sin tocar la fecha de
+verificación (#395), y `lint.check_stale_verif` compara la prosa contra `max(fecha del bloque,
+re-anclado)`. Una ronda de fan-out (`--from`) borra el sufijo; `--resolver`,
+`--migrate-condition-prefix` y `--restamp-section` lo conservan. Parser único:
+`cfg.reanchor_date`.
+
+**Validar** — el caso es tuyo, las notas que el lint lista hoy en `Verificación stale`:
+
+```bash
+python scripts/lint.py | grep -A 12 '^## Verificación stale'     # esperado: 9 sobre 14 notas de entidad
+python scripts/write_verif_sidecar.py vault/wiki/stars/gj_581.md --reanclar --dry-run
+#   → «137 fila(s) sobre 137 par(es) … 0 re-anclada(s) … fecha del bloque 2026-09-20
+#      (conservada: nada se verificó), re-anclado <hoy> (#499)»
+python scripts/write_verif_sidecar.py vault/wiki/stars/gj_581.md --reanclar   # y las otras ocho
+python scripts/make_notes.py gj_581                              # D-12: la cabecera publica el arrastre
+python scripts/lint.py | grep -A 3 '^## Verificación stale'      # esperado: 0
+```
+
+Las nueve, con sus pares: `harps-drs` 213 · `ica-ruido` 269 · `ica` 230 · `icasso` 239 ·
+`rv-doppler` 152 · `gj_581` 137 · `hd_40307` 179 · `blanqueo-…-dos-ejes` 41 ·
+`fastica-…-de-sesgo` 39 (1499 en total, `0 re-ancladas` en las nueve: el hermano ya estaba en
+sincronía y lo que faltaba era el declarante). Medido en un worktree de tu HEAD `9eba04e` con los
+`scripts/` del template: **9 → 0**.
+
+**Y la propiedad que hay que ver funcionar** (es la decisión de diseño, no un detalle): la fecha de
+**verificación** no se mueve. Después de re-anclar, `grep '^## Verificación de citas' <nota>` tiene
+que seguir diciendo `(2026-09-20 · re-anclado …)` y la cabecera `> _Estado —_`, `verificación
+2026-09-20, re-anclado <hoy>`. Y editá una afirmación **después** de re-anclar: la categoría tiene
+que **volver a encenderse** — si no vuelve, el sufijo es un apagador permanente y hay que devolver
+el issue.
+
+**Lo que cambia de lugar, declarado:** al cerrar `Verificación stale` se enciende **`Cabecera
+> _Estado —_ desfasada`** en las 7 notas con registro (las dos de `queries/` no llevan esa línea).
+Es esperado y la cierra el `make_notes.py <slug>` que la propia categoría imprime.
+
+**Devolver si** el sufijo apaga la categoría aunque la nota se haya editado después del arrastre, si
+`--reanclar` mueve la fecha de verificación, si una ronda de `--from` deja el sufijo viejo puesto, o
+si `--restamp-section`/`--resolver` lo borran.
+
+**Al cerrar:** los dos conteos (`Verificación stale` antes/después) y cuántas notas te quedaron en
+`Cabecera > _Estado —_ desfasada` antes de re-estampar.
+

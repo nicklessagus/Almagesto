@@ -244,6 +244,18 @@ def verify_block(text: str) -> tuple[bool, str | None]:
     return cfg.verification_date(text)
 
 
+def reanchor_of(f: str) -> str | None:
+    """The carry date declared in note `f`'s verification heading, or `None` (#499).
+
+    Read from the file rather than carried in the `verif_blocks` index on purpose: it is only
+    needed for the note that already FIRED the date trigger — a handful — so the expensive check
+    keeps costing what it cost (two history calls per fired note, none per note)."""
+    try:
+        return cfg.reanchor_date(Path(f).read_text(encoding="utf-8"))
+    except OSError:
+        return None
+
+
 def git_out(*args: str) -> str | None:
     """stdout de un `git` corrido en la raíz del repo; None si no hay git, no es repo o falló.
     Fuera de un repo el chequeo de verificación stale **no se puede evaluar**. Desde el issue 0.3
@@ -5773,6 +5785,15 @@ def check_stale_verif(verif_blocks, changed: dict) -> list:
     ⛔ The file's date is only the TRIGGER (#431): what is reported is what `prose_changed_since`
     says about the prose outside `cfg.SECCIONES_ESTAMPADAS`, because editing a stamped section
     cannot change a claim. Two git calls per FIRED note, not per note — the lint is cheap by design.
+
+    ⛔ And the date the prose is compared against is `max(d, re-anclado)` (#499). `--reanclar`
+    (#480) carries every row with its anchor recalculated and KEEPS the block's date on purpose
+    (#395), so comparing against `d` alone left this category on forever over the correction
+    DERIVED from the verification itself — the case #282/#257 say is re-anchored, not re-asked, and
+    the one the framework's own command exists to close (measured: 9 of 14 entity notes, 1499
+    pairs, `0` rows to move on all nine). The declarant is read from the heading
+    (`cfg.reanchor_date`), so a note that was never re-anchored behaves exactly as before, and an
+    edit made AFTER the carry still fires: the comparison moved, it did not disappear.
     """
     stale_verif: list = []
     for f, d in sorted(verif_blocks):
@@ -5782,14 +5803,20 @@ def check_stale_verif(verif_blocks, changed: dict) -> list:
                                       "(`## Verificación de citas (AAAA-MM-DD)`): sin fecha no hay "
                                       "forma de saber si sigue vigente"))
         elif (c := changed.get(f)) and c > d:
+            # #499 — el arrastre declarado (`· re-anclado R`) es la fecha contra la que se compara:
+            # las filas se llevaron a las anclas de ESE día, así que la prosa anterior a R ya está
+            # cubierta por el juicio que alguien firmó. La de verificación no se mueve (#395).
+            r = reanchor_of(f)
+            base = max(d, r) if r else d
             que: list = []
-            cambio = prose_changed_since(f, d, que)
+            cambio = prose_changed_since(f, base, que)
             if cambio is False:
                 continue                   # sólo se tocó una sección estampada: no hay qué verificar
             salvedad = (f"la prosa cambió ({que[0]})" if cambio
                         else "no se pudo aislar la prosa: se compara la fecha del archivo")
-            stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d} "
-                                      f"— {salvedad} → correr `verify-citations` sobre lo agregado"))
+            stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d}"
+                                      + (f" (re-anclado el {r})" if r else "")
+                                      + f" — {salvedad} → correr `verify-citations` sobre lo agregado"))
     return stale_verif
 
 

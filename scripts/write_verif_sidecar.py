@@ -55,6 +55,14 @@ and nothing else, and #282/#257 say it is re-anchored, not re-asked. `reverify_s
 and no command applied it: the only way was `--from <empty dir>`, which nothing documents. It
 carries every row with its anchor recalculated, keeps the block's date (re-anchoring is not
 re-verifying, #395) and REFUSES if any pair has no row to carry — that pair needs the fan-out.
+
+⛔ **And it DECLARES the carry in the heading (#499):** `## Verificación de citas (2026-09-20 ·
+re-anclado 2026-09-22)`. Keeping the date without declaring the carry left `lint.check_stale_verif`
+—which decides by date— with no way to turn off over the very case `--reanclar` exists to support,
+and re-dating instead would have put a false date in the artefact that travels (D-12). The suffix
+is stamped **even when 0 rows moved** (the measured case: the sibling was already in sync and what
+was missing was the signature); `--resolver`, `--migrate-condition-prefix` and `--restamp-section`
+keep it, and a fan-out round (`--from`) ERASES it — a new verification supersedes the carry.
 """
 from __future__ import annotations
 
@@ -347,18 +355,23 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
     return rows
 
 
-def note_section(note: Path, text: str, rows: list, fecha: str) -> str:
+def note_section(note: Path, text: str, rows: list, fecha: str,
+                 reanclado: str | None = None) -> str:
     """The `## Verificación de citas` section the NOTE keeps: header line, pointer, sub-sections.
 
     The header line is GENERATED (`verif_summary`, INV-81) and the three sub-sections carry their
     generated count fragment (#280) — the free text after the colon is the agent's triage and is
     preserved when it exists; when it does not, a visible placeholder says so rather than a
-    «ninguna» nobody wrote."""
+    «ninguna» nobody wrote.
+
+    `reanclado` appends the `· re-anclado AAAA-MM-DD` declarant to the heading (#499) — the date
+    the rows were CARRIED, next to and never instead of the date they were verified on."""
     fm = cfg.frontmatter_span(text)
     prosa = cfg.solo_prosa(fm[1] if fm else text)
     frags = lb.verif_subsection_lines(rows, prosa)
     vieja = lb.verif_section(text)
-    lineas = [f"{lb.VERIFY_HEADER} ({fecha})", f"{INTRO} {lb.verif_summary(rows)}", "",
+    sufijo = f" · re-anclado {reanclado}" if reanclado and reanclado != fecha else ""
+    lineas = [f"{lb.VERIFY_HEADER} ({fecha}{sufijo})", f"{INTRO} {lb.verif_summary(rows)}", "",
               lb.verif_pointer(note), ""]
     for sub in lb.VERIF_SUBSECCIONES:
         frag = frags.get(sub)
@@ -456,14 +469,20 @@ def _lost_prose(vieja: str, nueva: str) -> list:
 
 
 def emit(note: Path, text: str, rows: list, fecha: str, *, dry_run: bool = False,
-         solo_seccion: bool = False) -> None:
+         solo_seccion: bool = False, reanclado: str | None = None) -> None:
     """Render the sibling and the note's section from `rows`, and (unless `dry_run`) write them.
 
     The single writing point of this module — every mode that produces rows goes through here, so
     the round-trip guard (#284), the header line (INV-81) and the triage guard (#430) apply to all
     of them and cannot be forgotten by a mode added later. `solo_seccion` keeps the sibling
-    untouched: that is the re-stamping mode, which reads the rows FROM the sibling."""
-    seccion = note_section(note, text, rows, fecha)            # #430: rehúsa antes de escribir nada
+    untouched: that is the re-stamping mode, which reads the rows FROM the sibling.
+
+    ⛔ `reanclado` DEFAULTS TO NONE, and that default is the rule (#499): the declarant belongs to
+    the carry, so a mode that does not pass it —a fan-out round, `--from`— ERASES the suffix, which
+    is what a new verification should do to it. The modes that rewrite cells without re-reading
+    anything (`--resolver`, `--migrate-condition-prefix`, `--restamp-section`) pass the one already
+    in the heading, because none of them re-verified anything either."""
+    seccion = note_section(note, text, rows, fecha, reanclado)  # #430: rehúsa antes de escribir nada
     vieja = lb.verif_section(text)
     if perdida := _lost_prose(vieja, seccion):
         raise SidecarError(
@@ -503,7 +522,7 @@ def _rewrite_rows(note: Path, cambios: dict, fecha: str | None, dry_run: bool) -
                            f"`--fecha`: re-fechar es una decisión, no un default")
     nuevas = [replace(f, condition=cambios[k]) if (k := lb.row_key(f)) in cambios else f
               for f in filas]
-    emit(note, text, nuevas, d, dry_run=dry_run)
+    emit(note, text, nuevas, d, dry_run=dry_run, reanclado=cfg.reanchor_date(text))
     return {"filas": len(filas), "fecha": d}
 
 
@@ -613,7 +632,8 @@ def restamp_section(note: Path, fecha: str | None = None, dry_run: bool = False)
         raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado y no se pasó "
                            f"`--fecha`: re-fechar es una decisión, no un default")
     antes = text
-    emit(note, text, rows, d, dry_run=dry_run, solo_seccion=True)
+    emit(note, text, rows, d, dry_run=dry_run, solo_seccion=True,
+         reanclado=cfg.reanchor_date(text))
     return {"nota": note.name, "filas": len(rows), "fecha": d,
             "cambio": dry_run or note.read_text(encoding="utf-8") != antes}
 
@@ -657,7 +677,13 @@ def reanchor(note: Path, fecha: str | None = None, dry_run: bool = False) -> dic
     `reverify_subset`'s partition, and re-anchoring it would publish an anchor over a verdict that
     does not exist), and a note without a sibling has nothing to re-anchor. The block's date is
     PRESERVED unless `fecha` says otherwise: nothing was verified (#395). Orphan rows —the claim is
-    no longer in the body— are dropped and DECLARED."""
+    no longer in the body— are dropped and DECLARED.
+
+    ⛔ It DECLARES the carry in the heading: `· re-anclado <hoy>` (#499), **even when `reancladas`
+    is 0** — that is the measured case, a sibling already in sync whose note the lint kept calling
+    stale because nothing said the carry had been accepted. Preserving the date without declaring
+    the carry is what left `check_stale_verif` with no way to turn off (the date it compares against
+    is by construction older than the correction that expired the anchors)."""
     text = note.read_text(encoding="utf-8")
     rows = lb.verif_rows(note)
     if not rows:
@@ -677,8 +703,10 @@ def reanchor(note: Path, fecha: str | None = None, dry_run: bool = False) -> dic
             + "\n  ".join(f"{p.bibcode} · ancla {p.anchor}" for p in sin_fila))
     viejas = {(r.bibcode, r.anchor) for r in rows}
     nuevas = build_rows(note, text, {}, rows)
-    emit(note, text, nuevas, d, dry_run=dry_run)
+    hoy = dt.date.today().isoformat()
+    emit(note, text, nuevas, d, dry_run=dry_run, reanclado=hoy)
     return {"filas": len(nuevas), "pares_cuerpo": len(pares), "fecha": d,
+            "reanclado": hoy if hoy != d else None,
             "reancladas": sum(1 for r in nuevas if (r.bibcode, r.anchor) not in viejas),
             "huerfanas": [(h.bibcode, h.claim) for h in huerfanas],
             "hermano": cfg.verif_sidecar(note).name}
@@ -701,7 +729,8 @@ def _main_reanclar(args) -> int:
     accion = "se escribiría" if args.dry_run else "escrito"
     cfg.print_seguro(f"{accion} {r['hermano']}: {r['filas']} fila(s) sobre {r['pares_cuerpo']} "
                      f"par(es) del cuerpo — {r['reancladas']} re-anclada(s), 0 juzgada(s) (sin "
-                     f"ronda, #480); fecha del bloque {r['fecha']} (conservada: nada se verificó)")
+                     f"ronda, #480); fecha del bloque {r['fecha']} (conservada: nada se verificó)"
+                     + (f", re-anclado {r['reanclado']} (#499)" if r["reanclado"] else ""))
     if r["huerfanas"]:
         cfg.print_seguro(f"⚠ {len(r['huerfanas'])} fila(s) huérfana(s) descartada(s) — la "
                          f"afirmación ya no está en el cuerpo:"

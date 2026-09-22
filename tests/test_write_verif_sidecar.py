@@ -1,4 +1,5 @@
 """`write_verif_sidecar`: el eslabón que faltaba en la cadena de `verify-citations` (#403)."""
+import datetime as dt
 import hashlib
 import json
 from pathlib import Path
@@ -277,7 +278,9 @@ def test_480_reanclar_lleva_las_filas_con_el_ancla_recalculada_y_conserva_la_fec
     assert filas["2019Txt"].anchor != anclas_viejas["2019Txt"] and filas["2019Txt"].verdict == "soportada"
     assert filas["2020Pdf"].anchor == anclas_viejas["2020Pdf"] and filas["2020Pdf"].verdict == "no-soportada", \
         "la fila que no venció queda igual, con su veredicto"
-    assert "## Verificación de citas (2026-03-01)" in nota.read_text(encoding="utf-8"), "la fecha se CONSERVA"
+    assert nota.read_text(encoding="utf-8").count("## Verificación de citas (2026-03-01 · re-anclado ") == 1, \
+        "la fecha de verificación se CONSERVA y el arrastre se DECLARA al lado (#499)"
+    assert cfg.verification_date(nota.read_text(encoding="utf-8"))[1] == "2026-03-01"
     assert lint.collect().por_clave("stale_pairs").items == ()
     assert ws.main([str(nota), "--reanclar"]) == 0
     assert "0 re-anclada(s)" in capsys.readouterr().out, "idempotente"
@@ -1036,3 +1039,49 @@ def test_492_sin_localizador_en_un_lado_no_hay_contradiccion(toy_vault):
     ws.write(nota4, d4, fecha="2026-03-01")
     texto = nota4.read_text(encoding="utf-8")
     assert ws.build_rows(nota4, texto, ws.load_fanout(d4), lb.verif_rows(nota4))
+
+
+# ── #499 · el arrastre se DECLARA en el encabezado ──────────────────────────────────────────────
+
+def test_499_reanclar_DECLARA_el_arrastre_aunque_no_mueva_ninguna_fila(toy_vault, capsys):
+    """#499 — el caso medido en la instancia: el hermano YA estaba en sincronía (`0 re-ancladas`,
+    las nueve notas) y lo que faltaba era el declarante, así que estampar el sufijo sólo cuando algo
+    se mueve dejaría el defecto exactamente donde está. La fecha de verificación no se toca."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}, ronda="r1"), fecha="2026-03-01")
+    hoy = dt.date.today().isoformat()
+    assert ws.main([str(nota), "--reanclar", "--dry-run"]) == 0
+    assert cfg.reanchor_date(nota.read_text(encoding="utf-8")) is None, "dry-run no escribe"
+    assert ws.main([str(nota), "--reanclar"]) == 0
+    out = capsys.readouterr().out
+    assert "0 re-anclada(s)" in out and f"re-anclado {hoy}" in out, out
+    texto = nota.read_text(encoding="utf-8")
+    assert cfg.verification_date(texto) == (True, "2026-03-01"), "la de verificación NO se mueve"
+    assert cfg.reanchor_date(texto) == hoy
+    assert ws.main([str(nota), "--reanclar"]) == 0
+    assert nota.read_text(encoding="utf-8") == texto, "idempotente: el mismo arrastre el mismo día"
+
+
+def test_499_el_arrastre_lo_BORRA_la_ronda_y_lo_CONSERVAN_los_reescritores(toy_vault):
+    """Qué modo hace qué con el declarante, y por qué: una ronda de fan-out (`--from`) VERIFICÓ, y
+    una verificación nueva supersede el arrastre; `--resolver` y `--restamp-section` no leyeron
+    nada, así que el arrastre que alguien firmó sigue vigente y tienen que llevarlo."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {}, ronda="r1", condicion="SNR > 50", cond_tipo="acota")
+    ws.write(nota, d, fecha="2026-03-01")
+    assert ws.main([str(nota), "--reanclar"]) == 0
+    hoy = cfg.reanchor_date(nota.read_text(encoding="utf-8"))
+    assert hoy is not None
+
+    ws.restamp_section(nota)
+    assert cfg.reanchor_date(nota.read_text(encoding="utf-8")) == hoy, "re-estampar no verifica"
+    ancla = lb.verif_rows(nota)[0].anchor
+    ws.resolve_conditions(nota, {ancla: "fila en `## Régimen de validez`"})
+    assert cfg.reanchor_date(nota.read_text(encoding="utf-8")) == hoy, "resolver no verifica"
+    assert cfg.verification_date(nota.read_text(encoding="utf-8"))[1] == "2026-03-01"
+
+    ws.write(nota, _fanout(toy_vault, nota, {}, ronda="r2"), fecha="2026-03-05")
+    texto = nota.read_text(encoding="utf-8")
+    assert cfg.reanchor_date(texto) is None, "la ronda nueva BORRA el arrastre: se verificó de nuevo"
+    assert cfg.verification_date(texto) == (True, "2026-03-05")
+

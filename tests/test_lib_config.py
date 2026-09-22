@@ -3880,3 +3880,34 @@ def test_487_ads_parcial_es_UN_predicado_y_devuelve_el_motivo():
     assert cfg.ads_parcial({"parcial": "`--extra-only`: sólo extra_core"}).startswith("`--extra")
     assert cfg.ads_parcial({"parcial": None}) == "" and cfg.ads_parcial({}) == ""
     assert cfg.ads_parcial(None) == "" and cfg.ads_parcial([1, 2]) == ""
+
+
+# ── #499 · el re-anclaje declara su fecha, al lado de la de verificación ────────────────────────
+
+def test_499_reanchor_date_lee_el_arrastre_y_verification_date_NO_cambia_de_veredicto():
+    """#499 — `--reanclar` (#480) conserva la fecha del bloque a propósito (#395: re-anclar no es
+    verificar), así que `lint.check_stale_verif` —que decide por fecha— no tenía forma de apagarse
+    sobre el caso que ese comando existe para cerrar. El declarante es un SUFIJO, no una fecha
+    nueva: las dos conviven en el mismo encabezado y cada una responde su pregunta (D-12/INV-82).
+
+    La red de que no se pisan: `verification_date` lee la PRIMERA fecha de cada encabezado, así que
+    el sufijo no puede moverla — si la moviera, cerrar un backlog falso publicaría una fecha falsa
+    en el artefacto que viaja, que es el canje que este issue rechaza."""
+    t = "## Verificación de citas (2026-09-20 · re-anclado 2026-09-22)\n"
+    assert cfg.verification_date(t) == (True, "2026-09-20")
+    assert cfg.reanchor_date(t) == "2026-09-22"
+    assert cfg.reanchor_date("## Verificación de citas (2026-09-20)\n") is None
+    assert cfg.reanchor_date("# X\n\nsin bloque\n") is None
+    # varios bloques (hasta 11 medidos en una bóveda real): el arrastre es el del MÁS RECIENTE,
+    # el mismo que elige `verification_date` — una regla, un encabezado (AUD-136/INV-31).
+    dos = ("## Verificación de citas (2026-01-05 · re-anclado 2026-02-01)\n\n"
+           "## Verificación de citas (2026-07-30 · re-anclado 2026-08-02)\n")
+    assert cfg.verification_date(dos) == (True, "2026-07-30")
+    assert cfg.reanchor_date(dos) == "2026-08-02"
+    # y el bloque más reciente SIN sufijo no hereda el del viejo: una ronda nueva supersede el
+    # arrastre, y leer el de otro encabezado publicaría un arrastre que nadie firmó.
+    assert cfg.reanchor_date("## Verificación de citas (2026-01-05 · re-anclado 2026-02-01)\n\n"
+                             "## Verificación de citas (2026-07-30)\n") is None
+    # el encabezado sin fecha no aporta arrastre (no hay contra qué compararlo)
+    assert cfg.reanchor_date("## Verificación de citas\n") is None
+

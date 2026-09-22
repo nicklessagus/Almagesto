@@ -696,8 +696,13 @@ portadores:
         estado: fuera-de-alcance
         motivo: >-
           Usa `solo_prosa` para no contar dos veces las marcas de `inferencia` al escribir el
-          bloque. Su eje de caducidad es el ANCLA por par (D-4/D-20), que ya es la granularidad
-          fina que esta regla persigue: no mira fechas de archivo.
+          bloque. Su eje de caducidad es el ANCLA por par (D-4/D-20) y no mira fechas de archivo.
+          ⚠ Revisada en #499: esta firma decía además que ese eje «ya es la granularidad fina que
+          esta regla persigue», y de ahí salía que nadie cruzara las dos mitades — el escritor
+          CONSERVA la fecha del bloque (#395) y el lint decide por esa fecha, así que la categoría
+          quedaba encendida para siempre. Lo que esa regla sigue sin necesitar de él es con qué
+          VERSIÓN se compara; lo que sí le corresponde —declarar el arrastre que hace comparable
+          esa fecha— es la regla de #499, donde va como `usa`.
   - issue: 405
     regla: >-
       Resolver el `.txt` de un bibcode entre TODOS los slugs, no sólo bajo el del sujeto: el paper
@@ -1983,3 +1988,42 @@ portadores:
       - modulo: scripts/repaginate.py
         estado: fuera-de-alcance
         motivo: "Es el único ESCRITOR de la deuda y la lleva por la constante (`PAGINATION_OPEN_MARKS`), no por el predicado, por lo mismo que el lint: trabaja por ARCHIVO de extracción y necesita saber CUÁL marca está puesta para reescribirla, que es lo que un booleano por bibcode no dice."
+
+  - issue: 499
+    regla: >-
+      Toda fecha que el framework **conserva a propósito** necesita su declarante, o el detector que
+      la vigila no tiene cómo apagarse. `--reanclar` (#480) lleva las filas con el ancla
+      recalculada y conserva la fecha del bloque porque nada se verificó (#395), mientras
+      `lint.check_stale_verif` decide comparando la prosa contra la versión de ESA fecha: las dos
+      mitades correctas por separado dejaban la categoría encendida para siempre justo sobre la
+      corrección DERIVADA de la propia verificación (#282/#257), y re-fechar habría cambiado un
+      backlog falso por una fecha falsa en el artefacto que viaja (D-12/INV-82). El arrastre se
+      declara como sufijo del mismo encabezado (`· re-anclado AAAA-MM-DD`) y lo lee UNA función:
+      el escritor lo estampa, el detector compara contra `max(d, re-anclado)` y la cabecera de D-12
+      lo publica al lado de la fecha de verificación. Es la misma forma que D-12 ya le dio a la
+      fecha de SÍNTESIS (`cfg.save_sintesis`): lo que no se puede derivar, se declara.
+    funcion: lib_config.reanchor_date
+    patron: 're-anclado|reanchor'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "Es el ESCRITOR del declarante: `reanchor` lo estampa (aunque mueva 0 filas), `--from` lo borra y los reescritores que no re-leen nada lo conservan, todo por `note_section`/`emit`."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_stale_verif` compara la prosa contra `max(fecha del bloque, re-anclado)`: es el detector que sin el declarante no podía apagarse."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`estado_line` publica la tercera fecha de D-12 y el arrastre al lado; leerlo de otra manera haría que la cabecera y el lint nombraran fechas distintas (AUD-136)."
+      - modulo: scripts/reverify_subset.py
+        estado: fuera-de-alcance
+        motivo: "PROPONE el re-anclaje y no escribe (#257): nombra el sufijo en el texto que manda declararlo, y quien lo acepta es `--reanclar`. No lee ningún encabezado."
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "Su `VERIFY_HEADER` es el prefijo del encabezado y `section_start` ya tolera el sufijo que arranca con puntuación (INV-98); la palabra aparece en un comentario sobre el encadenado de veredictos. No parsea la fecha ni el arrastre."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "Nombra «extracto re-anclado» en el texto de una exención; no lee el encabezado del bloque ni decide caducidad por fecha."
+      - modulo: scripts/verify_fanout.py
+        estado: fuera-de-alcance
+        motivo: "Usa la palabra en el conteo de la barrera («114 fuera, re-anclados»), que es sobre los pares del alcance de la ronda; el declarante del encabezado lo escribe el sidecar."
+

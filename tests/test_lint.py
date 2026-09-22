@@ -2114,6 +2114,39 @@ def test_stale_verif_445_la_linea_en_blanco_entre_tabla_y_encabezado_NO_es_prosa
     assert len(filas) == 1 and "desaparecieron" in filas[0][1]
 
 
+def test_499_stale_verif_compara_contra_el_ARRASTRE_declarado(toy_vault):
+    """#499 — `--reanclar` (#480) lleva las filas con el ancla recalculada y CONSERVA la fecha del
+    bloque (#395: nada se verificó), así que comparar la prosa contra esa fecha dejaba la categoría
+    encendida para siempre justo sobre el caso que ese comando existe para cerrar: la corrección
+    DERIVADA de la propia verificación (#282/#257), que se re-ancla y no se re-pregunta. Medido en
+    una bóveda real: 9 de 14 notas de entidad, 1499 pares, y `--reanclar` diciendo `0 re-ancladas`
+    en las nueve — el hermano estaba en sincronía y lo que faltaba era el declarante.
+
+    Re-fechar el bloque cambiaba un backlog falso por una FECHA FALSA en el artefacto que viaja
+    (D-12), así que la salida es el sufijo: la comparación se mueve a `max(d, re-anclado)` y la
+    fecha de verificación no se toca."""
+    _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    # la corrección derivada: cambia el bloque citable, así que el ancla del par vence
+    p.write_text(p.read_text(encoding="utf-8").replace("Afirmación [[", "Afirmacion [["),
+                 encoding="utf-8")
+    assert len(_stale(toy_vault)) == 1, "el fixture: sin declarante la categoría queda encendida"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "## Verificación de citas (2020-01-01)",
+        "## Verificación de citas (2020-01-01 · re-anclado 2020-03-01)"), encoding="utf-8")
+    _git(toy_vault.ROOT, "add", "-A")
+    _git(toy_vault.ROOT, "commit", "-q", "-m", "re-ancla", fecha="2020-03-01")
+    assert _stale(toy_vault) == [], "la prosa se compara contra el arrastre que alguien firmó"
+    assert cfg.verification_date(p.read_text(encoding="utf-8"))[1] == "2020-01-01", \
+        "y la fecha de verificación NO se movió: no se verificó nada (#395)"
+    # la edición POSTERIOR al arrastre sigue disparando, y el mensaje nombra las DOS fechas
+    p.write_text(p.read_text(encoding="utf-8").replace("Afirmacion [[", "Afirmación nueva [["),
+                 encoding="utf-8")
+    filas = _stale(toy_vault)
+    assert len(filas) == 1, filas
+    assert "su último verify es del 2020-01-01 (re-anclado el 2020-03-01)" in filas[0][1], filas
+
+
 def test_prose_changed_since_devuelve_None_si_el_commit_no_TIENE_la_nota(toy_vault):
     """El commit más reciente hasta la fecha puede ser el que BORRÓ la nota (un `entity rename`, una
     nota movida y restaurada): ahí `git show <sha>:<ruta>` no devuelve nada. Sin la guarda se

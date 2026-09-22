@@ -329,6 +329,19 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   un extracto del primero); si no hay commit hasta esa fecha o `git` falla, se cae al comportamiento
   viejo **declarándolo** («no se pudo aislar la prosa: se compara la fecha del archivo»). Cuesta dos
   llamadas a `git` por nota **disparada**, no por nota.
+  ⛔ **Y la fecha contra la que se compara es `max(fecha del bloque, re-anclado)` (#499).** El
+  comando que el propio framework manda correr para cerrar esta categoría —`write_verif_sidecar
+  --reanclar` (#480)— **conserva** la fecha del bloque a propósito (#395: re-anclar no es
+  verificar), así que la comparación por fecha dejaba encendida para siempre justo la corrección
+  DERIVADA de la verificación (#282/#257), que se re-ancla y no se re-pregunta. Hoy `--reanclar`
+  **declara** el arrastre en el encabezado (`## Verificación de citas (2026-09-20 · re-anclado
+  2026-09-22)`) y el detector compara contra esa fecha; el mensaje nombra las dos. Medido en
+  `Almagesto-Tesis` (2026-09-22): **9 de 14** notas de entidad, 1499 pares, `--reanclar` moviendo
+  **0 filas** en las nueve (el hermano ya estaba en sincronía: lo que faltaba era el declarante) →
+  categoría **9 → 0**, con la fecha de verificación intacta. ⚠ Cerrarla deja en su lugar el backlog
+  de **cabecera `> _Estado —_` desfasada** (7 de las 9: las dos `queries/` no llevan esa línea),
+  porque D-12 publica el arrastre al lado de la fecha de verificación — se cierra con el
+  `python scripts/make_notes.py <slug>` que la propia categoría imprime.
   ⛔ **Y «cambió» lo decide el CONJUNTO DE ANCLAS de los bloques citables (#445)**, que es lo que las
   filas cuelgan (D-4): una línea en blanco entre una tabla y un `## ` —la edición que *Forma del
   artefacto* pide—, un encabezado renombrado o un fence no mueven ninguna ancla y **no disparan**.

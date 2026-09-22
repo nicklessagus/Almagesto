@@ -19,7 +19,9 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > **declara**, `cfg.save_sintesis` / `triage.py --sintesis`, porque no se puede derivar: `git` fecha
 > el ARCHIVO, así que una cirugía de cabecera contaría igual que reescribir el resumen) y
 > **verificación** (fecha del bloque, con la salvedad fija *"vigencia por par: la dicen las anclas"*
-> — sin ella la fecha se lee como "todo verificado a esta fecha", que es lo que el ancla corrige).
+> — sin ella la fecha se lee como "todo verificado a esta fecha", que es lo que el ancla corrige),
+> ⛔ **y el ARRASTRE del re-anclaje se declara al lado: `· re-anclado AAAA-MM-DD`, mismo encabezado
+> (#499)** — `--reanclar` conserva la fecha (nada se verificó, #395) y el lint compara contra ésa.
 > Con una sola fecha, refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear
 > —y re-sintetizado lo que nadie volvió a escribir (INV-82).
 

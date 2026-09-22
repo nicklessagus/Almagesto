@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.301.1"
+ALMAGESTO_VERSION = "1.302.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2624,6 +2624,7 @@ def stdout_tolerante() -> None:
 
 VERIF_HEAD_RE = re.compile(r"^##\s+Verificaci[oó]n de citas\b(.*)$", re.M)
 _VERIF_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_REANCHOR_RE = re.compile(r"·\s*re-anclado\s+(\d{4}-\d{2}-\d{2})")
 
 
 def verification_date(text: str) -> tuple[bool, str | None]:
@@ -2645,6 +2646,31 @@ def verification_date(text: str) -> tuple[bool, str | None]:
         return False, None
     dates = [m.group(0) for m in (_VERIF_DATE_RE.search(h) for h in heads) if m]
     return True, max(dates) if dates else None
+
+
+def reanchor_date(text: str) -> str | None:
+    """Date the most recent verification block was RE-ANCHORED on, or `None` (#499).
+
+    The suffix `## Verificación de citas (2026-09-20 · re-anclado 2026-09-22)` is the declarant the
+    framework asks for and did not have. `--reanclar` (#480) carries every row with its anchor
+    recalculated and **keeps** the verification date on purpose (#395: re-anchoring is not
+    re-verifying), so `lint.check_stale_verif` —which decides by DATE, comparing the note's prose
+    against the committed version at the block's date— kept firing forever on exactly the case #480
+    exists to support: the correction DERIVED from the verification itself (#282/#257). Measured on
+    a real vault: 9 of 14 entity notes stale, 1499 pairs, and `--reanclar` reporting `0` rows to
+    move on all nine — the sibling was already in sync and what was missing was the signature.
+
+    Re-dating the block would have swapped a false backlog for a false date in the artefact that
+    travels (D-12/INV-82), so the two dates are kept apart: `verification_date` still reads the
+    FIRST date of each heading (its verdict does not change) and this one reads the suffix of the
+    heading `verification_date` picked. A fan-out round erases it: a new verification supersedes the
+    carry.  @inv INV-82"""
+    fechados = [(m.group(0), h) for h in VERIF_HEAD_RE.findall(text)
+                if (m := _VERIF_DATE_RE.search(h))]
+    if not fechados:
+        return None
+    m = _REANCHOR_RE.search(max(fechados, key=lambda p: p[0])[1])
+    return m.group(1) if m else None
 
 
 def ratchet_raises(rel_path: str, fields, root: Path | None = None) -> list | None:

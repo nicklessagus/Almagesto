@@ -159,8 +159,9 @@ def main() -> int:
 
     if not r["sin_bloque"]:
         print("\n⚠ El re-anclaje es una PROPUESTA: dice que la afirmación sigue siendo reconociblemente\n"
-              "  la misma, no que la corrección haya sido fiel. Quien lo acepte lo declara en el bloque\n"
-              "  (de qué ronda viene el veredicto, y que el texto es posterior a la corrección).")
+              "  la misma, no que la corrección haya sido fiel. Quien lo acepte lo declara en el bloque:\n"
+              "  el sufijo `· re-anclado AAAA-MM-DD` del encabezado, que estampa `--reanclar` (#499) y\n"
+              "  contra el que compara el lint — la fecha de verificación no se mueve (#395).")
         if not r["sin_fila"]:
             # #480 — con 0 a re-verificar, la escritura tiene comando; con alguno, primero el fan-out
             print(f"  → sin pares a re-verificar: `python scripts/write_verif_sidecar.py {nota} "

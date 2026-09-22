@@ -3534,3 +3534,54 @@ El test nuevo muere sin el fix.
 cuatro redes; `lib_config` es el parser; `harvest_views`, `triage` y `fetch_bibtex` no derivan
 estado). Los tres «menores» del issue (fecha sin comillas en `vistas[]`, snippet de 80 caracteres,
 `## Excluidos` sin fecha) son reglas distintas y quedan en el issue.
+
+## #499 · el detector decidía por fecha y el comando que lo cierra conserva la fecha (2026-09-22)
+
+Reportado desde `Almagesto-Tesis`. `lint.check_stale_verif` decide *«vencido»* comparando la prosa
+contra la versión committeada **en la fecha del bloque**; `write_verif_sidecar --reanclar` (#480) —el
+comando que el propio framework manda correr para cerrarla— **conserva** esa fecha a propósito
+(#395: re-anclar no es verificar). Las dos mitades son correctas por separado y juntas dejan la
+categoría encendida **para siempre** sobre el caso que #480 existe para soportar: la corrección
+**derivada de la propia verificación** (#282/#257). Las dos ya se contradecían por escrito —la firma
+`fuera-de-alcance` de `write_verif_sidecar` en la regla de #431 dice *«su eje de caducidad es el
+ANCLA por par … no mira fechas de archivo»*, y el lint mira fechas de archivo—.
+
+**Población (bóveda `Almagesto-Tesis`, HEAD `9eba04e`, con `scripts/` de este template):**
+
+| | antes | después |
+|---|---|---|
+| `Verificación stale` | **9** de 14 notas de entidad | **0** |
+| pares en esas notas | 1499 | 1499 |
+| filas que `--reanclar` mueve | **0** en las nueve | — |
+| `## Verificación de citas (2026-09-20)` | 9 | 9, con `· re-anclado 2026-09-22` |
+| `Cabecera > _Estado —_ desfasada` | 0 | 7 (cierra con `make_notes.py <slug>`) |
+
+Las nueve: `harps-drs` (213 pares), `ica-ruido` (269), `ica` (230), `icasso` (239), `rv-doppler`
+(152), `gj_581` (137), `hd_40307` (179), `blanqueo-…-dos-ejes` (41), `fastica-…-de-sesgo` (39). ⚠ El
+issue midió **8**: `ica` entró entre su commit (`25e780a`) y el HEAD de hoy. El `0 re-ancladas` es lo
+que prueba el defecto — cada par del cuerpo ya tenía su fila con el ancla de hoy, y el lint pedía
+igual correr el fan-out sobre 1499 pares que no tienen nada que verificar.
+
+**Lo que entró** (salida 2 del issue, la que respeta #431 y D-12): `--reanclar` **declara** el
+arrastre como sufijo del mismo encabezado —`## Verificación de citas (2026-09-20 · re-anclado
+2026-09-22)`, `cfg.reanchor_date`— y `check_stale_verif` compara contra `max(d, re-anclado)`. No la
+salida 1 (que el detector use `lb.match_rows_to_pairs`): también daba 9 → 0, pero pierde señal —
+#407 empareja por **cobertura del extracto**, así que una fila puede ser arrastrada sobre una
+afirmación materialmente cambiada—. Y no `--fecha`: publicaría `verificación 2026-09-22` sobre una
+ronda que leyó los PDFs el 2026-09-20, o sea un backlog falso cambiado por una **fecha falsa en el
+artefacto que viaja** (D-12). La fecha de verificación no se mueve, `verification_date` no cambia de
+veredicto (lee la PRIMERA fecha de cada encabezado), una ronda de fan-out **borra** el sufijo y los
+reescritores que no re-leen nada (`--resolver`, `--migrate-condition-prefix`, `--restamp-section`) lo
+**conservan**.
+
+**El costo declarado:** cerrar `Verificación stale` enciende `Cabecera > _Estado —_ desfasada` en 7
+de las 9 (las dos `queries/` no llevan esa línea), porque D-12 publica el arrastre al lado de la
+fecha de verificación. Es backlog con salida de un comando —el que la propia categoría imprime— y no
+una deuda nueva: es la cabecera diciendo la verdad.
+
+**Portadores (#409).** `carriers --propose lib_config.reanchor_date --patron 're-anclado|reanchor'`:
+1 llama (`write_verif_sidecar`, que es quien lo escribe), y `lint` y `make_notes` van declarados
+`usa` — son los dos lectores, el que decide la caducidad y el que publica la tercera fecha de D-12.
+⚠ Lo que este issue **no** resuelve: `scripts/triage.py` sigue sin declarar en la regla de #431
+(preexistente; su `patron` es `last_change_dates|solo_prosa`).
+
