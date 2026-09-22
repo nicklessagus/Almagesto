@@ -43,9 +43,9 @@
 #   - Y la red barata del hallazgo secundario: claves `ancla:` contadas contra las entradas
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
-medido_en: "2026-09-20"
-techo_lineas: 1867
-techo_bytes: 153218
+medido_en: "2026-09-22"
+techo_lineas: 1322
+techo_bytes: 99451
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -727,3 +727,18 @@ crecimientos:
       docstring de `write_verif_sidecar`.
     techo_lineas: 1867
     techo_bytes: 153218
+  - fecha: "2026-09-22"
+    ancla: "AUD-475"
+    motivo: >-
+      BAJA, no suba: recorte de CLAUDE.md de 1867 líneas / 153192 B a 1322 / 99451 B (−35 % de
+      bytes). La alarma de pendiente (#465) marcaba 24 subas firmadas en 14 días, cada una juzgada
+      sola. Cada ⛔ queda como regla + consecuencia + ancla en una o dos líneas; salen el caso que la
+      produjo, las mediciones con sus números, la historia «hasta 1.x», la mecánica fina de las
+      operaciones y la enumeración de bloqueantes del lint.
+    sale: >-
+      Todo lo recortado se MOVIÓ, verbatim como estaba en v1.307.1, a `docs/operacion.md` §
+      «Apéndice A — el porqué largo de `CLAUDE.md`», con los mismos encabezados que CLAUDE.md un nivel
+      más abajo; CLAUDE.md apunta ahí desde el encabezado y desde el criterio de admisión. El
+      catálogo de bloqueantes sigue en `docs/lint.md` § Bloqueantes.
+    techo_lineas: 1322
+    techo_bytes: 99451
