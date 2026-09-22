@@ -388,23 +388,27 @@ def test_bajar_el_techo_nunca_es_hallazgo(repo: Path):
     assert ti.subidas_de_techo(repo) == []
 
 
-def test_techos_previos_lee_el_ratchet_de_HEAD(repo: Path):
-    """El test de al lado sólo cubría la rama `None`, que un `return None` satisface por
-    construcción: sobrevivía a la mutación y nadie probaba la rama que hace el trabajo.
-
-    Es la mitad positiva —leer el techo COMMITEADO— y es de la que depende el guard de #96: sin
-    ella, «el techo sólo puede bajar» no tiene contra qué comparar."""
+def test_la_subida_se_mide_contra_la_BASE_declarada_y_la_base_ilegible_NO_se_evalua(repo: Path, monkeypatch):
+    """⛔ AUD-479 — «no evaluada» lo decidía `techos_previos` leyendo `HEAD`, y la subida
+    `ratchet_raises` leyendo `$ALMAGESTO_RATCHET_BASE` (AUD-408): con una base irresoluble el
+    chequeo no corría y el reporte callaba —`[]` leído como «no subió»—. Una sola función decide
+    las dos cosas: la base declarada manda, y la ilegible es `None` (D-43)."""
+    import subprocess
     _git_repo_con_techo(repo, 2)
-    assert ti.techos_previos(repo) == {"sin_marca": 2, "sin_test": 2}
-    _ratchet(repo, 7)                                    # el del árbol NO es el de HEAD
-    assert ti.techos_previos(repo) == {"sin_marca": 2, "sin_test": 2}
+    _ratchet(repo, 7)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "sube"],
+                   cwd=repo, check=True, capture_output=True)
+    assert ti.subidas_de_techo(repo) == [], "contra HEAD la subida ya commiteada es invisible"
+    monkeypatch.setenv("ALMAGESTO_RATCHET_BASE", "HEAD~1")
+    assert [c for c, *_ in ti.subidas_de_techo(repo)] == ["sin_marca", "sin_test"]
+    monkeypatch.setenv("ALMAGESTO_RATCHET_BASE", "no-existe-esta-ref")
+    assert ti.subidas_de_techo(repo) is None
 
 
 def test_sin_git_la_subida_no_se_evalua_y_no_se_inventa_un_cero(repo: Path):
     """D-43: un chequeo que no pudo correr se declara, no devuelve «no subió»."""
     _ratchet(repo, 9)
-    assert ti.techos_previos(repo) is None
-    assert ti.subidas_de_techo(repo) == []               # el llamador imprime «no evaluada»
+    assert ti.subidas_de_techo(repo) is None             # el llamador imprime «no evaluada»
 
 
 def test_el_registro_admite_invariantes_de_tres_digitos():

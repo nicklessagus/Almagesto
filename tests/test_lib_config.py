@@ -3547,6 +3547,18 @@ def test_457_escape_dollars_neutraliza_el_suelto_y_NO_la_matematica(toy_vault):
     assert cfg.escape_dollars("") == ""
 
 
+def test_aud476_escape_dollars_la_MONEDA_no_se_empareja_con_la_matematica_siguiente(toy_vault):
+    """⛔ AUD-476 — `$[^$]*$` emparejaba el `$` de moneda con el que abre la matemática siguiente:
+    `US$20 y $x$` salía `US$20 y $x\\$` —la moneda quedaba abriendo matemática y la fórmula rota—.
+    Un `$` pegado a una letra o dígito a su izquierda no abre, y uno cuyo siguiente `$` va precedido
+    de espacio (o seguido de dígito) no cierra: los dos son moneda."""
+    assert cfg.escape_dollars("US$20 y $x$") == r"US\$20 y $x$"
+    assert cfg.escape_dollars("cuesta $20 y $x$") == r"cuesta \$20 y $x$"
+    assert cfg.escape_dollars("$x$ y $y$") == "$x$ y $y$"
+    assert cfg.escape_dollars("de $5 a $10") == r"de \$5 a \$10"
+    assert cfg.escape_dollars("display $$a+b$$ fin") == "display $$a+b$$ fin"
+
+
 def test_459_el_titulo_en_DOS_CODIFICACIONES_deja_de_ser_desacuerdo(toy_vault):
     """⛔ #459 — el detector de #397 comparaba un título BibTeX (con escapes LaTeX) contra el texto
     plano del catálogo, así que toda diferencia de CODIFICACIÓN salía como si las dos fuentes

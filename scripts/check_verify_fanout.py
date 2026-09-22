@@ -111,6 +111,26 @@ def pair_count_errors(pairs: dict, expected: int) -> list[str]:
             f"Contado sobre los {len(pairs)} archivo(s) que cumplen el schema."]
 
 
+def plan_errors(directory: Path, pairs: dict, expected: int | None = None) -> tuple:
+    """`(manifest, errors)`: the directory's pairs counted against the PLAN in it (#369/#222).
+
+    ONE implementation for the two consumers — the barrier's CLI and the sidecar writer (AUD-478:
+    the writer re-ran only the shape, so with a source deleted it wrote 1 row out of 2 pairs and
+    the net was `lint --cierre` alone). `manifest` is `None` with no plan in the directory and `{}`
+    when it does not parse; with no plan, `expected` (the hand count) is the only count there is."""
+    path = directory / MANIFEST
+    if not path.is_file():
+        return None, (pair_count_errors(pairs, expected) if expected is not None else [])
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return {}, [f"{MANIFEST}: no parsea — {exc}"]
+    if not manifest:
+        return manifest, []
+    return manifest, (manifest_errors(pairs, manifest, expected)
+                      + pair_count_errors(pairs, int(manifest.get("pares") or 0)))
+
+
 def scope_line(manifest: dict, pairs: dict) -> str:
     """What this round covers, in the manifest's own words (#407).
 
@@ -156,20 +176,11 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    manifest_path = directory / MANIFEST
-    if manifest_path.is_file():
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            errors.append(f"{MANIFEST}: no parsea — {exc}")
-            manifest = {}
-        if manifest:
-            errors += manifest_errors(pairs, manifest, args.esperados)
-            errors += pair_count_errors(pairs, int(manifest.get("pares") or 0))
-            print(scope_line(manifest, pairs))
-    elif args.esperados is not None:
-        errors += pair_count_errors(pairs, args.esperados)
-    else:
+    manifest, plan_errs = plan_errors(directory, pairs, args.esperados)
+    errors += plan_errs
+    if manifest:
+        print(scope_line(manifest, pairs))
+    elif manifest is None and args.esperados is None:
         print("⚠ sin manifiesto (`_esperado.json`) ni `--esperados`: la forma se valida, el CONTEO no "
               "— generá la ronda con `scripts/verify_fanout.py` para que la barrera sepa el plan")
 

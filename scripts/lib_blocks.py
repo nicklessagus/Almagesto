@@ -1656,7 +1656,7 @@ def second_hand_lifted(block: str, rows: list, *, atribuido: set | None = None) 
         nums = quantities(valor) & cantidades
         evidencia = (sorted(nums) if len(nums) >= 2 or any(_significativas(t) >= 3 for t in nums)
                      else [])
-        evidencia += [f"«{q[:60]}…»" for q in _quoted(valor) if q in citas]
+        evidencia += [cfg.quote_fragment(q, 60) for q in _quoted(valor) if q in citas]
         if evidencia:
             out.append((que, valor, de, evidencia))
     return out

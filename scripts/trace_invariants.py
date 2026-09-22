@@ -334,30 +334,7 @@ def load_techos(root: Path) -> dict:
             "sin_marcar": (int(techos["sin_marcar"]) if "sin_marcar" in techos else None)}
 
 
-def techos_previos(root: Path) -> dict | None:
-    """Los techos del `HEAD` anterior, o `None` si no se pueden leer (sin git, archivo nuevo).
-
-    `None` es *no evaluado*, no *no subió*: fuera de un repo este chequeo no puede correr y decirlo
-    es la diferencia entre «miré y está bien» y «no miré» (D-43)."""
-    import subprocess
-    try:
-        r = subprocess.run(["git", "show", "HEAD:docs/trazabilidad-ratchet.yaml"],
-                           cwd=root, capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if r.returncode != 0:
-        return None
-    data = yaml.safe_load(r.stdout) or {}
-    techos = data.get("techos") if isinstance(data, dict) else None
-    if not isinstance(techos, dict):
-        return None
-    try:
-        return {"sin_marca": int(techos.get("sin_marca", 0)), "sin_test": int(techos.get("sin_test", 0))}
-    except (TypeError, ValueError):
-        return None
-
-
-def subidas_de_techo(root: Path) -> list:
+def subidas_de_techo(root: Path) -> list | None:
     """Qué techo subió respecto del commit anterior, y si la subida está JUSTIFICADA.
 
     ⚠ AUD-139 — la mecánica vive en `lib_config.ratchet_raises` y la comparten los **cuatro**
@@ -365,11 +342,13 @@ def subidas_de_techo(root: Path) -> list:
     mutación— llevaban la misma promesa escrita («el techo sólo puede bajar») sostenida por la
     revisión humana sola.
 
-    Se conserva el `None` como *no evaluado* (D-43): fuera de un repo el chequeo no puede correr, y
-    decirlo es la diferencia entre «miré y está bien» y «no miré»."""
-    subidas = cfg.ratchet_raises("docs/trazabilidad-ratchet.yaml",
-                                 ("sin_marca", "sin_test", "sin_marcar"), root)
-    return subidas if subidas is not None else []
+    Devuelve el `None` como *no evaluado* (D-43): fuera de un repo, o con una base irresoluble, el
+    chequeo no puede correr, y decirlo es la diferencia entre «miré y está bien» y «no miré».
+    ⛔ AUD-479 — «no evaluada» lo decidía aparte `techos_previos`, leyendo `HEAD`, mientras la
+    subida se medía contra `$ALMAGESTO_RATCHET_BASE` (AUD-408): con una base irresoluble el reporte
+    callaba. Ahora una sola función decide las dos cosas."""
+    return cfg.ratchet_raises("docs/trazabilidad-ratchet.yaml",
+                              ("sin_marca", "sin_test", "sin_marcar"), root)
 
 
 # ── artefacto ────────────────────────────────────────────────────────────────────────────────────
@@ -563,9 +542,11 @@ def main(argv=None) -> int:
     # El techo SÓLO PUEDE BAJAR (#96). Hasta 1.37.0 esa regla vivía sólo en el encabezado del YAML
     # y la sostenía la revisión humana: nada impedía subirlo en el mismo commit que rompía la
     # cobertura. La escotilla es `# ratchet-sube: <motivo>` en el YAML, con motivo obligatorio.
-    if techos_previos(root) is None:
-        print("· subida de techo: no evaluada (sin git o sin versión anterior del ratchet)")
-    for campo, antes, ahora in subidas_de_techo(root):
+    subidas = subidas_de_techo(root)
+    if subidas is None:
+        print("· subida de techo: no evaluada (sin git, sin versión anterior del ratchet o base "
+              "`$ALMAGESTO_RATCHET_BASE` irresoluble)")
+    for campo, antes, ahora in subidas or []:
         print(f"⛔ el techo `{campo}` SUBIÓ de {antes} a {ahora} sin justificar. Un techo sólo baja; "
               f"si la subida es legítima (el contrato incorporó invariantes que todavía no se "
               f"pueden marcar), declaralo con un comentario `# ratchet-sube: <motivo>` en "

@@ -88,12 +88,17 @@ class SidecarError(Exception):
 
 
 def load_fanout(directory: Path) -> dict:
-    """`{bibcode: [par, …]}` from a fan-out directory that PASSED the barrier.
+    """`{bibcode: [par, …]}` from a fan-out directory that PASSED the barrier — shape AND the pair
+    count against the plan (`_esperado.json`), when the directory has one (AUD-478).
 
     Raises `SidecarError` listing the barrier's findings otherwise: building the sibling from a
     fan-out that did not close is exactly the derived work #199 measured going unread."""
     # @inv INV-161
-    _pairs, errors = check_verify_fanout.check_dir(directory)
+    pairs, errors = check_verify_fanout.check_dir(directory)
+    # AUD-478 — y el CONTEO contra el plan, con la misma función que la barrera: la forma sola no
+    # ve la fuente que el plan mandó y nadie devolvió (un directorio sin ella es VÁLIDO).
+    if not errors:
+        errors = check_verify_fanout.plan_errors(directory, pairs)[1]
     if errors:
         raise SidecarError("el fan-out no pasa la barrera (#259) — no se arma nada:\n  "
                            + "\n  ".join(errors))

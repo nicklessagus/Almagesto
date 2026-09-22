@@ -51,6 +51,18 @@ def _fanout(toy_vault, nota: Path, veredictos: dict, ronda="r1", **extra_par):
     return d
 
 
+def _acotar(d: Path, *fuera: str) -> Path:
+    """La ronda ACOTADA como la escribe el generador (#407): la fuente de afuera no tiene JSON NI
+    entrada en el plan. Borrar sólo el JSON es otra cosa —una fuente que el plan mandó y nadie
+    devolvió—, y ésa el escritor la rehúsa (AUD-478)."""
+    plan = json.loads((d / "_esperado.json").read_text(encoding="utf-8"))
+    for bib in fuera:
+        (d / f"{bib}.json").unlink()
+        plan["pares"] -= plan["fuentes"].pop(bib)
+    (d / "_esperado.json").write_text(json.dumps(plan), encoding="utf-8")
+    return d
+
+
 def test_escribe_el_hermano_y_la_nota_con_los_hashes_que_el_lint_LEE(toy_vault):
     """#403 — los dos errores medidos del armador escrito a mano: matchear `bibcode` en el nivel
     equivocado (55 falsos «sin veredicto») y hashear un PDF como texto (117 «vencidos por fuente»
@@ -200,7 +212,7 @@ def test_las_cuatro_guardas_que_el_barrido_no_distinguia(toy_vault):
       lo que hace `rpartition`) se lo comería."""
     nota = _escena(toy_vault)
     d = _fanout(toy_vault, nota, {})
-    (d / "2019Txt.json").unlink()                         # el fan-out juzgó UNA sola fuente
+    _acotar(d, "2019Txt")                                 # el fan-out juzgó UNA sola fuente
     r = ws.write(nota, d, fecha="2026-03-01")
     assert r["filas"] == 1 and r["pares_cuerpo"] == 2
     assert [f.bibcode for f in lb.verif_rows(nota)] == ["2020Pdf"]
@@ -243,8 +255,7 @@ def test_la_ronda_ACOTADA_arrastra_los_pares_de_afuera_con_el_ancla_recalculada(
     texto = nota.read_text(encoding="utf-8").replace(
         "La amplitud es 2.5 m/s [[2019Txt]].", "La amplitud es 2.5 m/s, medida en 2019 [[2019Txt]].")
     nota.write_text(texto, encoding="utf-8")
-    d = _fanout(toy_vault, nota, {"2020Pdf": "no-soportada"}, ronda="r2")
-    (d / "2019Txt.json").unlink()
+    d = _acotar(_fanout(toy_vault, nota, {"2020Pdf": "no-soportada"}, ronda="r2"), "2019Txt")
     r = ws.write(nota, d, fecha="2026-03-02")
     assert r["juzgadas"] == 1 and r["arrastradas"] == 1 and r["filas"] == 2
 
@@ -1095,10 +1106,9 @@ def test_499_el_arrastre_lo_BORRA_la_ronda_y_lo_CONSERVAN_los_reescritores(toy_v
 def test_el_par_que_el_fanout_NO_devolvio_lo_nombra_la_barrera_y_no_cierra(toy_vault):
     # @inv INV-161
     """AUD-437 (D-9): el subagente que no escribió su JSON deja un directorio VÁLIDO en forma. La
-    barrera lo nombra contra el plan (#369); el escritor sólo re-corre la FORMA (#259), así que si
-    igual se arma el hermano, el par que falta sale «sin verificar» y bloquea con `--cierre` (D-5).
-    Medido al escribir esto: el escritor arma 1 fila sobre 2 pares sin quejarse — la red es el par
-    barrera + cierre, no el escritor solo."""
+    barrera lo nombra contra el plan (#369). Hasta AUD-478 el escritor re-corría sólo la FORMA
+    (#259) y armaba 1 fila sobre 2 pares sin quejarse; hoy re-corre también el conteo contra el
+    plan y rehúsa."""
     nota = _escena(toy_vault)
     d = _fanout(toy_vault, nota, {})
     (d / "2019Txt.json").unlink()
@@ -1109,12 +1119,11 @@ def test_el_par_que_el_fanout_NO_devolvio_lo_nombra_la_barrera_y_no_cierra(toy_v
     assert any("2019Txt" in e for e in faltan), faltan
     assert check_verify_fanout.pair_count_errors(pares, plan["pares"]), "el conteo contra el plan tampoco cierra"
 
-    r = ws.write(nota, d, fecha="2026-03-01")
-    assert r["filas"] < r["pares_cuerpo"]
-    cat = lint.collect(cierre=True).por_clave("stale_pairs")
-    assert cat.severidad == lint.SEV_CIERRE
-    assert any(n == "concepto" and "2019Txt" in m and "sin verificar" in m for n, m in cat.items), \
-        cat.items
+    # AUD-478 — el escritor re-corre la MISMA barrera, conteo contra el plan incluido: no arma 1
+    # fila sobre 2 pares. Y no escribe nada: ni hermano ni cabecera.
+    with pytest.raises(ws.SidecarError, match="2019Txt"):
+        ws.write(nota, d, fecha="2026-03-01")
+    assert not cfg.verif_sidecar(nota).exists()
 
 
 # ── INV-82 · la fecha del bloque de verificación (AUD-428, AUD-467) ───────────────────────────────
@@ -1129,7 +1138,7 @@ def test_la_ronda_ACOTADA_re_fecha_el_bloque_y_la_arrastrada_conserva_su_fila(to
     ws.write(nota, _fanout(toy_vault, nota, {}, ronda="r1"), fecha="2026-03-01")
     antes = {r.bibcode: (r.anchor, r.verdict) for r in lb.verif_rows(nota)}
     d2 = _fanout(toy_vault, nota, {}, ronda="r2")
-    (d2 / "2019Txt.json").unlink()                     # la ronda juzga sólo 2020Pdf
+    _acotar(d2, "2019Txt")                             # la ronda juzga sólo 2020Pdf
     r = ws.write(nota, d2, fecha="2026-03-05")
     assert r["juzgadas"] == 1 and r["arrastradas"] == 1, r
     texto = nota.read_text(encoding="utf-8")

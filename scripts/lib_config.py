@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.311.1"
+ALMAGESTO_VERSION = "1.311.2"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1211,6 +1211,14 @@ def escape_cell(texto: str) -> str:
     return re.sub(r"\\vert\s+", r"\\vert ", "".join(out))
 
 
+#: AUD-476 · what `escape_dollars` leaves as math: `$$…$$`, or a `$…$` whose opener is not glued to a
+#: word on its left (`US$20`, `04$20.00` are currency) and is followed by a non-space, and whose
+#: closer — the NEXT `$`, never a later one — is preceded by a non-space and not followed by a digit
+#: (pandoc's rule). With the bare `$[^$]*$`, `US$20 y $x$` paired the currency with the opener of
+#: `$x$` and escaped the formula's closer instead.
+_DOLLAR_MATH_RE = re.compile(r"\$\$[^$]+\$\$|(?<![\\\w$])\$(?=[^\s$])[^$\n]*(?<=[^\s\\])\$(?![\d$])")
+
+
 def escape_dollars(texto: str) -> str:
     r"""Prose safe to put in a note: every `$` that is NOT a math delimiter neutralised (#457).
 
@@ -1226,7 +1234,7 @@ def escape_dollars(texto: str) -> str:
     # `_escape_dollar_run` devuelve el trozo intacto, así que ese atajo no decidía nada (#319 — su
     # mutación sobrevivía). A diferencia de `escape_cell`, devuelve SIEMPRE `str`.
     texto, out, i = str(texto or ""), [], 0
-    for m in _MATH_SPAN_RE.finditer(texto):
+    for m in _DOLLAR_MATH_RE.finditer(texto):
         out.append(_escape_dollar_run(texto[i:m.start()]))
         out.append(m.group(0))
         i = m.end()
@@ -5629,6 +5637,7 @@ from lib_quotes import (  # noqa: E402,F401
     SALVEDAD_MARCAS,
     SALVEDAD_MARCAS_LEIDAS,
     txt_accuses,
+    quote_fragment,
     verificar_pdf_mark,
     with_own_bibcode,
 )

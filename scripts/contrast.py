@@ -23,7 +23,7 @@ Four guarantees, each closing one of the measured failure modes:
      fewer rows, never to cut text (#226's doctrine, one step earlier). The opt-in cut
      (`--corto`/`--limite`) was retired (AUD-287): nothing used it, and it reintroduced the exact
      cut that #314 measured two fabricated quotes on. The `--validar` REPORT does shorten a quote
-     to name it, but the cut is declared as such — the ellipsis goes OUTSIDE the «» (`_fragment`,
+     to name it, but the cut is declared as such — the ellipsis goes OUTSIDE the «» (`lib_quotes.quote_fragment`,
      AUD-427) — and the `⚠verificar en el PDF` mark handed over to paste carries the extraction's
      tail whole.
   2. **Provenance travels**: `linea` (the locator) and `segunda_mano` ride with every value. The six
@@ -255,18 +255,6 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
     return n
 
 
-def _fragment(texto: str, n: int | None = None, *, lead: bool = False, trail: bool = False) -> str:
-    """A quoted string for a report or a mark: WHOLE between «», or the cut declared OUTSIDE them.
-
-    ⛔ AUD-427 — `«…{x[:40]}»` put a cut string between quotes, inside the `⚠verificar en el PDF`
-    mark handed over ready to paste: the exact shape #314/#226 forbid. `lead` says the string
-    continues something before it (a tail); `trail`, that it is a window that goes on after."""
-    texto = str(texto or "")
-    cortada = n is not None and len(texto) > n
-    return (("…" if lead else "") + f"«{texto[:n] if cortada else texto}»"
-            + ("…" if cortada or trail else ""))
-
-
 def _page_check(b, cita: str, duenio: str | None, out: dict) -> None:
     """This quote's page locator, contrasted against the `.txt` of its source (#492).
 
@@ -287,7 +275,7 @@ def _page_check(b, cita: str, duenio: str | None, out: dict) -> None:
         out["pag_no_eval"] += 1
         return
     estado, det = cfg.quote_page_verdict(cita, duenio, rangos)
-    corte = _fragment(cita, 70)
+    corte = cfg.quote_fragment(cita, 70)
     decl = ", ".join(f"p. {a}" if a == b_ else f"pp. {a}-{b_}" for a, b_ in rangos)
     if estado == "ok":
         out["pag_ok"] += 1
@@ -410,7 +398,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
             copiada = cfg.quote_from_stamped_block(b.text, b.intro)
             ver, det = cfg.quote_verdict(cita, candidatos, bibs_nota, txts, ambiguo=ambiguo,
                                          copiada=copiada)
-            corte = _fragment(cita, 70)
+            corte = cfg.quote_fragment(cita, 70)
             quienes = ", ".join(candidatos) or "sin fuente adyacente"
             if ver in ("txt_degradado", "txt_acusa"):
                 # #341 — aprobada por UN SOLO TESTIGO: la extracción de su fuente la dice y el
@@ -424,13 +412,13 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                 # `⚠verificar en el PDF` ya existe y tiene justo las propiedades que hacen falta.
                 out["discrepan"].append(
                     (b.first_line, f"{corte} — el `.txt` de {det['bib']} trae el mismo arranque y "
-                                   f"sigue distinto: dice {_fragment(det['cola_txt'], 70, lead=True)} donde la "
-                                   f"extracción dice {_fragment(det['cola_cita'], 70, lead=True)}. Son DOS lecturas "
+                                   f"sigue distinto: dice {cfg.quote_fragment(det['cola_txt'], 70, lead=True)} donde la "
+                                   f"extracción dice {cfg.quote_fragment(det['cola_cita'], 70, lead=True)}. Son DOS lecturas "
                                    f"del mismo PDF —`pdftotext` y un LLM— y la fuente es el PDF: "
                                    f"andá a la página (#333)",
                      cfg.verificar_pdf_mark(
-                         f"el `.txt` de {det['bib']} sigue {_fragment(det['cola_txt'], lead=True, trail=True)} y la "
-                         f"extracción {_fragment(det['cola_cita'], lead=True)}")))
+                         f"el `.txt` de {det['bib']} sigue {cfg.quote_fragment(det['cola_txt'], lead=True, trail=True)} y la "
+                         f"extracción {cfg.quote_fragment(det['cola_cita'], lead=True)}")))
             if ver == "extraccion_vieja":
                 # #437 — la extracción describe un PDF reemplazado: su cola distinta es la redacción
                 # del preprint, no evidencia contra el documento en disco. Y el `.txt` nuevo calla,
@@ -454,8 +442,8 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                 out["alteradas"].append(
                     (b.first_line, f"{corte} — el PDF de {det['txt_nuevo']} se reemplazó y su "
                                    f"`.txt` NUEVO trae el mismo arranque y sigue distinto: dice "
-                                   f"{_fragment(det['cola_txt'], 70, lead=True)} donde la nota dice "
-                                   f"{_fragment(det['cola_cita'], 70, lead=True)}. La cita no es la del documento en "
+                                   f"{cfg.quote_fragment(det['cola_txt'], 70, lead=True)} donde la nota dice "
+                                   f"{cfg.quote_fragment(det['cola_cita'], 70, lead=True)}. La cita no es la del documento en "
                                    f"disco (#437)"))
             elif ver == "alterada":
                 out["alteradas"].append(

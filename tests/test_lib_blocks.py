@@ -1046,6 +1046,20 @@ def test_second_hand_lifted_no_cruza_un_entrecomillado_CORTO():
     assert ev and ev[0][0].startswith("«the noise covariance"), ev
 
 
+def test_aud477_second_hand_lifted_NO_corta_la_cita_DENTRO_de_las_comillas():
+    """⛔ AUD-477 — la evidencia era `«{q[:60]}…»`: una cita truncada ENTRE comillas (lo que
+    #314/#226 prohíben) y, encima, con `…` aunque no se cortara nada. La cita va entera, o el corte
+    declarado con la `…` FUERA de las «»."""
+    largo = "the noise covariance matrix is also identifiable under the stated rank conditions"
+    filas = [("identificabilidad", f"la fuente dice «{largo}»", "atribuido por la fuente a otro")]
+    ev = [ev for *_r, ev in lb.second_hand_lifted(f"La covarianza «{largo}» ([[b]])", filas)][0]
+    assert ev == [f"«{largo[:60]}»…"], ev
+    corto = "the noise covariance matrix is identifiable"
+    filas = [("identificabilidad", f"la fuente dice «{corto}»", "otro")]
+    ev = [ev for *_r, ev in lb.second_hand_lifted(f"La covarianza «{corto}» ([[b]])", filas)][0]
+    assert ev == [f"«{corto}»"], ev
+
+
 def test_second_hand_lifted_ve_el_decimal_CASTELLANO_de_la_matematica():
     """⛔ La bóveda escribe `$P = 4{,}3115$` — las llaves son lo que evita que LaTeX espacie la coma
     como separador de lista. Leído crudo son dos números y NINGÚN valor de una ficha real cruza:

@@ -416,6 +416,19 @@ def verificar_pdf_mark(motivo: str, fecha: str = "") -> str:
     return f"{VERIFICAR_PDF_MARK} ({motivo}, {fecha or _dt.date.today().isoformat()})"
 
 
+def quote_fragment(texto: str, n: int | None = None, *, lead: bool = False, trail: bool = False) -> str:
+    """A quoted string for a report or a mark: WHOLE between «», or the cut declared OUTSIDE them.
+
+    ⛔ AUD-427 — `«…{x[:40]}»` put a cut string between quotes, inside the `⚠verificar en el PDF`
+    mark handed over ready to paste: the exact shape #314/#226 forbid. AUD-477 — `lib_blocks` had the
+    same cut (`«{q[:60]}…»`) in the second-hand evidence, so the rule moved here: one function. `lead` says the string
+    continues something before it (a tail); `trail`, that it is a window that goes on after."""
+    texto = str(texto or "")
+    cortada = n is not None and len(texto) > n
+    return (("…" if lead else "") + f"«{texto[:n] if cortada else texto}»"
+            + ("…" if cortada or trail else ""))
+
+
 def extraction_identity(data: dict) -> str:
     """Which bibcode an extraction belongs to: the `bibcode` INSIDE it, never the file name (#374).
 

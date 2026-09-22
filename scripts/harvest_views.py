@@ -892,8 +892,8 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
                 if _ac:
                     citas_dudosas.append((bib, _q))
                     cfg.print_seguro(
-                        f"  ⚠ {bib}: el `.txt` trae el arranque de «{_q[:60]}…» y sigue distinto "
-                        f"(«…{_ac['cola_txt'][:60]}»). Son DOS lecturas del mismo PDF y la fuente es "
+                        f"  ⚠ {bib}: el `.txt` trae el arranque de {cfg.quote_fragment(_q, 60)} y sigue "
+                        f"distinto ({cfg.quote_fragment(_ac['cola_txt'], 60, lead=True)}). Son DOS lecturas del mismo PDF y la fuente es "
                         f"el PDF: andá a la página antes de propagar esta cita (#359/#333)")
         # #230 — `txt` se CRUZA contra el disco, igual que `fuente` dos líneas más arriba. Se
         # estampaba lo que el extractor dijera (o el slug, por default), así que 9 notas de una
