@@ -11096,3 +11096,121 @@ def test_AUD412_vistas_nulo_declara_el_campo(toy_vault):
     assert _reclamos({"stars": ["tau Cet"], "vistas": []}), "control: la lista vacía reporta"
     assert _reclamos({"stars": ["tau Cet"], "vistas": None}), "`vistas:` nulo también"
     assert _reclamos({"stars": ["tau Cet"]}) == [], "la clave AUSENTE es el schema viejo"
+
+
+# ── AUD-443 · lo que quedaba inline en `collect`, con su test directo (paso 5 de #396) ───────────
+
+def _sweep(**over):
+    """A minimal `NoteSweep` over the toy vault (the lookups empty unless overridden)."""
+    base = dict(names=set(), fulltext=set(), refs_dir=str(cfg.RAW / "refs"), refs_stems=set(),
+                leak_patterns=lint.IMPL_LEAK_RE, concept_slugs=set(),
+                alias_idx=lint.alias_index_cache(), pdf_on_disk={},
+                theme_index=lint.theme_lookups()[0], themes_by_subject={},
+                sources_for=lint.source_lookup({}), incoming={})
+    return lint.NoteSweep(**{**base, **over})
+
+
+def test_check_merge_ours_driver_un_hallazgo_por_clon_y_el_ilegible_NO_EVALUADO(monkeypatch):
+    """#390 — el driver registrado es UNA decisión del clon: un hallazgo nombrando los patrones, no
+    uno por patrón; y el `.gitattributes` ilegible es *no evaluado* (D-43), nunca un cero."""
+    monkeypatch.setattr(lint, "merge_ours_driver_risk", lambda: (["a.md", "b.md"], None))
+    hallazgos, no_eval = lint.check_merge_ours_driver()
+    assert len(hallazgos) == 1 and hallazgos[0][0] == "merge.ours.driver" and no_eval == []
+    assert "2 patrón(es)" in hallazgos[0][1]
+    monkeypatch.setattr(lint, "merge_ours_driver_risk", lambda: ([], "ilegible"))
+    assert lint.check_merge_ours_driver() == ([], [("driver de `merge=ours`", "ilegible")])
+    monkeypatch.setattr(lint, "merge_ours_driver_risk", lambda: ([], None))
+    assert lint.check_merge_ours_driver() == ([], [])
+
+
+def test_check_pdf_provenance_nombra_el_carril_o_dice_que_no_hay(toy_vault, monkeypatch):
+    """#479 — sólo el PDF EN DISCO con `pdf_source` vacío es hallazgo, y el mensaje depende de si
+    hay un carril de config donde declararlo."""
+    disco = {"2020X": "/x.pdf"}
+    assert lint.check_pdf_provenance("2020X", {}, {}) == [], "sin PDF en disco no hay qué declarar"
+    assert lint.check_pdf_provenance("2020X", {"pdf_source": "eprint"}, disco) == []
+    monkeypatch.setattr(cfg, "config_rail", lambda k: None)
+    assert "sin item de config" in lint.check_pdf_provenance("2020X", {}, disco)[0][1]
+    monkeypatch.setattr(cfg, "config_rail", lambda k: "RIEL")
+    assert "declaralo en RIEL" in lint.check_pdf_provenance("2020X", {"pdf_source": " "}, disco)[0][1]
+
+
+def test_check_stale_verification_sin_git_es_NO_EVALUADO_solo_para_los_fechados(monkeypatch):
+    """D-43/#56 — sin git, el bloque fechado no se puede comparar y se DICE; el gate es fino: sin
+    bloques fechados el chequeo es evaluable y no le pregunta a git."""
+    monkeypatch.setattr(lint, "git_out", lambda *a: None)
+    stale, no_eval, evaluable = lint.check_stale_verification([("n.md", "2026-01-01")])
+    assert (stale, evaluable) == ([], False) and "1 nota(s)" in no_eval[0][0]
+    stale, no_eval, evaluable = lint.check_stale_verification([("n.md", None)])
+    assert evaluable and no_eval == [] and stale, "el bloque sin fecha se reporta igual"
+    monkeypatch.setattr(lint, "git_out", lambda *a: ".git")
+    monkeypatch.setattr(lint, "last_change_dates", lambda fs: {"n.md": "2026-03-01"})
+    stale, no_eval, evaluable = lint.check_stale_verification([("n.md", "2026-01-01")])
+    assert evaluable and no_eval == [] and len(stale) == 1
+
+
+def test_check_note_devuelve_por_clave_y_alimenta_los_indices(toy_vault):
+    """AUD-443 — el barrido de UNA nota devuelve `{clave: hallazgos}` y alimenta los índices
+    cruzados de `sweep`; la ref de diseño corta después del schema (sus links son ejemplos)."""
+    sw = _sweep()
+    papel = str(cfg.PAPERS / "2020X.md")
+    out = lint.check_note("2020X", papel, "---\ntitle: x\n---\n# x\n", {"title": "x"}, sw)
+    assert any("sin `tags: [paper]`" in m for _s, m in out["fm_broken"]), out.get("fm_broken")
+    assert sw.kinds["2020X"] == []
+    conc = str(cfg.CONCEPTS / "methods" / "c.md")
+    out = lint.check_note("c", conc, "---\ntags: [concept]\n---\n# c\n\nprosa\n",
+                          {"tags": ["concept"]}, sw)
+    assert out["coverage"] and "sin citas" in out["coverage"][0][1]
+    ref = str(cfg.RAW / "refs" / "r.md")
+    out = lint.check_note("r", ref, "---\ntags: [x]\n---\n[[roto]]\n", {"tags": ["x"]}, sw)
+    assert "broken" not in out, "las refs de diseño no cuentan sus links salientes"
+
+
+def test_check_paper_note_hallazgos_del_paper_e_indice_de_claves(toy_vault):
+    """AUD-443 — lo propio de una nota de paper: la retracción, la procedencia del PDF en disco, y
+    la clave de cita que alimenta el índice cruzado de #473."""
+    sw = _sweep(pdf_on_disk={"2020X": "/x.pdf"})
+    fm = {"tags": ["paper"], "retracted": True, "bibtex": "@article{Clave_2020,\n title={t}\n}",
+          "bibtex_source": "ads"}
+    out = lint.check_paper_note("2020X", str(cfg.PAPERS / "2020X.md"), fm, "# x\n", "# x\n", sw)
+    assert out["retracted"] and out["pdf_sin_procedencia"]
+    assert sw.bibtex_por_clave == {"Clave_2020": ["2020X"]}
+
+
+def test_scan_fulltext_separa_el_ilegible_y_hashea_una_vez(toy_vault):
+    """AUD-443 — una sola lectura por `.txt`: el casi vacío sale ilegible, el sano no, y los dos
+    entran al índice de verificabilidad y al hash de fuente (D-20)."""
+    d = cfg.RAW / "fulltext" / "s"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2020V.txt").write_text("", encoding="utf-8")
+    (d / "2020S.txt").write_text("Una prosa legible de sobra. " * 200, encoding="utf-8")
+    files, stems, illegible, hashes, divergent = lint.scan_fulltext()
+    assert stems == {"2020V", "2020S"} and set(hashes) == stems and divergent == []
+    assert [p for p, _why in illegible] == ["fulltext/s/2020V.txt"]
+
+
+def test_suppressed_titles_cada_config_ilegible_suprime_lo_suyo(monkeypatch):
+    """D-43/INV-87 — con una config ilegible, sus categorías no muestran un cero que nadie midió;
+    cada config suprime SÓLO las que dependen de ella."""
+    for f in ("stars_error", "themes_error", "objective_error"):
+        monkeypatch.setattr(cfg, f, lambda: None)
+    assert lint.suppressed_titles(True) == set()
+    assert lint.suppressed_titles(False) == {"Verificación stale"}
+    monkeypatch.setattr(cfg, "themes_error", lambda: "roto")
+    assert "Cadena incompleta" in lint.suppressed_titles(True)
+    monkeypatch.setattr(cfg, "themes_error", lambda: None)
+    monkeypatch.setattr(cfg, "objective_error", lambda: "roto")
+    assert lint.suppressed_titles(True) == {"Objetivo sin instanciar",
+                                            "Áreas de `concepts/` no declaradas",
+                                            "Áreas de concepts", "Lente desincronizada"}
+
+
+def test_collect_rehusa_el_hallazgo_bajo_una_clave_sin_categoria(toy_vault, monkeypatch):
+    """AUD-443 — los hallazgos se juntan por `Categoria.clave`: una clave que ninguna categoría
+    declara se vaciaría en silencio, así que `collect` la nombra y no publica."""
+    mk_note(cfg.CONCEPTS / "methods", "c", {"tags": ["concept"]}, "# c\n")
+    monkeypatch.setattr(lint, "check_note", lambda *a: {"coverage": [("c", "m")]})
+    assert lint.collect().por_clave("coverage").items == (("c", "m"),), "control: clave declarada"
+    monkeypatch.setattr(lint, "check_note", lambda *a: {"clave_inexistente": [("c", "m")]})
+    with pytest.raises(RuntimeError, match="clave_inexistente"):
+        lint.collect()
