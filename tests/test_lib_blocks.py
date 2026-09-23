@@ -1436,6 +1436,46 @@ def test_dentro_de_una_FILA_atribuye_la_columna_Fuente_y_no_la_celda_de_al_lado(
     assert lb.quote_owner(dos, "la cita esta de largo", ["2015Voss", "2013Voss"]) is None
 
 
+def test_515_el_localizador_ANTES_del_link_entre_parentesis_atribuye():
+    """#515 camino a — `«…» (p. 4) ([[bib]])` y `«…» (p. 4)— ([[bib]])` son #488 con el orden
+    invertido. Sin espacio/raya admitidos entre los dos paréntesis, la cita caía a la rama «antes»
+    y la ganaba el link de la cláusula anterior (el caso medido: `hd_40307`, a 264 caracteres)."""
+    bibs = ["2019A", "2016D"]
+    for tail in (" (p. 4) ([[2016D]]).", " (p. 4)— ([[2016D]]).", " (p. 4) [[2016D]]."):
+        assert lb.quote_owner(f"Según [[2019A]] algo; «c de largo»{tail}", "c de largo",
+                              bibs) == "2016D", tail
+    # #325 no se afloja: con prosa entre el localizador y el link, sigue sin dueño
+    assert lb.quote_owner("«c de largo» (p. 4), y la discusión sigue hasta [[2016D]]",
+                          "c de largo", bibs) is None
+
+
+def test_515_la_rama_ANTES_tiene_tope_de_distancia():
+    """#515 camino b — el link de una cláusula anterior, separado de la cita por una coordinada
+    entera, era dueño a cualquier distancia (medido: 264 y 311 caracteres, las 2 equivocadas; las
+    correctas, ≤89). Pasado el tope no hay dueño: ambigüedad (`None`), nunca otro bibcode."""
+    bibs = ["2016D", "2019C"]
+    cerca = "un tercero lo declara ([[2016D]]) y dice «c de largo»"
+    assert lb.quote_owner(cerca, "c de largo", bibs) == "2016D"
+    lejos = ("un tercero lo declara ([[2016D]]) y un cuarto no la encuentra al re-ajustar con cuatro "
+             "keplerianas más un polinomio cúbico para el ciclo magnético, no por la recalibración: "
+             "ese mismo trabajo declara que las dos versiones dan valores compatibles —«c de largo» "
+             "(p. 15)—, que no es un enunciado sobre la no-detección ([[2019C]]).")
+    assert lb.quote_owner(lejos, "c de largo", bibs) is None
+
+
+def test_515_la_celda_Fuente_no_le_gana_al_introductor_de_la_prosa():
+    """#515 camino c — la celda *Fuente* le gana a una MENCIÓN (#325), no al dueño que la propia
+    prosa declara. «Lo que [[B]] declara … —«cita»—» en una fila de *Fuente* `[[A]]` dice dos cosas:
+    la cita es AMBIGUA (#316), no de A (el caso medido: `ica-ruido`, citas de 2015Voss dadas a
+    2024K). Si la prosa nombra a la MISMA fuente de la celda, no hay conflicto."""
+    bibs = ["2024K", "2015Voss"]
+    fila = ("| alcance | [[2024K]] | resuelto. ⚠ Lo que [[2015Voss]] declara resuelto es el objetivo "
+            "—*«c de largo»* (p. 2)— |")
+    assert lb.quote_owner(fila, "c de largo", bibs) is None
+    igual = "| alcance | [[2024K]] | Lo que [[2024K]] declara —*«c de largo»* (p. 2)— |"
+    assert lb.quote_owner(igual, "c de largo", bibs) == "2024K"
+
+
 def test_la_columna_Fuente_solo_se_lee_en_una_FILA_de_tabla():
     """#325 — la regla de la celda vale dentro de una tabla. En prosa, un `|` suelto (una cita que
     trae la barra de una tabla del paper, un `grep` con alternación) no convierte al párrafo en una

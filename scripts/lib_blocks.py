@@ -602,7 +602,11 @@ def _solo_separadores(gap: str) -> bool:
 #: attribute correctly (measured: 3 of the 11 ambiguous ones in a single note).
 #: ⛔ It does NOT loosen #325: prose in the gap still has no adjacent owner, because letters are in
 #: neither character class (`', y más prosa '` stays False — the measured 131-character case).
-_ADYACENTE = re.compile(r"^[\s*_`»”\"'.,;:—–-]*(?:\([^()]{0,40}\))?(?:\(\s*)?[\s*_`.,;:—–-]*$")
+#: #515 — the locator may also come BEFORE a link that opens its own parenthesis, with a space or a
+#: dash between them: `«…» (p. 4) ([[bib]])`, `«…» (p. 4)— ([[bib]])` (#488 with the order flipped).
+#: Without `[\s—–-]*` there, the one such form in a real vault fell to the «before» branch and was
+#: owned by a link 264 characters back. Still no letters: #325 is not loosened.
+_ADYACENTE = re.compile(r"^[\s*_`»”\"'.,;:—–-]*(?:\([^()]{0,40}\))?[\s—–-]*(?:\(\s*)?[\s*_`.,;:—–-]*$")
 
 
 #: #325 · la rama «antes» es ASIMÉTRICA a propósito: la bóveda escribe de verdad `[[bib]] dice:
@@ -613,13 +617,22 @@ _ADYACENTE = re.compile(r"^[\s*_`»”\"'.,;:—–-]*(?:\([^()]{0,40}\))?(?:\(\
 #: lo que `_cell_source` resuelve un paso antes.
 _CORTE_ANTES = re.compile(r"[«»\n|]|\.\s")
 
+#: #515 · y la rama «antes» tiene TOPE: sin él, el link de una cláusula anterior —separado de la
+#: cita por una coordinada entera («…([[A]]) y un cuarto no la encuentra … —«cita»— … ([[B]])»)—
+#: era dueño a cualquier distancia. Medido en una bóveda real (v1.322.0): de las 34 citas que
+#: resolvía esta rama, las correctas quedan a ≤89 caracteres del link y las 2 equivocadas a 264 y
+#: 311. ⚠ Es UNA bóveda: el tope se pone en el medio, y pasarlo da ambigüedad (`None`, #316), el
+#: lado seguro — un dato que falta, no un dueño equivocado.
+_TOPE_ANTES = 160
+
 
 def _introduce(gap: str) -> bool:
     """Does what sits between a link and the quote read as the clause that INTRODUCES it? (#325)
 
     ⚠ The gap ends at the quote's TEXT, so the opening `«` and its markup are trimmed first — they
     are the delimiter of this very quote, not the boundary of another one."""
-    return not _CORTE_ANTES.search(re.sub(r"[«*_`\"'\s]*$", "", gap))
+    gap = re.sub(r"[«*_`\"'\s]*$", "", gap)
+    return len(gap) <= _TOPE_ANTES and not _CORTE_ANTES.search(gap)
 
 
 def _pegado(gap: str) -> bool:
@@ -671,7 +684,8 @@ def quote_owner(text: str, quote: str, bibs: list) -> str | None:
     —measured at 131, 247, 436 and 657 characters, across prose— so a mention in the same paragraph
     («…attributing that step to [[X]]») outvoted the declared source and the check reported notes
     that attribute correctly: 6 of 12 blocking findings of a real vault. In a table row the *Fuente*
-    cell wins first (`_cell_source`). When the block has several and none is adjacent, this returns
+    cell wins over a mention (`_cell_source`), but not over the prose's own owner: then `None`
+    (#515). When the block has several and none is adjacent, this returns
     `None` — ambiguity is a MISSING DATUM, not a finding, and it used to be resolved against the
     note N times, once per source.
 
@@ -685,9 +699,18 @@ def quote_owner(text: str, quote: str, bibs: list) -> str | None:
     ini_f = text.rfind("\n", 0, pos) + 1
     fin_f = text.find("\n", pos)
     de_celda = _cell_source(text[ini_f:fin_f if fin_f >= 0 else len(text)], bibs)
-    if de_celda:
-        return de_celda
-    fin = pos + len(quote)
+    de_prosa = _prose_owner(text, pos, pos + len(quote), bibs)
+    # #515 — the *Fuente* cell beats a MENTION, not an explicit owner: when the prose of the row
+    # hands the quote to another link («Lo que [[B]] declara … —«cita»—», or `«cita» [[B]]`), the
+    # row says two things and the quote is AMBIGUOUS (#316) — never the cell against its introducer.
+    if de_celda and de_prosa and de_prosa != de_celda:
+        return None
+    return de_celda or de_prosa
+
+
+def _prose_owner(text: str, pos: int, fin: int, bibs: list) -> str | None:
+    """The owner the PROSE gives the quote at `text[pos:fin]`: adjacent link after, else the
+    introducing link before (#325), else `None`. `quote_owner` weighs it against the table cell."""
     enlaces = [(m.start(), m.end(), m.group(1).strip()) for m in LINK_RE.finditer(text)
                if m.group(1).strip() in bibs]
     despues = [e for e in enlaces if e[0] >= fin]

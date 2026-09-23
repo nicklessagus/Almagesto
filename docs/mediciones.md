@@ -3873,3 +3873,18 @@ cinco sin cambio. Candidatos pendientes hoy en los `ads.json`: 0 en todos (el ca
 resolvió a mano), así que el efecto se ve en la próxima corrida de `query_ads`. En los temas el
 número sube pero no cambia nada visible: sin compuerta de triage, `load_triage` no se consulta en el
 chaining y el barrido es de estrellas.
+
+## #515 — `quote_owner`: localizador antes del link, tope a la rama «antes», celda vs introductor (v1.323.0)
+
+**Dueño viejo vs nuevo de las 200 citas en bloques de ≥2 fuentes** de la instancia (HEAD `91a714f`,
+worktree desechable): cambian **3**, las tres que debían —`hd_40307` L870 `2019C` → `2016D` (camino
+a), `hd_40307` L518 `2016D` → `None` (b, 311 car.), `ica-ruido` L716 «the exact recovery…» `2024K` →
+`None` (c)—; las otras 197 conservan dueño, incluidas las 32 que resuelve la rama «antes» a ≤89
+caracteres (tope: 160). Lint: `cita_no_verbatim` **43 → 41** (salen L518 y L716; L870 sigue, ahora
+contra el `.txt` de `2016A&A...585A.134D`). `contrast --validar-todo`: rc 0 → 0, no evaluables
+191 → 189, el resto igual.
+
+**Dicho y no cerrado:** la segunda cita de `ica-ruido` L716 («the latent source S…», de `2015Voss`)
+sigue atribuida a la celda `2024K`: la cita anterior corta la rama «antes» (`_CORTE_ANTES`), así que
+la prosa no le da dueño y gana la celda. La investigación había contado 4 mal atribuidas; con este
+arreglo se corrigen 3.

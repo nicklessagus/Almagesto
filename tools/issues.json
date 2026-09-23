@@ -2554,11 +2554,31 @@
   {
    "number": 513,
    "title": "replace_pdf no instala la PRIMERA copia: el PDF del editor que trae el usuario (salida de #512) queda sin pdf_source",
-   "state": "CLOSED"
+   "state": "OPEN"
   },
   {
    "number": 514,
    "title": "El chaining re-propone como candidato un paper sacado del sujeto con --drop-core: load_triage resta sólo el carril chaining",
+   "state": "OPEN"
+  },
+  {
+   "number": 515,
+   "title": "quote_owner atribuye una cita a una fuente que no es la suya por tres caminos: localizador antes del link, rama «antes» sin tope y celda Fuente contra el introductor",
+   "state": "OPEN"
+  },
+  {
+   "number": 516,
+   "title": "Una cita confirmada en la hoja del PDF no tiene dónde firmarse: #220/#333 re-listan para siempre lo ya leído (falta la escotilla de #502 para citas)",
+   "state": "OPEN"
+  },
+  {
+   "number": 517,
+   "title": "CLAUDE.md manda a correr refresh_issues al cerrar cada tanda, y en una instancia eso reescribe tools/issues.json (framework) sin ningún efecto útil",
+   "state": "OPEN"
+  },
+  {
+   "number": 518,
+   "title": "El residuo de fetch_pdf no dice que la copia bloqueada es la del EDITOR (2 de 2) y la lista duplicada: con #513 eso decide qué --source declarar",
    "state": "OPEN"
   }
  ]

@@ -2373,3 +2373,19 @@ portadores:
       - modulo: scripts/ingest_theme.py
         estado: fuera-de-alcance
         motivo: "Filtra el carril `fuente-declarada` (#81) para avisar de un item de `sources:` ya descartado: otro carril, otra regla."
+
+  - issue: 515
+    regla: >-
+      Una cita textual pertenece al `[[bibcode]]` que la TOCA; si ninguno la toca es AMBIGUA
+      (`None`), nunca un link lejano ni la celda *Fuente* contra el introductor explícito de la
+      prosa. Medido: 3 citas de una bóveda real atribuidas a otra fuente (localizador antes del
+      link, rama «antes» a 264/311 caracteres, celda contra introductor).
+    funcion: lib_blocks.quote_owner
+    patron: 'quote_owner\(|_ADYACENTE|_introduce\('
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_note_quotes` y la rama del `log` prueban cada cita contra el dueño que devuelve `quote_owner`; con `None`, contra todas y con el aviso de ambigüedad (#316)."
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "`validar` elige los candidatos por `quote_owner` (#324: una sola regla con el lint)."

@@ -1144,3 +1144,16 @@ cuenta en «N ya descartados antes» y no en la cola.
 
 **Devolver si** un bibcode con decisión `descartado` de cualquiera de los dos carriles (`chaining`,
 `sujeto`) aparece como candidato pendiente.
+
+## §#515 · v1.323.0 — `quote_owner` no atribuye a una fuente que no toca la cita
+
+```bash
+python scripts/lint.py
+python scripts/contrast.py --validar-todo
+```
+
+**Esperado:** «Cita textual que no está en su fuente» baja de 43 a 41: salen `hd_40307` L518 y
+`ica-ruido` L716 («the exact recovery…»); `hd_40307` L870 queda, pero nombrando `2016A&A...585A.134D`.
+`contrast` sigue en rc 0.
+
+**Devolver si** alguna otra cita de esa categoría cambia de fuente nombrada, o aparece una nueva.
