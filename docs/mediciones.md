@@ -3898,3 +3898,19 @@ arreglo se corrigen 3.
 la suite del ratchet pasa. La señal es la de #390 (`lint.git_remotes`, ahora una sola lectura de
 remotes para los dos). `trace_invariants.py` también escribe framework (`docs/trazabilidad.md`) y
 queda fuera de alcance, firmado: en una instancia regenera el archivo mergeado, sin diff.
+
+## #518 — el residuo de `fetch_pdf` dice qué copia es la del editor, sin repetir URL (v1.326.0)
+
+**Caso (instancia, 2026-09-23):** los 2 `bloqueado` de la bóveda (`gj_581` `2009A&A...497..583Z`,
+`ica` `2009JGRE..114.0B27E`) listaban la misma URL dos veces —OpenAlex y Unpaywall devuelven la
+misma `publishedVersion`, y se intentaba bajar dos veces— y las dos eran la copia del editor sin
+decirlo. Ahora `copias_libres: [{url, src}]` deduplicada por URL (la segunda aparición completa el
+`src` si la primera no lo traía) y el cierre, con `src: publisher`, imprime el `replace_pdf …
+--slug <slug> --source publisher` de #513; el cierre de #512 también. Lectores de `copias_libres`
+fuera de `fetch_pdf`: 0 en código (`carriers.py --propose`), 1 en el skill (`rescate-pdfs.md`,
+actualizado). `build/missing_pdf.json` es regenerable: sin lector tolerante.
+
+**Medido contra la red real** (`fetch_free_copy` sobre los dos DOI, sin escribir en la instancia):
+`2009A&A...497..583Z` → 1 copia (`aanda.org`, `src: publisher`), antes 2; `2009JGRE..114.0B27E` →
+Wiley `publisher` + HAL (`src` desconocido), antes Wiley ×2. Las dos imprimen el comando de #513, con
+el bibcode entre comillas (`&` en A&A).

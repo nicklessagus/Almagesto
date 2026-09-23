@@ -19,9 +19,11 @@ SPIE, The Messenger, A&A viejo; **4 de 5 se recuperaron** por estas ramas). `fet
 ⛔ **Mirá primero el `estado` de cada entrada (#358).** Desde 1.190.0 `fetch_pdf` recorre además la
 cascada de acceso abierto (OpenAlex → Unpaywall → Europe PMC → arXiv por título exacto) antes de
 rendirse, y el residuo lo dice: `estado: sin-copia-libre` (no hay copia libre en ninguno: rescate
-manual o `pending`) o `estado: bloqueado` con `copias_libres: [url…]` (la hubo y el host no entregó
+manual o `pending`) o `estado: bloqueado` con `copias_libres: [{url, src}…]` (la hubo y el host no entregó
 un PDF —típico: desafío de Cloudflare con 200—: probá bajarla a mano desde esa URL antes de
-cualquier otra cosa). Medido: 2 de 6 «sin conseguir» de un tema eran open access.
+cualquier otra cosa). ⛔ **Con `src: publisher` la bloqueada es la del EDITOR (#518)**: se instala
+con `replace_pdf.py <bib> <ruta.pdf> --slug <slug> --source publisher --reason "…"` (#513), que el
+cierre de `fetch_pdf` imprime listo. Medido: 2 de 6 «sin conseguir» de un tema eran open access.
 
 En orden de rendimiento:
 

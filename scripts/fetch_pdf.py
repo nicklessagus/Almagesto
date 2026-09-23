@@ -40,8 +40,9 @@ por donde seguir (#50: "bajar por DOI" no alcanza — Messenger, página del ins
 mirror académico, o derivar al usuario si es un A&A pre-arXiv; el detalle de cada rama vive
 en `## Notas` del skill ingest-star) y —#358— **`estado` + `copias_libres`**, que son lo primero
 que hay que mirar: `sin-copia-libre` (ningún depósito tiene copia → pide `pending:`) contra
-`bloqueado` (la hubo, y el host la bloqueó o no entregó un PDF → `copias_libres` lista las URL
-probadas: bajarla a mano desde ahí antes del rescate manual). Salían iguales.
+`bloqueado` (la hubo, y el host la bloqueó o no entregó un PDF → `copias_libres` lista las copias
+probadas como `[{url, src}]`, sin repetir URL: bajarla a mano desde ahí antes del rescate manual; con
+`src: publisher` el cierre imprime el `replace_pdf … --source publisher` de #513, #518). Salían iguales.
 Idempotente: no re-baja lo que ya está en vault/raw/pdfs/<slug>/; `--force` re-intenta incluso
 lo que ya tiene PDF (un PDF truncado por un corte anterior).
 
@@ -56,6 +57,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -259,7 +261,8 @@ def is_eprint_candidate(url: str, src: str | None) -> bool:
 def fetch_free_copy(slug: str, r: dict, dest: Path, token: str,
                     eprint_ok: bool = True) -> tuple[bool, list]:
     """Walk EVERY open-access candidate for record `r` (#358) and publish the first real PDF at
-    `dest` → `(got one, urls tried)`.
+    `dest` → `(got one, [{url, src}] tried)` — deduplicated by URL, each with the `pdf_source` it
+    would have recorded (#518: a blocked `publisher` copy is installed with `--source publisher`).
 
     Cascade: OpenAlex → Unpaywall → Europe PMC → arXiv by exact title (`discover`). All of them,
     not the first: measured, the first URL (OUP) answered a Cloudflare challenge with HTTP 200 and
@@ -280,7 +283,12 @@ def fetch_free_copy(slug: str, r: dict, dest: Path, token: str,
             cfg.print_seguro(f"      · copia libre ({why}) salteada: es el eprint y el paper tiene "
                              f"versión publicada sin `acepta_preprint` (#512)")
             continue
-        tried.append(url)
+        prev = next((t for t in tried if t["url"] == url), None)
+        if prev is not None:
+            # #518 — OpenAlex and Unpaywall return the same `publishedVersion`: tried once, listed once.
+            prev["src"] = prev["src"] or src
+            continue
+        tried.append({"url": url, "src": src})
         pdf = download_pdf(url, token)
         if pdf and write_pdf_atomic(dest, pdf):
             cfg.print_seguro(f"      ✓ copia libre ({why}) → {dest.name} ({len(pdf)} bytes)")
@@ -310,6 +318,17 @@ def publisher_link(r: dict) -> str:
             f"https://ui.adsabs.harvard.edu/link_gateway/{r['bibcode']}/PUB_HTML")
 
 
+def print_publisher_copy(slug: str, bib: str, copias: list) -> None:
+    """#518 — when the blocked copy IS the publisher's, say so and print the #513 install command
+    with `--source publisher` already set: what the user declares depends on which document it is."""
+    for c in copias:
+        if c.get("src") == "publisher":
+            cfg.print_seguro(f"      → la bloqueada es la copia del EDITOR: {c['url']} — bajala a mano "
+                             f"e instalala: `python scripts/replace_pdf.py {shlex.quote(bib)} <ruta.pdf> "
+                             f"--slug {slug} --source publisher --reason \"…\"`")
+            return
+
+
 def print_published_residue(slug: str, missing: list) -> None:
     """List the core papers whose PUBLISHED version could not be obtained, with their two ways out
     (#512): bring the publisher's PDF, or declare `acepta_preprint`. The chain never falls back to
@@ -322,6 +341,7 @@ def print_published_residue(slug: str, missing: list) -> None:
     for m in pub:
         cfg.print_seguro(f"  {m['bibcode']}  editor: {m['editor']}  eprint: "
                          f"{('arXiv:' + m['eprint']) if m.get('eprint') else '—'}")
+        print_publisher_copy(slug, m["bibcode"], m.get("copias_libres") or [])
     cfg.print_seguro(f"  → traé el PDF del editor e instalalo declarando su procedencia (#513): "
                      f"`python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher "
                      f"--slug {slug} --reason \"…\"`, o aceptá el preprint: `python scripts/"
@@ -480,6 +500,7 @@ def main() -> int:
                 cfg.print_seguro(f"      → había copia libre y el host la bloqueó o no entregó un PDF "
                                  f"({len(copias_libres)} URL en missing_pdf.json): probá bajarla a "
                                  f"mano desde ahí antes del rescate manual")
+                print_publisher_copy(args.slug, bib, copias_libres)
             else:
                 cfg.print_seguro(f"      → sin copia libre en OpenAlex, Unpaywall, Europe PMC ni arXiv"
                                  + ("" if r.get("doi") else " (sin DOI: no se consultaron)")

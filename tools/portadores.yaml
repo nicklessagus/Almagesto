@@ -2411,3 +2411,13 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: "Sólo nombra `trazabilidad-ratchet.yaml` para la guarda de AUD-139 (lee la base de git); no escribe archivos de framework."
+  - issue: 518
+    regla: >-
+      El residuo de `fetch_pdf` dice de QUÉ documento es cada copia libre que lista
+      (`copias_libres: [{url, src}]`, deduplicadas por URL), porque desde #513 lo que el usuario
+      declara al instalarla (`replace_pdf --slug --source …`) depende de eso; con `src: publisher`
+      el cierre imprime el comando con `--source publisher`. Medido: 2 de 2 `bloqueado` reales eran
+      la copia del editor, y 2 de 2 venían duplicadas.
+    funcion: fetch_pdf.fetch_free_copy
+    patron: 'copias_libres'
+    consumidores: []

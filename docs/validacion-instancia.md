@@ -1170,3 +1170,16 @@ git status --short tools/
 
 **Devolver si** `tools/issues.json` o `tools/mutacion-ratchet.yaml` quedan modificados, o si alguna
 de las dos corre en la instancia.
+
+## §#518 · v1.326.0 — la copia bloqueada del editor, una vez y con su comando
+
+```bash
+python scripts/fetch_pdf.py gj_581
+python -c "import json;[print(m['bibcode'],m['estado'],m['copias_libres']) for m in json.load(open('build/gj_581/missing_pdf.json'))]"
+```
+
+**Esperado:** `2009A&A...497..583Z` con **una** entrada en `copias_libres`, `src: publisher`, y en la
+salida la línea «la bloqueada es la copia del EDITOR» con `python scripts/replace_pdf.py
+'2009A&A...497..583Z' <ruta.pdf> --slug gj_581 --source publisher --reason "…"`.
+
+**Devolver si** una URL aparece dos veces, o si una `publishedVersion` bloqueada sale sin el comando.

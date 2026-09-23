@@ -590,10 +590,31 @@ def test_copia_libre_bloqueada_se_distingue_de_sin_copia_libre(toy_vault, monkey
     miss = {m["bibcode"]: m for m in json.loads(
         (toy_vault.ROOT / "build" / "test_star" / "missing_pdf.json").read_text(encoding="utf-8"))}
     assert miss["1978oldW...1..1W"]["estado"] == "bloqueado"
-    assert miss["1978oldW...1..1W"]["copias_libres"] == ["https://oup/cloudflare.pdf"]
+    assert miss["1978oldW...1..1W"]["copias_libres"] == [{"url": "https://oup/cloudflare.pdf",
+                                                          "src": None}]
     assert miss["2020newA...1..1A"]["estado"] == "sin-copia-libre"
     assert "bloqueó" in out and "sin copia libre" in out, out
     assert "sin conseguir 2 (1 con copia libre que el host bloqueó)" in out, out
+
+
+def test_copia_del_editor_bloqueada_se_lista_una_vez_y_se_nombra(toy_vault, monkeypatch, capsys):
+    """#518 — OpenAlex y Unpaywall devuelven la misma `publishedVersion`: se intentaba bajar dos
+    veces y se listaba dos veces, y el cierre no decía que la bloqueada era la del EDITOR, que es lo
+    que decide el `--source` de `replace_pdf --slug` (#513). Medido: 2 de 2 `bloqueado` reales."""
+    ads_json(toy_vault.ROOT, "test_star", [dict(RECORDS[0])])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    url = "https://www.aanda.org/x.pdf"
+    monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter(
+        [(url, "OpenAlex best_oa_location", None), (url, "Unpaywall", "publisher")]))
+    bajadas = []
+    monkeypatch.setattr(fp, "download_pdf", lambda u, tok: bajadas.append(u))
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    out = capsys.readouterr().out
+    miss = json.loads((toy_vault.ROOT / "build" / "test_star" / "missing_pdf.json").read_text())
+    assert bajadas == [url]
+    assert miss[0]["copias_libres"] == [{"url": url, "src": "publisher"}]
+    assert ("replace_pdf.py 1978oldW...1..1W <ruta.pdf> --slug test_star --source publisher"
+            in out), out
 
 
 def test_sin_doi_no_se_consulta_el_resolver(toy_vault, monkeypatch):
