@@ -1067,3 +1067,16 @@ Una segunda corrida no cambia nada.
 
 **Devolver si** alguna vista gana una viñeta o un eje de lente que no esté en la extracción de SU
 sujeto (`vault/raw/extraccion/*/<bib>.json` con `vista.sujeto` igual al de la vista).
+
+## §#510 · v1.318.0 — la ronda sin condición no escribe `⟂ —`
+
+```bash
+grep -rn ' ⟂ — |' vault/wiki --include='*.verif.md'     # 0 (las 6 ya se repararon a mano)
+python scripts/lint.py | grep -A3 'Condición sin clasificar'
+```
+
+**Esperado:** 0 celdas `⟂ —` y la categoría #221 en 0. La prueba del escritor es la próxima ronda
+acotada que no traiga condición sobre una celda encadenada: la celda vuelve al eslabón anterior.
+
+**Devolver si** aparece una celda terminada en ` ⟂ —` o ` ⟂ ` después de una ronda de
+`verify_fanout`/`write_verif_sidecar` con v1.318.0.

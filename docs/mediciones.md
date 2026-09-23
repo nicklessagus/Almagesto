@@ -3816,3 +3816,14 @@ validador), `make_notes.py --restamp-lente`:**
   reversión a mano no alcanzó**; sin viñetas nuevas.
 - Vistas «sin extracción en disco»: 54 → 66. Las 12 de más son vistas que antes recibían la
   extracción de otro sujeto; ahora se reportan y no se tocan.
+
+## #510 — una ronda sin condición sobre una cadena pendiente quita el eslabón (v1.318.0)
+
+**Reportado por el validador sobre la instancia (v1.317.0):** 6 celdas `… ⟂ — |` en 4 hermanos
+(`ica` ×3, `gj_581`, `harps-drs`, `hd_40307`), todas de tres rondas acotadas seguidas: la segunda
+encadenó una condición nueva y la tercera no declaró ninguna. Eran las 6 de la categoría #221
+(«Condición sin clasificar»). Reparadas a mano en la instancia.
+
+**Fix en la función compartida** (`lib_blocks.replace_current_condition`), no en `chained_condition`:
+es la que escribe el eslabón, y así la hereda cualquier llamador. Sin cadena no cambia nada (`—` se lee
+como «sin condición», igual que una fila nueva). Los dos tests nuevos fallan sobre el código viejo.

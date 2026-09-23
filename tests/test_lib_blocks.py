@@ -1805,3 +1805,13 @@ def test_451_replace_current_condition_conserva_la_historia():
     assert lb.replace_current_condition("acota: B", "acota→resuelta: y · B") == \
         "acota→resuelta: y · B"
     assert lb.replace_current_condition("", "acota: B") == "acota: B"
+
+
+def test_510_una_ronda_SIN_condicion_sobre_una_cadena_quita_el_eslabon_no_escribe_raya():
+    """#510 — `… ⟂ —` publicaba un eslabón vacío que el lint leía como condición sin clasificar
+    sobre una fila resuelta (6 de 6 de la categoría #221 en una instancia)."""
+    cadena = "acota→resuelta: x · A ⟂ acota: B"
+    for vacio in ("—", "", "-", "–", "  "):
+        assert lb.replace_current_condition(cadena, vacio) == "acota→resuelta: x · A", vacio
+    assert lb.replace_current_condition("acota: B", "—") == "—", "sin cadena: igual que una fila nueva"
+    assert lb.replace_current_condition("", "—") == "—"

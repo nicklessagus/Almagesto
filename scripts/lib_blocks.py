@@ -340,8 +340,15 @@ def replace_current_condition(condicion: str, nuevo: str) -> str:
     """The cell with its link in force replaced and its history kept (#451).
 
     Resolving a chained condition rewrites the LAST link; writing the cell whole would throw away
-    the resolution of the earlier round, which is a decision somebody signed (#427)."""
+    the resolution of the earlier round, which is a decision somebody signed (#427).
+
+    ⛔ An EMPTY link is never written (#510): a round with no condition (`""`/`—`) over a chain
+    whose link in force is pending DROPS that link — the fan-out's recount rules — instead of
+    chaining `… ⟂ —`, which the lint read as an unclassified condition on a resolved row (6 of 6 of
+    that category in an instance). Without a chain the cell is just `nuevo`, as for a new row."""
     enlaces = condition_links(condicion)
+    if len(enlaces) > 1 and str(nuevo or "").strip() in ("", "—", "-", "–"):
+        return COND_CHAIN_SEP.join(enlaces[:-1])
     return COND_CHAIN_SEP.join(enlaces[:-1] + [nuevo]) if enlaces else nuevo
 
 

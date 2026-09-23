@@ -1161,3 +1161,14 @@ def test_re_anclar_el_MISMO_dia_de_la_verificacion_NO_estampa_el_sufijo(toy_vaul
     assert r["reanclado"] is None
     assert "re-anclado" not in texto and cfg.reanchor_date(texto) is None
     assert cfg.verification_date(texto) == (True, hoy)
+
+
+def test_510_chained_condition_sin_condicion_sobre_cadena_pendiente_vuelve_al_eslabon_anterior():
+    """#510 — el caso medido: tres rondas acotadas seguidas; la segunda encadena y la tercera no
+    declara condición. La celda vuelve a la resolución firmada y el lint la lee como tal."""
+    b = ws.chained_condition("acota→resuelta: en el bloque · vieja", "acota: nueva")
+    assert b == "acota→resuelta: en el bloque · vieja ⟂ acota: nueva"
+    for vacio in ("—", ""):
+        c = ws.chained_condition(b, vacio)
+        assert c == "acota→resuelta: en el bloque · vieja", c
+        assert lb.condition_kind(lb.current_condition(c)) == "acota" and lb.condition_resolved(c)

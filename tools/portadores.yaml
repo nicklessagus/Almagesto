@@ -2249,3 +2249,16 @@ portadores:
       - modulo: scripts/replace_pdf.py
         estado: fuera-de-alcance
         motivo: "Marca `_paginacion` en TODAS las extracciones del bibcode reemplazado; no elige una."
+
+  - issue: 510
+    regla: >-
+      Un eslabón VACÍO no se escribe: una ronda sin condición (`""`/`—`) sobre una cadena cuyo
+      eslabón vigente está pendiente QUITA ese eslabón (manda el recálculo del fan-out), nunca
+      encadena `… ⟂ —`. Medido: 6 celdas en 4 hermanos de una instancia, las 6 de la categoría #221,
+      que el lint mandaba a clasificar sobre filas resueltas.
+    funcion: lib_blocks.replace_current_condition
+    patron: 'replace_current_condition'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "`chained_condition` (ronda del fan-out) y `resolve_conditions` (`--resolver`) reemplazan el eslabón vigente con esta función; la guarda vive en ella, así que los dos la heredan. `resolve_conditions` siempre pasa `acota→resuelta: …`, nunca vacío."

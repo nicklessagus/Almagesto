@@ -2534,6 +2534,11 @@
   {
    "number": 509,
    "title": "restamp-lente estampa en una vista la lente y los ejes de la extracción de OTRO sujeto: _extraction_of elige por bibcode",
+   "state": "CLOSED"
+  },
+  {
+   "number": 510,
+   "title": "write_verif_sidecar: una ronda sin condición sobre una celda ENCADENADA escribe el eslabón «—» en vez de quitarlo — el lint la reporta «sin clasificar» (6 de 6 en la instancia)",
    "state": "OPEN"
   }
  ]
