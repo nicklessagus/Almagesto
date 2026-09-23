@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-22",
+ "fetched": "2026-09-23",
  "issues": [
   {
    "number": 2,
@@ -2514,6 +2514,21 @@
   {
    "number": 505,
    "title": "HAL como carril antes de declarar un hueco de bibtex (y de PDF): 1 de los 8 huecos de la instancia estaba en HAL con exportación oficial y ningún paso lo consulta",
+   "state": "CLOSED"
+  },
+  {
+   "number": 506,
+   "title": "section_start confunde sujetos cuyo nombre es prefijo de otro: «## Vista — ica» devuelve la sección de ica-ruido (el lint da la nota por coherente y --force pisaría la otra vista)",
+   "state": "OPEN"
+  },
+  {
+   "number": 507,
+   "title": "harvest_views --dry-run escribe: el flag sólo está conectado a --restamp-salvedades y la cosecha normal lo ignora (5 archivos, +177 líneas en una «previsualización»)",
+   "state": "OPEN"
+  },
+  {
+   "number": 508,
+   "title": "carriers --check no resuelve re-exports: la regla firmada por el módulo definidor no ve las llamadas por la fachada (cfg.X); #500 se firmó por lib_config como parche",
    "state": "OPEN"
   },
   {

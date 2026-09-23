@@ -3781,3 +3781,23 @@ dos registros): el flag sólo llegaba a `--restamp-salvedades` y la cosecha norm
 - **Vuelta.** Sin `--dry-run`, los dos `--paper --force`: `git diff --numstat` da exactamente
   `5/2` y `16/8` en las notas, el `.txt` traído (untracked) y `+7` en cada registro (la cadena,
   que el dry-run no estampa).
+
+## #508 — `carriers --check` resuelve el re-export: una regla, cualquiera de sus nombres (v1.316.0)
+
+**Medido sobre el template (`ea085a1`):**
+
+- #500 re-firmada por el definidor (`lib_quotes.quote_page_verdict`): `--check` **antes: 2 hallazgos
+  falsos** (`contrast.py`, `repaginate.py`: «declarado `usa` y NO llama» — los dos llaman
+  `cfg.quote_page_verdict`) · **después: 0**. Queda firmada así; la firma por la fachada era el parche.
+- 80 re-exports top-level en `scripts/`+`tools/`; 8 reglas firmadas por el nombre de fachada (#454,
+  #492, #494, #495, #496, #500, #501, #504). Con la resolución, `--check` sobre las 80 reglas da **0
+  hallazgos: ningún portador nuevo** que antes fuera invisible (las 7 firmadas por la fachada se
+  dejan: los dos nombres son equivalentes).
+- Si es función o constante se decide sobre el **definidor** (sobre la fachada todo re-export
+  contestaba «callable»): ninguna regla vigente cambia de veredicto.
+- `--propose` por el definidor lista como firmados los `fuera-de-alcance` declarados bajo el nombre
+  de la fachada (antes salían como «nadie declaró»).
+- Costo: `_parse` cacheado por fuente; `--check` **71 s → 17 s** (antes cada consulta re-parseaba
+  `lib_config`).
+- Punto 2 del handoff: `triage.py` **no es portador** de #431 (no llama `prose_changed_since` ni
+  matchea el patrón; `--sintesis` declara la fecha, no la compara). Firmado `fuera-de-alcance`.

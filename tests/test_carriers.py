@@ -381,3 +381,51 @@ def test_AUD415_propose_cruza_el_RE_EXPORT_de_la_fachada(tmp_path):
         "scripts/ajeno.py": "import lib_config as cfg\ncfg.otra(1)\n"})
     llaman, _, _ = cr.propose("lib_quotes.regla", None, root, tmp_path / "no-existe.yaml")
     assert llaman == ["scripts/usa.py"]
+
+
+def _fachada(tmp_path, lib_quotes=LIB, fachada="from lib_quotes import regla  # noqa\n", **mas):
+    return _repo(tmp_path, **{"scripts/lib_quotes.py": lib_quotes, "scripts/lib_config.py": fachada,
+                              "scripts/usa.py": "import lib_config as cfg\ncfg.regla(1)\n", **mas})
+
+
+def test_508_check_resuelve_el_RE_EXPORT_en_las_DOS_direcciones(tmp_path):
+    """⛔ #508 — `--propose` cruzaba el re-export (AUD-415) y `--check` no: firmada por el módulo
+    DEFINIDOR, la regla decía «declarado `usa` y NO llama» sobre quien llama `cfg.regla`, así que
+    #500 se firmó por la fachada como parche. Un símbolo y su re-export son la MISMA función."""
+    root = _fachada(tmp_path, **{"scripts/directo.py": "import lib_quotes\nlib_quotes.regla(1)\n"})
+    usa = [{"modulo": "scripts/usa.py", "estado": "usa"},
+           {"modulo": "scripts/directo.py", "estado": "usa"}]
+    for ref in ("lib_quotes.regla", "lib_config.regla"):
+        _, hallazgos = cr.check(root, _decl(tmp_path, funcion=ref, consumidores=usa))
+        assert hallazgos == [], (ref, hallazgos)
+    # y el que llama por la fachada sin declarar sigue bloqueando
+    _, hallazgos = cr.check(root, _decl(tmp_path, funcion="lib_quotes.regla", consumidores=usa[1:]))
+    assert any("scripts/usa.py" in h and "LLAMA" in h for h in hallazgos)
+
+
+def test_508_el_re_export_con_ALIAS_se_resuelve(tmp_path):
+    root = _fachada(tmp_path, fachada="from lib_quotes import regla as regla2  # noqa\n",
+                    **{"scripts/usa.py": "import lib_config as cfg\ncfg.regla2(1)\n"})
+    nombres, definidor = cr.names_of(cr.source_modules(root), "lib_quotes", "regla")
+    assert nombres == {("lib_quotes", "regla"), ("lib_config", "regla2")}
+    assert definidor == LIB
+    assert cr.propose("lib_quotes.regla", None, root, tmp_path / "x.yaml")[0] == ["scripts/usa.py"]
+
+
+def test_508_si_es_CONSTANTE_lo_decide_el_DEFINIDOR_no_la_fachada(tmp_path):
+    """Sobre la fachada `es_callable` contesta «callable» para todo re-export: una constante
+    re-exportada se llevaba LLAMÁNDOLA, y su lector era invisible."""
+    root = _fachada(tmp_path, lib_quotes="TABLA = (1, 2)\n",
+                    fachada="from lib_quotes import TABLA  # noqa\n",
+                    **{"scripts/usa.py": "import lib_config as cfg\nx = cfg.TABLA\n"})
+    _, hallazgos = cr.check(root, _decl(tmp_path, funcion="lib_config.TABLA",
+                                        consumidores=[{"modulo": "scripts/usa.py", "estado": "usa"}]))
+    assert hallazgos == []
+
+
+def test_508_propose_por_el_definidor_ve_lo_FIRMADO_por_la_fachada(tmp_path):
+    root = _fachada(tmp_path, **{"scripts/otro.py": "PATRON = 1\n"})
+    decl = _decl(tmp_path, funcion="lib_config.regla", consumidores=[
+        {"modulo": "scripts/otro.py", "estado": "fuera-de-alcance", "motivo": "m"}])
+    _, firmados, sin_declarar = cr.propose("lib_quotes.regla", "PATRON", root, decl)
+    assert firmados == {"scripts/otro.py": "m"} and sin_declarar == []

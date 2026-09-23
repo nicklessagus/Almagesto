@@ -696,6 +696,13 @@ portadores:
           Su `_prosa = cfg.solo_prosa` acota las citas que cuenta `_estado_paper` dentro de UNA
           versión de la nota. No hay garantía fechada ni versión anterior: no hay dos fechas que
           comparar, así que la regla no tiene dónde aplicarse.
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Revisado en #508 (el handoff lo daba por «sin declarar»): no llama `prose_changed_since`
+          ni matchea el patrón. Su única garantía fechada es `--sintesis` → `cfg.save_sintesis`,
+          que DECLARA la fecha de síntesis en el registro (INV-82) y no la compara contra ninguna
+          versión de la nota: produce la fecha, no la juzga.
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: >-
@@ -2064,12 +2071,12 @@ portadores:
       518 sobre papers cuyo PDF nunca se reemplazó) mientras los 68 MAL —la mitad que sí vale— se
       ven igual con las dos reglas. La familia que esto nombra: un gate que exige una FORMA tiene
       que nombrar a quién le sirve esa forma, y si no hay nadie, chequea el HECHO y no la forma.
-    funcion: lib_config.quote_page_verdict
+    funcion: lib_quotes.quote_page_verdict
     patron: 'pag_indice|pag_declarado|PAGE_INDEX_DECLARED|REGLA_LOCALIZADOR'
     consumidores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
-        motivo: "Es donde vive `REGLA_LOCALIZADOR` (la forma que se le pide al extractor) y el re-export de `quote_page_verdict` (AUD-306); no juzga ningún localizador. La regla se declara por el símbolo RE-EXPORTADO: los consumidores llaman `cfg.quote_page_verdict` (desde AUD-415 `--propose` cruza el re-export y da los mismos llamadores por cualquiera de los dos nombres)."
+        motivo: "Es donde vive `REGLA_LOCALIZADOR` (la forma que se le pide al extractor) y el re-export de `quote_page_verdict` (AUD-306); no juzga ningún localizador. Desde #508 la regla se firma por su módulo DEFINIDOR (`lib_quotes`): `--check` y `--propose` resuelven el re-export y ven `cfg.quote_page_verdict` como la misma función; la firma por la fachada era el parche."
       - modulo: scripts/extraction_prompt.py
         estado: fuera-de-alcance
         motivo: "RINDE la regla al extractor recortándola por el prefijo literal `el **localizador** es `; no decide ningún veredicto. El prefijo es contrato: si cambia, el bullet publica la cadena entera (test en `test_make_notes.py::test_el_stub_y_el_prompt_no_divergen_sobre_el_localizador`)."

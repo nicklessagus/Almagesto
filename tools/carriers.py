@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import functools
 import re
 import sys
 from pathlib import Path
@@ -72,6 +73,13 @@ def source_modules(root: Path = ROOT) -> dict:
     return out
 
 
+@functools.lru_cache(maxsize=None)
+def _parse(fuente: str) -> ast.Module:
+    """`ast.parse`, once per source (#508): resolving re-exports multiplies the lookups per module,
+    and every lookup re-parsed the same 5 000-line `lib_config`. Trees are only read, never mutated."""
+    return ast.parse(fuente)
+
+
 def calls(fuente: str, modulo: str, simbolo: str) -> bool:
     """Does this module CALL `modulo.simbolo`? By AST, never by `in` over the text.
 
@@ -80,7 +88,7 @@ def calls(fuente: str, modulo: str, simbolo: str) -> bool:
     would count the mention in a comment or a docstring — which is exactly what #347 measured: the
     comment said «delegates to X» and did not delegate."""
     try:
-        arbol = ast.parse(fuente)
+        arbol = _parse(fuente)
     except SyntaxError:
         return False
     alias, directo = set(), False
@@ -111,7 +119,7 @@ def es_callable(fuente: str, simbolo: str) -> bool:
     as callable, which is the historical behaviour: the facade exists so consumers call through it.
     """
     try:
-        arbol = ast.parse(fuente)
+        arbol = _parse(fuente)
     except SyntaxError:
         return True                       # no se pudo decidir: el criterio de siempre
     for n in arbol.body:
@@ -140,7 +148,7 @@ def reads(fuente: str, modulo: str, simbolo: str) -> bool:
     function name would undo #347, where the comment said «delegates to X» and did not delegate.
     """
     try:
-        arbol = ast.parse(fuente)
+        arbol = _parse(fuente)
     except SyntaxError:
         return False
     alias, directo = set(), False
@@ -184,7 +192,7 @@ def existe(fuente: str, simbolo: str) -> bool:
     `lib_quotes`), and by its facade, «does not exist». A gate that refuses both forms of the same
     truth leaves the rule undeclared, which is exactly what this tool exists to prevent."""
     try:
-        arbol = ast.parse(fuente)
+        arbol = _parse(fuente)
     except SyntaxError:
         return False
     return any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
@@ -195,14 +203,53 @@ def existe(fuente: str, simbolo: str) -> bool:
             (a.asname or a.name) == simbolo for a in n.names) for n in ast.walk(arbol))
 
 
-def _reexports(fuente: str, modulo: str, simbolo: str) -> bool:
-    """Does this module re-export `modulo.simbolo` (`from modulo import simbolo`)? (AUD-415)"""
+def _top_imports(fuente: str) -> list:
+    """`[(from_module, name, exported_name)]` of the top-level `from X import …` of a module."""
     try:
-        arbol = ast.parse(fuente)
+        arbol = _parse(fuente)
     except SyntaxError:
-        return False
-    return any(isinstance(n, ast.ImportFrom) and n.module == modulo
-               and any(a.name == simbolo and not a.asname for a in n.names) for n in arbol.body)
+        return []
+    return [(n.module, a.name, a.asname or a.name) for n in arbol.body
+            if isinstance(n, ast.ImportFrom) and n.module for a in n.names]
+
+
+def names_of(fuentes: dict, modulo: str, simbolo: str) -> tuple:
+    """`(names, definer_src)` — every `(module, name)` the symbol is reachable by, and the source
+    of the module that DEFINES it. (#508; AUD-415 did this for `--propose` only)
+
+    ⛔ A symbol and its re-export (`from lib_quotes import X [as Y]`, AUD-306) are the SAME
+    function, so the gate recognises it by any of its names, in both directions: a rule signed by
+    the definer sees `cfg.X`, and one signed by the facade sees a direct `lib_quotes.X`. Before
+    #508 `--check` saw only the name the rule was signed with, so the rule #500 could not be signed
+    by `lib_quotes` («declared `usa` and does NOT call» on its two real callers).
+
+    ⛔ Whether it is a function or a constant is decided on the DEFINER: on a facade `es_callable`
+    answers «callable» for every re-export, so a re-exported constant was carried by calling."""
+    stems = {Path(r).stem: r for r in fuentes}
+    imports = {Path(r).stem: _top_imports(f) for r, f in fuentes.items()}
+    names = {(modulo, simbolo)}
+    while True:                           # fixpoint: chains of re-exports, either direction
+        nuevos = set()
+        for mod, imps in imports.items():
+            for desde, nombre, exportado in imps:
+                if desde not in stems:
+                    continue
+                if (desde, nombre) in names:
+                    nuevos.add((mod, exportado))          # mod is a facade of a known name
+                if (mod, exportado) in names:
+                    nuevos.add((desde, nombre))           # a known name is a facade of `desde`
+        if nuevos <= names:
+            break
+        names |= nuevos
+    definer = next((fuentes[stems[m]] for m, s in sorted(names) if m in stems
+                    and existe(fuentes[stems[m]], s)
+                    and s not in {exp for _d, _n, exp in imports[m]}), None)
+    return names, definer
+
+
+def _carries_any(fuente: str, names: set, definer_src: str) -> bool:
+    """`carries` under ANY name of the symbol (#508)."""
+    return any(carries(fuente, m, s, definer_src) for m, s in names)
 
 
 def load(path: Path = DECLARACION) -> list:
@@ -244,6 +291,8 @@ def entry_errors(entrada: dict, fuentes: dict) -> list:
     except re.error as exc:
         return [f"{quien}: `patron` no compila — {exc}"]
 
+    nombres, definidor = names_of(fuentes, modulo, simbolo)                         # #508
+    definidor = definidor or fuentes[dueño]
     declarados: dict = {}
     for c in entrada.get("consumidores") or []:
         if not isinstance(c, dict):
@@ -269,7 +318,7 @@ def entry_errors(entrada: dict, fuentes: dict) -> list:
     for mod, fuente in fuentes.items():
         if mod == dueño:
             continue
-        usa = carries(fuente, modulo, simbolo, fuentes[dueño])     # #476
+        usa = _carries_any(fuente, nombres, definidor)               # #476, #508
         matchea = bool(patron.search(fuente))
         if mod in declarados and declarados[mod] is None:
             continue                      # estado inválido: ya se reportó, no se reporta dos veces
@@ -305,19 +354,21 @@ def check(root: Path = ROOT, path: Path = DECLARACION) -> tuple:
     return entradas, hallazgos
 
 
-def signed_out_of_scope(ref: str, path: Path = DECLARACION) -> dict:
+def signed_out_of_scope(ref: str, path: Path = DECLARACION, aliases: tuple = ()) -> dict:
     """`{modulo: motivo}` — the consumers already signed `fuera-de-alcance` for `ref`.
 
     #482: the block that gets pasted into every issue showed them under the same heading as the
     consumer nobody looked at, so the reader could not tell which ones were debt. An unreadable
-    declaration yields `{}`: `--check` is the gate for that, this is a report."""
+    declaration yields `{}`: `--check` is the gate for that, this is a report.
+    `aliases` are the other names of the same symbol (#508): a rule signed by the facade is the
+    same rule when `--propose` is asked by the definer."""
     try:
         entradas = load(path)
     except DeclaracionIlegible:
         return {}
     out: dict = {}
     for e in entradas:
-        if not isinstance(e, dict) or str(e.get("funcion")) != ref:
+        if not isinstance(e, dict) or str(e.get("funcion")) not in {ref, *aliases}:
             continue
         for c in e.get("consumidores") or []:
             if isinstance(c, dict) and c.get("estado") == "fuera-de-alcance":
@@ -344,14 +395,15 @@ def propose(ref: str, patron: str | None, root: Path = ROOT, path: Path = DECLAR
     dueño = next((r for r in fuentes if Path(r).stem == modulo), None)
     if dueño is None or not existe(fuentes[dueño], simbolo):
         raise ValueError(f"`{ref}` no existe")
-    fachadas = [Path(r).stem for r, f in fuentes.items() if r != dueño and _reexports(f, modulo, simbolo)]
+    nombres, definidor = names_of(fuentes, modulo, simbolo)                         # #508
+    definidor = definidor or fuentes[dueño]
     rx = re.compile(patron) if patron else None
-    firmados = signed_out_of_scope(ref, path)
+    firmados = signed_out_of_scope(ref, path, tuple(f"{m}.{n}" for m, n in nombres))
     llaman, sin_declarar, firmados_matchean = [], [], {}
     for mod, fuente in fuentes.items():
         if mod == dueño:
             continue
-        if any(carries(fuente, m, simbolo, fuentes[dueño]) for m in (modulo, *fachadas)):   # #476
+        if _carries_any(fuente, nombres, definidor):                             # #476, #508
             llaman.append(mod)
         elif rx and rx.search(fuente):
             if mod in firmados:
@@ -382,7 +434,8 @@ def main(argv=None) -> int:
         fuentes = source_modules(ROOT)
         _mod, _sim = str(args.propose).rsplit(".", 1)
         _dueño = next((r for r in fuentes if Path(r).stem == _mod), None)
-        verbo = "LLAMAN a" if (_dueño and es_callable(fuentes[_dueño], _sim)) else "LEEN"
+        _src = names_of(fuentes, _mod, _sim)[1] or (fuentes[_dueño] if _dueño else "")   # #508
+        verbo = "LLAMAN a" if (_src and es_callable(_src, _sim)) else "LEEN"
         print(f"{verbo} `{args.propose}` ({len(llaman)}) — van declarados `usa`:")
         for m in llaman:
             print(f"  {m}")
