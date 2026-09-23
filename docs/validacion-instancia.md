@@ -1030,3 +1030,24 @@ tiene prosa redactada») y `--force` pisaba la vista de `ica-ruido`. (No uso `ha
 
 **Devolver si** alguna sección fija (`## Papers`, `## Verificación de citas (…)`, `## Abstract`)
 deja de encontrarse, o si la cosecha de `ica` toca la sección de `ica-ruido`.
+
+## §#507 · v1.315.0 — un `--dry-run` no escribe en ningún modo
+
+```bash
+git status --porcelain -- vault                                            # vacío antes
+python scripts/harvest_views.py <tema> --theme --paper <bib> --dry-run    # una extracción nueva
+git status --porcelain -- vault                                            # sigue vacío
+python scripts/harvest_views.py <tema> --theme --paper <bib>              # la real
+git diff --numstat -- vault
+```
+
+**Esperado:** el dry-run imprime `(dry-run) <bib>.md: +A/-B línea(s)` y termina en «dry-run: no se
+escribió nada (#507)»; `git status` sigue vacío. La corrida real escribe **exactamente** `A/B` en
+la nota, más la cadena en el registro y, si el `.txt` vivía bajo otro slug, la copia al tema (el
+dry-run la anuncia como «.txt traídos al slug»). `python scripts/make_notes.py --restamp-index
+--dry-run` y `python scripts/repaginate.py <bib> --out <dir> --dry-run` salen con exit 2 y no
+escriben.
+
+**Devolver si** algún modo de un script que declara `--dry-run` deja `git status` distinto, si el
+`+A/-B` anunciado no coincide con el `git diff --numstat` de la corrida real, o si un modo que
+antes lo respetaba ahora rehúsa.

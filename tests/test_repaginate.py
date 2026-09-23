@@ -611,3 +611,12 @@ def test_AUD460_pagina_null_SIN_motivo_se_rehusa(toy_vault):
     """⛔ AUD-460 — la guarda D-43 de `_check_item`: un hueco se declara, no se deja mudo."""
     assert "sin `motivo`" in rp._check_item({}, {"pagina": None, "motivo": " "}, BIB)
     assert rp._check_item({}, {"pagina": None, "motivo": "no está en la hoja"}, BIB) is None
+
+
+def test_507_out_con_dry_run_REHUSA_en_vez_de_escribir_el_paquete(toy_vault, tmp_path):
+    """#507 — `--out` escribe el paquete y no tiene preview: con `--dry-run` rehúsa (exit 2 de
+    argparse) en vez de ignorar el flag. `--list` no escribe y `--apply` lo respeta."""
+    out = tmp_path / "o"
+    with pytest.raises(SystemExit) as e:
+        rp.main([BIB, "--out", str(out), "--dry-run"])
+    assert e.value.code == 2 and not out.exists()

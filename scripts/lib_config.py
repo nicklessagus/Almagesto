@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.314.0"
+ALMAGESTO_VERSION = "1.315.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -5654,3 +5654,12 @@ from lib_quotes import (  # noqa: E402,F401
     verificar_pdf_mark,
     with_own_bibcode,
 )
+
+
+def refuse_dry_run(ap, modo: str) -> None:
+    """Refuse `--dry-run` in a mode that does not honour it: argparse's exit 2, never ignore it (#507).
+
+    A script that declares `--dry-run` promises it writes nothing IN EVERY MODE. A mode either
+    threads the flag through its writers or calls this; ignoring it reads as «nothing was written»
+    over a run that wrote (measured: a harvest «preview» left 5 files, +177 lines)."""
+    ap.error(f"`--dry-run` no está soportado en este modo ({modo}): rehúso en vez de escribir (#507)")

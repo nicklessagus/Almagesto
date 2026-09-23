@@ -3747,3 +3747,37 @@ encabezado presente en la nota + `## Vista — <s>` para los 7 sujetos declarado
 **Fix:** `lib_config.section_start` (`_SLUG_CONT`: `-`/`_` pegados continúan el nombre) y
 `harvest_views._lens_span` (era un `find` pelado; la misma trampa con `### Lente — <énfasis>`).
 Portadores: entrada 506 de `tools/portadores.yaml`.
+
+## #507 — un `--dry-run` no escribe en ningún modo del script que lo declara (v1.315.0)
+
+**Defecto (medido por el validador en Almagesto-Tesis, v1.313.0):** `harvest_views.py <slug> --theme
+--paper <bib> --dry-run` sobre tres extracciones nuevas dejó **5 archivos, +177/−4** (tres notas y
+dos registros): el flag sólo llegaba a `--restamp-salvedades` y la cosecha normal lo ignoraba.
+
+**Portadores** (todo `add_argument("--dry-run"`, 7 scripts), modo por modo:
+
+| script | modos | decisión |
+|---|---|---|
+| `harvest_views` | cosecha · `--restamp-salvedades` · `--propose-pdf-leido` | **respeta** (la cosecha corre los mismos escritores sobre una copia de la nota; no trae el `.txt` ni estampa la cadena) |
+| `make_notes` | `--fill-abstracts` · el resto (slug, `--rename-paper`, `--web`, los `--restamp-*`/`--migrate-*`) | respeta · **rehúsa** (ya rehusaba; pero `--restamp-index --fill-abstracts --dry-run` corría el re-estampado: con `--dry-run` ahora se despacha sólo `fill_abstracts`) |
+| `repaginate` | `--list` · `--apply` · `--out` | no escribe · respeta · **rehúsa** (escribía el paquete ignorando el flag) |
+| `write_verif_sidecar` | `--from` · `--reanclar` · `--restamp-section` · `--resolver` · `--migrate-condition-prefix` | respeta (todos escriben por `emit`) |
+| `replace_pdf` | reemplazo · `--backfill` | respeta |
+| `check_sources` | cruce · `--firmar` | respeta · no escribe |
+| `query_ads` | `--dry-run` es un modo propio, despachado antes que todo modo que escribe | respeta |
+
+**Medición sobre Almagesto-Tesis entera** (`b2634c4`, worktree con `scripts/` de v1.315.0):
+
+- **Ida.** `harvest_views --dry-run` sobre los 7 slugs con extracciones (2 estrellas, 5 temas:
+  287 JSON; todos rechazados por `upsert_view` porque ya tienen su vista fechada, comportamiento
+  previo); `--paper <bib> --force --dry-run` sobre `2026A&A...705A.226B` (ica), `2026RASTI...5ag038F`
+  (ica) y `2012ApJS..200...15A` (gj_581, con `.txt` bajo otro slug): anuncia `+16/-8`, `+16/-8` y
+  `+5/-2` líneas y «1 .txt traídos al slug». Más `make_notes` (26 flags, el slug y `--rename-paper` con
+  `--dry-run` → rc 2; `--restamp-index --fill-abstracts --dry-run` → rc 0), `repaginate --list` y
+  `--out` (rc 2, sin directorio), `write_verif_sidecar --restamp-section --todo` (13 notas),
+  `--reanclar` y `--migrate-condition-prefix`, `check_sources ica` (36 fuentes, red real),
+  `harvest_views --restamp-salvedades` y `--propose-pdf-leido`: **`git status --porcelain -- vault`
+  vacío.**
+- **Vuelta.** Sin `--dry-run`, los dos `--paper --force`: `git diff --numstat` da exactamente
+  `5/2` y `16/8` en las notas, el `.txt` traído (untracked) y `+7` en cada registro (la cadena,
+  que el dry-run no estampa).

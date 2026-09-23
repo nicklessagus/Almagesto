@@ -6,6 +6,7 @@ toman al importar (extract_fulltext.FULLTEXT). Ningún test toca la bóveda real
 """
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -47,6 +48,13 @@ STARS = {
         "data_local": None,
     },
 }
+
+
+def tree_digest(root: Path) -> dict:
+    """`{ruta relativa: sha256}` de todo archivo bajo `root`: el testigo de que un `--dry-run` no
+    escribió NADA (#507) — ni la nota, ni un `.txt` traído, ni el registro."""
+    return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(root.rglob("*")) if p.is_file()}
 
 
 def write_yaml(path: Path, data) -> None:

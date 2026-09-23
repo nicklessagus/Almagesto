@@ -99,6 +99,10 @@ no verde. Detalle y ratchets en `tests/README.md`; el resumen operativo:
    que afirma; el registro tiene que crecer aunque no cambie nada.** El bloque propio va entre
    centinelas (`<!-- almagesto:… -->`) y lo de afuera no se toca (`make_notes._reemplazar_seccion`
    ya lo hace).
+   ⛔ **Y un `--dry-run` no escribe en NINGÚN modo del script que lo declara (#507):** o el modo lo
+   hila hasta cada escritor, o rehúsa con `cfg.refuse_dry_run` (exit 2) — nunca lo ignora. La red
+   es un test por script que corre el modo con el flag y compara `conftest.tree_digest` antes y
+   después; los portadores (todo `add_argument("--dry-run"`) están firmados en `portadores.yaml`.
 7. **Idioma** — `pytest tests/test_idioma_codigo.py` (ver arriba).
 8. **Condicional que no decide nada** — `tests/test_codigo_muerto.py` (#319): el ternario cuyas dos
    ramas valen lo mismo es una regla escrita a medias y **ningún otro gate la ve** (no cambia

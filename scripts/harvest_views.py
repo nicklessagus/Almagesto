@@ -8,7 +8,7 @@ defect it exists for is measured: a hand-written harvest that accepted any JSON 
 picked up 13 `verify-citations` outputs from ANOTHER star and overwrote 13 finished notes, with
 perfectly valid JSON — that is, in silence.
 
-    python scripts/harvest_views.py <slug> [--theme] [--force]
+    python scripts/harvest_views.py <slug> [--theme] [--force] [--paper BIB] [--dry-run]
 
 What it writes, per paper:
   · the VIEW in the frontmatter (#188) — `sujeto`/`tipo` from the JSON, plus the three fields the
@@ -35,11 +35,13 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import difflib
 import re
 import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import extraction_prompt as ep
@@ -746,14 +748,17 @@ def upsert_view(dest: Path, vista: dict, *, force: bool = False) -> bool:
     return True
 
 
-def bring_fulltext(slug: str, bibcode: str) -> bool:
-    """Trae el `.txt` del paper al slug del sujeto si ya está bajo otro (D-18). True si copió."""
+def bring_fulltext(slug: str, bibcode: str, *, dry_run: bool = False) -> bool:
+    """Trae el `.txt` del paper al slug del sujeto si ya está bajo otro (D-18). True si copió
+    (con `dry_run`, si copiaría: #507)."""
     destino = cfg.FULLTEXT / slug / f"{bibcode}.txt"
     if destino.exists():
         return False
     origen = cfg.artefacto_en_otro_slug(cfg.FULLTEXT, slug, bibcode, ".txt")
     if origen is None:
         return False
+    if dry_run:
+        return True
     destino.parent.mkdir(parents=True, exist_ok=True)
     # Atómico (D-53 / INV-90), como el mismo atajo en `extract_fulltext`: un `shutil.copy2` al
     # destino final deja un `.txt` torn si el proceso muere a mitad, y `raw/` es inmutable — el
@@ -763,7 +768,7 @@ def bring_fulltext(slug: str, bibcode: str) -> bool:
 
 
 def harvest(slug: str, *, theme: bool = False, force: bool = False,
-            paper: str | None = None) -> dict:
+            paper: str | None = None, dry_run: bool = False) -> dict:
     """Cosecha las extracciones de `slug` —o sólo la de `paper`—. Devuelve los contadores.
 
     ⛔ `force` es destructivo por definición (reemplaza `fecha`/`fuente` de una lectura que ya
@@ -774,7 +779,12 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
 
     The source directory is NOT a parameter (AUD-284): this is the only gate that runs
     `is_extraction` (INV-103), and an external `src` would let it harvest from an unversioned
-    directory — exactly what #311 forbids. No caller ever passed one."""
+    directory — exactly what #311 forbids. No caller ever passed one.
+
+    ⛔ `dry_run` (#507) writes NOTHING: every writer runs on a scratch COPY of the note, so the
+    preview announces exactly what a real run would write (same writers, same guards), and prints
+    the per-note line delta. Until #507 the flag reached only `--restamp-salvedades` and a
+    «preview» of the harvest wrote 5 files, +177 lines."""
     src = cfg.EXTRACCION / slug              # #311: versionadas, no en `build/`
     n = {"cosechadas": 0, "rechazadas": 0, "sin_nota": 0, "sin_cambios": 0, "txt_traidos": 0,
          "slug_en_methods": 0}
@@ -811,6 +821,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         if not archivos:
             cfg.print_seguro(f"  (sin extracción de `{paper}` en {src}; nada que cosechar)")
             return n
+    scratch = tempfile.TemporaryDirectory(prefix="harvest-dry-run-") if dry_run else None
     for archivo in archivos:
         try:
             data = json.loads(archivo.read_text(encoding="utf-8"))
@@ -850,6 +861,10 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             cfg.print_seguro(f"  ⚠ {bib}: no hay nota en papers/ — corré "
                              f"`{cfg.make_notes_cmd(slug)}`")
             continue
+        real = dest
+        if scratch is not None:
+            dest = Path(scratch.name) / real.name
+            cfg.copy_file_atomic(real, dest)
         # #207 · de QUÉ se construyó la vista. Lo DECLARA el extractor (es el único que sabe qué
         # abrió) y acá se CRUZA contra el disco: `fuente: pdf` sin PDF es una contradicción, y
         # estamparla dejaría una vista de ocho líneas de abstract leyéndose como lectura del paper.
@@ -991,16 +1006,27 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             toco = True
         if stamp_reading_aids(dest, data):
             toco = True
-        if bring_fulltext(slug, mn.safe_name(bib)):
+        if bring_fulltext(slug, mn.safe_name(bib), dry_run=dry_run):
             n["txt_traidos"] += 1
         n["cosechadas" if toco else "sin_cambios"] += 1
+        if scratch is not None and toco:
+            _a = real.read_text(encoding="utf-8").splitlines()
+            _d = [ln for ln in difflib.unified_diff(_a, dest.read_text(encoding="utf-8").splitlines(),
+                                                    lineterm="", n=0)
+                  if ln[:1] in "+-" and not ln.startswith(("+++", "---"))]
+            cfg.print_seguro(f"  (dry-run) {real.name}: "
+                             f"+{sum(ln[0] == '+' for ln in _d)}/-{sum(ln[0] == '-' for ln in _d)} "
+                             f"línea(s)")
     cfg.print_seguro(
         f"  vistas: {n['cosechadas']} cosechadas, {n['sin_cambios']} sin cambios"
         + (f", {n['rechazadas']} RECHAZADAS" if n["rechazadas"] else "")
         + (f", {n['sin_nota']} sin nota destino" if n["sin_nota"] else "")
         + (f", {n['txt_traidos']} .txt traídos al slug" if n["txt_traidos"] else "")
         + (f", {n['slug_en_methods']} slug(s) filtrados de `methods` (#404)"
-           if n["slug_en_methods"] else ""))
+           if n["slug_en_methods"] else "")
+        + (" — dry-run: no se escribió nada (#507)" if dry_run else ""))
+    if scratch is not None:
+        scratch.cleanup()
     if salvedades_falsas:
         cfg.print_seguro(f"\n⛔ {len(salvedades_falsas)} salvedad(es) ESTRUCTURADAS resultaron "
                          f"FALSAS contra el archivo y NO se publicaron (#213). Una afirmación "
@@ -1473,7 +1499,10 @@ def main() -> int:
         # slug falsifica la procedencia de todo lo demás. No se prohíbe: se pide el alcance.
         ap.error("--force sin --paper re-estamparía TODAS las vistas del slug, incluidas las "
                  "verificadas: acotá con --paper <bibcode>")
-    harvest(args.slug, theme=args.theme, force=args.force, paper=args.paper)
+    harvest(args.slug, theme=args.theme, force=args.force, paper=args.paper,
+            dry_run=args.dry_run)
+    if args.dry_run:
+        return 0
     cfg.save_paso(args.slug, "harvest_views",
                   flags=([f"--paper {args.paper}"] if args.paper else [])
                         + (["--force"] if args.force else []))

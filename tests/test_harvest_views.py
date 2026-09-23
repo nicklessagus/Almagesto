@@ -2065,3 +2065,39 @@ def test_write_view_section_escribe_ica_sin_tocar_ica_ruido(tmp_path):
     assert hv.write_view_section(dest, "ica", "## Vista — ica\n\nnueva\n", theme=True) is True
     t = dest.read_text(encoding="utf-8")
     assert "prosa redactada" in t and "## Vista — ica\n\nnueva" in t
+
+@pytest.mark.parametrize("extra", [[], ["--paper", BIB]])
+def test_507_el_dry_run_de_la_COSECHA_no_escribe_nada_y_anuncia_lo_que_la_real_escribe(
+        toy_vault, monkeypatch, capsys, extra):
+    """#507 — `--dry-run` sólo llegaba a `--restamp-salvedades`: la cosecha normal lo IGNORABA y
+    escribía frontmatter, sección, el `.txt` traído al slug y el registro (medido: 5 archivos, +177
+    líneas en una «previsualización»). Ida: el árbol entero queda igual. Vuelta: sin el flag se
+    escribe lo que el dry-run anunció."""
+    from conftest import tree_digest
+    otro = toy_vault.FULLTEXT / "otra_estrella"
+    otro.mkdir(parents=True, exist_ok=True)
+    (otro / f"{BIB}.txt").write_text("texto del paper\n", encoding="utf-8")
+    sembrar(toy_vault)
+    antes = tree_digest(toy_vault.ROOT)
+    monkeypatch.setattr(sys, "argv", ["harvest_views.py", "test_star", "--dry-run", *extra])
+    assert hv.main() == 0
+    seco = capsys.readouterr().out
+    assert tree_digest(toy_vault.ROOT) == antes, "un --dry-run no escribe un byte"
+    assert "1 cosechadas" in seco and "1 .txt traídos" in seco and "dry-run" in seco
+    assert f"(dry-run) {BIB}.md: +" in seco, "dice cuánto cambiaría la nota"
+    monkeypatch.setattr(sys, "argv", ["harvest_views.py", "test_star", *extra])
+    assert hv.main() == 0
+    assert "1 cosechadas" in capsys.readouterr().out
+    assert (toy_vault.FULLTEXT / "test_star" / f"{BIB}.txt").exists()
+    assert any(p["paso"] == "harvest_views" for p in cfg.load_cadena("test_star"))
+
+
+@pytest.mark.parametrize("modo", [["--restamp-salvedades"], ["--propose-pdf-leido"]])
+def test_507_los_otros_modos_con_dry_run_tampoco_escriben(toy_vault, monkeypatch, modo):
+    """#507 — la regla es POR MODO: cada modo del script que declara `--dry-run` lo respeta."""
+    from conftest import tree_digest
+    sembrar(toy_vault)
+    antes = tree_digest(toy_vault.ROOT)
+    monkeypatch.setattr(sys, "argv", ["harvest_views.py", "test_star", *modo, "--dry-run"])
+    assert hv.main() == 0
+    assert tree_digest(toy_vault.ROOT) == antes

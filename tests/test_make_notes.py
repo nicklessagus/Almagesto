@@ -6110,3 +6110,53 @@ def test_AUD471_el_motivo_del_excluido_se_escapa(toy_vault):
     tabla = mn.excluded_table("test_star")
     assert r"GJ 1\|GJ 2" in tabla
     assert cfg.table_shape_issues(tabla) == []
+
+
+def _modos_de_make_notes() -> list:
+    """Every `store_true` flag `main` declares, read from the SOURCE so a new mode enters the net
+    without anyone listing it (#507), plus the two non-flag modes (the slug and `--rename-paper`)."""
+    import re
+    from pathlib import Path
+    src = Path(mn.__file__).read_text(encoding="utf-8")
+    src = src[src.index("def main("):]
+    flags = [m.group(1) for m in re.finditer(r'ap\.add_argument\("(--[\w-]+)"(.*?)\)\n', src, re.S)
+             if "store_true" in m.group(2) and m.group(1) not in ("--dry-run", "--fill-abstracts")]
+    assert len(flags) > 20, "el parseo del fuente dejó de ver los modos"
+    return [[f] for f in flags] + [["test_star"], ["--rename-paper", "2020A", "2020B"]]
+
+
+@pytest.mark.parametrize("modo", _modos_de_make_notes(), ids=lambda m: " ".join(m))
+def test_507_todo_modo_que_no_respeta_el_dry_run_REHUSA_sin_escribir(toy_vault, monkeypatch, modo):
+    """#507 — un `--dry-run` no escribe en NINGÚN modo: el que no lo soporta sale con exit 2."""
+    from conftest import tree_digest
+    antes = tree_digest(toy_vault.ROOT)
+    monkeypatch.setattr(sys, "argv", ["make_notes.py", *modo, "--dry-run"])
+    with pytest.raises(SystemExit) as e:
+        mn.main()
+    assert e.value.code == 2 and tree_digest(toy_vault.ROOT) == antes
+
+
+def test_507_fill_abstracts_dry_run_no_deja_correr_otro_modo_que_escribe(toy_vault, monkeypatch):
+    """#507 — `--fill-abstracts` se despachaba después de trece modos que escriben, así que
+    `--restamp-index --fill-abstracts --dry-run` re-estampaba el índice."""
+    from conftest import tree_digest
+    import openalex
+    monkeypatch.setattr(openalex, "entity_by_doi", lambda doi: None)
+    toy_vault.INDEX.write_text("# Índice\n", encoding="utf-8")   # sin secciones: el re-estampado escribiría
+    antes = tree_digest(toy_vault.ROOT)
+    monkeypatch.setattr(sys, "argv", ["make_notes.py", "--restamp-index", "--fill-abstracts",
+                                      "--dry-run"])
+    with pytest.raises(SystemExit) as e:   # la combinación se rehúsa, no se descarta callada
+        mn.main()
+    assert e.value.code == 2
+    assert tree_digest(toy_vault.ROOT) == antes
+
+
+def test_507_fill_abstracts_dry_run_solo_corre_y_no_escribe(toy_vault, monkeypatch):
+    from conftest import tree_digest
+    import openalex
+    monkeypatch.setattr(openalex, "entity_by_doi", lambda doi: None)
+    antes = tree_digest(toy_vault.ROOT)
+    monkeypatch.setattr(sys, "argv", ["make_notes.py", "--fill-abstracts", "--dry-run"])
+    assert mn.main() == 0
+    assert tree_digest(toy_vault.ROOT) == antes

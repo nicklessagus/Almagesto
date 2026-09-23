@@ -4778,7 +4778,17 @@ def main() -> int:
     if args.dry_run and not args.fill_abstracts:
         # Una perilla que sólo aplica a un modo lo DICE, en vez de no hacer nada en los otros: un
         # `--dry-run` ignorado en silencio se lee como «no escribió» sobre una corrida que escribió.
-        ap.error("--dry-run sólo aplica a --fill-abstracts")
+        cfg.refuse_dry_run(ap, "sólo aplica a --fill-abstracts")
+    if args.dry_run:
+        # #507 — `--fill-abstracts` se despachaba DESPUÉS de trece modos que escriben: con
+        # `--restamp-index --fill-abstracts --dry-run` el re-estampado corría y escribía. Y el
+        # otro modo tampoco se descarta callado: se rehúsa la combinación.
+        otros = [a.option_strings[0] for a in ap._actions
+                 if a.option_strings and a.dest not in ("dry_run", "fill_abstracts", "help")
+                 and getattr(args, a.dest, None) not in (None, False)]
+        if otros or getattr(args, "slug", None):
+            cfg.refuse_dry_run(ap, f"sólo --fill-abstracts; vino además {', '.join(otros) or 'un slug'}")
+        return fill_abstracts(dry_run=True)
 
     if args.restamp_pdf_links:
         return restamp_pdf_links()

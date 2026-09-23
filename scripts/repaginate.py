@@ -558,6 +558,8 @@ def main(argv=None) -> int:
     if not args.out:
         cfg.print_seguro("⛔ falta `--out <dir>` (o `--apply <resultado.json>`)")
         return 2
+    if args.dry_run:
+        cfg.refuse_dry_run(ap, "`--out` escribe el paquete de relectura")
     try:
         paquetes = write_rounds(args.bibcode, Path(args.out))
     except RoundError as e:

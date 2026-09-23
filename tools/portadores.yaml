@@ -2189,3 +2189,34 @@ portadores:
       - modulo: scripts/extraction_prompt.py
         estado: fuera-de-alcance
         motivo: "Sólo NOMBRA `## Vista — {sujeto}` en el texto del prompt para el extractor; no busca la sección en ninguna nota."
+
+  - issue: 507
+    regla: >-
+      Un `--dry-run` no escribe en NINGÚN modo del script que lo declara: o el modo lo respeta
+      (hilado hasta cada escritor), o rehúsa con exit 2 («`--dry-run` no está soportado en este
+      modo»); nunca lo ignora. Medido: la cosecha de `harvest_views` lo ignoraba y una
+      «previsualización» dejó 5 archivos, +177 líneas. Portador = todo script que declara el flag.
+    funcion: lib_config.refuse_dry_run
+    patron: 'add_argument\("--dry-run"'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "Sólo `--fill-abstracts` lo respeta; todo otro modo (los `--restamp-*`/`--migrate-*`, el slug, `--rename-paper`, `--web`) rehúsa antes de despachar, y con `--dry-run` se despacha SÓLO `fill_abstracts` (antes corrían primero trece modos que escriben)."
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "`--out` (escribe el paquete de relectura) rehúsa; `--apply` lo respeta (extracción y los dos re-estampados de la nota); `--list` no escribe."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Lo respeta en los tres modos: la cosecha corre los mismos escritores sobre una COPIA de la nota y no trae el `.txt` ni estampa la cadena (#507); `--restamp-salvedades` lo hila (#453); `--propose-pdf-leido` no escribe."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "Lo respeta en sus cinco modos (`--from`, `--reanclar`, `--restamp-section`, `--resolver`/`--resoluciones`, `--migrate-condition-prefix`): todos escriben por `emit`, que lo recibe."
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "Lo respeta en sus dos modos (el reemplazo y `--backfill`): copia, re-extracción, firma y `_paginacion` están bajo el flag."
+      - modulo: scripts/check_sources.py
+        estado: fuera-de-alcance
+        motivo: "El cruce lo respeta (el registro no se escribe); `--firmar` imprime el bloque y no escribe nunca."
+      - modulo: scripts/query_ads.py
+        estado: fuera-de-alcance
+        motivo: "`--dry-run` ES un modo (delta de re-clasificación offline) y se despacha antes que todo modo que escribe; `--probe`, que va primero, no escribe."
