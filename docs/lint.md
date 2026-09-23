@@ -683,6 +683,18 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   no exime nada. Las WARN de higiene no se firman: se cierran arreglando.
 - **`warn_revisada` que no corresponde a ningún hit** (#502/#256, backlog): el bloque cambió
   (re-revisalo y firmá el ancla nueva) o el hit ya no dispara (sacá la entrada).
+- **Cita CONFIRMADA en la página del PDF y firmada** (#516, backlog): la escotilla de #220
+  (`cita_no_verbatim`) y #333 (`cita_txt_discrepa`), cuyo propio mensaje manda al PDF —
+  `cita_revisada: [{ref, cita, pdf_sha, pagina, motivo, fecha}]` en el frontmatter de la nota. El
+  lint y `contrast --validar[-todo]` imprimen la entrada lista para pegar al lado del hallazgo
+  (sólo con UNA fuente candidata con PDF en disco: la atribución ambigua se arregla, no se firma). ⛔
+  Cubre un ESTADO: la `cita` (normalizada, por prefijo) y el sha del PDF de `ref` al firmar; editar
+  la cita o reemplazar el PDF (#436) la devuelve. Calla en los DOS portadores de `quote_verdict`
+  (`lib_quotes.reviewed_quote`, #324). Forma dura (D-58): sin `pagina`/`motivo`, o con el `<…>` de
+  la plantilla, no exime. ⚠ No es para la cita mal atribuida: ésa se arregla (#515).
+- **`cita_revisada` que no cubre ningún hallazgo** (#516/#256, backlog): el PDF cambió (re-leé la
+  página y re-firmá), la cita cambió, o ya no dispara (sacá la entrada); la firma mal formada se
+  nombra acá.
 - **Cita textual de `log.md` que su fuente no dice** (#238, `cita_log`): la bitácora es
   append-only, así que una cita fabricada ahí es **permanente** — medido, una entrada publicaba
   como cita textual **con página** una frase que invierte el sentido de lo que dice el paper.

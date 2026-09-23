@@ -3914,3 +3914,22 @@ actualizado). `build/missing_pdf.json` es regenerable: sin lector tolerante.
 `2009A&A...497..583Z` → 1 copia (`aanda.org`, `src: publisher`), antes 2; `2009JGRE..114.0B27E` →
 Wiley `publisher` + HAL (`src` desconocido), antes Wiley ×2. Las dos imprimen el comando de #513, con
 el bibcode entre comillas (`&` en A&A).
+
+## #516 — `cita_revisada`: la cita confirmada en la página se firma (v1.327.0)
+
+**Instancia (HEAD `0d88d79`, worktree desechable, `scripts/` de v1.327.0):** sin firmas, `#220` 41 y
+`#333` 9 (los 43 → 41 son #515). El reporte ofrece la entrada lista para pegar en **47 de 48**
+hallazgos que pasan por `quote_verdict` (38 + 9); la que falta es la atribución ambigua (`harps-drs`
+L816, dos fuentes, #316), que no se firma. Las otras 2 de `#220` son citas de `disputes[]` del
+frontmatter (`check_note_disputes`), que no pasan por `quote_verdict` y quedan fuera del alcance.
+**Firmando las 47 tal como las imprime el reporte** (página y motivo de relleno, sólo para medir
+el mecanismo): `#220` 41 → 3, `#333` 9 → 0, `cita_revisada` 47, huérfanas 0; `contrast
+--validar-todo` rc 0, `discrepan` 576 → 567 y no evaluables 193 → 153, «resueltas» 13 → 60. **Ida y
+vuelta:** cambiar dos bytes del PDF de `2021A&A...653A..43C` devuelve sus 3 citas y nombra las 3
+firmas («el PDF cambió», con los dos sha); editar una cita firmada la devuelve a `#220` y su firma
+queda huérfana. Primera pasada: 3 huérfanas falsas, la misma cita dos veces en una nota (dos
+hallazgos, dos entradas iguales) — la firma usada se compara por contenido, no por identidad.
+
+**Dicho y no cerrado:** `contrast` lista 576 `discrepan` y el lint 9 en `#333` sobre el mismo corpus;
+la firma calla en los dos, pero la diferencia de poblaciones entre los dos portadores no es de este
+issue.

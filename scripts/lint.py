@@ -793,7 +793,7 @@ LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "facets": False,
                "planets": True, "disputes": True, "corrections": True,
                "versions": True, "vistas": True, "no_vista": True,
                "segunda_mano_revisada": True, "pdf_reemplazo": True,
-               "warn_revisada": True}
+               "warn_revisada": True, "cita_revisada": True}
 
 
 def normalize_lists(fm: dict) -> list:
@@ -4215,6 +4215,18 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
     cita_opaca: list = []
     cita_txt_degradado: list = []
     cita_txt_discrepa: list = []
+    # #516 — la cita confirmada EN LA PÁGINA se firma (`cita_revisada`), como las WARN de #502:
+    # la firmada sale aparte (AUD-207) y la firma que no cubre ningún hit se nombra (#256).
+    cita_revisada: list = []
+    try:
+        _firmas = cfg.load_reviewed_quotes(fm or {}, entry=stem)
+        cita_revisada_huerfana: list = []
+    except cfg.VistasError as e:
+        _firmas, cita_revisada_huerfana = [], [(stem, str(e).replace("\n", " "))]
+    # por CONTENIDO, no por identidad: la misma cita dos veces en la nota da dos hallazgos y dos
+    # entradas pegadas iguales, y la segunda no es una firma huérfana (medido: 3 de 47).
+    _usadas: set = set()
+    _clave_firma = lambda f: (f["ref"], cfg.normalize_quote(f["cita"]), f["pdf_sha"])  # noqa: E731
     if stem not in NON_ORPHAN:
         _por_bloque: dict = {}
         for _par in lb.pairs_of(text):
@@ -4266,6 +4278,15 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                 _corte = _c if len(_c) <= 70 else _c[:70] + "…"
                 if _ver == "en_su_txt":
                     continue
+                if _ver in cfg.QUOTE_REVIEWABLE:
+                    _firma = cfg.reviewed_quote(_firmas, _bibs_c, _c)
+                    if _firma:
+                        _usadas.add(_clave_firma(_firma))
+                        cita_revisada.append(
+                            (stem, f"L{_ln}: «{_corte}» [{_ver}] — confirmada en el PDF de "
+                                   f"{_firma['ref']}, p. {_firma['pagina']}: {_firma['motivo']}"))
+                        continue
+                    _amb += cfg.reviewed_quote_entry(_bibs_c, _c)
                 if _ver == "sin_testigo_propio":
                     # ⛔ #454 — la cita la copió la MÁQUINA de la extracción (el bloque de
                     # salvedades de una `## Vista`), así que juzgarla contra esa extracción es
@@ -4350,7 +4371,18 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                     cita_opaca.append(
                         (stem, f"L{_ln}: «{_corte}» no se puede chequear — "
                                + "; ".join(f"{b}: {m}" for b, m in _opacas)))
-    return cita_inventada, cita_no_verbatim, cita_opaca, cita_txt_degradado, cita_txt_discrepa
+    for _f in _firmas:
+        if _clave_firma(_f) not in _usadas:
+            _sha = cfg.quote_pdf_sha(_f["ref"])
+            _porque = (f"el PDF de {_f['ref']} cambió (firmado `{_f['pdf_sha']}`, en disco "
+                       f"`{_sha or 'ninguno'}`): re-leé la página y re-firmá"
+                       if _sha != _f["pdf_sha"] else
+                       "la cita cambió o ya no dispara: re-leela y re-firmá, o sacá la entrada")
+            cita_revisada_huerfana.append(
+                (stem, f"`cita_revisada` firma {cfg.quote_fragment(_f['cita'], 70)} de "
+                       f"{_f['ref']} y ningún hallazgo corresponde → {_porque} (#516/#256)"))
+    return (cita_inventada, cita_no_verbatim, cita_opaca, cita_txt_degradado, cita_txt_discrepa,
+            cita_revisada, cita_revisada_huerfana)
 
 
 def check_note_disputes(stem: str, fm: dict, sources_for) -> tuple:
@@ -6542,7 +6574,8 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     # blockquote. Sin `.txt` o con OCR el fallo es esperable y se DECLARA (no evaluable).
     add("cita_log", check_log_quotes(stem, body_full, sweep.sources_for))
     for key, items in zip(("cita_inventada", "cita_no_verbatim", "cita_opaca",
-                           "cita_txt_degradado", "cita_txt_discrepa"),
+                           "cita_txt_degradado", "cita_txt_discrepa",
+                           "cita_revisada", "cita_revisada_huerfana"),
                           check_note_quotes(stem, f, fm, text, sweep.sources_for, sweep.n_citas)):
         add(key, items)
     # #235 — el hub que nombra un radio SIN `[[wikilink]]`: no entra al grafo.
@@ -7066,6 +7099,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('warn_revisada_huerfana', '`warn_revisada` que no corresponde a ningún hit: la '
                   'firma no exime nada (#502/#256, backlog)', SEV_BACKLOG,
                   tuple(found['warn_revisada_huerfana']), poblacion='notas'),
+        Categoria('cita_revisada', '❝ Cita CONFIRMADA en la página del PDF y firmada con `cita_revisada` (#516: visible, no es deuda)', SEV_BACKLOG, tuple(found['cita_revisada']), poblacion='citas'),
+        Categoria('cita_revisada_huerfana', '`cita_revisada` que no cubre ningún hallazgo: cambió la cita o el PDF, o ya no dispara (#516/#256, backlog)', SEV_BACKLOG, tuple(found['cita_revisada_huerfana']), poblacion='notas'),
         Categoria('sin_conclusiones_ok', 'Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda)', SEV_BACKLOG, tuple(found['sin_conclusiones_ok']), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(found['extraccion_no_declarada']), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(found['papers_table_stale']), poblacion='registros'),

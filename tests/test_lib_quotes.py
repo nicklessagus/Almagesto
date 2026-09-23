@@ -1206,3 +1206,32 @@ def test_AUD402_el_numero_tras_coma_es_pagina_solo_con_BORDE_de_localizador():
     # …y lo que sí tiene que soltar: una coma decimal y la figura `5a`
     assert cfg.page_locators("0,36 km/s en p. 9, 0,45 km/s en p. 6") == [("9", "9"), ("6", "6")]
     assert cfg.page_locators("las Figs. 4a p. 7, 5a p. 9") == [("7", "7"), ("9", "9")]
+
+
+_LARGA_516 = ("which requires the latent signals to be whitened before the model can be identified, "
+              "and that condition is not the same as knowing the noise covariance")
+
+
+def test_516_la_firma_cubre_LA_cita_y_LA_fuente(toy_vault):
+    """#516 — la firma es por cita (prefijo normalizado, como la corta el reporte) y por `ref`: otra
+    cita u otra fuente no la heredan; sin PDF en disco o con atribución ambigua (#316) no se ofrece
+    firma; y la forma dura rechaza el escalar, la lista de strings y la entrada sin `motivo`."""
+    pdf = cfg.PDFS / "s" / "2013Voss.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"%PDF x")
+    sha = lq.quote_pdf_sha("2013Voss")
+    firmas = lq.load_reviewed_quotes({"cita_revisada": [
+        {"ref": "2013Voss", "cita": _LARGA_516[:60] + "…", "pdf_sha": sha, "pagina": "p. 4",
+         "motivo": "verbatim"}]})
+    assert lq.reviewed_quote(firmas, ["2013Voss"], _LARGA_516)
+    assert not lq.reviewed_quote(firmas, ["2019Otro"], _LARGA_516), "otra fuente no la hereda"
+    assert not lq.reviewed_quote(firmas, ["2013Voss"], "otra cita " + _LARGA_516), "otra cita tampoco"
+    assert sha in lq.reviewed_quote_entry(["2013Voss"], _LARGA_516), "la entrada lleva el ESTADO"
+    assert lq.reviewed_quote_entry(["2019SinPdf"], _LARGA_516) == ""
+    assert lq.reviewed_quote_entry(["2013Voss", "2019Otro"], _LARGA_516) == ""
+    pdf.write_bytes(b"%PDF y, reemplazado")
+    assert not lq.reviewed_quote(firmas, ["2013Voss"], _LARGA_516), "otro PDF: la firma no cubre"
+    for mala in ("un motivo suelto", ["una", "lista"],
+                 [{"ref": "2013Voss", "cita": _LARGA_516, "pdf_sha": sha, "pagina": "4"}]):
+        with pytest.raises(cfg.VistasError):
+            lq.load_reviewed_quotes({"cita_revisada": mala})

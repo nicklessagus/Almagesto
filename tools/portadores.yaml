@@ -670,6 +670,9 @@ portadores:
         motivo: >-
           Le PIDE al extractor que marque el valor de segunda mano (#103). Nombra el campo en el
           schema del JSON y nada más.
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Sólo la NOMBRA el docstring de `load_reviewed_quotes` (#516), la escotilla hermana para citas."
   - issue: 431
     regla: >-
       Una garantía fechada sobre una nota se compara contra la PROSA fuera de
@@ -781,6 +784,9 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: elige el `pdf:` kind y su hash por bytes
+      - modulo: scripts/lib_quotes.py
+        estado: usa
+        motivo: "`quote_pdf_sha` hashea la copia que resuelve `pdf_slug`, la misma que `write_verif_sidecar` (#516)."
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: >-
@@ -2153,6 +2159,9 @@ portadores:
       - modulo: scripts/lib_blocks.py
         estado: fuera-de-alcance
         motivo: "Vive ahí `warn_anchor`, el hash del bloque contra el que se firma; no lee firmas."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Sólo la NOMBRA el docstring de `load_reviewed_quotes` (#516), la escotilla hermana para citas."
 
   - issue: 505
     regla: >-
@@ -2421,3 +2430,18 @@ portadores:
     funcion: fetch_pdf.fetch_free_copy
     patron: 'copias_libres'
     consumidores: []
+  - issue: 516
+    regla: >-
+      Todo veredicto que una persona cierra ABRIENDO LA FUENTE tiene dónde quedar firmado, y la
+      firma cubre un ESTADO: la cita textual confirmada en la página (#220/#333) se firma con
+      `cita_revisada` (cita normalizada + sha del PDF de `ref`), se lista aparte y calla en los DOS
+      portadores de `quote_verdict`; si cambia la cita o el PDF, el hallazgo vuelve.
+    funcion: lib_quotes.reviewed_quote
+    patron: 'reviewed_quote\(|cita_revisada'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_note_quotes` saca a `cita_revisada` los hallazgos #220/#333 firmados y nombra la firma que no cubre ninguno (`cita_revisada_huerfana`)."
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "`validar` pasa la cita firmada a `resueltas` en vez de `discrepan`/`no_evaluables` (#324: una sola regla con el lint)."

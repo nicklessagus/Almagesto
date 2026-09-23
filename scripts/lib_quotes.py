@@ -9,6 +9,7 @@ it reaches through `cfg.` at call time. `lib_config` re-exports every public nam
 from __future__ import annotations
 
 import datetime as _dt
+import functools
 import json
 import re
 import unicodedata
@@ -1311,6 +1312,97 @@ def quote_found(quote: str, source_norm: str) -> bool:
         if frags and all(f in source_norm for f in frags):
             return True
     return False
+
+
+#: #516 — the `quote_verdict` verdicts only THE PAGE can close: #220's `no_verbatim` and the three
+#: that land in #333's category. The rest close by fixing the note (`alterada`, #314/#515) or are
+#: not findings (`en_su_txt`, `txt_degradado`, `txt_parte`, `no_evaluable`).
+QUOTE_REVIEWABLE = ("no_verbatim", "txt_acusa", "extraccion_vieja", "sin_testigo_propio")
+
+#: #516 — what makes a `cita_revisada` entry a STATE: the quote, the file it was read in (`pdf_sha`)
+#: and where (`pagina`), plus why. `fecha` is printed, not required (as #463).
+REVIEWED_QUOTE_KEYS = ("ref", "cita", "pdf_sha", "pagina", "motivo")
+
+
+def load_reviewed_quotes(meta: dict, *, entry: str = "?") -> list:
+    """`cita_revisada: [{ref, cita, pdf_sha, pagina, motivo[, fecha]}]` — a quote CONFIRMED on the page (#516).
+
+    The sibling of `warn_revisada` (#502), `segunda_mano_revisada` (#433) and `metadata_revisada`
+    (#463) for the two quote categories whose own message sends you to the PDF (#220/#333): without
+    it the page's answer had nowhere to live and the next session paid the same readers over the
+    same quotes. ⛔ The signature covers a STATE: the quote (normalized, by prefix) and the sha of
+    the PDF of `ref` at signing — edit the quote or replace the PDF (#436) and the finding comes
+    back. Same hard form (D-58): a bare scalar, a missing key or an unfilled `<placeholder>` aborts."""
+    v = (meta or {}).get("cita_revisada")
+    if v is None:
+        return []
+    forma = (f"'{entry}': {{}}. Forma canónica (el lint y `contrast` la imprimen lista para pegar "
+             f"al lado del hallazgo): cita_revisada: - {{{{ref: <bibcode>, cita: \"<la cita>\", "
+             f"pdf_sha: <sha10 del PDF>, pagina: <página del PDF>, motivo: <qué dice la hoja>, "
+             f"fecha: <AAAA-MM-DD>}}}}")
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        raise cfg.VistasError(forma.format("`cita_revisada` no acepta un motivo suelto ni una lista "
+                                           "de strings: sin `ref` y `cita` no dice QUÉ cita se leyó"))
+    out = []
+    for x in v:
+        campos = {k: ("" if x.get(k) is None else str(x.get(k))).strip() for k in REVIEWED_QUOTE_KEYS}
+        faltan = [k for k, val in campos.items()
+                  if not val or (val.startswith("<") and val.endswith(">"))]
+        if faltan:
+            raise cfg.VistasError(forma.format(f"a una entrada de `cita_revisada` le falta "
+                                               f"{', '.join(faltan)} (o quedó el `<…>` de la plantilla)"))
+        out.append(dict(x, **campos))
+    return out
+
+
+def quote_pdf_sha(bibcode: str) -> str | None:
+    """The sha10 of the PDF of `bibcode` on disk —the copy `write_verif_sidecar.source_ref_for`
+    hashes (`pdf_slug`)— or None without one (#516). Not the note's `pdf_sha`: most notes of a real
+    vault do not carry it (see `replace_pdf`)."""
+    slug = cfg.pdf_slug(bibcode)
+    if not slug:
+        return None
+    p = cfg.PDFS / slug / f"{bibcode}.pdf"
+    st = p.stat()
+    return _file_sha10(str(p), st.st_mtime_ns, st.st_size)
+
+
+@functools.lru_cache(maxsize=None)
+def _file_sha10(path: str, _mtime_ns: int, _size: int) -> str:
+    """Keyed on (path, mtime, size): the sweep asks once per hit and a PDF is megabytes."""
+    import lib_blocks                                # lazy: lib_blocks imports lib_config
+    return lib_blocks.bytes_hash(Path(path))
+
+
+def reviewed_quote(firmas: list, refs, cita: str) -> dict | None:
+    """The `cita_revisada` entry that covers THIS quote under one of `refs`, or None (#516).
+
+    ⛔ ONE function decides the match for both carriers of `quote_verdict` (lint #220/#333 and
+    `contrast --validar[-todo]`), or the two surfaces diverge (#324). Covered = same `ref`, the
+    signed `cita` is a prefix (≥ `QUOTE_MIN` chars, normalized) of the quote, and the PDF on disk
+    still hashes to the signed `pdf_sha`."""
+    norm = normalize_quote(cita)
+    for f in firmas or []:
+        pre = normalize_quote(f["cita"].rstrip("…").rstrip())
+        if (f["ref"] in refs and len(pre) >= min(QUOTE_MIN, len(norm)) and norm.startswith(pre)
+                and quote_pdf_sha(f["ref"]) == f["pdf_sha"]):
+            return f
+    return None
+
+
+def reviewed_quote_entry(refs, cita: str) -> str:
+    """The `cita_revisada` entry ready to paste, as a suffix for the finding — or "" (#516).
+
+    Offered only with ONE candidate source that has a PDF on disk: with an ambiguous attribution
+    (#316) the fix is putting the quote next to its source, and a signature there would hide it."""
+    refs = list(refs or [])
+    sha = quote_pdf_sha(refs[0]) if len(refs) == 1 else None
+    if not sha:
+        return ""
+    return (f" · si la página del PDF la confirma, firmala bajo `cita_revisada:` en el frontmatter:"
+            f"  - {{ref: {refs[0]}, cita: {json.dumps(cita, ensure_ascii=False)}, pdf_sha: {sha}, "
+            f"pagina: <pág.>, motivo: <qué dice la hoja>, fecha: {_dt.date.today().isoformat()}}} "
+            f"(#516)")
 
 
 import lib_config as cfg   # at the END on purpose: no cycle at import time (see module docstring)

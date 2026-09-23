@@ -1183,3 +1183,21 @@ salida la línea «la bloqueada es la copia del EDITOR» con `python scripts/rep
 '2009A&A...497..583Z' <ruta.pdf> --slug gj_581 --source publisher --reason "…"`.
 
 **Devolver si** una URL aparece dos veces, o si una `publishedVersion` bloqueada sale sin el comando.
+
+## §#516 · v1.327.0 — `cita_revisada`: firmar la cita confirmada en la página
+
+```bash
+python scripts/lint.py
+python scripts/contrast.py --validar-todo
+```
+
+Pegar, en la nota de cada cita releída verbatim en el PDF (las 36 de `#220` y las 9 de `#333` de
+STATUS §3g), la entrada que el reporte imprime al lado del hallazgo, llenando `pagina` y `motivo`.
+
+**Esperado:** `#220` y `#333` bajan a lo no firmado (las 5 de #515 no se firman: se arreglan); la
+sección «Cita CONFIRMADA en la página» las lista con su página y motivo; `contrast` las cuenta en
+«resueltas» y deja de imprimirlas. Reemplazar el PDF de una fuente firmada (`replace_pdf`) o
+editar una cita firmada la devuelve y nombra la firma en «`cita_revisada` que no cubre».
+
+**Devolver si** una firma con `<pág.>` sin llenar exime, si una cita firmada sigue listada en `#220`/
+`#333` (o en `contrast`), o si una firma aparece huérfana sin que haya cambiado ni la cita ni el PDF.

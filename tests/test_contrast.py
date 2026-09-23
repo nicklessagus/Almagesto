@@ -1350,3 +1350,68 @@ def test_AUD470_las_filas_escapan_el_dolar_suelto(toy_vault, capsys):
     ct.main(["ica_ruido", "--filas"])
     filas = [l for l in capsys.readouterr().out.splitlines() if l.startswith("| ")]
     assert filas and r"costo \$1" in filas[0] and r"US\$20" in filas[0], filas
+
+
+def _nota_516(firmas=None):
+    """La nota de #516: una cita cuyo `.txt` sigue distinto (#333), con la firma que se le pase."""
+    import yaml
+    f = cfg.CONCEPTS / "methods" / "ica-ruido.md"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    fm = {"tags": ["concept"], **({"cita_revisada": firmas} if firmas is not None else {})}
+    f.write_text(f"---\n{yaml.safe_dump(fm, allow_unicode=True)}---\n\n# ica-ruido\n\n"
+                 f"Dice «{LARGA}» [[2013Voss]].\n", encoding="utf-8")
+    return f
+
+
+def _entrada_pegable(texto: str) -> dict:
+    """La entrada que el reporte imprime, parseada como YAML: si no parsea, no «se pega»."""
+    import re as _re
+    import yaml
+    m = _re.search(r"  - (\{ref: .*?\}) \(#516\)", texto)
+    assert m, texto
+    return yaml.safe_load(m.group(1))
+
+
+def test_516_la_cita_confirmada_en_la_pagina_se_FIRMA_y_calla_en_los_DOS_portadores(toy_vault):
+    """#516 — la respuesta del PDF a #220/#333 no tenía dónde escribirse: 45 citas releídas verbatim
+    en la hoja quedaban listadas para siempre y la próxima sesión pagaba los mismos lectores. La
+    firma `cita_revisada` cubre un ESTADO (la cita + el sha del PDF de `ref`) y calla en los DOS
+    portadores de `quote_verdict` —lint y `contrast`— porque la decide UNA función (#324). La
+    firmada se lista APARTE (AUD-207); reemplazar el PDF la devuelve y nombra la firma huérfana."""
+    import lint as lt
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss", "prosa. " + LARGA[:LARGA.index("and that")]
+         + "but the noise covariance has to be estimated first. más prosa.")
+    pdf = cfg.PDFS / "ica_ruido" / "2013Voss.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"%PDF-1.4 uno")
+    nota = _nota_516()
+    _ln, motivo, _marca = ct.validar(nota, mostrar=False)["discrepan"][0]
+    [(_s, msg)] = lt.collect().por_clave("cita_txt_discrepa").items
+    # la entrada que imprimen los dos portadores es la misma, y se pega tal cual (YAML válido)
+    entrada = _entrada_pegable(motivo)
+    assert entrada == _entrada_pegable(msg)
+    assert entrada["ref"] == "2013Voss" and entrada["cita"] == LARGA
+    # ⛔ forma dura (D-58): la plantilla sin llenar NO exime, y el lint lo nombra
+    _nota_516([entrada])
+    assert ct.validar(nota, mostrar=False)["discrepan"], "el `<pág.>` de la plantilla no exime"
+    rep = lt.collect()
+    assert rep.por_clave("cita_txt_discrepa").items
+    assert "pagina" in " ".join(m for _s, m in rep.por_clave("cita_revisada_huerfana").items)
+    firma = {**entrada, "pagina": 4, "motivo": "verbatim en la hoja: el `.txt` empalma la columna"}
+    _nota_516([firma])
+    r = ct.validar(nota, mostrar=False)
+    assert not r["discrepan"] and len(r["resueltas"]) == 1, r
+    rep = lt.collect()
+    assert not rep.por_clave("cita_txt_discrepa").items
+    [(_s, rev)] = rep.por_clave("cita_revisada").items
+    assert "p. 4" in rev and "empalma la columna" in rev, "listada APARTE, con su motivo"
+    assert not rep.por_clave("cita_revisada_huerfana").items
+    # el PDF se reemplaza (#436) → la firma deja de cubrir: el hallazgo vuelve y la firma se nombra
+    pdf.write_bytes(b"%PDF-1.4 dos, otro documento")
+    assert ct.validar(nota, mostrar=False)["discrepan"]
+    rep = lt.collect()
+    assert rep.por_clave("cita_txt_discrepa").items and not rep.por_clave("cita_revisada").items
+    [(_s, hue)] = rep.por_clave("cita_revisada_huerfana").items
+    assert "el PDF de 2013Voss cambió" in hue, hue
+

@@ -526,6 +526,12 @@
 ## `warn_revisada` que no corresponde a ningún hit: la firma no exime nada (#502/#256, backlog) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## ❝ Cita CONFIRMADA en la página del PDF y firmada con `cita_revisada` (#516: visible, no es deuda) (0)
+> sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
+
+## `cita_revisada` que no cubre ningún hallazgo: cambió la cita o el PDF, o ya no dispara (#516/#256, backlog) (0)
+> sobre 89 notas de `vault/wiki/`
+
 ## Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda) (0)
 > sobre 60 notas de `papers/`
 

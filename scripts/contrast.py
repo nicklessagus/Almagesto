@@ -366,9 +366,16 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
     # #373/#394 — en una nota de PAPER el bibcode es la nota, no un link, y desde #394 la regla
     # (y su medición) vive en `cfg.note_own_bibcode`/`cfg.with_own_bibcode`, compartida con el lint:
     # dos gates que juzgan la misma cita no pueden tener dos implementaciones (#324).
-    propio = cfg.note_own_bibcode(nota, cfg.split_fm(texto))
+    fm = cfg.split_fm(texto)
+    propio = cfg.note_own_bibcode(nota, fm)
     if propio:
         bibs_nota.add(propio)
+    # #516 — la cita confirmada en la página y firmada calla ACÁ también (misma función que el lint,
+    # #324). La firma rota no se juzga acá: la reporta el lint (`cita_revisada_huerfana`).
+    try:
+        firmas = cfg.load_reviewed_quotes(fm or {}, entry=nota.stem)
+    except cfg.VistasError:
+        firmas = []
     for b in lb.split_blocks(texto):
         # #386/#387 — el `log` es append-only por contrato, así que su corrección es una MARCA y no
         # una edición, y una entrada que documenta una cita defectuosa tiene que citarla. Las dos
@@ -400,6 +407,15 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                                          copiada=copiada)
             corte = cfg.quote_fragment(cita, 70)
             quienes = ", ".join(candidatos) or "sin fuente adyacente"
+            firma = cfg.reviewed_quote(firmas, candidatos, cita) \
+                if ver in cfg.QUOTE_REVIEWABLE else None
+            if firma:
+                out["resueltas"].append(
+                    (b.first_line, f"`cita_revisada`: confirmada en el PDF de {firma['ref']}, p. "
+                                   f"{firma['pagina']} — {firma['motivo']} (#516)"))
+                continue
+            firmala = cfg.reviewed_quote_entry(candidatos, cita) \
+                if ver in cfg.QUOTE_REVIEWABLE else ""
             if ver in ("txt_degradado", "txt_acusa"):
                 # #341 — aprobada por UN SOLO TESTIGO: la extracción de su fuente la dice y el
                 # `.txt` de esa misma fuente no. Se cuenta acá, antes del `continue`, porque el
@@ -415,7 +431,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                                    f"sigue distinto: dice {cfg.quote_fragment(det['cola_txt'], 70, lead=True)} donde la "
                                    f"extracción dice {cfg.quote_fragment(det['cola_cita'], 70, lead=True)}. Son DOS lecturas "
                                    f"del mismo PDF —`pdftotext` y un LLM— y la fuente es el PDF: "
-                                   f"andá a la página (#333)",
+                                   f"andá a la página (#333){firmala}",
                      cfg.verificar_pdf_mark(
                          f"el `.txt` de {det['bib']} sigue {cfg.quote_fragment(det['cola_txt'], lead=True, trail=True)} y la "
                          f"extracción {cfg.quote_fragment(det['cola_cita'], lead=True)}")))
@@ -427,7 +443,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                     (b.first_line, f"{corte} — la extracción de {', '.join(det['bibs'])} es de un "
                                    f"PDF REEMPLAZADO (#436) y el `.txt` del nuevo no la "
                                    f"encuentra: no se puede decidir desde acá. Abrí el PDF nuevo "
-                                   f"(#437)",
+                                   f"(#437){firmala}",
                      cfg.verificar_pdf_mark(
                          f"la extracción de {', '.join(det['bibs'])} es del PDF anterior y el "
                          f"nuevo no la trae verbatim")))
@@ -463,7 +479,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                     (b.first_line,
                      f"{corte} — la escribió la máquina DESDE la extracción de "
                      f"{propio or quienes}, así que esa extracción no es testigo (#454), y el "
-                     f"`.txt` no la dice: nadie la verificó nunca",
+                     f"`.txt` no la dice: nadie la verificó nunca{firmala}",
                      cfg.verificar_pdf_mark("la cita de una salvedad, sin testigo independiente")))
             elif ver == "no_evaluable":
                 out["no_evaluables"].append(
@@ -474,7 +490,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                     (b.first_line, f"{corte} — ni el `.txt` ni la extracción de {quienes} la "
                                    f"dicen, y ninguna es evidencia positiva: la transcripción es "
                                    f"SELECTIVA y el `.txt` un índice degradado (#321/#205). "
-                                   f"Confirmala en el PDF"))
+                                   f"Confirmala en el PDF{firmala}"))
         out["pag_sin_cita"] += max(0, len(cfg.page_locators(b.text))
                                    - (out["pag_consumidos"] - antes))
     if mostrar:
@@ -753,7 +769,8 @@ def validar_todo(slug: str | None = None) -> int:
                      f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla) · "
                      f"{solo_ext} sólo respaldada(s) por la extracción, "
                      f"{len(discrepan)} de ellas con el `.txt` en contra"
-                     + (f" · {resueltas} declarada(s) y resuelta(s) en el `log` (#386/#387)"
+                     + (f" · {resueltas} declarada(s) y resuelta(s): en el `log` (#386/#387) o "
+                        f"firmada(s) `cita_revisada` (#516)"
                         if resueltas else ""))
     if not citas:
         cfg.print_seguro("  ⚠ NO EVALUADO: ninguna cita mirada. Si la bóveda es anterior a #311, "

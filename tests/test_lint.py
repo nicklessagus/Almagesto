@@ -9591,16 +9591,16 @@ def test_check_note_quotes_rutea_cada_veredicto_a_SU_categoria(toy_vault, monkey
         monkeypatch.setattr(cfg, "quote_verdict", lambda *_a, **_k: (ver, det or {}))
         return lint.check_note_quotes("m", ruta, {}, texto, fuentes, [0])
 
-    inv, nov, opa, deg, dis = _con("en_su_txt")
-    assert (inv, nov, opa, deg, dis) == ([], [], [], [], []), "en su `.txt`: no hay nada que decir"
+    inv, nov, opa, deg, dis, rev, hue = _con("en_su_txt")
+    assert (inv, nov, opa, deg, dis, rev, hue) == ([],) * 7, "en su `.txt`: no hay nada que decir"
 
-    *_x, deg, _d = _con("txt_degradado", {"en_extraccion": ["2020X"]})
+    *_x, deg, _d, _r, _h = _con("txt_degradado", {"en_extraccion": ["2020X"]})
     assert len(deg) == 1 and "defecto es del índice" in deg[0][1]
 
-    *_x, dis = _con("txt_acusa", {"bib": "2020X", "cola_txt": "aaa", "cola_cita": "bbb"})
+    *_x, dis, _r, _h = _con("txt_acusa", {"bib": "2020X", "cola_txt": "aaa", "cola_cita": "bbb"})
     assert len(dis) == 1 and lint.VERIFICAR_PDF_MARK in dis[0][1]
 
-    *_x, deg, _d = _con("txt_parte")
+    *_x, deg, _d, _r, _h = _con("txt_parte")
     assert len(deg) == 1 and "el `.txt` la parte" in deg[0][1]
 
     inv, *_x = _con("alterada", {"otro_bib": ["2019Y"]})
@@ -9617,7 +9617,7 @@ def test_check_note_quotes_rutea_cada_veredicto_a_SU_categoria(toy_vault, monkey
     assert lint.check_note_quotes(
         "m", ruta, {}, texto,
         lambda _b: ({"2020X": ["x"]}, [("2019Y", "sin `.txt` en disco")]), [0]) \
-        == ([], [], [], [], [])
+        == ([],) * 7
 
     # y la fuente OPACA: no se puede chequear, que no es lo mismo que estar mal
     monkeypatch.setattr(cfg, "quote_verdict", lambda *_a, **_k: ("no_evaluable", {}))
