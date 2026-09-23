@@ -52,8 +52,9 @@ Progreso del append de <fuente> → <destino>:
      pases de taquito; (b) el chaining deja **candidatos sin juzgar** en `candidates`, que el lint
      surface como *Triage pendiente* (#55): resolvelos con `python scripts/triage.py <slug>` o dejá
      el conteo en el `log`, para no cerrar el append con juicio pendiente mudo.
-     Si el paper no tiene arXiv (paywall/viejo) y el resolver de ADS tampoco lo entrega (queda en
-     `build/<slug>/missing_pdf.json`, con `bibstem` y `hint`), seguí la **cascada manual de rescate**
+     Con versión publicada la cadena NO baja el eprint (#512): `publicado-no-conseguido` → PDF del
+     editor o `triage.py <slug> --acepta-preprint <bib> --reason`. Si nada lo entrega
+     (`missing_pdf.json`, con `hint`), seguí la **cascada manual de rescate**
      de `## Notas` del skill `ingest-star` antes de pedirlo. Con el PDF en mano (rescatado o provisto
      por el usuario): copiarlo a `vault/raw/pdfs/<slug>/<bibcode>.pdf` y correr
      `python scripts/extract_fulltext.py <slug>`.

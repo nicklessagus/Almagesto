@@ -638,3 +638,85 @@ def test_oa_candidates_es_la_cascada_de_discover(monkeypatch):
     monkeypatch.setattr(discover, "iter_pdf_candidates",
                         lambda doi, title=None: iter([(f"u:{doi}:{title}", "w", None)]))
     assert list(_OA_CANDIDATES_REAL("10.1/x", "T")) == [("u:10.1/x:T", "w", None)]
+
+
+# ── #512 · publisher-first ───────────────────────────────────────────────────
+PUB_CON_ARXIV = {"bibcode": "2014ApJ...793L..24R", "title": "publicado", "relevant": True,
+                 "arxiv_id": "1409.00001", "doi": "10.1/p", "bibstem": "ApJ", "year": "2014"}
+ESOURCES_3 = [{"link_type": "ESOURCE|EPRINT_PDF", "url": "https://arxiv.org/pdf/1409.00001"},
+              {"link_type": "ESOURCE|ADS_PDF", "url": "https://articles.adsabs.harvard.edu/pdf/x"},
+              {"link_type": "ESOURCE|PUB_PDF", "url": "https://iop/pub.pdf"}]
+
+
+def _acepta(toy_vault, bib):
+    import yaml
+    from conftest import write_yaml
+    stars = yaml.safe_load(toy_vault.STARS_YAML.read_text(encoding="utf-8"))
+    stars["Estrella Test"]["acepta_preprint"] = [{"bibcode": bib, "motivo": "m", "fecha": "2026-09-23"}]
+    write_yaml(toy_vault.STARS_YAML, stars)
+
+
+def test_512_publicado_prueba_editor_y_nunca_el_eprint(toy_vault, monkeypatch, capsys):
+    """El caso del issue (2014ApJ...793L..24R: IOP entregaba el PUB_PDF): con versión publicada y
+    sin `acepta_preprint`, el orden es ADS_PDF → PUB_PDF; EPRINT_PDF ni se pide."""
+    ads_json(toy_vault.ROOT, "test_star", [PUB_CON_ARXIV])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: ESOURCES_3)
+    pedidos = []
+    monkeypatch.setattr(fp, "download_pdf",
+                        lambda url, tok: pedidos.append(url) or (b"%PDF-pub" if "pub.pdf" in url else None))
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert pedidos == ["https://articles.adsabs.harvard.edu/pdf/x", "https://iop/pub.pdf"]
+    assert (toy_vault.PDFS / "test_star" / "2014ApJ...793L..24R.pdf").read_bytes() == b"%PDF-pub"
+    assert "EPRINT_PDF salteado" in capsys.readouterr().out
+
+
+def test_512_aceptado_si_prueba_el_eprint(toy_vault, monkeypatch):
+    ads_json(toy_vault.ROOT, "test_star", [PUB_CON_ARXIV])
+    _acepta(toy_vault, "2014ApJ...793L..24R")
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: ESOURCES_3)
+    pedidos = []
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: pedidos.append(url) or b"%PDF-e")
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert pedidos == ["https://arxiv.org/pdf/1409.00001"]
+
+
+def test_512_cascada_abierta_saltea_arxiv_si_no_hay_aceptacion(toy_vault, monkeypatch):
+    """La copia libre de arXiv —marcada `eprint`, o una ubicación de OpenAlex en arxiv.org sin
+    procedencia— es el eprint por otra puerta: se saltea igual."""
+    ads_json(toy_vault.ROOT, "test_star", [PUB_CON_ARXIV])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter([
+        ("https://arxiv.org/pdf/1409.00001", "OpenAlex best_oa_location", None),
+        ("https://export.arxiv.org/pdf/1409.00001", "arXiv por título", "eprint"),
+        ("https://pmc/x.pdf", "Europe PMC", None)]))
+    pedidos = []
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: pedidos.append(url) or None)
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert pedidos == ["https://pmc/x.pdf"]
+
+
+def test_512_residuo_publicado_no_conseguido(toy_vault, monkeypatch, capsys):
+    """Sin editor ni copia libre, la cadena NO baja el eprint: lo lista con DOI, enlace del editor
+    y el eprint disponible, y nombra las dos salidas (traer el PDF, o `--acepta-preprint`)."""
+    sin_doi = dict(PUB_CON_ARXIV, bibcode="2014MNRAS.437.3540F", doi=None, arxiv_id="1310.00002")
+    d = ads_json(toy_vault.ROOT, "test_star", [PUB_CON_ARXIV, sin_doi])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: ESOURCES_3)
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: None)
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    miss = {m["bibcode"]: m for m in json.loads((d / "missing_pdf.json").read_text())}
+    m = miss["2014ApJ...793L..24R"]
+    assert (m["estado"], m["editor"], m["eprint"], m["doi"]) == (
+        "publicado-no-conseguido", "https://doi.org/10.1/p", "1409.00001", "10.1/p")
+    assert miss["2014MNRAS.437.3540F"]["editor"].endswith("/2014MNRAS.437.3540F/PUB_HTML")
+    out = capsys.readouterr().out
+    assert "--acepta-preprint <bibcode>" in out and "NO bajó el preprint" in out
+
+
+def test_512_sin_eprint_a_la_vista_el_residuo_sigue_siendo_358(toy_vault, monkeypatch):
+    """Publicado sin arxiv_id ni EPRINT_PDF: aceptar el preprint no cambiaría nada, así que el
+    residuo conserva los estados de #358 (`sin-copia-libre` / `bloqueado`)."""
+    d = ads_json(toy_vault.ROOT, "test_star", [RECORDS[0]])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    [m] = json.loads((d / "missing_pdf.json").read_text())
+    assert m["estado"] == "sin-copia-libre" and "editor" not in m

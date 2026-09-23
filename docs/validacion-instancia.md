@@ -1094,3 +1094,24 @@ cambia (medido: 1 de 161).
 
 **Devolver si** alguna nota con `pdf_source: eprint` pierde la marca tras re-extraer (un sello real
 sin fecha legible en el `.txt`).
+
+## §#512 · v1.320.0 — publisher-first: el preprint sólo con `acepta_preprint`
+
+```bash
+python scripts/lint.py | grep -E 'PREPRINT habiendo|Se lee el PREPRINT'
+python scripts/ingest_star.py gj_581          # o un append de prueba: bibcode publicado nuevo en extra_core
+grep -B2 -A6 publicado-no-conseguido build/gj_581/missing_pdf.json
+python scripts/triage.py gj_581 --acepta-preprint <bib> --reason "prueba"   # imprime, no escribe
+```
+
+**Esperado:** sin aceptaciones, la categoría #298 queda igual (medido: 122 → 122, mismos stems) y
+`preprint_aceptado` en 0. Re-correr la cadena no re-baja nada (178 de los 179 retenidos ya tienen PDF
+en disco). Un core publicado nuevo que el editor no entrega aparece en `missing_pdf.json` como
+`publicado-no-conseguido` con `doi`, `editor` y `eprint`, y el cierre de `fetch_pdf` lo lista con las
+dos salidas; NO aparece bajado desde arXiv. Pegar el bloque de `--acepta-preprint` y re-correr baja
+el eprint y el lint lo mueve a `preprint_aceptado`.
+
+**Devolver si** `fetch_arxiv`/`fetch_pdf` bajan un eprint de un bibcode publicado sin
+`acepta_preprint` (`build/<slug>/pdf_source.json` con `eprint` para ese bibcode), si el residuo pierde
+el `estado` de #358 para un publicado SIN eprint a la vista, o si un `acepta_preprint` mal formado
+tumba el lint en vez de salir *no evaluado*.

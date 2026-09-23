@@ -165,11 +165,11 @@ def ads_json(root, slug, records):
 
 
 RECORDS = [
-    {"bibcode": "2020withA...1A", "title": "con arxiv", "relevant": True,
+    {"bibcode": "2021arXiv210100001A", "title": "con arxiv", "relevant": True,
      "arxiv_id": "2101.00001", "doi": "10.1/a"},
     {"bibcode": "1990preA....1B", "title": "pre-arxiv", "relevant": True,
      "arxiv_id": None, "doi": "10.1/b"},
-    {"bibcode": "2020nonC....1C", "title": "no core", "relevant": False,
+    {"bibcode": "2021arXiv210100002C", "title": "no core", "relevant": False,
      "arxiv_id": "2101.00002", "doi": None},
 ]
 
@@ -197,15 +197,15 @@ def test_main_fallo_arxiv_va_al_residuo(toy_vault, no_sleep, monkeypatch):
     monkeypatch.setattr(fa, "download_pdf", lambda aid, dest: False)
     assert run_main(monkeypatch, ["test_star"]) == 0
     miss = json.loads((toy_vault.ROOT / "build" / "test_star" / "missing_pdf.json").read_text())
-    assert [m["bibcode"] for m in miss] == ["1990preA....1B", "2020withA...1A"]
+    assert [m["bibcode"] for m in miss] == ["1990preA....1B", "2021arXiv210100001A"]
 
 
 def test_main_skip_existente_y_limit(toy_vault, no_sleep, monkeypatch, capsys):
-    recs = [dict(RECORDS[0]), dict(RECORDS[0], bibcode="2021otro...1D", arxiv_id="2101.00009")]
+    recs = [dict(RECORDS[0]), dict(RECORDS[0], bibcode="2021arXiv210100009D", arxiv_id="2101.00009")]
     ads_json(toy_vault.ROOT, "test_star", recs)
     destdir = toy_vault.PDFS / "test_star"
     destdir.mkdir(parents=True, exist_ok=True)
-    (destdir / "2020withA...1A.pdf").write_bytes(b"%PDF-ya")
+    (destdir / "2021arXiv210100001A.pdf").write_bytes(b"%PDF-ya")
     bajados = []
     monkeypatch.setattr(fa, "download_pdf", lambda aid, dest: bajados.append(aid) or True)
     run_main(monkeypatch, ["test_star"])
@@ -213,7 +213,7 @@ def test_main_skip_existente_y_limit(toy_vault, no_sleep, monkeypatch, capsys):
     assert "ya estaban 1" in capsys.readouterr().out
 
     bajados.clear()
-    (destdir / "2020withA...1A.pdf").unlink()
+    (destdir / "2021arXiv210100001A.pdf").unlink()
     run_main(monkeypatch, ["test_star", "--limit", "1"])
     assert len(bajados) == 1
 
@@ -228,11 +228,11 @@ def test_main_tiene_force_para_re_bajar_lo_congelado(toy_vault, no_sleep, monkey
     d = toy_vault.ROOT / "build" / "test_star"
     d.mkdir(parents=True, exist_ok=True)
     (d / "ads.json").write_text(json.dumps({"star": "Estrella Test", "records": [
-        {"bibcode": "2020withA...1A", "title": "x", "relevant": True,
+        {"bibcode": "2021arXiv210100001A", "title": "x", "relevant": True,
          "arxiv_id": "2101.00001", "doi": None}]}), encoding="utf-8")
     destdir = toy_vault.PDFS / "test_star"
     destdir.mkdir(parents=True, exist_ok=True)
-    (destdir / "2020withA...1A.pdf").write_bytes(b"%PDF-trunc")   # simula un truncado congelado
+    (destdir / "2021arXiv210100001A.pdf").write_bytes(b"%PDF-trunc")   # simula un truncado congelado
     bajados = []
     monkeypatch.setattr(fa, "download_pdf", lambda aid, dest: bajados.append(aid) or True)
     run_main(monkeypatch, ["test_star", "--force"])
@@ -261,7 +261,7 @@ def test_all_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
     un sitio y no a su gemelo — y estos dos son gemelos literales."""
     ads_json(toy_vault.ROOT, "test_star", RECORDS)
     cfg.save_decisiones("test_star", {
-        "2020withA...1A": {"decision": "descartado", "motivo": "off-topic",
+        "2021arXiv210100001A": {"decision": "descartado", "motivo": "off-topic",
                              "fecha": "2026-08-28"}})
     pedidos = []
     monkeypatch.setattr(fa, "download_pdf", lambda aid, dest: pedidos.append(aid) or True)
@@ -269,3 +269,29 @@ def test_all_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
     assert "2101.00001" not in pedidos, "se re-pidió a arXiv un descarte vigente"
     assert "2101.00002" in pedidos, "el resto de `--all` sigue entrando"
     assert "excluido(s) por decisión de curación" in capsys.readouterr().out
+
+
+def test_512_no_baja_el_eprint_de_un_publicado_sin_aceptacion(toy_vault, no_sleep, monkeypatch):
+    """#512 — el eprint de un paper con versión PUBLICADA no se adopta en silencio: va al residuo
+    para que `fetch_pdf` pruebe el editor. Con `acepta_preprint` declarado, sí se baja."""
+    import yaml
+    from conftest import write_yaml
+    recs = [{"bibcode": "2014ApJ...793L..24R", "title": "pub", "relevant": True,
+             "arxiv_id": "1409.00001", "doi": "10.1/p"},
+            {"bibcode": "2021arXiv210100001A", "title": "pre", "relevant": True,
+             "arxiv_id": "2101.00001", "doi": None}]
+    ads_json(toy_vault.ROOT, "test_star", recs)
+    bajados = []
+    monkeypatch.setattr(fa, "download_pdf", lambda aid, dest: bajados.append(aid) or True)
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert bajados == ["2101.00001"]
+    miss = json.loads((toy_vault.ROOT / "build" / "test_star" / "missing_pdf.json").read_text())
+    assert [m["bibcode"] for m in miss] == ["2014ApJ...793L..24R"]
+
+    stars = yaml.safe_load(toy_vault.STARS_YAML.read_text(encoding="utf-8"))
+    stars["Estrella Test"]["acepta_preprint"] = [
+        {"bibcode": "2014ApJ...793L..24R", "motivo": "el editor no entrega", "fecha": "2026-09-23"}]
+    write_yaml(toy_vault.STARS_YAML, stars)
+    bajados.clear()
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert "1409.00001" in bajados                  # (el doble no escribe: el otro se re-pide)

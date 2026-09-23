@@ -10,7 +10,10 @@ campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
   query_ads --theme → [guardia de expansión] → fetch_arxiv → fetch_pdf → make_notes --theme →
   extract_fulltext → check_retractions → fetch_bibtex. La **guardia de expansión** (#37) frena entre la query y
   el primer paso que gasta red y disco si el core se multiplicó respecto de lo ya ingestado
-  (default ×1.5 y 50 o más nuevos); `--yes` continúa a sabiendas.
+  (default ×1.5 y 50 o más nuevos); `--yes` continúa a sabiendas. **Publisher-first (#512)**,
+  igual que `ingest_star`: el eprint de un bibcode con versión publicada sólo entra con
+  `acepta_preprint` declarado; lo que el editor no entrega queda en `missing_pdf.json` como
+  `publicado-no-conseguido`, listado para el usuario.
   · **Corpus DECLARADO (#384): `source: ads` + `query: null` + `extra_core:`** → la misma
     sub-cadena con `query_ads --theme --extra-only` (sólo esos bibcodes, sin descubrimiento ni
     guardia) → fetch_arxiv → fetch_pdf → make_notes --theme → extract_fulltext → check_retractions → fetch_bibtex.

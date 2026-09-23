@@ -4051,3 +4051,52 @@ def test_511_la_cita_de_la_BIBLIOGRAFIA_no_es_el_sello_de_arxiv():
     # y el sello gana aunque una cita aparezca ANTES en el flujo del texto
     assert cfg.arxiv_stamp_id(actas.replace("\f", "\farXiv:1306.6074v1 [astro-ph.EP] 26 Jun 2013\n")) \
         == "1306.6074"
+
+
+# ── #512 · publisher-first: el preprint sólo con decisión declarada ─────────
+@pytest.mark.parametrize("bib, publicado", [
+    ("2014ApJ...793L..24R", True), ("2014MNRAS.437.3540F", True),
+    ("2023arXiv230112345X", False), ("1999astro.ph..1234X", False),
+    ("2019PhDT.......12X", False), ("2010MsT.........1X", False),
+])
+def test_512_has_published_version(bib, publicado):
+    """Una sola decisión para los fetchers y el lint: el depósito de arXiv y la tesis no tienen una
+    versión publicada que preferir; el eprint ES la fuente."""
+    assert cfg.has_published_version(bib) is publicado
+
+
+def _acepta(toy_vault, entradas, en="stars"):
+    if en == "stars":
+        stars = yaml.safe_load(toy_vault.STARS_YAML.read_text(encoding="utf-8"))
+        stars["Estrella Test"]["acepta_preprint"] = entradas
+        write_yaml(toy_vault.STARS_YAML, stars)
+    else:
+        write_yaml(toy_vault.THEMES_YAML, {"ica": {"title": "ICA", "acepta_preprint": entradas}})
+
+
+def test_512_acepta_preprint_vale_por_bibcode_en_cualquier_sujeto(toy_vault):
+    _acepta(toy_vault, [{"bibcode": "2014MNRAS.437.3540F", "motivo": "OUP 403", "fecha": "2026-09-23"}],
+            en="themes")
+    got = cfg.acepta_preprint_bibcodes()
+    assert list(got) == ["2014MNRAS.437.3540F"] and "`ica`" in got["2014MNRAS.437.3540F"]
+    assert cfg.preprint_allowed("2014MNRAS.437.3540F") is True
+    assert cfg.preprint_allowed("2014ApJ...793L..24R") is False
+    assert cfg.preprint_allowed("2023arXiv230112345X") is True      # preprint-only: nada cambia
+
+
+@pytest.mark.parametrize("malo", [
+    "2014MNRAS.437.3540F",                                          # escalar
+    ["2014MNRAS.437.3540F"],                                        # lista de strings
+    [{"bibcode": "2014MNRAS.437.3540F", "fecha": "2026-09-23"}],    # sin motivo
+    [{"bibcode": "2014MNRAS.437.3540F", "motivo": "x"}],            # sin fecha
+])
+def test_512_acepta_preprint_forma_dura(toy_vault, malo):
+    """Misma forma dura que `extra_core` (D-58): sin motivo ni fecha la aceptación no distingue
+    «se aceptó el preprint» de «nadie buscó el publicado»."""
+    _acepta(toy_vault, malo)
+    with pytest.raises(SystemExit) as e:
+        cfg.acepta_preprint_bibcodes()
+    assert "acepta_preprint:" in str(e.value) and "2014MNRAS.437.3540F" in str(e.value)
+    with pytest.raises(SystemExit):
+        cfg.load_acepta_preprint({"acepta_preprint": malo}, entry="test_star")
+    assert cfg.load_acepta_preprint({}) == []

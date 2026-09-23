@@ -2544,6 +2544,11 @@
   {
    "number": 511,
    "title": "arxiv_stamp toma una cita de la BIBLIOGRAFÍA como el sello de arXiv en documentos de ≤2 páginas: pdf_source eprint falso, arxiv_id de otro paper y un «identidad duplicada» que manda fusionar dos trabajos (1/135)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 512,
+   "title": "La ingesta adopta el PREPRINT por defecto: pedir la versión publicada al usuario (o su aceptación explícita del eprint) antes de extraer — 150 notas en preprint con versión publicada, 110 con PUB_PDF en ADS",
    "state": "OPEN"
   }
  ]

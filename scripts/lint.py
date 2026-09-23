@@ -4901,9 +4901,13 @@ def check_data_availability(stem: str, fm: dict) -> list:
     return filas
 
 
-def check_paper_pending(stem: str, fm: dict) -> tuple:
-    """`(version_publicada, pending_srcs, bad_roles)` — the published version the sweep found (#298)
-    and the source that could not be obtained (#80).
+def check_paper_pending(stem: str, fm: dict, aceptados: dict | None = None) -> tuple:
+    """`(version_publicada, pending_srcs, bad_roles, preprint_aceptado)` — the published version the
+    sweep found (#298) and the source that could not be obtained (#80).
+
+    #512 — the eprint read over a published bibcode whose `acepta_preprint` is declared (`aceptados`,
+    `cfg.acepta_preprint_bibcodes()`) is a registered decision, not debt: it comes back APART in the
+    fourth list (AUD-207), with the declaration that covers it.
 
     Extracted from the paper sub-block of `lint.collect` by #396; the blocks compute and the caller
     accumulates. `pending` is a CLOSED vocabulary with a mandatory reason: in six months what helps
@@ -4912,19 +4916,27 @@ def check_paper_pending(stem: str, fm: dict) -> tuple:
     version_publicada: list = []
     pending_srcs: list = []
     bad_roles: list = []
+    preprint_aceptado: list = []
+    aceptados = {} if aceptados is None else aceptados
+    _bib = str(fm.get("bibcode") or stem)
     if (_vd := str(fm.get("versions_disponible") or "").strip()):
         version_publicada.append(
             (stem, f"`versions_disponible: {_vd}`: el preprint salió publicado y nadie "
                    f"renombró nada → `python scripts/make_notes.py --rename-paper {stem} "
                    f"{_vd}` (o declaralo en `versions[]` si ya lo revisaste)"))
-    elif (str(fm.get("pdf_source") or "") == "eprint"
-            and "arxiv" not in str(fm.get("bibcode") or stem).lower()):
-        version_publicada.append(
-            (stem, "`pdf_source: eprint` con bibcode PUBLICADO: la nota se apoya en el "
-                   "preprint teniendo versión publicada, así que una discrepancia numérica "
-                   "contra un valor publicado es candidata a diferencia de VERSIÓN → "
-                   "conseguí el PDF publicado (`python scripts/fetch_pdf.py <slug> "
-                   "--force`) o dejá la salvedad"))
+    elif str(fm.get("pdf_source") or "") == "eprint" and cfg.has_published_version(_bib):
+        if cfg.preprint_allowed(_bib, aceptados):              # la misma regla que los fetchers
+            preprint_aceptado.append((stem, f"{aceptados[_bib]}: se lee el preprint por decisión "
+                                            f"declarada (#512)"))
+        else:
+            version_publicada.append(
+                (stem, "`pdf_source: eprint` con bibcode PUBLICADO: la nota se apoya en el "
+                       "preprint teniendo versión publicada, así que una discrepancia numérica "
+                       "contra un valor publicado es candidata a diferencia de VERSIÓN → "
+                       f"conseguí el PDF publicado (`python scripts/replace_pdf.py {_bib} "
+                       "<ruta.pdf> --source publisher --reason \"…\"`) o declará que se lee el "
+                       f"preprint (`python scripts/triage.py <slug> --acepta-preprint {_bib} "
+                       "--reason \"<motivo>\"`, #512)"))
     if fm.get("pending_source"):
         ptr = fm.get("doi") or fm.get("source_url") or "(sin puntero conocido)"
         _p = str(fm["pending_source"])
@@ -4947,7 +4959,7 @@ def check_paper_pending(stem: str, fm: dict) -> tuple:
         pending_srcs.append(
             (stem, f"{_p}{' · ' + str(fm['pending_motivo']) if fm.get('pending_motivo') else ''}"
                    f" — proveer la fuente; puntero: {ptr}{_falta}"))
-    return version_publicada, pending_srcs, bad_roles
+    return version_publicada, pending_srcs, bad_roles, preprint_aceptado
 
 
 def check_paper_role(stem: str, fm: dict, relevancia: str, thesis_refs: dict, method_refs: dict) -> tuple:
@@ -6357,6 +6369,7 @@ class NoteSweep:
     thesis_refs: dict = field(default_factory=dict)    # valor de thesis_link → notas que lo usan
     method_refs: dict = field(default_factory=dict)    # valor de methods → papers que lo declaran
     bibtex_por_clave: dict = field(default_factory=dict)   # {citekey: [stem]} — #473
+    acepta_preprint: dict = field(default_factory=dict)    # {bibcode: origen} — #512
     #: #275 · how many «…» quotes could REALLY be evaluated (the `citas` population).
     n_citas: list = field(default_factory=lambda: [0])
     #: #342 · how many notes carry a `## Huecos` with bullets (the `huecos` population).
@@ -6433,10 +6446,11 @@ def check_paper_note(stem: str, f: str, fm: dict, text: str, body_full: str, swe
         sweep.bibtex_por_clave.setdefault(_ck, []).append(stem)
     add("data_availability_mal_formada", check_data_availability(stem, fm))   # #424
     # #298 — la versión publicada disponible, y el `pending` (#7/#80).
-    _p1, _p2, _p3 = check_paper_pending(stem, fm)
+    _p1, _p2, _p3, _p4 = check_paper_pending(stem, fm, sweep.acepta_preprint)
     add("version_publicada", _p1)
     add("pending_srcs", _p2)
     add("bad_roles", _p3)
+    add("preprint_aceptado", _p4)                                  # #512, aparte (AUD-207)
     # el tooling escribe siempre `high`/`low`; el `.lower()` cubre la edición a mano,
     # donde un `Low` entraba a la población que el recorte quería dejar afuera.
     relevancia = str(fm.get("relevance") or "").strip().lower()
@@ -6722,6 +6736,13 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     paper_abstracts: dict = {}         # {stem: abstract normalizado} — #216, duplicado sin doi/arxiv
     paper_lens_text: dict = {}         # {stem: título+abstract+keywords} — #291, el texto que lee la lente
     anchor_bodies: dict = {}           # {archivo: texto} de TODA nota de entidad/query — D-47
+    # #512 — la forma dura de `acepta_preprint` aborta al loader; acá no tumba el lint: sin poder
+    # leer las aceptaciones, la exención no se evaluó (D-43) y eso cuenta para el exit.
+    try:
+        _acepta = cfg.acepta_preprint_bibcodes()
+    except SystemExit as exc:
+        _acepta = {}
+        found["not_evaluated"].append(("acepta_preprint", str(exc).split("\n")[0]))
     sweep = NoteSweep(
         names=names, fulltext=fulltext, refs_dir=refs_dir, refs_stems=refs_stems,
         # D-50: los genéricos + un patrón por consumidor declarado, UNA vez por corrida.
@@ -6731,7 +6752,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         # El índice de alias es factory, no caché de módulo (#396): dura lo que dura ESTA corrida.
         alias_idx=alias_index_cache(), pdf_on_disk=pdf_on_disk, theme_index=theme_index,
         themes_by_subject=themes_by_subject, sources_for=source_lookup(paper_fms),
-        incoming={n: 0 for n in names})
+        incoming={n: 0 for n in names}, acepta_preprint=_acepta)
     for f in files:
         stem = basename(f)[:-3]
         try:
@@ -7004,6 +7025,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('faceta_muerta', '🕳 Alternativa de faceta con POBLACIÓN CERO o duplicada (#291, backlog)', SEV_BACKLOG, tuple(found['faceta_muerta']), poblacion='config'),
         Categoria('reuso_sin_chequear', '🕳 Artefacto reusado entre slugs sin chequear su versión, y pasada de red que nunca corrió (#297, backlog)', SEV_BACKLOG, tuple(found['reuso_sin_chequear']), poblacion='papers'),
         Categoria('version_publicada', '🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog)', SEV_BACKLOG, tuple(found['version_publicada']), poblacion='papers_version'),
+        Categoria('preprint_aceptado', '✍ Se lee el PREPRINT habiendo versión publicada por decisión DECLARADA (`acepta_preprint`, #512) — declarado, no es deuda', SEV_BACKLOG, tuple(found['preprint_aceptado']), poblacion='papers_version'),
         Categoria('status_apilado', '🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog)', SEV_BACKLOG, tuple(found['status_apilado']), poblacion='config'),
         Categoria('alcance_desfasado', '🕳 `alcance`/`unidad_cita` de la nota ≠ el declarado en `sources[]` (#312, backlog)', SEV_BACKLOG, tuple(found['alcance_desfasado']), poblacion='papers'),
         Categoria('fuente_metadata_falsa', '⛔ `sources:` declara un autor o un año que Crossref DESMIENTE para ese `doi` (#353): atribución falsa publicada', SEV_BLOQUEANTE, tuple(found['fuente_metadata_falsa']), poblacion='temas'),

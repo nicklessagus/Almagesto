@@ -153,7 +153,7 @@ Progreso del ingest del tema <tema>:
    ⛔ **La mecánica de la cadena se describe en UN solo lugar (#67):**
    `.claude/skills/ingest-star/reference/cadena-ads.md` — el mismo archivo que apunta `ingest-star`,
    porque es **la misma cadena**: la **guardia de expansión**, el citation chaining, el rate limit de
-   `fetch_arxiv`, la cascada de `fetch_pdf` con su fallback, el residuo `build/<slug>/missing_pdf.json`
+   `fetch_arxiv`, la cascada publisher-first de `fetch_pdf` (#512), el residuo `build/<slug>/missing_pdf.json`
    (y su rescate manual, en `.claude/skills/ingest-star/reference/rescate-pdfs.md` — "bajar por DOI"
    solo **no** alcanza), los dos chequeos de `extract_fulltext`, `check_retractions` y `extra_core`
    como curación persistente. Antes había una copia acá y otra en `ingest-star`: dos lugares donde

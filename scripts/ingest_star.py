@@ -9,6 +9,13 @@ vault/config/stars.yaml:
     query_ads → [guardia de expansión] → fetch_arxiv → fetch_pdf → fetch_ground_truth
     → make_notes → extract_fulltext → check_retractions → fetch_bibtex
 
+**Publisher-first (#512):** `fetch_arxiv` baja sólo el eprint de lo que no tiene versión publicada
+(arXiv-only, tesis) o lleva `acepta_preprint` en la config; `fetch_pdf` prueba el editor
+(ADS_PDF → PUB_PDF y la cascada abierta sin arXiv) para el resto. Lo que así no sale queda en
+`missing_pdf.json` como `publicado-no-conseguido` y el cierre lo lista con sus dos salidas: traer el
+PDF del editor o `triage.py <slug> --acepta-preprint <bib> --reason "…"`. La cadena no baja el
+eprint en silencio.
+
 La **guardia de expansión** (#37) es un checkpoint humano entre la query y el primer paso que
 gasta red y disco: si el core del `ads.json` fresco se multiplicó respecto de las notas ya
 ingestadas del sujeto (default: ×1.5 y 50 o más nuevos), frena con el conteo, cuántos vinieron por

@@ -10566,17 +10566,17 @@ def test_check_paper_legacy_fields_y_pending(toy_vault):
     filas = lint.check_paper_legacy_fields("2020X", {"symbols_lost": 3}, "cuerpo\n", sm)
     assert len(filas) == 1 and "symbols_lost" in filas[0][1]
 
-    ver, pend, bad = lint.check_paper_pending("2020X", {})
-    assert (ver, pend, bad) == ([], [], [])
-    ver, _p, _b = lint.check_paper_pending("2020X", {"versions_disponible": "2021ApJ..1A"})
+    ver, pend, bad, _acep = lint.check_paper_pending("2020X", {})
+    assert (ver, pend, bad, _acep) == ([], [], [], [])
+    ver, _p, _b, _a = lint.check_paper_pending("2020X", {"versions_disponible": "2021ApJ..1A"})
     assert len(ver) == 1 and "--rename-paper" in ver[0][1]
-    _v, pend, _b = lint.check_paper_pending("2020X", {"pending_source": "paywall",
+    _v, pend, _b, _a = lint.check_paper_pending("2020X", {"pending_source": "paywall",
                                                       "pending_motivo": "detrás del muro"})
     assert len(pend) == 1 and "detrás del muro" in pend[0][1]
-    _v, _p2, bad = lint.check_paper_pending("2020X", {"pending_source": "inventado",
+    _v, _p2, bad, _a = lint.check_paper_pending("2020X", {"pending_source": "inventado",
                                                       "pending_motivo": "x"})
     assert bad, "`pending` fuera del vocabulario cerrado"
-    _v, pend2, _b = lint.check_paper_pending("2020X", {"pending_source": "paywall"})
+    _v, pend2, _b, _a = lint.check_paper_pending("2020X", {"pending_source": "paywall"})
     assert any("motivo" in m for _s, m in pend2 + _b), "el motivo es obligatorio"
 
 
@@ -11222,3 +11222,34 @@ def test_vistas_en_cuerpo_no_confunde_sujetos_prefijo():
     t = "# X\n\n## Vista — ica-ruido\n\nprosa\n"
     assert lint.vistas_en_cuerpo(t) == {"ica-ruido"}
     assert lint.vistas_en_cuerpo(t + "\n## Vista — ica (2026-08-27)\n\nmás\n") == {"ica", "ica-ruido"}
+
+
+# ── #512 · el preprint aceptado se reporta APARTE ────────────────────────────
+def test_512_eprint_aceptado_sale_aparte_y_no_como_deuda(toy_vault):
+    """El `eprint` sobre bibcode publicado CON `acepta_preprint` es una decisión registrada: va a
+    su propia categoría (AUD-207), no a la deuda de #298; sin aceptación, el hallazgo nombra las dos
+    salidas (reemplazar por el editor o aceptar)."""
+    paper_extraido(toy_vault, "2014MNRAS.437.3540F", pdf_source="eprint")
+    paper_extraido(toy_vault, "2014ApJ...793L..24R", pdf_source="eprint")
+    r = lint.collect()
+    deuda = dict(r.por_clave("version_publicada").items)
+    assert "--acepta-preprint 2014MNRAS.437.3540F" in deuda["2014MNRAS.437.3540F"]
+    assert "replace_pdf.py 2014MNRAS.437.3540F" in deuda["2014MNRAS.437.3540F"]
+
+    stars = yaml.safe_load(toy_vault.STARS_YAML.read_text(encoding="utf-8"))
+    stars["Estrella Test"]["acepta_preprint"] = [
+        {"bibcode": "2014MNRAS.437.3540F", "motivo": "OUP 403", "fecha": "2026-09-23"}]
+    write_yaml(toy_vault.STARS_YAML, stars)
+    r = lint.collect()
+    assert set(dict(r.por_clave("version_publicada").items)) == {"2014ApJ...793L..24R"}
+    [(stem, msg)] = r.por_clave("preprint_aceptado").items
+    assert stem == "2014MNRAS.437.3540F" and "`test_star`" in msg
+    assert r.por_clave("preprint_aceptado").severidad == lint.SEV_BACKLOG
+
+
+def test_512_acepta_preprint_mal_formado_no_tumba_el_lint(toy_vault):
+    stars = yaml.safe_load(toy_vault.STARS_YAML.read_text(encoding="utf-8"))
+    stars["Estrella Test"]["acepta_preprint"] = ["2014MNRAS.437.3540F"]
+    write_yaml(toy_vault.STARS_YAML, stars)
+    no_eval = dict(lint.collect().por_clave("not_evaluated").items)
+    assert "acepta_preprint" in no_eval

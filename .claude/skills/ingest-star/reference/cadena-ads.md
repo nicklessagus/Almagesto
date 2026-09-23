@@ -50,6 +50,18 @@ Los papers **sin arXiv** —y los que tienen arXiv pero cuya bajada falló— lo
 que resuelve contra ADS en cascada: `EPRINT_PDF` → `ADS_PDF` (escaneo alojado por ADS, con token) →
 `PUB_PDF` (publisher), con **fallback `curl`**.
 
+⛔ **Publisher-first (#512): con versión PUBLICADA el eprint no se adopta sin decisión.** Si el
+bibcode no es de arXiv ni una tesis (`cfg.has_published_version`) y ninguna config declara
+`acepta_preprint` para él, `fetch_arxiv` no lo baja y `fetch_pdf` prueba sólo `ADS_PDF` → `PUB_PDF`
+y la cascada abierta **sin** los candidatos de arXiv. Lo que así no sale queda en el residuo como
+`estado: publicado-no-conseguido`, con `doi`, `editor` (enlace) y `eprint` (el arxiv_id disponible),
+y el cierre lo lista. Las dos salidas son del usuario: traer el PDF del editor
+(`vault/raw/pdfs/<slug>/<bibcode>.pdf`, o `replace_pdf.py` si ya hay otra copia) o aceptar el
+preprint con `python scripts/triage.py <slug> --acepta-preprint <bib> --reason "<motivo>"`, que
+imprime el bloque `acepta_preprint: [{bibcode, motivo, fecha}]` para pegar junto a `extra_core`
+(forma dura, como D-58; no edita la config). La aceptación vale **por bibcode en toda la bóveda**
+(el PDF se reusa entre slugs, D-18) y el lint la reporta aparte, no como deuda de #298.
+
 Esa rama es la que después queda registrada en `pdf_source` (`eprint` | `ads` | `publisher` | `web`
 | `null` = desconocido, que **no** es "publicado"), y el consumidor la mira antes de copiar un
 número: con `eprint` el `.txt` es el **preprint** y puede traer otros valores que el publicado.

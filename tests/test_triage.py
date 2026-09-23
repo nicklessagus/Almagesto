@@ -1246,3 +1246,23 @@ def test_AUD219_drop_core_borra_el_stub_que_solo_era_de_esta_ESTRELLA(toy_vault,
         "vistas:\n- sujeto: Estrella Test\n  tipo: star\n---\n# T\n", encoding="utf-8")
     triage.drop_core("test_star", ["2009Icar..201..504M"], "off-topic")
     assert not (cfg.PAPERS / "2009Icar..201..504M.md").exists(), capsys.readouterr().out
+
+
+# ── #512 · aceptar el preprint: snippet listo para pegar ────────────────────
+def test_512_acepta_preprint_imprime_el_bloque_y_no_escribe(toy_vault, capsys):
+    antes = toy_vault.STARS_YAML.read_text(encoding="utf-8")
+    rc = triage.acepta_preprint("test_star", ["2014MNRAS.437.3540F", "2023arXiv230112345X"],
+                                "OUP devuelve 403")
+    out = capsys.readouterr().out
+    assert rc == 0 and toy_vault.STARS_YAML.read_text(encoding="utf-8") == antes
+    assert "entrada `Estrella Test` de vault/config/stars.yaml" in out
+    assert "  - bibcode: 2014MNRAS.437.3540F" in out and "OUP devuelve 403" in out
+    assert "2023arXiv230112345X: no tiene versión publicada" in out
+    # lo impreso es lo que el loader acepta (forma dura): pegarlo no aborta la próxima corrida
+    bloque = yaml.safe_load(out[out.index("acepta_preprint:"):].split("\n  →")[0])
+    assert cfg.load_acepta_preprint(bloque, entry="test_star")[0]["bibcode"] == "2014MNRAS.437.3540F"
+
+
+def test_512_acepta_preprint_exige_motivo(toy_vault):
+    with pytest.raises(SystemExit):
+        triage.acepta_preprint("test_star", ["2014MNRAS.437.3540F"], "")

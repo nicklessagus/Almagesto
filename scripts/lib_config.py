@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.319.0"
+ALMAGESTO_VERSION = "1.320.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3738,6 +3738,85 @@ def load_extra_core(meta: dict, *, entry: str = "?") -> list:
                      f"parte entró (p. ej. `alcance: caps. 2-3`), o el chequeo de completitud lee un "
                      f"recorte deliberado como omisión (#80/#382).")
     return v
+
+
+#: #512 · what follows the year in a bibcode that has NO published version to prefer: the arXiv
+#: deposit itself (`2023arXiv…`, old `1999astro.ph…`) and a thesis (`PhDT`/`MsT`), whose eprint IS
+#: the document. ponytail: the other pre-2007 arXiv categories (`gr.qc`, `hep.th`…) are not listed;
+#: add them when a vault ingests one.
+PREPRINT_ONLY_PREFIXES = ("arxiv", "astro.ph", "phdt.", "mst.")
+
+
+def has_published_version(bibcode) -> bool:
+    """Whether `bibcode` names a published version (a journal, proceedings, book) rather than the
+    preprint itself or a thesis (#512, the rule #298 already used in the lint).
+
+    ONE decision for the fetchers that ADOPT the reading document and for the lint that reports the
+    eprint read over a published bibcode: two copies of «is this an arXiv bibcode» drift."""
+    return not str(bibcode or "")[4:].lower().startswith(PREPRINT_ONLY_PREFIXES)
+
+
+def load_acepta_preprint(meta: dict, *, entry: str = "?") -> list:
+    """`acepta_preprint: [{bibcode, motivo, fecha}]` — the user's explicit decision to read the
+    PREPRINT of a paper that has a published version (#512). Same HARD FORM as `extra_core` (D-58):
+    a bare bibcode, a list of strings or a map missing any of the three keys ABORTS with the
+    canonical form, because an acceptance that does not say why nor when cannot tell «the preprint
+    was accepted» from «nobody looked for the published one» — which is the whole point."""
+    v = meta.get("acepta_preprint")
+    if v is None:
+        return []
+    ok = isinstance(v, list) and all(
+        isinstance(x, dict) and all(str(x.get(k) or "").strip() for k in ("bibcode", "motivo", "fecha"))
+        for x in v)
+    if not ok:
+        bibs = ([v] if isinstance(v, str) else
+                [x if isinstance(x, str) else as_map(x).get("bibcode") or "<bibcode>" for x in as_list(v)])
+        sys.exit(f"'{entry}': `acepta_preprint` es una lista de mapas con `bibcode`, `motivo` y `fecha`, "
+                 f"los tres obligatorios (#512): sin motivo ni fecha el registro no distingue «se aceptó "
+                 f"el preprint» de «nadie buscó el publicado». Forma canónica:\n\n"
+                 + acepta_preprint_snippet(bibs or ["<bibcode>"], "<por qué se lee el preprint>"))
+    return v
+
+
+def acepta_preprint_snippet(bibcodes, motivo: str) -> str:
+    """The `acepta_preprint:` block ready to paste (#512) — printed by `triage.py --acepta-preprint`
+    and by the loader's error; the config is curated and versioned, so nothing writes it."""
+    hoy = _dt.date.today().isoformat()
+    out = ["acepta_preprint:"]
+    for b in bibcodes:
+        out += [f"  - bibcode: {b}", f"    motivo: {yaml_scalar(motivo)}", f'    fecha: "{hoy}"']
+    return "\n".join(out) + "\n"
+
+
+def acepta_preprint_bibcodes() -> dict:
+    """`{bibcode: origen}` of every `acepta_preprint` declared in `stars.yaml` and `themes.yaml`.
+
+    ⚠ Per BIBCODE, not per (paper, subject): the PDF is one file reused across slugs (D-18) and the
+    note is one per bibcode, so the reading document is a property of the paper — accepting it under
+    any subject accepts it everywhere. An unreadable config contributes nothing (its loader is what
+    reports it, INV-80). First declaration wins."""
+    out: dict = {}
+    for archivo, error, load in (("stars.yaml", stars_error, load_stars),
+                                 ("themes.yaml", themes_error, load_themes)):
+        if error():
+            continue
+        for clave, meta in (load() or {}).items():
+            slug = str(as_map(meta).get("slug") or clave) if archivo == "stars.yaml" else clave
+            for x in load_acepta_preprint(as_map(meta), entry=slug):
+                out.setdefault(str(x["bibcode"]).strip(), f"acepta_preprint de `{slug}` ({archivo})")
+    return out
+
+
+def preprint_allowed(bibcode, aceptados: dict | None = None) -> bool:
+    """May the chain adopt the PREPRINT as the reading document of `bibcode`? (#512)
+
+    Yes when there is no published version (arXiv-only, thesis: the eprint IS the source) or when
+    the user declared `acepta_preprint` for it; otherwise the chain goes publisher-first and never
+    falls back to the eprint in silence. `aceptados` lets a caller that asks N times load the config
+    once."""
+    if not has_published_version(bibcode):
+        return True
+    return str(bibcode).strip() in (acepta_preprint_bibcodes() if aceptados is None else aceptados)
 
 
 def abstract_pending(text: str) -> bool:

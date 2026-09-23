@@ -26,6 +26,13 @@ los arma `discover.iter_pdf_candidates`). Se recorren TODOS, no el primero — m
 URL (OUP) contestó un desafío Cloudflare con HTTP 200 y la copia real era la de Europe PMC—, y
 cada uno se valida por magic `%PDF`.
 
+⛔ #512 — publisher-first: si el bibcode tiene versión PUBLICADA (`cfg.has_published_version`) y
+nadie declaró `acepta_preprint`, el eprint NO se adopta: del resolver se prueba ADS_PDF → PUB_PDF
+(sin EPRINT_PDF) y de la cascada abierta se saltean los candidatos de arXiv. Lo que así no sale
+queda en el residuo con `estado: publicado-no-conseguido`, el DOI, el enlace del `editor` y el
+`eprint` disponible (arxiv_id), y el cierre lo lista con sus dos salidas: traer el PDF del editor o
+aceptar el preprint (`triage.py <slug> --acepta-preprint <bib> --reason "…"`).
+
 Lo que ni así se consigue queda en build/<slug>/missing_pdf.json (superset del formato de
 fetch_arxiv; al correr último en la cadena, es el residuo COMPLETO del ingest por verdad
 de disco). Cada entrada lleva `bibstem`/`year`, un `hint` con la rama de la cascada MANUAL
@@ -242,7 +249,15 @@ def download_pdf(url: str, token: str) -> bytes | None:
     return data
 
 
-def fetch_free_copy(slug: str, r: dict, dest: Path, token: str) -> tuple[bool, list]:
+def is_eprint_candidate(url: str, src: str | None) -> bool:
+    """A free-copy candidate that IS the preprint (#512): tagged `eprint`, or hosted on arXiv —
+    an OpenAlex/Unpaywall location on arxiv.org comes with `pdf_source` unknown, not `eprint`."""
+    host = (urlparse(url).hostname or "").lower()
+    return src == "eprint" or host == "arxiv.org" or host.endswith(".arxiv.org")
+
+
+def fetch_free_copy(slug: str, r: dict, dest: Path, token: str,
+                    eprint_ok: bool = True) -> tuple[bool, list]:
     """Walk EVERY open-access candidate for record `r` (#358) and publish the first real PDF at
     `dest` → `(got one, urls tried)`.
 
@@ -252,10 +267,19 @@ def fetch_free_copy(slug: str, r: dict, dest: Path, token: str) -> tuple[bool, l
     lands with a `.pdf` extension. The urls tried are what separates «no free copy» from «there
     was one and the host blocked it» in the residue — those two ask for opposite actions.
     Records `pdf_source` (#57) only when the candidate knows it (arXiv → `eprint`, a
-    `publishedVersion` OA location → `publisher`); otherwise it stays unknown."""
+    `publishedVersion` OA location → `publisher`); otherwise it stays unknown.
+
+    `eprint_ok=False` (#512: published version, no `acepta_preprint`) skips the arXiv candidates —
+    they are not tried and not listed as tried."""
     bib = r["bibcode"]
     tried: list = []
     for url, why, src in oa_candidates(r.get("doi"), r.get("title")):
+        if not eprint_ok and is_eprint_candidate(url, src):
+            # ponytail: the arXiv-by-title lookup still runs inside the generator (one request);
+            # pass the flag down to `discover` if that cost ever matters.
+            cfg.print_seguro(f"      · copia libre ({why}) salteada: es el eprint y el paper tiene "
+                             f"versión publicada sin `acepta_preprint` (#512)")
+            continue
         tried.append(url)
         pdf = download_pdf(url, token)
         if pdf and write_pdf_atomic(dest, pdf):
@@ -274,6 +298,35 @@ def oa_candidates(doi: str | None, title: str | None = None):
     conseguir» in one theme were open access, with `discover.py --resolve` returning their URL."""
     import discover
     return discover.iter_pdf_candidates(doi, title)
+
+
+ESTADO_PUBLICADO = "publicado-no-conseguido"      # #512
+
+
+def publisher_link(r: dict) -> str:
+    """Where the user gets the publisher's copy: the DOI, or ADS's gateway to the publisher (#512)."""
+    doi = str(r.get("doi") or "").strip()
+    return (f"https://doi.org/{doi}" if doi else
+            f"https://ui.adsabs.harvard.edu/link_gateway/{r['bibcode']}/PUB_HTML")
+
+
+def print_published_residue(slug: str, missing: list) -> None:
+    """List the core papers whose PUBLISHED version could not be obtained, with their two ways out
+    (#512): bring the publisher's PDF, or declare `acepta_preprint`. The chain never falls back to
+    the eprint on its own — same shape as the triage candidates: listed, the user decides."""
+    pub = [m for m in missing if m.get("estado") == ESTADO_PUBLICADO]
+    if not pub:
+        return
+    cfg.print_seguro(f"\n⛔ {len(pub)} core con versión PUBLICADA sin conseguir — la cadena NO bajó el "
+                     f"preprint (#512):")
+    for m in pub:
+        cfg.print_seguro(f"  {m['bibcode']}  editor: {m['editor']}  eprint: "
+                         f"{('arXiv:' + m['eprint']) if m.get('eprint') else '—'}")
+    cfg.print_seguro(f"  → traé el PDF del editor a `vault/raw/pdfs/{slug}/<bibcode>.pdf` y re-corré la "
+                     f"cadena (si ya hay otra copia: `python scripts/replace_pdf.py <bibcode> <ruta.pdf> "
+                     f"--source publisher --reason \"…\"`), o aceptá el preprint: `python scripts/"
+                     f"triage.py {slug} --acepta-preprint <bibcode> --reason \"<motivo>\"` + pegar el "
+                     f"bloque + re-correr la cadena.")
 
 
 def drop_filter(recs: list, slug: str) -> tuple[list, list]:
@@ -375,13 +428,20 @@ def main() -> int:
                       + (f" ({n_arx} con arXiv cuya bajada falló)" if n_arx else ""))
     got = 0
     missing = []
+    aceptados = cfg.acepta_preprint_bibcodes()
     for i, r in enumerate(todo, 1):
         bib = r["bibcode"]
         dest = destdir / f"{safe_name(bib)}.pdf"
+        eprint_ok = cfg.preprint_allowed(bib, aceptados)          # #512 — publisher-first
         cands = candidate_urls(esource_records(bib, token))
+        salteado = not eprint_ok and any(t == "EPRINT_PDF" for t, _ in cands)
+        if not eprint_ok:
+            cands = [(t, u) for t, u in cands if t != "EPRINT_PDF"]
         cfg.print_seguro(f"  [{i}/{len(todo)}] {bib}: "
                           + (", ".join(t for t, _ in cands) if cands
-                             else "sin fuentes PDF en el resolver"))
+                             else "sin fuentes PDF en el resolver")
+                          + (" (EPRINT_PDF salteado: versión publicada sin `acepta_preprint`, #512)"
+                             if salteado else ""))
         ok = False
         for sub, url in cands:
             pdf = download_pdf(url, token)
@@ -398,16 +458,24 @@ def main() -> int:
         # #358 — agotados los `esource` de ADS, el resolver de acceso abierto ANTES de rendirse.
         copias_libres: list = []
         if not ok and r.get("doi"):
-            ok, copias_libres = fetch_free_copy(args.slug, r, dest, token)
+            ok, copias_libres = fetch_free_copy(args.slug, r, dest, token, eprint_ok)
             got += int(ok)
         if not ok:
             hint = rescue_hint(r.get("bibstem"), r.get("year"))
             # Tres estados, no uno (#358): «no hay copia libre» pide `pending:`; «la hubo y el
             # host la bloqueó» pide otro depósito o bajarla a mano desde esa URL. Salían iguales.
             estado = "bloqueado" if copias_libres else "sin-copia-libre"
-            missing.append({"bibcode": bib, "title": r.get("title"), "doi": r.get("doi"),
-                            "bibstem": r.get("bibstem"), "year": r.get("year"), "hint": hint,
-                            "estado": estado, "copias_libres": copias_libres})
+            entrada = {"bibcode": bib, "title": r.get("title"), "doi": r.get("doi"),
+                       "bibstem": r.get("bibstem"), "year": r.get("year"), "hint": hint,
+                       "estado": estado, "copias_libres": copias_libres}
+            if not eprint_ok and (r.get("arxiv_id") or salteado):
+                # #512 — había un eprint y la regla lo retuvo: no se bajó en silencio, queda para
+                # el usuario con las dos salidas. `copias_libres` sigue diciendo si hubo copia
+                # libre bloqueada (#358). Sin eprint a la vista, aceptar el preprint no cambia
+                # nada y el residuo queda en los estados de #358.
+                entrada.update(estado=ESTADO_PUBLICADO, editor=publisher_link(r),
+                               eprint=r.get("arxiv_id"))
+            missing.append(entrada)
             if copias_libres:
                 cfg.print_seguro(f"      → había copia libre y el host la bloqueó o no entregó un PDF "
                                  f"({len(copias_libres)} URL en missing_pdf.json): probá bajarla a "
@@ -421,6 +489,7 @@ def main() -> int:
     n_bloq = sum(1 for m in missing if m["estado"] == "bloqueado")
     cfg.print_seguro(f"Bajados {got}, ya estaban {skipped}, sin conseguir {len(missing)}"
                      + (f" ({n_bloq} con copia libre que el host bloqueó)" if n_bloq else "") + ".")
+    print_published_residue(args.slug, missing)
     miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
     if limited:
         cfg.print_seguro(f"  ⚠ --limit activo: quedaron {len(pendientes) - len(todo)} paper(s) "

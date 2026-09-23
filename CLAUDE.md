@@ -480,6 +480,10 @@ cuando se conoce), `ads` (escaneo alojado por ADS), `publisher`, `web` (snapshot
 en el `.txt` y se detecta re-corriendo `extract_fulltext` sin re-bajar (misma re-corrida = backfill
 de la marca de garble). Con `eprint`, una discrepancia numérica contra un valor publicado es
 candidata a **diferencia de versión** y NO se "corrige" la nota hacia el preprint.
+⛔ **Con versión PUBLICADA el preprint no se adopta sin decisión (#512):** la cadena prueba el
+editor y lo no conseguido queda en `missing_pdf.json` (`publicado-no-conseguido`); el eprint entra
+sólo con `acepta_preprint: [{bibcode, motivo, fecha}]` junto a `extra_core` (`triage.py <slug>
+--acepta-preprint <bib> --reason`), y vale por bibcode. arXiv-only y tesis: el eprint ES la fuente.
 
 ⚠ **`symbols_lost` y `fulltext_layout` se RETIRARON (#205, #193, #194):** migrador
 `--migrate-txt-fields`; el lint **bloquea** la nota que los lleve. **`Read` rasteriza el PDF, así que

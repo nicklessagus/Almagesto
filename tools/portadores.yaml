@@ -2279,3 +2279,50 @@ portadores:
       - modulo: scripts/replace_pdf.py
         estado: usa
         motivo: "Clasifica el PDF entrante con `arxiv_stamp` sobre sus primeras páginas; hereda el regex."
+
+  - issue: 512
+    regla: >-
+      Con versión PUBLICADA el preprint no se adopta como documento de lectura sin decisión
+      explícita: todo lo que ELIGE qué documento se baja pregunta `preprint_allowed` (bibcode sin
+      versión publicada —arXiv, tesis— o con `acepta_preprint` declarado). Medido: 122 notas de una
+      instancia leen el eprint teniendo bibcode publicado, y 179 de 198 core con arXiv los bajaba
+      `fetch_arxiv` por defecto.
+    funcion: lib_config.preprint_allowed
+    patron: 'fetch_arxiv|ARXIV_PDF|pdf_source.*eprint|"eprint"'
+    consumidores:
+      - modulo: scripts/fetch_arxiv.py
+        estado: usa
+        motivo: "Baja el eprint sólo de lo que `preprint_allowed` permite; el resto va al residuo para que `fetch_pdf` pruebe el editor."
+      - modulo: scripts/fetch_pdf.py
+        estado: usa
+        motivo: "Sin permiso saca EPRINT_PDF del resolver y saltea los candidatos de arXiv de la cascada abierta (`is_eprint_candidate`); lo no conseguido sale `publicado-no-conseguido`."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_paper_pending`: el `eprint` sobre bibcode publicado con permiso va a `preprint_aceptado` (aparte, AUD-207); sin permiso es deuda de #298."
+      - modulo: scripts/discover.py
+        estado: fuera-de-alcance
+        motivo: "`iter_pdf_candidates` PROPONE candidatos con su procedencia (`eprint` para arXiv) y no conoce el bibcode; el filtro lo aplica quien adopta el documento (`fetch_pdf.fetch_free_copy`). `resolve_pdf` propone una URL para `sources:` (off-ADS) y para: la adopta el usuario al pegarla."
+      - modulo: scripts/ingest_star.py
+        estado: fuera-de-alcance
+        motivo: "Orquesta: corre `fetch_arxiv`/`fetch_pdf`, que llevan la regla; su header documenta el orden publisher-first."
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: "Orquesta la misma sub-cadena (`ads_subchain`); la regla vive en los fetchers que corre."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "`--acepta-preprint` imprime la declaración que la regla lee; no baja nada (usa `has_published_version` sólo para avisar lo que no necesita aceptación)."
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "Es la salida hacia el PUBLICADO: instala el PDF que trae el usuario y lo firma; no adopta el eprint."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Estampa `pdf_source` por verdad de disco/registro del fetcher; no elige qué documento se baja."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Lee `pdf_source` para las salvedades `pdf_leido`; no baja nada."
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: "Lee `pdf_source` para avisarle al extractor que lee un preprint; no baja nada."
+      - modulo: scripts/search_arxiv.py
+        estado: fuera-de-alcance
+        motivo: "Backend de DESCUBRIMIENTO en arXiv (registros, no PDFs); no adopta ningún documento."

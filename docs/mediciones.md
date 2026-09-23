@@ -3835,3 +3835,22 @@ nuevo:** 329 `.txt`, 161 con marca según el regex viejo, **1 cambia**: `gj_667c
 (`('v2', '1111.5019')` → `(None, None)`), el falso positivo del issue. Las otras 160 dan idéntico
 (versión e id), incluidos los sellos `astro-ph/…` sin categoría y los que `pdftotext` parte en dos
 líneas. La exigencia va en `ARXIV_STAMP_RE` como lookahead, así que los dos lectores la heredan.
+
+## #512 — publisher-first: el preprint sólo con decisión declarada (v1.320.0)
+
+**Medido sobre un worktree desechable de la instancia (v1.319.0 → scripts de v1.320.0, sólo lectura
+de la instancia real):**
+
+- **Lint, sin aceptaciones declaradas:** «La nota se apoya en el PREPRINT…» (#298) **122 → 122**,
+  el mismo conjunto de stems (el issue citaba 150, medido antes de los reemplazos a mano).
+  `preprint_aceptado`: 0. La función compartida `has_published_version` no movió ninguna nota: la
+  instancia no tiene `astro.ph`, `PhDT` ni `MsT` con `pdf_source: eprint`.
+- **Con una aceptación sembrada** (`2002MNRAS.334...53M` en `hd_40307`): 122 → **121** en la deuda y
+  **1** en `preprint_aceptado`, nombrando la declaración que la cubre.
+- **Fetchers, offline sobre los `build/<slug>/ads.json` de la instancia** (8 sujetos, 247 core, 198
+  con `arxiv_id`): `fetch_arxiv` bajaba los 198; ahora baja **19** (arXiv-only) y retiene **179** para
+  el editor. De esos 179, **178 ya tienen PDF en disco** (re-correr la cadena no toca nada: la
+  idempotencia es por verdad de disco) y **1** (en `gj_581`) iría al carril publisher-first.
+- **No medido contra la red:** el orden ADS_PDF → PUB_PDF usa el mismo cliente de siempre
+  (`fetch_pdf.download_pdf`); el issue ya midió `link_gateway/…/PUB_PDF` (IOP 200, OUP 403). Los
+  tests cubren el orden, el filtro de la cascada abierta y el residuo con dobles de red.

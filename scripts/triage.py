@@ -8,6 +8,7 @@ Uso:
     python scripts/triage.py <slug> --drop-core <bib> […] --reason "<motivo>"      # #112: sacar un CORE del sujeto
     python scripts/triage.py <slug> --accept-source <doi> […] --via <via> --reason "<motivo>"  # #111: entrada lista para pegar
     python scripts/triage.py <slug> --promote-source <clave> --bibcode <bib>    # fuente off-ADS que resultó tener bibcode
+    python scripts/triage.py <slug> --acepta-preprint <bib> […] --reason "<motivo>"  # #512: leer el PREPRINT, lista para pegar
     python scripts/triage.py <slug> --prioridad                                # core agrupados por puerta (#126)
     python scripts/triage.py <slug> --extraccion todos|subconjunto [--reason …]  # D-13: qué se leyó
     python scripts/triage.py <slug> --sintesis [--n-papers N] [--reason …]     # INV-82: fecha de síntesis
@@ -628,6 +629,34 @@ def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
     return 1 if fallidos else 0
 
 
+def acepta_preprint(slug: str, bibcodes: list, motivo: str) -> int:
+    """Print the `acepta_preprint:` block ready to paste (#512) — the explicit decision to read the
+    PREPRINT of a paper that has a published version. Like `accept_source`, it never writes the
+    config: the decision is curated and versioned, and a script that edits it turns a decision into
+    a side effect. It refuses without `--reason`, and names the bibcodes that need no acceptance
+    (arXiv-only, thesis: there the eprint IS the source)."""
+    if not motivo:
+        sys.exit("aceptar el preprint sin `--reason` deja el registro sin decir POR QUÉ se lee el "
+                 "preprint teniendo versión publicada — que es todo lo que la escotilla guarda (#512).")
+    kinds = cfg.subject_kinds(slug)
+    if not kinds:
+        sys.exit(f"'{slug}' no es una estrella de stars.yaml ni un tema de themes.yaml")
+    sobran = [b for b in bibcodes if not cfg.has_published_version(b)]
+    for b in sobran:
+        cfg.print_seguro(f"  · {b}: no tiene versión publicada (arXiv / tesis) — el eprint ES la "
+                         f"fuente y no hace falta aceptarlo")
+    pedidos = [b for b in bibcodes if b not in sobran]
+    if not pedidos:
+        return 0
+    archivo, entrada = (("themes.yaml", slug) if kinds == ("theme",) else
+                        ("stars.yaml", cfg.star_by_slug(slug)[0]))
+    cfg.print_seguro(f"\n# pegar en la entrada `{entrada}` de vault/config/{archivo}, junto a `extra_core`")
+    cfg.print_seguro(cfg.acepta_preprint_snippet(pedidos, motivo))
+    cfg.print_seguro(f"  → vale para el bibcode en TODA la bóveda (el PDF se reusa entre slugs, D-18). "
+                     f"Después re-corré la cadena (`fetch_arxiv.py {slug}` baja el eprint; idempotente).")
+    return 0
+
+
 CURATED_KEYS = ("no_vista", "no_sintetizado", "salvedades", "vistas", "methods", "thesis_links",
                 "role", "refuta")
 
@@ -746,7 +775,8 @@ def main() -> int:
     ap.add_argument("--reason", default="",
                     # AUD-210: el help nombraba dos de las CINCO operaciones que lo exigen.
                     help="el motivo, y queda en el registro versionado. OBLIGATORIO con --drop, "
-                         "--drop-source, --drop-core, --accept-source y --extraccion subconjunto "
+                         "--drop-source, --drop-core, --accept-source, --acepta-preprint y "
+                         "--extraccion subconjunto "
                          "(ahí es el criterio del recorte). Con --sintesis es opcional, como nota")
     ap.add_argument("--extraccion", choices=("todos", "subconjunto"),
                     help="D-13/INV-83: declarar QUÉ SE LEYÓ de los core de este sujeto. `todos` = "
@@ -781,6 +811,10 @@ def main() -> int:
                     help="#353 (T5b): migra la fuente declarada CLAVE a su identidad ADS (--bibcode), "
                          "preservando la curación de la nota; imprime el `extra_core` y no edita themes.yaml")
     ap.add_argument("--bibcode", default="", help="bibcode ADS destino de --promote-source")
+    ap.add_argument("--acepta-preprint", nargs="+", metavar="BIBCODE", dest="acepta_preprint",
+                    help="#512: declarar que se LEE EL PREPRINT de un paper con versión publicada "
+                         "(publisher-first no la consiguió). Imprime el bloque `acepta_preprint:` "
+                         "listo para pegar junto a `extra_core`; no edita la config. Exige --reason.")
     ap.add_argument("--prioridad", action="store_true",
                     help="la cola de extracción: no filtra ni toca la lente, ordena lo que ya es "
                          "core. Dos vistas — #87: por cuántas facetas del objetivo toca cada uno "
@@ -812,6 +846,8 @@ def main() -> int:
         return close(drop_core(args.slug, args.drop_core, args.reason), "triage")
     if args.accept_source:
         return close(accept_source(args.slug, args.accept_source, args.via, args.reason), "triage")
+    if args.acepta_preprint:
+        return close(acepta_preprint(args.slug, args.acepta_preprint, args.reason), "triage")
     if args.promote_source:
         if not args.bibcode:
             ap.error("--promote-source necesita --bibcode <bibcode ADS destino>")

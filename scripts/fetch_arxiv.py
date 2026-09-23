@@ -10,6 +10,10 @@ pre-arXiv) Y las bajadas que fallaron (#32: antes un fallo sólo quedaba en el s
 invisible para la cascada manual); fetch_pdf, el siguiente paso de la cadena, intenta
 todo lo que siga sin PDF en disco vía el resolver de ADS.
 
+⛔ #512 — publisher-first: sólo baja el eprint de un bibcode SIN versión publicada (arXiv-only,
+tesis: `cfg.has_published_version`) o con `acepta_preprint` declarado en la config del sujeto
+(`cfg.preprint_allowed`). El resto va al residuo y `fetch_pdf` intenta el editor.
+
 Deja además en build/<slug>/pdf_source.json de qué rama salió cada PDF (acá siempre `eprint`:
 arXiv sirve el EPRINT, que puede ser un v1 pre-referato distinto del publicado que cita el
 bibcode). Lo consume make_notes para estampar `pdf_source` (#57).
@@ -121,14 +125,22 @@ def main() -> int:
     destdir = cfg.PDFS / args.slug
     destdir.mkdir(parents=True, exist_ok=True)
 
-    todo = [r for r in recs if r.get("arxiv_id")]
+    # #512 — publisher-first: el eprint de un paper con versión PUBLICADA no se adopta en silencio.
+    # Acá sólo baja lo que no tiene publicado (arXiv-only, tesis) o lo que el usuario aceptó con
+    # `acepta_preprint`; el resto va a `fetch_pdf`, que prueba el editor y deja el residuo.
+    aceptados = cfg.acepta_preprint_bibcodes()
+    todo = [r for r in recs if r.get("arxiv_id") and cfg.preprint_allowed(r["bibcode"], aceptados)]
+    publicados = [r for r in recs
+                  if r.get("arxiv_id") and not cfg.preprint_allowed(r["bibcode"], aceptados)]
     no_arxiv = [r for r in recs if not r.get("arxiv_id")]
     if args.limit:
         todo = todo[: args.limit]
 
     label = data.get("star") or data.get("title") or args.slug
     cfg.print_seguro(f"{label}: {len(todo)} con arXiv a bajar, "
-                      f"{len(no_arxiv)} sin arXiv (pre-arXiv / no e-print)")
+                      f"{len(no_arxiv)} sin arXiv (pre-arXiv / no e-print)"
+                      + (f", {len(publicados)} con versión PUBLICADA → al editor primero "
+                         f"(`fetch_pdf`; el eprint sólo con `acepta_preprint`, #512)" if publicados else ""))
     got, skipped, failed = 0, 0, []
     for i, r in enumerate(todo, 1):
         stem = safe_name(r["bibcode"])
@@ -158,13 +170,14 @@ def main() -> int:
     # residuo = sin arXiv + bajadas fallidas (#32): la contabilidad de "qué falta" debe cubrir
     # también los fallos, que antes morían en el stdout. En la cadena, fetch_pdf (siguiente paso)
     # intenta todo lo que siga sin PDF en disco y reescribe este archivo con el residuo final.
-    residue = no_arxiv + failed
+    residue = no_arxiv + publicados + failed
     if residue:
         miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
         cfg.write_text_atomic(miss, json.dumps(
             [{"bibcode": r["bibcode"], "title": r["title"], "doi": r.get("doi")}
              for r in residue], indent=2, ensure_ascii=False))
-        cfg.print_seguro(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(failed)} fallidos) → {miss} "
+        cfg.print_seguro(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(publicados)} publicados sin "
+                          f"`acepta_preprint` + {len(failed)} fallidos) → {miss} "
                           "(fetch_pdf los intenta vía el resolver de ADS; el residuo final es el suyo).")
     cfg.save_paso(args.slug, "fetch_arxiv", flags=cfg.flags_usados(args, ap))
     return 0

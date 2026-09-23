@@ -67,7 +67,7 @@ Progreso del ingest de <estrella>:
    ⛔ **La mecánica de la cadena se describe en UN solo lugar (#67):**
    `.claude/skills/ingest-star/reference/cadena-ads.md`, que `ingest-theme` apunta también. Ahí
    están la **guardia de expansión** (el checkpoint humano que frena si el pool se multiplicó), el
-   citation chaining, el rate limit de `fetch_arxiv`, la cascada de `fetch_pdf` y su residuo
+   citation chaining, el rate limit de `fetch_arxiv`, la cascada publisher-first de `fetch_pdf` (#512) y su residuo
    `build/<slug>/missing_pdf.json`, los dos chequeos de `extract_fulltext`, `check_retractions` y
    `extra_core` como **curación persistente y versionada**. Leelo la primera vez y ante cualquier
    aborto; lo que sigue acá es sólo lo que es **de una estrella**.

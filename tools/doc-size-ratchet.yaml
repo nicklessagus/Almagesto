@@ -43,9 +43,9 @@
 #   - Y la red barata del hallazgo secundario: claves `ancla:` contadas contra las entradas
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
-medido_en: "2026-09-22"
-techo_lineas: 1322
-techo_bytes: 99451
+medido_en: "2026-09-23"
+techo_lineas: 1325
+techo_bytes: 99797
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -742,3 +742,19 @@ crecimientos:
       catálogo de bloqueantes sigue en `docs/lint.md` § Bloqueantes.
     techo_lineas: 1322
     techo_bytes: 99451
+  - fecha: "2026-09-23"
+    ancla: "#512"
+    motivo: >-
+      La regla que un agente necesita ANTES de correr la cadena o de pegar un bibcode en
+      `extra_core`: con versión publicada el preprint no se adopta en silencio, el residuo nuevo
+      (`publicado-no-conseguido`) y la escotilla `acepta_preprint` con su comando. Sin ella, el
+      agente que ve un `missing_pdf.json` con papers que están en arXiv los "rescata" bajando el
+      eprint a mano, que es exactamente lo que la regla existe para impedir.
+    sale: >-
+      Nada: son cuatro líneas en el párrafo de `pdf_source`, que es donde se decide qué documento
+      se lee, y el porqué medido (150 notas en preprint con versión publicada, 110 con PUB_PDF en
+      ADS, 68 extracciones re-paginadas) ya va al issue y a `docs/mediciones.md`. La mecánica
+      (orden ADS_PDF → PUB_PDF, filtro de la cascada abierta, forma del residuo) vive en los
+      docstrings de `fetch_pdf`/`fetch_arxiv` y en el header de los orquestadores.
+    techo_lineas: 1325
+    techo_bytes: 99797

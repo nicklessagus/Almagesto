@@ -436,6 +436,9 @@
 ## 🕳 La nota se apoya en el PREPRINT habiendo versión publicada (#298, backlog) (0)
 > sobre 60 notas de `papers/` — 0 con `versions_disponible` (la estampa `sweep_external`); las demás se deciden por `pdf_source` (#442)
 
+## ✍ Se lee el PREPRINT habiendo versión publicada por decisión DECLARADA (`acepta_preprint`, #512) — declarado, no es deuda (0)
+> sobre 60 notas de `papers/` — 0 con `versions_disponible` (la estampa `sweep_external`); las demás se deciden por `pdf_source` (#442)
+
 ## 🕳 `STATUS.md` apilado como bitácora: es ESTADO, se reescribe (#302, backlog) (0)
 > sobre 1 archivo de configuración
 
