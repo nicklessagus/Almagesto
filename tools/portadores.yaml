@@ -2351,3 +2351,25 @@ portadores:
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "Sólo NOMBRA `replace_pdf.py` como salida del backlog #298; no instala nada."
+
+  - issue: 514
+    regla: >-
+      Todo PROPONENTE de bibcodes para un sujeto resta los descartes del PAR `(paper, sujeto)`,
+      cualquiera sea el carril que lo excluyó: el candidato descartado (`chaining`) y el core sacado
+      con `--drop-core` (`sujeto`, #112). Medido: un `--drop-core` de `gj_581` volvió por el grafo de
+      citas como candidato pendiente y se aceptó a `extra_core`.
+    funcion: query_ads.load_triage
+    patron: 'es_del_carril\(|origen.*chaining'
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Define `es_del_carril` y `dropped_from_subject` (el carril `sujeto`); no propone candidatos."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "El roll-up lee `dropped_from_subject` para publicar el estado del paper dropeado; no propone candidatos."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "Lista las decisiones con su `origen` y escribe los descartes de los dos carriles; la cola de candidatos la produce `query_ads` (los dos proponentes llaman `load_triage`)."
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: "Filtra el carril `fuente-declarada` (#81) para avisar de un item de `sources:` ya descartado: otro carril, otra regla."

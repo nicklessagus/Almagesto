@@ -3864,3 +3864,12 @@ población previa; la prueba es el próximo residuo `publicado-no-conseguido`. T
 (copia, `.txt` acotado al bibcode, `pdf:`/`pdf_sha`/`pdf_source` en la nota, sin `pdf_reemplazo`),
 las negativas (slug no declarado, preprint vendido como publicado, sin `--slug`) y que con copia
 previa `--slug` no cambia nada.
+
+## #514 — el chaining resta también los `--drop-core` del sujeto (v1.322.0)
+
+**`load_triage` viejo vs nuevo, leyendo los registros de la instancia (worktree desechable, sólo
+lectura):** `gj_581` 197 → 202 (los 5 `--drop-core`), `ica` 0 → 21, `ica-ruido` 0 → 10; los otros
+cinco sin cambio. Candidatos pendientes hoy en los `ads.json`: 0 en todos (el caso del issue ya se
+resolvió a mano), así que el efecto se ve en la próxima corrida de `query_ads`. En los temas el
+número sube pero no cambia nada visible: sin compuerta de triage, `load_triage` no se consulta en el
+chaining y el barrido es de estrellas.

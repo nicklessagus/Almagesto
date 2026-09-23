@@ -1131,3 +1131,16 @@ python scripts/lint.py | grep -B1 -A3 '<bib>'
 «PDF sin procedencia» ni en #298. Re-correr `extract_fulltext <slug>` no cambia `pdf_source`.
 
 **Devolver si** la nota queda con `pdf_source: null`, o si el comando escribe algo al rehusar.
+
+## §#514 · v1.322.0 — el chaining no re-propone un `--drop-core`
+
+```bash
+python scripts/query_ads.py gj_581
+python scripts/triage.py gj_581
+```
+
+**Esperado:** 0 candidatos pendientes; si el grafo de citas vuelve a traer `2012ApJS..200...15A`,
+cuenta en «N ya descartados antes» y no en la cola.
+
+**Devolver si** un bibcode con decisión `descartado` de cualquiera de los dos carriles (`chaining`,
+`sujeto`) aparece como candidato pendiente.

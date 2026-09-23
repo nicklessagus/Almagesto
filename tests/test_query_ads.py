@@ -1346,6 +1346,28 @@ def test_main_triage_no_repropone_descartados(toy_vault, toy_classifier, no_slee
     assert "1 ya descartados antes" in capsys.readouterr().out
 
 
+def test_514_el_chaining_no_re_propone_un_paper_sacado_del_sujeto_con_drop_core(
+        toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
+    """#514 — `load_triage` restaba sólo el carril `chaining`: un paper sacado del sujeto con
+    `--drop-core` (carril `sujeto`, #112) que dejó de venir por la query directa volvía por el grafo
+    de citas como candidato pendiente (medido: `2012ApJS..200...15A` en `gj_581`, y se aceptó)."""
+    d = toy_vault.ROOT / "build" / "test_star"
+    d.mkdir(parents=True, exist_ok=True)
+    cfg.save_decisiones("test_star", {
+        "2012terra..1A": {"decision": "descartado", "origen": "sujeto",
+                          "motivo": "la lectura refutó el reclamo (#212)"}})
+    monkeypatch.setattr(qa, "query_ads",
+                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
+                        [rec("2020dirA....1A")])
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [
+        dict(rec("2012terra..1A", title="HARPS-TERRA"), via="chain:references")])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    data = json.loads((d / "ads.json").read_text())
+    assert data["candidates"] == [], "el juicio del PAR ya está tomado: no se re-pide"
+    assert "1 ya descartados antes" in capsys.readouterr().out
+    assert qa.load_triage("test_star") == {"2012terra..1A"}
+
+
 def test_load_triage_no_suprime_descartes_de_fuente_declarada(toy_vault):
     """#81: `decisiones` mezcla los DOS carriles — el candidato del citation chaining (`triage
     --drop`, sin `origen`) y la fuente DECLARADA de un tema off-ADS (`triage --drop-source`,

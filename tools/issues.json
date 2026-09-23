@@ -2549,11 +2549,16 @@
   {
    "number": 512,
    "title": "La ingesta adopta el PREPRINT por defecto: pedir la versión publicada al usuario (o su aceptación explícita del eprint) antes de extraer — 150 notas en preprint con versión publicada, 110 con PUB_PDF en ADS",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 513,
    "title": "replace_pdf no instala la PRIMERA copia: el PDF del editor que trae el usuario (salida de #512) queda sin pdf_source",
+   "state": "CLOSED"
+  },
+  {
+   "number": 514,
+   "title": "El chaining re-propone como candidato un paper sacado del sujeto con --drop-core: load_triage resta sólo el carril chaining",
    "state": "OPEN"
   }
  ]

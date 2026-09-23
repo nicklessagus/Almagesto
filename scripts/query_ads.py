@@ -689,9 +689,16 @@ def load_triage(slug: str) -> set[str]:
     porque su sujeto es otro sistema lo sigue siendo lo proponga el grafo de citas o el full-text.
     Hasta 1.97.0 el barrido no lo llamaba, así que re-proponía **para siempre** lo ya juzgado —
     medido en `hd_40307`: 52 de 52 descartes con motivo devueltos como «core NUEVOS»."""
+    # ⛔ #514 — y por eso resta los DOS carriles del par: el candidato descartado (`chaining`) y el
+    # core sacado del sujeto (`sujeto`, `--drop-core`, #112). Filtrando sólo `chaining`, un paper
+    # que dejó de venir por la query directa y volvió por el grafo de citas se re-proponía como
+    # candidato pendiente, y el juicio ya tomado se ofrecía para contradecirlo (medido: aceptado a
+    # `extra_core` sobre un `--drop-core` que la lectura había motivado). `fuente-declarada` (#81)
+    # no es un bibcode de ADS y queda afuera.
     # @inv INV-49
     return {b for b, d in cfg.load_decisiones(slug).items()
-            if d.get("decision") == "descartado" and cfg.es_del_carril(d, "chaining")}
+            if d.get("decision") == "descartado"
+            and (cfg.es_del_carril(d, "chaining") or cfg.es_del_carril(d, "sujeto"))}
 
 
 def excluidos_del_sujeto(slug: str) -> dict:
