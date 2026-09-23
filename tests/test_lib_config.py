@@ -3994,3 +3994,43 @@ def test_AUD413_fm_key_span_toma_el_bloque_literal_con_linea_en_blanco():
     assert yaml.safe_load("\n".join(resto)) == {"sin_bibtex": "foo"}
     # la línea en blanco ENTRE dos claves no es del valor
     assert cfg.fm_key_span(["a: 1", "", "b: 2"], "a") == (0, 1)
+
+
+# ── #506 · a subject name can itself carry punctuation: the suffix never CONTINUES the slug ──────
+
+def _declared_subjects() -> list:
+    """Every subject a `## Vista — <sujeto>` can name: star canonical names + theme slugs, plus the
+    shapes measured on a real vault (the template ships with none declared)."""
+    fijos = ["ica", "ica-ruido", "ica_x", "GJ 71", "GJ 710", "tau Cet", "tau Ceti", "HD 1070",
+             "HD 10700"]
+    return sorted(set(fijos) | set(cfg.load_stars()) | set(cfg.load_themes()))
+
+
+def _prefix_pairs(subjects):
+    return [(a, b) for a in subjects for b in subjects if a != b and b.startswith(a)]
+
+
+def test_la_red_506_tiene_pares_de_prefijo_que_mirar():
+    """Sin pares la red de abajo pasaría vacía (INV-40: declarar la población)."""
+    assert ("ica", "ica-ruido") in _prefix_pairs(_declared_subjects())
+
+
+@pytest.mark.parametrize("a,b", _prefix_pairs(_declared_subjects()))
+def test_ningun_sujeto_prefijo_devuelve_la_vista_del_otro(a, b):
+    """#506: `## Vista — ica` devolvía la sección de `ica-ruido`. El cosechador rehusaba escribir la
+    vista de `ica` («ya tiene prosa redactada») y `--force` habría pisado la de `ica-ruido`."""
+    solo_b = f"# P\n\n## Vista — {b}\n\nprosa de b\n"
+    assert cfg.section_start(solo_b, f"## Vista — {a}") == -1
+    assert cfg.section_span(solo_b, f"## Vista — {a}") is None
+    # con las dos, en el orden que sea, cada una devuelve la suya
+    for t in (solo_b + f"\n## Vista — {a}\n\nprosa de a\n",
+              f"# P\n\n## Vista — {a}\n\nprosa de a\n\n## Vista — {b}\n\nprosa de b\n"):
+        ini, fin = cfg.section_span(t, f"## Vista — {a}")
+        assert "prosa de a" in t[ini:fin] and "prosa de b" not in t[ini:fin]
+
+
+@pytest.mark.parametrize("cola", [" (2026-08-27)", " · releída", ":", ""])
+def test_el_sufijo_de_puntuacion_separado_sigue_tolerado(cola):
+    """La otra mitad (#176): `## Vista — X (2026-08-27)` sigue siendo la sección de X."""
+    t = f"# P\n\n## Vista — ica{cola}\n\nprosa\n"
+    assert cfg.section_start(t, "## Vista — ica") == t.index("## Vista")

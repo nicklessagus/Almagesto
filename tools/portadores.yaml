@@ -2157,3 +2157,35 @@ portadores:
       - modulo: scripts/discover.py
         estado: usa
         motivo: "`iter_pdf_candidates` suma HAL (`fileMain_s`, por DOI) entre Europe PMC y arXiv, con `pdf_source` desconocido; `_NO_FREE_COPY` lo nombra entre lo consultado."
+
+  - issue: 506
+    regla: >-
+      `## Vista — <sujeto>` (y `### Lente — <énfasis>`) se buscan por el nombre EXACTO: el sufijo
+      tolerado tras un encabezado (#176, `## Vista — X (2026-08-27)`) nunca CONTINÚA el nombre, y
+      `-`/`_` pegados continúan un slug. Medido: `ica` e `ica-ruido` son dos temas declarados y
+      `section_start(t, "## Vista — ica")` devolvía la sección de `ica-ruido` — el cosechador
+      rehusaba escribir la vista de `ica` y `--force` hubiera pisado la otra.
+    funcion: lib_config.section_start
+    patron: 'Vista — '
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`write_view_section`, `restamp_view_locators` y `restamp_salvedades` cortan la vista con `section_span`; `_lens_span` dejó el `find` pelado y pasó a `section_start` (misma trampa con `### Lente — ruido` / `ruido-rosa`)."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`view_stub_kind` / `restamp_vista_stub` leen la sección del sujeto con `section_span`."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Corta secciones fijas con `section_start`/`section_span`; la coherencia `vistas[] ↔ cuerpo` usa `vistas_en_cuerpo`, que extrae el sujeto completo por regex y corta sólo en espacio + puntuación: ya separaba `ica` de `ica-ruido`."
+      - modulo: scripts/lib_blocks.py
+        estado: usa
+        motivo: "Busca `## Verificación de citas` (encabezado fijo): hereda el corte, sin sujeto en el nombre."
+      - modulo: scripts/bench_verify.py
+        estado: usa
+        motivo: "Busca `VERIFY_HEADER` (encabezado fijo): hereda el corte, sin sujeto en el nombre."
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: "Busca `## Inventario por eje` (encabezado fijo): hereda el corte, sin sujeto en el nombre."
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: "Sólo NOMBRA `## Vista — {sujeto}` en el texto del prompt para el extractor; no busca la sección en ninguna nota."

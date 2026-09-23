@@ -11214,3 +11214,11 @@ def test_collect_rehusa_el_hallazgo_bajo_una_clave_sin_categoria(toy_vault, monk
     monkeypatch.setattr(lint, "check_note", lambda *a: {"clave_inexistente": [("c", "m")]})
     with pytest.raises(RuntimeError, match="clave_inexistente"):
         lint.collect()
+
+
+def test_vistas_en_cuerpo_no_confunde_sujetos_prefijo():
+    """#506: `ica` e `ica-ruido` son dos sujetos. El lector del lint no pasa por `section_start` y
+    ya los separaba; esto lo fija, para que `vistas[] ↔ cuerpo` vea la vista de `ica` que falta."""
+    t = "# X\n\n## Vista — ica-ruido\n\nprosa\n"
+    assert lint.vistas_en_cuerpo(t) == {"ica-ruido"}
+    assert lint.vistas_en_cuerpo(t + "\n## Vista — ica (2026-08-27)\n\nmás\n") == {"ica", "ica-ruido"}

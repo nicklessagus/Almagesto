@@ -1006,3 +1006,27 @@ guarda sigue rechazando el `mal`), o si el prompt de extracción arranca con la 
 
 **Al cerrar:** las cinco filas de la tabla con tus números, y si te quedó algún localizador `MAL`
 nuevo que antes salía `indice` (no debería: son estados disjuntos).
+
+## #506 · v1.314.0 — `## Vista — <sujeto>` se busca por el nombre exacto
+
+Tras el merge, desde la raíz de la instancia:
+
+```bash
+python scripts/lint.py > /tmp/lint506.log 2>&1; echo RC=$?      # sin categorías nuevas ni cambios de conteo
+python -c "
+import sys,glob;sys.path.insert(0,'scripts');import lib_config as c
+s=sorted(set(c.load_stars())|set(c.load_themes()))
+p=[(a,b) for a in s for b in s if a!=b and b.startswith(a)]
+print('pares', p)
+print('fallan', [(a,b) for a,b in p if c.section_start(f'## Vista — {b}\nx\n', f'## Vista — {a}')>=0])"
+python -c "import sys;sys.path.insert(0,'scripts');import lib_config as c;print(c.section_start(open('vault/wiki/papers/1997Wentzell.md',encoding='utf-8').read(),'## Vista — ica'))"   # -1
+```
+
+**Esperado** (medido sobre `b2634c4`): el lint idéntico al de v1.313.0; `pares` =
+`[('ica','ica-ruido'), ('ica','icasso')]` y `fallan` = `[]`; la búsqueda de `ica` en `1997Wentzell` (sólo tiene
+`## Vista — ica-ruido`) da `-1`: son 24 notas así, donde antes la cosecha de `ica` rehusaba («ya
+tiene prosa redactada») y `--force` pisaba la vista de `ica-ruido`. (No uso `harvest_views
+--dry-run` como prueba: ver el issue gemelo sobre `--dry-run`.)
+
+**Devolver si** alguna sección fija (`## Papers`, `## Verificación de citas (…)`, `## Abstract`)
+deja de encontrarse, o si la cosecha de `ica` toca la sección de `ica-ruido`.

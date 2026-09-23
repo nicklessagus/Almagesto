@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.313.0"
+ALMAGESTO_VERSION = "1.314.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1601,6 +1601,10 @@ def _offsets_en_fence(text: str) -> set:
     return dentro
 
 
+#: #506 · characters that, glued right after a header, continue a subject slug (never a suffix).
+_SLUG_CONT = ("-", "_")
+
+
 def section_start(text: str, header: str) -> int:
     """Index where the `header` section starts, anchored to a line break, or -1 if absent.
 
@@ -1622,13 +1626,22 @@ def section_start(text: str, header: str) -> int:
     the concept roll-up and `stamp_concept_rollup` return `False` forever — silently, and taking
     D-24's *Entró por* column with it. Any two sections where one names a prefix of the other hit
     the same trap, so the rule lives here and not at the call site.
+
+    ⛔ And the suffix never CONTINUES the name (#506): a subject name may itself carry
+    punctuation, so `## Vista — ica` matched `## Vista — ica-ruido` (the stripped rest `-ruido`
+    starts with punctuation). Measured on a real vault: the harvester refused to write the `ica`
+    view because it saw the `ica-ruido` prose, and `--force` would have overwritten it. A glued
+    alphanumeric, `-` or `_` continues a slug; the tolerated suffix is the one that does not.
     """
     #  @inv INV-98
     dentro = _offsets_en_fence(text)
     for i in ([0] if text.startswith(header) else []) + _header_hits(text, header):
         if i in dentro:
             continue        # el encabezado vive dentro de un ```code fence```: es un EJEMPLO
-        resto = text[i + len(header):].split("\n", 1)[0].strip()
+        cola = text[i + len(header):].split("\n", 1)[0]
+        if cola[:1] in _SLUG_CONT:
+            continue        # #506: `-`/`_` continue a subject name (`ica` vs `ica-ruido`)
+        resto = cola.strip()
         if not resto or not resto[0].isalnum():
             return i
     return -1

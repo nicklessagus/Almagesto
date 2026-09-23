@@ -3721,3 +3721,29 @@ no evaluables 2337 → 2337 · rc 0.
 
 **Fix:** `lib_quotes.adjacent_locators` (`_introduce_la_siguiente`) y `PAGE_LOC_RE`
 (`_page_loc_re`, `_PAGE_BORDER`).
+
+## #506 — `## Vista — ica` devolvía la sección de `ica-ruido` (v1.314.0)
+
+**Medido en Almagesto-Tesis (`b2634c4`, v1.313.0), `scripts/` del template sobre un worktree de la
+instancia**, comparando `section_start` viejo ↔ nuevo sobre las 298 notas de `vault/wiki/`: cada
+encabezado presente en la nota + `## Vista — <s>` para los 7 sujetos declarados + los sujetos y
+énfasis de `vistas[]` (3531 búsquedas).
+
+- **Cambian 24, las 24 del mismo tipo:** `## Vista — ica` en una nota que sólo tiene la vista de
+  `ica-ruido` → antes la sección de `ica-ruido`, ahora `-1`. Ninguna otra búsqueda cambia (ningún
+  encabezado fijo de la bóveda va seguido de `-`/`_`).
+- **Pares de prefijo entre los sujetos declarados:** `ica`/`ica-ruido` e `ica`/`icasso`. El segundo
+  ya lo separaba la regla de #176 (`s` es alfanumérico); el primero es el del issue. La red del
+  test, corrida sobre los sujetos de la instancia: 0 pares fallan.
+- **`vistas[] ↔ cuerpo`: 0 → 0.** El lint no pasa por `section_start`: `lint.vistas_en_cuerpo`
+  extrae el sujeto completo por regex y ya distinguía `ica` de `ica-ruido`. Hoy ninguna nota declara
+  `ica` sin su sección (la de `2014ISPM...31...18A` ya se arregló insertando el stub). ⚠ El issue
+  dice que el lint dio esa nota por coherente; con el lector del lint no se reproduce — declarado,
+  no re-medible (el estado de la nota cambió).
+- **Lint entero antes ↔ después: idéntico** (salvo la fecha), rc 0 los dos.
+- **Consecuencia para las 24:** con el corte viejo, cosechar `ica` en cualquiera de ellas rehusaba
+  («ya tiene prosa redactada») y `--force` pisaba la vista de `ica-ruido`; ahora la sección se agrega.
+
+**Fix:** `lib_config.section_start` (`_SLUG_CONT`: `-`/`_` pegados continúan el nombre) y
+`harvest_views._lens_span` (era un `find` pelado; la misma trampa con `### Lente — <énfasis>`).
+Portadores: entrada 506 de `tools/portadores.yaml`.

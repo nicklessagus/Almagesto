@@ -561,8 +561,8 @@ def upsert_section(dest: Path, header: str, cuerpo: str) -> bool:
 
 def _lens_span(seccion: str, enfasis: str) -> tuple | None:
     """Span of the `### Lente — <énfasis>` sub-section inside a view section, or `None` (#239)."""
-    marca = f"### Lente — {enfasis}"
-    ini = seccion.find(marca)
+    # #506: the shared cutter, not a bare `find` — `ruido` is a prefix of `ruido-rosa`
+    ini = cfg.section_start(seccion, f"### Lente — {enfasis}")
     if ini < 0:
         return None
     fin = seccion.find("\n### ", ini + 1)

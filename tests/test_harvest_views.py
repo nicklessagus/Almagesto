@@ -2043,3 +2043,25 @@ def test_AUD470_las_ayudas_de_lectura_escapan_el_dolar(toy_vault):
     t = dest.read_text(encoding="utf-8")
     for esc in (r"costs US\$20", r"cuesta US\$20", r"a \$5 fee", r"tasa de \$5"):
         assert esc in t, (esc, t)
+
+
+# ── #506 · `ica` no es la vista de `ica-ruido`, ni `ruido` la lente de `ruido-rosa` ───────────────
+
+def test_lens_span_no_confunde_lentes_prefijo():
+    """El mismo corte que `section_start` para `### Lente — <énfasis>`: era un `find` pelado."""
+    sec = "## Vista — ica\n\n### Lente — ruido-rosa\n\nrosa\n"
+    assert hv._lens_span(sec, "ruido") is None
+    sec += "\n### Lente — ruido\n\nblanco\n"
+    ini, fin = hv._lens_span(sec, "ruido")
+    assert sec[ini:fin].startswith("### Lente — ruido\n") and "rosa" not in sec[ini:fin]
+
+
+def test_write_view_section_escribe_ica_sin_tocar_ica_ruido(tmp_path):
+    """Regresión del caso medido (#506): la nota sólo tiene la vista redactada de `ica-ruido`;
+    cosechar `ica` tiene que AGREGAR su sección, no rehusar ni pisar la otra."""
+    dest = tmp_path / "2014ISPM...31...18A.md"
+    dest.write_text("---\nbibcode: x\n---\n# X\n\n## Vista — ica-ruido\n\nprosa redactada\n",
+                    encoding="utf-8")
+    assert hv.write_view_section(dest, "ica", "## Vista — ica\n\nnueva\n", theme=True) is True
+    t = dest.read_text(encoding="utf-8")
+    assert "prosa redactada" in t and "## Vista — ica\n\nnueva" in t
