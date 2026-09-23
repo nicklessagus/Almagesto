@@ -5274,6 +5274,33 @@ def test_restamp_lente_toma_la_lente_DECLARADA_por_la_extraccion(toy_vault, caps
     assert "0 vista(s) con `lente` re-estampada" in capsys.readouterr().out, "idempotente"
 
 
+def test_509_restamp_lente_elige_la_extraccion_del_SUJETO_de_la_vista(toy_vault):
+    """#509 — con dos lecturas del mismo paper (dos sujetos, dos slugs, mismo nombre de JSON), la
+    vista del sujeto que va segundo recibía la lente y los ejes de la extracción del primero."""
+    vistas = [{"sujeto": "Estrella A", "tipo": "star", "lente": ["rv"]},
+              {"sujeto": "Estrella B", "tipo": "star", "lente": ["activity"]}]
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020dos....1..1D.md"
+    f.write_text("---\nbibcode: 2020dos....1..1D\ntags: [paper]\nvistas:\n"
+                 + yaml.safe_dump(vistas, allow_unicode=True, sort_keys=False, default_flow_style=False)
+                 + "---\n\n# p\n\n## Vista — Estrella A\n\n**Ejes:**\n\n- **rv:** K de A\n\n"
+                 + "## Vista — Estrella B\n\n**Ejes:**\n\n- **activity:** S de B\n", encoding="utf-8")
+    for slug, suj, ejes in (("a_star", "Estrella A", {"rv": "K de A", "ml": "red de A"}),
+                            ("b_star", "Estrella B", {"activity": "S de B"})):
+        d = cfg.EXTRACCION / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "2020dos....1..1D.json").write_text(json.dumps(
+            {"bibcode": "2020dos....1..1D", "vista": {"sujeto": suj, "tipo": "star"},
+             "lente": list(ejes), "ejes": ejes}, ensure_ascii=False), encoding="utf-8")
+    mn.restamp_lens()
+    texto = f.read_text(encoding="utf-8")
+    por = {v["sujeto"]: list(v["lente"]) for v in cfg.split_fm(texto)["vistas"]}
+    assert por == {"Estrella A": ["rv", "ml"], "Estrella B": ["activity"]}, por
+    b = texto[texto.index("## Vista — Estrella B"):]
+    assert "red de A" not in b and "K de A" not in b, "la vista de B ganó ejes de la extracción de A"
+    assert "- **ml:** red de A" in texto[:texto.index("## Vista — Estrella B")]
+
+
 def test_481_restamp_lente_re_serializa_la_fecha_parseada_como_date(toy_vault, capsys):
     """#481 — el migrador de la categoría `vista_fecha_no_str`: la vista cuya `fecha` YAML leyó como
     `date` se reescribe como str, sin re-fechar la lectura ni tocar la lente."""

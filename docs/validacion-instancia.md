@@ -1051,3 +1051,19 @@ escriben.
 **Devolver si** algún modo de un script que declara `--dry-run` deja `git status` distinto, si el
 `+A/-B` anunciado no coincide con el `git diff --numstat` de la corrida real, o si un modo que
 antes lo respetaba ahora rehúsa.
+
+## §#509 · v1.317.0 — `--restamp-lente` elige la extracción por sujeto
+
+```bash
+python scripts/make_notes.py --restamp-lente
+git diff --stat -- vault
+```
+
+**Esperado** (medido sobre `b4646f2`): cambian **3** notas, sólo en `vistas[].lente` de la vista
+`ica-ruido` (`2023A&A...675A.187O`, `2025A&A...696A.152O`, `2026A&A...705A.234O`), que todavía
+tenía la lente de `ica`: residuo de la reversión. Ninguna viñeta de eje nueva. La lista «sin
+extracción en disco» sube de 54 a 66 (vistas que antes recibían la extracción de otro sujeto).
+Una segunda corrida no cambia nada.
+
+**Devolver si** alguna vista gana una viñeta o un eje de lente que no esté en la extracción de SU
+sujeto (`vault/raw/extraccion/*/<bib>.json` con `vista.sujeto` igual al de la vista).

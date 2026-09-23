@@ -402,8 +402,14 @@ def restamp_scope() -> int:
     return 0
 
 
-def _extraction_of(bibcode: str, enfasis: str = "") -> dict | None:
-    """The versioned extraction JSON of one reading, under whichever slug holds it (#311/#371)."""
+def _extraction_of(bibcode: str, sujeto: str, enfasis: str = "") -> dict | None:
+    """The versioned extraction JSON of one reading, under whichever slug holds it (#311/#371).
+
+    ⛔ A reading is `(bibcode, sujeto, enfasis)`, never the bibcode alone (#509): a paper read for
+    two subjects has two JSON with the same filename under two slugs, and taking the first one that
+    parses stamped the lens and axes of `gj_581` into the view of `hd_40307` (measured: 134 bullets
+    and 24 lenses in 29 notes). A JSON that does not declare `vista.sujeto` is not a match —
+    the harvester rejects those, so there is no reading to fall back to."""
     import json
     nombre = cfg.lens_filename(bibcode, enfasis)
     for f in sorted(cfg.EXTRACCION.glob(f"*/{nombre}")) if cfg.EXTRACCION.exists() else []:
@@ -411,7 +417,8 @@ def _extraction_of(bibcode: str, enfasis: str = "") -> dict | None:
             data = json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError, OSError):
             continue
-        if isinstance(data, dict):
+        vista = data.get("vista") if isinstance(data, dict) else None
+        if isinstance(vista, dict) and str(vista.get("sujeto") or "").strip() == sujeto:
             return data
     return None
 
@@ -491,7 +498,7 @@ def restamp_lens() -> int:
                 if hv_mod.upsert_view(f, entrada):
                     n_fecha += 1
                     text = f.read_text(encoding="utf-8")
-            data = _extraction_of(bib, enfasis)
+            data = _extraction_of(bib, sujeto, enfasis)
             if data is None:
                 sin_json.append(f"{f.stem} · «{sujeto}»"
                                 + (f" (lente «{enfasis}»)" if enfasis else ""))

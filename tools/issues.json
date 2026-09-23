@@ -2519,16 +2519,21 @@
   {
    "number": 506,
    "title": "section_start confunde sujetos cuyo nombre es prefijo de otro: «## Vista — ica» devuelve la sección de ica-ruido (el lint da la nota por coherente y --force pisaría la otra vista)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 507,
    "title": "harvest_views --dry-run escribe: el flag sólo está conectado a --restamp-salvedades y la cosecha normal lo ignora (5 archivos, +177 líneas en una «previsualización»)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 508,
    "title": "carriers --check no resuelve re-exports: la regla firmada por el módulo definidor no ve las llamadas por la fachada (cfg.X); #500 se firmó por lib_config como parche",
+   "state": "CLOSED"
+  },
+  {
+   "number": 509,
+   "title": "restamp-lente estampa en una vista la lente y los ejes de la extracción de OTRO sujeto: _extraction_of elige por bibcode",
    "state": "OPEN"
   }
  ]

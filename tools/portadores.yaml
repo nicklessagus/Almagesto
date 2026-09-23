@@ -2227,3 +2227,25 @@ portadores:
       - modulo: scripts/query_ads.py
         estado: fuera-de-alcance
         motivo: "`--dry-run` ES un modo (delta de re-clasificación offline) y se despacha antes que todo modo que escribe; `--probe`, que va primero, no escribe."
+
+  - issue: 509
+    regla: >-
+      Una extracción se identifica por `(bibcode, sujeto, énfasis)`, nunca por el bibcode solo
+      (#188/#239/#371): todo lector que ELIGE una extracción para una vista la elige por el sujeto de
+      esa vista. Medido: `--restamp-lente` tomaba el primer JSON que parseaba y estampó la lente y
+      los ejes de un sujeto en la vista de otro (134 viñetas y 24 lentes en 29 notas).
+    funcion: make_notes._extraction_of
+    patron: 'EXTRACCION\.glob\(f?"\*/'
+    consumidores:
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Arma un índice que ACUMULA las citas de todas las extracciones de un bibcode; no elige una para una vista."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Recorre TODAS las extracciones (#494) por identidad `<slug>/<stem>`; no elige una por bibcode."
+      - modulo: scripts/repaginate.py
+        estado: fuera-de-alcance
+        motivo: "Recorre todas las extracciones de un bibcode por identidad `<slug>/<stem>` para re-paginarlas; no elige una."
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "Marca `_paginacion` en TODAS las extracciones del bibcode reemplazado; no elige una."

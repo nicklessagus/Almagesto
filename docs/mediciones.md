@@ -3801,3 +3801,18 @@ dos registros): el flag sólo llegaba a `--restamp-salvedades` y la cosecha norm
   `lib_config`).
 - Punto 2 del handoff: `triage.py` **no es portador** de #431 (no llama `prose_changed_since` ni
   matchea el patrón; `--sintesis` declara la fecha, no la compara). Firmado `fuera-de-alcance`.
+
+## #509 — `_extraction_of` elige la extracción por el SUJETO de la vista (v1.317.0)
+
+**Medido sobre un worktree desechable de la instancia (`b4646f2`, después de la reversión a mano del
+validador), `make_notes.py --restamp-lente`:**
+
+- Las 298 extracciones de la instancia declaran `vista.sujeto` (el cosechador rechaza las que no),
+  así que filtrar por sujeto no deja sin lectura a ninguna vista que tuviera la suya.
+- **Código viejo:** `27 files changed, +259/−101` — la contaminación se regenera.
+- **Código nuevo:** 3 notas cambian, las tres en la vista `ica-ruido` (`2023A&A...675A.187O`,
+  `2025A&A...696A.152O`, `2026A&A...705A.234O`): su `lente` todavía era la de la extracción de
+  `ica` (5 ejes) y pasa a las claves de la de `ica-ruido` (8). **Residuo de la contaminación que la
+  reversión a mano no alcanzó**; sin viñetas nuevas.
+- Vistas «sin extracción en disco»: 54 → 66. Las 12 de más son vistas que antes recibían la
+  extracción de otro sujeto; ahora se reportan y no se tocan.
