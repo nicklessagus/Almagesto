@@ -2539,6 +2539,11 @@
   {
    "number": 510,
    "title": "write_verif_sidecar: una ronda sin condición sobre una celda ENCADENADA escribe el eslabón «—» en vez de quitarlo — el lint la reporta «sin clasificar» (6 de 6 en la instancia)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 511,
+   "title": "arxiv_stamp toma una cita de la BIBLIOGRAFÍA como el sello de arXiv en documentos de ≤2 páginas: pdf_source eprint falso, arxiv_id de otro paper y un «identidad duplicada» que manda fusionar dos trabajos (1/135)",
    "state": "OPEN"
   }
  ]

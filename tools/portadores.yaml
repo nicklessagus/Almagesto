@@ -2262,3 +2262,20 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: "`chained_condition` (ronda del fan-out) y `resolve_conditions` (`--resolver`) reemplazan el eslabón vigente con esta función; la guarda vive en ella, así que los dos la heredan. `resolve_conditions` siempre pasa `acota→resuelta: …`, nunca vacío."
+
+  - issue: 511
+    regla: >-
+      La marca de arXiv es el SELLO del margen, que lleva FECHA detrás del id; un `arXiv:NNNN` sin
+      fecha es una cita de la bibliografía y no clasifica el documento. En un documento de ≤2
+      páginas el alcance de dos páginas es el documento entero: medido, 1 de 135 marcas de una
+      instancia era una cita (`pdf_source: eprint` falso, `arxiv_id` de otro paper y un «identidad
+      duplicada» que mandaba fusionar dos trabajos).
+    funcion: lib_config.arxiv_stamp
+    patron: 'ARXIV_STAMP_RE|arxiv_stamp'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`stamp_fulltext` estampa `pdf_source`/`eprint_version`/`arxiv_id` desde `arxiv_stamp`/`arxiv_stamp_id`; los dos pasan por `ARXIV_STAMP_RE`, donde vive la exigencia de fecha."
+      - modulo: scripts/replace_pdf.py
+        estado: usa
+        motivo: "Clasifica el PDF entrante con `arxiv_stamp` sobre sus primeras páginas; hereda el regex."

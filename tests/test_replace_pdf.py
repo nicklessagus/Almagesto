@@ -144,7 +144,7 @@ def test_reemplazar_por_OTRO_eprint_conserva_la_version(toy_vault, tmp_path, mon
     eprint: ahí el campo sigue siendo el eje correcto (qué v se leyó) y borrarlo perdería la
     salvedad que #57 hace posible. La guarda es `source != "eprint"`, no «siempre»."""
     _copia("gj_581", "2010D"); nota = _nota("2010D")
-    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "arXiv:1234.5678v2")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "arXiv:1234.5678v2 [astro-ph.EP] 3 Mar 2013")
     _paginas(monkeypatch)
     monkeypatch.setattr(rp.subprocess, "run", _ok)
     rp.replace("2010D", _entrante(tmp_path), "eprint", "la v2, que corrige la tabla 3")

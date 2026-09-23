@@ -1670,11 +1670,11 @@ def test_la_marca_de_arxiv_se_busca_por_PAGINA_no_por_tope_de_chars():
     versión y no a error de la ficha. El alcance sigue acotado a dos páginas, y eso también importa:
     leer el paper entero traería los `arXiv:` de la BIBLIOGRAFÍA, que son de otros trabajos."""
     relleno = "x" * 6000
-    assert cfg.arxiv_stamp(relleno + " arXiv:2101.00001v2 " + "y" * 100) == "v2"
+    assert cfg.arxiv_stamp(relleno + " arXiv:2101.00001v2 [astro-ph.SR] 5 Jan 2021 " + "y" * 100) == "v2"
     # dos páginas alcanzan; la tercera (donde suele empezar la bibliografía) ya no cuenta
-    assert cfg.arxiv_stamp("p1\f" + relleno + "\fp3 arXiv:2101.00001v2") is None
+    assert cfg.arxiv_stamp("p1\f" + relleno + "\fp3 arXiv:2101.00001v2 [astro-ph.SR] 5 Jan 2021") is None
     # y el piso de 4000 sigue cubriendo el `.txt` sin saltos de página
-    assert cfg.arxiv_stamp("arXiv:2101.00001") == ""
+    assert cfg.arxiv_stamp("arXiv:2101.00001 [astro-ph.SR] 5 Jan 2021") == ""
     assert cfg.arxiv_stamp("un paper cualquiera sin marca") is None
 
 
@@ -3214,12 +3214,12 @@ def test_arxiv_stamp_id_sale_del_MISMO_match_que_la_version():
     que son de otros trabajos."""
     t = "arXiv:2306.11263v2 [astro-ph.EP] 5 Jan 2023\n\nTítulo\n"
     assert cfg.arxiv_stamp(t) == "v2" and cfg.arxiv_stamp_id(t) == "2306.11263"
-    viejo = "arXiv:astro-ph/0201234 blah"
+    viejo = "arXiv:astro-ph/0201234 14 Jan 2002 blah"
     assert cfg.arxiv_stamp(viejo) == "" and cfg.arxiv_stamp_id(viejo) == "astro-ph/0201234", \
         "el id viejo con slash, y sin versión: `''` no es `None` y esa distinción decide pdf_source"
     assert cfg.arxiv_stamp("sin sello") is None and cfg.arxiv_stamp_id("sin sello") is None
     # ⛔ el mismo alcance acotado: un `arXiv:` de la bibliografía, tres páginas más abajo, NO cuenta
-    lejos = "portada\n" + "x" * 5000 + "\f" + "p2\n" + "y" * 5000 + "\f" + "arXiv:9999.99999v1\n"
+    lejos = "portada\n" + "x" * 5000 + "\f" + "p2\n" + "y" * 5000 + "\f" + "arXiv:9999.99999v1 [astro-ph.EP] 1 Jan 2099\n"
     assert cfg.arxiv_stamp_id(lejos) is None and cfg.arxiv_stamp(lejos) is None
 
 
@@ -4034,3 +4034,20 @@ def test_el_sufijo_de_puntuacion_separado_sigue_tolerado(cola):
     """La otra mitad (#176): `## Vista — X (2026-08-27)` sigue siendo la sección de X."""
     t = f"# P\n\n## Vista — ica{cola}\n\nprosa\n"
     assert cfg.section_start(t, "## Vista — ica") == t.index("## Vista")
+
+
+def test_511_la_cita_de_la_BIBLIOGRAFIA_no_es_el_sello_de_arxiv():
+    """#511 — en un documento de ≤2 páginas el alcance es el documento entero: la primera cita a
+    arXiv de la bibliografía se leía como el sello (medido: `2014IAUS..299..287G`, `pdf_source:
+    eprint` falso y el `arxiv_id` de Bonfils et al.). El sello lleva FECHA; la cita no."""
+    actas = "Title\nGregory et al.\n\fReferences\nBonfils, X., et al. 2013, arXiv:1111.5019v2\n"
+    assert cfg.arxiv_stamp(actas) is None and cfg.arxiv_stamp_id(actas) is None
+    # el sello real sigue: con categoría, sin categoría (astro-ph viejo) y partido por pdftotext
+    for sello, ver, ident in (("arXiv:1306.6074v1 [astro-ph.EP] 26 Jun 2013", "v1", "1306.6074"),
+                              ("arXiv:astro-ph/0209466v1 23 Sep 2002", "v1", "astro-ph/0209466"),
+                              ("arXiv:2101.00001v3  [astro-ph.SR]\n 5 Jan 2021", "v3", "2101.00001"),
+                              ("arXiv:2101.00001 [astro-ph.SR] 5 Jan 2021", "", "2101.00001")):
+        assert cfg.arxiv_stamp(sello) == ver and cfg.arxiv_stamp_id(sello) == ident, sello
+    # y el sello gana aunque una cita aparezca ANTES en el flujo del texto
+    assert cfg.arxiv_stamp_id(actas.replace("\f", "\farXiv:1306.6074v1 [astro-ph.EP] 26 Jun 2013\n")) \
+        == "1306.6074"

@@ -3827,3 +3827,11 @@ encadenó una condición nueva y la tercera no declaró ninguna. Eran las 6 de l
 **Fix en la función compartida** (`lib_blocks.replace_current_condition`), no en `chained_condition`:
 es la que escribe el eslabón, y así la hereda cualquier llamador. Sin cadena no cambia nada (`—` se lee
 como «sin condición», igual que una fila nueva). Los dos tests nuevos fallan sobre el código viejo.
+
+## #511 — el sello de arXiv lleva fecha; la cita de la bibliografía no (v1.319.0)
+
+**Medido leyendo los `.txt` de la instancia (sólo lectura), `arxiv_stamp`/`arxiv_stamp_id` viejo vs
+nuevo:** 329 `.txt`, 161 con marca según el regex viejo, **1 cambia**: `gj_667c/2014IAUS..299..287G`
+(`('v2', '1111.5019')` → `(None, None)`), el falso positivo del issue. Las otras 160 dan idéntico
+(versión e id), incluidos los sellos `astro-ph/…` sin categoría y los que `pdftotext` parte en dos
+líneas. La exigencia va en `ARXIV_STAMP_RE` como lookahead, así que los dos lectores la heredan.

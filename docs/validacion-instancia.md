@@ -1080,3 +1080,17 @@ acotada que no traiga condición sobre una celda encadenada: la celda vuelve al 
 
 **Devolver si** aparece una celda terminada en ` ⟂ —` o ` ⟂ ` después de una ronda de
 `verify_fanout`/`write_verif_sidecar` con v1.318.0.
+
+## §#511 · v1.319.0 — la cita de arXiv en la bibliografía no es el sello
+
+```bash
+python scripts/extract_fulltext.py gj_667c --bibcode 2014IAUS..299..287G   # re-estampa sin re-bajar
+python scripts/lint.py | grep -A3 'Identidad duplicada'
+```
+
+**Esperado:** la nota corregida a mano (`pdf_source: ads`, sin `eprint_version` ni `arxiv_id`) no
+vuelve a romperse; «Identidad duplicada» no la lista. Sobre los 329 `.txt`, ninguna otra marca
+cambia (medido: 1 de 161).
+
+**Devolver si** alguna nota con `pdf_source: eprint` pierde la marca tras re-extraer (un sello real
+sin fecha legible en el `.txt`).

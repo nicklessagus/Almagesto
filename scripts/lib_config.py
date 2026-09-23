@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.318.0"
+ALMAGESTO_VERSION = "1.319.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -124,7 +124,13 @@ FULLTEXT_WEB_MARK = "# Almagesto — snapshot web"
 # no depende de que el fetcher haya dejado registro, así que funciona retroactivamente sobre un
 # corpus ya bajado. Importa porque `verify-citations` promete que la cita textual son "las palabras
 # reales del paper" y un v1 pre-referato puede decir otra cosa que el publicado.
-ARXIV_STAMP_RE = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(v\d+)?",
+# ⛔ #511 — el SELLO del margen lleva FECHA detrás del id (`arXiv:1306.6074v1 [astro-ph.EP] 26 Jun
+# 2013`; los viejos `astro-ph/0209466 … 23 Sep 2002`, sin categoría); una cita de la bibliografía
+# (`2013, arXiv:1111.5019v2`) no. En un documento de ≤2 páginas el alcance es el documento entero y
+# la primera cita se leía como sello: `pdf_source: eprint` falso y el `arxiv_id` de OTRO paper.
+# Medido: 134 de 135 marcas de una instancia llevan fecha; la que no, era ese falso positivo.
+ARXIV_STAMP_RE = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(v\d+)?"
+                            r"(?=\s*(?:\[[^\]]+\])?\s*\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4})",
                             re.I)
 ARXIV_STAMP_SCAN_CHARS = 4000     # piso: la marca está en el margen, y `pdftotext` la ubica donde
 ARXIV_STAMP_SCAN_PAGES = 2        # quiera dentro de la página — ver `arxiv_stamp`
