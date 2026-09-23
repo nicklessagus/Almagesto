@@ -2445,3 +2445,27 @@ portadores:
       - modulo: scripts/contrast.py
         estado: usa
         motivo: "`validar` pasa la cita firmada a `resueltas` en vez de `discrepan`/`no_evaluables` (#324: una sola regla con el lint)."
+  - issue: 513
+    regla: >-
+      Cuando la fuente llega, la marca de pendiente sale — en TODO camino que instala el PDF: el
+      des-pendeo (`unpend_note`) vive en `stamp_pdf`, por donde pasan todos; y el lint cruza
+      `pending_source` contra el disco. Medido: la primera copia de `replace_pdf --slug` dejaba la
+      nota ADS en «Fuentes pendientes» con el PDF ya en disco.
+    funcion: make_notes.stamp_pdf
+    patron: 'pending_source'
+    consumidores:
+      - modulo: scripts/fetch_pdf.py
+        estado: usa
+        motivo: "Estampa por `stamp_pdf` el PDF que bajó: la nota pendiente sale sola."
+      - modulo: scripts/fetch_web.py
+        estado: usa
+        motivo: "La `url:` que sirve un PDF (#242) pasa por `stamp_pdf`."
+      - modulo: scripts/ingest_theme.py
+        estado: usa
+        motivo: "El PDF local de `sources:` pasa por `stamp_pdf`."
+      - modulo: scripts/replace_pdf.py
+        estado: usa
+        motivo: "La primera copia (#513) y el reemplazo pasan por `stamp_pdf`."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "No instala PDFs: es el otro lado de la regla. `check_paper_pending` cruza `pending_source` contra `raw/pdfs/`: con el PDF en disco nombra `--restamp-pdf-links` en vez de pedir la fuente."

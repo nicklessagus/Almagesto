@@ -3933,3 +3933,11 @@ hallazgos, dos entradas iguales) — la firma usada se compara por contenido, no
 **Dicho y no cerrado:** `contrast` lista 576 `discrepan` y el lint 9 en `#333` sobre el mismo corpus;
 la firma calla en los dos, pero la diferencia de poblaciones entre los dos portadores no es de este
 issue.
+
+## #513 (reabierto) — la primera copia saca la marca `pending_source` (v1.328.0)
+
+**Copia de la instancia (sin `.git`, sólo lectura sobre la real):** «Fuentes pendientes» 5 → **4**
+tras `make_notes.py --restamp-pdf-links`: sale `2009A&A...497..583Z` (PDF instalado por
+`replace_pdf --slug`); antes del comando el lint ya la nombraba con «el PDF YA está en disco». Diff
+de `vault/wiki/`: **1** archivo, sólo las líneas `pending_source`/`pending_motivo`. Las otras 4 siguen
+sin PDF. `2009JGRE..114.0B27E` no tenía la marca.

@@ -4988,9 +4988,13 @@ def check_paper_pending(stem: str, fm: dict, aceptados: dict | None = None) -> t
             # @inv INV-46, INV-108
             bad_roles.append((stem, f"`pending_source: {_p}` fuera del vocabulario "
                                     f"({' | '.join(cfg.PENDING_OK)})"))
+        # #513 — cruzado contra el disco: la fuente que YA llegó no se pide de nuevo.
+        _llego = (cfg.PDFS.exists() and any(cfg.PDFS.glob(f"*/{stem}.pdf")))
+        _accion = ("⚠ el PDF YA está en disco → `python scripts/make_notes.py --restamp-pdf-links` "
+                   "saca la marca" if _llego else f"proveer la fuente; puntero: {ptr}")
         pending_srcs.append(
             (stem, f"{_p}{' · ' + str(fm['pending_motivo']) if fm.get('pending_motivo') else ''}"
-                   f" — proveer la fuente; puntero: {ptr}{_falta}"))
+                   f" — {_accion}{_falta}"))
     return version_publicada, pending_srcs, bad_roles, preprint_aceptado
 
 

@@ -238,10 +238,21 @@ def stamp_pdf(dest, stem: str) -> bool:
     un-stamp when there is no PDF (the lint already surfaces that); and it keeps a value that still
     resolves — first writer wins, so re-running any slug does not repoint. ⚠ It does not touch
     `pdf_source`: that one survives the file (#230) because it describes the provenance of the
-    reading that happened, not the file. Returns True when it changed the note."""
+    reading that happened, not the file. Returns True when it changed the note.
+
+    ⛔ #513 — when the PDF is on disk the `pending_source` mark goes too (`unpend_note`): every path
+    that installs a PDF (`fetch_pdf`, `replace_pdf`, `ingest_theme`, `fetch_web`, `make_notes`,
+    `--restamp-pdf-links`) routes through here, so the source that ARRIVED stops being listed as
+    missing. After the field, so the first stamp still records `pdf_sha`."""
     rel = best_pdf(stem)
     if rel is None or not dest.exists():
         return False
+    changed = _stamp_pdf_field(dest, rel)
+    return unpend_note(dest, stem, rel.split("/")[-2]) or changed
+
+
+def _stamp_pdf_field(dest, rel: str) -> bool:
+    """The `pdf:`/`pdf_sha:` surgery of `stamp_pdf` (#304/#383)."""
     text = dest.read_text(encoding="utf-8")
     lim = cfg.fm_bounds(text)
     if lim is None:
@@ -4342,6 +4353,7 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
                 merged += 1
             else:
                 skipped += 1
+            stamp_pdf(dest, safe_name(bib))   # #513: el PDF que llegó después se linkea y des-pendea
             if stamp_pdf_link(dest):    # cabecera ↔ frontmatter `pdf` (#47) — cirugía, no pisa nada
                 restamped += 1
             continue

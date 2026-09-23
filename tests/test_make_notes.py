@@ -6187,3 +6187,32 @@ def test_507_fill_abstracts_dry_run_solo_corre_y_no_escribe(toy_vault, monkeypat
     monkeypatch.setattr(sys, "argv", ["make_notes.py", "--fill-abstracts", "--dry-run"])
     assert mn.main() == 0
     assert tree_digest(toy_vault.ROOT) == antes
+
+
+def test_stamp_pdf_despendea_la_nota_ADS_cuando_llega_el_PDF(toy_vault):
+    """#513 — `unpend_note` tenía un solo llamador (el carril off-ADS): la nota con bibcode ADS y
+    `pending_source` seguía «pendiente» con el PDF ya instalado por `replace_pdf --slug`. Todo
+    camino que instala un PDF pasa por `stamp_pdf`, así que la marca sale ahí —y `pdf_sha` se
+    sigue registrando en la primera copia."""
+    (toy_vault.PDFS / "gj_581").mkdir(parents=True, exist_ok=True)
+    (toy_vault.PDFS / "gj_581" / "2009A&A...497..583Z.pdf").write_bytes(b"%PDF-1.4 editor")
+    mk_note(toy_vault.PAPERS, "2009A&A...497..583Z",
+            {"tags": ["paper"], "pdf": None, "pending_source": "adquisicion",
+             "pending_motivo": "aanda.org bloquea"},
+            "> ⏳ **Fuente pendiente** (adquisicion)\n\ncuerpo\n")
+    dest = toy_vault.PAPERS / "2009A&A...497..583Z.md"
+    assert mn.stamp_pdf(dest, "2009A&A...497..583Z")
+    texto = dest.read_text(encoding="utf-8")
+    assert "pending_source" not in texto and "pending_motivo" not in texto
+    assert "⏳ **Fuente pendiente" not in texto
+    assert "pdf: ../../raw/pdfs/gj_581/2009A&A...497..583Z.pdf" in texto
+    assert "pdf_sha:" in texto, "la primera copia registra su hash (#383)"
+    assert mn.stamp_pdf(dest, "2009A&A...497..583Z") is False, "idempotente"
+
+
+def test_stamp_pdf_sin_PDF_deja_la_marca_pendiente(toy_vault):
+    mk_note(toy_vault.PAPERS, "2009X", {"tags": ["paper"], "pdf": None,
+                                        "pending_source": "paywall", "pending_motivo": "m"}, "")
+    dest = toy_vault.PAPERS / "2009X.md"
+    assert mn.stamp_pdf(dest, "2009X") is False
+    assert "pending_source: paywall" in dest.read_text(encoding="utf-8")

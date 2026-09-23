@@ -11261,3 +11261,15 @@ def test_is_instance_es_el_remote_upstream(monkeypatch):
     for remotes, esperado in [("origin\nupstream\n", True), ("origin\n", False), (None, False)]:
         monkeypatch.setattr(lint, "git_out", lambda *a, r=remotes: r)
         assert lint.is_instance() is esperado, remotes
+
+
+def test_pending_con_el_PDF_en_disco_no_pide_la_fuente(toy_vault):
+    """#513 — el lint cruza `pending_source` contra el disco: la fuente que YA llegó no se pide
+    de nuevo, se nombra el comando que saca la marca."""
+    (toy_vault.PDFS / "gj_581").mkdir(parents=True, exist_ok=True)
+    (toy_vault.PDFS / "gj_581" / "2009Z.pdf").write_bytes(b"%PDF")
+    fm = {"pending_source": "adquisicion", "pending_motivo": "m", "doi": "10.1/x"}
+    _, pend, _, _ = lint.check_paper_pending("2009Z", fm)
+    assert "YA está en disco" in pend[0][1] and "--restamp-pdf-links" in pend[0][1]
+    _, pend, _, _ = lint.check_paper_pending("2009Otro", fm)
+    assert "proveer la fuente" in pend[0][1]

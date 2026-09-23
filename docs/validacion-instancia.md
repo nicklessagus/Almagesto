@@ -1201,3 +1201,16 @@ editar una cita firmada la devuelve y nombra la firma en «`cita_revisada` que n
 
 **Devolver si** una firma con `<pág.>` sin llenar exime, si una cita firmada sigue listada en `#220`/
 `#333` (o en `contrast`), o si una firma aparece huérfana sin que haya cambiado ni la cita ni el PDF.
+
+## §#513 (reabierto) · v1.328.0 — la fuente que llegó sale de «Fuentes pendientes»
+
+```bash
+python scripts/make_notes.py --restamp-pdf-links
+python scripts/lint.py
+```
+
+**Esperado:** «Fuentes pendientes» baja de 5 a 4 (sale `2009A&A...497..583Z`) y la nota pierde sólo
+`pending_source`/`pending_motivo`. En adelante `replace_pdf --slug`, `fetch_pdf` y `make_notes <slug>`
+la sacan solos.
+
+**Devolver si** otra nota cambia, o si una nota sin PDF en disco pierde la marca.
