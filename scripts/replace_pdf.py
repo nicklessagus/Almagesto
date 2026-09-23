@@ -33,6 +33,8 @@ order of **500** pairs. Deciding when to pay that is not this script's call.
 
     python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason "<motivo>"
     python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason "…" --dry-run
+    python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --slug <slug> --reason "…"
+                                                        # primera copia, sin PDF previo (#513)
 """
 from __future__ import annotations
 
@@ -286,6 +288,54 @@ def backfill(bibcode: str, source: str, reason: str, sha_anterior: str = "auto",
             "extracciones": [str(e) for e in extracciones], "slugs": [c.parent.name for c in copias]}
 
 
+def install_first(bibcode: str, nuevo: Path, source: str, slug: str,
+                  dry_run: bool = False) -> dict:
+    """Install the FIRST copy of a paper's PDF under `slug`, declaring its provenance (#513).
+
+    ⛔ The exit #512 offers for a published paper the chain could not get —«bring the publisher's
+    PDF»— had no command: `replace` refuses without a previous copy and `fetch_pdf` cannot fetch
+    what is behind the paywall, so the file was dropped by hand in `raw/pdfs/<slug>/` and the note
+    stayed `pdf_source: null` (backlog #415) on exactly the case #512 produces.
+
+    Same refusals as a replacement (`check_incoming`). What it does NOT do, on purpose: no
+    `_paginacion` and no `pdf_reemplazo` — there was no previous document, so no locator points at
+    one and nothing was replaced. The provenance lands where `stamp_fulltext` reads it
+    (`record_pdf_source`) and, durably, on the note (`pdf_source` + `pdf_sha`, which #383 guards)."""
+    errores = check_incoming(bibcode, nuevo, source)
+    declarado = any(s == slug for s in cfg.load_themes()) or any(
+        (m or {}).get("slug") == slug for m in cfg.load_stars().values())
+    if not declarado:
+        # un typo crearía `raw/pdfs/<typo>/`: una capa colgada de un slug que no existe
+        errores.append(f"`--slug {slug}` no está declarado en stars.yaml ni en themes.yaml")
+    if errores:
+        raise ReplaceError("\n".join(f"⛔ {e}" for e in errores))
+    stem = cfg.note_stem(bibcode)
+    dest = cfg.PDFS / slug / f"{stem}.pdf"
+    nota = cfg.PAPERS / f"{stem}.md"
+    txt = cfg.FULLTEXT / slug / f"{stem}.txt"
+    cfg.print_seguro(f"  {'(dry-run) ' if dry_run else ''}→ {dest} (primera copia)")
+    fallidos = []
+    if not dry_run:
+        cfg.copy_file_atomic(nuevo, dest)
+        cfg.record_pdf_source(slug, stem, source)
+        proc = subprocess.run([sys.executable, str(Path(__file__).with_name("extract_fulltext.py")),
+                               slug, "--bibcode", stem, "--force"], check=False)
+        if proc.returncode != 0:
+            fallidos.append(txt)                  # AUD-423: el rc decide, no la existencia
+        if nota.exists():
+            mn.stamp_pdf(nota, stem)
+            cfg.set_fm_scalar(nota, "pdf_sha", lb.sha10(nuevo.read_bytes()))
+            cfg.set_fm_scalar(nota, "pdf_source", source)
+            if source != "eprint":
+                cfg.set_fm_scalar(nota, "eprint_version", "null", crear=False)
+    if not nota.exists():
+        cfg.print_seguro(f"  ⚠ no hay nota `{nota.name}`: el PDF se instaló y el frontmatter no se "
+                         f"pudo estampar — `make_notes.py {slug}` la crea y toma la procedencia "
+                         f"de `build/{slug}/pdf_source.json`")
+    return {"bibcode": bibcode, "slug": slug, "sha": lb.sha10(nuevo.read_bytes()),
+            "txt": str(txt), "txts_fallidos": [str(t) for t in fallidos], "nota": nota.exists()}
+
+
 def replace(bibcode: str, nuevo: Path, source: str, reason: str,
             dry_run: bool = False) -> dict:
     """Install `nuevo` as this paper's PDF under every slug, and leave the trace (#436).
@@ -311,7 +361,8 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
     copias = pdf_copies(bibcode)
     if not copias:
         raise ReplaceError(f"⛔ no hay ningún PDF de {bibcode} en `vault/raw/pdfs/**` — esto "
-                           f"REEMPLAZA una copia existente; para la primera, `fetch_pdf.py`")
+                           f"REEMPLAZA una copia existente; para instalar la PRIMERA, pasá "
+                           f"`--slug <slug>` (#513)")
     sha_viejo, sha_nuevo = lb.sha10(copias[0].read_bytes()), lb.sha10(nuevo.read_bytes())
     alcance = reverification_scope(bibcode)         # ANTES de tocar: las filas se leen igual, pero
     slugs = [c.parent.name for c in copias]         # el orden documenta que el número es el de antes
@@ -466,6 +517,10 @@ def main(argv=()) -> int:
     ap.add_argument("--reason", required=True,
                     help="por qué se reemplaza — viaja a la marca `_paginacion` de la extracción "
                          "y al reporte (mismo criterio que el `--reason` del triage)")
+    ap.add_argument("--slug", default=None,
+                    help="#513 · si el paper NO tiene ninguna copia en disco, instala la PRIMERA "
+                         "bajo este slug (el PDF del editor que trajo el usuario, salida de #512); "
+                         "con copia previa no cambia nada: es un reemplazo")
     ap.add_argument("--dry-run", action="store_true",
                     help="mostrar qué se tocaría (incluido el alcance de re-verificación) sin "
                          "escribir nada")
@@ -484,6 +539,17 @@ def main(argv=()) -> int:
         if not args.pdf:
             cfg.print_seguro("⛔ falta el PDF entrante (o `--backfill` para el reemplazo hecho a mano)")
             return 2
+        if args.slug and not pdf_copies(args.bibcode):
+            r = install_first(args.bibcode, Path(args.pdf), args.source, args.slug,
+                              dry_run=args.dry_run)
+            cfg.print_seguro(
+                f"\n{r['bibcode']}: {'(dry-run) ' if args.dry_run else ''}PRIMERA copia instalada "
+                f"en `{r['slug']}` · sha {r['sha']} · `pdf_source: {args.source}` (#513)"
+                + (f"\n  ⚠ FALLÓ la extracción del `.txt`: re-correla con `python scripts/"
+                   f"extract_fulltext.py {r['slug']} --bibcode {cfg.note_stem(r['bibcode'])}`"
+                   if r["txts_fallidos"] else "")
+                + f"\n  → anotá en `vault/wiki/log.md` («{args.reason}») y commiteá `raw/` con la nota.")
+            return 0
         r = replace(args.bibcode, Path(args.pdf), args.source, args.reason, dry_run=args.dry_run)
     except ReplaceError as e:
         cfg.print_seguro(str(e))

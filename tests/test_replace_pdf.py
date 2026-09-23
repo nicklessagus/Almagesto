@@ -595,3 +595,60 @@ def test_AUD422_la_marca_de_paginacion_va_por_la_IDENTIDAD_de_adentro(toy_vault)
     tocadas = rp.stamp_depagination("2011Naik", "a" * 10, "b" * 10, "m")
     assert sorted(Path(t).stem for t in tocadas) == ["2011Naik", "2011Naik__ruido"]
     assert "_paginacion" not in json.loads((d / "2011Naika.json").read_text(encoding="utf-8"))
+
+
+# ── #513 · la PRIMERA copia: el PDF del editor que trae el usuario (salida de #512) ─────────────
+
+def _nota_sin_pdf(bib: str) -> Path:
+    fm = {"bibcode": bib, "tags": ["paper"], "stars": ["Test"], "pdf": None, "pdf_source": None}
+    return mk_note(cfg.PAPERS, bib, fm, "# p\n\n## Abstract\n\nx\n")
+
+
+def test_513_instala_la_PRIMERA_copia_y_declara_su_procedencia(toy_vault, tmp_path, monkeypatch):
+    """Sin copia previa `replace` rehusaba y el PDF quedaba a mano en `raw/pdfs/`, con la nota en
+    `pdf_source: null` (#415) — justo sobre el caso que #512 produce."""
+    nota = _nota_sin_pdf("2014M")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    llamadas = []
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, *a, **k: (llamadas.append(cmd), _ok(cmd))[1])
+    assert rp.main(["2014M", str(_entrante(tmp_path)), "--source", "publisher", "--slug", "test_star",
+                    "--reason", "el usuario lo bajó con acceso institucional"]) == 0
+    dest = cfg.PDFS / "test_star" / "2014M.pdf"
+    assert dest.read_bytes() == EDITOR
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    assert fm["pdf_source"] == "publisher" and fm["pdf_sha"] == lb.sha10(EDITOR)
+    assert fm["pdf"] and fm["pdf"].endswith("test_star/2014M.pdf"), fm["pdf"]
+    assert not fm.get("pdf_reemplazo"), "no hubo documento anterior: no es un reemplazo"
+    assert any("--bibcode" in c and "2014M" in c for c in llamadas), "extrae SÓLO ese `.txt`"
+    assert json.loads((cfg.ROOT / "build" / "test_star" / "pdf_source.json").read_text())["2014M"] \
+        == "publisher", "donde `stamp_fulltext` lee la procedencia al re-estampar"
+
+
+def test_513_sin_slug_y_sin_copia_rehusa_nombrando_el_flag(toy_vault, tmp_path, monkeypatch, capsys):
+    _nota_sin_pdf("2014M")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    assert rp.main(["2014M", str(_entrante(tmp_path)), "--source", "publisher", "--reason", "x"]) == 2
+    assert "--slug" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("slug,marca", [("no_existe", "sin marca"),
+                                        ("test_star", "arXiv:1306.6074v1 [astro-ph.EP] 26 Jun 2013")])
+def test_513_primera_copia_rehusa_slug_no_declarado_y_preprint_vendido_como_publicado(
+        toy_vault, tmp_path, monkeypatch, slug, marca):
+    _nota_sin_pdf("2014M")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: marca)
+    monkeypatch.setattr(rp.subprocess, "run", _ok)
+    assert rp.main(["2014M", str(_entrante(tmp_path)), "--source", "publisher", "--slug", slug,
+                    "--reason", "x"]) == 2
+    assert not list(cfg.PDFS.glob("*/2014M.pdf")), "una negativa no escribe nada"
+
+
+def test_513_con_copia_previa_el_slug_no_cambia_nada_es_un_reemplazo(toy_vault, tmp_path, monkeypatch):
+    _copia("gj_581", "2010D"); nota = _nota("2010D")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    _paginas(monkeypatch)
+    monkeypatch.setattr(rp.subprocess, "run", _ok)
+    assert rp.main(["2010D", str(_entrante(tmp_path)), "--source", "publisher", "--slug", "test_star",
+                    "--reason", "x"]) == 0
+    assert not (cfg.PDFS / "test_star" / "2010D.pdf").exists()
+    assert cfg.as_list(cfg.split_fm(nota.read_text(encoding="utf-8")).get("pdf_reemplazo"))

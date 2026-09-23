@@ -56,8 +56,8 @@ Progreso del append de <fuente> → <destino>:
      editor o `triage.py <slug> --acepta-preprint <bib> --reason`. Si nada lo entrega
      (`missing_pdf.json`, con `hint`), seguí la **cascada manual de rescate**
      de `## Notas` del skill `ingest-star` antes de pedirlo. Con el PDF en mano (rescatado o provisto
-     por el usuario): copiarlo a `vault/raw/pdfs/<slug>/<bibcode>.pdf` y correr
-     `python scripts/extract_fulltext.py <slug>`.
+     por el usuario): `python scripts/replace_pdf.py <bib> <pdf> --source <s> --slug <slug>
+     --reason "…"` (#513).
    - **(ii) PDF off-ADS** a un tema con `source` off-ADS → agregar el item a `sources:` de la
      entrada del tema (`key` + `pdf` + metadata) y `python scripts/ingest_theme.py <slug>` (sólo
      procesa lo nuevo; deja nota con `pdf` linkeado y fulltext extraído).

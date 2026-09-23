@@ -802,6 +802,9 @@ portadores:
       - modulo: scripts/repaginate.py
         estado: usa
         motivo: "Resuelve bajo qué slug está el PDF que hay que releer: la relectura es del PDF (#205) y el paper puede vivir bajo otro sujeto."
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "`install_first` (#513) ESCRIBE la primera copia bajo el slug que el usuario pasa con `--slug`; el reemplazo enumera todas las copias con `pdf_copies`. Ninguno resuelve una lectura."
 
   - issue: 403
     regla: >-
@@ -925,6 +928,9 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: Define `record_pdf_source` y el vocabulario `PDF_SOURCE_OK`; no resuelve la precedencia.
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "`install_first` (#513) ESCRIBE el registro de `build/` para la primera copia y el `pdf_source` de la nota; la precedencia la resuelve `pdf_source_info` al re-estampar."
 
   - issue: 446
     regla: >-
@@ -2326,3 +2332,22 @@ portadores:
       - modulo: scripts/search_arxiv.py
         estado: fuera-de-alcance
         motivo: "Backend de DESCUBRIMIENTO en arXiv (registros, no PDFs); no adopta ningún documento."
+
+  - issue: 513
+    regla: >-
+      El PDF que trae el usuario entra por un comando que DECLARA su procedencia, sea la primera
+      copia o un reemplazo: dejarlo a mano en `raw/pdfs/<slug>/` deja la nota con `pdf_source:
+      null` (#415), y ésa era la única salida de «traé el PDF del editor» que ofrece el residuo
+      `publicado-no-conseguido` de #512.
+    funcion: replace_pdf.install_first
+    patron: 'replace_pdf\.py'
+    consumidores:
+      - modulo: scripts/fetch_pdf.py
+        estado: fuera-de-alcance
+        motivo: "El residuo `publicado-no-conseguido` NOMBRA el comando (`--slug`) como salida; no instala nada."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Sólo NOMBRA `replace_pdf.py --backfill` en un mensaje; no instala ni declara procedencia."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Sólo NOMBRA `replace_pdf.py` como salida del backlog #298; no instala nada."

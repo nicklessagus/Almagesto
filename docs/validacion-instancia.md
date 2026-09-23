@@ -1115,3 +1115,19 @@ el eprint y el lint lo mueve a `preprint_aceptado`.
 `acepta_preprint` (`build/<slug>/pdf_source.json` con `eprint` para ese bibcode), si el residuo pierde
 el `estado` de #358 para un publicado SIN eprint a la vista, o si un `acepta_preprint` mal formado
 tumba el lint en vez de salir *no evaluado*.
+
+## §#513 · v1.321.0 — la primera copia del PDF del editor
+
+Sobre un paper con `publicado-no-conseguido` en `build/<slug>/missing_pdf.json` y el PDF del editor
+en mano:
+
+```bash
+python scripts/replace_pdf.py <bib> <ruta.pdf> --source publisher --slug <slug> --reason "<motivo>"
+python scripts/lint.py | grep -B1 -A3 '<bib>'
+```
+
+**Esperado:** el PDF queda en `raw/pdfs/<slug>/`, el `.txt` extraído, la nota con `pdf:`,
+`pdf_sha` y `pdf_source: publisher`; ni `pdf_reemplazo` ni `_paginacion`; el lint no lo lista en
+«PDF sin procedencia» ni en #298. Re-correr `extract_fulltext <slug>` no cambia `pdf_source`.
+
+**Devolver si** la nota queda con `pdf_source: null`, o si el comando escribe algo al rehusar.

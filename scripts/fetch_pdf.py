@@ -322,9 +322,9 @@ def print_published_residue(slug: str, missing: list) -> None:
     for m in pub:
         cfg.print_seguro(f"  {m['bibcode']}  editor: {m['editor']}  eprint: "
                          f"{('arXiv:' + m['eprint']) if m.get('eprint') else '—'}")
-    cfg.print_seguro(f"  → traé el PDF del editor a `vault/raw/pdfs/{slug}/<bibcode>.pdf` y re-corré la "
-                     f"cadena (si ya hay otra copia: `python scripts/replace_pdf.py <bibcode> <ruta.pdf> "
-                     f"--source publisher --reason \"…\"`), o aceptá el preprint: `python scripts/"
+    cfg.print_seguro(f"  → traé el PDF del editor e instalalo declarando su procedencia (#513): "
+                     f"`python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher "
+                     f"--slug {slug} --reason \"…\"`, o aceptá el preprint: `python scripts/"
                      f"triage.py {slug} --acepta-preprint <bibcode> --reason \"<motivo>\"` + pegar el "
                      f"bloque + re-correr la cadena.")
 

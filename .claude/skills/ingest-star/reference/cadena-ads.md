@@ -56,7 +56,8 @@ bibcode no es de arXiv ni una tesis (`cfg.has_published_version`) y ninguna conf
 y la cascada abierta **sin** los candidatos de arXiv. Lo que así no sale queda en el residuo como
 `estado: publicado-no-conseguido`, con `doi`, `editor` (enlace) y `eprint` (el arxiv_id disponible),
 y el cierre lo lista. Las dos salidas son del usuario: traer el PDF del editor
-(`vault/raw/pdfs/<slug>/<bibcode>.pdf`, o `replace_pdf.py` si ya hay otra copia) o aceptar el
+(`replace_pdf.py <bib> <pdf> --source publisher --slug <slug> --reason`, que instala la primera
+copia declarando su procedencia, #513) o aceptar el
 preprint con `python scripts/triage.py <slug> --acepta-preprint <bib> --reason "<motivo>"`, que
 imprime el bloque `acepta_preprint: [{bibcode, motivo, fecha}]` para pegar junto a `extra_core`
 (forma dura, como D-58; no edita la config). La aceptación vale **por bibcode en toda la bóveda**

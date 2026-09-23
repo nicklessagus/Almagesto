@@ -2550,6 +2550,11 @@
    "number": 512,
    "title": "La ingesta adopta el PREPRINT por defecto: pedir la versión publicada al usuario (o su aceptación explícita del eprint) antes de extraer — 150 notas en preprint con versión publicada, 110 con PUB_PDF en ADS",
    "state": "OPEN"
+  },
+  {
+   "number": 513,
+   "title": "replace_pdf no instala la PRIMERA copia: el PDF del editor que trae el usuario (salida de #512) queda sin pdf_source",
+   "state": "OPEN"
   }
  ]
 }

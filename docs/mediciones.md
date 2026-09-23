@@ -3854,3 +3854,13 @@ de la instancia real):**
 - **No medido contra la red:** el orden ADS_PDF → PUB_PDF usa el mismo cliente de siempre
   (`fetch_pdf.download_pdf`); el issue ya midió `link_gateway/…/PUB_PDF` (IOP 200, OUP 403). Los
   tests cubren el orden, el filtro de la cascada abierta y el residuo con dobles de red.
+
+## #513 — `replace_pdf --slug` instala la PRIMERA copia declarando su procedencia (v1.321.0)
+
+Hallado al cerrar #512: la salida «traé el PDF del editor» del residuo `publicado-no-conseguido` no
+tenía comando (`replace_pdf` rehusaba sin copia previa) y dejar el archivo a mano en `raw/pdfs/`
+dejaba `pdf_source: null` (#415). No hay medición sobre la instancia: el modo es nuevo y no hay
+población previa; la prueba es el próximo residuo `publicado-no-conseguido`. Tests: la instalación
+(copia, `.txt` acotado al bibcode, `pdf:`/`pdf_sha`/`pdf_source` en la nota, sin `pdf_reemplazo`),
+las negativas (slug no declarado, preprint vendido como publicado, sin `--slug`) y que con copia
+previa `--slug` no cambia nada.
