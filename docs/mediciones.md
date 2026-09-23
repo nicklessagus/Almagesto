@@ -3888,3 +3888,13 @@ contra el `.txt` de `2016A&A...585A.134D`). `contrast --validar-todo`: rc 0 → 
 sigue atribuida a la celda `2024K`: la cita anterior corta la rama «antes» (`_CORTE_ANTES`), así que
 la prosa no le da dueño y gana la celda. La investigación había contado 4 mal atribuidas; con este
 arreglo se corrigen 3.
+
+## #517 — `refresh_issues` y `mutar --ratchet` rehúsan en una instancia (v1.325.0)
+
+**Worktree desechable de la instancia (HEAD `0d88d79`, remotes `origin` + `upstream`), sólo lectura:**
+`python tools/refresh_issues.py` → rc 2, «esto es una INSTANCIA», `tools/issues.json` sin tocar
+(`git status` no lo lista); `python tools/mutar.py --todo --ratchet` → rc 2 antes de mutar,
+`mutacion-ratchet.yaml` con el mismo sha1. En el template (sólo `origin`) las dos siguen corriendo:
+la suite del ratchet pasa. La señal es la de #390 (`lint.git_remotes`, ahora una sola lectura de
+remotes para los dos). `trace_invariants.py` también escribe framework (`docs/trazabilidad.md`) y
+queda fuera de alcance, firmado: en una instancia regenera el archivo mergeado, sin diff.

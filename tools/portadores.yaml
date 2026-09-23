@@ -2389,3 +2389,25 @@ portadores:
       - modulo: scripts/contrast.py
         estado: usa
         motivo: "`validar` elige los candidatos por `quote_owner` (#324: una sola regla con el lint)."
+
+  - issue: 517
+    regla: >-
+      Una herramienta que ESCRIBE un archivo de framework no lo hace en silencio dentro de una
+      INSTANCIA (remote `upstream` declarado): rehúsa sin escribir (regla de oro, #377). Medido: en
+      la instancia, `refresh_issues.py` reescribió `tools/issues.json` al cerrar #512 y hubo que
+      revertirlo a mano.
+    funcion: lint.is_instance
+    patron: 'issues\.json|ratchet\.yaml|RATCHET|trazabilidad\.md'
+    consumidores:
+      - modulo: tools/refresh_issues.py
+        estado: usa
+        motivo: "Escribe `tools/issues.json`: rehúsa antes de `fetch()` si `is_instance()`."
+      - modulo: tools/mutar.py
+        estado: usa
+        motivo: "`--ratchet` gatea contra `mutacion-ratchet.yaml` (framework): rehúsa antes de mutar si `is_instance()`."
+      - modulo: scripts/trace_invariants.py
+        estado: fuera-de-alcance
+        motivo: "Regenera `docs/trazabilidad.md` desde las marcas `@inv` de `scripts/`+`tests/`, que en una instancia son las del template: la salida es el archivo mergeado, sin diff."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Sólo nombra `trazabilidad-ratchet.yaml` para la guarda de AUD-139 (lee la base de git); no escribe archivos de framework."

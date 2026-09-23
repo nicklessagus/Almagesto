@@ -1332,3 +1332,12 @@ def test_AUD466_diff_con_solo_audita_la_INTERSECCION(monkeypatch):
     with pytest.raises(_Corte):
         mutar._trazabilidad(NS(archivos=[], solo="INV-02,INV-03", diff=True))
     assert visto["solo"] == {"INV-02"}
+
+
+def test_ratchet_en_una_INSTANCIA_rehusa_sin_mutar(monkeypatch, capsys):
+    """#517 — en una instancia el techo es framework (#377): rehúsa antes de mutar nada."""
+    import lint
+    monkeypatch.setattr(lint, "is_instance", lambda: True)
+    monkeypatch.setattr(mutar, "mutar_archivo", lambda *a, **k: pytest.fail("no debía mutar"))
+    assert _args_main(monkeypatch, ["--todo", "--ratchet"]) == 2
+    assert "INSTANCIA" in capsys.readouterr().out

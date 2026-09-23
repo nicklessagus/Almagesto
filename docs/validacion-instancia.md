@@ -1157,3 +1157,16 @@ python scripts/contrast.py --validar-todo
 `contrast` sigue en rc 0.
 
 **Devolver si** alguna otra cita de esa categoría cambia de fuente nombrada, o aparece una nueva.
+
+## §#517 · v1.325.0 — `refresh_issues` rehúsa en la instancia
+
+```bash
+python tools/refresh_issues.py
+git status --short tools/
+```
+
+**Esperado:** rc 2 con «esto es una INSTANCIA (remote `upstream` declarado)» y `git status` sin
+`tools/issues.json`. Lo mismo con `python tools/mutar.py --todo --ratchet` (rehúsa antes de mutar).
+
+**Devolver si** `tools/issues.json` o `tools/mutacion-ratchet.yaml` quedan modificados, o si alguna
+de las dos corre en la instancia.

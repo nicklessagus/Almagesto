@@ -707,7 +707,7 @@ backlog; uno inventado se lee como verdad (medido: 4 de 29 fuentes, seis días, 
 > antes de que el issue exista se lo lleva el issue siguiente, y la trazabilidad pasa de vacía a
 > **mal atribuida** —el caso que la regla de método nº 4 llama peor—; pasó en vivo. La red es
 > `tests/test_docs_ejecutables.py::test_todo_numero_de_issue_que_el_repo_cita_existe` contra la
-> caché versionada `tools/issues.json` (`python tools/refresh_issues.py` al cerrar cada tanda).
+> caché versionada `tools/issues.json` (`python tools/refresh_issues.py` al cerrar cada tanda **del template**; en una instancia rehúsa, #517).
 
 ⛔ **Criterio de admisión a ESTE archivo (#465): entra la regla que un agente necesita ANTES de
 escribir o correr algo en cualquier sesión de una instancia.** Lo que sólo hace falta al escribir

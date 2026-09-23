@@ -500,7 +500,7 @@ def merge_ours_driver_risk() -> tuple[list[str], str | None]:
     #  @inv INV-68
     if not (git_out("config", "--get", "merge.ours.driver") or "").strip():
         return [], None       # la receta: el driver se pasa por comando al traer el template
-    if "origin" not in (git_out("remote") or "").split():
+    if "origin" not in git_remotes():
         return [], None       # sin `origin` no hay eje destructivo: nada que mergear de otra máquina
     return patrones, None
 
@@ -7193,6 +7193,20 @@ def main(argv=()) -> int:
     if res.slug:
         _print_seguro(f"✓ nada frena el cierre de `{res.slug}` — la deuda ajena queda listada arriba")
     return 0
+
+
+def git_remotes() -> list[str]:
+    """Names of this clone's git remotes; `[]` without git. One reader for #390 and #517."""
+    return (git_out("remote") or "").split()
+
+
+def is_instance() -> bool:
+    """True when this clone is an INSTANCE of the template: it declares an `upstream` remote (#517).
+
+    Same signal the sync recipe relies on (`git -c merge.ours.driver=true merge upstream/main`,
+    #390). Tools that write a FRAMEWORK file (`tools/issues.json`, the mutation ratchet) refuse
+    here: in an instance that file is not editable (golden rule, #377)."""
+    return "upstream" in git_remotes()
 
 
 if __name__ == "__main__":

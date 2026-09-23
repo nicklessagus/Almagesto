@@ -11253,3 +11253,11 @@ def test_512_acepta_preprint_mal_formado_no_tumba_el_lint(toy_vault):
     write_yaml(toy_vault.STARS_YAML, stars)
     no_eval = dict(lint.collect().por_clave("not_evaluated").items)
     assert "acepta_preprint" in no_eval
+
+
+def test_is_instance_es_el_remote_upstream(monkeypatch):
+    """#517 — la instancia se reconoce por el remote `upstream`; el template (sólo `origin`) y el
+    clon sin git no lo son. Una sola lectura de remotes para #390 y #517 (`git_remotes`)."""
+    for remotes, esperado in [("origin\nupstream\n", True), ("origin\n", False), (None, False)]:
+        monkeypatch.setattr(lint, "git_out", lambda *a, r=remotes: r)
+        assert lint.is_instance() is esperado, remotes

@@ -826,6 +826,15 @@ def main() -> int:
                          "cobertura que no existe.")
     args = ap.parse_args()
 
+    if args.ratchet:
+        # #517 — the ceiling is framework; in an instance it is not editable (golden rule, #377).
+        sys.path.insert(0, str(RAIZ / "scripts"))
+        import lint
+        if lint.is_instance():
+            print(f"⛔ esto es una INSTANCIA (remote `upstream` declarado): {RATCHET.name} es "
+                  f"framework y el ratchet se corre en el template (#517). No se mutó nada.")
+            return 2
+
     if args.trazabilidad:
         return _trazabilidad(args)
     if args.guardas:

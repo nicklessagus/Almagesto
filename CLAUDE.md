@@ -179,10 +179,10 @@ backlog; uno inventado se lee como verdad.
 > **Anclas.** Cada regla lleva su `(#N)` o `(D-N)`: el issue público
 > (`github.com/nicklessagus/Almagesto/issues`) tiene el caso y la medición; `docs/contrato.md`, el
 > invariante; `docs/mediciones.md`, la evidencia. ⛔ **El issue se CREA antes de escribir su número
-> (#292):** el `(#N)` escrito antes se lo lleva el issue siguiente y la trazabilidad queda **mal
-> atribuida**. La red es
-> `tests/test_docs_ejecutables.py::test_todo_numero_de_issue_que_el_repo_cita_existe` contra la
-> caché versionada `tools/issues.json` (`python tools/refresh_issues.py` al cerrar cada tanda).
+> (#292):** el `(#N)` escrito antes se lo lleva el issue siguiente: trazabilidad **mal atribuida**.
+> Red: `tests/test_docs_ejecutables.py::test_todo_numero_de_issue_que_el_repo_cita_existe` contra
+> `tools/issues.json` (`tools/refresh_issues.py` por tanda, **del template**: en una
+> instancia rehúsa, #517).
 
 ⛔ **Criterio de admisión a ESTE archivo (#465): entra la regla que un agente necesita ANTES de
 escribir o correr algo en cualquier sesión de una instancia.** Lo que sólo hace falta al escribir

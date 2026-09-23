@@ -45,6 +45,14 @@ def main() -> int:
                                  epilog="Needs `gh` and network; writes tools/issues.json. "
                                         "Run it when closing a tanda, next to the version bump.")
     ap.parse_args()
+    # #517 — in an instance `tools/issues.json` is framework (golden rule, #377): refuse before
+    # `fetch()`, writing nothing. The cache comes from the template by merge.
+    sys.path.insert(0, str(DEST.parent.parent / "scripts"))
+    import lint
+    if lint.is_instance():
+        print("⛔ esto es una INSTANCIA (remote `upstream` declarado): `tools/issues.json` es "
+              "framework y se refresca en el template (#517). No se escribió nada.")
+        return 2
     try:
         issues = fetch()
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
