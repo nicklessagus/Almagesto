@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-23",
+ "fetched": "2026-09-24",
  "issues": [
   {
    "number": 2,
@@ -2554,7 +2554,7 @@
   {
    "number": 513,
    "title": "replace_pdf no instala la PRIMERA copia: el PDF del editor que trae el usuario (salida de #512) queda sin pdf_source",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 514,
@@ -2564,21 +2564,31 @@
   {
    "number": 515,
    "title": "quote_owner atribuye una cita a una fuente que no es la suya por tres caminos: localizador antes del link, rama «antes» sin tope y celda Fuente contra el introductor",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 516,
    "title": "Una cita confirmada en la hoja del PDF no tiene dónde firmarse: #220/#333 re-listan para siempre lo ya leído (falta la escotilla de #502 para citas)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 517,
    "title": "CLAUDE.md manda a correr refresh_issues al cerrar cada tanda, y en una instancia eso reescribe tools/issues.json (framework) sin ningún efecto útil",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 518,
    "title": "El residuo de fetch_pdf no dice que la copia bloqueada es la del EDITOR (2 de 2) y la lista duplicada: con #513 eso decide qué --source declarar",
+   "state": "CLOSED"
+  },
+  {
+   "number": 519,
+   "title": "lint: «vista SÓLO del abstract» juzga cada entrada de vistas[] y no el sujeto (falso positivo con una segunda lectura del PDF)",
+   "state": "OPEN"
+  },
+  {
+   "number": 520,
+   "title": "Resumen de congreso: no hay forma de declarar que el abstract ES la fuente, y cuatro categorías piden un PDF que no existe",
    "state": "OPEN"
   }
  ]

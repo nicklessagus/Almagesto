@@ -1214,3 +1214,14 @@ python scripts/lint.py
 la sacan solos.
 
 **Devolver si** otra nota cambia, o si una nota sin PDF en disco pierde la marca.
+
+## §#519 · v1.329.0 — «vista SÓLO del abstract» se juzga por sujeto
+
+```bash
+python scripts/lint.py
+```
+
+**Esperado:** `📄 Vista construida SÓLO del abstract` baja de 10 a 9 (sale `2026RAA....26g5019B`,
+releído del PDF con `enfasis`). Ninguna otra categoría cambia.
+
+**Devolver si** sale una nota cuyo sujeto no tiene ninguna lectura `fuente: pdf` con fecha.

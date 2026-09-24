@@ -2469,3 +2469,20 @@ portadores:
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "No instala PDFs: es el otro lado de la regla. `check_paper_pending` cruza `pending_source` contra `raw/pdfs/`: con el PDF en disco nombra `--restamp-pdf-links` en vez de pedir la fuente."
+  - issue: 519
+    regla: >-
+      «vista SÓLO del abstract» se juzga por SUJETO, no por entrada de `vistas[]`: una segunda
+      lectura del mismo sujeto desde el PDF (`enfasis`, #239) cierra el pedido del PDF. Medido: 1 de
+      10 en Almagesto-Tesis, con el PDF en disco y leído.
+    funcion: lint.check_paper_views
+    patron: 'get\("fuente"\)|== "abstract"'
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Cruza la `fuente` de UNA vista contra el disco al cosecharla; no decide si el sujeto se leyó del PDF."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "`load_vistas` valida el vocabulario cerrado de `fuente` por entrada; no agrega por sujeto."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "`fuente` ahí es la clave de otro dict (puntero de una decisión de curación), no la de una vista."

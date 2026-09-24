@@ -5315,6 +5315,10 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # categoría DECLARADA existe para separar. ⚠ `no_vista` NO borra la entrada de
         # `vistas[]`: la nota sigue diciendo que ese sujeto la reclama; lo que declara es
         # por qué no se leyó.
+        # #519 — «sólo del abstract» se juzga por SUJETO: una segunda lectura del PDF
+        # (`enfasis`, #239) cierra el pedido aunque la base siga diciendo `abstract`.
+        _leidos_pdf = {v["sujeto"] for v in vistas if str(v.get("fuente") or "").strip() == "pdf"
+                       and str(v.get("fecha") or "").strip()}
         for v in vistas:
             if not str(v.get("fecha") or "").strip() and v["sujeto"] in no_vista:
                 reclamo_sin_vista_declarado.append(
@@ -5332,7 +5336,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                     (stem, f"la vista de **{v['sujeto']}** no dice de qué se construyó "
                            f"(`fuente: pdf|abstract`): una lectura del abstract se lee "
                            f"igual que una del paper"))
-            elif _f == "abstract":
+            elif _f == "abstract" and v["sujeto"] not in _leidos_pdf:
                 # NO es un error: la vista es legítima y está declarada. El hallazgo pide
                 # el PDF — mismo carril que `pending_source`, visto desde la lectura.
                 vista_solo_abstract.append(

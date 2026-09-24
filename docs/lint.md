@@ -787,7 +787,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   una del paper: el dato no se inventa, se pide al extractor). `fuente: abstract` **no es un
   error** —la vista es legítima y está declarada—: el hallazgo pide **conseguir el PDF** (mismo
   carril que `pending_source`, visto desde la lectura), y ojo, el abstract es donde la fuente
-  afirma de más. Sólo se evalúa en vistas **con fecha**; un `fuente: pdf` sin PDF en disco lo
+  afirma de más. Se juzga por **sujeto** (#519): una segunda lectura del PDF (`enfasis`) lo
+  cierra. Sólo se evalúa en vistas **con fecha**; un `fuente: pdf` sin PDF en disco lo
   rechaza antes el cosechador (#207).
 - **La vista REFUTA un reclamo que sigue en el frontmatter** (#212): se leyó y el resultado dice
   que el reclamo es falso; la salida es el `--drop-core` que el cosechador imprime, no aflojar el

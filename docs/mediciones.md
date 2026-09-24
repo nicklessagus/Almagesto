@@ -3941,3 +3941,9 @@ tras `make_notes.py --restamp-pdf-links`: sale `2009A&A...497..583Z` (PDF instal
 `replace_pdf --slug`); antes del comando el lint ya la nombraba con «el PDF YA está en disco». Diff
 de `vault/wiki/`: **1** archivo, sólo las líneas `pending_source`/`pending_motivo`. Las otras 4 siguen
 sin PDF. `2009JGRE..114.0B27E` no tenía la marca.
+
+## #519 — «vista SÓLO del abstract» por sujeto (v1.329.0)
+
+**Copia de la instancia (sin `.git`, sólo lectura sobre la real):** la categoría 10 → **9**; sale
+`2026RAA....26g5019B` (HD 40307: base `abstract` + relectura `pdf` con `enfasis`). Diff del reporte:
+sólo esa categoría.

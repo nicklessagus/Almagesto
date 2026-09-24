@@ -5079,6 +5079,24 @@ def test_vista_desde_el_pdf_no_dispara_ninguno_de_los_dos(toy_vault, capsys):
         assert "2020pdf...1..1P" not in _seccion(out, cat), cat
 
 
+def test_vista_solo_abstract_se_juzga_por_sujeto(toy_vault, capsys):
+    """#519 — una segunda lectura del PDF (`enfasis`) cierra el pedido del sujeto; la de OTRO
+    sujeto no."""
+    mk_note(toy_vault.PAPERS, "2020enf...1..1E",
+            {"tags": ["paper"], "stars": ["Estrella Test", "Otra"],
+             "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-28",
+                         "fuente": "abstract"},
+                        {"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-09-10",
+                         "fuente": "pdf", "enfasis": "relectura"},
+                        {"sujeto": "Otra", "tipo": "star", "fecha": "2026-08-28",
+                         "fuente": "abstract"}]},
+            "## Vista — Estrella Test\n\ntexto\n\n### Lente — relectura\n\nx\n\n"
+            "## Vista — Otra\n\ntexto\n")
+    sec = _seccion(run_lint_reporte(capsys)[1], "SÓLO del abstract")
+    assert "**Otra**" in sec
+    assert "**Estrella Test**" not in sec
+
+
 @pytest.mark.parametrize("bloque, tipo", [("- a\n- b", "list"), ("una frase", "str"), ("42", "int")])
 def test_frontmatter_valido_pero_no_mapa_grita(toy_vault, capsys, bloque, tipo):
     """La otra mitad: `split_fm` devuelve `{}` para honrar su firma, así que sin este detector la
