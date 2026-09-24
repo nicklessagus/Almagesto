@@ -790,6 +790,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   afirma de más. Se juzga por **sujeto** (#519): una segunda lectura del PDF (`enfasis`) lo
   cierra. Sólo se evalúa en vistas **con fecha**; un `fuente: pdf` sin PDF en disco lo
   rechaza antes el cosechador (#207).
+- **Fuente que ES su abstract** (#520, `solo_abstract_ok`, listada aparte: no es deuda): un resumen
+  de congreso no tiene paper detrás, así que el `## Abstract` verbatim es **toda** la fuente. Se
+  declara `solo_abstract: <motivo>` en la nota (sin motivo no aplica) y entonces: no pide PDF
+  (`vista_solo_abstract`), no reporta la fuente perdida (`vista_sin_fuente_en_disco`), y las citas
+  a ese paper se evalúan contra su `## Abstract` en vez del `.txt` (`unverifiable`, `cita_opaca`,
+  y `contrast --validar` por la misma función, `lib_quotes.abstract_source`).
 - **La vista REFUTA un reclamo que sigue en el frontmatter** (#212): se leyó y el resultado dice
   que el reclamo es falso; la salida es el `--drop-core` que el cosechador imprime, no aflojar el
   add-only.

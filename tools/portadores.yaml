@@ -911,6 +911,9 @@ portadores:
       - modulo: scripts/triage.py
         estado: fuera-de-alcance
         motivo: Escribe el placeholder al armar el stub; no decide si una nota sigue pendiente.
+      - modulo: scripts/lib_quotes.py
+        estado: usa
+        motivo: "`abstract_source` (#520) no toma como fuente un `## Abstract` que sigue siendo el placeholder."
 
   - issue: 415
     regla: >-
@@ -2486,3 +2489,24 @@ portadores:
       - modulo: scripts/triage.py
         estado: fuera-de-alcance
         motivo: "`fuente` ahí es la clave de otro dict (puntero de una decisión de curación), no la de una vista."
+  - issue: 520
+    regla: >-
+      Una fuente que ES su abstract (resumen de congreso, `solo_abstract: <motivo>`) se lee de su
+      `## Abstract` verbatim: todo chequeo que pide el `.txt` para evaluar una cita cae ahí antes de
+      declararla no evaluable. Medido: 2 notas de `ica` en Almagesto-Tesis en cuatro categorías,
+      4 de las 9 citas no verificables del tier 2.
+    funcion: lib_quotes.abstract_source
+    patron: 'FULLTEXT\.glob\(f"\*/\{'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`source_lookup.sources_for` (cita textual) y `check_note_links` (citas no verificables) caen a `abstract_source`; `contrast` pasa por `fulltext_readings`, que cae ahí también."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "La salvedad `txt_pierde` predica sobre el `.txt` MISMO: sin `.txt` es no evaluable por construcción."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "`txt_slug`, `doc_on_disk` y `bibcode_slugs` preguntan dónde está el artefacto y qué marca lleva, no qué dice la fuente."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Estampa el puntero `fulltext:` por verdad de disco; el abstract no es un archivo al que apuntar."

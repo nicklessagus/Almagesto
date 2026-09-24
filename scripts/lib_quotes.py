@@ -610,6 +610,34 @@ def fulltext_readings(bibcode: str) -> list:
             out = source_texts(txts[0].read_text(encoding="utf-8", errors="replace"))
         except OSError:
             out = []
+    else:
+        out = abstract_source(bibcode)
+    cfg._FULLTEXT_CACHE[clave] = out
+    return out
+
+
+def abstract_source(bibcode: str) -> list:
+    """Readings of the note's verbatim `## Abstract` when the note declares it IS the source (#520).
+
+    `[]` unless the paper note declares `solo_abstract: <motivo>` and the section holds a real
+    abstract (not the placeholder). The two quote callers fall back to this when there is no `.txt`:
+    a conference abstract has nothing else to read, and without it every quote of it is «not
+    evaluable» forever."""
+    clave = ("abstract", str(cfg.PAPERS), bibcode)
+    if clave in cfg._FULLTEXT_CACHE:
+        return cfg._FULLTEXT_CACHE[clave]
+    out = []
+    f = cfg.PAPERS / f"{bibcode}.md"
+    try:
+        text = f.read_text(encoding="utf-8") if f.exists() else ""
+    except (OSError, UnicodeDecodeError):
+        text = ""
+    # el `in` antes del YAML: el lint llama esto por cada cita sin `.txt`, y parsear cada nota
+    # otra vez rompía el presupuesto de una pasada de YAML (`test_lint_una_pasada_de_yaml`)
+    span = cfg.section_span(text, "## Abstract") if "solo_abstract:" in text else None
+    if span and cfg.solo_abstract_motivo(cfg.split_fm(text)) and not cfg.abstract_pending(text):
+        cuerpo = text[span[0]:span[1]].split("\n", 1)[-1]
+        out = source_texts(cuerpo)
     cfg._FULLTEXT_CACHE[clave] = out
     return out
 

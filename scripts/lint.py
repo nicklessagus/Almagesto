@@ -4610,6 +4610,7 @@ def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf
     sin_conclusiones_ok: list = []
     sin_aviso_llm: list = []
     vista_solo_abstract: list = []
+    solo_abstract_ok: list = []
     # @inv INV-156
     if cfg.section_start(text, "## Abstract") < 0:
         sin_abstract.append(
@@ -4621,9 +4622,12 @@ def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf
     # estructurales y machine-readable — un documento largo no tiene esa sección, y un paper
     # leído sólo del abstract no la tiene POR CONSTRUCCIÓN (#207).
     _marca_sc = fm.get("sin_conclusiones", _SIN_MARCA)
-    _solo_abstract = bool(fm.get("vistas")) and all(
+    _solo_abstract = bool(cfg.solo_abstract_motivo(fm)) or bool(fm.get("vistas")) and all(
         str((v_ or {}).get("fuente") or "") == "abstract"
         for v_ in cfg.as_list(fm.get("vistas")) if isinstance(v_, dict))
+    # #520 — la escotilla declarada se lista APARTE (AUD-207): visible, no es deuda.
+    if (_sa := cfg.solo_abstract_motivo(fm)):
+        solo_abstract_ok.append((stem, f"`solo_abstract: {_sa}`"))
     if _marca_sc is not _SIN_MARCA:
         # Escotilla declarada: motivo OBLIGATORIO, mismo criterio que `no_vista` /
         # `no_sintetizado` / el `--reason` del triage. Sin motivo sigue siendo deuda.
@@ -4646,7 +4650,8 @@ def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf
             (stem, "sin el aviso de **capa LLM**: la nota de paper es la que más contenido "
                    "generado tiene y no dice cuál de sus tres capas es auditable → "
                    "`python scripts/make_notes.py --restamp-headers`"))
-    return sin_abstract, sin_conclusiones, sin_conclusiones_ok, sin_aviso_llm, vista_solo_abstract
+    return (sin_abstract, sin_conclusiones, sin_conclusiones_ok, sin_aviso_llm, vista_solo_abstract,
+            solo_abstract_ok)
 
 
 def check_paper_legacy_fields(stem: str, fm: dict, body_full: str, segunda_mano: dict) -> list:
@@ -5317,6 +5322,9 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # por qué no se leyó.
         # #519 — «sólo del abstract» se juzga por SUJETO: una segunda lectura del PDF
         # (`enfasis`, #239) cierra el pedido aunque la base siga diciendo `abstract`.
+        # #520 — la fuente ES el abstract (resumen de congreso), declarado con motivo: no hay
+        # PDF que conseguir ni fuente en disco que perder.
+        _es_abstract = bool(cfg.solo_abstract_motivo(fm))
         _leidos_pdf = {v["sujeto"] for v in vistas if str(v.get("fuente") or "").strip() == "pdf"
                        and str(v.get("fecha") or "").strip()}
         for v in vistas:
@@ -5336,13 +5344,14 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                     (stem, f"la vista de **{v['sujeto']}** no dice de qué se construyó "
                            f"(`fuente: pdf|abstract`): una lectura del abstract se lee "
                            f"igual que una del paper"))
-            elif _f == "abstract" and v["sujeto"] not in _leidos_pdf:
+            elif _f == "abstract" and v["sujeto"] not in _leidos_pdf and not _es_abstract:
                 # NO es un error: la vista es legítima y está declarada. El hallazgo pide
                 # el PDF — mismo carril que `pending_source`, visto desde la lectura.
                 vista_solo_abstract.append(
                     (stem, f"la vista de **{v['sujeto']}** se construyó SÓLO del abstract: "
                            f"conseguir el PDF para leer el paper (y ojo, el abstract es "
-                           f"donde la fuente afirma de más)"))
+                           f"donde la fuente afirma de más) — o, si la fuente ES un resumen de "
+                           f"congreso, declará `solo_abstract: <motivo>` (#520)"))
         # #217 — la vista OCURRIÓ (tiene fecha) y su fuente ya no está en disco: sus citas
         # no se pueden contrastar nunca más. Pasa cuando `--drop-core` borra los artefactos
         # y conserva la nota, y es peor en la rama «se conserva porque pertenece a OTRO
@@ -5353,12 +5362,13 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # la vista se lee igual de firme que cualquier otra.
         _copias = cfg.bibcode_slugs(stem)      # #448: los dos artefactos, UNA enumeración
         if any(str(v.get("fecha") or "").strip() for v in vistas) and not _copias["pdf"] \
-                and not _copias["txt"]:
+                and not _copias["txt"] and not _es_abstract:
             vista_sin_fuente_en_disco.append(
                 (stem, "tiene vista FECHADA y ya no hay fuente en disco (ni PDF ni `.txt`): "
                        "la lectura ocurrió y sus localizadores siguen siendo válidos, pero "
                        "`verify-citations` no puede contrastarla nunca más — conseguir de "
-                       "nuevo la fuente, o declarar la pérdida en `salvedades` de la vista"))
+                       "nuevo la fuente, o declarar la pérdida en `salvedades` de la vista (si "
+                       "la fuente ES un resumen de congreso: `solo_abstract: <motivo>`, #520)"))
         # #449 — la prosa afirma QUÉ DOCUMENTO hay en disco y los testigos la desmienten. La
         # salvedad sobre el artefacto no lleva `[[bibcode]]`, así que `verify-citations` la deja
         # afuera por construcción (#213) y `contrast --validar` mira citas, no prosa sobre el
@@ -5617,7 +5627,7 @@ def check_note_links(stem: str, f, text: str, names, fulltext: dict, incoming: d
     for tgt in links_prosa:
         if BIBCODE_RE.match(tgt):
             nbib += 1
-            if in_verifiable_note and tgt not in fulltext:
+            if in_verifiable_note and tgt not in fulltext and not cfg.abstract_source(tgt):
                 # @inv INV-03
                 unverifiable.append((stem, f"cita {tgt} sin fulltext (no chequeable claim↔fuente)"))
     # #344 — los links del HERMANO cuentan como los de la nota. La tabla vivía adentro hasta
@@ -6367,7 +6377,9 @@ def source_lookup(paper_fms: dict):
             motivo = ("`fulltext_source: ocr`" if paper_fm(b).get("fulltext_source") == "ocr"
                       else "")
             txts = list(cfg.FULLTEXT.glob(f"*/{b}.txt")) if cfg.FULLTEXT.exists() else []
-            if not txts:
+            if not txts and (_abs := cfg.abstract_source(b)):
+                fuentes[b] = _abs          # #520: el `## Abstract` ES la fuente, declarado
+            elif not txts:
                 opacas.append((b, "sin `.txt` en disco"))
             elif motivo:
                 opacas.append((b, motivo))
@@ -6456,7 +6468,7 @@ def check_paper_note(stem: str, f: str, fm: dict, text: str, body_full: str, swe
     # #277 — los tres ⛔ del schema de nota de paper que no tenía ningún detector (medido: 39 de
     # 138 notas reales sin `## Abstract`, con el lint en rc 0).
     for key, items in zip(("sin_abstract", "sin_conclusiones", "sin_conclusiones_ok",
-                           "sin_aviso_llm", "vista_solo_abstract"),
+                           "sin_aviso_llm", "vista_solo_abstract", "solo_abstract_ok"),
                           check_paper_reading_aids(stem, fm, text, body_full, sweep.pdf_on_disk)):
         add(key, items)
     # #205 · `symbols_lost`/`fulltext_layout` (schema sin lector, bloquea); `segunda_mano` (#279) es
@@ -7110,6 +7122,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('cita_revisada', '❝ Cita CONFIRMADA en la página del PDF y firmada con `cita_revisada` (#516: visible, no es deuda)', SEV_BACKLOG, tuple(found['cita_revisada']), poblacion='citas'),
         Categoria('cita_revisada_huerfana', '`cita_revisada` que no cubre ningún hallazgo: cambió la cita o el PDF, o ya no dispara (#516/#256, backlog)', SEV_BACKLOG, tuple(found['cita_revisada_huerfana']), poblacion='notas'),
         Categoria('sin_conclusiones_ok', 'Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda)', SEV_BACKLOG, tuple(found['sin_conclusiones_ok']), poblacion='papers'),
+        Categoria('solo_abstract_ok', 'Fuente que ES su abstract (resumen de congreso) DECLARADA con motivo (#520: visible, no es deuda)', SEV_BACKLOG, tuple(found['solo_abstract_ok']), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(found['extraccion_no_declarada']), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(found['papers_table_stale']), poblacion='registros'),
         Categoria('cadena_incompleta', 'Cadena incompleta: falta un paso del orden canónico (backlog)', SEV_BACKLOG, tuple(found['cadena_incompleta']), poblacion='estrellas'),

@@ -5097,6 +5097,30 @@ def test_vista_solo_abstract_se_juzga_por_sujeto(toy_vault, capsys):
     assert "**Estrella Test**" not in sec
 
 
+@pytest.mark.parametrize("declarado", [False, True])
+def test_resumen_de_congreso_declarado_solo_abstract(toy_vault, capsys, declarado):
+    """#520 — un resumen de congreso no tiene PDF: el `## Abstract` es TODA la fuente. Sin la
+    escotilla, las cuatro categorías piden un documento que no existe; con `solo_abstract:
+    <motivo>` salen, se lista aparte, y la cita se evalúa contra el `## Abstract` de la nota."""
+    frase = "no model results in a significant detection of the planetary signal"
+    fm = {"tags": ["paper"], "stars": ["Estrella Test"],
+          "vistas": [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-08-28",
+                      "fuente": "abstract"}]}
+    if declarado:
+        fm["solo_abstract"] = "resumen de COSPAR: no hay paper completo"
+    mk_note(toy_vault.PAPERS, "2022cosp...44..588J", fm,
+            f"## Abstract\n\nWe find that {frase}.\n\n## Vista — Estrella Test\n\ntexto\n")
+    mk_note(toy_vault.QUERIES, "mi-query", {"tags": ["query"]},
+            f"Según «{frase}» [[2022cosp...44..588J]].\n")
+    link_from_log(toy_vault, "mi-query")
+    rep = run_lint_reporte(capsys)[1]
+    for cat in ("SÓLO del abstract", "SIN fuente en disco", "Citas no verificables",
+                "NO EVALUABLE"):
+        assert ("2022cosp...44..588J" in _seccion(rep, cat)
+                or "mi-query" in _seccion(rep, cat)) is not declarado, cat
+    assert ("2022cosp...44..588J" in _seccion(rep, "ES su abstract")) is declarado
+
+
 @pytest.mark.parametrize("bloque, tipo", [("- a\n- b", "list"), ("una frase", "str"), ("42", "int")])
 def test_frontmatter_valido_pero_no_mapa_grita(toy_vault, capsys, bloque, tipo):
     """La otra mitad: `split_fm` devuelve `{}` para honrar su firma, así que sin este detector la

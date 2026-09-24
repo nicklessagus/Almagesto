@@ -1225,3 +1225,14 @@ python scripts/lint.py
 releído del PDF con `enfasis`). Ninguna otra categoría cambia.
 
 **Devolver si** sale una nota cuyo sujeto no tiene ninguna lectura `fuente: pdf` con fecha.
+
+## §#520 · v1.330.0 — `solo_abstract: <motivo>` para un resumen de congreso
+
+Agregar al frontmatter de `2022cosp...44..588J` y `2022eas..conf.1709L`
+`solo_abstract: "<motivo>"` y correr `python scripts/lint.py`.
+
+**Esperado (medido en copia):** citas no verificables 9 → 5 · vista SÓLO del abstract 9 → 7 · vista
+SIN fuente en disco 10 → 8 · cita NO EVALUABLE 13 → 12 (la de `ica` L480 se evalúa contra el
+`## Abstract` y pasa) · la categoría nueva *Fuente que ES su abstract* lista las 2.
+
+**Devolver si** otra categoría cambia, o si la cita de L480 cae en otra categoría de cita.

@@ -3947,3 +3947,9 @@ sin PDF. `2009JGRE..114.0B27E` no tenía la marca.
 **Copia de la instancia (sin `.git`, sólo lectura sobre la real):** la categoría 10 → **9**; sale
 `2026RAA....26g5019B` (HD 40307: base `abstract` + relectura `pdf` con `enfasis`). Diff del reporte:
 sólo esa categoría.
+
+## #520 — `solo_abstract` para resúmenes de congreso (v1.330.0)
+
+**Copia de la instancia, con `solo_abstract` declarado en las 2 notas de `ica`:** unverifiable 9 → 5,
+vista_solo_abstract 9 → 7, vista_sin_fuente_en_disco 10 → 8, cita_opaca 13 → 12 (la cita de L480
+sale `en_su_txt` contra el `## Abstract`), `solo_abstract_ok` 0 → 2. Diff del reporte: sólo esas.

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.329.0"
+ALMAGESTO_VERSION = "1.330.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3829,6 +3829,16 @@ def abstract_pending(text: str) -> bool:
     return i >= 0 and ABSTRACT_PLACEHOLDER in text[i:i + 200]
 
 
+def solo_abstract_motivo(fm: dict) -> str:
+    """The declared motive that this source IS its abstract (#520), or `""`.
+
+    A conference abstract has no paper behind it: the verbatim `## Abstract` is the whole source,
+    so every check that asks for a PDF or a `.txt` asks for a document that does not exist. The
+    hatch is declared with its motive (same criterion as `sin_conclusiones` / `no_vista`); without
+    a motive it does not apply."""
+    return str((fm or {}).get("solo_abstract") or "").strip()
+
+
 def config_items() -> list:
     """`[(key, item, origen)]` — every config item that carries per-source fields (#479).
 
@@ -5706,6 +5716,7 @@ from lib_quotes import (  # noqa: E402,F401
     extraction_depaginated,
     extraction_pagination_open,
     fulltext_pagination,
+    abstract_source,
     fulltext_readings,
     log_quote_exempt,
     normalize_quote,

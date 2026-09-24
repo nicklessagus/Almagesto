@@ -535,6 +535,9 @@
 ## Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda) (0)
 > sobre 60 notas de `papers/`
 
+## Fuente que ES su abstract (resumen de congreso) DECLARADA con motivo (#520: visible, no es deuda) (0)
+> sobre 60 notas de `papers/`
+
 ## Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog) (0)
 > sobre 3 registros de sujeto
 
