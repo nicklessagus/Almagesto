@@ -1340,6 +1340,29 @@ def extraction_depaginated(bibcode: str) -> bool:
                for d in _extraction_index().get(bibcode, []) if isinstance(d, dict))
 
 
+#: #526 · the add-only mark on an EXTRACTION whose text a verification refuted. The JSON is not
+#: regenerable (#311), so the refuted string stays — and without the mark `contrast` served it as a
+#: row «not to re-type» (#322) and `harvest_views --force` wrote it back into the corrected note.
+#: Entries: `{texto, por: <nota>.verif#<ancla>, motivo, fecha, campos}`; written ONLY by
+#: `write_verif_sidecar.py --refutar-extraccion`.
+REFUTED_MARK = "_refutado"
+
+
+def _fold(texto) -> str:
+    """Case- and whitespace-folded text, the comparison `refuted_in` makes on both sides."""
+    return " ".join(str(texto or "").split()).casefold()
+
+
+def refuted_in(data: dict, texto) -> list:
+    """The `_refutado` entries of this extraction whose refuted string appears in `texto` (#526).
+
+    ONE implementation for every reader that serves or re-writes the extraction's text: `contrast`
+    (the three reading modes) and `harvest_views` (the section it renders)."""
+    t = _fold(texto)
+    return [e for e in cfg.as_list((data or {}).get(REFUTED_MARK))
+            if isinstance(e, dict) and _fold(e.get("texto")) and _fold(e.get("texto")) in t]
+
+
 def quote_found(quote: str, source_norm: str) -> bool:
     """Is this quote in that (already normalized) source text? All its fragments must be."""
     for variante in quote_variants(quote):

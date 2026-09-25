@@ -136,6 +136,13 @@ def _mostrar(texto: str) -> str:
     return " ".join(str(texto or "").split())
 
 
+def _refutado(bib: str, hits: list) -> str:
+    """The line that travels with a value a verification refuted (#526), one per `_refutado` hit."""
+    return "\n".join(f"    ⛔ REFUTADO {cfg.quote_fragment(e.get('texto'))} en [[{bib}]] por "
+                     f"{e.get('por')} ({e.get('fecha')}): {e.get('motivo')} — no lo pegues (#526)"
+                     for e in hits)
+
+
 def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | None,
              eje: str | None, filas: bool,
              incluir_dropeados: bool = False, cita: bool = False) -> int:
@@ -155,6 +162,7 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
     many were excluded (INV-40) and `--incluir-dropeados` shows them, each behind its own banner."""
     rx = re.compile(patron, re.I) if patron else None
     formas = dict.fromkeys(FORMAS, 0)          # #330: qué emitió, por forma — se declara al cerrar
+    rehusadas = 0                              # #526: filas refutadas que NO salen pegables
     todas = extracciones(slug)
     # #112 vive en el registro VERSIONADO, no en `build/`: la única implementación de «qué papers
     # sacó el usuario de ESTE sujeto» es `cfg.dropped_from_subject` (regla de método nº 2 — el molde
@@ -180,6 +188,8 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
                 if rx and not rx.search(f"{k} {texto}"):
                     continue
                 cfg.print_seguro(f"[[{bib}]] · eje `{k}`\n    {texto}")
+                if hits := cfg.refuted_in(data, f"{k} {texto}"):
+                    cfg.print_seguro(_refutado(bib, hits))
                 n += 1
             continue
         for v in valores(data):
@@ -194,6 +204,15 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
             else:
                 mostrado = f"{que} → {texto}"
             if rx and not rx.search(f"{que} {texto} {regimen}"):
+                continue
+            # ⛔ #526 — lo que una verificación refutó y la extracción inmutable (#311) conserva: en
+            # la vista de lectura sale MARCADO; como fila o fragmento pegable (#322/#385) no sale.
+            hits = cfg.refuted_in(data, f"{que} {texto} {regimen} {mostrado} "
+                                        f"{v.get('segunda_mano') or ''}")
+            if hits and (cita or filas):
+                cfg.print_seguro(f"⛔ [[{bib}]] · {que}: NO se sirve como pegable\n"
+                                 + _refutado(bib, hits))
+                rehusadas += 1
                 continue
             # La PROCEDENCIA viaja siempre (#314): los seis errores de atribución de la corrida
             # medida salieron de un digest que no la imprimía.
@@ -231,7 +250,8 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
                                  f"{GLOSA} |")
             else:
                 cfg.print_seguro(f"[[{bib}]] · {loc}{sm}\n    {mostrado}"
-                                 + (f"\n    régimen: {regimen}" if regimen and not campo else ""))
+                                 + (f"\n    régimen: {regimen}" if regimen and not campo else "")
+                                 + (f"\n{_refutado(bib, hits)}" if hits else ""))
             n += 1
     if (filas or cita) and n:
         cfg.print_seguro(f"\n  ⛔ La celda sale TAL CUAL del JSON, con su bibcode y su localizador: "
@@ -251,7 +271,9 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
         cola = f"{n_drop} excluida(s) por `--drop-core` (`--incluir-dropeados` para verlas)"
     else:
         cola = "0 excluida(s) por `--drop-core`"
-    cfg.print_seguro(f"\n> sobre {len(todas)} extracción(es) del sujeto · {cola}")
+    cfg.print_seguro(f"\n> sobre {len(todas)} extracción(es) del sujeto · {cola}"
+                     + (f" · {rehusadas} fila(s) REFUTADA(s) no servida(s) como pegable(s) "
+                        f"(`_refutado`, #526)" if rehusadas else ""))
     return n
 
 

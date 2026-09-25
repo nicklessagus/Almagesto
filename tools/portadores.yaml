@@ -209,6 +209,9 @@ portadores:
     funcion: lib_config.EXTRACCION
     patron: 'EXTRACCION'
     consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "`--refutar-extraccion` (#526) recorre las extracciones del bibcode para anotar `_refutado`."
       - modulo: scripts/contrast.py
         estado: usa
         motivo: "Lee los JSON de extracción para armar el digest del contraste (2b) y para validar las citas contra la transcripción."
@@ -1942,6 +1945,9 @@ portadores:
     funcion: lib_config.extraction_depaginated
     patron: '_paginacion|_repaginado'
     consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "Nombra `_paginacion` en un docstring como precedente de la marca `_refutado` (#526); no decide nada sobre el documento en disco."
       - modulo: scripts/contrast.py
         estado: fuera-de-alcance
         motivo: "Consume el veredicto `extraccion_vieja` que esta puerta decide (la marca `⚠verificar en el PDF`), pero no la llama: desde #494 la causa del localizador MAL la decide `extraction_pagination_open`, que es la otra pregunta sobre la misma marca."
@@ -2257,6 +2263,9 @@ portadores:
     funcion: make_notes._extraction_of
     patron: 'EXTRACCION\.glob\(f?"\*/'
     consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "`--refutar-extraccion` (#526) marca TODAS las extracciones del bibcode que contienen el texto refutado; no elige una para una vista."
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Arma un índice que ACUMULA las citas de todas las extracciones de un bibcode; no elige una para una vista."
@@ -2607,3 +2616,42 @@ portadores:
       - modulo: scripts/triage.py
         estado: fuera-de-alcance
         motivo: "`--sintesis` es el canal que declara la fecha (la salida del hallazgo)."
+  - issue: 526
+    regla: >-
+      Lo que una verificación REFUTÓ y la extracción inmutable (#311) conserva lleva la marca
+      add-only `_refutado` (precedente `_paginacion`, #436), y todo lector que sirve el texto de la
+      extracción como pegable o lo re-escribe en una nota la respeta. Medido: 1 caso en
+      Almagesto-Tesis (`2015MNRAS.446.1478B`, «grilla aleatoria»), servido por `contrast --filas`.
+    funcion: lib_quotes.refuted_in
+    patron: 'cfg\.EXTRACCION'
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "`--filas`/`--cita` no sirven la fila refutada (la nombran con su refutación); la lectura (`--grep`, `--campo`, `--eje`) la muestra marcada. `validar` no la mira: la extracción sigue siendo testigo de QUIÉN dijo la frase."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "La vista (también bajo `--force`) y `--restamp-salvedades` no re-escriben un cuerpo que lleve texto refutado."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "`--refutar-extraccion` es el ÚNICO escritor de la marca: exige un par con `contradice`/`no-soportada` en la cadena y un texto que la extracción contenga."
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: "Mueve o borra la capa `extraccion` entera por slug; no lee su texto."
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: "Sólo nombra la RUTA donde el extractor escribe; no copia texto de una extracción previa."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Lee las extracciones para contar la deuda de paginación (`_paginacion`); no sirve su texto."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "`_extraction_of` re-estampa metadata de la vista (lente, ejes preguntados) y `--rename-paper` mueve el archivo; ninguno escribe el texto del extractor en la nota."
+      - modulo: scripts/proposals.py
+        estado: fuera-de-alcance
+        motivo: "Junta pedidos de alcance del extractor (`scope_request_texts`) como propuestas a firmar; no son texto pegable a una ficha."
+      - modulo: scripts/repaginate.py
+        estado: fuera-de-alcance
+        motivo: "Reescribe sólo `linea` con lectura+escritura del JSON entero: la marca `_refutado` viaja intacta."
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "Agrega `_paginacion` con lectura+escritura del JSON entero: la marca `_refutado` viaja intacta."

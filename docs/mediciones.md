@@ -3992,3 +3992,11 @@ vista es copia de la extracción inmutable). Diff del reporte: sólo la categor�
 0 → **3** sobre 10 registros (`rv-doppler` 31, `indicadores-actividad` 33, `harps-drs` 26
 sintetizados — los del issue). Diff del reporte: sólo esa categoría. Ida y vuelta: `triage.py
 rv-doppler --sintesis --n-papers 31` → 2.
+## #526 — `_refutado`: lo que una verificación refutó en la extracción (v1.336.0)
+
+**Copia de la instancia (sin `.git`, sólo lectura sobre la real):** `--refutar-extraccion` sobre
+`2015MNRAS.446.1478B` («grilla aleatoria», fila `0c20c8bbc1` de `deteccion-estadistica.verif.md`)
+marcó 1 extracción en 2 campos; la segunda corrida, 0 (JSON idéntico, md5 igual). `contrast
+deteccion-estadistica --grep aleatori --filas`: 4 → **3** filas pegables, 1 rehusada con su
+refutación; `--cita` igual. `harvest_views --force --dry-run` del paper: 1 cosechada (+2/-2) → 0,
+rehusada. Lint y `contrast --validar-todo`: salida idéntica antes y después.

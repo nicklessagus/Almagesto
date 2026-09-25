@@ -1313,3 +1313,20 @@ sujeto (medido en copia: con `rv-doppler` declarado baja a 2).
 
 **Devolver si** aparece una estrella (las 3 ya declaran `sintesis:`) o un sujeto sin papers
 `sintetizado` en su roll-up.
+## §#526 · v1.336.0 — lo refutado en la extracción deja de servirse pegable
+
+```bash
+python scripts/write_verif_sidecar.py vault/wiki/concepts/methods/deteccion-estadistica.md \
+  --refutar-extraccion 0c20c8bbc1:2015MNRAS.446.1478B --texto "grilla aleatoria" \
+  --reason "la fuente dice grilla no uniforme refinada adaptativamente, no aleatoria (pp. 1484-1485)"
+python scripts/contrast.py deteccion-estadistica --grep aleatori --filas
+```
+
+**Esperado (medido en copia):** el primer comando marca 1 extracción (`ground_truth[7].que`,
+`ejes.method`); repetirlo dice «0 marcadas · 1 ya lo estaba» y el JSON no cambia. `--filas` pasa de
+4 filas pegables a **3** + la línea `⛔ … NO se sirve como pegable` y el cierre
+`1 fila(s) REFUTADA(s)`. `harvest_views deteccion-estadistica --theme --paper 2015MNRAS.446.1478B
+--force --dry-run` pasa de «1 cosechada, +2/-2» a «la vista NO se re-escribe». Lint y
+`contrast --validar-todo`: sin cambios.
+
+**Devolver si** otra fila deja de salir, o si el lint cambia alguna categoría.

@@ -62,6 +62,7 @@ EXTRACCION_ESCRITORES = {
     "repaginate.apply": "localizadores tras RELEER el PDF (#494), con sus guardas",
     "make_notes._move_extraction": "`--rename-paper`: mueve y reescribe SÓLO `bibcode` (#228/#374)",
     "make_notes.migrate_all_extracciones": "migrador #311: MUEVE de `build/`, sin tocar contenido",
+    "write_verif_sidecar.refute_extraction": "agrega `_refutado` (#526); no toca la lectura",
 }
 OTROS_ESCRITORES = {
     "bench_verify.cmd_seed": "build/ (examen y clave del benchmark)",

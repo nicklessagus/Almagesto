@@ -1211,3 +1211,50 @@ def test_522_la_ronda_que_limpia_ANOTA_la_resolucion_y_el_migrador_la_repone(toy
     assert (nota.read_bytes(), herm.read_bytes()) == t1, "idempotente"
     assert not any("--migrate-verdict-chain" in str(x)
                    for x in lint.collect().por_clave("verif_estructura").items)
+
+
+def test_refutar_extraccion_ANOTA_add_only_idempotente_y_rehusa_lo_que_no_se_refuto(toy_vault):
+    """#526 — el `contradice` que nació en la EXTRACCIÓN se resolvió en la nota, pero el JSON
+    inmutable (#311) lo seguía diciendo y `contrast` lo servía pegable. La anotación es ADD-ONLY
+    (el texto refutado queda, precedente `_paginacion`, #436), converge en la segunda corrida y
+    rehúsa el par que nunca fue refutado o el texto que ninguna extracción lleva."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {"2020Pdf": "contradice"}), fecha="2026-03-01")
+    ancla = next(f.anchor for f in lb.verif_rows(nota) if f.bibcode == "2020Pdf")
+    otra = next(f.anchor for f in lb.verif_rows(nota) if f.bibcode == "2019Txt")
+    (cfg.EXTRACCION / "s").mkdir(parents=True, exist_ok=True)
+    jf = cfg.EXTRACCION / "s" / "2020Pdf.json"
+    jf.write_text(json.dumps({"bibcode": "2020Pdf", "ejes": {"m": "grilla ALEATORIA fina"},
+                              "ground_truth": [{"que": "grilla aleatoria", "valor": "x"}]}),
+                  encoding="utf-8")
+    r = ws.refute_extraction(nota, f"{ancla}:2020Pdf", "grilla aleatoria", "p. 5 dice adaptativa")
+    data = json.loads(jf.read_text(encoding="utf-8"))
+    assert data["ground_truth"][0]["que"] == "grilla aleatoria", "add-only: el texto queda"
+    [e] = data["_refutado"]
+    assert e["por"] == f"concepto.verif#{ancla}" and e["campos"] == ["ejes.m", "ground_truth[0].que"]
+    assert len(r["tocadas"]) == 1
+    antes = jf.read_bytes()
+    assert ws.refute_extraction(nota, ancla, "grilla aleatoria", "otra vez")["ya"] == [jf]
+    assert jf.read_bytes() == antes, "anotar dos veces converge"
+    with pytest.raises(ws.SidecarError, match="nunca fue"):
+        ws.refute_extraction(nota, otra, "grilla aleatoria", "m")
+    with pytest.raises(ws.SidecarError, match="ninguna extracción"):
+        ws.refute_extraction(nota, ancla, "texto que no está", "m")
+    assert ws.main([str(nota), "--refutar-extraccion", ancla, "--texto", "grilla aleatoria"]) == 1
+    with pytest.raises(ws.SidecarError, match="nombra 0"):
+        ws.refute_extraction(nota, "ffffffffff", "grilla aleatoria", "m")
+    with pytest.raises(ws.SidecarError, match="obligatorios"):
+        ws.refute_extraction(nota, ancla, "grilla aleatoria", " ")
+    with pytest.raises(ws.SidecarError, match="obligatorios"):
+        ws.refute_extraction(nota, ancla, " ", "m")
+    (cfg.EXTRACCION / "s" / "lista.json").write_text("[1]", encoding="utf-8")
+    # la extracción de OTRO paper con el mismo texto, y un JSON roto, no se tocan
+    otro = cfg.EXTRACCION / "s" / "2019Txt.json"
+    otro.write_text(json.dumps({"bibcode": "2019Txt", "ejes": {"m": "grilla aleatoria"}}),
+                    encoding="utf-8")
+    (cfg.EXTRACCION / "s" / "roto.json").write_text("{", encoding="utf-8")
+    ws.refute_extraction(nota, ancla, "grilla aleatoria", "tercera")
+    assert "_refutado" not in json.loads(otro.read_text(encoding="utf-8"))
+    assert ws.main(["no-existe.md", "--refutar-extraccion", ancla]) == 2
+    assert ws.main(["--refutar-extraccion", ancla]) == 2
+    assert ws.main([str(nota.with_suffix("")) + ".verif.md", "--refutar-extraccion", ancla]) == 2

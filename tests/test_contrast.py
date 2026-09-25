@@ -1415,3 +1415,27 @@ def test_516_la_cita_confirmada_en_la_pagina_se_FIRMA_y_calla_en_los_DOS_portado
     [(_s, hue)] = rep.por_clave("cita_revisada_huerfana").items
     assert "el PDF de 2013Voss cambió" in hue, hue
 
+
+
+def test_526_lo_REFUTADO_no_sale_pegable_y_en_la_lectura_sale_MARCADO(toy_vault, capsys):
+    """#526 — la extracción inmutable (#311) conserva lo que una verificación refutó; con la marca
+    `_refutado`, `--filas`/`--cita` no lo sirven como cadena «que no se re-tipea» (#322) y la
+    lectura (`--grep`, `--eje`) lo muestra con la refutación al lado."""
+    _extraccion("t", "2015Bal", ejes={"method": "grilla aleatoria + LM"},
+                ground_truth=[{"que": "grilla aleatoria no uniforme", "valor": "LM", "linea": "p. 8"},
+                              {"que": "grilla de frecuencias", "valor": "paso 1/T", "linea": "p. 9"}],
+                _refutado=[{"texto": "grilla aleatoria", "por": "x.verif#abc", "motivo": "adaptativa",
+                            "fecha": "2026-09-24"}])
+    ct.main(["t", "--grep", "grilla", "--filas"])
+    out = capsys.readouterr().out
+    assert "| grilla aleatoria no uniforme |" not in out and "NO se sirve como pegable" in out
+    assert "| grilla de frecuencias |" in out, "sólo la fila refutada se retiene"
+    assert "1 fila(s) REFUTADA(s)" in out
+    ct.main(["t", "--grep", "grilla", "--cita"])
+    assert "LM (p. 8)" not in capsys.readouterr().out
+    for flags, visible in ((["--grep", "aleatori"], "→ LM"), (["--eje", "method"], "+ LM")):
+        ct.main(["t", *flags])
+        out = capsys.readouterr().out
+        assert "REFUTADO «grilla aleatoria»" in out and visible in out, "la lectura lo muestra"
+    ct.main(["t", "--grep", "frecuencias"])
+    assert "REFUTADO" not in capsys.readouterr().out, "sólo el valor que lo contiene"

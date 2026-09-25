@@ -3,6 +3,7 @@
     python scripts/write_verif_sidecar.py <nota.md> --from build/<slug>/verif/<ronda> [--fecha AAAA-MM-DD] [--dry-run]
     python scripts/write_verif_sidecar.py [<nota.md> | --todo] --restamp-section    # #430
     python scripts/write_verif_sidecar.py <nota.md> --reanclar [--fecha AAAA-MM-DD] [--dry-run]   # #480
+    python scripts/write_verif_sidecar.py <nota.md> --refutar-extraccion <ancla>[:<bib>] --texto "<frag>" --reason "<motivo>"   # #526
 
 The missing link of the `verify-citations` chain. It had a generator (`verify_fanout.py`, #369), a
 barrier (`check_verify_fanout.py`, #259) and a re-anchoring proposer (`reverify_subset.py`, #257),
@@ -648,6 +649,73 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
     return {"resueltas": len(cambios), **_rewrite_rows(note, cambios, fecha, dry_run)}
 
 
+def _json_strings(v, path: str = ""):
+    """`(path, string)` for every string inside an extraction JSON (#526: where the text lives)."""
+    if isinstance(v, str):
+        yield path, v
+    elif isinstance(v, dict):
+        for k, x in v.items():
+            yield from _json_strings(x, f"{path}.{k}" if path else str(k))
+    elif isinstance(v, list):
+        for i, x in enumerate(v):
+            yield from _json_strings(x, f"{path}[{i}]")
+
+
+def refute_extraction(note: Path, address: str, texto: str, motivo: str,
+                      dry_run: bool = False) -> dict:
+    """Stamp `_refutado` on the extractions whose text a verification of this note refuted (#526).
+
+    The pair's verdict was resolved in the NOTE, but when its cause was the EXTRACTION the JSON —not
+    regenerable, #311— still says it, and `contrast` served it as a row «not to re-type» (#322).
+    ADD-ONLY, the precedent of `_paginacion` (#436): the refuted string stays, the entry says who
+    refuted it. Three refusals: an address not in the sibling (or ambiguous), a row whose verdict
+    chain never was `contradice`/`no-soportada` (nothing was refuted), and a `texto` that no
+    extraction of that bibcode carries (the annotation would name nothing). Idempotent: the same
+    `(texto, por)` already stamped is a no-op."""
+    ancla, bib = _split_address(address)
+    filas = lb.rows_addressed(lb.verif_rows(note) or [], ancla, bib)
+    if len(filas) != 1:
+        raise SidecarError(
+            f"la dirección {address} nombra {len(filas)} fila(s) de {note.name}"
+            + (f" ({', '.join(f.bibcode for f in filas)}): desambiguá con `<ancla>:<bibcode>`"
+               if filas else " — ¿la nota cambió? re-anclá primero"))
+    fila = filas[0]
+    if not set(lb.verdict_chain(fila.verdict)) & set(lb.VERDICTS_SIN_RESOLVER):
+        raise SidecarError(f"el par {ancla}:{fila.bibcode} nunca fue `contradice`/`no-soportada` "
+                           f"(«{fila.verdict}»): no hay nada refutado que anotar")
+    if not str(texto or "").strip() or not str(motivo or "").strip():
+        raise SidecarError("`--texto` y `--reason` son obligatorios: qué se refutó y por qué")
+    por = f"{note.stem}.verif#{ancla}"
+    tocadas, ya = [], []
+    for f in sorted(cfg.EXTRACCION.glob("*/*.json")) if cfg.EXTRACCION.exists() else []:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict) or cfg.extraction_identity(data) != fila.bibcode:
+            continue
+        sonda = {cfg.REFUTED_MARK: [{"texto": texto}]}
+        campos = [ruta for ruta, v in _json_strings(data)
+                  if not ruta.startswith(cfg.REFUTED_MARK) and cfg.refuted_in(sonda, v)]
+        if not campos:
+            continue
+        previas = cfg.as_list(data.get(cfg.REFUTED_MARK))
+        if any(isinstance(e, dict) and e.get("texto") == texto and e.get("por") == por
+               for e in previas):
+            ya.append(f)
+            continue
+        data[cfg.REFUTED_MARK] = previas + [{
+            "texto": texto, "por": por, "motivo": motivo.strip(),
+            "fecha": dt.date.today().isoformat(), "campos": campos}]
+        if not dry_run:
+            cfg.write_text_atomic(f, json.dumps(data, ensure_ascii=False, indent=1) + "\n")
+        tocadas.append((f, campos))
+    if not tocadas and not ya:
+        raise SidecarError(f"ninguna extracción de {fila.bibcode} contiene «{texto}»: la anotación "
+                           f"no nombraría nada")
+    return {"tocadas": tocadas, "ya": ya, "por": por, "bibcode": fila.bibcode}
+
+
 def migrate_condition_prefix(note: Path, fecha: str | None = None, dry_run: bool = False) -> dict:
     """Collapse the doubled class of every condition cell in this note's sibling (#427).
 
@@ -916,6 +984,24 @@ def _main_migrate_chain(args) -> int:
     return 1 if fallas else 0
 
 
+def _main_refutar(args) -> int:
+    """`--refutar-extraccion`: the `_refutado` mark on the extraction (#526)."""
+    nota = Path(args.nota or "")
+    if not args.nota or not nota.exists() or cfg.is_verif_sidecar(nota):
+        cfg.print_seguro("⛔ `--refutar-extraccion` toma UNA nota (la del par refutado)")
+        return 2
+    try:
+        r = refute_extraction(nota, args.refutar, args.texto, args.reason, dry_run=args.dry_run)
+    except SidecarError as exc:
+        cfg.print_seguro(f"⛔ {exc}")
+        return 1
+    verbo = "se marcaría(n)" if args.dry_run else "marcada(s)"
+    cfg.print_seguro(f"{len(r['tocadas'])} extracción(es) de {r['bibcode']} {verbo} `_refutado` "
+                     f"por {r['por']} · {len(r['ya'])} ya lo estaba(n)"
+                     + "".join(f"\n  {f.name} · {', '.join(c)}" for f, c in r["tocadas"]))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("nota", nargs="?", help="la nota (`vault/wiki/.../<x>.md`)")
@@ -949,6 +1035,14 @@ def main(argv=None) -> int:
                          "#499: DECLARA el arrastre con el sufijo `· re-anclado <hoy>` en el "
                          "encabezado del bloque (aun con 0 filas re-ancladas), y el lint compara "
                          "la prosa contra esa fecha")
+    ap.add_argument("--refutar-extraccion", dest="refutar", metavar="ANCLA[:BIBCODE]",
+                    help="#526: el `contradice`/`no-soportada` de ese par nació en la EXTRACCIÓN — "
+                         "anota `_refutado` (add-only) en cada extracción del bibcode que contiene "
+                         "`--texto`; `contrast` deja de servirlo pegable y `harvest_views` no lo "
+                         "re-escribe")
+    ap.add_argument("--texto", default=None, help="con --refutar-extraccion: el fragmento refutado")
+    ap.add_argument("--reason", default=None,
+                    help="con --refutar-extraccion: por qué (obligatorio)")
     ap.add_argument("--fecha", default=None,
                     help="fecha del bloque. Default: hoy sólo con `--from` (una ronda de "
                          "fan-out); con `--reanclar`, `--restamp-section`, `--resolver`/"
@@ -956,6 +1050,8 @@ def main(argv=None) -> int:
                          "tiene (nada se verificó, #395) — pasarla re-fecha el bloque")
     ap.add_argument("--dry-run", action="store_true", help="no escribe: dice qué haría")
     args = ap.parse_args(argv)
+    if args.refutar:
+        return _main_refutar(args)
     if args.restamp:
         return _main_restamp(args)
     if args.migrate_chain:

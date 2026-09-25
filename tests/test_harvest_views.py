@@ -2101,3 +2101,23 @@ def test_507_los_otros_modos_con_dry_run_tampoco_escriben(toy_vault, monkeypatch
     monkeypatch.setattr(sys, "argv", ["harvest_views.py", "test_star", *modo, "--dry-run"])
     assert hv.main() == 0
     assert tree_digest(toy_vault.ROOT) == antes
+
+
+def test_526_force_NO_re_escribe_lo_que_una_verificacion_REFUTO(toy_vault, capsys):
+    """#526 — la nota se corrigió contra el PDF, pero el JSON inmutable (#311) conserva el texto
+    refutado: `--force` lo volvía a escribir en la vista. Con `_refutado` la sección no se toca."""
+    data = extraccion(aporte="usa una grilla aleatoria",
+                      _refutado=[{"texto": "grilla aleatoria", "por": "x.verif#abc",
+                                  "motivo": "adaptativa", "fecha": "2026-09-24"}])
+    dest = sembrar(toy_vault, data, body="## Vista — Estrella Test\n\nGrilla adaptativa.\n")
+    hv.harvest("test_star", force=True)
+    assert "Grilla adaptativa." in dest.read_text(encoding="utf-8")
+    assert "grilla aleatoria" not in dest.read_text(encoding="utf-8")
+    assert "la vista NO se re-escribe" in capsys.readouterr().out
+    # y el re-estampado acotado de salvedades (#453), el otro camino JSON → nota, tampoco
+    sembrar(toy_vault, extraccion())          # la vista cosechada sin salvedades
+    hv.harvest("test_star")
+    data["salvedades"] = ["la grilla aleatoria no es de la fuente"]   # AGREGAR pasa (#453)
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(data), encoding="utf-8")
+    r = hv.restamp_salvedades("test_star")
+    assert [b for b, _ in r["rehusadas"]] == [BIB] and not r["tocadas"]

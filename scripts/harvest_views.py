@@ -1001,8 +1001,15 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             salvedades_falsas.append((bib, _detalle))
             cfg.print_seguro(f"  ⛔ {bib}: salvedad FALSA, no se publica — {_detalle}")
         _enf = str(data.get("enfasis") or "").strip()
-        if write_view_section(dest, sujeto, render_view(sujeto, data), theme=theme, force=force,
-                              enfasis=_enf):
+        _cuerpo = render_view(sujeto, data)
+        # ⛔ #526 — lo que una verificación refutó sigue en el JSON (#311, add-only): re-escribirlo
+        # en la nota —la vía es `--force`— deshace la corrección. La sección no se toca.
+        if _refutados := cfg.refuted_in(data, _cuerpo):
+            cfg.print_seguro(f"  ⛔ {bib}: la vista NO se re-escribe — la extracción lleva texto "
+                             f"refutado (`_refutado`): "
+                             + "; ".join(f"«{e.get('texto')}» por {e.get('por')}"
+                                         for e in _refutados))
+        elif write_view_section(dest, sujeto, _cuerpo, theme=theme, force=force, enfasis=_enf):
             toco = True
         if stamp_reading_aids(dest, data):
             toco = True
@@ -1267,6 +1274,9 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
             # cobrar por ningún camino.
             seccion = seccion[:_view_without_lenses(seccion)]
         bloque = "\n".join(render_salvedades(data)).rstrip("\n")
+        if cfg.refuted_in(data, bloque):          # #526 — lo refutado no vuelve a la nota
+            rehusadas.append((bib, "el bloque lleva texto refutado (`_refutado`) → NO se re-estampa"))
+            continue
         # ⚠ Sin repetir `dentro is None` en las dos ramas, a propósito: «hay marcas» ya implica
         # que `salvedades_span` no devolvió `None` por ausencia, así que un `and dentro is None`
         # adelante no decidiría nada (#319).
