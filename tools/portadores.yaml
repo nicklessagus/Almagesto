@@ -2590,3 +2590,20 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: "`escape_cell` en roll-ups estampados (motivos, variantes, `data_availability`): metadata, no valores de extracción."
+  - issue: 523
+    regla: >-
+      Todo sujeto con ≥1 paper `sintetizado` en su roll-up declara `sintesis:` en su registro: es la
+      tercera fecha de la cabecera `_Estado_` (D-12/INV-82) y no se puede derivar. Medido: 3 de 10
+      sujetos de Almagesto-Tesis (31, 33 y 26 sintetizados) sin ella y ningún gate lo veía.
+    funcion: lint.check_sintesis_no_declarada
+    patron: 'sintesis'
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "`save_sintesis` ESCRIBE la declaración; es la salida que el hallazgo nombra, no un detector."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "`estado_line` la estampa si está; omitirla sin registro es correcto (no hay fecha que publicar) y el reclamo vive en el lint."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "`--sintesis` es el canal que declara la fecha (la salida del hallazgo)."

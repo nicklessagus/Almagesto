@@ -2782,6 +2782,36 @@ def test_el_recorte_de_lectura_no_depende_de_la_grafia_del_reclamo(toy_vault, ca
     assert _recorte("wPCA") == set(), "`wpca` no denota al tema `pca`: no hay recorte que declarar"
 
 
+def test_sujeto_sintetizado_sin_sintesis_declarada_se_reporta(toy_vault):
+    """#523 — la fecha de síntesis es la tercera de la cabecera `_Estado_` (D-12/INV-82) y sólo se
+    declara. Sin `sintesis:` en el registro `estado_line` la omite en silencio y `estado_desfasado`
+    compara contra esa misma línea: ningún gate lo veía (3 de 10 sujetos de una bóveda real).
+
+    Los dos lados simétricos van en el mismo test: sin paper `sintetizado` no hay nada que declarar,
+    y declarada, calla — sin ellos un detector que reportara SIEMPRE pasaría igual.  @inv INV-82"""
+    bib = "2020relA...1..1A"
+    mk_note(toy_vault.PAPERS, bib,
+            {"tags": ["paper"], "bibcode": bib, "stars": ["Estrella Test"], "relevance": "high",
+             "methods": ["gls"]}, "")
+    link_from_log(toy_vault, bib)
+
+    def _slugs():
+        fms = {f.stem: cfg.split_fm(f.read_text(encoding="utf-8")) for f in cfg.note_paths(cfg.PAPERS)}
+        filas, no_eval = lint.check_sintesis_no_declarada(fms)
+        assert not no_eval, no_eval
+        return {slug for slug, _ in filas}
+
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
+                                           "slug": "test_star"}, "## Síntesis\n\nSin citas.\n")
+    assert _slugs() == set(), "extraído pero no sintetizado: todavía no hay síntesis que fechar"
+    mk_note(toy_vault.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
+                                           "slug": "test_star"},
+            f"## Síntesis\n\nLa señal b [[{bib}]].\n")
+    assert _slugs() == {"test_star"}
+    cfg.save_sintesis("test_star", n_papers=1)
+    assert _slugs() == set(), "declarada, calla"
+
+
 def test_disputa_entre_autoridades_es_expresable(toy_vault, capsys):
     """D-2 / INV-77: con `DISPUTE_SOURCES = ("ground_truth",)` las dos posiciones de una disputa
     nea↔simbad decían lo mismo — el desacuerdo entre autoridades no tenía forma. Desde D-1 es un

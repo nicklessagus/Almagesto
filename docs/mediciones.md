@@ -3986,3 +3986,9 @@ primera versión con `_DOLLAR_MATH_RE` dio 10 en el inventario, con 5 falsos (`H
 renderiza); se cambió a emparejar cada `$` con el siguiente. El lint publica sólo el inventario (la
 vista es copia de la extracción inmutable). Diff del reporte: sólo la categoría nueva, 0 → 5.
 `sigma`, `<=` y `A_b` sueltos no entran al detector (también son prosa); las tildes, tampoco.
+## #523 — síntesis sin declarar (v1.333.0)
+
+**Copia de la instancia (sin `.git`, sólo lectura sobre la real):** categoría nueva `sintesis_no_declarada`
+0 → **3** sobre 10 registros (`rv-doppler` 31, `indicadores-actividad` 33, `harps-drs` 26
+sintetizados — los del issue). Diff del reporte: sólo esa categoría. Ida y vuelta: `triage.py
+rv-doppler --sintesis --n-papers 31` → 2.

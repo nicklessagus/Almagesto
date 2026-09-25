@@ -1611,6 +1611,44 @@ def check_papers_table_stale(paper_fms: dict) -> tuple:
     return papers_table_stale, no_evaluados
 
 
+def check_sintesis_no_declarada(paper_fms: dict) -> tuple:
+    """`(findings, no_evaluados)` — subjects whose roll-up has >=1 `sintetizado` paper and whose registro has no `sintesis:` (#523).
+
+    Twin of `check_extraccion_no_declarada`. The synthesis date is the third date of the
+    `> _Estado — …_` header (D-12/INV-82) and it cannot be derived, only declared
+    (`triage.py --sintesis`). `make_notes.estado_line` omits the part silently when the registro
+    lacks it, and `estado_desfasado` compares against that same line, so nothing ever disagreed:
+    measured, 3 of 10 subjects of a real vault published a synthesised note without its date.
+    The universe is `mn.papers_universe`, the SAME one the `## Papers` table stamps.
+
+    @inv INV-82
+    """
+    filas: list = []
+    no_evaluados: list = []
+    for kind, slug, _nombre, _meta in cfg.all_subjects():
+        # Cheap YAML-free gate first (the lint's parse budget is ratcheted by `test_escala`): no
+        # extracted paper cited in the note's prose means no `sintetizado`, by `_estado_paper`.
+        dest = mn.subject_note(slug, kind)
+        prosa = cfg.solo_prosa(dest.read_text(encoding="utf-8")) if dest and dest.exists() else ""
+        if not any((paper_fms.get(stem) or {}).get("methods") for stem in LINK_RE.findall(prosa)):
+            continue
+        try:
+            n_sint = sum(1 for r in mn.papers_universe(slug, kind, paper_fms)
+                         if r["estado"] == mn.ESTADO_SINTETIZADO)
+            declarada = cfg.as_map(cfg.load_registro(slug).get("sintesis")).get("fecha")
+        except Exception as _exc:                   # noqa: BLE001 — D-43: declared, not a zero
+            no_evaluados.append((f"síntesis declarada de `{slug}` (#523)",
+                                 f"{_exc.__class__.__name__}: {_exc}"))
+            continue
+        if n_sint and not declarada:
+            filas.append(
+                (slug, f"{n_sint} paper(s) `sintetizado` en su nota y el registro **no declara** "
+                       f"`sintesis:` → la cabecera `_Estado_` sale sin la fecha de síntesis (D-12); "
+                       f"declarala: `python scripts/triage.py {slug} --sintesis --n-papers "
+                       f"{n_sint}` + `{cfg.make_notes_cmd(slug)}`"))
+    return filas, no_evaluados
+
+
 def check_duplicate_without_id(paper_fms: dict, paper_abstracts: dict,
                                alias: set, ya_reportados: set) -> list:
     """Notes that are probably the SAME work and carry no `doi`/`arxiv_id` (#216).
@@ -6937,6 +6975,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["papers_table_stale"], _pt_no_eval = check_papers_table_stale(paper_fms)   # D-10
     found["not_evaluated"] += _pt_no_eval
     found["extraccion_no_declarada"] = check_extraccion_no_declarada(sweep.sin_extraer_por_sujeto)
+    found["sintesis_no_declarada"], _si_no_eval = check_sintesis_no_declarada(paper_fms)   # #523
+    found["not_evaluated"] += _si_no_eval
     # El espejo de NEA; `vistos_gt` cruza a `check_star_without_ground_truth`: distingue «el
     # espejo discrepa» de «no hay nadie vigilando esta ficha».
     (found["contradictions"], found["mass_issues"], vistos_gt,
@@ -7200,6 +7240,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('sin_conclusiones_ok', 'Fuente sin `## Conclusiones` DECLARADA con motivo (#277: visible, no es deuda)', SEV_BACKLOG, tuple(found['sin_conclusiones_ok']), poblacion='papers'),
         Categoria('solo_abstract_ok', 'Fuente que ES su abstract (resumen de congreso) DECLARADA con motivo (#520: visible, no es deuda)', SEV_BACKLOG, tuple(found['solo_abstract_ok']), poblacion='papers'),
         Categoria('extraccion_no_declarada', 'Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog)', SEV_BACKLOG, tuple(found['extraccion_no_declarada']), poblacion='registros'),
+        Categoria('sintesis_no_declarada', 'Síntesis sin declarar: la nota tiene papers `sintetizado` y el registro no trae `sintesis:` — la cabecera pierde su tercera fecha (#523, backlog)', SEV_BACKLOG, tuple(found['sintesis_no_declarada']), poblacion='registros'),
         Categoria('papers_table_stale', 'Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog)', SEV_BACKLOG, tuple(found['papers_table_stale']), poblacion='registros'),
         Categoria('cadena_incompleta', 'Cadena incompleta: falta un paso del orden canónico (backlog)', SEV_BACKLOG, tuple(found['cadena_incompleta']), poblacion='estrellas'),
         Categoria('truncated_corpora', 'Corpus truncado: la query directa trajo menos de lo que ADS reporta (backlog)', SEV_BACKLOG, tuple(found['truncated_corpora']), poblacion='registros'),

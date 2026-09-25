@@ -1062,6 +1062,13 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   se salteaba en silencio (medido sobre una bóveda real: la categoría pasa de `(0)` a `(1)`, un
   tema con **26** core sin extraer y sin criterio declarado). El barrido es hoy **una sola
   implementación**, `cfg.all_subjects()`, compartida con el detector de roll-up.
+- **Síntesis sin declarar** (#523): el roll-up del sujeto (`make_notes.papers_universe`, el mismo
+  que estampa `## Papers`) tiene ≥1 paper `sintetizado` y el registro no trae `sintesis:`. Gemela de
+  la anterior: la fecha de síntesis es la tercera de la cabecera `_Estado_` (D-12/INV-82), no se
+  puede derivar, y sin ella `estado_line` la omite **en silencio** —y `estado_desfasado` compara
+  contra esa misma línea, así que no discrepaba nunca—. Medido sobre una bóveda real: 3 de 10
+  sujetos (31, 33 y 26 sintetizados). Se cierra con `python scripts/triage.py <slug> --sintesis
+  --n-papers <N>` + `make_notes.py <slug>`.
 - **Tema de MÉTODO sin `search_fq`** (#351): un tema que declara `facet:` propia es, por D-26, un
   tema de método; si no declara `search_fq` hereda el del objetivo —`database:astronomy` en una
   bóveda astro—, que acota el universo **server-side, antes de traer nada**, y ninguna `facet:`

@@ -550,6 +550,9 @@
 ## Recorte de lectura sin declarar: hay core sin extraer y el registro no dice por qué (backlog) (0)
 > sobre 3 registros de sujeto
 
+## Síntesis sin declarar: la nota tiene papers `sintetizado` y el registro no trae `sintesis:` — la cabecera pierde su tercera fecha (#523, backlog) (0)
+> sobre 3 registros de sujeto
+
 ## Lista de papers desactualizada: la tabla estampada no refleja el universo (backlog) (0)
 > sobre 3 registros de sujeto
 

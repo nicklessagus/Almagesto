@@ -42,7 +42,7 @@ Progreso del ingest del tema <tema>:
 - [ ] 3c contraste cross-paper (inventario por eje)
 - [ ] 4  síntesis del concept durable (+ régimen de validez / disputes)
 - [ ] 5  auto-revisión de autosuficiencia
-- [ ] 6  bookkeeping (index, log, STATUS)
+- [ ] 6  bookkeeping (index, log, STATUS) + `triage.py <slug> --sintesis`
 - [ ] 6a `contrast.py <slug> --validar-todo` en 0 — **antes** del verify (#323)
 - [ ] 6b verify-citations sobre el concept + notas nuevas
 - [ ] 7  `lint.py --cierre <slug>` en 0 → commit → preguntar push
@@ -348,10 +348,10 @@ Progreso del ingest del tema <tema>:
    ninguna entidad es extracción perdida. O lo sintetizás donde corresponda, o declarás por qué no
    va: `no_sintetizado: <motivo>` en su nota (la marca sin motivo se sigue reportando).
 
-6. **Bookkeeping.** Re-estampar el índice —`python scripts/make_notes.py --restamp-index`, #237:
-   `index.md` era 100 % Dataview, o sea que no había dónde «agregar el concepto» y el paso no se
-   podía cumplir como estaba escrito—, appendear a
-   `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **No** tocar la matriz método×estrella.
+6. **Bookkeeping.** Re-estampar el índice (`python scripts/make_notes.py --restamp-index`, #237),
+   appendear a `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **Declarar la fecha
+   de síntesis** (INV-82, #523; el lint la reclama): `python scripts/triage.py <slug> --sintesis
+   --n-papers <N>` + `make_notes.py <slug> --theme`. **No** tocar la matriz método×estrella.
    (El `lint` va **después** del verify del paso 6b: `CLAUDE.md` lo pide "antes de lint/commit",
    porque resolver una cita no-soportada suele cambiar la prosa.)
 
