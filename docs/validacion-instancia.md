@@ -1447,3 +1447,15 @@ localizador entero (`§3.2, p. 13 …`) o que traiga menos numeraciones que el i
 adyacentes a una cita (hueco aparte) y la corrección de contenido de Comon.
 
 **Devolver si** una numeración queda vieja en un item que se contó como reescrito.
+
+## §#534 · v1.343.0 — la relectura enumera también los localizadores sueltos
+
+Mismo armado que §#533 (copia previa a `5be796f`, los 3 PDFs de `ica` sin carátula).
+
+**Esperado:** `repaginate.py <bib> --out …` emite **81 / 31 / 26** ítems (Comon / Icarus /
+Charpentier), con ids `ruta@k` para los sueltos, que llevan su contexto en `valor`. Aplicadas las
+páginas por numeración, sólo Comon difiere de la corrección a mano: la corrección de contenido y
+el `«p. 304 (PDF p. 19)»` que está dentro de una cita.
+
+**Devolver si** la deuda se cierra con un localizador suelto sin releer, o si se reescribe uno
+dentro de «…».

@@ -2271,6 +2271,21 @@ portadores:
         estado: fuera-de-alcance
         motivo: "Define `PAGE_LOC_RE` y LEE localizadores (gate de citas); no reescribe ninguno."
 
+  - issue: 534
+    regla: >-
+      Una relectura de paginación (#494) cierra la deuda sólo si re-leyó TODOS los localizadores
+      de la extracción, también los que no están pegados a una cita (fuera de un «…», que es
+      verbatim). Enumerar sólo los adyacentes cerraba la deuda con 6 de 75 viejos.
+    funcion: repaginate.loose_chains
+    patron: 'adjacent_locators\('
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "`restamp_view_locators` re-estampa CELDAS de la vista por ancla de cita; lo suelto de un campo de texto libre llega a la nota por la sustitución verbatim de `repaginate` (`para_nota_texto`)."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Define la adyacencia (`adjacent_locators`) para el gate de citas; no enumera deuda de paginación."
+
   - issue: 505
     regla: >-
       Antes de declarar un hueco —de `bibtex` (`sin_bibtex`, #467) o de PDF (`pending`, la cascada

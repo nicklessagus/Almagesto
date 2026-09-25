@@ -4081,3 +4081,14 @@ enumera, así que ninguna relectura los toca. Es un hueco anterior a #533, que q
 propio. El caso «colapsado» de #494 (una página para un `linea` que nombraba varias; 765 de 5627
 en la medición original) **deja de aceptarse**: la otra página quedaba nombrando el documento
 reemplazado.
+
+## #534 — la relectura enumera también los localizadores sueltos (v1.343.0)
+
+**El mismo armado que en #533** (worktree antes de `5be796f`, los 3 PDFs de `ica` sin carátula,
+respuestas por numeración con hoja del PDF − 1): los ítems pasan de **69 a 138**. Los 69 nuevos son
+localizadores sueltos, en su mayoría páginas impresas que se confirman sin cambio. Contra la corrección
+a mano: Charpentier **0** e Icarus **0** campos distintos (antes 5). En Comon quedan **2**, ambos
+esperables: la corrección de contenido aplicada aparte y un localizador **dentro** de una cita
+(`«p. 304 (PDF p. 19)»`), que por diseño no se reescribe porque es texto verbatim. De paso, el apply
+conservaba mal el prefijo: `pp. 12-13` salía `p. 12-13`. Ahora queda `pp.` si lo nuevo sigue siendo
+un rango.

@@ -173,6 +173,33 @@ def page_answer(pagina) -> list | None:
     return etiquetas if ok else None
 
 
+_QUOTE_SPAN_RE = re.compile(r"«[^«»]*»")
+
+
+def loose_chains(texto: str) -> list:
+    """`[[(a, b), …]]` — the locator chains of a free-text field that NO quote owns (#534): outside
+    every «…» (verbatim source text is never rewritten) and not adjacent to any quote.
+
+    ⛔ Before #534 only quote-adjacent locators were items, so `App. A (p. 33 …): …` or
+    `«…» (§3.2, p. 14 …)` —a section between quote and number cuts the adjacency— were never
+    re-read and the debt closed on them anyway: 6 stale of 75 in one measured round."""
+    dentro = [(m.start(), m.end()) for m in _QUOTE_SPAN_RE.finditer(texto)]
+    propios = set()
+    for cita in cfg.quotes_in(texto):
+        pos = texto.find(cita)
+        for a, _b in cfg.adjacent_locators(texto, pos, pos + len(cita))[:1]:
+            propios.update(numbering_chain(texto, a))
+    chains, usados = [], set()
+    for m in cfg.PAGE_LOC_RE.finditer(texto):
+        sp = (m.start(), m.end())
+        if sp in propios or sp in usados or any(a <= sp[0] < b for a, b in dentro):
+            continue
+        chain = numbering_chain(texto, sp[0])
+        usados.update(chain)
+        chains.append(chain)
+    return chains
+
+
 def items(data: dict) -> list:
     """`[{id, ruta, que, valor, cita, linea}]` — every locator of this extraction to be re-read.
 
@@ -202,6 +229,12 @@ def items(data: dict) -> list:
                             "cita": cita, "linea": _loc_token(texto, cita),
                             "numeraciones": [texto[a:b] for a, b in
                                              numbering_chain(texto, spans[0][0])] if spans else []})
+        # #534 — y cada localizador SUELTO, con su contexto para ubicarlo en la hoja
+        for k, chain in enumerate(loose_chains(texto), 1):
+            a, b = chain[0][0], chain[-1][1]
+            out.append({"id": f"{ruta}@{k}", "ruta": ruta, "que": "", "cita": "",
+                        "valor": texto[max(0, a - 120):a].strip(),
+                        "linea": texto[a:b], "numeraciones": [texto[x:y] for x, y in chain]})
     return out
 
 
@@ -356,8 +389,14 @@ def _set_by_path(data: dict, ruta: str, nuevo: str) -> None:
 
 
 def _replace_chain(texto: str, chain: list, reemplazos: list) -> str:
-    """Write one replacement per locator span of `chain`, keeping every label and qualifier (#533)."""
+    """Write one replacement per locator span of `chain`, keeping every label and qualifier (#533)
+    — and the token's own `p.`/`pp.` (#534: `pp. 12-13` came back as `p. 12-13`)."""
     for (a, b), r in sorted(zip(chain, reemplazos), reverse=True):
+        prefijo = re.match(r"p{1,2}\.\s*", texto[a:b], re.I)
+        # `pp.` sólo si lo nuevo sigue siendo un rango o una lista
+        if prefijo and r.startswith("p. ") and prefijo.group(0).lower().startswith("pp") \
+                and re.search(r"[-–,]|\by\b|\band\b", r[3:]):
+            r = prefijo.group(0) + r[3:]
         texto = texto[:a] + r + texto[b:]
     return texto
 
@@ -513,6 +552,12 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
         actual = dict(_strings(data)).get(ruta, "")
         if ruta.endswith(".linea"):
             texto = _replace_line_locators(actual, nuevo)
+        elif "@" in fila["id"]:                     # #534 — localizador suelto, por posición
+            k = int(fila["id"].rsplit("@", 1)[1])
+            chains = loose_chains(actual)
+            chain = chains[k - 1] if k <= len(chains) else []
+            texto = (_replace_chain(actual, chain, nuevo)
+                     if [actual[a:b] for a, b in chain] == item["numeraciones"] else None)
         else:
             texto = _replace_locator(actual, ocurrencia, viejo, nuevo if n_num > 1 else nuevo[0])
         if texto is None:

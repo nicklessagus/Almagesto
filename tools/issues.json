@@ -2655,6 +2655,11 @@
    "number": 533,
    "title": "repaginate --apply corrompe los localizadores con dos numeraciones (impresa + hoja del PDF) y los cuenta como reescritos",
    "state": "OPEN"
+  },
+  {
+   "number": 534,
+   "title": "repaginate no enumera los localizadores que no están pegados a una cita: la deuda se cierra con páginas viejas",
+   "state": "OPEN"
   }
  ]
 }

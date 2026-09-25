@@ -432,7 +432,7 @@ def test_494_el_CALIFICADOR_del_localizador_no_se_pisa(toy_vault, tmp_path, caps
     filas[1]["pagina"] = ["2009-2010", "2011"]
     assert rp.main([BIB, "--apply", str(_resultado(tmp_path, filas))]) == 0
     nuevo = json.loads((cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
-    assert nuevo["ground_truth"][1]["linea"] == "p. 2009-2010, y también p. 2011 si se mira el apéndice"
+    assert nuevo["ground_truth"][1]["linea"] == "pp. 2009-2010, y también p. 2011 si se mira el apéndice"
     # la celda de la vista cambia UN token: con la lista no se re-estampa sola, y se dice
     assert "1 celda(s) de la vista con varias numeraciones NO se re-estampan" in capsys.readouterr().out
 
@@ -665,3 +665,32 @@ def test_533_dos_numeraciones_se_repaginan_CADA_UNA_con_la_suya_o_se_rehusa(toy_
     r2 = rp.apply(BIB, _resultado(tmp_path, [{"id": "ground_truth[0].linea", "pagina": "4",
                                               "evidencia": ev, "motivo": ""}]))
     assert r2["sin_cambio"] == ["ground_truth[0].linea"] and not r2["escritos"]
+
+
+def test_534_el_localizador_SUELTO_tambien_es_item_y_el_de_adentro_de_una_cita_no(toy_vault, tmp_path):
+    """#534 — sólo se enumeraban los localizadores pegados a una cita: `App. A (p. 33 …): …` o
+    `«…» (§3.2, p. 14 …)` (la sección corta la adyacencia) no se releían nunca y la deuda se cerraba
+    con ellos viejos — 6 de 75 medidos. Ahora son items `ruta@k`, con su contexto; y un «p. N»
+    DENTRO de una cita no se toca: es texto verbatim de la fuente."""
+    d = _extraccion(ground_truth=[], salvedades=[
+        "App. A (p. 33 [índice del PDF]): la hipótesis gaussiana; ver también «see p. 5» (p. 9)."],
+        ejes={"criterio": f"analiza «{CITA}» (§3.2, p. 14 [índice del PDF]) sin decir cuántas"})
+    _txt_paginado()
+    los = {it["id"]: it for it in rp.items(d)}
+    # la cita corta («see p. 5») no es cita para `quotes_in`: su `(p. 9)` queda suelto también
+    assert set(los) == {"salvedades[0]@1", "salvedades[0]@2", "ejes.criterio#1"}, set(los)
+    assert los["salvedades[0]@1"]["numeraciones"] == ["p. 33"]
+    assert "App. A" in los["salvedades[0]@1"]["valor"], "el contexto es lo que ubica la hoja"
+    ev = "Received 3 March 2013"
+    filas = [{"id": "salvedades[0]@2", "pagina": "8", "evidencia": ev, "motivo": ""},
+             {"id": "salvedades[0]@1", "pagina": "32", "evidencia": ev, "motivo": ""},
+             {"id": "ejes.criterio#1", "pagina": "13", "evidencia": ev, "motivo": ""}]
+    r = rp.apply(BIB, _resultado(tmp_path, filas))
+    nuevo = json.loads(r["extraccion"].read_text(encoding="utf-8"))
+    assert r["cerrada"] and len(r["escritos"]) == 3
+    assert nuevo["salvedades"][0] == ("App. A (p. 32 [índice del PDF]): la hipótesis gaussiana; "
+                                      "ver también «see p. 5» (p. 8).")
+    assert nuevo["ejes"]["criterio"] == f"analiza «{CITA}» (§3.2, p. 13 [índice del PDF]) sin decir cuántas"
+    # y el `pp.` del token viejo se conserva
+    assert rp._replace_chain("ver pp. 12-13.", [(4, 13)], ["p. 11-12"]) == "ver pp. 11-12."
+    assert rp._replace_chain("ver pp. 12-13.", [(4, 13)], ["p. 11"]) == "ver p. 11.", "rango → página"
