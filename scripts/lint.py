@@ -6061,6 +6061,38 @@ def check_cascade_not_run() -> list:
     return cascada_sin_correr
 
 
+def check_declared_corpus_probe() -> tuple:
+    """`(corpus_sin_probe, corpus_sin_probe_declarado)` — a declared corpus with no probe trail (#524).
+
+    A theme with `query: null` + `extra_core` (#384, `source: ads`) is often a hand cut of a probe,
+    and the registro kept only what was chosen: the query, `fq`, lens and the core universe it was
+    cut from were in no versioned file. The trail is `query_ads.py <slug> --theme --probe
+    --registrar --criterio`; a corpus that did not come from a probe says so with
+    `corpus_sin_probe: <motivo>` on the theme, listed apart (AUD-207)."""
+    sin: list = []
+    declarado: list = []
+    if cfg.themes_error():
+        return sin, declarado
+    for _slug, _tmeta in (cfg.load_themes() or {}).items():
+        _tm = cfg.as_map(_tmeta)
+        if (str(_tm.get("source") or "ads").strip() != "ads" or _tm.get("query")
+                or not cfg.as_list(_tm.get("extra_core"))):
+            continue
+        if [p for p in cfg.as_list((cfg.load_registro(_slug) or {}).get("probes"))
+                if isinstance(p, dict)]:
+            continue
+        if str(_tm.get("corpus_sin_probe") or "").strip():
+            declarado.append((f"tema `{_slug}`", f"corpus_sin_probe: {_tm['corpus_sin_probe']}"))
+            continue
+        sin.append(
+            (f"tema `{_slug}`",
+             "corpus declarado (`query: null` + `extra_core`, #384) sin probe en el registro: si "
+             "salió de recortar una búsqueda, registrala → `python scripts/query_ads.py "
+             f"{_slug} --theme --probe \"<query>\" --registrar --criterio \"<recorte>\"`; si no, "
+             "declaralo con `corpus_sin_probe: <motivo>` en la entrada del tema"))
+    return sin, declarado
+
+
 def check_dead_facets(paper_lens_text: dict) -> list:
     """`faceta_muerta` — a facet that classifies NOTHING in the corpus it is supposed to cut.
 
@@ -6941,6 +6973,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["tema_ejes_heredados"], _te_no_eval = check_theme_inherited_axes()   # #360
     found["not_evaluated"] += _te_no_eval
     found["cascada_sin_correr"] = check_cascade_not_run()                  # #361
+    found["corpus_sin_probe"], found["corpus_sin_probe_declarado"] = check_declared_corpus_probe()  # #524
     found["faceta_muerta"] = check_dead_facets(paper_lens_text)            # #291
 
     # ── la tabla: clave, título, severidad, hallazgos. **Una sola declaración** de cada cosa.
@@ -7095,6 +7128,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('fuente_metadata_dudosa', '🕳 `sources:` sin cruzar contra su `doi`/PDF, o cruzada con título distinto, primera página que no confirma o no evaluable (#353, backlog)', SEV_BACKLOG, tuple(found['fuente_metadata_dudosa']), poblacion='temas'),
         Categoria('tema_ejes_heredados', '🕳 Tema de MÉTODO sin `ejes:`: lee con los ejes del objetivo, que son los de una bóveda astro (#360, backlog)', SEV_BACKLOG, tuple(found['tema_ejes_heredados']), poblacion='temas'),
         Categoria('cascada_sin_correr', '🕳 Tema off-ADS/mixto cuya cascada de descubrimiento (paso 0b) nunca corrió, corrió vacía o con backends caídos (#361, backlog)', SEV_BACKLOG, tuple(found['cascada_sin_correr']), poblacion='temas'),
+        Categoria('corpus_sin_probe', '🕳 Corpus declarado (`query: null` + `extra_core`) sin el probe del que se recortó en el registro (#524, backlog)', SEV_BACKLOG, tuple(found['corpus_sin_probe']), poblacion='temas'),
+        Categoria('corpus_sin_probe_declarado', '✍ Corpus declarado que NO salió de un probe: `corpus_sin_probe: <motivo>` (#524) — declarado, no es deuda', SEV_BACKLOG, tuple(found['corpus_sin_probe_declarado']), poblacion='temas'),
         Categoria('tema_fq_heredado', '🕳 Tema de MÉTODO sin `search_fq`: hereda el del objetivo, que excluye su literatura server-side (#351, backlog)', SEV_BACKLOG, tuple(found['tema_fq_heredado']), poblacion='temas'),
         Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '
                   'segunda red para el punto ciego de la query se haya tendido entera (backlog)',

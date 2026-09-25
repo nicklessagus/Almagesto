@@ -59,7 +59,7 @@ skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de
   auditar: 18400
   find-contradictions: 21500
   ingest-star: 32000
-  ingest-theme: 51800
+  ingest-theme: 51918
   maintain: 36803
   query-corpus: 6000
   setup: 15300
@@ -114,6 +114,18 @@ crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por
       parcial— pasaron de un párrafo con sus porqués a una cláusula con sus nombres, porque el
       porqué vive en el issue, en `docs/mediciones.md` y en el docstring de `repaginate.py`).
     techo_bytes: 36803
+
+  - fecha: "2026-09-24"
+    skill: ingest-theme
+    ancla: "#524"
+    motivo: >-
+      El paso donde se declara un corpus `query: null` + `extra_core` (#384) es donde el operador
+      recorta un probe a mano, y sin el puntero el recorte no deja rastro: medido, dos temas de la
+      instancia recortados de probes de 118 y 177/24/48 core sin la query en ningún archivo.
+    sale: >-
+      Nada: son tres líneas con el comando y la escotilla, en el párrafo de #384 donde ya se decide
+      el corpus declarado; el porqué y la medición van a `docs/lint.md` y `docs/mediciones.md`.
+    techo_bytes: 51918
 
 crecimientos:
   - fecha: "2026-08-31"

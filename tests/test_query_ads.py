@@ -2821,3 +2821,32 @@ def test_458_query_ads_PAGINA_y_registra_lo_que_VOLVIO(toy_classifier, ads_token
     qa.query_ads("q", rows=6, meta=m2)
     assert pedidos == [(0, 2), (2, 2)], "se agotó `num_found`: no se pide una página vacía"
     assert m2["truncated"] is False and m2["traidos"] == 4
+
+
+# ── #524 · el probe que decide un recorte deja rastro ────────────────────────
+def test_probe_registrar_deja_la_busqueda_y_el_criterio_en_el_registro(toy_vault, toy_classifier,
+                                                                       monkeypatch, capsys):
+    """#524 — un corpus declarado (`query: null` + `extra_core`, #384) que sale de recortar un probe
+    guardaba sólo lo elegido: la query, el `fq`, la lente y el universo core del que se recortó no
+    estaban en ningún archivo versionado. `--registrar` los appendea a `probes:` con el criterio."""
+    recs = [{"bibcode": "2020a....1A", "title": "starspot activity", "abstract": "", "keyword": [],
+             "doctype": "article", "facets": ["actividad"], "relevant": True, "citation_count": 7},
+            {"bibcode": "2020b....1B", "title": "asteroseismology", "abstract": "", "keyword": [],
+             "doctype": "article", "facets": [], "relevant": False, "citation_count": 3}]
+
+    def fake(q, rows=2000, meta=None, **k):
+        if meta is not None:
+            meta.update(num_found=40, traidos=2, truncated=False)
+        return [dict(r) for r in recs]
+    monkeypatch.setattr(qa, "query_ads", fake)
+    write_yaml(cfg.STARS_YAML, {"HD 1": {"slug": "hd_1", "ads_object": "HD 1"}})
+    assert run_main(monkeypatch, ["hd_1", "--probe", "abs:activity", "--registrar",
+                                  "--criterio", "sólo los del grupo X"]) == 0
+    [p] = cfg.load_registro("hd_1")["probes"]
+    assert p["query"] == "abs:activity" and p["criterio"] == "sólo los del grupo X"
+    assert p["bibcodes_core"] == ["2020a....1A"] and p["n_core"] == 1 and p["n_found"] == 40
+    assert "facets" in p["lente"] and "fq" in p
+    # sin criterio rehúsa: el recorte sin su porqué es la mitad que el registro existe para guardar
+    with pytest.raises(SystemExit):
+        run_main(monkeypatch, ["hd_1", "--probe", "abs:activity", "--registrar"])
+    assert len(cfg.load_registro("hd_1")["probes"]) == 1

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.332.0"
+ALMAGESTO_VERSION = "1.334.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4884,6 +4884,19 @@ def save_descubrimiento(slug: str, entrada: dict) -> None:
     data.setdefault("slug", slug)
     data["descubrimientos"] = [d for d in as_list(data.get("descubrimientos"))
                                if isinstance(d, dict)] + [entrada]
+    save_registro(slug, data)
+
+
+def save_probe(slug: str, entrada: dict) -> None:
+    """APPENDS a `--probe --registrar` run to `probes: []` of the subject's registro (#524).
+
+    A declared corpus (`query: null` + `extra_core`, #384) is often a hand cut of a probe: without
+    this the registro kept only the chosen bibcodes, and the query, the `fq`, the lens, the core
+    universe it was cut from and the cut criterion lived in stdout and comments. Accumulative, and
+    it touches no other section."""
+    data = load_registro(slug)
+    data.setdefault("slug", slug)
+    data["probes"] = [p for p in as_list(data.get("probes")) if isinstance(p, dict)] + [entrada]
     save_registro(slug, data)
 
 

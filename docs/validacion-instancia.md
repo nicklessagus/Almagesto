@@ -1276,3 +1276,19 @@ reporte de antes (la categoría a 0).
 **Devolver si** cambia otra columna además de `Veredicto` (salvo el re-truncado de un extracto largo
 al re-emitir, que ya hacían `--resolver`/`--migrate-condition-prefix`), o si alguna celda migrada
 queda `→soportada` al final.
+## §#524 · v1.334.0 — el probe que decide un recorte deja rastro (`probes:`)
+
+```bash
+python scripts/lint.py
+```
+
+**Esperado (medido en copia):** categoría nueva *Corpus declarado sin el probe del que se recortó*
+con **3** temas (`rv-doppler`, `deteccion-estadistica`, `indicadores-actividad`); la declarada
+(`corpus_sin_probe`) en 0. Ninguna otra categoría cambia. Para cerrarla: re-correr el probe de cada
+recorte con `python scripts/query_ads.py <slug> --theme --probe "<query>" --registrar --criterio
+"<recorte>"` (escribe `probes:` en `vault/config/registro/<slug>.yaml`), o declarar
+`corpus_sin_probe: <motivo>` en el tema si el corpus no salió de un probe (medido en copia sobre
+`rv-doppler`: 3 → 2 y la declarada 0 → 1).
+
+**Devolver si** aparece un tema con `query:` poblada o `source:` ≠ `ads`, o si `--registrar` toca
+otra sección del registro.

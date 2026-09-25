@@ -460,6 +460,12 @@
 ## 🕳 Tema off-ADS/mixto cuya cascada de descubrimiento (paso 0b) nunca corrió, corrió vacía o con backends caídos (#361, backlog) (0)
 > sobre 0 temas de `themes.yaml`
 
+## 🕳 Corpus declarado (`query: null` + `extra_core`) sin el probe del que se recortó en el registro (#524, backlog) (0)
+> sobre 0 temas de `themes.yaml`
+
+## ✍ Corpus declarado que NO salió de un probe: `corpus_sin_probe: <motivo>` (#524) — declarado, no es deuda (0)
+> sobre 0 temas de `themes.yaml`
+
 ## 🕳 Tema de MÉTODO sin `search_fq`: hereda el del objetivo, que excluye su literatura server-side (#351, backlog) (0)
 > sobre 0 temas de `themes.yaml`
 

@@ -10388,6 +10388,29 @@ def test_los_tres_chequeos_de_tema_avisan_lo_que_se_HEREDA(toy_vault):
     assert lint.check_cascade_not_run() == [], "un tema ADS puro no corre la cascada"
 
 
+def test_corpus_declarado_sin_probe_en_el_registro(toy_vault):
+    """#524 — `query: null` + `extra_core` recortado de un probe guardaba sólo lo elegido. Sin
+    `probes:` en el registro es backlog; con él sale; `corpus_sin_probe: <motivo>` lo declara y va
+    aparte (AUD-207). Un tema con `query:` o off-ADS no es corpus declarado (#384)."""
+    base = {"title": "D", "area": "methods", "concept": "d", "source": "ads", "query": None,
+            "extra_core": [{"bibcode": "2020a....1A", "via": "usuario", "motivo": "m"}]}
+    def _t(**extra):
+        write_yaml(cfg.THEMES_YAML, {"d": {**base, **extra}})
+
+    _t()
+    sin, decl = lint.check_declared_corpus_probe()
+    assert len(sin) == 1 and "--registrar" in sin[0][1] and decl == []
+    _t(corpus_sin_probe="lista del director")
+    assert lint.check_declared_corpus_probe() == ([], [("tema `d`", "corpus_sin_probe: lista del director")])
+    _t(query="abs:x")
+    assert lint.check_declared_corpus_probe() == ([], [])
+    _t(source="local-pdfs")
+    assert lint.check_declared_corpus_probe() == ([], [])
+    _t()
+    cfg.save_probe("d", {"fecha": "2026-09-24", "query": "abs:x", "criterio": "c"})
+    assert lint.check_declared_corpus_probe() == ([], [])
+
+
 # ── #396 · test DIRECTO para cada `check_*` que sólo se alcanzaba por el barrido ─────────────────
 #
 # «Todas mueren bajo `mutar --dirigida`» no es lo mismo que «todas tienen test propio»: la primera

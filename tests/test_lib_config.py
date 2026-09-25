@@ -4100,3 +4100,13 @@ def test_512_acepta_preprint_forma_dura(toy_vault, malo):
     with pytest.raises(SystemExit):
         cfg.load_acepta_preprint({"acepta_preprint": malo}, entry="test_star")
     assert cfg.load_acepta_preprint({}) == []
+
+
+def test_save_probe_appendea_y_no_toca_las_otras_secciones(toy_vault):
+    """#524 — `probes:` es acumulativo como `barridos`/`descubrimientos` y no pisa `decisiones`."""
+    cfg.save_registro("d", {"slug": "d", "decisiones": {"2020a....1A": {"decision": "drop"}}})
+    cfg.save_probe("d", {"query": "q1", "criterio": "c1"})
+    cfg.save_probe("d", {"query": "q2", "criterio": "c2"})
+    reg = cfg.load_registro("d")
+    assert [p["query"] for p in reg["probes"]] == ["q1", "q2"]
+    assert reg["decisiones"] == {"2020a....1A": {"decision": "drop"}}

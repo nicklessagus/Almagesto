@@ -7,6 +7,8 @@ Uso:
     python scripts/query_ads.py <slug> [--theme] --dry-run  # re-clasificar en memoria, sin red ni escritura
     python scripts/query_ads.py --probe "<query>"         # previsualizar el corte core/no-core, sin bajar
     python scripts/query_ads.py <slug> --theme --probe    # ídem con la lente PROPIA del tema (D-26) y su `query:`
+    python scripts/query_ads.py <slug> [--theme] --probe ["<q>"] --registrar --criterio "<recorte>"
+                                                          # ídem y lo deja en `probes:` del registro (#524)
 
 Escribe build/<slug>/ads.json con la lista de registros (bibcode, título, autores,
 año, abstract, arxiv_id, doctype, citation_count, facets, relevant, why_excluded —el motivo real
@@ -28,7 +30,7 @@ Escribe TAMBIÉN el registro de búsqueda VERSIONADO del sujeto, `vault/config/r
 **lente** con la que se clasificó) — #64: el ads.json es scratch regenerable, pero saber sobre qué
 universo afirma una ficha y con qué filtro se recortó tiene que viajar con la bóveda. No se escribe
 en los modos que no consultan un sujeto (`--probe`) ni en los que no clasifican de nuevo
-(`--dry-run`), que retornan antes.
+(`--dry-run`), que retornan antes — salvo `--probe --registrar`, que appendea a `probes:` (#524).
 
 Usa la API REST de ADS directamente (control total de campos y filas). Rate: ~5000/día.
 La query por estrella se arma con `title:`/`abs:` sobre nombre+alias (ver `build_query`; `object:`
@@ -1602,6 +1604,13 @@ def main() -> int:
                          "global es la equivocada para un tema de método) y muestra por qué puerta "
                          "entró cada core (#126); ahí la QUERY se puede omitir y sale de `query:` "
                          "del tema en themes.yaml.")
+    ap.add_argument("--registrar", action="store_true",
+                    help="con `<slug> --probe`: appendea la corrida a `probes:` del registro "
+                         "versionado (query, fq, lente, n y bibcodes core) con el `--criterio` del "
+                         "recorte — para el corpus declarado que sale de recortar un probe (#524)")
+    ap.add_argument("--criterio", metavar="TEXTO",
+                    help="con --registrar (obligatorio): el criterio con que se recorta el core del "
+                         "probe a `extra_core` (#524)")
     ap.add_argument("--dry-run", action="store_true",
                     help="PREVIEW de re-clasificación (sub-modo D de maintain): re-clasifica EN "
                          "MEMORIA los build/<slug>/ads.json ya existentes con la regla vigente de "
@@ -1616,6 +1625,10 @@ def main() -> int:
                          "stars.yaml. No baja PDFs ni escribe build/, pero SÍ appendea la corrida a `barridos:` del registro versionado (#88) — no es un preview puro como --probe. Sólo estrellas.")
     args = ap.parse_args()
 
+    if args.registrar and (args.probe is None or not args.slug or not (args.criterio or "").strip()):
+        # #524 — un probe registrado sin sujeto no tiene registro donde vivir, y sin criterio no
+        # dice por qué se recortó: es la mitad que el registro existe para guardar.
+        ap.error('--registrar va con `<slug> [--theme] --probe` y con --criterio "<por qué se recorta>"')
     if args.probe is not None:
         # #208 — `--probe` previsualizaba SIEMPRE con la lente global, o sea con la que D-26 declara
         # «activamente dañina» para un tema de método, y sobre exactamente la población que el tema
@@ -1663,7 +1676,31 @@ def main() -> int:
         # sea callaba en los dos casos que producen el cero engañoso (probe crudo; tema con el fq
         # heredado). Va ANTES del conteo, porque el conteo ya salió de este filtro (#238).
         cfg.print_seguro(f"  {fq_line(fq_probe, tema_meta)}")
-        return print_probe(q, query_ads(q, rows=args.rows, fq=fq_probe), theme_meta=tema_meta)
+        pmeta: dict = {}
+        recs = query_ads(q, rows=args.rows, fq=fq_probe, meta=pmeta if args.registrar else None)
+        rc = print_probe(q, recs, theme_meta=tema_meta)
+        if args.registrar:
+            # #524 — el probe que DECIDE un recorte deja rastro: sin esto el corpus declarado
+            # (`query: null` + `extra_core`, #384) guardaba sólo lo elegido, y el universo del que
+            # se eligió —y por lo tanto lo descartado— no estaba en ningún archivo versionado.
+            cfg.save_probe(args.slug, {
+                "fecha": dt.date.today().isoformat(),
+                "query": q,
+                "fq": fq_probe,
+                "rows": args.rows,
+                "traidos": pmeta.get("traidos"),
+                "n_found": pmeta.get("num_found"),
+                "truncated": bool(pmeta.get("truncated")),
+                "n_total": len(recs),
+                "n_core": sum(1 for r in recs if r.get("relevant")),
+                "bibcodes_core": sorted(r["bibcode"] for r in recs
+                                        if r.get("relevant") and r.get("bibcode")),
+                "criterio": args.criterio.strip(),
+                "lente": lens_used(tema_meta),
+                "almagesto_version": cfg.ALMAGESTO_VERSION,
+            })
+            cfg.print_seguro(f"  → probe registrado en {cfg.registro_path(args.slug)} (`probes:`, #524)")
+        return rc
 
     if args.dry_run:   # offline: sólo re-clasifica lo que ya está en build/ (no toca ADS)
         slugs = [args.slug] if args.slug else built_slugs()

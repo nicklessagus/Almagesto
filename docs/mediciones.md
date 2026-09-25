@@ -3970,3 +3970,10 @@ hermanos (20 `contradice→corregida→soportada`, 8 `soportada→contradice→s
 0 → 9, nada más. `--migrate-verdict-chain --todo`: 47 celdas, segunda corrida 0; contradicen 4 → 40
 y no-soportadas 4 → 15 en la suma de cabeceras, todas resueltas. Efecto colateral: una fila
 (`deteccion-estadistica` #38) re-trunca su extracto al re-emitir (`render_verif_table`, preexistente).
+## #524 — el probe que recorta un corpus declarado queda en el registro (v1.334.0)
+
+**Copia de la instancia (sin `.git`, sólo lectura sobre la real):** categoría nueva
+`corpus_sin_probe` **3** (`rv-doppler`, `deteccion-estadistica`, `indicadores-actividad`: los tres
+`source: ads` + `query: null` + `extra_core`, ninguno con `probes:`); declarada 0. Diff del reporte:
+sólo esas dos cabeceras. Con `corpus_sin_probe` declarado en `rv-doppler`: 3 → 2, declarada 0 → 1.
+`--registrar` no se midió contra ADS (la escritura la cubre el test con doble de `query_ads`).

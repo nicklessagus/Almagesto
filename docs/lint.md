@@ -1211,6 +1211,14 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   y sano en otra no es deuda, y las filas `NO CORRIÓ: …` son decisiones declaradas, no caídas.
   Desde #361 la cobertura del registro lleva también la fila **`anclaje`**, con los mismos tres
   estados: antes el anclaje moría con traceback y no dejaba rastro. Backlog.
+- **Corpus declarado sin el probe del que se recortó** (#524, `corpus_sin_probe`): un tema `source:
+  ads` con `query: null` + `extra_core` (#384) que salió de recortar un probe guardaba en el registro
+  sólo lo elegido — la query, el `fq`, la lente y el universo core del recorte no estaban en ningún
+  archivo versionado (medido: probes de 118 y 177/24/48 core recortados a 13 y 32). Se cierra con
+  `query_ads.py <slug> --theme --probe "<q>" --registrar --criterio "<recorte>"`, que appendea a
+  `probes:` del registro (query, fq, lente, n, `bibcodes_core`, criterio); el corpus que NO salió de
+  un probe se declara con `corpus_sin_probe: <motivo>` en el tema y va **aparte**
+  (`corpus_sin_probe_declarado`, AUD-207). Backlog.
 - **Cadena incompleta** (D-57/INV-91, `cadena_incompleta`, backlog): el registro de una
   **estrella** tiene `cadena` y le falta un paso del orden canónico (`cfg.CADENA_ESTRELLA`); el
   hallazgo **nombra el paso** donde se cortó y los que corrieron (*«faltan 4 pasos»* no es

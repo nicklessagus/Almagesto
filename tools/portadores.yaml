@@ -2542,3 +2542,21 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: "«revertidas» es prosa de un docstring (notas revertidas en una sesión); no lee veredictos."
+  - issue: 524
+    regla: >-
+      El probe que DECIDE un recorte deja rastro en el registro versionado: un corpus declarado
+      (`query: null` + `extra_core`, #384) recortado de un probe registra la query, el `fq`, la
+      lente, n y los bibcodes core, con el criterio (`--probe --registrar --criterio`, `probes:`).
+      Medido: dos temas de Almagesto-Tesis recortados de probes de 118 y 177/24/48 core sin rastro.
+    funcion: query_ads.print_probe
+    patron: 'print_probe\(|--probe'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "No corre probes: `check_declared_corpus_probe` lee `probes:` del registro y reporta el corpus declarado sin él (`corpus_sin_probe`), o aparte con `corpus_sin_probe: <motivo>`."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "No corre probes: `save_probe` es el único escritor de `probes:`, y lo llaman los dos previews (estrella #248, tema #208) desde el mismo `main` de `query_ads`."
+      - modulo: scripts/search_arxiv.py
+        estado: fuera-de-alcance
+        motivo: "Preview de arXiv: lo que trae no tiene bibcode ADS y no puede ir a `extra_core` (va a `sources:`, cuyo rastro es `descubrimientos` de `discover`)."
