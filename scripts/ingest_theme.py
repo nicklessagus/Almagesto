@@ -11,8 +11,8 @@ campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
   extract_fulltext → check_retractions → fetch_bibtex. La **guardia de expansión** (#37) frena entre la query y
   el primer paso que gasta red y disco si el core se multiplicó respecto de lo ya ingestado
   (default ×1.5 y 50 o más nuevos), y en la **PRIMERA ingesta frena siempre** con la lista de lo
-  que se va a bajar —publicado o sólo eprint— para recortar el corpus y traer los publicados antes
-  (#529; también en la mitad ADS de un tema mixto); `--yes` continúa a sabiendas. **Publisher-first (#512)**,
+  que se va a bajar —publicado o sólo eprint— para recortar el corpus antes de bajar (#529; también
+  en la mitad ADS de un tema mixto); `--yes` continúa a sabiendas. **Publisher-first (#512)**,
   igual que `ingest_star`: el eprint de un bibcode con versión publicada sólo entra con
   `acepta_preprint` declarado; lo que el editor no entrega queda en `missing_pdf.json` como
   `publicado-no-conseguido`, listado para el usuario.
@@ -200,13 +200,17 @@ def expansion_guard(slug: str, yes: bool) -> None:
                          f"bajó nada (#529).")
         print_download_list(core)
         if not yes:
+            # ⛔ #530 — al usuario se le pide el RESIDUO, no el core: la cadena ya es
+            # publisher-first (#512) y nunca baja un preprint en silencio, así que primero intenta.
             sys.exit(f"cadena frenada antes de bajar la primera vez. Antes de seguir: (1) recortá el "
                      f"corpus con el usuario y persistilo (`extra_core` con `query: null`, o "
-                     f"`triage.py {slug} --drop-core <bib> --reason`); (2) pasale la lista de "
-                     f"PUBLICADOS y que traiga los que consiga (`replace_pdf.py <bib> <pdf> --source "
-                     f"publisher`); (3) el que no consiga, `triage.py {slug} --acepta-preprint <bib> "
-                     f"--reason \"el usuario no consiguió la versión publicada\"`; (4) re-corré con "
-                     f"--yes.")
+                     f"`triage.py {slug} --drop-core <bib> --reason`); (2) re-corré con --yes (baja "
+                     f"sólo del editor, #512); (3) rescate manual del residuo "
+                     f"(`reference/rescate-pdfs.md`); (4) recién ahí pedile al usuario lo que falte "
+                     f"de `build/{slug}/missing_pdf.json`, con sus links (`replace_pdf.py <bib> <pdf> "
+                     f"--source publisher`); (5) lo que no consiga: `triage.py {slug} "
+                     f"--acepta-preprint <bib> --reason \"el usuario no consiguió la versión "
+                     f"publicada\"`.")
         cfg.print_seguro("  → --yes: corpus aprobado, sigo a bajar.")
         return
     conocidos = {r["bibcode"] for r in core

@@ -42,6 +42,9 @@ En orden de rendimiento:
 
 Guardá el artefacto citable (PDF o imagen de tabla) en `vault/raw/`.
 
+⛔ **HAL (Anubis) y ORO (Cloudflare) también le devuelven a `curl` un desafío anti-bot (#530)**: sus
+`copias_libres` se bajan desde un navegador — pasáselas al usuario como links.
+
 ⛔ **No gastar intentos en `aanda.org`:** está detrás de **DataDome** — cualquier `curl` (con UA de
 navegador, con `Referer`, siguiendo redirects) recibe un challenge JS (`Please enable JS…`,
 `ct.captcha-delivery.com`). Para un **A&A pre-arXiv** que el resolver no entrega no hay preprint y

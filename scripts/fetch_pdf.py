@@ -341,6 +341,11 @@ def print_published_residue(slug: str, missing: list) -> None:
     for m in pub:
         cfg.print_seguro(f"  {m['bibcode']}  editor: {m['editor']}  eprint: "
                          f"{('arXiv:' + m['eprint']) if m.get('eprint') else '—'}")
+        # #530 — this is THE list the user is asked for: every free copy goes with its link (the
+        # hosts behind an anti-bot challenge only open from a browser)
+        for c in m.get("copias_libres") or []:
+            if c.get("src") != "publisher":
+                cfg.print_seguro(f"      copia libre ({c.get('src') or '?'}): {c.get('url')}")
         print_publisher_copy(slug, m["bibcode"], m.get("copias_libres") or [])
     cfg.print_seguro(f"  → traé el PDF del editor e instalalo declarando su procedencia (#513): "
                      f"`python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher "

@@ -2634,6 +2634,16 @@
   {
    "number": 529,
    "title": "La primera ingesta de un sujeto baja PDFs sin checkpoint humano: expansion_guard no aplica «sin notas previas», y el corpus que el usuario conserva es el 4-11 % del core",
+   "state": "CLOSED"
+  },
+  {
+   "number": 530,
+   "title": "Primera ingesta: al usuario se le pide el RESIDUO de fetch_pdf, no el core aprobado (orden de #529 invertido)",
+   "state": "OPEN"
+  },
+  {
+   "number": 531,
+   "title": "PDF de HAL: la carátula antepuesta corre todos los localizadores de página y la instalación no lo detecta",
    "state": "OPEN"
   }
  ]

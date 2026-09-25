@@ -4041,3 +4041,11 @@ antes de `fetch_arxiv` y lista los 9 core (9 publicados, 0 sólo eprint, 1 «ya 
 la bóveda: 365 → 365. Portador que el issue no nombraba: la mitad ADS de un tema **mixto**
 (`ingest_offads` con `query:` o `extra_core:`) corría la sub-cadena **sin ninguna guardia**. Ahora
 pasa por la misma.
+
+## #530 — al usuario se le pide el residuo, no el core (v1.340.1)
+
+El mensaje de #529 invertía el orden: pedía los PDFs del editor **antes** de dejar que la cadena
+publisher-first (#512) los intentara. En la instancia (primera ingesta de `gj_674` + `hd_41248`) se
+le pidieron **13** PDFs al usuario; con `--yes` la cadena bajó 2 sola, y el pedido correcto era de
+**11**, con links. Ahora el orden es: recortar → `--yes` → rescate → residuo de `missing_pdf.json` →
+`--acepta-preprint`. El residuo impreso lleva además cada copia libre con su URL.

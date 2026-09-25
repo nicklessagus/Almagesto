@@ -741,3 +741,16 @@ def test_512_sin_eprint_a_la_vista_el_residuo_sigue_siendo_358(toy_vault, monkey
     assert run_main(monkeypatch, ["test_star"]) == 0
     [m] = json.loads((d / "missing_pdf.json").read_text())
     assert m["estado"] == "sin-copia-libre" and "editor" not in m
+
+
+def test_530_el_residuo_publicado_lista_las_copias_libres_con_su_link(toy_vault, capsys):
+    """#530 — el residuo es LA lista que se le pide al usuario: cada copia libre va con su link
+    (HAL/ORO/aanda sólo abren desde un navegador); la del editor sigue con su comando de #518."""
+    fp.print_published_residue("s", [{
+        "bibcode": "2016A&A...588A..31F", "estado": fp.ESTADO_PUBLICADO,
+        "editor": "https://doi.org/10.1/x", "eprint": None,
+        "copias_libres": [{"src": "hal", "url": "https://hal.science/hal-1/document"},
+                          {"src": "publisher", "url": "https://aanda.org/x.pdf"}]}])
+    out = capsys.readouterr().out
+    assert "copia libre (hal): https://hal.science/hal-1/document" in out
+    assert "copia libre (publisher)" not in out and "copia del EDITOR: https://aanda.org/x.pdf" in out

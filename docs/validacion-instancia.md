@@ -1393,3 +1393,14 @@ publicados, `--acepta-preprint`, `--yes`). Los PDFs de `vault/raw/pdfs` no cambi
 cualquier sujeto existente **no** frena por esto.
 
 **Devolver si** un sujeto ya ingestado frena como primera ingesta, o si algo se baja antes del `--yes`.
+
+## §#530 · v1.340.1 — primero la cadena, después el residuo al usuario
+
+Repetir la receta de §#529 (tema nuevo de prueba, sin `--yes`).
+
+**Esperado:** el mensaje de la guardia nombra, en este orden, recortar → `--yes` → rescate manual →
+lo que falte de `build/<slug>/missing_pdf.json` → `--acepta-preprint`. Sin la lista de publicados como
+pedido previo. En una corrida con `--yes` que deje residuo `publicado-no-conseguido`, cada entrada
+imprime sus `copia libre (<src>): <url>`.
+
+**Devolver si** el mensaje o `cadena-ads.md` le piden al usuario PDFs antes de `--yes`.

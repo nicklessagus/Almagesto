@@ -151,8 +151,13 @@ def test_529_la_PRIMERA_ingesta_frena_con_la_lista_de_lo_que_se_va_a_bajar(toy_v
     (toy_vault.ROOT / "build" / "test_star" / "ads.json").write_text(
         json.dumps({"records": recs}), encoding="utf-8")
     with_notes([recs[2]["bibcode"]])                   # nota de otro sujeto: igual es la primera
-    with pytest.raises(SystemExit, match="--acepta-preprint"):
+    with pytest.raises(SystemExit, match="--acepta-preprint") as exc:
         run_main(monkeypatch)
+    # #530 — al usuario se le pide el RESIDUO: primero `--yes` (publisher-first), después rescate,
+    # recién ahí lo que falte de `missing_pdf.json`
+    msg = str(exc.value)
+    assert msg.index("--yes") < msg.index("rescate") < msg.index("missing_pdf.json") \
+        < msg.index("--acepta-preprint")
     assert fake_run.calls == [("query_ads.py", "test_star")]      # no llegó a bajar nada
     out = capsys.readouterr().out
     assert "PRIMERA ingesta" in out and "2 con versión PUBLICADA" in out and "1 sólo eprint" in out
