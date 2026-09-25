@@ -68,6 +68,7 @@ OTROS_ESCRITORES = {
     "bench_verify.cmd_seed": "build/ (examen y clave del benchmark)",
     "citation_index.build": "build/ (índice de citas)",
     "fetch_arxiv.main": "build/ (faltantes del fetcher)",
+    "replace_pdf.drop_from_residue": "build/ (saca del residuo `missing_pdf.json` lo instalado, #532)",
     "fetch_ground_truth.write_ground_truth": "raw/ground_truth/",
     "fetch_pdf.main": "build/ (faltantes del fetcher)",
     "harvest_views.restamp_view_locators": "la NOTA (lee la extracción)",

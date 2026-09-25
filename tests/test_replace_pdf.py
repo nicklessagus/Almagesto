@@ -689,3 +689,23 @@ def test_531_cruza_las_paginas_del_publisher_contra_ADS(toy_vault, tmp_path, mon
     assert rp.ads_page_warning("2016F", nuevo, "eprint") is None
     monkeypatch.setattr(rp.cfg, "pdf_page_count", lambda _p: (18, ""))
     assert rp.ads_page_warning("2016F", nuevo, "publisher") is None
+
+
+def test_532_instalar_saca_el_bibcode_del_RESIDUO_de_todos_los_slugs(toy_vault, tmp_path, monkeypatch):
+    """#532 — `missing_pdf.json` es la lista que se le pide al usuario (#530) y sólo `fetch_pdf` la
+    reescribía: un PDF instalado a mano seguía listado hasta re-correr la cadena. Instalar lo saca
+    del residuo de CADA slug; el que queda vacío se borra; `--dry-run` no toca nada."""
+    _nota_sin_pdf("2014S")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "sin marca")
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, *a, **k: _ok(cmd))
+    for slug, miss in (("test_star", [{"bibcode": "2014S"}, {"bibcode": "2015T"}]),
+                       ("otro", [{"bibcode": "2014S"}])):
+        (cfg.ROOT / "build" / slug).mkdir(parents=True, exist_ok=True)
+        (cfg.ROOT / "build" / slug / "missing_pdf.json").write_text(json.dumps(miss))
+    rp.install_first("2014S", _entrante(tmp_path), "publisher", "test_star", dry_run=True)
+    assert json.loads((cfg.ROOT / "build" / "otro" / "missing_pdf.json").read_text()) == [
+        {"bibcode": "2014S"}], "--dry-run no escribe"
+    rp.install_first("2014S", _entrante(tmp_path), "publisher", "test_star")
+    assert json.loads((cfg.ROOT / "build" / "test_star" / "missing_pdf.json").read_text()) == [
+        {"bibcode": "2015T"}]
+    assert not (cfg.ROOT / "build" / "otro" / "missing_pdf.json").exists()

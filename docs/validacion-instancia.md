@@ -1422,3 +1422,14 @@ python scripts/query_ads.py hd_41248         # re-query: el ads.json gana `page_
   (6 contra 5, página al final).
 
 **Devolver si** la categoría lista un PDF sin carátula, o si un `publisher` que coincide con ADS avisa.
+
+## §#532 · v1.341.1 — instalar un PDF lo saca del residuo
+
+Sobre una COPIA con `build/<slug>/missing_pdf.json`: instalar con `replace_pdf.py` uno de los
+bibcodes listados (primera copia con `--slug`, o reemplazo).
+
+**Esperado:** la salida dice «sale del residuo `missing_pdf.json` de: <slug>» y el archivo ya no lo
+lista (medido: `hd_41248`, 6 → 5). Con `--dry-run` no cambia nada. El residuo real de la instancia
+lista PDFs ya instalados hasta que se re-corra `fetch_pdf hd_41248`: eso es de antes del fix.
+
+**Devolver si** una instalación deja el bibcode en el residuo, o si saca otro.

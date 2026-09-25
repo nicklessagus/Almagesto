@@ -4060,3 +4060,10 @@ coinciden. Sólo avisa `2010EAS....42..131F`, 6 contra 5, con la página de copy
 es lo que midió el issue. Los 3 `eprint` no se cruzan. **La red del lint encontró 3 PDFs reales con la
 carátula de HAL**, que entraron antes y que nadie había visto: `1994SigPr..36..287C` (`web`),
 `2009Icar..201..504M` (`eprint`) y `2025A&A...701A..17C` (`publisher`), los tres en `ica`.
+
+## #532 — instalar un PDF lo saca del residuo (v1.341.1)
+
+**Worktree de Almagesto-Tesis, con el `build/hd_41248/missing_pdf.json` real (6 entradas):** se quitó
+`2014A&A...566A..35S` del disco y se reinstaló con `replace_pdf.py … --slug hd_41248`. El residuo
+pasa a 5 entradas, sin ésa, y la salida lo dice. Antes quedaba listado hasta re-correr `fetch_pdf`:
+en la instancia real, el residuo de `hd_41248` todavía lista PDFs instalados hoy.

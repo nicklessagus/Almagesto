@@ -2232,6 +2232,33 @@ portadores:
         estado: fuera-de-alcance
         motivo: "Consulta HAL y PROPONE el bloque BibTeX y la URL del PDF (#505); no instala archivos."
 
+  - issue: 532
+    regla: >-
+      El residuo `build/<slug>/missing_pdf.json` dice lo que FALTA en disco: todo lo que instala un
+      PDF lo saca del residuo en el mismo acto. Es la lista que se le pide al usuario (#530), y si
+      queda vieja le pide PDFs que ya están.
+    funcion: replace_pdf.drop_from_residue
+    patron: 'missing_pdf\.json'
+    consumidores:
+      - modulo: scripts/fetch_pdf.py
+        estado: fuera-de-alcance
+        motivo: "Es el dueño del residuo: lo REESCRIBE entero por verdad de disco en cada corrida (y lo borra si queda vacío)."
+      - modulo: scripts/fetch_arxiv.py
+        estado: fuera-de-alcance
+        motivo: "Agrega los sin `arxiv_id` ANTES de `fetch_pdf`, que después lo reescribe por verdad de disco; no instala a mano."
+      - modulo: scripts/ingest_star.py
+        estado: fuera-de-alcance
+        motivo: "Sólo lo NOMBRA en el docstring; la cadena corre `fetch_pdf`, que lo regenera."
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: "Lo NOMBRA en el mensaje de la primera ingesta (#530) y en el docstring; no lo escribe."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Sólo lo nombra en un comentario; el lint no lee `build/` para esto."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Sólo lo nombra en un docstring (#304); no lo escribe."
+
   - issue: 505
     regla: >-
       Antes de declarar un hueco —de `bibtex` (`sin_bibtex`, #467) o de PDF (`pending`, la cascada

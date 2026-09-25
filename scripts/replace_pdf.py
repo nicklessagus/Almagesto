@@ -130,6 +130,30 @@ def check_incoming(bibcode: str, nuevo: Path, source: str) -> list:
     return errores
 
 
+def drop_from_residue(bibcode: str) -> list:
+    """Take `bibcode` out of every subject's `build/<slug>/missing_pdf.json` (#532) → the slugs
+    touched. The residue says what is MISSING on disk and is the list the user is asked for (#530):
+    only `fetch_pdf` rewrote it, so a PDF installed here stayed listed until the chain re-ran.
+    An emptied residue is removed, as `fetch_pdf` does."""
+    claves, tocados = {bibcode, cfg.note_stem(bibcode)}, []
+    for f in sorted((cfg.ROOT / "build").glob("*/missing_pdf.json")):
+        try:
+            miss = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        quedan = [m for m in miss if not (isinstance(m, dict) and m.get("bibcode") in claves)]
+        if len(quedan) == len(miss):
+            continue
+        if quedan:
+            cfg.write_text_atomic(f, json.dumps(quedan, indent=2, ensure_ascii=False))
+        else:
+            f.unlink()
+        tocados.append(f.parent.name)
+    if tocados:
+        cfg.print_seguro(f"  → sale del residuo `missing_pdf.json` de: {', '.join(tocados)} (#532)")
+    return tocados
+
+
 def ads_page_count(bibcode: str) -> int | None:
     """ADS's `page_count` of `bibcode`, from any subject's `build/<slug>/ads.json` (#531); `None`
     when no record carries it (an `ads.json` older than v1.340.2, or a paper off ADS)."""
@@ -366,6 +390,7 @@ def install_first(bibcode: str, nuevo: Path, source: str, slug: str,
                                slug, "--bibcode", stem, "--force"], check=False)
         if proc.returncode != 0:
             fallidos.append(txt)                  # AUD-423: el rc decide, no la existencia
+        drop_from_residue(bibcode)
         if nota.exists():
             mn.stamp_pdf(nota, stem)
             cfg.set_fm_scalar(nota, "pdf_sha", lb.sha10(nuevo.read_bytes()))
@@ -423,6 +448,8 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
             # PDF truncado que `if dest.exists()` da por bajado para siempre — el modo de falla
             # que H-07 cerró, y acá el destino es un artefacto de `raw/` que viaja en git-lfs.
             cfg.copy_file_atomic(nuevo, c)
+    if not dry_run:
+        drop_from_residue(bibcode)
     txts, copiados, fallidos = [], [], []
     stem = cfg.note_stem(bibcode)
     for slug in slugs:
