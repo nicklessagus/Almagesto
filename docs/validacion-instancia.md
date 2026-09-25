@@ -1347,6 +1347,11 @@ python scripts/contrast.py deteccion-estadistica --grep aleatori --filas
 
 **Devolver si** otra fila deja de salir, o si el lint cambia alguna categoría.
 
+**Re-entrega v1.338.0 (devuelto 2026-09-25: «1 cosechadas, +3/-1»).** La sección se rehusaba pero
+`vistas[]` se re-fechaba (`fecha` → hoy + `previa`). Esperado ahora: el mismo `--dry-run` da
+**«0 cosechadas, 1 sin cambios»**; sin `--force` sobre el slug, la única diferencia es que ese paper
+pasa de un rechazo genérico por `fecha` al aviso de `_refutado`.
+
 ## §#527 · v1.337.0 — `apply_fixes` devuelve los bloques que se pidieron
 
 Sobre una COPIA de `concepts/methods/deteccion-estadistica.md`, un JSON de fixes por caso y

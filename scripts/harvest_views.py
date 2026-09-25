@@ -971,8 +971,13 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         if refuta:
             entrada["refuta"] = refuta
             refutados.append((bib, refuta))
+        # ⛔ #526 — lo que una verificación refutó sigue en el JSON (#311, add-only): re-escribirlo
+        # en la nota —la vía es `--force`— deshace la corrección. Se decide ANTES de declarar la
+        # vista: rehusar la sección y re-fechar `vistas[]` igual afirmaba una lectura que no se
+        # escribió (#395; devuelto por el validador).
+        _refutados = cfg.refuted_in(data, render_view(sujeto, data))
         try:
-            toco = upsert_view(dest, entrada, force=force)
+            toco = False if _refutados else upsert_view(dest, entrada, force=force)
         except ViewUpsertError as exc:
             # AUD-200 / INV-139 — si la vista no se puede DECLARAR, la sección del cuerpo tampoco
             # se escribe: una `## Vista — X` sin su entrada en `vistas[]` es la incoherencia que el
@@ -1002,9 +1007,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             cfg.print_seguro(f"  ⛔ {bib}: salvedad FALSA, no se publica — {_detalle}")
         _enf = str(data.get("enfasis") or "").strip()
         _cuerpo = render_view(sujeto, data)
-        # ⛔ #526 — lo que una verificación refutó sigue en el JSON (#311, add-only): re-escribirlo
-        # en la nota —la vía es `--force`— deshace la corrección. La sección no se toca.
-        if _refutados := cfg.refuted_in(data, _cuerpo):
+        if _refutados:
             cfg.print_seguro(f"  ⛔ {bib}: la vista NO se re-escribe — la extracción lleva texto "
                              f"refutado (`_refutado`): "
                              + "; ".join(f"«{e.get('texto')}» por {e.get('por')}"

@@ -4005,6 +4005,13 @@ deteccion-estadistica --grep aleatori --filas`: 4 → **3** filas pegables, 1 re
 refutación; `--cita` igual. `harvest_views --force --dry-run` del paper: 1 cosechada (+2/-2) → 0,
 rehusada. Lint y `contrast --validar-todo`: salida idéntica antes y después.
 
+**Devuelto por el validador (v1.338.0):** en la instancia dio «1 cosechadas, +3/-1». El chequeo de
+`_refutado` corría DESPUÉS de `upsert_view`: la sección se rehusaba y `vistas[]` se re-fechaba igual
+(#395). El «→ 0» de arriba se midió en una copia cuya vista ya tenía fecha del día, así que el
+re-fechado no dejaba diff: el medidor no veía el eje. Corregido (el chequeo decide antes de declarar
+la vista), sobre un worktree de la instancia: 1 cosechada (+3/-1) → **0 cosechadas, 1 sin cambios**.
+Sin `--force` sobre el slug: 13 rechazadas → 12 + el aviso de `_refutado`, sin otra diferencia.
+
 ## #527 — `apply_fixes` re-emite los bloques que se pidieron (v1.337.0)
 
 **Copia de la instancia, `deteccion-estadistica.md` (212 pares, 210 bloques):** caso 1 (`\n\n` en un

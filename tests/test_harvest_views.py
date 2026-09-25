@@ -2109,9 +2109,15 @@ def test_526_force_NO_re_escribe_lo_que_una_verificacion_REFUTO(toy_vault, capsy
     data = extraccion(aporte="usa una grilla aleatoria",
                       _refutado=[{"texto": "grilla aleatoria", "por": "x.verif#abc",
                                   "motivo": "adaptativa", "fecha": "2026-09-24"}])
-    dest = sembrar(toy_vault, data, body="## Vista — Estrella Test\n\nGrilla adaptativa.\n")
+    dest = sembrar(toy_vault, data, body="## Vista — Estrella Test\n\nGrilla adaptativa.\n",
+                   fm_extra={"vistas": [{"sujeto": "Estrella Test", "tipo": "star",
+                                         "fecha": "2026-01-01"}]})
     hv.harvest("test_star", force=True)
     assert "Grilla adaptativa." in dest.read_text(encoding="utf-8")
+    # devuelto por el validador: la sección se rehusaba pero `vistas[]` se RE-FECHABA (#395),
+    # declarando una lectura que no se escribió
+    v = cfg.split_fm(dest.read_text(encoding="utf-8"))["vistas"][0]
+    assert v["fecha"] == "2026-01-01" and "previa" not in v
     assert "grilla aleatoria" not in dest.read_text(encoding="utf-8")
     assert "la vista NO se re-escribe" in capsys.readouterr().out
     # y el re-estampado acotado de salvedades (#453), el otro camino JSON → nota, tampoco
