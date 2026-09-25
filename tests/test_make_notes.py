@@ -6216,3 +6216,36 @@ def test_stamp_pdf_sin_PDF_deja_la_marca_pendiente(toy_vault):
     dest = toy_vault.PAPERS / "2009X.md"
     assert mn.stamp_pdf(dest, "2009X") is False
     assert "pending_source: paywall" in dest.read_text(encoding="utf-8")
+
+
+def test_528_migrar_warn_anchor_re_firma_un_bloque_y_DECLARA_la_que_cubria_varios(toy_vault, capsys):
+    """#528 — la firma de un ítem se hacía sobre el PÁRRAFO (la lista entera). El migrador la pasa
+    al bloque de `split_blocks` sólo si lo que cubría cae en UNO; si cubría ítems distintos no la
+    reparte —cuál revisó quien firmó no está en la nota— y la declara. Idempotente."""
+    import lib_blocks as lb
+    pat = lint.IMPL_LEAK_RE
+    lista = ["- La perilla ξ de la ec. 33 regula el peso.", "- Otra perilla del modelo, ec. 34."]
+    uno = ["- La perilla ξ de la ec. 33 regula el peso.", "- Un ítem sin nada que marcar."]
+    motivo = "el parámetro del paper, citado con página"
+    notas = {}
+    for stem, lineas in (("varios", lista), ("uno", uno)):
+        vieja = lb.paragraph_anchor(lineas, 0)
+        notas[stem] = (mk_note(toy_vault.CONCEPTS / "methods", stem, {"tags": ["methods"],
+                       "warn_revisada": [{"categoria": "impl_leaks", "ancla": vieja,
+                                          "motivo": motivo}]}, "\n".join(lineas) + "\n"),
+                       vieja, lb.warn_anchor(lineas, 0))
+    nota, vieja, _ = notas["varios"]
+    antes = nota.read_text(encoding="utf-8")
+    n, declaradas = mn.migrate_warn_anchor(nota, pat)
+    assert n == 0 and [(s, a, k) for s, _c, a, k in declaradas] == [("varios", vieja, 2)]
+    assert nota.read_text(encoding="utf-8") == antes              # no se reparte en silencio
+    nota, vieja, nueva = notas["uno"]
+    assert vieja != nueva
+    assert mn.migrate_warn_anchor(nota, pat) == (1, [])
+    assert read_fm(nota)["warn_revisada"][0]["ancla"] == nueva
+    assert read_fm(nota)["warn_revisada"][0]["motivo"] == motivo
+    assert mn.migrate_warn_anchor(nota, pat) == (0, [])          # idempotente
+    # sobre la bóveda: la declarada se NOMBRA, con su ancla y cuántos bloques cubría
+    assert mn.migrate_all_warn_anchor() == 0
+    out = capsys.readouterr().out
+    assert "0 ancla(s) re-firmada(s)" in out and f"varios: `impl_leaks` · ancla `{notas['varios'][1]}` → 2 bloques" in out

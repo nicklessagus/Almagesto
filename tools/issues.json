@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-24",
+ "fetched": "2026-09-25",
  "issues": [
   {
    "number": 2,
@@ -2594,36 +2594,41 @@
   {
    "number": 521,
    "title": "txt_accuses: el empalme de columnas (#388) no ve la reanudación en la OTRA columna, y en el camino #437 eso bloquea una cita correcta que ni cita_revisada puede firmar",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 522,
    "title": "write_verif_sidecar encadena contradice→soportada pelado y la cabecera pierde el conteo de #232 (chained_verdict quedó sin llamadores)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 523,
    "title": "Sujeto sintetizado sin sintesis: en el registro: la cabecera _Estado_ pierde la tercera fecha y ningún gate lo ve (D-12/INV-82)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 524,
    "title": "Corpus declarado (query: null + extra_core, #384) recortado desde un probe: el universo considerado y lo descartado no quedan en el registro",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 525,
    "title": "El extractor no escribe valor/regimen en $…$ ni con tildes, y contrast --filas/--cita y el cosechador lo publican tal cual",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 526,
    "title": "Un contradice cuya causa es la EXTRACCIÓN no baja al JSON: contrast --filas sigue sirviendo lo refutado como celda pegable (#311/#322)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 527,
    "title": "apply_fixes.rewrap re-envuelve como texto plano: funde párrafos en silencio y puede crear un ítem que roba la cita; y #222 rehúsa sacar una cláusula citada (#389)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 528,
+   "title": "warn_anchor hashea el PÁRRAFO y split_blocks el ÍTEM: una firma warn_revisada sobre un ítem de lista exime a toda la lista, y editar cualquier ítem vence las firmas de todos",
    "state": "OPEN"
   }
  ]

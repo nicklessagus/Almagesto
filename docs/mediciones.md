@@ -4021,3 +4021,13 @@ ahora 210 → 210 y 0. Caso 4 (sacar la cláusula citada) antes rehusado como «
 `retira` declarado (212 → 211) y sigue rehusado sin declarar. Ida y vuelta (aplicar la identidad
 sobre la salida): 0 cambios. Falsos positivos: el fix identidad sobre los 1799 bloques de
 `concepts/` + `stars/` da 1789 aplican / 10 no localizables, **igual** antes y después. Caso 5 (`reverify_subset` y el cambio dentro de `$…$`) no se tocó.
+
+## #528 — el ancla de `warn_revisada` es el bloque de `split_blocks` (v1.339.0)
+
+**Worktree de Almagesto-Tesis (`5b3f637` + v1.338.1):** en `hd_40307`, los dos hits de
+`bloque_con_varios_hechos` en `## Huecos` (L923, L946) tenían la misma ancla (`d7df7c126e`); ahora,
+`84d4e97f55` y `919dda86ca`. `make_notes.py --migrate-warn-anchor` re-firma **9** anclas en 9 notas y
+**declara 1** (`ica-ruido`, `8237e326e5`, que cubría hits en 3 bloques). La segunda corrida re-firma 0.
+Lint, antes → después de migrar: fuga (1) y costura (4) iguales; «bloque con más de un hecho» 10 → 13,
+revisadas 105 → 102 y huérfanas 10 → 11. Son exactamente los 3 hits y la firma declarada; ninguna otra
+categoría cambia. Sin migrar, el cambio de ancla solo deja 20 huérfanas y 93 revisadas.

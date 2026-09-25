@@ -1855,3 +1855,25 @@ def test_510_una_ronda_SIN_condicion_sobre_una_cadena_quita_el_eslabon_no_escrib
         assert lb.replace_current_condition(cadena, vacio) == "acota→resuelta: x · A", vacio
     assert lb.replace_current_condition("acota: B", "—") == "—", "sin cadena: igual que una fila nueva"
     assert lb.replace_current_condition("", "—") == "—"
+
+
+def test_528_warn_anchor_es_el_BLOQUE_de_split_blocks_no_el_parrafo():
+    """#528 — `warn_anchor` caminaba el párrafo, y una lista sin líneas en blanco es UN párrafo:
+    la firma de un ítem eximía a todos y editar cualquiera vencía las de todos. Ahora el ancla es
+    el bloque de `split_blocks`, el mismo que produce los pares y los hits."""
+    lista = ["## Huecos", "- primer hueco [[2020A&A...1A]],", "  que sigue en otra línea.",
+             "- segundo hueco [[2021A&A...2B]]."]
+    a1, a1_cont, a2 = (lb.warn_anchor(lista, i) for i in (1, 2, 3))
+    assert a1 == a1_cont != a2                     # la continuación es del ítem 1; el 2 es otro
+    # el ancla vieja (la que migra `--migrate-warn-anchor`) era la de la lista ENTERA
+    assert lb.paragraph_anchor(lista, 1) == lb.paragraph_anchor(lista, 3) == lb.sha10(
+        lb.normalize_ws(" ".join(lista[1:])))
+    editada = lista[:3] + ["- segundo hueco, reescrito [[2021A&A...2B]]."]
+    assert lb.warn_anchor(editada, 1) == a1        # editar el ítem 2 no vence la firma del 1
+    assert lb.warn_anchor(editada, 3) != a2
+    # un párrafo conserva el ancla de antes (#502): no hay firmas que migrar ahí
+    parrafo = ["Una línea", "  y su continuación."]
+    assert lb.warn_anchor(parrafo, 1) == lb.sha10(lb.normalize_ws("Una línea y su continuación."))
+    # fuera de lo que `split_blocks` lee (sección estampada) sigue el párrafo
+    estampada = ["## Papers", "texto estampado", "sigue"]
+    assert lb.warn_anchor(estampada, 2) == lb.sha10("texto estampado sigue")

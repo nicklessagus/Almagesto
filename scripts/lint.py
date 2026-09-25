@@ -6297,6 +6297,14 @@ def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: 
             revisadas, huerfanas)
 
 
+def warn_hits(stem: str, body_full: str, offset: int, impl_leaks: list) -> dict:
+    """The hits of the three signable WARN categories (`cfg.WARN_REVISABLE`), by category. One
+    assembly for the sweep and for `make_notes --migrate-warn-anchor` (#528)."""
+    return {"impl_leaks": impl_leaks,
+            "bloque_con_varios_hechos": check_block_facts(stem, body_full, offset),
+            "costura_unidad": check_unit_seams(stem, body_full, offset)}
+
+
 def check_block_facts(stem: str, body_full: str, offset: int) -> list:
     """`bloque_con_varios_hechos` — a cited block above the p90 in length or in cited facts (#408).
 
@@ -6717,11 +6725,8 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     # PROSA entre las citas. #502 — y las tres se FIRMAN: el hit revisado sale aparte, con motivo.
     for key, items in zip(("impl_leaks", "bloque_con_varios_hechos", "costura_unidad",
                            "warn_revisada", "warn_revisada_huerfana"),
-                          split_reviewed_warn(
-                              stem, fm, body_full, _offset,
-                              {"impl_leaks": _il,
-                               "bloque_con_varios_hechos": check_block_facts(stem, body_full, _offset),
-                               "costura_unidad": check_unit_seams(stem, body_full, _offset)})):
+                          split_reviewed_warn(stem, fm, body_full, _offset,
+                                              warn_hits(stem, body_full, _offset, _il))):
         add(key, items)
     # #233 — la cabecera `> _Estado — …_` que la nota PUBLICA contra la que el estampador daría hoy.
     add("estado_desfasado", check_state_header(stem, f, text, _entity_slug(f)))

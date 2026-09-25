@@ -2173,6 +2173,25 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Sólo la NOMBRA el docstring de `load_reviewed_quotes` (#516), la escotilla hermana para citas."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "`migrate_warn_anchor` (#528) re-escribe el ancla de firmas existentes; no decide qué exime."
+
+  - issue: 528
+    regla: >-
+      Toda ancla que firma o verifica un bloque usa la MISMA definición de bloque que
+      `lib_blocks.split_blocks` (familia de #222). `warn_anchor` caminaba el párrafo, y una lista
+      sin líneas en blanco es un solo párrafo: la firma de un ítem eximía a todos y editar
+      cualquiera vencía las de todos (medido: 2 hits de `hd_40307` con la misma ancla).
+    funcion: lib_blocks.warn_anchor
+    patron: 'while ini > 0 and not corta'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`split_reviewed_warn` calcula el ancla de cada hit WARN con `warn_anchor`."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`migrate_warn_anchor` re-firma del ancla de párrafo (`paragraph_anchor`) a la de bloque."
 
   - issue: 505
     regla: >-

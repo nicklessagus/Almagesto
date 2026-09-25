@@ -1560,6 +1560,87 @@ def migrate_all_verif_sidecar() -> int:
     return 0
 
 
+def migrate_warn_anchor(dest, leak_patterns) -> tuple[int, list]:
+    """#528 — re-sign ONE note's `warn_revisada` from the paragraph anchor to the block anchor.
+
+    Returns `(re-signed, declared)`. A signature is re-signed only when every hit it covered falls
+    in ONE block today; one that covered hits in several blocks is NOT split among them —which one
+    the reviewer meant is not in the note— and is returned declared, so those hits come back as
+    WARN. A signature that already covered nothing stays as it was (the lint names it orphan).
+    ⛔ The frontmatter is re-parsed before writing and nothing is written if it stops parsing (#222).
+    """
+    import lint                       # import local: `lint` importa a `make_notes`
+    text = dest.read_text(encoding="utf-8")
+    fm = cfg.split_fm(text) or {}
+    firmas = [f for f in cfg.as_list(fm.get("warn_revisada")) if isinstance(f, dict)]
+    partes = cfg.frontmatter_span(text)
+    if not firmas or not partes:
+        return 0, []
+    body = partes[1]
+    head = text[:len(text) - len(body)]
+    offset = len(head.split("\n")) - 1
+    stem = dest.stem
+    hits = lint.warn_hits(stem, body, offset, lint.check_impl_leaks(
+        stem, body, offset, leak_patterns, stem not in lint.NON_ORPHAN))
+    lineas = body.split("\n")
+    nuevas: dict = {}
+    for cat, items in hits.items():
+        for _st, msg in items:
+            m = re.match(r"L(\d+)", msg)
+            i = int(m.group(1)) - 1 - offset if m else -1
+            if 0 <= i < len(lineas):
+                nuevas.setdefault((cat, lb.paragraph_anchor(lineas, i)), set()).add(
+                    lb.warn_anchor(lineas, i))
+    por_ancla: dict = {}
+    declaradas = []
+    for f in firmas:
+        destino = nuevas.get((f.get("categoria"), str(f.get("ancla"))))
+        if destino is None:
+            continue
+        if len(destino) > 1:
+            declaradas.append((stem, f.get("categoria"), f.get("ancla"), len(destino)))
+            destino = {None}
+        por_ancla.setdefault(str(f.get("ancla")), set()).update(destino)
+    reemplazo = {}
+    for vieja, destino in por_ancla.items():
+        if destino == {None} or len(destino) > 1:
+            continue                  # ambigua (o dos categorías en desacuerdo): no se toca
+        (nueva,) = destino
+        if nueva != vieja:
+            reemplazo[vieja] = nueva
+    if not reemplazo:
+        return 0, declaradas
+    head2 = re.sub(r"\b(" + "|".join(map(re.escape, reemplazo)) + r")\b",
+                   lambda mm: reemplazo[mm.group(1)], head)
+    if not cfg.split_fm(head2 + body):
+        cfg.print_seguro(f"  ⛔ {stem}: el frontmatter dejó de parsear — no se escribe (#222)")
+        return 0, declaradas
+    cfg.write_text_atomic(dest, head2 + body)
+    return len(reemplazo), declaradas
+
+
+def migrate_all_warn_anchor() -> int:
+    """#528 over the whole vault. Idempotent: a second run finds every anchor already current."""
+    import lint
+    patrones = lint.IMPL_LEAK_RE + lint.downstream_leaks(cfg.load_downstream())
+    total, declaradas = 0, []
+    for nota in cfg.note_paths(cfg.WIKI, "**/*.md"):
+        n, d = migrate_warn_anchor(nota, patrones)
+        declaradas += d
+        if n:
+            total += n
+            cfg.print_seguro(f"  → {nota.relative_to(cfg.WIKI)}: {n} ancla(s) re-firmada(s)")
+    cfg.print_seguro(f"#528: {total} ancla(s) re-firmada(s) al bloque que parte el lint.")
+    if declaradas:
+        cfg.print_seguro(f"⚠ {len(declaradas)} firma(s) cubrían hits en VARIOS bloques y NO se "
+                         f"reparten (cuál revisó quien firmó no está en la nota): sus hits vuelven "
+                         f"como WARN y la firma queda huérfana — re-revisá y firmá el ancla de cada "
+                         f"bloque:")
+        for stem, cat, ancla, n in declaradas:
+            cfg.print_seguro(f"  - {stem}: `{cat}` · ancla `{ancla}` → {n} bloques")
+    return 0
+
+
 def migrate_disputes(dest) -> bool:
     """Migración #71 de UNA ficha: `planets[].disputes[]` (polo de verdad hardcodeado) → `disputes`
     a nivel nota, con **posiciones explícitas**.
@@ -4707,6 +4788,10 @@ def main() -> int:
                     help="migración #344: mueve la TABLA del bloque de verificación al hermano "
                          "`<nota>.verif.md` (la nota conserva la línea de cabecera, las tres "
                          "sub-secciones y un puntero). Idempotente. No requiere slug.")
+    ap.add_argument("--migrate-warn-anchor", action="store_true", dest="migrate_warn_anchor",
+                    help="migración #528: re-firma cada `warn_revisada` del ancla de PÁRRAFO al "
+                         "bloque que parte el lint; la firma que cubría varios bloques no se "
+                         "reparte: se declara. Idempotente. No requiere slug.")
     ap.add_argument("--migrate-bearing", action="store_true", dest="migrate_bearing",
                     help="migración D-21: saca `bearing:` del frontmatter de las notas de paper (la "
                          "postura vive en la tabla de evidencia de la hipótesis). No requiere slug.")
@@ -4882,6 +4967,8 @@ def main() -> int:
         return migrate_all_verif_archivo()
     if args.migrate_verif_sidecar:
         return migrate_all_verif_sidecar()
+    if args.migrate_warn_anchor:
+        return migrate_all_warn_anchor()
     if args.migrate_facets:
         migrate_all_facets()
         return 0

@@ -1365,3 +1365,18 @@ aplica con 210 → 210 bloques y 0 párrafos sin cita (antes: 210 → 211, un í
 cita). (4) sin `retira` rehúsa; con `retira` escribe, 212 → 211 pares.
 
 **Devolver si** un fix que antes aplicaba limpio ahora se rehúsa sin traer `\n\n` ni abrir bloque.
+
+## §#528 · v1.339.0 — el ancla de `warn_revisada` es el bloque, no el párrafo
+
+```bash
+python scripts/make_notes.py --migrate-warn-anchor
+python scripts/lint.py
+```
+
+**Esperado (medido en worktree sobre `5b3f637`):** 9 anclas re-firmadas y **1 declarada**
+(`ica-ruido` · `bloque_con_varios_hechos` · `8237e326e5` → 3 bloques); la segunda corrida re-firma 0.
+En el lint, los dos hits de `hd_40307` L923/L946 salen con anclas **distintas**. «Bloque con más de un
+hecho» 10 → 13, revisadas 105 → 102, huérfanas 10 → 11; fuga y costura sin cambios. Los 3 hits
+de `ica-ruido` se re-revisan y se firma el ancla de cada bloque.
+
+**Devolver si** cambia otra categoría, o si la segunda corrida re-firma algo.

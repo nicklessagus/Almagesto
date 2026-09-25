@@ -55,7 +55,7 @@ import functools
 import hashlib
 import json
 import re
-from dataclasses import replace, dataclass
+from dataclasses import replace, dataclass, field
 from pathlib import Path
 
 import lib_config as cfg
@@ -86,6 +86,9 @@ class Block:
     first_line: int      # 1-indexada sobre el texto completo de la nota
     text: str
     intro: str | None = None
+    # #528 — the block's LAST line (same indexing as `first_line`), so a line can be mapped back to
+    # the block that holds it (`warn_anchor`). Out of equality: it locates, it does not identify.
+    last_line: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -406,10 +409,25 @@ def block_anchor(text: str, intro: str | None = None) -> str:
 
 
 def warn_anchor(lineas: list, i: int) -> str:
-    """The anchor a WARN hit is signed against (#502): the hash of the PARAGRAPH that holds line
-    `i` (0-indexed) — or of the row itself in a table, where a paragraph would be the whole table
-    and editing any row would expire every signature in it. Normalised like `block_anchor`, so a
-    reflow does not expire the signature and changing a word does."""
+    """The anchor a WARN hit is signed against (#502): the hash of the BLOCK that holds line `i`
+    (0-indexed over the body `split_blocks` reads). Normalised like `block_anchor`, so a reflow does
+    not expire the signature and changing a word does.
+
+    ⛔ #528 — the block is `split_blocks`'s, the same one that produces the pairs and the
+    `bloque_con_varios_hechos` hits (#222's family). A hand-rolled paragraph walk made a list with
+    no blank lines ONE paragraph: signing one item exempted all of them, and editing any item
+    expired every signature in the list. Lines `split_blocks` does not read (stamped sections,
+    fences) keep the paragraph walk — there is no block there to share."""
+    for b in split_blocks("\n".join(lineas)):
+        if b.first_line - 1 <= i <= b.last_line - 1:
+            return sha10(normalize_ws(b.text))
+    return paragraph_anchor(lineas, i)
+
+
+def paragraph_anchor(lineas: list, i: int) -> str:
+    """The PARAGRAPH that holds line `i` — or the row itself in a table, where a paragraph would be
+    the whole table. `warn_anchor`'s fallback for lines `split_blocks` does not read, and the
+    pre-#528 anchor that `make_notes --migrate-warn-anchor` re-signs from."""
     if lineas[i].strip().startswith("|"):
         return sha10(normalize_ws(lineas[i]))
 
@@ -468,6 +486,7 @@ def split_blocks(body: str) -> list[Block]:
     out: list[Block] = []
     cur: list[str] = []
     cur_line = 0
+    cur_last = 0
     cur_kind = "parrafo"
     fenced = False
     en_verificacion = False
@@ -482,9 +501,9 @@ def split_blocks(body: str) -> list[Block]:
         if cur:
             texto = " ".join(cur)
             if cur_kind == "item":
-                emitir("item", cur_line, texto)       # un ítem hereda, igual que una fila
+                emitir("item", cur_line, texto, cur_last)   # un ítem hereda, igual que una fila
             else:
-                out.append(Block(cur_kind, cur_line, texto))
+                out.append(Block(cur_kind, cur_line, texto, last_line=cur_last))
                 if cur_kind != "blockquote":
                     # ⛔ #224 — un blockquote NO pasa a ser el ámbito vigente. Antes se emitía
                     # directo, sin pasar por acá, así que nunca lo era; al acumularlo como párrafo
@@ -493,11 +512,11 @@ def split_blocks(body: str) -> list[Block]:
                     intro_actual = texto              # este párrafo pasa a ser el ámbito vigente
         cur, cur_kind = [], "parrafo"
 
-    def emitir(kind: str, linea_n: int, texto: str):
+    def emitir(kind: str, linea_n: int, texto: str, ultima: int):
         """Una fila/ítem hereda sólo si NO cita por su cuenta (si cita, el caption no forma parte
         de lo que afirma y editarlo no debe vencerla)."""
         out.append(Block(kind, linea_n, texto,
-                         None if _bibcodes(texto) else intro_actual))
+                         None if _bibcodes(texto) else intro_actual, last_line=ultima))
 
     for i, linea in enumerate(lineas, 1 + offset):
         s = linea.strip()
@@ -540,6 +559,7 @@ def split_blocks(body: str) -> list[Block]:
             else:
                 flush()
                 cur, cur_line, cur_kind = [s.lstrip("> ").strip()], i, "blockquote"
+            cur_last = i
             continue
         if s.startswith("|"):
             flush()
@@ -548,16 +568,18 @@ def split_blocks(body: str) -> list[Block]:
                 if out and out[-1].kind == "fila":
                     out.pop()
                 continue
-            emitir("fila", i, s)
+            emitir("fila", i, s, i)
             continue
         if _BULLET_RE.match(s):
             flush()
             cur, cur_line, cur_kind = [s], i, "item"
+            cur_last = i
             continue
         if cur:
             cur.append(s)                    # continuación hard-wrapped del bloque en curso
         else:
             cur, cur_line, cur_kind = [s], i, "parrafo"
+        cur_last = i
     flush()
     return out
 

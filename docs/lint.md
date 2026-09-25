@@ -683,8 +683,11 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   tres WARN que decide una persona leyendo (fuga de implementación, bloque con más de un hecho,
   costura de unidad) — `warn_revisada: [{categoria, ancla, motivo}]` en el frontmatter de la nota.
   El lint imprime el `ancla` al final de cada hit; firmar es pegarla. ⛔ El ancla hashea el BLOQUE
-  (el párrafo, o la fila en una tabla): si la prosa cambia, la firma deja de cubrir y el hit vuelve
-  — lo juzgado ES la prosa. Forma dura (D-58): sin `motivo` o con una categoría fuera de las tres,
+  **de `split_blocks`** (#528: párrafo, ítem de lista, blockquote o fila — el mismo que producen
+  los pares; con el párrafo, una firma sobre un ítem eximía a la lista entera): si la prosa cambia,
+  la firma deja de cubrir y el hit vuelve — lo juzgado ES la prosa. Migrador de las firmas
+  pre-v1.339.0: `make_notes.py --migrate-warn-anchor` (re-firma la que cae en UN bloque; la que
+  cubría varios la **declara** y no la reparte). Forma dura (D-58): sin `motivo` o con una categoría fuera de las tres,
   no exime nada. Las WARN de higiene no se firman: se cierran arreglando.
 - **`warn_revisada` que no corresponde a ningún hit** (#502/#256, backlog): el bloque cambió
   (re-revisalo y firmá el ancla nueva) o el hit ya no dispara (sacá la entrada).
