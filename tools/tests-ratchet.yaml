@@ -20,7 +20,7 @@
 #   - conteo por DEBAJO → pasa y avisa que hay que bajar el techo acá (AUD-07).
 #   - el techo NUNCA se sube. Si una función nueva lo necesita, su test está en el archivo equivocado.
 medido_en: "2026-09-11"
-techo: 28
+techo: 27
 conocidos:
   - bench_verify.py::flush
   - extract_fulltext.py::tesseract_version
@@ -36,7 +36,6 @@ conocidos:
   - lib_config.py::ratchet_raises
   - lib_config.py::record_pdf_source
   - lib_config.py::save_sintesis
-  - lib_config.py::section_start
   - lib_config.py::snapshot_retrieved
   - lib_config.py::themes_error
   - lib_quotes.py::deinterleave_columns

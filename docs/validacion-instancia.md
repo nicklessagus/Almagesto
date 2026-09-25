@@ -1276,8 +1276,8 @@ reporte de antes (la categoría a 0).
 **Devolver si** cambia otra columna además de `Veredicto` (salvo el re-truncado de un extracto largo
 al re-emitir, que ya hacían `--resolver`/`--migrate-condition-prefix`), o si alguna celda migrada
 queda `→soportada` al final.
+
 ## §#524 · v1.334.0 — el probe que decide un recorte deja rastro (`probes:`)
-## §#523 · v1.333.0 — sujeto sintetizado sin `sintesis:` en el registro
 
 ```bash
 python scripts/lint.py
@@ -1293,6 +1293,21 @@ recorte con `python scripts/query_ads.py <slug> --theme --probe "<query>" --regi
 
 **Devolver si** aparece un tema con `query:` poblada o `source:` ≠ `ads`, o si `--registrar` toca
 otra sección del registro.
+
+## §#523 · v1.333.0 — sujeto sintetizado sin `sintesis:` en el registro
+
+```bash
+python scripts/lint.py
+```
+
+**Esperado:** la categoría nueva *Síntesis sin declarar* lista **3** sujetos (`rv-doppler` 31,
+`indicadores-actividad` 33, `harps-drs` 26 sintetizados). Ninguna otra categoría cambia. Cerrarla es
+`python scripts/triage.py <slug> --sintesis --n-papers <N>` + `make_notes.py <slug> --theme` por
+sujeto (medido en copia: con `rv-doppler` declarado baja a 2).
+
+**Devolver si** aparece una estrella (las 3 ya declaran `sintesis:`) o un sujeto sin papers
+`sintetizado` en su roll-up.
+
 ## §#525 · v1.335.0 — notación fuera de `$…$` en el inventario, y el prompt que la pide
 
 ```bash
@@ -1313,6 +1328,7 @@ sujeto (medido en copia: con `rv-doppler` declarado baja a 2).
 
 **Devolver si** aparece una estrella (las 3 ya declaran `sintesis:`) o un sujeto sin papers
 `sintetizado` en su roll-up.
+
 ## §#526 · v1.336.0 — lo refutado en la extracción deja de servirse pegable
 
 ```bash
@@ -1330,6 +1346,7 @@ python scripts/contrast.py deteccion-estadistica --grep aleatori --filas
 `contrast --validar-todo`: sin cambios.
 
 **Devolver si** otra fila deja de salir, o si el lint cambia alguna categoría.
+
 ## §#527 · v1.337.0 — `apply_fixes` devuelve los bloques que se pidieron
 
 Sobre una COPIA de `concepts/methods/deteccion-estadistica.md`, un JSON de fixes por caso y

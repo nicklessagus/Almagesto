@@ -468,7 +468,7 @@ misma notación que el veredicto de al lado (#232: la segunda ronda anota, no pi
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde se resolvió>   # repetible
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>:<bibcode>=<dónde>     # #434
 python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json                  # `{ancla[:bibcode]: dónde}`
-python scripts/write_verif_sidecar.py <nota.md> --refutar-extraccion <ancla>:<bib> --texto "<frag>" --reason "…"  # #526: causa en la extracción
+python scripts/write_verif_sidecar.py <nota.md> --refutar-extraccion <ancla>:<bib> --texto "<frag>" --reason "…"  # #526
 ```
 
 ⛔ **La dirección es el PAR, no el ancla (#434).** Un ancla hashea el **bloque**, así que un bloque

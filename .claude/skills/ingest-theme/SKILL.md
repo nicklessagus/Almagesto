@@ -349,9 +349,8 @@ Progreso del ingest del tema <tema>:
    va: `no_sintetizado: <motivo>` en su nota (la marca sin motivo se sigue reportando).
 
 6. **Bookkeeping.** Re-estampar el índice (`python scripts/make_notes.py --restamp-index`, #237),
-   appendear a `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **Declarar la fecha
-   de síntesis** (INV-82, #523; el lint la reclama): `python scripts/triage.py <slug> --sintesis
-   --n-papers <N>` + `make_notes.py <slug> --theme`. **No** tocar la matriz método×estrella.
+   appendear a `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **Fecha de síntesis**
+   (INV-82, #523): `triage.py <slug> --sintesis --n-papers <N>` + `make_notes.py <slug> --theme`. **No** tocar la matriz método×estrella.
    (El `lint` va **después** del verify del paso 6b: `CLAUDE.md` lo pide "antes de lint/commit",
    porque resolver una cita no-soportada suele cambiar la prosa.)
 
@@ -511,7 +510,7 @@ Qué cambia respecto del flujo ADS de arriba:
   aviso de tema mixto — no hace falta mentir con `local-pdfs` + `sources: []`, que afirma
   bibliografía fuera de ADS que no existe y dispara ese aviso donde es falso. ⛔ **Si ese
   `extra_core` sale de recortar un probe, el probe se REGISTRA (#524):** `--probe … --registrar
-  --criterio "<recorte>"` (o `corpus_sin_probe: <motivo>` en el tema). Hasta 1.76.2 el guard abortaba con
+  --criterio "<recorte>"` (o `corpus_sin_probe: <motivo>`). Hasta 1.76.2 el guard abortaba con
   `sources:` vacía, o sea medía la premisa que #104 rompió, y el orden de arriba era un **deadlock**.
 - **Sin ADS (si `query:` queda en null):** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
   `vault/config/themes.yaml` la entrada lleva `query: null`, el switch **`source: web | local-pdfs |

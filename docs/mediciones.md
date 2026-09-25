@@ -3970,6 +3970,7 @@ hermanos (20 `contradice→corregida→soportada`, 8 `soportada→contradice→s
 0 → 9, nada más. `--migrate-verdict-chain --todo`: 47 celdas, segunda corrida 0; contradicen 4 → 40
 y no-soportadas 4 → 15 en la suma de cabeceras, todas resueltas. Efecto colateral: una fila
 (`deteccion-estadistica` #38) re-trunca su extracto al re-emitir (`render_verif_table`, preexistente).
+
 ## #524 — el probe que recorta un corpus declarado queda en el registro (v1.334.0)
 
 **Copia de la instancia (sin `.git`, sólo lectura sobre la real):** categoría nueva
@@ -3977,6 +3978,7 @@ y no-soportadas 4 → 15 en la suma de cabeceras, todas resueltas. Efecto colate
 `source: ads` + `query: null` + `extra_core`, ninguno con `probes:`); declarada 0. Diff del reporte:
 sólo esas dos cabeceras. Con `corpus_sin_probe` declarado en `rv-doppler`: 3 → 2, declarada 0 → 1.
 `--registrar` no se midió contra ADS (la escritura la cubre el test con doble de `query_ads`).
+
 ## #525 — notación cruda copiada de la extracción (v1.335.0)
 
 **Copia de la instancia:** detector (superíndice, subíndice con llaves, comando LaTeX; fuera de
@@ -3986,12 +3988,14 @@ primera versión con `_DOLLAR_MATH_RE` dio 10 en el inventario, con 5 falsos (`H
 renderiza); se cambió a emparejar cada `$` con el siguiente. El lint publica sólo el inventario (la
 vista es copia de la extracción inmutable). Diff del reporte: sólo la categoría nueva, 0 → 5.
 `sigma`, `<=` y `A_b` sueltos no entran al detector (también son prosa); las tildes, tampoco.
+
 ## #523 — síntesis sin declarar (v1.333.0)
 
 **Copia de la instancia (sin `.git`, sólo lectura sobre la real):** categoría nueva `sintesis_no_declarada`
 0 → **3** sobre 10 registros (`rv-doppler` 31, `indicadores-actividad` 33, `harps-drs` 26
 sintetizados — los del issue). Diff del reporte: sólo esa categoría. Ida y vuelta: `triage.py
 rv-doppler --sintesis --n-papers 31` → 2.
+
 ## #526 — `_refutado`: lo que una verificación refutó en la extracción (v1.336.0)
 
 **Copia de la instancia (sin `.git`, sólo lectura sobre la real):** `--refutar-extraccion` sobre
@@ -4000,6 +4004,7 @@ marcó 1 extracción en 2 campos; la segunda corrida, 0 (JSON idéntico, md5 igu
 deteccion-estadistica --grep aleatori --filas`: 4 → **3** filas pegables, 1 rehusada con su
 refutación; `--cita` igual. `harvest_views --force --dry-run` del paper: 1 cosechada (+2/-2) → 0,
 rehusada. Lint y `contrast --validar-todo`: salida idéntica antes y después.
+
 ## #527 — `apply_fixes` re-emite los bloques que se pidieron (v1.337.0)
 
 **Copia de la instancia, `deteccion-estadistica.md` (212 pares, 210 bloques):** caso 1 (`\n\n` en un
