@@ -1253,3 +1253,26 @@ python scripts/lint.py
 
 **Devolver si** sale un ⚠ cuya cola del `.txt` es la misma frase con otra palabra (eso es un verdadero
 positivo), o si vuelve una cola corta (<24 caracteres) a perdonarse.
+
+## §#522 · v1.332.0 — la ronda que limpia un veredicto malo anota `→corregida`
+
+```bash
+python scripts/lint.py
+python scripts/write_verif_sidecar.py --migrate-verdict-chain --todo --dry-run
+python scripts/write_verif_sidecar.py --migrate-verdict-chain --todo
+python scripts/write_verif_sidecar.py --migrate-verdict-chain --todo   # idempotente
+python scripts/lint.py
+```
+
+**Esperado (medido en copia):** antes de migrar, *Bloque de verificación incompleto* 0 → **9**
+(una línea por nota: `ica-ruido` 13, `hd_40307` 10, `rv-doppler` 9, `ica` 5, `icasso` 3,
+`harps-drs` 2, `deteccion-estadistica` 2, `gj_667c` 2, `indicadores-actividad` 1); ninguna otra
+categoría cambia. El migrador re-encadena **47** celdas de 2064 filas en 18 notas (la segunda corrida:
+0); la suma de cabeceras pasa de 4 → **40** contradicen y 4 → **15** no-soportadas, todas resueltas,
+y las siete notas que publicaban «0 contradicen» dejan de hacerlo. Sólo cambia la celda `Veredicto` y
+la cabecera de la sección; la fecha del bloque se conserva. Después de migrar el lint vuelve al
+reporte de antes (la categoría a 0).
+
+**Devolver si** cambia otra columna además de `Veredicto` (salvo el re-truncado de un extracto largo
+al re-emitir, que ya hacían `--resolver`/`--migrate-condition-prefix`), o si alguna celda migrada
+queda `→soportada` al final.

@@ -3961,3 +3961,12 @@ la guarda de sonda completa en las otras lecturas salían 79: las 4 de más eran
 («uncertainty.», «9 solar radii», «shorter than ≈10 years», «present in our data») que aparecen en
 cualquier lado del documento, y siguen acusando. Lint: 4 `cita_revisada` quedan huérfanas (eran
 empalmes firmados).
+
+## #522 — la ronda que limpia un veredicto malo anota `→corregida` (v1.332.0)
+
+**Copia de la instancia (v1.331.0 → 1.332.0):** 47 filas `revertidas` en 9 notas de 2064 filas / 18
+hermanos (20 `contradice→corregida→soportada`, 8 `soportada→contradice→soportada`, 8
+`no-soportada→corregida→soportada`, 5 `contradice→soportada`, 6 otras). Lint: `verif_estructura`
+0 → 9, nada más. `--migrate-verdict-chain --todo`: 47 celdas, segunda corrida 0; contradicen 4 → 40
+y no-soportadas 4 → 15 en la suma de cabeceras, todas resueltas. Efecto colateral: una fila
+(`deteccion-estadistica` #38) re-trunca su extracto al re-emitir (`render_verif_table`, preexistente).

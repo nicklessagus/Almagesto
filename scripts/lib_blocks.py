@@ -1094,9 +1094,11 @@ def verif_counts(rows: list) -> dict:
     round 2— under *soportadas*, so the header published «209 soportadas / 0 contradicen» over a
     note that contradicted its source. The canonical chain of #232 is unaffected: `contradice→
     corregida` annotates (the verb is not a verdict), so its last link is still `contradice` and it
-    keeps counting as a contradiction, resolved. What #232 feared —round 2 blanking the number— can
-    only happen if someone writes a bare `contradice→soportada` by hand, and that is exactly what
-    `revertidas` publishes.
+    keeps counting as a contradiction, resolved. What #232 feared —round 2 blanking the number—
+    happens with a bare `contradice→soportada`, and that is exactly what `revertidas` publishes.
+    ⛔ #522 — the writer produced that form itself until 1.332.0 (it no longer does: it annotates
+    through `chained_verdict`); `write_verif_sidecar.py --migrate-verdict-chain` folds the rows
+    already written, and the lint reports a `revertidas` > 0 under `verif_estructura`.
     """
     vs = [current_verdict(r.verdict) for r in rows]
     return {"pares": len(rows),
@@ -1467,21 +1469,26 @@ def chained_verdict(previous: str, current: str) -> str:
     the count. Measured on a note of 10 rounds: 1 `contradice` in round 1 → the final block said
     **0 contradicen**, over 62 orphaned pairs accumulated by the same mechanism.
 
-    So the row re-emitted under the new anchor carries the history: `<previous first>→corregida`
-    when the previous verdict demanded action and the current one is clean. `verif_counts` still
-    partitions by the FIRST verdict —which says what the note actually got wrong— and `resueltos`
-    reads the annotation, so the block publishes `1 contradicen (1 resueltas)` instead of 0.
+    So the row carries the history: `<previous>→corregida` when the verdict in force demanded
+    action and the current one is clean. `verif_counts` partitions by the verdict in force (#450),
+    which the annotation leaves in place, and `resueltos` reads the annotation, so the block
+    publishes `1 contradicen (1 resueltas)` instead of 0.
 
     ⚠ Loosening the anchor is not an option (#224): the anchor stays the detector of expiry; this is
-    the history axis, which is what was missing."""
+    the history axis, which is what was missing.
+
+    ⛔ #522 — the writer of every round goes through here (`write_verif_sidecar.append_round_verdict`).
+    It had no caller since #480 and the writer concatenated `contradice→soportada` bare, which
+    `verif_counts` files under *soportadas*: measured, 47 rows in 9 notes of an instance, seven of
+    them publishing «0 contradicen». The WHOLE previous chain is kept (`soportada→contradice→
+    corregida`), and a previous chain already resolved is returned as is: a third round that
+    confirms `soportada` does not un-resolve it."""
     # ⛔ #450 — se mira el veredicto VIGENTE del previo (el último eslabón), no el primero: con
     # `prev[0]`, un `soportada→contradice` re-anclado y limpio en la ronda siguiente devolvía
     # `soportada` pelada y la contradicción desaparecía del bloque — el blanqueo exacto que #232
     # existe para impedir, por el camino que #366 abrió.
-    vigente = current_verdict(previous)
-    cur = verdict_chain(current)
-    if vigente in ("contradice", "no-soportada") and cur == ["soportada"]:
-        return f"{vigente}→corregida"
+    if current_verdict(previous) in VERDICTS_SIN_RESOLVER and verdict_chain(current) == ["soportada"]:
+        return previous if resueltos(previous) else f"{previous}→corregida"
     return current
 
 

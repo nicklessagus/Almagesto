@@ -115,9 +115,9 @@ def test_la_segunda_ronda_ENCADENA_y_la_misma_ronda_es_no_op(toy_vault):
     d2 = _fanout(toy_vault, nota, {"2020Pdf": "soportada"}, ronda="r2")
     r = ws.write(nota, d2, fecha="2026-03-02")
     filas = {f.bibcode: f for f in lb.verif_rows(nota)}
-    assert filas["2020Pdf"].verdict == "no-soportada→soportada", filas["2020Pdf"].verdict
+    assert filas["2020Pdf"].verdict == "no-soportada→corregida", filas["2020Pdf"].verdict
     assert filas["2019Txt"].verdict == "soportada", "la que no cambió no se toca"
-    assert r["encadenadas"] == 1
+    assert r["encadenadas"] == 0, "#522: la anotación `→corregida` no es una ronda más (#274c)"
     assert lint.collect().por_clave("verif_sin_resolver").items == (), \
         "la cadena anota la resolución: ya no es un veredicto pelado (#91)"
 
@@ -1172,3 +1172,42 @@ def test_510_chained_condition_sin_condicion_sobre_cadena_pendiente_vuelve_al_es
         c = ws.chained_condition(b, vacio)
         assert c == "acota→resuelta: en el bloque · vieja", c
         assert lb.condition_kind(lb.current_condition(c)) == "acota" and lb.condition_resolved(c)
+
+
+def test_522_la_ronda_que_limpia_ANOTA_la_resolucion_y_el_migrador_la_repone(toy_vault):
+    """⛔ #522 — `append_round_verdict` concatenaba `contradice→soportada` pelado: `verif_counts` la
+    archiva como soportada y la contradicción sale de la cabecera («0 contradicen»). La ronda que
+    limpia anota `→corregida` (`lb.chained_verdict`), y una cadena ya resuelta no se extiende."""
+    assert ws.append_round_verdict("contradice", "soportada") == "contradice→corregida"
+    assert ws.append_round_verdict("soportada→contradice", "soportada") == \
+        "soportada→contradice→corregida"
+    assert ws.append_round_verdict("contradice→corregida", "soportada") == "contradice→corregida"
+    assert ws.append_round_verdict("no-soportada→la fuente es un contraste", "soportada") == \
+        "no-soportada→la fuente es un contraste", "la anotación libre (#316) no se pisa"
+    assert ws.append_round_verdict("soportada", "contradice") == "soportada→contradice"
+    # el migrador: re-encadena lo que el escritor viejo dejó, y lo canónico vuelve igual
+    for viejo, nuevo in [("contradice→soportada", "contradice→corregida"),
+                         ("soportada→contradice→soportada", "soportada→contradice→corregida"),
+                         ("no-soportada→corregida→soportada", "no-soportada→corregida"),
+                         ("contradice → corregida (ver p. 3)", "contradice → corregida (ver p. 3)"),
+                         ("soportada→contradice", "soportada→contradice")]:
+        assert ws.fold_verdict_cell(viejo) == nuevo, viejo
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {"2020Pdf": "contradice"}, ronda="r1"),
+             fecha="2026-03-01")
+    herm = cfg.verif_sidecar(nota)
+    herm.write_text(herm.read_text(encoding="utf-8").replace("| contradice |",
+                                                             "| contradice→soportada |", 1),
+                    encoding="utf-8")
+    ws.restamp_section(nota)
+    assert lb.verif_counts(lb.verif_rows(nota))["contradicen"] == 0, "la forma pelada blanquea"
+    est = lint.collect().por_clave("verif_estructura").items
+    assert any("--migrate-verdict-chain" in str(x) for x in est), est
+    assert ws.main(["--migrate-verdict-chain", "--todo"]) == 0
+    c = lb.verif_counts(lb.verif_rows(nota))
+    assert (c["contradicen"], c["contradicen_resueltas"], c["revertidas"]) == (1, 1, 0)
+    t1 = nota.read_bytes(), herm.read_bytes()
+    assert ws.migrate_verdict_chain(nota)["migradas"] == 0
+    assert (nota.read_bytes(), herm.read_bytes()) == t1, "idempotente"
+    assert not any("--migrate-verdict-chain" in str(x)
+                   for x in lint.collect().por_clave("verif_estructura").items)

@@ -1213,13 +1213,15 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: >-
-          Su `append_round_verdict` (ex `chained_verdict`, renombrada en AUD-442) pregunta QUÉ SE ESCRIBIÓ ÚLTIMO en la celda (para no extender la
+          Su `append_round_verdict` pregunta QUÉ SE ESCRIBIÓ ÚLTIMO en la celda (para no extender la
           cadena repitiendo una ronda), no cuál veredicto rige — son preguntas distintas y dan
           distinto sobre `no-soportada→corregida`. Comparte la PARTICIÓN (`lb._cell_parts`) en vez
-          de abrirla a mano sobre `→`, que es lo que hacía.
+          de abrirla a mano sobre `→`, que es lo que hacía. ⛔ #522: la pregunta «cuál rige» la
+          delega a `lb.chained_verdict` antes de encadenar (una `soportada` sobre un vigente malo
+          anota `→corregida`); hasta 1.331.0 no lo hacía y escribía `contradice→soportada`.
       - modulo: scripts/reverify_subset.py
         estado: fuera-de-alcance
-        motivo: Transporta la celda verbatim al `--json` del re-anclaje y no la interpreta; quien la lee es `lb.chained_verdict`.
+        motivo: Transporta la celda verbatim al `--json` del re-anclaje y no la interpreta; quien la lee es `write_verif_sidecar` (vía `lb.chained_verdict`, #522).
 
   - issue: 449
     regla: >-
@@ -2522,3 +2524,21 @@ portadores:
       - modulo: scripts/harvest_views.py
         estado: usa
         motivo: "El cruce de citas del cosechador (#359) llama a `txt_accuses` con las lecturas de la fuente; `lint` y `contrast` llegan por `quote_verdict`, en el mismo módulo."
+  - issue: 522
+    regla: >-
+      Un veredicto que exigió acción (`contradice`/`no-soportada`) no sale del conteo de su
+      veredicto cuando una ronda posterior lo limpia (#232): la ronda ANOTA `→corregida`, nunca
+      encadena `soportada` pelada, y una cadena ya resuelta no se extiende. Medido: 47 filas en 9
+      notas de la instancia, siete publicando «0 contradicen».
+    funcion: lib_blocks.chained_verdict
+    patron: 'chained_verdict\(|append_round_verdict\(|verif_counts\(|revertidas'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "`append_round_verdict` (toda ronda) y el migrador `--migrate-verdict-chain` (`fold_verdict_cell`) pasan por `chained_verdict`."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "No escribe celdas: es el DETECTOR — `check_verif_structure` reporta en `verif_estructura` la fila `revertida` (la forma pelada, por `verif_counts`) con el migrador."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "«revertidas» es prosa de un docstring (notas revertidas en una sesión); no lee veredictos."

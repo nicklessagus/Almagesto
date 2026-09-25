@@ -1791,7 +1791,7 @@ def test_450_el_re_anclaje_no_blanquea_una_contradiccion_de_la_RONDA_2():
     """#450 en el camino de #366: `chained_verdict` miraba `prev[0]`, así que un
     `soportada→contradice` re-anclado y limpio en la ronda siguiente volvía `soportada` pelada y la
     contradicción desaparecía del bloque — el blanqueo que #232 existe para impedir."""
-    assert lb.chained_verdict("soportada→contradice", "soportada") == "contradice→corregida"
+    assert lb.chained_verdict("soportada→contradice", "soportada") == "soportada→contradice→corregida"
     assert lb.chained_verdict("contradice→corregida", "soportada") == "contradice→corregida"
     assert lb.chained_verdict("soportada", "soportada") == "soportada", "sin falla previa no anota"
     assert lb.chained_verdict("soportada→contradice", "contradice") == "contradice"

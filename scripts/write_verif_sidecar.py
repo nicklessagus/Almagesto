@@ -234,9 +234,16 @@ def append_round_verdict(previous: str | None, new: str) -> str:
     `no-soportada` then `corregida` → `no-soportada→corregida`; more rounds keep chaining (#274c).
     A round that repeats the LAST verdict of the chain does not extend it — that is what makes
     re-running the writer on the same fan-out a no-op, and what keeps a chain from reading as «three
-    rounds fought this» when one round confirmed it three times."""
+    rounds fought this» when one round confirmed it three times.
+
+    ⛔ #522 — a `soportada` over a verdict in force that demanded action ANNOTATES the resolution
+    (`lb.chained_verdict`: `contradice→corregida`) instead of chaining it bare: `contradice→
+    soportada` is filed under *soportadas* and the contradiction left the header's count. And a
+    chain already resolved (`contradice→corregida`) is not extended by a confirming round."""
     if not previous:
         return new
+    if (anotada := lb.chained_verdict(previous, new)) != new:
+        return anotada
     # ⛔ #450 — la partición del separador es UNA definición (`lb._cell_parts`): acá se abría a mano
     # sobre `→` y el vocabulario real incluye `->`, `—`, `:` y `(`, así que una celda escrita con
     # cualquiera de ésos se extendía repitiendo el veredicto que ya tenía. ⚠ La pregunta de esta
@@ -245,6 +252,41 @@ def append_round_verdict(previous: str | None, new: str) -> str:
     # nuevo y la cadena NO se extendería — y esa fila tiene que quedar abierta (#450).
     ultimo = lb._cell_parts(previous)[-1]
     return previous if ultimo == lb._bare_verdict(new) else f"{previous}→{new}"
+
+
+def fold_verdict_cell(cell: str) -> str:
+    """The cell re-written as the writer would have chained it, round by round (#522).
+
+    The migration half of `append_round_verdict`: it replays each VERDICT link of the cell through
+    that function and keeps every other part —the annotation, free text (#316)— verbatim with its
+    own separator. `contradice→soportada` → `contradice→corregida`; `contradice→corregida→soportada`
+    → `contradice→corregida`; a cell the writer would produce comes back unchanged."""
+    partes = re.split(f"({lb._RESOLUCION_SEP.pattern})", str(cell or ""))
+    acc = partes[0]
+    for sep, parte in zip(partes[1::2], partes[2::2]):
+        if parte.strip(lb._ADORNO).strip().lower() in lb.VERDICTS:
+            acc = append_round_verdict(acc, parte.strip())
+        else:
+            acc += sep + parte
+    return acc
+
+
+def migrate_verdict_chain(note: Path, dry_run: bool = False) -> dict:
+    """Fold the rows whose verdict demanded action and a later round cleaned bare (#522).
+
+    Only the rows `verif_counts` files as `revertidas` are touched —the one form the writer no
+    longer produces—, so a hand annotation elsewhere is left byte for byte. Like the other
+    re-writers it goes through `emit` and keeps the block's date: nothing was re-verified (D-4)."""
+    text = note.read_text(encoding="utf-8")
+    filas = lb.verif_rows(note) or []
+    nuevas = [replace(f, verdict=fold_verdict_cell(f.verdict))
+              if lb.verif_counts([f])["revertidas"] else f for f in filas]
+    n = sum(a.verdict != b.verdict for a, b in zip(filas, nuevas))
+    if n:
+        if not (d := cfg.verification_date(text)[1]):
+            raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado")
+        emit(note, text, nuevas, d, dry_run=dry_run, reanclado=cfg.reanchor_date(text))
+    return {"migradas": n, "filas": len(filas)}
 
 
 def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
@@ -844,6 +886,36 @@ def _main_restamp(args) -> int:
     return 1 if fallas else 0
 
 
+def _main_migrate_chain(args) -> int:
+    """`--migrate-verdict-chain` for one note or the whole vault (#522). Declares its population."""
+    if args.todo:
+        notas = sorted(s.with_name(s.name[:-len(cfg.VERIF_SUFFIX)] + ".md")
+                       for s in cfg.WIKI.rglob("*" + cfg.VERIF_SUFFIX)) if cfg.WIKI.exists() else []
+    elif args.nota:
+        notas = [Path(args.nota)]
+    else:
+        cfg.print_seguro("⛔ `--migrate-verdict-chain` necesita una nota o `--todo`")
+        return 2
+    total, fallas = 0, []
+    for n in notas:
+        if not n.exists() or cfg.is_verif_sidecar(n):
+            fallas.append((n.name, "no es una nota"))
+            continue
+        try:
+            r = migrate_verdict_chain(n, dry_run=args.dry_run)
+        except SidecarError as exc:
+            fallas.append((n.name, str(exc)))
+            continue
+        total += r["migradas"]
+        if r["migradas"]:
+            cfg.print_seguro(f"  {n.name}: {r['migradas']} de {r['filas']} fila(s)")
+    cfg.print_seguro(f"{total} celda(s) de veredicto re-encadenada(s) sobre {len(notas)} nota(s)"
+                     + (" (dry-run: no se escribió)" if args.dry_run else ""))
+    for nombre, motivo in fallas:
+        cfg.print_seguro(f"⛔ {nombre}: {motivo}")
+    return 1 if fallas else 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("nota", nargs="?", help="la nota (`vault/wiki/.../<x>.md`)")
@@ -864,8 +936,13 @@ def main(argv=None) -> int:
     ap.add_argument("--restamp-section", action="store_true", dest="restamp",
                     help="#430: re-estampa la SECCIÓN de la nota desde su hermano (sin fan-out); "
                          "conserva la fecha del bloque y no toca la tabla")
+    ap.add_argument("--migrate-verdict-chain", action="store_true", dest="migrate_chain",
+                    help="#522: re-encadena la celda `Veredicto` que una ronda posterior limpió "
+                         "pelada (`contradice→soportada` → `contradice→corregida`); conserva la "
+                         "fecha del bloque")
     ap.add_argument("--todo", action="store_true",
-                    help="con --restamp-section: barre toda la bóveda (notas con hermano)")
+                    help="con --restamp-section o --migrate-verdict-chain: barre toda la bóveda "
+                         "(notas con hermano)")
     ap.add_argument("--reanclar", action="store_true",
                     help="#480: sin ronda — lleva todas las filas con el ancla recalculada, "
                          "conserva la fecha del bloque y REHÚSA si algún par hay que re-verificar. "
@@ -881,6 +958,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     if args.restamp:
         return _main_restamp(args)
+    if args.migrate_chain:
+        return _main_migrate_chain(args)
     if args.reanclar:
         return _main_reanclar(args)
     if args.resolver or args.resoluciones or args.migrate_cond:

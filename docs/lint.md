@@ -375,6 +375,11 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   línea, `lb.fragment_stated` compara, #430): cruda, la sub-sección cuyo fragmento un fan-out puso
   en negrita se reportaba desincronizada y **ninguna edición la cerraba** —el conteo ES el
   correcto—. Regla de método nº 4, quinta vez (#168, #276, #283, #309).
+- **Veredicto que exigió acción y una ronda posterior limpió PELADO** (#522, misma categoría,
+  backlog): `contradice→soportada` se cuenta como soportada y sale de «N contradicen» —medido: 47
+  filas en 9 notas, siete publicando «0 contradicen»—. El escritor lo producía hasta 1.331.0; desde
+  1.332.0 anota `→corregida` (`lb.chained_verdict`). Se cierra con
+  `write_verif_sidecar.py <nota>|--todo --migrate-verdict-chain` (conserva la fecha del bloque).
 - **Cabecera del bloque desincronizada de la tabla de su hermano** (#344/INV-148, **R-1**: backlog
   en la pasada periódica, **bloquea con `--cierre`**). INV-81 cruzando archivos: los conteos los da
   `lib_blocks.verif_summary`, el mismo código que lee la tabla, y desde #344 la tabla vive en OTRO

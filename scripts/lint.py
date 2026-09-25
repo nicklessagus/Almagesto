@@ -3368,6 +3368,15 @@ def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
     # tabla ahí al lado para desmentirla). Severidad R-1: la cabecera la escribe
     # `verify-citations`, que es paso de CIERRE, así que ahí bloquea; en la pasada periódica es
     # deuda.  @inv INV-148
+    # ⛔ #522 — la fila cuyo veredicto exigió acción y una ronda posterior limpió PELADO
+    # (`contradice→soportada`) sale del conteo de su veredicto: la cabecera publicaba «0
+    # contradicen» sobre una nota que contradijo a su fuente. El escritor ya no la produce.
+    if (_rev := lb.verif_counts(filas)["revertidas"]):
+        verif_estructura.append(
+            (stem, f"{_rev} fila(s) con un veredicto que exigió acción y una ronda posterior "
+                   f"limpió sin anotar la resolución (`contradice→soportada`): la cabecera no la "
+                   f"cuenta → `python scripts/write_verif_sidecar.py <nota> "
+                   f"--migrate-verdict-chain` (o `--todo`)"))
     _resumen = lb.verif_summary(filas)
     if not lb.verif_summary_stated(texto, filas):
         verif_cabecera.append(
