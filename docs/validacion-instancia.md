@@ -1288,7 +1288,7 @@ con **3** temas (`rv-doppler`, `deteccion-estadistica`, `indicadores-actividad`)
 (`corpus_sin_probe`) en 0. Ninguna otra categoría cambia. Para cerrarla: re-correr el probe de cada
 recorte con `python scripts/query_ads.py <slug> --theme --probe "<query>" --registrar --criterio
 "<recorte>"` (escribe `probes:` en `vault/config/registro/<slug>.yaml`), o declarar
-`corpus_sin_probe: <motivo>` en el tema si el corpus no salió de un probe (medido en copia sobre
+`corpus_sin_probe: <motivo>` en el tema si el probe no se puede registrar (medido en copia sobre
 `rv-doppler`: 3 → 2 y la declarada 0 → 1).
 
 **Devolver si** aparece un tema con `query:` poblada o `source:` ≠ `ads`, o si `--registrar` toca

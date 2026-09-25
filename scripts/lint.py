@@ -7201,7 +7201,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('tema_ejes_heredados', '🕳 Tema de MÉTODO sin `ejes:`: lee con los ejes del objetivo, que son los de una bóveda astro (#360, backlog)', SEV_BACKLOG, tuple(found['tema_ejes_heredados']), poblacion='temas'),
         Categoria('cascada_sin_correr', '🕳 Tema off-ADS/mixto cuya cascada de descubrimiento (paso 0b) nunca corrió, corrió vacía o con backends caídos (#361, backlog)', SEV_BACKLOG, tuple(found['cascada_sin_correr']), poblacion='temas'),
         Categoria('corpus_sin_probe', '🕳 Corpus declarado (`query: null` + `extra_core`) sin el probe del que se recortó en el registro (#524, backlog)', SEV_BACKLOG, tuple(found['corpus_sin_probe']), poblacion='temas'),
-        Categoria('corpus_sin_probe_declarado', '✍ Corpus declarado que NO salió de un probe: `corpus_sin_probe: <motivo>` (#524) — declarado, no es deuda', SEV_BACKLOG, tuple(found['corpus_sin_probe_declarado']), poblacion='temas'),
+        Categoria('corpus_sin_probe_declarado', '✍ Corpus declarado sin probe registrado, con motivo: `corpus_sin_probe: <motivo>` (#524) — declarado, no es deuda', SEV_BACKLOG, tuple(found['corpus_sin_probe_declarado']), poblacion='temas'),
         Categoria('tema_fq_heredado', '🕳 Tema de MÉTODO sin `search_fq`: hereda el del objetivo, que excluye su literatura server-side (#351, backlog)', SEV_BACKLOG, tuple(found['tema_fq_heredado']), poblacion='temas'),
         Categoria('sweep_pendiente', 'Barrido full-text (2b) sin rastro o truncado: no consta que la '
                   'segunda red para el punto ciego de la query se haya tendido entera (backlog)',

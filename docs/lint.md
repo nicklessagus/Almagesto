@@ -1230,8 +1230,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   sólo lo elegido — la query, el `fq`, la lente y el universo core del recorte no estaban en ningún
   archivo versionado (medido: probes de 118 y 177/24/48 core recortados a 13 y 32). Se cierra con
   `query_ads.py <slug> --theme --probe "<q>" --registrar --criterio "<recorte>"`, que appendea a
-  `probes:` del registro (query, fq, lente, n, `bibcodes_core`, criterio); el corpus que NO salió de
-  un probe se declara con `corpus_sin_probe: <motivo>` en el tema y va **aparte**
+  `probes:` del registro (query, fq, lente, n, `bibcodes_core`, criterio); el corpus cuyo probe NO se puede registrar
+  —no salió de uno, o la query se perdió— se declara con `corpus_sin_probe: <motivo>` en el tema
+  (el motivo dice cuál) y va **aparte**
   (`corpus_sin_probe_declarado`, AUD-207). Backlog.
 - **Cadena incompleta** (D-57/INV-91, `cadena_incompleta`, backlog): el registro de una
   **estrella** tiene `cadena` y le falta un paso del orden canónico (`cfg.CADENA_ESTRELLA`); el
