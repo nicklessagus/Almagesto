@@ -2655,3 +2655,16 @@ portadores:
       - modulo: scripts/replace_pdf.py
         estado: fuera-de-alcance
         motivo: "Agrega `_paginacion` con lectura+escritura del JSON entero: la marca `_refutado` viaja intacta."
+  - issue: 527
+    regla: >-
+      Un escritor que re-emite prosa de una nota devuelve la MISMA cantidad de bloques de
+      `lib_blocks` que se quiso escribir: no corta antes de un token que abre bloque ni dentro de
+      `$…$`, y el párrafo nuevo dentro de un `str` se rehúsa (va como lista, #408). Los pares sólo
+      bajan por un retiro DECLARADO (`retira`). Medido en Almagesto-Tesis: fusión muda 212 → 212,
+      ítem que roba la cita 210 → 211 bloques con 1 párrafo sin cita.
+    funcion: apply_fixes.rewrap
+    patron: 'textwrap\.(wrap|fill|TextWrapper)|\bwrap\(|\bfill\(|len\(lb\.pairs_of\('
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "Cuenta `pairs_of` para el hermano `.verif.md`; no re-emite prosa de la nota."

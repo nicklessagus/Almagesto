@@ -71,6 +71,7 @@ class Result:
     added: list = field(default_factory=list)      # #389 · (bib, n, [bibcodes que el fix AGREGÓ])
     grown: list = field(default_factory=list)      # #406 · (bib, n, +chars) — creció SIN citas nuevas
     split: list = field(default_factory=list)      # #408 · (bib, n, k) — un bloque partido en k
+    retired: list = field(default_factory=list)    # #527 · (bib, n, [bibcodes retirados, declarados])
 
 
 #: #406 · a partir de cuántos caracteres NETOS un fix «agrega material» aunque no gane citas.
@@ -78,6 +79,11 @@ class Result:
 #: aviso de #389 —que sólo mira citas— quedó mudo. Cuarenta es la mitad de eso y más que cualquier
 #: corrección de un número o una palabra; NO bloquea, igual que #389: a veces agregar es el arreglo.
 CRECE_MIN_CHARS = 40
+
+#: #527 · lo que en `lib_blocks.split_blocks` abre un bloque si queda al INICIO de una línea.
+OPENS_BLOCK_RE = re.compile(r"(?:[-*+]|\d+\.)\s|[|>#]|```")
+MATH_RE = re.compile(r"\$[^$\n]+\$")
+PARA_BREAK_RE = re.compile(r"\n[ \t]*\n")
 
 
 def normalise(s: str) -> str:
@@ -116,7 +122,7 @@ def load_fixes(fix_dir: Path) -> tuple[list, list]:
         for r in data.get("rechazados", []):
             rejected.append((bib, r.get("n"), r.get("motivo")))
         for fx in data.get("fixes", []):
-            fixes.append((bib, fx["n"], fx["viejo"], fx["nuevo"]))
+            fixes.append((bib, fx["n"], fx["viejo"], fx["nuevo"], fx.get("retira") or []))
     return fixes, rejected
 
 
@@ -153,8 +159,9 @@ def rewrap(new, first_line: str) -> list:
     ⛔ #408 — `new` may be a LIST of blocks: the fix that PARTS one block into several («un bloque,
     un hecho»). Each is re-wrapped on its own with a blank line between, so `split_blocks` reads
     them back as separate blocks and every one keeps its own pair. A single string is one block, as
-    before; a string with a blank line inside is NOT a split — `normalise` collapses it, on purpose,
-    because a corrector that meant two blocks says so with a list.
+    before; a string with a blank line inside is NOT a split: `apply` REFUSES it (#527 —
+    it used to be collapsed here in silence), because a corrector that meant two blocks says so
+    with a list. ⛔ #527 — it never breaks inside `$…$` nor before a token that opens a block.
 
     ⛔ AUD-141 — **a table row is never wrapped.** Wrapping one at column 100 splits it across
     several lines and the table stops being a table: the `## Verificación de citas` block, whose
@@ -176,8 +183,17 @@ def rewrap(new, first_line: str) -> list:
         return [quote + indent + normalise(new)]        # una fila de tabla es UNA línea
     bullet = bool(re.match(r"([-*+]|\d+\.)\s", stripped))
     cont = indent + ("  " if bullet else "")
-    envuelto = textwrap.wrap(normalise(new), width=WIDTH - len(quote), initial_indent=indent,
-                             subsequent_indent=cont, break_long_words=False, break_on_hyphens=False)
+    # #527 — `$…$` viaja con sus espacios como NUL durante el wrap; una línea que abriría un
+    # bloque se pega a la anterior, aunque pase del ancho.
+    texto = MATH_RE.sub(lambda m: m.group(0).replace(" ", "\0"), normalise(new))
+    envuelto: list = []
+    for ln in textwrap.wrap(texto, width=WIDTH - len(quote), initial_indent=indent,
+                            subsequent_indent=cont, break_long_words=False, break_on_hyphens=False):
+        if envuelto and OPENS_BLOCK_RE.match(ln.lstrip()):
+            envuelto[-1] += " " + ln.lstrip()
+        else:
+            envuelto.append(ln)
+    envuelto = [ln.replace("\0", " ") for ln in envuelto]
     return [quote + ln for ln in envuelto] if quote else envuelto
 
 
@@ -203,12 +219,12 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     pending, res.rejected = load_fixes(fix_dir)
 
     # A hand-merged fix wins over the originals it replaces — they targeted the same block.
-    merged = {normalise(v) for bib, _, v, _ in pending if bib == MERGED}
-    res.skipped = [(b, n) for b, n, v, _ in pending if b != MERGED and normalise(v) in merged]
+    merged = {normalise(v) for bib, _, v, *_ in pending if bib == MERGED}
+    res.skipped = [(b, n) for b, n, v, *_ in pending if b != MERGED and normalise(v) in merged]
     pending = [x for x in pending if x[0] == MERGED or normalise(x[2]) not in merged]
 
     claims: dict = {}
-    for bib, n, old, _ in pending:
+    for bib, n, old, *_ in pending:
         claims.setdefault(normalise(old), []).append((bib, n))
     res.collisions = [(who, key) for key, who in claims.items() if len(who) > 1]
     if res.collisions:
@@ -224,8 +240,16 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # and step 2 ran `find_block` over the already-mutated text: a block containing a line step 1
     # had touched stopped resolving. It happened whenever a table got one ROW fix (exact) and one
     # TABLE fix (block) — no collision was declared, it simply failed and aborted all of them.
-    planned = []                      # (span, bib, n, replacement lines, kind)
-    for bib, n, old, new in pending:
+    planned = []                      # (span, bib, n, new, kind, retira)
+    for bib, n, old, new, retira in pending:
+        # ⛔ #527 — un párrafo nuevo dentro de un `str` se FUNDÍA en silencio: `rewrap` colapsa el
+        # blanco, y ni #222 (los pares no bajan) ni #389/#406 lo veían. Dos bloques se piden con
+        # una lista (#408); acá se rehúsa en las dos ramas.
+        if any(PARA_BREAK_RE.search(str(b)) for b in (new if isinstance(new, list) else [new])):
+            res.failed.append((bib, n, "`nuevo` trae una línea en blanco adentro: son DOS bloques "
+                                       "y aplicarlo como texto los funde en uno. Usá una lista, "
+                                       "un elemento por bloque (#408)"))
+            continue
         idx = [k for k, l in enumerate(lines) if l == old]
         if len(idx) == 1:
             if isinstance(new, list):
@@ -237,9 +261,9 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                                                "FILA de tabla: partir vale para prosa; una fila se "
                                                "reemplaza por una fila (o dos fixes, dos `viejo`)"))
                     continue
-                planned.append(((idx[0], idx[0] + 1), bib, n, new, "block"))
+                planned.append(((idx[0], idx[0] + 1), bib, n, new, "block", retira))
                 continue
-            planned.append(((idx[0], idx[0] + 1), bib, n, [new], "exact"))
+            planned.append(((idx[0], idx[0] + 1), bib, n, new, "exact", retira))
             continue
         span = find_block(lines, old)
         if span is None:
@@ -255,7 +279,7 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                                        f"{len(cubiertos) - 1} par(es) verificable(s). Mandá un "
                                        f"fix por bloque."))
             continue
-        planned.append((span, bib, n, new, "block"))
+        planned.append((span, bib, n, new, "block", retira))
 
     # Dos fixes que tocan las mismas líneas no se pueden aplicar en cadena: el segundo anclaría en
     # lo que dejó el primero. Es la colisión de siempre vista desde el otro lado —acá los `viejo`
@@ -268,6 +292,22 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                                    f"se solapa en las líneas {max(i1, i2) + 1}–{min(j1, j2)} con el "
                                    f"fix {planned[a][1]} par {planned[a][2]}"))
 
+    # ⛔ #527 — un escritor que re-emite prosa devuelve la MISMA cantidad de bloques que se quiso
+    # escribir: los del `viejo` por un `str`, uno por elemento de una lista. Medido: un corte de
+    # `rewrap` que dejó `- CS^2$ [[bib]].` al inicio de línea abrió un ÍTEM que se llevó la cita,
+    # y el párrafo quedó con la fórmula sin cita y un `$` suelto — los pares, 212 → 212.
+    reemplazos = {}
+    for span, bib, n, new, kind, _ in planned:
+        repl = [new] if kind == "exact" else rewrap(new, lines[span[0]])
+        pedidos = (len(new) if isinstance(new, list)
+                   else len(lb.split_blocks("\n".join(lines[span[0]:span[1]]))))
+        salen = len(lb.split_blocks("\n".join(repl)))
+        if salen != pedidos:
+            res.failed.append((bib, n, f"el texto re-emitido son {salen} bloque(s) de `lib_blocks` "
+                                       f"donde se pidieron {pedidos}: un salto de línea abre un "
+                                       f"bloque (`- `, `N. `, `|`, `>`, `#` al inicio) o funde dos"))
+        reemplazos[span] = repl
+
     if res.failed:
         return res
 
@@ -276,10 +316,22 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # entraron con material agregado (una cita de otra fuente al final del párrafo, una narración
     # sobre el segundo objeto, una atribución fabricada con cita verbatim y referente equivocado).
     # No bloquea: a veces agregar una cita ES el arreglo (una `inferencia` que pasa a hecho citado).
-    for span, bib, n, new, kind in planned:
+    retirables = 0
+    for span, bib, n, new, kind, retira in planned:
         viejo_txt = "\n".join(lines[span[0]:span[1]])
         nuevo_txt = "\n".join(new) if isinstance(new, list) else new
         antes = set(lb._bibcodes(viejo_txt))
+        # ⛔ #527 — SACAR una cláusula citada es la primera opción que manda #389, y la red de #222
+        # lo rehusaba («fundió bloques»): no distinguía una fusión de un retiro. La fusión la caza
+        # ahora el conteo de bloques; el retiro se DECLARA (`retira: [bibcode]`) y tiene que ser
+        # verdad: sólo lo declarado puede bajar pares.
+        falsos = sorted(set(retira) - (antes - set(lb._bibcodes(nuevo_txt))))
+        if falsos:
+            res.failed.append((bib, n, f"`retira` declara {falsos}, que no estaban en `viejo` o "
+                                       f"siguen en `nuevo`"))
+        elif retira:
+            res.retired.append((bib, n, sorted(set(retira))))
+            retirables += len(set(retira))
         # AUD-220 — en la rama «block» `new` es un `str`: `"\n".join(str)` une carácter por
         # carácter y ningún `[[…]]` sobrevive, así que el aviso callaba justo en la rama medida.
         entran = sorted(set(lb._bibcodes(nuevo_txt)) - antes)
@@ -294,12 +346,13 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
             res.grown.append((bib, n, delta))
         if kind == "block" and isinstance(new, list) and len(new) > 1:
             res.split.append((bib, n, len(new)))
-    for span, bib, n, new, kind in sorted(planned, key=lambda x: -x[0][0]):
+    if res.failed:
+        return res
+    for span, bib, n, new, kind, _ in sorted(planned, key=lambda x: -x[0][0]):
+        lines[span[0]:span[1]] = reemplazos[span]
         if kind == "exact":
-            lines[span[0]] = new[0]
             res.exact += 1
         else:
-            lines[span[0]:span[1]] = rewrap(new, lines[span[0]])
             res.by_block += 1
     res.applied = res.exact + res.by_block
 
@@ -308,10 +361,11 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # y es lo único que habría cazado los siete pares perdidos sin que nadie los contara a mano.
     nuevo_texto = "\n".join(lines)
     res.pairs_after = len(lb.pairs_of(nuevo_texto))
-    if res.pairs_after < res.pairs_before:
+    if res.pairs_after < res.pairs_before - retirables:
         res.failed.append(("_pares", 0, f"la aplicación deja {res.pairs_after} pares donde había "
-                                        f"{res.pairs_before}: alguna corrección fundió bloques. "
-                                        f"NO se escribe."))
+                                        f"{res.pairs_before} ({retirables} retirado(s) declarado(s)): "
+                                        f"alguna corrección fundió bloques o sacó una cita sin "
+                                        f"declararla en `retira` (#527). NO se escribe."))
         res.applied = 0
         return res
 
@@ -356,6 +410,9 @@ def main(argv=None) -> int:
               f"empalme que agrega prosa es exactamente lo que ninguna otra capa ve: releé el "
               f"bloque entero antes de escribir (¿el mismo hecho dos veces? ¿una unidad separada "
               f"de su número?).")
+    for bib, n, bibs in res.retired:
+        print(f"  ✂ {bib} par {n}: RETIRA {', '.join(f'[[{b}]]' for b in bibs)} del bloque "
+              f"(declarado, #527) — esos pares salen; los que quedan en el bloque se re-verifican.")
     for bib, n, k in res.split:
         print(f"  ✂ {bib} par {n}: el bloque se PARTE en {k} (#408) — cada uno queda con su par; "
               f"los pares suben, nunca bajan.")

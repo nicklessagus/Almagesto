@@ -470,3 +470,67 @@ def test_una_fila_EXACTA_no_se_parte(tmp_path):
     res = af.apply(nota, _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": fila,
                                                        "nuevo": ["| a | b [[2020X]] |", "| c | d |"]}])))
     assert res.failed and "partir" in res.failed[0][2]
+
+
+# ── #527 · un escritor que re-emite prosa devuelve la MISMA cantidad de bloques ──
+
+_LARGO = ("Un párrafo que ocupa dos líneas en el archivo porque es bastante largo y sigue un poco "
+          "más allá de las cien\ncolumnas de ancho [[2020X]].")
+_LARGO_N = " ".join(_LARGO.split())
+
+
+@pytest.mark.parametrize("cuerpo,viejo", [(_LARGO, _LARGO_N), ("Corto [[2020X]].", "Corto [[2020X]].")],
+                         ids=["bloque", "exacto"])
+def test_527_nuevo_str_con_parrafo_adentro_se_rehusa(tmp_path, cuerpo, viejo):
+    """#527 caso 1 — un `str` con `\\n\\n` salía como UN párrafo: pares 211 → 211, nadie avisaba.
+    Se rehúsa en las dos ramas y se manda a la lista (#408)."""
+    nota = _note(tmp_path, f"# n\n\n{cuerpo}\n")
+    res = af.apply(nota, _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": viejo,
+                                                       "nuevo": "Uno [[2020X]].\n\nDos."}])), write=True)
+    assert res.applied == 0 and "lista" in res.failed[0][2], res.failed
+    assert nota.read_text(encoding="utf-8") == f"# n\n\n{cuerpo}\n"
+
+
+def test_527_el_corte_no_abre_un_item_que_roba_la_cita(tmp_path):
+    """#527 caso 2 — el corte a 100 columnas dejaba `- CS^2 [[bib]].` al inicio de una línea:
+    `split_blocks` lo leía como ÍTEM, que se llevaba la cita, y el párrafo quedaba sin ella. Los
+    pares no se movían. Caso 3: tampoco se corta dentro de `$…$`."""
+    nota = _note(tmp_path, f"# n\n\n{_LARGO}\n")
+    for nuevo in ("Texto " + "x" * 90 + " AA - CS^2 [[2020X]].",
+                  "Texto " + "x" * 90 + " $A - CS^2$ [[2020X]]."):
+        res = af.apply(nota, _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": _LARGO_N, "nuevo": nuevo}])))
+        assert not res.failed, res.failed
+        lineas = af.rewrap(nuevo, "")
+        assert [b.kind for b in lb.split_blocks("\n".join(lineas))] == ["parrafo"], lineas
+        assert all(ln.count("$") % 2 == 0 for ln in lineas), lineas
+
+
+def test_527_la_red_cuenta_BLOQUES_por_fix(tmp_path):
+    """#527 — la red general: lo re-emitido tiene que tener los bloques pedidos. Un `nuevo` de la
+    rama exacta con un salto que abre un ítem no pasa por `rewrap`; lo caza el conteo."""
+    nota = _note(tmp_path, "# n\n\nCorto [[2020X]].\n")
+    res = af.apply(nota, _fixes(tmp_path, ("2020X", [{"n": 1, "viejo": "Corto [[2020X]].",
+                                                       "nuevo": "Corto.\n- ítem [[2020X]]."}])))
+    assert res.applied == 0 and "bloque(s)" in res.failed[0][2], res.failed
+
+
+def test_527_sacar_una_clausula_citada_se_DECLARA_con_retira(tmp_path):
+    """#527 caso 4 — sacar la cláusula con su cita (la primera opción de #389) bajaba los pares
+    213 → 212 y #222 lo rehusaba como «fusión». Con `retira` declarado pasa; sin declarar, o con
+    una declaración falsa, se rehúsa."""
+    viejo = "- **Hueco.** Lo dice [[2020X]], y además lo afirma [[2021Y]]."
+    nuevo = "- **Hueco.** Lo dice [[2020X]]."
+
+    def corre(extra):
+        nota = _note(tmp_path, f"# n\n\n{viejo}\n")
+        fx = {"n": 1, "viejo": viejo, "nuevo": nuevo, **extra}
+        return af.apply(nota, _fixes(tmp_path, ("2020X", [fx])), write=True), nota
+
+    res, nota = corre({})
+    assert res.applied == 0 and "retira" in res.failed[0][2], res.failed
+    res, nota = corre({"retira": ["2021Y"]})
+    assert not res.failed and (res.pairs_before, res.pairs_after) == (2, 1)
+    assert res.retired == [("2020X", 1, ["2021Y"])]
+    assert nota.read_text(encoding="utf-8") == f"# n\n\n{nuevo}\n"
+    res, _ = corre({"retira": ["2020X"]})                  # sigue en `nuevo`: la declaración miente
+    assert res.applied == 0 and "retira" in res.failed[0][2], res.failed

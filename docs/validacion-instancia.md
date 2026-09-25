@@ -1330,3 +1330,16 @@ python scripts/contrast.py deteccion-estadistica --grep aleatori --filas
 `contrast --validar-todo`: sin cambios.
 
 **Devolver si** otra fila deja de salir, o si el lint cambia alguna categoría.
+## §#527 · v1.337.0 — `apply_fixes` devuelve los bloques que se pidieron
+
+Sobre una COPIA de `concepts/methods/deteccion-estadistica.md`, un JSON de fixes por caso y
+`python scripts/apply_fixes.py <copia> <dir> --write`: (1) un párrafo como `nuevo` con `\n\n`
+adentro; (2) un `nuevo` que el ancho 100 corta justo antes de `- CS^2 [[bib]].`; (4) sacar de un
+ítem la cláusula con su `[[bibcode]]`, sin y con `"retira": ["<bib>"]`.
+
+**Esperado (medido en copia, 212 pares / 210 bloques):** (1) rehúsa y pide lista (antes: aplicaba,
+212 → 212 pares y el párrafo fundido); la misma partición como lista pasa, 210 → 211 bloques. (2)
+aplica con 210 → 210 bloques y 0 párrafos sin cita (antes: 210 → 211, un ítem espurio se llevaba la
+cita). (4) sin `retira` rehúsa; con `retira` escribe, 212 → 211 pares.
+
+**Devolver si** un fix que antes aplicaba limpio ahora se rehúsa sin traer `\n\n` ni abrir bloque.

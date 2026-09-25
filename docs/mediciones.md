@@ -4000,3 +4000,12 @@ marcó 1 extracción en 2 campos; la segunda corrida, 0 (JSON idéntico, md5 igu
 deteccion-estadistica --grep aleatori --filas`: 4 → **3** filas pegables, 1 rehusada con su
 refutación; `--cita` igual. `harvest_views --force --dry-run` del paper: 1 cosechada (+2/-2) → 0,
 rehusada. Lint y `contrast --validar-todo`: salida idéntica antes y después.
+## #527 — `apply_fixes` re-emite los bloques que se pidieron (v1.337.0)
+
+**Copia de la instancia, `deteccion-estadistica.md` (212 pares, 210 bloques):** caso 1 (`\n\n` en un
+`str`) antes aplicaba mudo 212 → 212 / 210 → 210 (fundido), ahora rehúsa; como lista, 210 → 211.
+Caso 2 (corte antes de `- CS^2`) antes 210 → 211 bloques con **1** párrafo sin cita y `$` suelto,
+ahora 210 → 210 y 0. Caso 4 (sacar la cláusula citada) antes rehusado como «fusión», ahora pasa con
+`retira` declarado (212 → 211) y sigue rehusado sin declarar. Ida y vuelta (aplicar la identidad
+sobre la salida): 0 cambios. Falsos positivos: el fix identidad sobre los 1799 bloques de
+`concepts/` + `stars/` da 1789 aplican / 10 no localizables, **igual** antes y después. Caso 5 (`reverify_subset` y el cambio dentro de `$…$`) no se tocó.

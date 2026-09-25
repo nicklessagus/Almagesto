@@ -441,8 +441,8 @@ mitades se pagaron en la misma corrida:
   el mensaje que lo explica: mandá **un fix por bloque**.
 
 **Red final, y es la decisiva:** el aplicador cuenta `pairs_of` **antes y después** y **no escribe**
-si bajó. Una corrección no puede hacer desaparecer una afirmación citada — mismo principio que el
-ancla: lo que la nota afirma tiene que seguir siendo contable.
+si bajó —salvo el retiro DECLARADO, `retira: [bibcode]`— y si lo re-emitido no tiene los bloques
+pedidos (dos párrafos van como lista, #408) (#527). Una corrección no hace desaparecer una cita.
 
 **Todo o nada**: si un solo `viejo` no resuelve —no aparece, aparece dos veces, o hay una colisión
 sin fusionar— no se escribe **ninguno**. Un reemplazo que adivina es peor que uno que falla, y una
