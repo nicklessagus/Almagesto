@@ -415,8 +415,9 @@ def test_494_el_CALIFICADOR_del_localizador_no_se_pisa(toy_vault, tmp_path, caps
     ENTERO y con él el calificador —`p. 4 (Tabla 2)` quedaba en `p. 491`—. Medido: **143 de 563**.
     El calificador dice DÓNDE de la página está el dato y no se re-deriva de ningún lado.
 
-    Y el caso **colapsado** se declara: el localizador viejo nombraba varias páginas, el lector
-    ubicó una, y el resto del campo —que sigue nombrando las otras— queda."""
+    ⛔ #533 — y el caso «colapsado» ya no se acepta: con una página para un campo que nombraba
+    varias, la otra quedaba nombrando una página del documento VIEJO. Se rehúsa; con la lista, cada
+    una con la suya."""
     d = _extraccion(ground_truth=[
         {"que": "blanqueo", "valor": CITA, "linea": "p. 4 (nota al pie de la Tabla 2)"},
         {"que": "dos", "valor": OTRA, "linea": "pp. 3-4, y también p. 9 si se mira el apéndice"}])
@@ -426,12 +427,14 @@ def test_494_el_CALIFICADOR_del_localizador_no_se_pisa(toy_vault, tmp_path, caps
     assert rp.main([BIB, "--apply", str(_resultado(tmp_path, filas))]) == 0
     nuevo = json.loads((cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
     assert nuevo["ground_truth"][0]["linea"] == "p. 2010 (nota al pie de la Tabla 2)"
-    assert nuevo["ground_truth"][1]["linea"] == "p. 2010, y también p. 9 si se mira el apéndice"
-    assert "1 colapsado(s)" in capsys.readouterr().out
-    # ⛔ y queda en la MARCA, no sólo en pantalla: en pantalla se lo lleva la corrida, y es lo único
-    # que queda dicho sobre un campo cuyo localizador viejo nombraba varias páginas (medido: 765 de
-    # 5627 `ground_truth[].linea`)
-    assert nuevo["_repaginado"]["colapsados"] == ["ground_truth[1].linea"], nuevo["_repaginado"]
+    assert nuevo["ground_truth"][1]["linea"] == "pp. 3-4, y también p. 9 si se mira el apéndice"
+    assert nuevo["_repaginado_parcial"]["pendientes"] == ["ground_truth[1].linea"]
+    filas[1]["pagina"] = ["2009-2010", "2011"]
+    assert rp.main([BIB, "--apply", str(_resultado(tmp_path, filas))]) == 0
+    nuevo = json.loads((cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
+    assert nuevo["ground_truth"][1]["linea"] == "p. 2009-2010, y también p. 2011 si se mira el apéndice"
+    # la celda de la vista cambia UN token: con la lista no se re-estampa sola, y se dice
+    assert "1 celda(s) de la vista con varias numeraciones NO se re-estampan" in capsys.readouterr().out
 
 
 def _extraccion_lente(lente: str = "orden", slug: str = "ica_ruido", bib: str = BIB):
@@ -620,3 +623,45 @@ def test_507_out_con_dry_run_REHUSA_en_vez_de_escribir_el_paquete(toy_vault, tmp
     with pytest.raises(SystemExit) as e:
         rp.main([BIB, "--out", str(out), "--dry-run"])
     assert e.value.code == 2 and not out.exists()
+
+
+def test_533_dos_numeraciones_se_repaginan_CADA_UNA_con_la_suya_o_se_rehusa(toy_vault, tmp_path):
+    """#533 — `p. 288 (PDF p. 3)` es UNA página con dos numeraciones. El apply reemplazaba sólo la
+    primera cifra: con la carátula de HAL quitada (hoja − 1, impresa igual) dejaba vieja la del PDF
+    y lo contaba como reescrito — 69 de 69 en la instancia. Ahora el lector devuelve una por
+    numeración (lista), y con menos, o con el localizador entero en `pagina`, se rehúsa."""
+    d = _extraccion(ground_truth=[
+        {"que": "a", "valor": CITA, "linea": "p. 288 (PDF p. 3)"},
+        {"que": "b", "valor": CITA, "linea": "p. 290-291 (PDF p. 5-6)"},
+        {"que": "c", "valor": CITA, "linea": "§3.2, p. 13 [índice del PDF] (ms. p. 12)"},
+        {"que": "d", "valor": CITA, "linea": "p. 288 (PDF p. 3)"},
+        {"que": "e", "valor": CITA, "linea": "p. 4 (Tabla 2); ver también la p. 7"}],
+        salvedades=[f"«{CITA}» (A17 p. 5-6 (PDF p. 6-7))"], ejes={})
+    _txt_paginado()
+    los = {it["id"]: it for it in rp.items(d)}
+    assert los["ground_truth[2].linea"]["numeraciones"] == ["p. 13", "p. 12"]
+    assert los["ground_truth[4].linea"]["numeraciones"] == ["p. 4", "p. 7"], \
+        "un `linea` pide página por CADA token, también con prosa en el medio"
+    assert los["salvedades[0]#1"]["numeraciones"] == ["p. 5-6", "p. 6-7"]
+    ev = "Received 3 March 2013"
+    respuestas = {"ground_truth[0].linea": ["288", "2"], "ground_truth[1].linea": ["290-291", "4-5"],
+                  "ground_truth[2].linea": "§3.2, p. 13 [índice del PDF] (ms. p. 12)",
+                  "ground_truth[3].linea": "288", "ground_truth[4].linea": ["4", "6"],
+                  "salvedades[0]#1": ["5-6", "5-6"]}
+    filas = [{"id": i, "pagina": p, "evidencia": ev, "motivo": ""} for i, p in respuestas.items()]
+    r = rp.apply(BIB, _resultado(tmp_path, filas))
+    nuevo = json.loads(r["extraccion"].read_text(encoding="utf-8"))
+    gt = [g["linea"] for g in nuevo["ground_truth"]]
+    assert gt[0] == "p. 288 (PDF p. 2)" and gt[1] == "p. 290-291 (PDF p. 4-5)"
+    assert nuevo["salvedades"][0] == f"«{CITA}» (A17 p. 5-6 (PDF p. 5-6))"
+    rehusados = dict(r["rehusados"])
+    assert "no es una página" in rehusados["ground_truth[2].linea"]
+    assert "2 numeración(es)" in rehusados["ground_truth[3].linea"]
+    assert gt[2] == "§3.2, p. 13 [índice del PDF] (ms. p. 12)" and gt[3] == "p. 288 (PDF p. 3)"
+    # varias ubicaciones en un `linea`: cada una con la suya — ya no queda una vieja («colapsado»)
+    assert gt[4] == "p. 4 (Tabla 2); ver también la p. 6"
+    # confirmado igual al viejo: aparte, no «reescrito»
+    d2 = _extraccion(ground_truth=[{"que": "a", "valor": CITA, "linea": "p. 4"}], salvedades=[], ejes={})
+    r2 = rp.apply(BIB, _resultado(tmp_path, [{"id": "ground_truth[0].linea", "pagina": "4",
+                                              "evidencia": ev, "motivo": ""}]))
+    assert r2["sin_cambio"] == ["ground_truth[0].linea"] and not r2["escritos"]

@@ -2259,6 +2259,18 @@ portadores:
         estado: fuera-de-alcance
         motivo: "Sólo lo nombra en un docstring (#304); no lo escribe."
 
+  - issue: 533
+    regla: >-
+      Un localizador se re-pagina ENTERO: cada numeración de la misma página (impresa, del PDF,
+      del manuscrito) y cada ubicación de un `linea` con la suya, o se rehúsa. Reemplazar la
+      primera cifra dejaba viejas las otras y las contaba como reescritas (69 de 69 medidos).
+    funcion: repaginate.numbering_chain
+    patron: "f\"p\\. \\{f\\['pagina'\\]\\}\"|_replace_first_locator|PAGE_LOC_RE\\.finditer"
+    consumidores:
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Define `PAGE_LOC_RE` y LEE localizadores (gate de citas); no reescribe ninguno."
+
   - issue: 505
     regla: >-
       Antes de declarar un hueco —de `bibtex` (`sin_bibtex`, #467) o de PDF (`pending`, la cascada

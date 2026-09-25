@@ -4067,3 +4067,17 @@ carátula de HAL**, que entraron antes y que nadie había visto: `1994SigPr..36.
 `2014A&A...566A..35S` del disco y se reinstaló con `replace_pdf.py … --slug hd_41248`. El residuo
 pasa a 5 entradas, sin ésa, y la salida lo dice. Antes quedaba listado hasta re-correr `fetch_pdf`:
 en la instancia real, el residuo de `hd_41248` todavía lista PDFs instalados hoy.
+
+## #533 — el localizador se re-pagina entero, numeración por numeración (v1.342.0)
+
+**Worktree de Almagesto-Tesis antes de `5be796f`:** se reinstalaron los 3 PDFs de `ica` sin la
+carátula de HAL. Da las mismas **69** ítems del issue (43 + 11 + 15), de los cuales **59** tienen
+más de una numeración o ubicación. Se aplicaron las respuestas que dieron los lectores (hoja del PDF
+− 1, impresa sin cambio), una por numeración. Contra la corrección a mano de `5be796f`: Charpentier
+**0** campos distintos; Comon **2**; Icarus **5**. De esos 7, **1** es la corrección de contenido
+que se aplicó aparte («upon request» p. 312 → 304). Los otros **6** son localizadores **no
+adyacentes a ninguna cita** (`«…» (§3.2, p. 14 …)`, `App. A (p. 33 …): …`): `items()` no los
+enumera, así que ninguna relectura los toca. Es un hueco anterior a #533, que queda para un issue
+propio. El caso «colapsado» de #494 (una página para un `linea` que nombraba varias; 765 de 5627
+en la medición original) **deja de aceptarse**: la otra página quedaba nombrando el documento
+reemplazado.

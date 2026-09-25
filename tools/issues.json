@@ -2650,6 +2650,11 @@
    "number": 532,
    "title": "replace_pdf instala el PDF y missing_pdf.json lo sigue listando: el residuo que se le pasa al usuario pide PDFs que ya están",
    "state": "OPEN"
+  },
+  {
+   "number": 533,
+   "title": "repaginate --apply corrompe los localizadores con dos numeraciones (impresa + hoja del PDF) y los cuenta como reescritos",
+   "state": "OPEN"
   }
  ]
 }

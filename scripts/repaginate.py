@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import re
 import pathlib
 import sys
 from pathlib import Path
@@ -88,7 +89,8 @@ RESULT_SCHEMA = {"bibcode": "<bibcode>",
                  "pdf_sha": "<el sha10 que traía el paquete>",
                  "items": [{"id": "<el id del item, tal cual>",
                             "pagina": "<la página en la que está: la que muestra la hoja o el "
-                                      "índice del PDF (#500), o null>",
+                                      "índice del PDF (#500); una LISTA con una página por "
+                                      "numeración si el item trae varias (#533); o null>",
                             "evidencia": "<palabras que viste en ESA hoja, distintas del valor>",
                             "motivo": "<por qué no la hallaste — sólo si pagina es null>"}]}
 
@@ -134,6 +136,43 @@ def _strings(data: dict):
                     yield f"salvedades[{i}].{k}", sv[k]
 
 
+#: #533 · what may stand BETWEEN two numberings of the SAME page (`p. 288 (PDF p. 3)`,
+#: `p. 13 [índice del PDF] (ms. p. 12)`): brackets, punctuation and the numbering's label. Prose
+#: in between (`p. 4 y p. 7`) makes them distinct pages, not numberings.
+_NUMBERING_GAP_RE = re.compile(r"^[\s()\[\],;:/=–-]*(?:(?:PDF|ms\.?|manuscrito|índice|del|hoja|"
+                               r"sheet|impresa|printed)[\s()\[\],;:/=–-]*)*$", re.I)
+
+
+def numbering_chain(texto: str, start: int) -> list:
+    """`[(a, b)]` — the page-locator spans from `start` on that are NUMBERINGS of one page (#533):
+    each next token is separated from the previous one only by a label (`_NUMBERING_GAP_RE`).
+
+    ⛔ The unit of a locator is the chain, not its first token: replacing only the first of
+    `p. 288 (PDF p. 3)` left the numbering that DID change stale and reported it rewritten
+    (measured: 69 of 69 locators of three PDFs whose HAL cover was removed)."""
+    spans = [(m.start(), m.end()) for m in cfg.PAGE_LOC_RE.finditer(texto) if m.start() >= start]
+    chain = spans[:1]
+    for a, b in spans[1:]:
+        if not _NUMBERING_GAP_RE.match(texto[chain[-1][1]:a]):
+            break
+        chain.append((a, b))
+    return chain
+
+
+def page_answer(pagina) -> list | None:
+    """The reader's `pagina` as a list of page labels, or `None` if its FORM is wrong (#533).
+
+    A scalar is one numbering; a list, one per numbering in order. Each label must be what
+    `PAGE_LOC_RE` reads after `p. ` — a number or a range, with its prefix (`L45`) — so a whole
+    locator (`§3.2, p. 13 [índice del PDF]`) cannot be written as a page (measured: 11 of 11 items
+    of one source came back that way and were written inside the old locator)."""
+    paginas = pagina if isinstance(pagina, list) else [pagina]
+    etiquetas = [str(p).strip() for p in paginas]
+    ok = etiquetas and all((m := cfg.PAGE_LOC_RE.fullmatch(f"p. {e}")) and m.end() == len(e) + 3
+                           for e in etiquetas)
+    return etiquetas if ok else None
+
+
 def items(data: dict) -> list:
     """`[{id, ruta, que, valor, cita, linea}]` — every locator of this extraction to be re-read.
 
@@ -148,13 +187,21 @@ def items(data: dict) -> list:
                 i = int(ruta.split("[")[1].split("]")[0])
                 fila = cfg.as_list(data.get("ground_truth"))[i]
                 out.append({"id": ruta, "ruta": ruta, "que": str(fila.get("que") or ""),
-                            "valor": str(fila.get("valor") or ""), "cita": "", "linea": texto})
+                            "valor": str(fila.get("valor") or ""), "cita": "", "linea": texto,
+                            # ⛔ #533 — un `linea` pide una página por CADA token: con varias
+                            # ubicaciones (`p. 291 (PDF p. 5); resumen en p. 287 (PDF p. 2)`)
+                            # reescribir la primera dejaba vieja la otra («colapsado», #494)
+                            "numeraciones": [m.group(0) for m in cfg.PAGE_LOC_RE.finditer(texto)]})
             continue
         for n, cita in enumerate(cfg.quotes_in(texto), 1):
             loc = cfg.page_locators_after(texto, cita)
             if loc:
+                pos = texto.find(cita)
+                spans = cfg.adjacent_locators(texto, pos, pos + len(cita))
                 out.append({"id": f"{ruta}#{n}", "ruta": ruta, "que": "", "valor": "",
-                            "cita": cita, "linea": _loc_token(texto, cita)})
+                            "cita": cita, "linea": _loc_token(texto, cita),
+                            "numeraciones": [texto[a:b] for a, b in
+                                             numbering_chain(texto, spans[0][0])] if spans else []})
     return out
 
 
@@ -263,6 +310,10 @@ def prompt_for(paquete: dict, pdf: Path, out_dir: Path) -> str:
               "`evidencia`: palabras que viste en ESA hoja y que no son el valor del item.", "",
               "⛔ **Lo que no encontrás se declara**: `pagina: null` + `motivo`. Un hueco "
               "declarado es correcto; copiar la guía sin abrir el PDF, no.", "",
+              "⛔ **`pagina` es un NÚMERO (o rango), no un localizador** (#533): `\"13\"`, "
+              "`\"5-6\"`, `\"L45\"` — nunca `\"§3.2, p. 13\"`. Si el item trae varias numeraciones "
+              "de la misma página (impresa, del PDF, del manuscrito), devolvé una LISTA con una "
+              "por numeración, en el orden en que aparecen.", "",
               f"Items: {len(paquete['items'])}.", ""]
     for it in paquete["items"]:
         g = it["guia"]
@@ -270,6 +321,10 @@ def prompt_for(paquete: dict, pdf: Path, out_dir: Path) -> str:
                 f"índice {g['indice']} del PDF" if g["indice"] else "sin guía")
         partes += [f"### `{it['id']}`", "",
                    f"- localizador actual (del documento VIEJO): `{it['linea']}`",
+                   *([f"- ⛔ trae {len(it['numeraciones'])} numeraciones/páginas ("
+                      + ", ".join(f"`{x}`" for x in it["numeraciones"])
+                      + "): devolvé `pagina` como LISTA, una por cada una y en este orden (#533)"]
+                     if len(it.get("numeraciones") or []) > 1 else []),
                    f"- guía del `.txt` (dónde abrir): {guia}"
                    + (f" — {g['motivo']}" if g["motivo"] else ""),
                    f"- qué dice: {it['cita'] or it['valor'] or it['que']}", ""]
@@ -300,7 +355,14 @@ def _set_by_path(data: dict, ruta: str, nuevo: str) -> None:
         data.setdefault(resto[0], {})[resto[1]] = nuevo
 
 
-def _replace_locator(texto: str, ocurrencia: int, viejo: str, nuevo: str) -> str | None:
+def _replace_chain(texto: str, chain: list, reemplazos: list) -> str:
+    """Write one replacement per locator span of `chain`, keeping every label and qualifier (#533)."""
+    for (a, b), r in sorted(zip(chain, reemplazos), reverse=True):
+        texto = texto[:a] + r + texto[b:]
+    return texto
+
+
+def _replace_locator(texto: str, ocurrencia: int, viejo: str, nuevo) -> str | None:
     """Swap the locator ADJACENT to the `ocurrencia`-th quote of this string, or `None` if it moved.
 
     ⛔ Anchored on the quote and not on the token, because two quotes of one string can name the
@@ -318,27 +380,29 @@ def _replace_locator(texto: str, ocurrencia: int, viejo: str, nuevo: str) -> str
         spans = cfg.adjacent_locators(texto, pos, desde)
         if not spans or texto[spans[0][0]:spans[0][1]] != viejo:
             return None
+        if isinstance(nuevo, list):                 # #533 — una por numeración
+            return _replace_chain(texto, numbering_chain(texto, spans[0][0]), nuevo)
         a, b = spans[0]
         return texto[:a] + nuevo + texto[b:]
     return None
 
 
-def _replace_first_locator(texto: str, nuevo: str) -> tuple:
-    """`(texto_nuevo, n_localizadores)` — swap the FIRST locator of a `linea` and keep the rest.
+def _replace_line_locators(texto: str, reemplazos: list) -> str | None:
+    """Swap EVERY locator of a `linea`, one replacement each, and keep the rest; `None` if the count
+    no longer matches (somebody edited the field by hand).
 
     ⛔ Returned by the real repagination: the writer's first version overwrote the whole field, and
     with it the **qualifier** — `p. 4 (Tabla 2)` became `p. 491`, `p. 2056 (nota al pie de la Tabla
     1)` became `p. 2062`. Measured: **143 of 563**. The qualifier is what makes a locator usable —
     it says WHERE on the page the datum is — and it is re-derivable from nothing.
 
-    `n_localizadores` > 1 is the **collapsed** case: the old value named several pages with prose
-    in between and the reader placed one. It is counted and declared, because the rest of the
-    string —which stays— still names the others."""
-    locs = list(cfg.PAGE_LOC_RE.finditer(texto))
-    if not locs:
-        return texto, 0
-    m = locs[0]
-    return texto[:m.start()] + nuevo + texto[m.end():], len(locs)
+    ⛔ #533 — and EVERY locator, not the first: swapping one left the others naming pages of the
+    replaced document (the «collapsed» case of #494, 765 of 5627, and the second numbering of
+    `p. 288 (PDF p. 3)`, 69 of 69). A stale locator attributes wrongly, which is worse than none."""
+    locs = [(m.start(), m.end()) for m in cfg.PAGE_LOC_RE.finditer(texto)]
+    if not locs or len(locs) != len(reemplazos):
+        return None
+    return _replace_chain(texto, locs, reemplazos)
 
 
 def _check_item(item: dict, res: dict, bibcode: str) -> str | None:
@@ -352,11 +416,20 @@ def _check_item(item: dict, res: dict, bibcode: str) -> str | None:
     if pagina in (None, ""):
         return None if str(res.get("motivo") or "").strip() else \
             "`pagina: null` sin `motivo`: un hueco se declara, no se deja mudo (D-43)"
+    paginas = page_answer(pagina)
+    if paginas is None:
+        return (f"`pagina: {pagina!r}` no es una página: tiene que ser un número o rango "
+                f"(`\"13\"`, `\"5-6\"`, `\"L45\"`), o una lista de ellos — nunca el localizador (#533)")
+    n_num = max(1, len(item.get("numeraciones") or []))
+    if len(paginas) != n_num:
+        return (f"el localizador trae {n_num} numeración(es)/página(s) "
+                f"({', '.join(item.get('numeraciones') or [])}) y volvieron {len(paginas)}: con "
+                f"menos, la que no volvió queda vieja (#533) — devolvé una por cada una, en orden")
     if not ev:
         return "página confirmada sin `evidencia`: sin testigo de la hoja no se distingue de copiar la guía"
     if ev.lower() in str(item.get("valor") or item.get("cita") or "").lower():
         return "la `evidencia` está contenida en el valor del item: no es testigo de la hoja"
-    estado, det = cfg.quote_page_verdict(ev, bibcode, [(str(pagina), str(pagina))])
+    estado, det = cfg.quote_page_verdict(ev, bibcode, [(paginas[0], paginas[0])])
     if estado == "mal":
         return (f"el `.txt` ubica esa `evidencia` en otra página "
                 f"({', '.join(map(str, det.get('impresas') or det.get('paginas') or []))}): "
@@ -414,7 +487,7 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
                          f"({len(filas)} contra {len(los)}): el paquete quedó viejo, re-emitilo")
     hoy = _dt.date.today().isoformat()
     escritos, no_hallados, rehusados, para_nota, para_nota_texto = [], [], [], [], []
-    colapsados: list = []
+    sin_cambio: list = []
     for fila in filas:
         item = los[fila["id"]]
         motivo = _check_item(item, fila, bibcode)
@@ -432,16 +505,16 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
         # cierto —dice dónde de la página estaba el dato— y es lo que hace barata la próxima
         # relectura. Lo único que caduca es el número.
         motivo_hueco = str(fila.get("motivo") or "").strip()
-        nuevo = (f"p. {fila['pagina']}" if fila.get("pagina") not in (None, "")
-                 else f"no hallado (relectura {hoy}: {motivo_hueco})")
+        paginas = page_answer(fila["pagina"]) if fila.get("pagina") not in (None, "") else None
+        n_num = max(1, len(item.get("numeraciones") or []))
+        # #533 — un reemplazo por numeración: el hueco también, o la que no se tocó queda vieja
+        nuevo = ([f"no hallado (relectura {hoy}: {motivo_hueco})"] * n_num if paginas is None
+                 else [f"p. {p}" for p in paginas])
         actual = dict(_strings(data)).get(ruta, "")
         if ruta.endswith(".linea"):
-            texto, n_locs = _replace_first_locator(actual, nuevo)
-            if n_locs > 1:
-                colapsados.append(fila["id"])
-            texto = texto if n_locs else None
+            texto = _replace_line_locators(actual, nuevo)
         else:
-            texto = _replace_locator(actual, ocurrencia, viejo, nuevo)
+            texto = _replace_locator(actual, ocurrencia, viejo, nuevo if n_num > 1 else nuevo[0])
         if texto is None:
             rehusados.append((fila["id"], f"el localizador `{viejo}` ya no está donde el paquete lo "
                                           f"leyó: alguien lo corrigió a mano"))
@@ -451,17 +524,16 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
         _set_by_path(data, ruta, texto)
         if fila.get("pagina") in (None, ""):
             no_hallados.append(fila["id"])
+        elif texto == actual:
+            # #533 — confirmado sin cambio NO es «reescrito»: el resumen decía 69 reescritos
+            # cuando ninguno había cambiado donde debía
+            sin_cambio.append(fila["id"])
         else:
             escritos.append(fila["id"])
             para_nota.append((item, fila))
     pendientes = sorted([i for i, _m in rehusados])
-    # ⛔ `colapsados` va en la MARCA y no sólo por pantalla: es lo único que queda dicho sobre un
-    # campo cuyo localizador viejo nombraba varias páginas y el lector ubicó una — medido sobre la
-    # bóveda real, 765 de 5627 `ground_truth[].linea`. En pantalla se lo lleva la corrida; en el
-    # artefacto sobrevive, que es donde lo va a buscar quien lea ese campo dentro de seis meses.
     marca = {"fecha": hoy, "pdf_sha": sha_disco, "n": len(escritos),
-             "no_hallados": len(no_hallados), "colapsados": colapsados,
-             "fuente": "relectura del PDF (#494)"}
+             "no_hallados": len(no_hallados), "fuente": "relectura del PDF (#494)"}
     # @inv INV-160
     for m in cfg.PAGINATION_OPEN_MARKS:
         data.pop(m, None)
@@ -473,7 +545,7 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
         cfg.write_text_atomic(f, json.dumps(data, ensure_ascii=False, indent=1) + "\n")
     return {"extraccion": f, "escritos": escritos, "no_hallados": no_hallados,
             "rehusados": rehusados, "cerrada": not pendientes, "para_nota": para_nota,
-            "para_nota_texto": para_nota_texto, "colapsados": colapsados}
+            "para_nota_texto": para_nota_texto, "sin_cambio": sin_cambio}
 
 
 def print_list() -> int:
@@ -503,13 +575,11 @@ def _apply_cli(args) -> int:
         cfg.print_seguro(f"⛔ {e}")
         return 2
     cfg.print_seguro(f"→ {r['extraccion']}: {len(r['escritos'])} localizador(es) reescrito(s) · "
+                     f"{len(r['sin_cambio'])} confirmado(s) sin cambio · "
                      f"{len(r['no_hallados'])} `no hallado` declarado(s) · "
                      f"{len(r['rehusados'])} rehusado(s)")
     for i, motivo in r["rehusados"]:
         cfg.print_seguro(f"  ⚠ {i}: {motivo}")
-    if r.get("colapsados"):
-        cfg.print_seguro(f"  · {len(r['colapsados'])} colapsado(s): el localizador viejo nombraba "
-                         f"varias páginas y el lector ubicó una — el resto del campo queda")
     cfg.print_seguro(f"  deuda {'CERRADA' if r['cerrada'] else 'PARCIAL: sigue abierta'}")
     # la nota copió esos localizadores de la extracción (#454), así que se re-estampan acotado
     import harvest_views as hv
@@ -518,8 +588,16 @@ def _apply_cli(args) -> int:
     # único ancla posible es la cita de al lado. Lo que salió de un campo de texto libre —una
     # salvedad— la nota lo publica VERBATIM, así que se sustituye entero abajo; mandarlo también
     # por acá hacía que las dos pasadas se pisaran sobre el mismo bullet.
+    filas = [(it, f) for it, f in r.get("para_nota", []) if it["ruta"].endswith(".linea")]
+    # ⛔ #533 — el re-estampado de la celda cambia UN token; con varias numeraciones escribiría la
+    # lista entera en el lugar de la primera. Esas se nombran y se copian a mano de la extracción.
+    varias = [it["id"] for it, f in filas if isinstance(f["pagina"], list)]
     cambios = [(it["cita"] or it["valor"], it["linea"], f"p. {f['pagina']}")
-               for it, f in r.get("para_nota", []) if it["ruta"].endswith(".linea")]
+               for it, f in filas if not isinstance(f["pagina"], list)]
+    if varias:
+        cfg.print_seguro(f"  ⚠ {len(varias)} celda(s) de la vista con varias numeraciones NO se "
+                         f"re-estampan solas (#533): copiá el localizador de la extracción — "
+                         f"{', '.join(varias[:5])}{' …' if len(varias) > 5 else ''}")
     if cambios:
         vista = hv.restamp_view_locators(slug, paper=args.bibcode, cambios=cambios,
                                          dry_run=args.dry_run)

@@ -1433,3 +1433,17 @@ lista (medido: `hd_41248`, 6 → 5). Con `--dry-run` no cambia nada. El residuo 
 lista PDFs ya instalados hasta que se re-corra `fetch_pdf hd_41248`: eso es de antes del fix.
 
 **Devolver si** una instalación deja el bibcode en el residuo, o si saca otro.
+
+## §#533 · v1.342.0 — dos numeraciones, cada una con la suya
+
+Sobre una COPIA previa a `5be796f`: reinstalar los 3 PDFs de `ica` sin carátula con `replace_pdf`,
+emitir las rondas (`repaginate.py <bib> --out …`) y aplicar resultados cuya `pagina` sea una lista
+por numeración.
+
+**Esperado:** el prompt de cada item con varias numeraciones lo dice y pide lista (59 de 69).
+`--apply` escribe `p. 288 (PDF p. 2)` (antes quedaba `(PDF p. 3)`), rehúsa una `pagina` que sea un
+localizador entero (`§3.2, p. 13 …`) o que traiga menos numeraciones que el item, y separa
+«confirmado(s) sin cambio» de «reescrito(s)». Contra la corrección a mano quedan 6 localizadores no
+adyacentes a una cita (hueco aparte) y la corrección de contenido de Comon.
+
+**Devolver si** una numeración queda vieja en un item que se contó como reescrito.
