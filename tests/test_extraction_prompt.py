@@ -82,6 +82,15 @@ def test_prompt_pide_lo_verificable_de_103():
         assert exigido in p, f"el prompt no exige {exigido!r}"
 
 
+def test_el_prompt_pide_la_notacion_de_la_boveda_fuera_de_las_citas():
+    """#525 — la extracción es inmutable (#311) y `contrast --filas` la copia literal (#322/#330):
+    el único lugar donde `10^-3` se vuelve `$10^{-3}$` es el extractor. Medido: 394 de 7060 valores
+    con notación cruda y 134 palabras sin tilde en una bóveda real."""
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
+    assert "(#525)" in p and "`$10^{-3}$`" in p and "tildes" in p
+    assert "Dentro\n  de «…» no" in p, "la cita va como está en la fuente"
+
+
 def test_prompt_declara_que_un_grep_vacio_no_prueba_ausencia():
     p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA).lower()
     assert "ausencia" in p

@@ -3977,3 +3977,12 @@ y no-soportadas 4 → 15 en la suma de cabeceras, todas resueltas. Efecto colate
 `source: ads` + `query: null` + `extra_core`, ninguno con `probes:`); declarada 0. Diff del reporte:
 sólo esas dos cabeceras. Con `corpus_sin_probe` declarado en `rv-doppler`: 3 → 2, declarada 0 → 1.
 `--registrar` no se midió contra ADS (la escritura la cubre el test con doble de `query_ads`).
+## #525 — notación cruda copiada de la extracción (v1.335.0)
+
+**Copia de la instancia:** detector (superíndice, subíndice con llaves, comando LaTeX; fuera de
+`$…$`, «…», código y `[[…]]`) sobre 11 576 filas de tabla: **288** hits, 283 en `## Vista` y **5** en
+`## Inventario por eje`. Leídos a mano: las 5 del inventario y 33 de la vista, todos verdaderos. Una
+primera versión con `_DOLLAR_MATH_RE` dio 10 en el inventario, con 5 falsos (`H$\alpha$`, que Obsidian
+renderiza); se cambió a emparejar cada `$` con el siguiente. El lint publica sólo el inventario (la
+vista es copia de la extracción inmutable). Diff del reporte: sólo la categoría nueva, 0 → 5.
+`sigma`, `<=` y `A_b` sueltos no entran al detector (también son prosa); las tildes, tampoco.

@@ -1292,3 +1292,16 @@ recorte con `python scripts/query_ads.py <slug> --theme --probe "<query>" --regi
 
 **Devolver si** aparece un tema con `query:` poblada o `source:` ≠ `ads`, o si `--registrar` toca
 otra sección del registro.
+## §#525 · v1.335.0 — notación fuera de `$…$` en el inventario, y el prompt que la pide
+
+```bash
+python scripts/lint.py
+python scripts/extraction_prompt.py <slug> <bibcode> | grep -n '#525'
+```
+
+**Esperado (medido en copia):** categoría nueva *Notación sin renderizar* con **5** filas —`gj_581`
+(`10^-128`), `deteccion-estadistica` ×3 (`F^M`, `10^−3`, `10^-0.13`), `indicadores-actividad`
+(`−0.33y^3`)—, las 5 notación cruda de verdad. Ninguna otra categoría cambia. El prompt nuevo pide
+`$…$` y tildes fuera de «…». Se cierra re-tipeando SÓLO la notación a `$…$`.
+
+**Devolver si** aparece una fila con `H$\alpha$` u otra matemática ya entre `$`, o texto de «…».

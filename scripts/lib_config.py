@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.334.0"
+ALMAGESTO_VERSION = "1.335.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1251,6 +1251,30 @@ def escape_dollars(texto: str) -> str:
 def _escape_dollar_run(trozo: str) -> str:
     r"""The `$` of a fragment with no math span, escaped once — never twice (#457)."""
     return re.sub(r"(?<!\\)\$", r"\\$", trozo)
+
+
+#: #525 · what is NOT notation to render: math spans, «quotes» (verbatim from the source), inline
+#: code, wikilinks and URLs. ⚠ The math span pairs each `$` with the NEXT one, glued or not:
+#: `H$\alpha$` renders in Obsidian, and `_DOLLAR_MATH_RE` (pandoc's stricter rule, built to protect
+#: currency) left it out — measured, 5 false positives in 10 on a real vault.
+_NOTATION_MASK_RE = re.compile(r"\$\$.*?\$\$|\$[^$\n]+\$|«[^»]*»|`[^`]*`|\[\[[^\]]*\]\]|https?://\S+")
+#: #525 · raw math outside `$…$`, only the unambiguous forms: a superscript (`10^-3`, `y^3`), a braced
+#: subscript (`sum_{i=1}`) or a LaTeX command. Measured on a real vault: 5 of 5 inventory rows and a
+#: sample of 33 of the 288 table-row hits read by hand, all true; `sigma`, `<=` or `A_b` alone were
+#: left out because they are prose too.
+RAW_NOTATION_RE = re.compile(
+    r"[\w)\]]\^[-−+\w{(]|\w_\{"
+    r"|\\(?:sigma|alpha|beta|frac|sqrt|lambda|Delta|delta|sum|pm|times|approx|sim|leq|geq)\b")
+
+
+def raw_notation(texto: str) -> str | None:
+    """The first word carrying math written OUTSIDE `$…$` (Obsidian shows `10^-3` literally), or None."""
+    visible = _NOTATION_MASK_RE.sub(" ", str(texto or ""))
+    if not (m := RAW_NOTATION_RE.search(visible)):
+        return None
+    ini = visible.rfind(" ", 0, m.start()) + 1
+    fin = visible.find(" ", m.end())
+    return visible[ini:fin if fin >= 0 else None]
 
 
 def method_key(nombre) -> str:

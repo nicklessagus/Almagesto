@@ -533,6 +533,11 @@ da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vi
 - Mirá si el PDF es un **preprint** de arXiv (marca de agua al margen): si lo es, decilo en
   `salvedades` **estructurada** —`{{"tipo":"pdf_leido","documento":"eprint"}}` (#452), ver abajo—,
   porque un valor que discrepa del publicado es candidato a diferencia de versión.
+- ⛔ **Tu texto va a la bóveda TAL CUAL, así que escribilo en su notación (#525):** toda matemática
+  en `$…$` (`$10^{{-3}}$`, `$\\log C_{{cf}}$`, `$\\sigma$`, `$\\geq 4\\sigma$`) y el castellano con
+  tildes, en `que`, `valor`, `regimen`, `aporte` y `hueco`. La extracción es inmutable y
+  `contrast --filas` la copia literal: lo que escribas `10^-3` o `minimos` se publica así. **Dentro
+  de «…» no**: la cita va como está en la fuente.
 - ⛔ **Nada de prosa comparativa con otros papers.** Comparar dos fuentes es tarea del
   orquestador y va al `## Inventario por eje`, no a esta nota.
 

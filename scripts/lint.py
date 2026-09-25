@@ -3167,6 +3167,35 @@ def check_contraste_pendiente(extracted) -> list:
     return contraste_pendiente
 
 
+def check_inventory_notation() -> list:
+    """`notacion_cruda` — an `## Inventario por eje` row with math outside `$…$` (#525, backlog).
+
+    The row comes from `contrast --filas`, which copies the extraction verbatim (#322/#330), so the
+    raw notation was born in the extractor. The fix is re-typing ONLY the notation into `$…$`
+    (never inside «…», which is the source's text); the `## Vista` tables are left out on purpose:
+    they are a copy of an immutable extraction (#311) and the prompt now asks for `$…$`."""
+    out: list = []
+    for f in sorted(glob.glob(str(cfg.STARS / "*.md"))) + sorted(glob.glob(str(cfg.CONCEPTS / "*" / "*.md"))):
+        try:
+            texto = Path(f).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        i = cfg.section_start(texto, INVENTARIO_HEADER)
+        if i < 0:
+            continue
+        seccion = texto[i:]
+        if (corte := seccion.find("\n## ", 1)) > 0:
+            seccion = seccion[:corte]
+        filas = [ln.strip() for ln in seccion.split("\n")
+                 if ln.strip().startswith("|") and not _SEP_ROW.match(ln.strip())]
+        for fila in filas[1:]:
+            if (hit := cfg.raw_notation(fila)):
+                out.append((basename(f)[:-3], f"fila del `## Inventario por eje` con notación fuera "
+                            f"de `$…$` (`{hit}`): Obsidian la muestra literal → re-tipeá SÓLO la "
+                            f"notación a `$…$`, nunca dentro de «…» (#525)"))
+    return out
+
+
 def check_dangling_methods(method_refs: dict, dangling) -> list:
     """`dangling_methods` — a `methods` naming no note, by stem or by `aliases` (backlog).
 
@@ -6926,6 +6955,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         return is_dangling(n, _stems_norm, sweep.alias_idx)
     found["dangling_thesis"] = check_dangling_thesis(sweep.thesis_refs, _dangling)
     found["contrast_missing"] = check_contraste_pendiente(sweep.extracted)
+    found["notacion_cruda"] = check_inventory_notation()
     found["dangling_methods"] = check_dangling_methods(sweep.method_refs, _dangling)
     found["alias_colision"] = check_alias_collisions()
     found["methods_colision"] = check_methods_spelling_collisions(sweep.method_refs)
@@ -6993,6 +7023,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('mass_issues', 'Ground-truth: masa inconsistente con m·sini (K,P,e,M*)', SEV_BLOQUEANTE, tuple(found['mass_issues']), poblacion='ground_truth'),
         Categoria('contrast_missing', 'Contraste cross-paper (3b) sin rastro: el inventario por eje quedó en la plantilla (backlog)',
                   SEV_BACKLOG, tuple(found['contrast_missing']), poblacion='entidades'),
+        Categoria('notacion_cruda', 'Notación sin renderizar: fila del inventario por eje con matemática fuera de `$…$` (#525, backlog)',
+                  SEV_BACKLOG, tuple(found['notacion_cruda']), poblacion='entidades'),
         Categoria('alias_faltante', 'Identificadores que SIMBAD conoce y `stars.yaml` no declara: '
                   'un alias que falta es un paper que nunca aparece, en silencio (backlog — la '
                   'elección es curación)', SEV_BACKLOG, tuple(found['alias_faltante']), poblacion='ground_truth'),

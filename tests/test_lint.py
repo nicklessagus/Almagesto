@@ -9172,6 +9172,20 @@ def test_check_contraste_pendiente_solo_donde_el_contraste_es_POSIBLE(toy_vault)
     assert lint.check_contraste_pendiente(extracted) == [], "sección borrada = escotilla declarada"
 
 
+def test_notacion_cruda_en_el_inventario_se_reporta_y_la_cita_no(toy_vault):
+    """#525 — `contrast --filas` copia la extracción literal, así que `10^-3` fuera de `$…$` llega a
+    la ficha y Obsidian lo muestra tal cual. Dentro de «…» es texto de la fuente y no se toca; el
+    `$…$` bien escrito no es hallazgo, ni la `## Vista` (copia de una extracción inmutable)."""
+    inv = (f"\n{lint.INVENTARIO_HEADER}\n\n| Eje | Paper | Dice | Método |\n|---|---|---|---|\n"
+           "| FAP | [[2008X]] | FAP < 10^−3 | GLS |\n"
+           "| FAP | [[2009Y]] | «FAP < 10^-3» y $10^{-4}$ | $\\sigma$ |\n")
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"}, inv)
+    mk_note(cfg.PAPERS, "2008X", {"tags": ["paper"]},
+            "\n## Vista — Estrella Test\n\n| que | valor |\n|---|---|\n| FAP | 10^-3 |\n")
+    filas = lint.check_inventory_notation()
+    assert len(filas) == 1 and filas[0][0] == "test_star" and "10^−" in filas[0][1], filas
+
+
 def test_las_dos_categorias_dangling_comparten_la_regla_y_difieren_en_SEVERIDAD(toy_vault):
     """#396/#243/#348 — `check_dangling_thesis` bloquea y `check_dangling_methods` es backlog, y la
     asimetría es real: un `thesis_links` nombra un concepto que `ingest-theme` CREA en la misma

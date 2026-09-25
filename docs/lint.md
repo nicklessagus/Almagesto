@@ -744,6 +744,13 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   extraídos citados. Ausencia de la sección = declarado; presente-y-vacío = el paso se salteó —
   y su producto no se nota si falta. Se cierra corriendo `contrast.py <slug>` y escribiendo el
   inventario (o sacando la plantilla si el contraste es imposible con un solo paper).
+- **Notación sin renderizar en el inventario** (#525, `notacion_cruda`, backlog): una fila de
+  `## Inventario por eje` con matemática fuera de `$…$` —superíndice (`10^-3`), subíndice con
+  llaves (`sum_{i}`) o comando LaTeX (`\sigma`)—, sin mirar dentro de «…», código ni
+  `[[wikilinks]]`. Obsidian la muestra literal. Viene de `contrast --filas`, que copia la
+  extracción tal cual (#322/#330); se cierra re-tipeando **sólo la notación** a `$…$`. Las tablas
+  de `## Vista` quedan afuera a propósito: son copia de una extracción inmutable (#311), y desde
+  #525 el prompt del extractor pide `$…$`. Medido en Almagesto-Tesis: 5 filas, las 5 verdaderas.
 - **`status: sostenida` contra su propia tabla de evidencia** (D-37/#177, `status_vs_evidencia`,
   backlog): una hipótesis `sostenida` con filas `desafía` en la tabla. El `status` se **deriva**
   de la tabla; con evidencia repartida es `disputada`. Es lo único que impide que `status` sea un

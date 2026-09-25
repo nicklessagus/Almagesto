@@ -2560,3 +2560,33 @@ portadores:
       - modulo: scripts/search_arxiv.py
         estado: fuera-de-alcance
         motivo: "Preview de arXiv: lo que trae no tiene bibcode ADS y no puede ir a `extra_core` (va a `sources:`, cuyo rastro es `descubrimientos` de `discover`)."
+  - issue: 525
+    regla: >-
+      Todo texto que una máquina copia del JSON de extracción a `vault/wiki/` cumple la notación de la
+      bóveda (`$…$`, tildes). La extracción es inmutable (#311) y el copiado literal (#322/#330), así
+      que la regla se cumple en el EXTRACTOR y la deuda heredada la levanta el lint. Medido en
+      Almagesto-Tesis: 5 filas de `## Inventario por eje` con notación cruda, las 5 verdaderas.
+    funcion: lib_config.raw_notation
+    patron: 'contrast.py|--filas|escape_cell\('
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_inventario_notacion` (`notacion_cruda`, backlog) sobre las filas del inventario."
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: "Lleva la regla como TEXTO del prompt (pide `$…$` y tildes fuera de «…», #525): antes de la lectura no hay texto que detectar."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "`--filas`/`--cita` copian la extracción literal (#322/#330): normalizar ahí re-tipearía la cita."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "La tabla de la `## Vista` es copia de la extracción inmutable (#311); `escape_cell` escapa la `|`, no la notación. El lint la deja afuera a propósito."
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "`escape_cell` en la tabla de verificación: el extracto es de la nota, no del JSON."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Menciona `contrast.py`/`--filas` en comentarios; compara citas, no escribe notación."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "`escape_cell` en roll-ups estampados (motivos, variantes, `data_availability`): metadata, no valores de extracción."

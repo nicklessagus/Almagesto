@@ -1692,6 +1692,10 @@ re-extraer el `.txt`.
    una fuente** (agrupar bibcodes bajo una glosa compartida fabrica atribuciones). ⛔ **Y las
    comillas son las del EXTRACTOR: el script no pone ninguna (#330)** —`valor` llega entre «», con
    «» adentro (glosa) o sin «»—; lo que sale sin comillas NO es verbatim y no se entrecomilla.
+   ⛔ **Re-tipear SÓLO la notación sí se permite (#525):** fuera de «…», `10^-3` → `$10^{-3}$` no
+   cambia qué dice la fila y es la única salida para una extracción vieja (inmutable, #311); dentro
+   de «…» no se toca. El lint lo levanta como backlog (`notacion_cruda`); el prompt del extractor ya
+   pide `$…$` y tildes, así que la fila nueva no debería traerla.
    ⛔ **Y la extracción es testigo de lo que el SINTETIZADOR re-tipeó, nunca de lo que la MÁQUINA
    copió de ella (#454):** el bloque de salvedades de una `## Vista` lo estampa `harvest_views`
    desde el JSON, así que ahí el testigo y el juzgado son el mismo archivo y el paso 2 la aprueba

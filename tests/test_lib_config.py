@@ -4110,3 +4110,10 @@ def test_save_probe_appendea_y_no_toca_las_otras_secciones(toy_vault):
     reg = cfg.load_registro("d")
     assert [p["query"] for p in reg["probes"]] == ["q1", "q2"]
     assert reg["decisiones"] == {"2020a....1A": {"decision": "drop"}}
+def test_raw_notation_ve_la_matematica_fuera_de_dolares_y_no_la_cita():
+    """#525 — superíndice, subíndice con llaves o comando LaTeX fuera de `$…$`. Lo de «…» es texto
+    de la fuente, y `H$\\alpha$` (pegado a la letra) Obsidian lo renderiza: no es hallazgo."""
+    assert cfg.raw_notation("FAP < 10^-3 en GLS") == "10^-3"
+    assert cfg.raw_notation("es sum_{i=1} a_i") == "sum_{i=1}"
+    assert cfg.raw_notation("\\sigma = 1") == "\\sigma"
+    assert cfg.raw_notation("«y^3» [[2001A^b]] `x^2` $x^2$ H$\\alpha$ y sigma <= 3") is None
