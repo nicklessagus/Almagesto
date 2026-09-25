@@ -2629,6 +2629,11 @@
   {
    "number": 528,
    "title": "warn_anchor hashea el PÁRRAFO y split_blocks el ÍTEM: una firma warn_revisada sobre un ítem de lista exime a toda la lista, y editar cualquier ítem vence las firmas de todos",
+   "state": "CLOSED"
+  },
+  {
+   "number": 529,
+   "title": "La primera ingesta de un sujeto baja PDFs sin checkpoint humano: expansion_guard no aplica «sin notas previas», y el corpus que el usuario conserva es el 4-11 % del core",
    "state": "OPEN"
   }
  ]

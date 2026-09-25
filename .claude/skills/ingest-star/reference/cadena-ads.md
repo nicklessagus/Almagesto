@@ -25,6 +25,26 @@ Antes de refrescar un sujeto viejo, mirá ese número: si el pool explotó, revi
 combinación** en `objective.yaml` (skill `setup`) antes de bajar nada — podar las regex no alcanza si
 la combinación sigue siendo OR. `--yes` continúa a sabiendas.
 
+### ⛔ La PRIMERA ingesta frena siempre (#529)
+
+Pedir un sujeto **no** es aprobar su core (medido: el usuario conservó el 6-13 % del core, y una
+primera corrida bajó 21 PDFs que se tiraron). Si el sujeto nunca bajó nada (sin `fetch_arxiv`/
+`fetch_pdf` en su `cadena` ni PDFs bajo `raw/pdfs/<slug>/`), la guardia **frena siempre** —también
+en la mitad ADS de un tema mixto— e imprime **la lista de lo que se va a bajar**: bibcode,
+publicado / sólo eprint, revista, DOI y si ya está en disco. Esa corrida frenada **es** el modo «no
+bajar». Con la lista, en este orden:
+
+1. **Recortar el corpus con el usuario** y persistirlo: `extra_core` (con `query: null`, #384) o
+   `triage.py <slug> --drop-core <bib> --reason`.
+2. **Pasarle la lista de PUBLICADOS** y que traiga los que consiga; se instalan con
+   `replace_pdf.py <bib> <ruta.pdf> --source publisher --reason "…"`.
+3. **Cada uno que declare no poder conseguir**: `triage.py <slug> --acepta-preprint <bib> --reason
+   "el usuario no consiguió la versión publicada, <fecha>"` (#512) — la cadena baja el eprint.
+4. **Re-correr el orquestador con `--yes`.**
+
+Cada paper del corpus aprobado termina en uno de tres estados: **publicado instalado**, **preprint
+aceptado con motivo**, o **`pending_source` declarado**. Nunca un preprint por defecto en silencio.
+
 ## Citation chaining
 
 `query_ads` pide a ADS references/citations de los core: trae surveys y catálogos conectados por el

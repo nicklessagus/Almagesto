@@ -2193,6 +2193,20 @@ portadores:
         estado: usa
         motivo: "`migrate_warn_anchor` re-firma del ancla de párrafo (`paragraph_anchor`) a la de bloque."
 
+  - issue: 529
+    regla: >-
+      Ningún paso que gaste red y disco corre en la PRIMERA ingesta de un sujeto antes de que el
+      usuario apruebe el corpus con la lista de lo que se va a bajar (publicado / sólo eprint).
+      Pedir un sujeto no es aprobar su core: medido, el usuario conservó el 6-13 %. La regla la
+      llevan TODOS los caminos que corren `query_ads` antes de `fetch_*`, incluida la mitad ADS de
+      un tema mixto, que no pasaba por ninguna guardia.
+    funcion: ingest_theme.expansion_guard
+    patron: 'if not conocidos'
+    consumidores:
+      - modulo: scripts/ingest_star.py
+        estado: usa
+        motivo: "Llama a `expansion_guard` después de `query_ads.py`, antes de `fetch_arxiv.py`."
+
   - issue: 505
     regla: >-
       Antes de declarar un hueco —de `bibtex` (`sin_bibtex`, #467) o de PDF (`pending`, la cascada
@@ -2393,6 +2407,9 @@ portadores:
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "Sólo NOMBRA `replace_pdf.py` como salida del backlog #298; no instala nada."
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: "Sólo NOMBRA `replace_pdf.py` en el mensaje de la primera ingesta (#529); no instala PDFs."
 
   - issue: 514
     regla: >-

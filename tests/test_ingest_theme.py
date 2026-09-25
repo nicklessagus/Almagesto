@@ -109,10 +109,29 @@ def test_guardia_expansion_frena_la_cadena_ads(toy_vault, fake_run, fake_notes, 
     (d / "ads.json").write_text(json.dumps({"records": recs}), encoding="utf-8")
     for r in recs[:10]:
         mk_note(cfg.PAPERS, r["bibcode"], {"bibcode": r["bibcode"]})
+    (cfg.PDFS / "gp").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "gp" / "viejo.pdf").write_bytes(b"%PDF")          # ya bajó alguna vez (#529)
     with pytest.raises(SystemExit, match="frenada"):
         run_main(monkeypatch)
     assert [c[0] for c in fake_run.calls] == ["query_ads.py"]
     assert "EXPANSIÓN" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("decl", [{"query": "abs:gp"}, {"extra_core": [
+    {"bibcode": "2020core...000A", "via": "usuario", "motivo": "m"}]}])
+def test_529_la_mitad_ADS_de_un_tema_MIXTO_tambien_pasa_por_la_guardia(
+        toy_vault, fake_run, fake_notes, monkeypatch, decl):
+    """#529 — el carril off-ADS corre la sub-cadena ADS (`query:` o `extra_core:`) y NO llamaba a
+    la guardia: la primera ingesta de un tema mixto bajaba sin checkpoint, aun con #37."""
+    import json
+    topic(source="web", sources=[], **decl)
+    d = toy_vault.ROOT / "build" / "gp"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"records": [
+        {"bibcode": "2020core...000A", "relevant": True}]}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="PRIMERA|primera"):
+        run_main(monkeypatch)
+    assert [c[0] for c in fake_run.calls] == ["query_ads.py"]
 
 
 def test_handoff_nombra_los_pasos_salteables(toy_vault, fake_run, fake_notes, monkeypatch, capsys):

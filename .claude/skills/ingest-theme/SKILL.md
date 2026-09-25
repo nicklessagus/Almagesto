@@ -63,7 +63,7 @@ Progreso del ingest del tema <tema>:
    - **c. Validar con un conteo barato** antes de bajar nada (y antes de persistir el slug):
      `python scripts/query_ads.py --probe '<query candidata>' --rows 50` y mirar el corte CORE/no-core +
      los títulos top (ordenados por citas). Si trae cientos con ruido o muy pocos, reajustar la
-     query y reconfirmar. **No** bajar PDFs hasta que el usuario apruebe la query final. (`--probe`
+     query y reconfirmar. **No** bajar PDFs hasta que apruebe query y corpus (#529). (`--probe`
      recibe la query cruda, así que corre sin que el tema exista todavía en `themes.yaml` —
      `--theme <slug>` recién funciona después del paso d.)
    - ⛔ **c1. Para un tema de MÉTODO, re-corré el probe CON la lente del tema, después del paso d:**

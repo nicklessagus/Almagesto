@@ -19,7 +19,9 @@ eprint en silencio.
 La **guardia de expansión** (#37) es un checkpoint humano entre la query y el primer paso que
 gasta red y disco: si el core del `ads.json` fresco se multiplicó respecto de las notas ya
 ingestadas del sujeto (default: ×1.5 y 50 o más nuevos), frena con el conteo, cuántos vinieron por
-el grafo de citas y el puntero a `relevance.require`/`min_facets`. `--yes` continúa a sabiendas.
+el grafo de citas y el puntero a `relevance.require`/`min_facets`. En la **PRIMERA ingesta frena
+siempre** (#529) con la lista de lo que se va a bajar —publicado o sólo eprint—: pedir la estrella
+no es aprobar su core. `--yes` continúa a sabiendas.
 
 **Este header ES la definición canónica de la cadena de estrellas** (el análogo para temas es
 `ingest_theme.py`). Docs y skills apuntan acá en vez de copiar la lista — una copia por doc es
@@ -60,8 +62,9 @@ def main() -> int:
         epilog="Exit != 0 aborta la cadena: corregí y volvé a correr (es idempotente).")
     ap.add_argument("slug", help="estrella de vault/config/stars.yaml (por slug)")
     ap.add_argument("--yes", action="store_true",
-                    help="continuar a sabiendas si la guardia de expansión frena la cadena (el pool "
-                         "core se multiplicó respecto de lo ya ingestado)")
+                    help="continuar a sabiendas si la guardia frena la cadena: el pool core se "
+                         "multiplicó respecto de lo ya ingestado, o es la PRIMERA ingesta y el corpus "
+                         "ya se aprobó (#529)")
     args = ap.parse_args()
     try:
         name, _ = cfg.star_by_slug(args.slug)

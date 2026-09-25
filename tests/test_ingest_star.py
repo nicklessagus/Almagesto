@@ -112,10 +112,18 @@ def with_notes(bibcodes):
         mk_note(cfg.PAPERS, b, {"bibcode": b})
 
 
+def ya_bajado(slug):
+    """El sujeto ya bajó alguna vez (#529): un PDF bajo su `raw/pdfs/<slug>/`."""
+    import lib_config as cfg
+    (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / slug / "viejo.pdf").write_bytes(b"%PDF")
+
+
 def test_guardia_frena_expansion_antes_de_fetch(toy_vault, fake_run, monkeypatch, capsys):
     """El core saltó de 10 notas a 200 → frena DESPUÉS de query_ads y ANTES de fetch_arxiv."""
     recs = write_core(toy_vault, "test_star", 200)
     with_notes([r["bibcode"] for r in recs[:10]])
+    ya_bajado("test_star")
     with pytest.raises(SystemExit, match="frenada"):
         run_main(monkeypatch)
     assert fake_run.calls == [("query_ads.py", "test_star")]      # no llegó a bajar nada
@@ -130,9 +138,30 @@ def test_guardia_yes_continua(toy_vault, fake_run, monkeypatch):
     assert ("fetch_arxiv.py", "test_star") in fake_run.calls
 
 
-def test_guardia_no_frena_el_primer_ingest(toy_vault, fake_run, monkeypatch):
-    """Sin notas previas no hay expansión que medir: el usuario acaba de pedir el sujeto."""
-    write_core(toy_vault, "test_star", 500)
+def test_529_la_PRIMERA_ingesta_frena_con_la_lista_de_lo_que_se_va_a_bajar(toy_vault, fake_run,
+                                                                           monkeypatch, capsys):
+    """#529 — pedir un sujeto NO es aprobar su core (medido: el usuario conservó el 6-13 %, y una
+    primera corrida bajó 21 PDFs que se tiraron). La primera ingesta frena siempre, con la lista
+    —publicado o sólo eprint— que el usuario usa para recortar y para traer los publicados. Aunque
+    el core ya tenga notas de OTROS sujetos: «sin notas» dejaba pasar a un sujeto nuevo solapado."""
+    import json
+    recs = write_core(toy_vault, "test_star", 3)
+    recs[0].update(doi="10.1/x", bibstem="A&A")
+    recs[1]["bibcode"] = "2020arXiv200101234A"
+    (toy_vault.ROOT / "build" / "test_star" / "ads.json").write_text(
+        json.dumps({"records": recs}), encoding="utf-8")
+    with_notes([recs[2]["bibcode"]])                   # nota de otro sujeto: igual es la primera
+    with pytest.raises(SystemExit, match="--acepta-preprint"):
+        run_main(monkeypatch)
+    assert fake_run.calls == [("query_ads.py", "test_star")]      # no llegó a bajar nada
+    out = capsys.readouterr().out
+    assert "PRIMERA ingesta" in out and "2 con versión PUBLICADA" in out and "1 sólo eprint" in out
+    assert f"{recs[0]['bibcode']}" in out and "doi: 10.1/x" in out and "A&A" in out
+    assert "2020arXiv200101234A  sólo eprint" in out
+    # con el corpus aprobado, `--yes` sigue; y una vez bajado, deja de ser la primera
+    assert run_main(monkeypatch, ("test_star", "--yes")) == 0
+    ya_bajado("test_star")
+    fake_run.calls.clear()
     assert run_main(monkeypatch) == 0
 
 
@@ -140,6 +169,7 @@ def test_guardia_no_frena_un_refresh_normal(toy_vault, fake_run, monkeypatch):
     """+20 papers sobre 100 ya ingestados: ni factor ni volumen alcanzan el umbral."""
     recs = write_core(toy_vault, "test_star", 120)
     with_notes([r["bibcode"] for r in recs[:100]])
+    ya_bajado("test_star")
     assert run_main(monkeypatch) == 0
 
 

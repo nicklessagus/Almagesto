@@ -10,13 +10,15 @@ campo `source` (formaliza el modo off-ADS del skill ingest-theme en el tooling):
   query_ads --theme → [guardia de expansión] → fetch_arxiv → fetch_pdf → make_notes --theme →
   extract_fulltext → check_retractions → fetch_bibtex. La **guardia de expansión** (#37) frena entre la query y
   el primer paso que gasta red y disco si el core se multiplicó respecto de lo ya ingestado
-  (default ×1.5 y 50 o más nuevos); `--yes` continúa a sabiendas. **Publisher-first (#512)**,
+  (default ×1.5 y 50 o más nuevos), y en la **PRIMERA ingesta frena siempre** con la lista de lo
+  que se va a bajar —publicado o sólo eprint— para recortar el corpus y traer los publicados antes
+  (#529; también en la mitad ADS de un tema mixto); `--yes` continúa a sabiendas. **Publisher-first (#512)**,
   igual que `ingest_star`: el eprint de un bibcode con versión publicada sólo entra con
   `acepta_preprint` declarado; lo que el editor no entrega queda en `missing_pdf.json` como
   `publicado-no-conseguido`, listado para el usuario.
   · **Corpus DECLARADO (#384): `source: ads` + `query: null` + `extra_core:`** → la misma
-    sub-cadena con `query_ads --theme --extra-only` (sólo esos bibcodes, sin descubrimiento ni
-    guardia) → fetch_arxiv → fetch_pdf → make_notes --theme → extract_fulltext → check_retractions → fetch_bibtex.
+    sub-cadena con `query_ads --theme --extra-only` (sólo esos bibcodes, sin descubrimiento; la
+    guardia de primera ingesta de #529 sí corre) → fetch_arxiv → fetch_pdf → make_notes --theme → extract_fulltext → check_retractions → fetch_bibtex.
     No es un tema mixto ni le faltan fuentes; sin `query:` NI `extra_core:` el orquestador rehúsa
     antes de gastar nada. (`ads_subchain` es la definición única de esa sub-cadena.)
 - `web` | `local-pdfs` | `local-pdfs+web`: modo off-ADS. La bibliografía se declara en la
@@ -154,16 +156,59 @@ EXPANSION_FACTOR = 1.5     # salto mínimo (core nuevo / ya ingestado) para fren
 EXPANSION_NEW = 50         # …y además, mínimo de papers nuevos (evita frenar por ruido chico)
 
 
+def first_ingest(slug: str) -> bool:
+    """Is this the subject's FIRST download? (#529) No `fetch_arxiv`/`fetch_pdf` in its registro's
+    `cadena` (D-57: each script stamps itself) and no PDF under its own `raw/pdfs/<slug>/` — the
+    second clause keeps a subject ingested before D-57 from reading as new. ⚠ Not «no notes»: a new
+    subject whose core overlaps papers of other subjects already has notes, and the old test let
+    it through whenever fewer than `EXPANSION_NEW` were new."""
+    pasos = {str(cfg.as_map(c).get("paso")) for c in cfg.as_list(cfg.load_registro(slug).get("cadena"))}
+    return not pasos & {"fetch_arxiv", "fetch_pdf"} and not any((cfg.PDFS / slug).glob("*.pdf"))
+
+
+def print_download_list(core: list) -> None:
+    """The list the user curates the first ingest with (#529): per core paper, bibcode, DOI,
+    venue and whether it has a PUBLISHED version (#512: the one the vault reads) or is eprint-only,
+    and whether a PDF of it is already on disk under another subject (reused, D-18)."""
+    en_disco = {p.stem for p in cfg.PDFS.glob("*/*.pdf")}
+    n_pub = sum(cfg.has_published_version(r["bibcode"]) for r in core)
+    cfg.print_seguro(f"  {n_pub} con versión PUBLICADA (se lee ésa, #512) · {len(core) - n_pub} sólo eprint "
+                     f"(arXiv/tesis: el eprint ES la fuente):")
+    for r in sorted(core, key=lambda r: r["bibcode"]):
+        estado = "publicado" if cfg.has_published_version(r["bibcode"]) else "sólo eprint"
+        disco = " · ya en disco" if make_notes.safe_name(r["bibcode"]) in en_disco else ""
+        cfg.print_seguro(f"    {r['bibcode']:<20} {estado:<11} {r.get('bibstem') or '—':<10} "
+                         f"doi: {r.get('doi') or '—'}{disco}")
+
+
 def expansion_guard(slug: str, yes: bool) -> None:
     """Frena la cadena DESPUÉS de query_ads y ANTES del primer paso que gasta red y disco, si el
-    pool core se multiplicó respecto de lo ya ingestado del sujeto. No aplica al primer ingest
-    (sin notas previas no hay expansión que medir: el usuario acaba de pedir el sujeto entero)."""
+    pool core se multiplicó respecto de lo ya ingestado del sujeto.
+
+    ⛔ #529 — y en la PRIMERA ingesta frena SIEMPRE (salvo `--yes`), con la lista de lo que se va
+    a bajar. Pedir un sujeto no es aprobar su core: medido en una bóveda real, el corpus que el
+    usuario conservó fue el 6-13 % del core, y una primera corrida bajó 21 PDFs que se tiraron. La
+    corrida frenada ES el modo «no bajar»: sale antes del primer paso que gasta red."""
     adsfile = cfg.ROOT / "build" / slug / "ads.json"
     if not adsfile.exists():
         return
     data = json.loads(adsfile.read_text(encoding="utf-8"))
     core = [r for r in data["records"] if r.get("relevant")]
     n_cand = len(cfg.as_list(data.get("candidates")))   # pendientes de triage (#38): no se bajan
+    if core and first_ingest(slug):
+        cfg.print_seguro(f"\n⚠ PRIMERA ingesta de {slug}: {len(core)} core por bajar. Todavía no se "
+                         f"bajó nada (#529).")
+        print_download_list(core)
+        if not yes:
+            sys.exit(f"cadena frenada antes de bajar la primera vez. Antes de seguir: (1) recortá el "
+                     f"corpus con el usuario y persistilo (`extra_core` con `query: null`, o "
+                     f"`triage.py {slug} --drop-core <bib> --reason`); (2) pasale la lista de "
+                     f"PUBLICADOS y que traiga los que consiga (`replace_pdf.py <bib> <pdf> --source "
+                     f"publisher`); (3) el que no consiga, `triage.py {slug} --acepta-preprint <bib> "
+                     f"--reason \"el usuario no consiguió la versión publicada\"`; (4) re-corré con "
+                     f"--yes.")
+        cfg.print_seguro("  → --yes: corpus aprobado, sigo a bajar.")
+        return
     conocidos = {r["bibcode"] for r in core
                  if (cfg.PAPERS / f"{make_notes.safe_name(r['bibcode'])}.md").exists()}
     nuevos = [r for r in core if r["bibcode"] not in conocidos]
@@ -255,7 +300,7 @@ def ingest_ads(slug: str, meta: dict, yes: bool = False) -> None:
     _cierre_retracciones(slug)
 
 
-def ingest_offads(slug: str, meta: dict, force: bool) -> None:
+def ingest_offads(slug: str, meta: dict, force: bool, yes: bool = False) -> None:
     """Modo off-ADS: concept stub + una fuente por item de `sources:` (web o PDF local)."""
     for k in ("area", "concept"):
         if not meta.get(k):
@@ -434,6 +479,8 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             if rc:
                 sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                          "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")
+            if script == "query_ads.py":   # #529 — la mitad ADS del tema mixto también baja
+                expansion_guard(slug, yes)
     elif extra:
         cfg.print_seguro(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
         for script, sargs in ads_subchain(slug, extra_only=True):
@@ -441,6 +488,8 @@ def ingest_offads(slug: str, meta: dict, force: bool) -> None:
             if rc:
                 sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                          "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")
+            if script == "query_ads.py":
+                expansion_guard(slug, yes)
     extract_rc = 0
     # #211 — `query` entra a la condición: la mitad ADS del tema mixto baja PDFs con `fetch_pdf`
     # y su extracción sale por acá. Sin esto, un tema mixto con `query:` y sin `extra_core:` ni
@@ -521,8 +570,9 @@ def main() -> int:
     ap.add_argument("--force", action="store_true",
                     help="re-bajar/re-copiar FUENTES ya presentes (snapshot/PDF/fulltext); nunca pisa notas")
     ap.add_argument("--yes", action="store_true",
-                    help="continuar a sabiendas si la guardia de expansión frena la cadena (el pool "
-                         "core se multiplicó respecto de lo ya ingestado)")
+                    help="continuar a sabiendas si la guardia frena la cadena: el pool core se "
+                         "multiplicó respecto de lo ya ingestado, o es la PRIMERA ingesta y el corpus "
+                         "ya se aprobó (#529)")
     args = ap.parse_args()
 
     try:
@@ -553,7 +603,7 @@ def main() -> int:
             cfg.print_seguro("  ⚠ --force no aplica al modo ads (corré el script puntual con --force si hace falta).")
         ingest_ads(args.slug, meta, args.yes)
     elif source in OFFADS_KINDS:
-        ingest_offads(args.slug, {**meta, "source": source}, args.force)
+        ingest_offads(args.slug, {**meta, "source": source}, args.force, args.yes)
     else:
         sys.exit(f"source desconocido en '{args.slug}': {source!r} "
                  f"(válidos: ads | {' | '.join(OFFADS_KINDS)}).")

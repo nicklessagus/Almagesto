@@ -596,7 +596,7 @@ Pero los pasos que se saltean **a propósito, con un flag**, no dejan traza en n
 viaje:
 
 - **`--yes`** salta la guardia de expansión — el checkpoint humano que frena la cadena cuando el pool
-  se multiplica (×1.5 y 50 o más nuevos). Nada en el registro dice que ese día alguien decidió seguir
+  se multiplica (×1.5 y 50 o más nuevos), y desde #529 también en la **primera ingesta**. Nada en el registro dice que ese día alguien decidió seguir
   de largo.
 - ~~**`--no-triage`** apaga la compuerta entera~~ — ✅ **CERRADO (D-48, v1.26.0): el flag se
   eliminó** (ver INC-2). Queda el resto de este hueco. El `busqueda` del registro guardará

@@ -1380,3 +1380,16 @@ hecho» 10 → 13, revisadas 105 → 102, huérfanas 10 → 11; fuga y costura s
 de `ica-ruido` se re-revisan y se firma el ancla de cada bloque.
 
 **Devolver si** cambia otra categoría, o si la segunda corrida re-firma algo.
+
+## §#529 · v1.340.0 — la primera ingesta frena antes de bajar
+
+Declarar en `themes.yaml` un tema nuevo de prueba con `query:` y correr
+`python scripts/ingest_theme.py <slug>` (sin `--yes`); después, sacar el tema.
+
+**Esperado (medido en worktree sobre `f1704cf`, query `abs:"chromatic index" abs:"radial velocity"`):**
+rc 1 después de `query_ads`, sin ningún `fetch_*`. Se imprime «PRIMERA ingesta … 9 core por bajar»,
+la lista con publicado/sólo eprint, revista, DOI y «ya en disco», y los cuatro pasos (recortar,
+publicados, `--acepta-preprint`, `--yes`). Los PDFs de `vault/raw/pdfs` no cambian. Un refresh de
+cualquier sujeto existente **no** frena por esto.
+
+**Devolver si** un sujeto ya ingestado frena como primera ingesta, o si algo se baja antes del `--yes`.

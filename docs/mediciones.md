@@ -4031,3 +4031,13 @@ sobre la salida): 0 cambios. Falsos positivos: el fix identidad sobre los 1799 b
 Lint, antes → después de migrar: fuga (1) y costura (4) iguales; «bloque con más de un hecho» 10 → 13,
 revisadas 105 → 102 y huérfanas 10 → 11. Son exactamente los 3 hits y la firma declarada; ninguna otra
 categoría cambia. Sin migrar, el cambio de ancla solo deja 20 huérfanas y 93 revisadas.
+
+## #529 — la primera ingesta frena con la lista de lo que se va a bajar (v1.340.0)
+
+**Worktree de Almagesto-Tesis (`f1704cf`):** `first_ingest` da `False` en los **10** sujetos existentes
+(3 estrellas, 7 temas): un refresh no frena de más. Tema nuevo de prueba (`query: abs:"chromatic
+index" abs:"radial velocity"`) contra ADS real: `ingest_theme.py` corre `query_ads`, frena con rc 1
+antes de `fetch_arxiv` y lista los 9 core (9 publicados, 0 sólo eprint, 1 «ya en disco»). PDFs en
+la bóveda: 365 → 365. Portador que el issue no nombraba: la mitad ADS de un tema **mixto**
+(`ingest_offads` con `query:` o `extra_core:`) corría la sub-cadena **sin ninguna guardia**. Ahora
+pasa por la misma.
