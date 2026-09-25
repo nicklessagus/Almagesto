@@ -725,3 +725,29 @@ def test_533_devuelto_el_RANGO_se_chequea_como_rango_y_el_hueco_en_prosa_no_pisa
     # control: la misma evidencia fuera del rango SÍ contradice
     assert "otra página" in rp._check_item(los["ground_truth[0].linea"],
                                            {"pagina": "2011", "evidencia": ev}, BIB)
+
+
+def test_535_un_cierre_de_ANTES_de_534_deja_la_deuda_de_sueltos_visible_y_releible(toy_vault, tmp_path):
+    """#535 — las extracciones cerradas antes de #534 (`_repaginado` sin `alcance`) nunca
+    releyeron sus localizadores sueltos, y no había forma de reabrirlas: `--list` daba 0 y la ronda
+    rehusaba. Ahora la deuda de sueltos se ve, la ronda emite SÓLO esos, y al cerrarla el cierre
+    viejo se conserva y gana `alcance`. Un cierre nuevo ya nace con `alcance`."""
+    _extraccion(marca=None, salvedades=["App. A (p. 33): la hipótesis gaussiana."],
+                _repaginado={"fecha": "2026-09-01", "pdf_sha": _sha(_pdf()), "n": 3})
+    _txt_paginado()
+    [(f, d)] = rp.pending()
+    assert [it["id"] for it in rp.items_for(d)] == ["salvedades[0]@1"], "sólo los sueltos"
+    paquete = rp.write_round(BIB, tmp_path / "r")
+    assert [it["id"] for it in paquete["items"]] == ["salvedades[0]@1"]
+    r = rp.apply(BIB, _resultado(tmp_path, [{"id": "salvedades[0]@1", "pagina": "32",
+                                             "evidencia": "Received 3 March 2013", "motivo": ""}]))
+    nuevo = json.loads(f.read_text(encoding="utf-8"))
+    assert r["cerrada"] and nuevo["salvedades"][0] == "App. A (p. 32): la hipótesis gaussiana."
+    assert nuevo["_repaginado"]["fecha"] == "2026-09-01", "el cierre viejo se conserva"
+    assert nuevo["_repaginado"]["alcance"] == "sueltos" and nuevo["_repaginado"]["sueltos"]["n"] == 1
+    assert rp.pending() == []
+    # un cierre NUEVO ya declara su alcance, así que no reabre
+    d2 = _extraccion(salvedades=["App. A (p. 33): x."], ground_truth=[], ejes={})
+    rp.apply(BIB, _resultado(tmp_path, [{"id": "salvedades[0]@1", "pagina": "32",
+                                         "evidencia": "Received 3 March 2013", "motivo": ""}]))
+    assert json.loads(f.read_text(encoding="utf-8"))["_repaginado"]["alcance"] == "sueltos"

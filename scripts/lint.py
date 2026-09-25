@@ -2068,7 +2068,20 @@ def check_depaginated_extractions() -> tuple:
                         f"{parcial} → `python scripts/repaginate.py {f.stem} --out "
                         f"build/repag/{f.stem}` y releé esas páginas EN EL PDF (#494); la cita "
                         f"textual sigue valiendo (#436){sin_firma}"))
+        elif cfg.as_map(data.get("_repaginado")) and (sueltos := _loose_debt(data)):
+            # #535 — cerrada con una relectura que no enumeraba los localizadores sueltos (#534)
+            out.append((f"{f.parent.name}/{f.stem}",
+                        f"relectura CERRADA antes de #534 (`_repaginado` sin `alcance`): "
+                        f"{len(sueltos)} localizador(es) suelto(s) nunca se releyeron y pueden "
+                        f"nombrar el documento ANTERIOR → `python scripts/repaginate.py {f.stem} "
+                        f"--out build/repag/{f.stem}` (emite sólo los sueltos)"))
     return out, poblacion
+
+
+def _loose_debt(data: dict) -> list:
+    """`repaginate.loose_debt` (#535), imported here so the lint does not load it unless needed."""
+    import repaginate
+    return repaginate.loose_debt(data)
 
 
 def check_red_pass_missing() -> list:

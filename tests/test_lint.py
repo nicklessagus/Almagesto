@@ -11410,3 +11410,18 @@ def test_531_check_repository_cover_lee_SOLO_la_primera_pagina_de_cada_txt(toy_v
     covers = lint.scan_fulltext()[5]
     assert [m.split("`")[1] for _, m in lint.check_repository_cover(covers)] == ["a/2014S.txt",
                                                                                  "b/2014S.txt"]
+
+
+def test_535_la_deuda_de_sueltos_de_un_cierre_viejo_se_reporta(toy_vault):
+    """#535 — `_repaginado` sin `alcance` y con localizadores sueltos: la deuda sigue abierta para
+    ellos, y el lint la lista con el comando que emite sólo los sueltos."""
+    d = cfg.EXTRACCION / "gj_581"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "2010V.json").write_text(json.dumps({"bibcode": "2010V", "salvedades": ["App. A (p. 33): x."],
+                                              "_repaginado": {"fecha": "2026-09-01"}}), encoding="utf-8")
+    (d / "2011W.json").write_text(json.dumps({"bibcode": "2011W", "salvedades": ["App. A (p. 33): x."],
+                                              "_repaginado": {"fecha": "2026-09-01",
+                                                              "alcance": "sueltos"}}), encoding="utf-8")
+    out, poblacion = lint.check_depaginated_extractions()
+    assert poblacion == 2 and [e for e, _ in out] == ["gj_581/2010V"], out
+    assert "1 localizador(es) suelto(s)" in out[0][1]

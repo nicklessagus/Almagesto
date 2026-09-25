@@ -2286,6 +2286,25 @@ portadores:
         estado: fuera-de-alcance
         motivo: "Define la adyacencia (`adjacent_locators`) para el gate de citas; no enumera deuda de paginación."
 
+  - issue: 535
+    regla: >-
+      Una deuda de paginación cerrada con una versión de `repaginate` que no enumeraba algo sigue
+      ABIERTA para eso que no enumeraba: `_repaginado` declara su `alcance`, y sin él los
+      localizadores sueltos (#534) quedan como deuda visible y releíble (78 extracciones y 2123
+      sueltos en una bóveda real, con `--list` en 0).
+    funcion: repaginate.loose_debt
+    patron: 'PAGINATION_OPEN_MARKS'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_depaginated_extractions` lista la deuda de sueltos en la misma categoría (vía `_loose_debt`)."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "`extraction_pagination_open` decide si el gate de citas juzga localizadores ADYACENTES a una cita; los sueltos no los evalúa (los declara FUERA DE ALCANCE)."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Sólo re-exporta `PAGINATION_OPEN_MARKS` de `lib_quotes`."
+
   - issue: 505
     regla: >-
       Antes de declarar un hueco —de `bibtex` (`sin_bibtex`, #467) o de PDF (`pending`, la cascada

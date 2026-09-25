@@ -95,8 +95,34 @@ RESULT_SCHEMA = {"bibcode": "<bibcode>",
                             "motivo": "<por qué no la hallaste — sólo si pagina es null>"}]}
 
 
+#: #535 · what a CLOSED re-reading enumerated. A `_repaginado` without it was closed before #534,
+#: when loose locators were not items: those still owe their re-reading.
+ALCANCE_COMPLETO = "sueltos"
+
+
+def loose_debt(data: dict) -> list:
+    """The loose-locator items a closed re-reading never enumerated (#535), or `[]`.
+
+    ⛔ A debt closed by a `repaginate` that did not enumerate something is still OPEN for that
+    something: 79 extractions of a real vault were closed before #534, with ~2100 loose locators
+    never re-read and no way to reopen them (`--list` said 0, the round said «nada que releer»)."""
+    if any(cfg.as_map(data.get(m)) for m in cfg.PAGINATION_OPEN_MARKS):
+        return []
+    marca = cfg.as_map(data.get("_repaginado"))
+    if not marca or marca.get("alcance") == ALCANCE_COMPLETO:
+        return []
+    return [it for it in items(data) if "@" in it["id"]]
+
+
+def items_for(data: dict) -> list:
+    """The items a round owes: all of them while the debt is open, the loose ones of a
+    pre-#534 closure (#535)."""
+    return loose_debt(data) or items(data)
+
+
 def pending() -> list:
-    """`[(path, data)]` — the extractions whose pagination debt is still OPEN (#494).
+    """`[(path, data)]` — the extractions whose pagination debt is still OPEN (#494), including the
+    loose locators of a pre-#534 closure (#535).
 
     The same six-line walk as the lint's category, and not its result, because the writer needs the
     PATH: `_extraction_index` keys by bibcode and drops where each one lives."""
@@ -106,8 +132,8 @@ def pending() -> list:
             data = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue                      # el JSON ilegible tiene su propio detector
-        if isinstance(data, dict) and any(cfg.as_map(data.get(m))
-                                          for m in cfg.PAGINATION_OPEN_MARKS):
+        if isinstance(data, dict) and (any(cfg.as_map(data.get(m))
+                                           for m in cfg.PAGINATION_OPEN_MARKS) or loose_debt(data)):
             out.append((f, data))
     return out
 
@@ -329,12 +355,13 @@ def write_round(bibcode: str, out_dir: Path, *, extraccion=None) -> dict:
     pdf = cfg.PDFS / slug / f"{stem}.pdf"
     sha = lb.sha10(pdf.read_bytes())
     f, data = abiertas[0]
-    marca = next(cfg.as_map(data.get(m)) for m in cfg.PAGINATION_OPEN_MARKS if cfg.as_map(data.get(m)))
+    marca = next((cfg.as_map(data.get(m)) for m in cfg.PAGINATION_OPEN_MARKS
+                  if cfg.as_map(data.get(m))), cfg.as_map(data.get("_repaginado")))
     if marca.get("pdf_sha") and marca["pdf_sha"] != sha:
         raise RoundError(f"el PDF en disco ({sha}) no es el que registró la marca "
                          f"({marca['pdf_sha']}): se reemplazó otra vez, y este paquete describiría "
                          f"un tercer documento")
-    los = items(data)
+    los = items_for(data)
     paquete = {"bibcode": bibcode, "extraccion": file_id(f), "lente": lens_of(f),
                "ruta": f.as_posix(), "pdf_sha": sha,
                "items": [{**it, "guia": guide(it, bibcode)} for it in los],
@@ -529,7 +556,8 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
     if str(res.get("pdf_sha") or "") != sha_disco:
         raise ApplyError(f"el `pdf_sha` del resultado ({res.get('pdf_sha')}) no es el del PDF en "
                          f"disco ({sha_disco}): se leyó otro documento")
-    los = {it["id"]: it for it in items(data)}
+    sueltos = bool(loose_debt(data))            # #535 — ronda sólo de sueltos sobre un cierre viejo
+    los = {it["id"]: it for it in items_for(data)}
     if {x.get("id") for x in filas} != set(los):
         raise ApplyError(f"los `id` del resultado no son los de la extracción "
                          f"({len(filas)} contra {len(los)}): el paquete quedó viejo, re-emitilo")
@@ -602,12 +630,20 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
     if huecos:
         marca["huecos"] = huecos                    # #533 — el hueco en prosa vive acá, no en el texto
     # @inv INV-160
-    for m in cfg.PAGINATION_OPEN_MARKS:
-        data.pop(m, None)
-    if pendientes:
-        data["_repaginado_parcial"] = {**marca, "pendientes": pendientes}
+    if sueltos:
+        # #535 — el cierre viejo se CONSERVA (dice qué se releyó y cuándo); la ronda de sueltos se
+        # registra al lado, y `alcance` se estampa sólo cuando no quedó ninguno pendiente
+        viejo = cfg.as_map(data.get("_repaginado"))
+        data["_repaginado"] = {**viejo, "sueltos": {**marca, "pendientes": pendientes}}
+        if not pendientes:
+            data["_repaginado"]["alcance"] = ALCANCE_COMPLETO
     else:
-        data["_repaginado"] = marca
+        for m in cfg.PAGINATION_OPEN_MARKS:
+            data.pop(m, None)
+        if pendientes:
+            data["_repaginado_parcial"] = {**marca, "pendientes": pendientes}
+        else:
+            data["_repaginado"] = {**marca, "alcance": ALCANCE_COMPLETO}
     if not dry_run:
         cfg.write_text_atomic(f, json.dumps(data, ensure_ascii=False, indent=1) + "\n")
     return {"extraccion": f, "escritos": escritos, "no_hallados": no_hallados,
@@ -618,15 +654,16 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
 def print_list() -> int:
     """The open debt, by source, with its population declared (INV-40)."""
     deuda = pending()
-    total = sum(len(items(d)) for _f, d in deuda)
+    total = sum(len(items_for(d)) for _f, d in deuda)
     cfg.print_seguro(f"> deuda de paginación ABIERTA: {len(deuda)} extracción(es) · {total} "
                      f"localizador(es) a releer")
     for f, d in deuda:
         bib = str(d.get("bibcode") or f.stem)
-        marca = next(m for m in cfg.PAGINATION_OPEN_MARKS if cfg.as_map(d.get(m)))
+        marca = next((m for m in cfg.PAGINATION_OPEN_MARKS if cfg.as_map(d.get(m))),
+                     "_repaginado sin `alcance`: sueltos sin releer (#535)")
         pend = cfg.as_list(cfg.as_map(d.get(marca)).get("pendientes"))
         lente = f" · lente `{lens_of(f)}`" if lens_of(f) else ""
-        cfg.print_seguro(f"  · {f.parent.name}/{f.stem}: {len(items(d))} item(s) `{marca}`{lente}"
+        cfg.print_seguro(f"  · {f.parent.name}/{f.stem}: {len(items_for(d))} item(s) `{marca}`{lente}"
                          + (f" · {len(pend)} pendiente(s) de una ronda previa" if pend else "")
                          + f" → python scripts/repaginate.py {bib} --out build/repag/{f.stem}")
     if not deuda:

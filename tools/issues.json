@@ -2649,16 +2649,21 @@
   {
    "number": 532,
    "title": "replace_pdf instala el PDF y missing_pdf.json lo sigue listando: el residuo que se le pasa al usuario pide PDFs que ya están",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 533,
    "title": "repaginate --apply corrompe los localizadores con dos numeraciones (impresa + hoja del PDF) y los cuenta como reescritos",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 534,
    "title": "repaginate no enumera los localizadores que no están pegados a una cita: la deuda se cierra con páginas viejas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 535,
+   "title": "Las extracciones re-paginadas antes de #534 quedaron con ~2100 localizadores sueltos sin releer y no hay forma de reabrirlas",
    "state": "OPEN"
   }
  ]

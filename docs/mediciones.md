@@ -4105,3 +4105,14 @@ prosa va a la marca. Re-medido sobre el caso real (138 ítems): el mismo resulta
 2 diferencias esperables en Comon. El chequeo de rangos contra texto real no se pudo decidir ahí: el
 `.txt` de Comon es OCR y no deriva la numeración impresa, así que da no evaluable. Lo cubre el test
 (rojo con el código viejo, verde con el nuevo, y el control fuera del rango rehúsa).
+
+## #535 — la deuda de sueltos de un cierre anterior a #534 (v1.345.0)
+
+**Worktree de Almagesto-Tesis (`3a05aed`):** con v1.344.0, `repaginate --list` da **0**. Con v1.345.0
+da **78 extracciones · 2123 localizadores** a releer, y el lint lista las mismas 78 en la categoría
+de deuda de paginación. Los 2123 son exactamente los sueltos que midió el issue; el issue contaba 79
+extracciones, y probablemente la que falta se cerró con v1.344.0 al validar #533. La ronda
+(`repaginate <bib> --out …`) emite **sólo los sueltos**: por ejemplo, 61 ítems en
+`rv-doppler/2023AnRSA..10..623H`. Al cerrarla, el `_repaginado` viejo se conserva, gana `sueltos: {…}`
+y `alcance: sueltos`. Todo cierre nuevo ya nace con `alcance`. La estimación del issue (~1600
+corridos) es una **estimación**, no una medición: sólo la relectura lo dice.

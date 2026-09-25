@@ -1467,3 +1467,22 @@ el `«p. 304 (PDF p. 19)»` que está dentro de una cita.
 
 **Devolver si** la deuda se cierra con un localizador suelto sin releer, o si se reescribe uno
 dentro de «…».
+
+## §#535 · v1.345.0 — reabrir los sueltos de los cierres anteriores a #534
+
+```bash
+python scripts/repaginate.py --list
+python scripts/lint.py        # categoría de deuda de paginación
+```
+
+**Esperado (medido en worktree sobre `3a05aed`):** 78 extracciones · 2123 localizadores, cada una
+marcada «`_repaginado` sin `alcance`: sueltos sin releer (#535)». El lint lista las mismas 78 y rc 0,
+porque es backlog. La ronda de una de ellas emite sólo sus sueltos (ids `ruta@k`). Al aplicarla, el
+`_repaginado` conserva su fecha y gana `alcance: sueltos`. La relectura de las 2123 es trabajo de la
+instancia; el template no la corre.
+
+⚠ Un cierre hecho con v1.343.0–v1.344.0 **también reaparece**: esas versiones ya enumeraban los
+sueltos, pero no estampaban `alcance`, y la marca no guarda la versión. Releerlo sólo los confirma.
+
+**Devolver si** una extracción cerrada con v1.345.0 o posterior aparece en la lista, o si la ronda
+emite ítems que no son sueltos.
