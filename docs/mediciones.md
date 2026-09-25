@@ -3953,3 +3953,11 @@ sólo esa categoría.
 **Copia de la instancia, con `solo_abstract` declarado en las 2 notas de `ica`:** unverifiable 9 → 5,
 vista_solo_abstract 9 → 7, vista_sin_fuente_en_disco 10 → 8, cita_opaca 13 → 12 (la cita de L480
 sale `en_su_txt` contra el `## Abstract`), `solo_abstract_ok` 0 → 2. Diff del reporte: sólo esas.
+
+## #521 — la reanudación del empalme se busca en las otras columnas (v1.331.0)
+
+**Copia de la instancia:** `contrast --validar-todo` rc 1 → 0; «`.txt` en contra» 535 → 460. Sin
+la guarda de sonda completa en las otras lecturas salían 79: las 4 de más eran colas cortas
+(«uncertainty.», «9 solar radii», «shorter than ≈10 years», «present in our data») que aparecen en
+cualquier lado del documento, y siguen acusando. Lint: 4 `cita_revisada` quedan huérfanas (eran
+empalmes firmados).

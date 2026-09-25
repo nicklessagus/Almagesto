@@ -580,8 +580,15 @@ def txt_accuses(quote: str, readings: list) -> dict | None:
     # adelante en la misma lectura: si el `.txt` trae la continuación, no está diciendo otra cosa,
     # está diciendo lo mismo con algo metido en el medio. ⚠ En el verdadero positivo medido de esa
     # misma tanda la cola SEGUÍA la misma frase y no reanuda, así que el filtro no lo toca.
+    # ⛔ #521 — y en las OTRAS lecturas: `source_texts` da una por columna física (#275), así que la
+    # cita que arranca al pie de la columna izquierda reanuda arriba de la derecha, en otra lectura
+    # (medido: 64 líneas ANTES, en una lectura distinta). En la propia lectura, sólo hacia adelante;
+    # en las otras, que son el documento entero, la sonda COMPLETA: una cola corta («9 solar radii»)
+    # aparece en cualquier lado, y perdonar de más es la dirección que no se toma.
     sonda = q[comun:comun + CITA_COLA_MIN * 2].strip()
     if len(sonda) >= CITA_COLA_MIN and sonda in src[pos + comun:]:
+        return None
+    if len(sonda) >= CITA_COLA_MIN * 2 - 1 and any(sonda in r for r in readings if r is not src):
         return None
     # El borde de palabra, y de paso la cita que el `.txt` tiene ENTERA: `normalize_quote` recorta
     # el espacio final, así que una coincidencia completa termina en una letra y la guarda la corta

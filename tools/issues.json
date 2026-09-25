@@ -2584,11 +2584,46 @@
   {
    "number": 519,
    "title": "lint: «vista SÓLO del abstract» juzga cada entrada de vistas[] y no el sujeto (falso positivo con una segunda lectura del PDF)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 520,
    "title": "Resumen de congreso: no hay forma de declarar que el abstract ES la fuente, y cuatro categorías piden un PDF que no existe",
+   "state": "CLOSED"
+  },
+  {
+   "number": 521,
+   "title": "txt_accuses: el empalme de columnas (#388) no ve la reanudación en la OTRA columna, y en el camino #437 eso bloquea una cita correcta que ni cita_revisada puede firmar",
+   "state": "OPEN"
+  },
+  {
+   "number": 522,
+   "title": "write_verif_sidecar encadena contradice→soportada pelado y la cabecera pierde el conteo de #232 (chained_verdict quedó sin llamadores)",
+   "state": "OPEN"
+  },
+  {
+   "number": 523,
+   "title": "Sujeto sintetizado sin sintesis: en el registro: la cabecera _Estado_ pierde la tercera fecha y ningún gate lo ve (D-12/INV-82)",
+   "state": "OPEN"
+  },
+  {
+   "number": 524,
+   "title": "Corpus declarado (query: null + extra_core, #384) recortado desde un probe: el universo considerado y lo descartado no quedan en el registro",
+   "state": "OPEN"
+  },
+  {
+   "number": 525,
+   "title": "El extractor no escribe valor/regimen en $…$ ni con tildes, y contrast --filas/--cita y el cosechador lo publican tal cual",
+   "state": "OPEN"
+  },
+  {
+   "number": 526,
+   "title": "Un contradice cuya causa es la EXTRACCIÓN no baja al JSON: contrast --filas sigue sirviendo lo refutado como celda pegable (#311/#322)",
+   "state": "OPEN"
+  },
+  {
+   "number": 527,
+   "title": "apply_fixes.rewrap re-envuelve como texto plano: funde párrafos en silencio y puede crear un ítem que roba la cita; y #222 rehúsa sacar una cláusula citada (#389)",
    "state": "OPEN"
   }
  ]

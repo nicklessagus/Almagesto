@@ -1236,3 +1236,20 @@ SIN fuente en disco 10 → 8 · cita NO EVALUABLE 13 → 12 (la de `ica` L480 se
 `## Abstract` y pasa) · la categoría nueva *Fuente que ES su abstract* lista las 2.
 
 **Devolver si** otra categoría cambia, o si la cita de L480 cae en otra categoría de cita.
+
+## §#521 · v1.331.0 — el empalme de columnas reanuda en la OTRA columna
+
+```bash
+python scripts/contrast.py --validar-todo
+python scripts/lint.py
+```
+
+**Esperado (medido en copia):** `contrast --validar-todo` rc 1 → **0** (sale el ⛔ de
+`2013A&A...557A..93F` L241). «con el `.txt` en contra» 535 → 460: los 75 que salen son empalmes
+(pies de página, cabeceras de revista, datos de figuras, referencias). En el lint, 4 firmas
+`cita_revisada` pasan a *no cubre ningún hallazgo* (38 → 42): `harps-drs` (2016A&A...585A.134D,
+2021A&A...653A..43C), `indicadores-actividad` (2011A&A...528A...4B) y `gj_581`
+(2012arXiv1211.1280T). Eran empalmes firmados y ya no disparan: se sacan esas entradas.
+
+**Devolver si** sale un ⚠ cuya cola del `.txt` es la misma frase con otra palabra (eso es un verdadero
+positivo), o si vuelve una cola corta (<24 caracteres) a perdonarse.

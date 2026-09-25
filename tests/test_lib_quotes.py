@@ -218,6 +218,34 @@ def test_el_EMPALME_de_columnas_no_es_una_contradiccion():
         "which is why FastICA is very suitable for this purpose.", [txt]) is None
 
 
+def test_el_EMPALME_reanuda_en_la_OTRA_columna():
+    """#521 — la cita arranca al pie de la columna izquierda y sigue arriba de la derecha: la
+    continuación está en OTRA lectura (#275), y buscarla sólo en la misma no la encontraba. En el
+    camino de #437 eso salía `alterada` y bloqueaba una cita correcta."""
+    izq = cfg.normalize_source_text(
+        "the bisector inverse span is measured from the line core to its mid-point (i.e., the "
+        "A93, page 2 of 12 Astronomy and Astrophysics volume 557 header of the next page follows")
+    der = cfg.normalize_source_text(
+        "point at equal distance from the continuum and the line full depth) and it will only "
+        "coincidentally fall on the same flux level.")
+    cita = ("the bisector inverse span is measured from the line core to its mid-point (i.e., the "
+            "point at equal distance from the continuum and the line full depth)")
+    assert cfg.txt_accuses(cita, [der, izq]) is None
+    # el control: sin la columna derecha, el mismo empalme sigue acusando
+    assert cfg.txt_accuses(cita, [izq]) is not None
+
+
+def test_en_la_OTRA_columna_una_cola_corta_no_perdona():
+    """#521 — en otra lectura se busca en el documento entero, así que la cola corta que aparece en
+    cualquier lado no prueba reanudación: la acusación queda en pie."""
+    izq = cfg.normalize_source_text(
+        "the companion orbits the star at a separation equivalent to about 1.2 AU, and the "
+        "measured value is at odds with the published estimate of the mass of the companion")
+    der = cfg.normalize_source_text("text elsewhere about nine solar radii here")
+    cita = ("the companion orbits the star at a separation equivalent to about nine solar radii")
+    assert cfg.txt_accuses(cita, [izq, der]) is not None
+
+
 def test_una_SONDA_corta_no_alcanza_para_perdonar_el_empalme():
     """El recorte del filtro de arriba: la reanudación se prueba con la COLA de la cita, y una cola
     corta matchea por casualidad —cualquier `.txt` largo contiene «of the data» en algún lado—. Con

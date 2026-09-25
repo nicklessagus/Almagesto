@@ -2510,3 +2510,15 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: "Estampa el puntero `fulltext:` por verdad de disco; el abstract no es un archivo al que apuntar."
+  - issue: 521
+    regla: >-
+      La reanudación que perdona un empalme de columnas (#388) se busca también en las OTRAS
+      lecturas del mismo `.txt` (una por columna física, #275), con la sonda completa: en la misma
+      lectura sólo hacia adelante. Medido: una cita correcta bloqueaba en el camino de #437 porque
+      su continuación estaba 64 líneas antes, en la otra columna.
+    funcion: lib_quotes.txt_accuses
+    patron: 'in src\[pos'
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "El cruce de citas del cosechador (#359) llama a `txt_accuses` con las lecturas de la fuente; `lint` y `contrast` llegan por `quote_verdict`, en el mismo módulo."
