@@ -1448,6 +1448,14 @@ adyacentes a una cita (hueco aparte) y la corrección de contenido de Comon.
 
 **Devolver si** una numeración queda vieja en un item que se contó como reescrito.
 
+**Re-entrega v1.344.0 (devuelto 2026-09-25).** (1) Una respuesta con rango (`"290-291"`) se chequea
+como rango: los 4 rehusados de Comon tendrían que pasar. (2) Un token con varias páginas
+(`p. 299, p. 304`) pide una por página: `aporte@7` y `hueco@3` piden lista de 2. (3) Un
+`pagina: null` en prosa **no** toca el texto: el localizador queda intacto y el hueco va a
+`_repaginado.huecos` con su motivo. En un `linea` el hueco sigue yendo al campo (#494). El
+apply reemplaza sólo las ETIQUETAS numéricas: `p.`/`pp.`, separadores y calificadores quedan como
+estaban.
+
 ## §#534 · v1.343.0 — la relectura enumera también los localizadores sueltos
 
 Mismo armado que §#533 (copia previa a `5be796f`, los 3 PDFs de `ica` sin carátula).

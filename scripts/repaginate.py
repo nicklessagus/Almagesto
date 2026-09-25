@@ -168,9 +168,24 @@ def page_answer(pagina) -> list | None:
     of one source came back that way and were written inside the old locator)."""
     paginas = pagina if isinstance(pagina, list) else [pagina]
     etiquetas = [str(p).strip() for p in paginas]
-    ok = etiquetas and all((m := cfg.PAGE_LOC_RE.fullmatch(f"p. {e}")) and m.end() == len(e) + 3
-                           for e in etiquetas)
+    ok = etiquetas and all(_LABEL_RE.fullmatch(e) for e in etiquetas)
     return etiquetas if ok else None
+
+
+#: #533 · one page LABEL inside a locator token: a number or a range, with its prefix (`L45`).
+#: `p. 299, p. 304` holds two, `p. 290-291` one. The apply rewrites labels only, so `p.`/`pp.`,
+#: separators and qualifiers stay as written.
+_LABEL_RE = re.compile(r"[A-Z]?\d{1,4}(?:\s*[-–—]\s*[A-Z]?\d{1,4})?")
+
+
+def label_spans(texto: str, tokens: list) -> list:
+    """`[(a, b)]` — the page labels inside the locator `tokens` of `texto`, in order (#533).
+
+    ⛔ The unit of an answer is the LABEL, not the token: `p. 299, p. 304` is one `PAGE_LOC_RE`
+    token naming two pages, and counting it as one numbering left the reader no way to return
+    both — it declared the item `null` and the apply wrote the motive into the prose."""
+    return [(a + m.start(), a + m.end()) for a, b in tokens
+            for m in _LABEL_RE.finditer(texto[a:b])]
 
 
 _QUOTE_SPAN_RE = re.compile(r"«[^«»]*»")
@@ -218,7 +233,8 @@ def items(data: dict) -> list:
                             # ⛔ #533 — un `linea` pide una página por CADA token: con varias
                             # ubicaciones (`p. 291 (PDF p. 5); resumen en p. 287 (PDF p. 2)`)
                             # reescribir la primera dejaba vieja la otra («colapsado», #494)
-                            "numeraciones": [m.group(0) for m in cfg.PAGE_LOC_RE.finditer(texto)]})
+                            "numeraciones": [texto[a:b] for a, b in label_spans(
+                                texto, [(m.start(), m.end()) for m in cfg.PAGE_LOC_RE.finditer(texto)])]})
             continue
         for n, cita in enumerate(cfg.quotes_in(texto), 1):
             loc = cfg.page_locators_after(texto, cita)
@@ -227,14 +243,15 @@ def items(data: dict) -> list:
                 spans = cfg.adjacent_locators(texto, pos, pos + len(cita))
                 out.append({"id": f"{ruta}#{n}", "ruta": ruta, "que": "", "valor": "",
                             "cita": cita, "linea": _loc_token(texto, cita),
-                            "numeraciones": [texto[a:b] for a, b in
-                                             numbering_chain(texto, spans[0][0])] if spans else []})
+                            "numeraciones": [texto[a:b] for a, b in label_spans(
+                                texto, numbering_chain(texto, spans[0][0]))] if spans else []})
         # #534 — y cada localizador SUELTO, con su contexto para ubicarlo en la hoja
         for k, chain in enumerate(loose_chains(texto), 1):
             a, b = chain[0][0], chain[-1][1]
             out.append({"id": f"{ruta}@{k}", "ruta": ruta, "que": "", "cita": "",
                         "valor": texto[max(0, a - 120):a].strip(),
-                        "linea": texto[a:b], "numeraciones": [texto[x:y] for x, y in chain]})
+                        "linea": texto[a:b],
+                        "numeraciones": [texto[x:y] for x, y in label_spans(texto, chain)]})
     return out
 
 
@@ -388,21 +405,26 @@ def _set_by_path(data: dict, ruta: str, nuevo: str) -> None:
         data.setdefault(resto[0], {})[resto[1]] = nuevo
 
 
-def _replace_chain(texto: str, chain: list, reemplazos: list) -> str:
-    """Write one replacement per locator span of `chain`, keeping every label and qualifier (#533)
-    — and the token's own `p.`/`pp.` (#534: `pp. 12-13` came back as `p. 12-13`)."""
-    for (a, b), r in sorted(zip(chain, reemplazos), reverse=True):
-        prefijo = re.match(r"p{1,2}\.\s*", texto[a:b], re.I)
-        # `pp.` sólo si lo nuevo sigue siendo un rango o una lista
-        if prefijo and r.startswith("p. ") and prefijo.group(0).lower().startswith("pp") \
-                and re.search(r"[-–,]|\by\b|\band\b", r[3:]):
-            r = prefijo.group(0) + r[3:]
-        texto = texto[:a] + r + texto[b:]
+def _replace_labels(texto: str, tokens: list, etiquetas: list) -> str | None:
+    """Write one page label per label span of the locator `tokens` (#533), leaving `p.`/`pp.`,
+    separators and qualifiers as written; `None` if the label count does not match. A `pp.` whose
+    token ends up naming one page becomes `p.`."""
+    spans = label_spans(texto, tokens)
+    if len(spans) != len(etiquetas):
+        return None
+    for a, b in sorted(tokens, reverse=True):
+        dentro = [(x - a, y - a, e) for (x, y), e in zip(spans, etiquetas) if a <= x < b]
+        token = texto[a:b]
+        for x, y, e in reversed(dentro):
+            token = token[:x] + e + token[y:]
+        if len(dentro) == 1 and not re.search(r"[-–—]", dentro[0][2]):
+            token = re.sub(r"^pp\.", "p.", token, flags=re.I)
+        texto = texto[:a] + token + texto[b:]
     return texto
 
 
-def _replace_locator(texto: str, ocurrencia: int, viejo: str, nuevo) -> str | None:
-    """Swap the locator ADJACENT to the `ocurrencia`-th quote of this string, or `None` if it moved.
+def _replace_locator(texto: str, ocurrencia: int, viejo: str, etiquetas: list) -> str | None:
+    """Swap the labels of the locator ADJACENT to the `ocurrencia`-th quote, or `None` if it moved.
 
     ⛔ Anchored on the quote and not on the token, because two quotes of one string can name the
     same page: counting `p. 3` would swap the wrong one. And it matches the token EXACTLY as the
@@ -419,29 +441,13 @@ def _replace_locator(texto: str, ocurrencia: int, viejo: str, nuevo) -> str | No
         spans = cfg.adjacent_locators(texto, pos, desde)
         if not spans or texto[spans[0][0]:spans[0][1]] != viejo:
             return None
-        if isinstance(nuevo, list):                 # #533 — una por numeración
-            return _replace_chain(texto, numbering_chain(texto, spans[0][0]), nuevo)
-        a, b = spans[0]
-        return texto[:a] + nuevo + texto[b:]
+        return _replace_labels(texto, numbering_chain(texto, spans[0][0]), etiquetas)
     return None
 
 
-def _replace_line_locators(texto: str, reemplazos: list) -> str | None:
-    """Swap EVERY locator of a `linea`, one replacement each, and keep the rest; `None` if the count
-    no longer matches (somebody edited the field by hand).
-
-    ⛔ Returned by the real repagination: the writer's first version overwrote the whole field, and
-    with it the **qualifier** — `p. 4 (Tabla 2)` became `p. 491`, `p. 2056 (nota al pie de la Tabla
-    1)` became `p. 2062`. Measured: **143 of 563**. The qualifier is what makes a locator usable —
-    it says WHERE on the page the datum is — and it is re-derivable from nothing.
-
-    ⛔ #533 — and EVERY locator, not the first: swapping one left the others naming pages of the
-    replaced document (the «collapsed» case of #494, 765 of 5627, and the second numbering of
-    `p. 288 (PDF p. 3)`, 69 of 69). A stale locator attributes wrongly, which is worse than none."""
-    locs = [(m.start(), m.end()) for m in cfg.PAGE_LOC_RE.finditer(texto)]
-    if not locs or len(locs) != len(reemplazos):
-        return None
-    return _replace_chain(texto, locs, reemplazos)
+def _line_tokens(texto: str) -> list:
+    """Every locator token of a `linea` — all of them are the item (#533)."""
+    return [(m.start(), m.end()) for m in cfg.PAGE_LOC_RE.finditer(texto)]
 
 
 def _check_item(item: dict, res: dict, bibcode: str) -> str | None:
@@ -468,7 +474,10 @@ def _check_item(item: dict, res: dict, bibcode: str) -> str | None:
         return "página confirmada sin `evidencia`: sin testigo de la hoja no se distingue de copiar la guía"
     if ev.lower() in str(item.get("valor") or item.get("cita") or "").lower():
         return "la `evidencia` está contenida en el valor del item: no es testigo de la hoja"
-    estado, det = cfg.quote_page_verdict(ev, bibcode, [(paginas[0], paginas[0])])
+    # ⛔ #533 (devuelto) — los rangos con la MISMA lectura que el gate: `(pagina, pagina)` con un
+    # rango daba un conjunto vacío y rehusaba cuatro respuestas que el PDF confirma
+    rangos = [r for e in paginas for r in cfg.page_locators(f"p. {e}")]
+    estado, det = cfg.quote_page_verdict(ev, bibcode, rangos)
     if estado == "mal":
         return (f"el `.txt` ubica esa `evidencia` en otra página "
                 f"({', '.join(map(str, det.get('impresas') or det.get('paginas') or []))}): "
@@ -527,6 +536,7 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
     hoy = _dt.date.today().isoformat()
     escritos, no_hallados, rehusados, para_nota, para_nota_texto = [], [], [], [], []
     sin_cambio: list = []
+    huecos: list = []
     for fila in filas:
         item = los[fila["id"]]
         motivo = _check_item(item, fila, bibcode)
@@ -545,21 +555,31 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
         # relectura. Lo único que caduca es el número.
         motivo_hueco = str(fila.get("motivo") or "").strip()
         paginas = page_answer(fila["pagina"]) if fila.get("pagina") not in (None, "") else None
-        n_num = max(1, len(item.get("numeraciones") or []))
-        # #533 — un reemplazo por numeración: el hueco también, o la que no se tocó queda vieja
-        nuevo = ([f"no hallado (relectura {hoy}: {motivo_hueco})"] * n_num if paginas is None
-                 else [f"p. {p}" for p in paginas])
         actual = dict(_strings(data)).get(ruta, "")
-        if ruta.endswith(".linea"):
-            texto = _replace_line_locators(actual, nuevo)
+        if paginas is None and not ruta.endswith(".linea"):
+            # ⛔ #533 (devuelto) — en PROSA el hueco no se escribe en el texto: pisaba un localizador
+            # correcto con ~400 caracteres de motivo dentro de la extracción. Queda intacto y el
+            # hueco va a la marca, con su motivo.
+            texto = actual
+            huecos.append({"id": fila["id"], "motivo": motivo_hueco})
+        elif paginas is None:
+            # en un `linea` —un campo de localizador— el hueco sí va al campo (#494): el
+            # calificador sigue siendo cierto y lo único que caduca es el número
+            texto = actual if _line_tokens(actual) else None
+            for n, (a, b) in reversed(list(enumerate(_line_tokens(actual)))):
+                marca_hueco = f"no hallado (relectura {hoy}: {motivo_hueco})" if n == 0 else "no hallado"
+                texto = texto[:a] + marca_hueco + texto[b:]
+        elif ruta.endswith(".linea"):
+            texto = _replace_labels(actual, _line_tokens(actual), paginas)
         elif "@" in fila["id"]:                     # #534 — localizador suelto, por posición
             k = int(fila["id"].rsplit("@", 1)[1])
             chains = loose_chains(actual)
             chain = chains[k - 1] if k <= len(chains) else []
-            texto = (_replace_chain(actual, chain, nuevo)
-                     if [actual[a:b] for a, b in chain] == item["numeraciones"] else None)
+            texto = (_replace_labels(actual, chain, paginas)
+                     if [actual[a:b] for a, b in label_spans(actual, chain)] == item["numeraciones"]
+                     else None)
         else:
-            texto = _replace_locator(actual, ocurrencia, viejo, nuevo if n_num > 1 else nuevo[0])
+            texto = _replace_locator(actual, ocurrencia, viejo, paginas)
         if texto is None:
             rehusados.append((fila["id"], f"el localizador `{viejo}` ya no está donde el paquete lo "
                                           f"leyó: alguien lo corrigió a mano"))
@@ -579,6 +599,8 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
     pendientes = sorted([i for i, _m in rehusados])
     marca = {"fecha": hoy, "pdf_sha": sha_disco, "n": len(escritos),
              "no_hallados": len(no_hallados), "fuente": "relectura del PDF (#494)"}
+    if huecos:
+        marca["huecos"] = huecos                    # #533 — el hueco en prosa vive acá, no en el texto
     # @inv INV-160
     for m in cfg.PAGINATION_OPEN_MARKS:
         data.pop(m, None)

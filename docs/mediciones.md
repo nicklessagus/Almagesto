@@ -4092,3 +4092,16 @@ esperables: la corrección de contenido aplicada aparte y un localizador **dentr
 (`«p. 304 (PDF p. 19)»`), que por diseño no se reescribe porque es texto verbatim. De paso, el apply
 conservaba mal el prefijo: `pp. 12-13` salía `p. 12-13`. Ahora queda `pp.` si lo nuevo sigue siendo
 un rango.
+
+## #533 devuelto — rangos, tokens con varias páginas y huecos en prosa (v1.344.0)
+
+El validador encontró dos defectos con lectores reales. (1) `_check_item` pasaba
+`(pagina, pagina)` a `quote_page_verdict`, y con un rango eso da un conjunto vacío: 4 respuestas de
+Comon que el PDF confirma quedaron rehusadas. (2) `p. 299, p. 304` es UN token de `PAGE_LOC_RE` con
+dos páginas: contado como una numeración, el lector no podía devolverlas, lo declaró `null`, y el
+apply escribió ~400 caracteres de motivo dentro de la prosa. Ahora la unidad es la **etiqueta**
+(`label_spans`), los rangos se leen con `page_locators` (la misma lectura que el gate) y el hueco en
+prosa va a la marca. Re-medido sobre el caso real (138 ítems): el mismo resultado que en #534, con
+2 diferencias esperables en Comon. El chequeo de rangos contra texto real no se pudo decidir ahí: el
+`.txt` de Comon es OCR y no deriva la numeración impresa, así que da no evaluable. Lo cubre el test
+(rojo con el código viejo, verde con el nuevo, y el control fuera del rango rehúsa).

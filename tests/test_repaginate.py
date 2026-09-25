@@ -320,13 +320,13 @@ def test_494_el_swap_se_ancla_en_la_CITA_y_no_pisa_lo_corregido_a_mano(toy_vault
     `None` y el ítem se rehúsa, que es la misma regla que protege una corrección a mano en
     `restamp_salvedades` (#453)."""
     texto = f"Dice «{CITA}» (p. 3) y también «{OTRA}» (p. 3) al final."
-    cambiado = rp._replace_locator(texto, 2, "p. 3", "p. 2010")
+    cambiado = rp._replace_locator(texto, 2, "p. 3", ["2010"])
     assert cambiado == f"Dice «{CITA}» (p. 3) y también «{OTRA}» (p. 2010) al final.", cambiado
-    assert rp._replace_locator(texto, 1, "p. 9", "p. 2010") is None, "el token ya no es el del paquete"
-    assert rp._replace_locator(texto, 3, "p. 3", "p. 2010") is None, "no hay tercera cita"
+    assert rp._replace_locator(texto, 1, "p. 9", ["2010"]) is None, "el token ya no es el del paquete"
+    assert rp._replace_locator(texto, 3, "p. 3", ["2010"]) is None, "no hay tercera cita"
     # y una cita SIN localizador adyacente tampoco se completa con nada: devuelve `None`
     sin_loc = f"Dice «{CITA}» y nada más, y después «{OTRA}» (p. 3)."
-    assert rp._replace_locator(sin_loc, 1, "p. 3", "p. 2010") is None
+    assert rp._replace_locator(sin_loc, 1, "p. 3", ["2010"]) is None
 
 
 def test_494_si_el_swap_no_se_puede_hacer_el_item_se_REHUSA_y_no_se_escribe_None(toy_vault, tmp_path,
@@ -552,7 +552,7 @@ def test_501_el_escritor_no_corrompe_el_localizador_en_el_borde_de_la_ventana(to
     t = "| «" + c + "» | " + "x" * 69 + " | p. 13 |"
     assert rp._loc_token(t, c) == "p. 13"
     for _ in range(3):
-        t = rp._replace_locator(t, 1, rp._loc_token(t, c), "p. 2021") or t
+        t = rp._replace_locator(t, 1, rp._loc_token(t, c), ["2021"]) or t
     assert t.endswith("| p. 2021 |"), t
 
 
@@ -563,10 +563,10 @@ def test_504_el_escritor_no_reescribe_el_localizador_de_la_afirmacion_vecina(toy
     c = "this is a long enough quotation to be recognized by the parser"
     vecino = f"dice «{c}», pero la Tabla 1 (p. 6) lista otra cosa"
     assert rp._loc_token(vecino, c) == ""
-    assert rp._replace_locator(vecino, 1, "p. 6", "p. 9") is None
+    assert rp._replace_locator(vecino, 1, "p. 6", ["9"]) is None
     previo = f"la p. 5 dice que «{c}», y sigue"
     assert rp._loc_token(previo, c) == "p. 5"
-    assert rp._replace_locator(previo, 1, "p. 5", "p. 8") == f"la p. 8 dice que «{c}», y sigue"
+    assert rp._replace_locator(previo, 1, "p. 5", ["8"]) == f"la p. 8 dice que «{c}», y sigue"
 
 
 def test_AUD420_apply_SIN_PDF_en_disco_rehusa_y_no_cierra_la_deuda(toy_vault, tmp_path):
@@ -639,10 +639,10 @@ def test_533_dos_numeraciones_se_repaginan_CADA_UNA_con_la_suya_o_se_rehusa(toy_
         salvedades=[f"«{CITA}» (A17 p. 5-6 (PDF p. 6-7))"], ejes={})
     _txt_paginado()
     los = {it["id"]: it for it in rp.items(d)}
-    assert los["ground_truth[2].linea"]["numeraciones"] == ["p. 13", "p. 12"]
-    assert los["ground_truth[4].linea"]["numeraciones"] == ["p. 4", "p. 7"], \
+    assert los["ground_truth[2].linea"]["numeraciones"] == ["13", "12"]
+    assert los["ground_truth[4].linea"]["numeraciones"] == ["4", "7"], \
         "un `linea` pide página por CADA token, también con prosa en el medio"
-    assert los["salvedades[0]#1"]["numeraciones"] == ["p. 5-6", "p. 6-7"]
+    assert los["salvedades[0]#1"]["numeraciones"] == ["5-6", "6-7"]
     ev = "Received 3 March 2013"
     respuestas = {"ground_truth[0].linea": ["288", "2"], "ground_truth[1].linea": ["290-291", "4-5"],
                   "ground_truth[2].linea": "§3.2, p. 13 [índice del PDF] (ms. p. 12)",
@@ -679,7 +679,7 @@ def test_534_el_localizador_SUELTO_tambien_es_item_y_el_de_adentro_de_una_cita_n
     los = {it["id"]: it for it in rp.items(d)}
     # la cita corta («see p. 5») no es cita para `quotes_in`: su `(p. 9)` queda suelto también
     assert set(los) == {"salvedades[0]@1", "salvedades[0]@2", "ejes.criterio#1"}, set(los)
-    assert los["salvedades[0]@1"]["numeraciones"] == ["p. 33"]
+    assert los["salvedades[0]@1"]["numeraciones"] == ["33"]
     assert "App. A" in los["salvedades[0]@1"]["valor"], "el contexto es lo que ubica la hoja"
     ev = "Received 3 March 2013"
     filas = [{"id": "salvedades[0]@2", "pagina": "8", "evidencia": ev, "motivo": ""},
@@ -692,5 +692,36 @@ def test_534_el_localizador_SUELTO_tambien_es_item_y_el_de_adentro_de_una_cita_n
                                       "ver también «see p. 5» (p. 8).")
     assert nuevo["ejes"]["criterio"] == f"analiza «{CITA}» (§3.2, p. 13 [índice del PDF]) sin decir cuántas"
     # y el `pp.` del token viejo se conserva
-    assert rp._replace_chain("ver pp. 12-13.", [(4, 13)], ["p. 11-12"]) == "ver pp. 11-12."
-    assert rp._replace_chain("ver pp. 12-13.", [(4, 13)], ["p. 11"]) == "ver p. 11.", "rango → página"
+    assert rp._replace_labels("ver pp. 12-13.", [(4, 13)], ["11-12"]) == "ver pp. 11-12."
+    assert rp._replace_labels("ver pp. 12-13.", [(4, 13)], ["11"]) == "ver p. 11.", "rango → página"
+
+
+def test_533_devuelto_el_RANGO_se_chequea_como_rango_y_el_hueco_en_prosa_no_pisa_el_texto(
+        toy_vault, tmp_path):
+    """Devuelto por el validador: (1) `quote_page_verdict` recibía `(pagina, pagina)`, y con un
+    rango (`"2009-2010"`) eso da un conjunto vacío: la `evidencia` DENTRO del rango se leía como
+    «otra página» y se rehusaban respuestas que el PDF confirma (4 en Comon). (2) `p. 299, p. 304`
+    es UN token con DOS páginas: contado como una numeración, el lector no podía devolverlas, lo
+    declaró `null`, y el apply metió ~400 caracteres de motivo en la prosa inmutable (#311)."""
+    d = _extraccion(ground_truth=[{"que": "a", "valor": CITA, "linea": "pp. 3-4"}],
+                    salvedades=["App. A (p. 3, p. 9): la hipótesis gaussiana.",
+                                "Resumen suelto en p. 7 del paper."], ejes={})
+    _txt_paginado()                   # la hoja 1 imprime 2009; la cita cae en la 2 (2010)
+    los = {it["id"]: it for it in rp.items(d)}
+    assert los["salvedades[0]@1"]["numeraciones"] == ["3", "9"], "un token, DOS páginas"
+    ev = "relleno propio de la hoja 1"                  # está en la hoja que imprime 2009
+    filas = [{"id": "ground_truth[0].linea", "pagina": "2009-2010", "evidencia": ev, "motivo": ""},
+             {"id": "salvedades[0]@1", "pagina": ["2009", "2012"], "evidencia": ev, "motivo": ""},
+             {"id": "salvedades[1]@1", "pagina": None, "evidencia": "",
+              "motivo": "la hoja no numera y el índice no alcanza"}]
+    r = rp.apply(BIB, _resultado(tmp_path, filas))
+    assert not r["rehusados"], r["rehusados"]
+    nuevo = json.loads(r["extraccion"].read_text(encoding="utf-8"))
+    assert nuevo["ground_truth"][0]["linea"] == "pp. 2009-2010"
+    assert nuevo["salvedades"][0] == "App. A (p. 2009, p. 2012): la hipótesis gaussiana."
+    assert nuevo["salvedades"][1] == "Resumen suelto en p. 7 del paper.", "el hueco no pisa la prosa"
+    assert nuevo["_repaginado"]["huecos"] == [{"id": "salvedades[1]@1",
+                                               "motivo": "la hoja no numera y el índice no alcanza"}]
+    # control: la misma evidencia fuera del rango SÍ contradice
+    assert "otra página" in rp._check_item(los["ground_truth[0].linea"],
+                                           {"pagina": "2011", "evidencia": ev}, BIB)
