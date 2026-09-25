@@ -72,6 +72,7 @@ def to_record(entry) -> dict:
         "doi": doi,
         "doctype": "eprint",
         "bibstem": "arXiv",
+        "page_count": None,                        # #531: un eprint no tiene paginación de editor
         # arXiv NO publica el conteo de citas. Va `None` = «no lo sé», nunca 0: un 0 afirma
         # «no lo cita nadie» sobre un dato que nadie miró, y aguas abajo la puerta 2 de D-26
         # (`citation_count >= umbral`) lo leería como «no es fundacional» — excluyendo por

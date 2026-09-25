@@ -1404,3 +1404,21 @@ pedido previo. En una corrida con `--yes` que deje residuo `publicado-no-consegu
 imprime sus `copia libre (<src>): <url>`.
 
 **Devolver si** el mensaje o `cadena-ads.md` le piden al usuario PDFs antes de `--yes`.
+
+## §#531 · v1.341.0 — la carátula de repositorio corre los localizadores
+
+```bash
+python scripts/lint.py                       # categoría «PDF con la CARÁTULA de un repositorio»
+python scripts/query_ads.py hd_41248         # re-query: el ads.json gana `page_count`
+```
+
+**Esperado (medido en worktree sobre `fc09fb4`):**
+- La categoría nueva lista **3** notas de `ica`: `1994SigPr..36..287C`, `2009Icar..201..504M` y
+  `2025A&A...701A..17C`. Las tres tienen «To cite this version» en la página 1 del PDF. Se cierran
+  quitando la página 1, instalando con `replace_pdf.py` y re-paginando.
+- `replace_pdf.py` sobre un PDF con carátula de HAL rehúsa e imprime el comando `mutool merge`.
+- Con el `ads.json` refrescado, al instalar un `--source publisher` avisa si las páginas no
+  coinciden con ADS. De los PDFs de `hd_41248` y `gj_674`, sólo avisaría `2010EAS....42..131F`
+  (6 contra 5, página al final).
+
+**Devolver si** la categoría lista un PDF sin carátula, o si un `publisher` que coincide con ADS avisa.

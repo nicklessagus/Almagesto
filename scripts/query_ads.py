@@ -112,7 +112,7 @@ import lib_config as cfg
 
 API = "https://api.adsabs.harvard.edu/v1/search/query"
 FIELDS = ("bibcode,title,author,year,pubdate,abstract,identifier,doctype,"
-          "citation_count,bibstem,doi,keyword")
+          "citation_count,bibstem,doi,keyword,page_count")
 # Lente astro del BUSCADOR (fq de Solr): acota el universo de toda query de DESCUBRIMIENTO.
 # No se aplica cuando el universo ya lo fijó el usuario con una lista de bibcodes — ver
 # `fetch_bibcodes` y el parámetro `fq` de `query_ads` (#68).
@@ -916,6 +916,7 @@ def to_record(d: dict) -> dict:
         "doi": (d.get("doi") or [None])[0],
         "doctype": d.get("doctype"),
         "bibstem": (d.get("bibstem") or [None])[0],
+        "page_count": d.get("page_count"),          # #531 — contra lo que se cruza el PDF instalado
         # AUD-166 / INV-69 — la clave AUSENTE es «ADS no lo devolvió», no «cero citas», y hasta
         # 1.73.0 se persistía `0`: un 0 afirma «no lo cita nadie» sobre un dato que nadie miró, y
         # aguas abajo la puerta 2 de D-26 (`citation_count >= umbral`) lo lee como «no es

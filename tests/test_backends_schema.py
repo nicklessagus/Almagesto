@@ -32,6 +32,7 @@ CLAVES = {
     # CLAUDE.md promete que **existe siempre**, para que «no consta» y «ninguna puerta» no se
     # confundan. Si vive en el schema, los tres backends lo emiten y este test lo fija (red #2).
     "puertas",
+    "page_count",     # #531 — contra lo que se cruza el PDF del editor; `None` = no consta
 }
 
 _ATOM = """<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">

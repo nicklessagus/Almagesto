@@ -754,3 +754,17 @@ def test_530_el_residuo_publicado_lista_las_copias_libres_con_su_link(toy_vault,
     out = capsys.readouterr().out
     assert "copia libre (hal): https://hal.science/hal-1/document" in out
     assert "copia libre (publisher)" not in out and "copia del EDITOR: https://aanda.org/x.pdf" in out
+
+
+def test_531_la_copia_libre_con_CARATULA_no_se_instala_y_queda_marcada(toy_vault, monkeypatch):
+    """#531 — la cascada abierta baja la copia de HAL CON su carátula: instalada, cada «p. N» queda
+    corrida en 1. No se instala: queda en `copias_libres` con la marca, para quitarla a mano."""
+    dest = cfg.PDFS / "s" / "x.pdf"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter(
+        [("https://hal.science/hal-1/document", "HAL", None)]))
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: b"%PDF-1.5 hal")
+    monkeypatch.setattr(fp.cfg, "repository_cover", lambda _p: "HAL Id:")
+    ok, tried = fp.fetch_free_copy("s", {"bibcode": "2014S", "doi": "10.1/s"}, dest, "tok")
+    assert not ok and not dest.exists()
+    assert tried == [{"url": "https://hal.science/hal-1/document", "src": None, "caratula": "HAL Id:"}]

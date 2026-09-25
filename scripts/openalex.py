@@ -113,6 +113,7 @@ def to_record(work: dict) -> dict:
         "doi": _bare_doi(work.get("doi")),
         "doctype": work.get("type"),
         "bibstem": venue,
+        "page_count": None,                        # #531: sólo ADS lo publica
         # AUD-166 / INV-69: ausente = «no consta», nunca 0 (mismo contrato que `search_arxiv` y,
         # desde 1.74.0, que `query_ads.to_record`).
         "citation_count": work.get("cited_by_count"),

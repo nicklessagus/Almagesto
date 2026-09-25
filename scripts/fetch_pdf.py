@@ -291,6 +291,14 @@ def fetch_free_copy(slug: str, r: dict, dest: Path, token: str,
         tried.append({"url": url, "src": src})
         pdf = download_pdf(url, token)
         if pdf and write_pdf_atomic(dest, pdf):
+            # ⛔ #531 — la copia de HAL llega con SU carátula adelante: instalada, cada «p. N»
+            # queda corrida en 1. No se instala; queda en el residuo, marcada, para quitarla.
+            if (caratula := cfg.repository_cover(dest)):
+                dest.unlink()
+                tried[-1]["caratula"] = caratula
+                cfg.print_seguro(f"      · copia libre ({why}) trae CARÁTULA de repositorio "
+                                 f"(«{caratula}»): no se instala — {url}")
+                continue
             cfg.print_seguro(f"      ✓ copia libre ({why}) → {dest.name} ({len(pdf)} bytes)")
             if src:
                 cfg.record_pdf_source(slug, safe_name(bib), src)
@@ -345,7 +353,9 @@ def print_published_residue(slug: str, missing: list) -> None:
         # hosts behind an anti-bot challenge only open from a browser)
         for c in m.get("copias_libres") or []:
             if c.get("src") != "publisher":
-                cfg.print_seguro(f"      copia libre ({c.get('src') or '?'}): {c.get('url')}")
+                nota = (" — trae CARÁTULA de repositorio: quitá la página 1 antes de instalar "
+                        "(#531)") if c.get("caratula") else ""
+                cfg.print_seguro(f"      copia libre ({c.get('src') or '?'}): {c.get('url')}{nota}")
         print_publisher_copy(slug, m["bibcode"], m.get("copias_libres") or [])
     cfg.print_seguro(f"  → traé el PDF del editor e instalalo declarando su procedencia (#513): "
                      f"`python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher "

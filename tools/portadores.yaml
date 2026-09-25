@@ -2207,6 +2207,31 @@ portadores:
         estado: usa
         motivo: "Llama a `expansion_guard` después de `query_ads.py`, antes de `fetch_arxiv.py`."
 
+  - issue: 531
+    regla: >-
+      El PDF que entra a `raw/pdfs/` empieza en la primera página del artículo: la carátula que un
+      repositorio (HAL) antepone corre en 1 cada localizador «p. N», sin aviso. La llevan todos los
+      caminos por los que entra un PDF: la instalación a mano (`replace_pdf`, que rehúsa) y la
+      cascada abierta de `fetch_pdf` (que no instala la copia con carátula).
+    funcion: lib_config.repository_cover
+    patron: 'HAL Id|fileMain_s|hal\.science'
+    consumidores:
+      - modulo: scripts/fetch_pdf.py
+        estado: usa
+        motivo: "`fetch_free_copy` no instala la copia libre con carátula y la marca en `copias_libres`."
+      - modulo: scripts/replace_pdf.py
+        estado: usa
+        motivo: "`check_incoming` rehúsa con `REPOSITORY_COVER_RE` sobre la página 1 (la que ya lee para la marca de arXiv)."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_repository_cover` es la red sobre el `.txt` de lo que entró antes."
+      - modulo: scripts/discover.py
+        estado: fuera-de-alcance
+        motivo: "PROPONE la URL de HAL (`fileMain_s`) y no baja nada: lo que se baje de ahí entra por `fetch_pdf` o `replace_pdf`."
+      - modulo: scripts/hal.py
+        estado: fuera-de-alcance
+        motivo: "Consulta HAL y PROPONE el bloque BibTeX y la URL del PDF (#505); no instala archivos."
+
   - issue: 505
     regla: >-
       Antes de declarar un hueco —de `bibtex` (`sin_bibtex`, #467) o de PDF (`pending`, la cascada

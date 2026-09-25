@@ -53,6 +53,9 @@
 ## ⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto) (0)
 > sobre 3 ground-truth de `raw/ground_truth/`
 
+## 📑 PDF con la CARÁTULA de un repositorio (HAL) como página 1: cada «p. N» leído de él queda corrido en 1 (#531, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## 📄 PDF en disco con `pdf_source: null` (desconocido): el campo decide lecturas y no se re-deriva — declaralo en su carril de config (#415/#479, backlog) (0)
 > sobre 60 notas de `papers/`
 

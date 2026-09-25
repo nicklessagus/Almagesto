@@ -42,6 +42,12 @@ En orden de rendimiento:
 
 Guardá el artefacto citable (PDF o imagen de tabla) en `vault/raw/`.
 
+⛔ **Una copia de HAL trae SU carátula como página 1 (#531)**: instalada así, cada «p. N» queda
+corrido en 1. Quitala antes de instalar (`mutool merge -o <salida.pdf> <entrada.pdf> 2-N`) y
+declaralo en el `--reason`; `replace_pdf` rehúsa la copia con carátula e imprime ese comando. El PDF
+tiene que tener las páginas del editor: al instalar un `--source publisher`, `replace_pdf` cruza
+contra el `page_count` de ADS y avisa si no coinciden.
+
 ⛔ **HAL (Anubis) y ORO (Cloudflare) también le devuelven a `curl` un desafío anti-bot (#530)**: sus
 `copias_libres` se bajan desde un navegador — pasáselas al usuario como links.
 

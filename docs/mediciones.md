@@ -4049,3 +4049,14 @@ publisher-first (#512) los intentara. En la instancia (primera ingesta de `gj_67
 le pidieron **13** PDFs al usuario; con `--yes` la cadena bajó 2 sola, y el pedido correcto era de
 **11**, con links. Ahora el orden es: recortar → `--yes` → rescate → residuo de `missing_pdf.json` →
 `--acepta-preprint`. El residuo impreso lleva además cada copia libre con su URL.
+
+## #531 — la carátula de HAL se rehúsa al instalar y se detecta en el `.txt` (v1.341.0)
+
+**Worktree de Almagesto-Tesis (`fc09fb4`):** con una carátula tipo HAL antepuesta a
+`2014A&A...566A..35S` (14 → 15 páginas), `replace_pdf.py … --source publisher` rehúsa e imprime
+`mutool merge -o <salida.pdf> <pdf> 2-15`; el PDF instalado, sin carátula, no dispara. Con
+`page_count` de ADS en el `ads.json` (re-query de `hd_41248` y `gj_674`): 17 de 18 `publisher`
+coinciden. Sólo avisa `2010EAS....42..131F`, 6 contra 5, con la página de copyright **al final**:
+es lo que midió el issue. Los 3 `eprint` no se cruzan. **La red del lint encontró 3 PDFs reales con la
+carátula de HAL**, que entraron antes y que nadie había visto: `1994SigPr..36..287C` (`web`),
+`2009Icar..201..504M` (`eprint`) y `2025A&A...701A..17C` (`publisher`), los tres en `ica`.

@@ -835,6 +835,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
 - **Duplicado sin `doi` ni `arxiv_id`** (#216): comparación por el arranque del `## Abstract`
   verbatim; **reporta, no fusiona** (la distinción «mismo trabajo en dos congresos» vs «dos etapas
   del mismo programa» es real). Salida: `--rename-paper` + `versions[]`, o `--drop-core` con motivo.
+- **PDF con la carátula de un repositorio como página 1** (#531, `pdf_con_caratula`, backlog): la
+  primera página del `.txt` trae la carátula de HAL («HAL Id», «To cite this version»), así que cada
+  «p. N» leído de ese PDF está corrido en 1. Es la red de lo que entró antes de que `replace_pdf`
+  la rehusara al instalar. Salida: quitar la página 1, `replace_pdf.py` y `repaginate.py` (#494).
 - **PDF en disco con `pdf_source: null`** (#415/#479, `pdf_sin_procedencia`, backlog): el campo
   decide lecturas y para el PDF que trajo el usuario no se re-deriva (medido: 59 de 254 notas, 37
   por `sources[]` y 22 por `extra_core`). El hallazgo nombra el **carril** de config donde

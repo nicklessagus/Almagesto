@@ -41,7 +41,8 @@ bajar». Con la lista, en este orden:
 3. **Rescate manual del residuo** (`reference/rescate-pdfs.md`).
 4. ⛔ **Recién ahí, pedirle al usuario lo que falte** —el residuo de `missing_pdf.json`, que
    `fetch_pdf` imprime con el DOI y las copias libres como links—, nunca el core entero (#530). Se
-   instalan con `replace_pdf.py <bib> <ruta.pdf> --source publisher --reason "…"`.
+   instalan con `replace_pdf.py <bib> <ruta.pdf> --source publisher --reason "…"`, que rehúsa la copia
+   con la carátula de HAL y cruza las páginas contra ADS (#531, `reference/rescate-pdfs.md`).
 5. **Cada uno que declare no poder conseguir**: `triage.py <slug> --acepta-preprint <bib> --reason
    "el usuario no consiguió la versión publicada, <fecha>"` (#512) — la cadena baja el eprint.
 

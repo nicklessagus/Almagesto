@@ -11293,7 +11293,7 @@ def test_scan_fulltext_separa_el_ilegible_y_hashea_una_vez(toy_vault):
     d.mkdir(parents=True, exist_ok=True)
     (d / "2020V.txt").write_text("", encoding="utf-8")
     (d / "2020S.txt").write_text("Una prosa legible de sobra. " * 200, encoding="utf-8")
-    files, stems, illegible, hashes, divergent = lint.scan_fulltext()
+    files, stems, illegible, hashes, divergent, _covers = lint.scan_fulltext()
     assert stems == {"2020V", "2020S"} and set(hashes) == stems and divergent == []
     assert [p for p, _why in illegible] == ["fulltext/s/2020V.txt"]
 
@@ -11382,3 +11382,31 @@ def test_pending_con_el_PDF_en_disco_no_pide_la_fuente(toy_vault):
     assert "YA está en disco" in pend[0][1] and "--restamp-pdf-links" in pend[0][1]
     _, pend, _, _ = lint.check_paper_pending("2009Otro", fm)
     assert "proveer la fuente" in pend[0][1]
+
+
+def test_531_el_txt_que_empieza_con_la_CARATULA_de_HAL_es_backlog(toy_vault, capsys):
+    """#531 — la red bajo el rehúso de `replace_pdf`: un PDF que entró antes con la carátula de HAL
+    deja su `.txt` empezando por ella. Sólo la PRIMERA página: HAL citado más adelante no cuenta."""
+    from conftest import mk_note
+    for bib, txt in (("2014S", "HAL Id: hal-01441972\nTo cite this version:\n\fA&A 1"),
+                     ("2015T", "A&A 1\fReferences: archives-ouvertes.fr")):
+        mk_note(toy_vault.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "stars": ["Estrella Test"]},
+                "## Abstract\nx\n")
+        (cfg.FULLTEXT / "test_star").mkdir(parents=True, exist_ok=True)
+        (cfg.FULLTEXT / "test_star" / f"{bib}.txt").write_text(txt, encoding="utf-8")
+    rc, rep = run_lint_reporte(capsys)
+    sec = _seccion(rep, "CARÁTULA de un repositorio")
+    assert "2014S" in sec and "HAL Id" in sec and "2015T" not in sec, sec
+
+
+def test_531_check_repository_cover_lee_SOLO_la_primera_pagina_de_cada_txt(toy_vault):
+    """El test directo de `check_repository_cover` (#396), sobre lo que `scan_fulltext` detecta en
+    su lectura única: una línea por `.txt` con carátula, bajo cada slug donde vive, y nada si HAL
+    aparece después del primer salto de página."""
+    for slug in ("a", "b"):
+        (cfg.FULLTEXT / slug).mkdir(parents=True, exist_ok=True)
+        (cfg.FULLTEXT / slug / "2014S.txt").write_text("To cite this version:\n\fA&A", encoding="utf-8")
+    (cfg.FULLTEXT / "a" / "2015T.txt").write_text("A&A\fHAL Id: hal-1", encoding="utf-8")
+    covers = lint.scan_fulltext()[5]
+    assert [m.split("`")[1] for _, m in lint.check_repository_cover(covers)] == ["a/2014S.txt",
+                                                                                 "b/2014S.txt"]

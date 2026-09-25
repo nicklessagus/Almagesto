@@ -111,7 +111,15 @@ def check_incoming(bibcode: str, nuevo: Path, source: str) -> list:
         errores.append(f"el archivo entrante es BYTE A BYTE el que ya está en "
                        f"`{iguales[0].parent.name}` (sha {sha_nuevo}): no hay nada que reemplazar, "
                        f"y hacerlo vencería los pares anclados a ese PDF por nada")
-    marca = cfg.arxiv_stamp(first_pages_text(nuevo))
+    primeras = first_pages_text(nuevo)
+    # ⛔ #531 — la carátula de un repositorio (HAL) corre en 1 TODOS los localizadores «p. N»: la
+    # página impresa N del artículo queda en la N+1 del archivo, y nada lo avisa después.
+    if (caratula := cfg.repository_cover(text=primeras)):
+        errores.append(f"la página 1 del PDF entrante es una CARÁTULA de repositorio "
+                       f"(«{caratula}»): instalado así, cada «p. N» queda corrido en 1. "
+                       f"Quitala y volvé a correr con el resultado, declarándolo en `--reason`: "
+                       f"`{cfg.strip_cover_command(nuevo)}`")
+    marca = cfg.arxiv_stamp(primeras)
     if marca is not None and source in ("publisher", "ads"):
         version = f" {marca}" if marca else ""
         errores.append(f"el PDF entrante lleva la marca de arXiv{version} en el margen y se lo "
@@ -120,6 +128,40 @@ def check_incoming(bibcode: str, nuevo: Path, source: str) -> list:
                        f"archivarlo como publicado hace que la nota mande a re-verificar contra el "
                        f"documento equivocado")
     return errores
+
+
+def ads_page_count(bibcode: str) -> int | None:
+    """ADS's `page_count` of `bibcode`, from any subject's `build/<slug>/ads.json` (#531); `None`
+    when no record carries it (an `ads.json` older than v1.340.2, or a paper off ADS)."""
+    for f in sorted((cfg.ROOT / "build").glob("*/ads.json")):
+        try:
+            recs = json.loads(f.read_text(encoding="utf-8")).get("records") or []
+        except (OSError, ValueError):
+            continue
+        for r in recs:
+            if r.get("bibcode") == bibcode and r.get("page_count"):
+                return int(r["page_count"])
+    return None
+
+
+def ads_page_warning(bibcode: str, nuevo: Path, source: str) -> str | None:
+    """A WARNING when a `--source publisher` PDF does not have the pages ADS says the article has
+    (#531). A page too MANY at the start shifts every locator; one at the end (a copyright page)
+    does not — the count cannot tell which, so whoever installs looks. `eprint` is not crossed: its
+    own pagination is expected. Not evaluable is said, never silent (D-43)."""
+    if source != "publisher":
+        return None
+    esperado = ads_page_count(bibcode)
+    n, why = cfg.pdf_page_count(nuevo) if esperado is not None else (None, "")
+    if n is None:
+        return (f"no se pudo cruzar la cantidad de páginas contra ADS "
+                f"({why or 'ningún `ads.json` trae su `page_count`'}): revisá a mano que la página 1 "
+                f"del PDF sea la primera del artículo")
+    if n != esperado:
+        return (f"el PDF tiene {n} página(s) y ADS dice {esperado}: si sobra una ADELANTE (carátula, "
+                f"hoja de licencia) todos los «p. N» quedan corridos — quitala antes de instalar; "
+                f"al final no corre nada")
+    return None
 
 
 def page_warning(saliente: Path, entrante: Path) -> str | None:
@@ -313,6 +355,8 @@ def install_first(bibcode: str, nuevo: Path, source: str, slug: str,
     dest = cfg.PDFS / slug / f"{stem}.pdf"
     nota = cfg.PAPERS / f"{stem}.md"
     txt = cfg.FULLTEXT / slug / f"{stem}.txt"
+    if (aviso := ads_page_warning(bibcode, nuevo, source)):
+        cfg.print_seguro(f"  ⚠ {aviso} (#531)")
     cfg.print_seguro(f"  {'(dry-run) ' if dry_run else ''}→ {dest} (primera copia)")
     fallidos = []
     if not dry_run:
@@ -369,6 +413,8 @@ def replace(bibcode: str, nuevo: Path, source: str, reason: str,
     # #437 — la comparación de páginas va ANTES de copiar, y por el mismo motivo que el alcance: el
     # PDF saliente está en disco sólo ahora, y es la única señal que no se reconstruye después.
     aviso_paginas = page_warning(copias[0], nuevo)
+    if (aviso := ads_page_warning(bibcode, nuevo, source)):
+        cfg.print_seguro(f"  ⚠ {aviso} (#531)")
     paginas = (cfg.pdf_page_count(copias[0])[0], cfg.pdf_page_count(nuevo)[0])
     for c in copias:
         cfg.print_seguro(f"  {'(dry-run) ' if dry_run else ''}→ {c}")

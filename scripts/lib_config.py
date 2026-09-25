@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.340.1"
+ALMAGESTO_VERSION = "1.341.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1036,6 +1036,39 @@ def previous_blob_sha10(path) -> tuple:
         return m.group(1)[:10].decode(), ""
     import hashlib
     return hashlib.sha256(anterior).hexdigest()[:10], ""
+
+
+#: #531 · what a repository's own cover page says on page 1 (HAL prepends one to the publisher's
+#: PDF). ponytail: only HAL's wording; add another repository's when one shows up.
+REPOSITORY_COVER_RE = re.compile(r"HAL Id\s*:|archives-ouvertes\.fr|To cite this version", re.I)
+
+
+def repository_cover(pdf=None, *, text: str | None = None) -> str | None:
+    """The marker of a repository COVER PAGE on page 1, or `None` (#531) — of `pdf` (read with
+    `pdftotext`), or of `text` already extracted (only up to its first form feed: page 1).
+
+    HAL prepends its own page («HAL Id … To cite this version») to the publisher's PDF: installed
+    as is, printed page N of the article is page N+1 of the file and every «p. N» locator (vista,
+    verify, `repaginate`) is off by one — silently. ONE decision for the three places a PDF is
+    judged (`fetch_pdf`, `replace_pdf`, the lint over the `.txt`). `None` also when `pdftotext`
+    cannot run: this is a refusal trigger, not a certificate."""
+    if text is None:
+        import subprocess
+        try:
+            text = subprocess.run(["pdftotext", "-f", "1", "-l", "1", str(pdf), "-"],
+                                  capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace", timeout=60).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+    m = REPOSITORY_COVER_RE.search((text or "").split("\f")[0])
+    return m.group(0) if m else None
+
+
+def strip_cover_command(pdf, out="<salida.pdf>") -> str:
+    """The command that drops page 1 of `pdf` (#531) — printed, never run: the user installs the
+    result, and the `--reason` says the cover was removed."""
+    n, _ = pdf_page_count(pdf)
+    return f"mutool merge -o {out} {pdf} 2-{n or 'N'}"
 
 
 def pdf_page_count(pdf) -> tuple:

@@ -652,3 +652,40 @@ def test_513_con_copia_previa_el_slug_no_cambia_nada_es_un_reemplazo(toy_vault, 
                     "--reason", "x"]) == 0
     assert not (cfg.PDFS / "test_star" / "2010D.pdf").exists()
     assert cfg.as_list(cfg.split_fm(nota.read_text(encoding="utf-8")).get("pdf_reemplazo"))
+
+
+HAL = "HAL Id: hal-01441972\nhttps://hal.science/hal-01441972\nTo cite this version:\n"
+
+
+def test_531_rehusa_la_CARATULA_de_repositorio_y_da_el_comando(toy_vault, tmp_path, monkeypatch):
+    """#531 — HAL antepone SU carátula al PDF del editor: instalado así, la página impresa N queda
+    en la N+1 del archivo y cada «p. N» (vista, verify, `repaginate`) sale corrido en 1, sin aviso.
+    Rehúsa en la primera copia (#513, donde #437 no tiene saliente) y en el reemplazo, con el
+    comando para quitarla. Sólo mira la página 1: la cita a HAL en la página 2 no es carátula."""
+    _nota_sin_pdf("2014S")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: HAL + "\fAstronomy & Astrophysics")
+    monkeypatch.setattr(rp.cfg, "pdf_page_count", lambda _p: (15, ""))
+    with pytest.raises(rp.ReplaceError, match="CARÁTULA") as exc:
+        rp.install_first("2014S", _entrante(tmp_path), "publisher", "test_star")
+    assert "mutool merge -o" in str(exc.value) and " 2-15" in str(exc.value)
+    assert not (cfg.PDFS / "test_star" / "2014S.pdf").exists(), "una rehusada no escribe NADA"
+    _copia("gj_581", "2010D")
+    with pytest.raises(rp.ReplaceError, match="CARÁTULA"):
+        rp.replace("2010D", _entrante(tmp_path), "eprint", "m")
+    monkeypatch.setattr(rp, "first_pages_text", lambda _p: "Astronomy & Astrophysics\f" + HAL)
+    assert rp.check_incoming("2014S", _entrante(tmp_path), "publisher") == []
+
+
+def test_531_cruza_las_paginas_del_publisher_contra_ADS(toy_vault, tmp_path, monkeypatch):
+    """Una página de más ADELANTE corre los localizadores; el conteo no dice en qué extremo sobra,
+    así que avisa. `eprint` no se cruza (paginación propia). Sin `page_count`, lo dice (D-43)."""
+    nuevo = _entrante(tmp_path)
+    monkeypatch.setattr(rp.cfg, "pdf_page_count", lambda _p: (19, ""))
+    assert "no se pudo cruzar" in rp.ads_page_warning("2016F", nuevo, "publisher")
+    d = cfg.ROOT / "build" / "hd_41248"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"records": [{"bibcode": "2016F", "page_count": 18}]}))
+    assert "19 página(s) y ADS dice 18" in rp.ads_page_warning("2016F", nuevo, "publisher")
+    assert rp.ads_page_warning("2016F", nuevo, "eprint") is None
+    monkeypatch.setattr(rp.cfg, "pdf_page_count", lambda _p: (18, ""))
+    assert rp.ads_page_warning("2016F", nuevo, "publisher") is None

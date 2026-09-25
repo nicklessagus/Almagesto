@@ -6370,7 +6370,9 @@ def cierre_scope(slug: str | None) -> frozenset:
 
 
 def scan_fulltext() -> tuple:
-    """`(files, stems, illegible, hashes, divergent)` — ONE read of every `.txt` of `raw/fulltext/`.
+    """`(files, stems, illegible, hashes, divergent, covers)` — ONE read of every `.txt` of
+    `raw/fulltext/`. `covers`: `(stem, rel path, marker)` of the `.txt` whose page 1 is a
+    repository's cover (#531), on the same read — the scale anchor forbids a second one.
 
     `stems` is the verifiability precondition (a cited bibcode without its `.txt` cannot be checked
     claim↔source); `illegible` the `.txt` that exists and is useless for grep/verify (mojibake,
@@ -6383,6 +6385,7 @@ def scan_fulltext() -> tuple:
     illegible: list = []
     hashes: dict[str, str] = {}
     copies: dict[str, dict[str, list]] = {}
+    covers: list = []
     for p in files:
         contenido = open(p, encoding="utf-8", errors="replace").read()
         _bib, _h = basename(p)[:-4], lb.sha10(contenido)
@@ -6392,7 +6395,10 @@ def scan_fulltext() -> tuple:
         ok, why = is_legible(contenido)
         if not ok:
             illegible.append((Path(p).relative_to(cfg.RAW).as_posix(), why))
-    return files, {basename(p)[:-4] for p in files}, illegible, hashes, diverged_copies(copies)
+        if (_m := cfg.repository_cover(text=contenido[:20000])):
+            covers.append((_bib, Path(p).relative_to(cfg.FULLTEXT).as_posix(), _m))
+    return (files, {basename(p)[:-4] for p in files}, illegible, hashes, diverged_copies(copies),
+            covers)
 
 
 def pdfs_on_disk() -> dict:
@@ -6559,6 +6565,18 @@ def check_pdf_provenance(stem: str, fm: dict, pdf_on_disk: dict) -> list:
                     "sin item de config donde declararlo: la procedencia sólo puede venir "
                     "de la marca de arXiv, de `pdf_reemplazo` (`replace_pdf`) o del "
                     "registro del fetcher en `build/` (re-corré `fetch_pdf`)"))]
+
+
+def check_repository_cover(covers: list) -> list:
+    """#531 — the `.txt` starts with a repository's COVER page (HAL): the PDF it was extracted from
+    has page 1 = the cover, so every «p. N» locator read from it is off by one. Backlog: the net
+    under `replace_pdf`'s refusal for PDFs that entered before it. `covers` is what `scan_fulltext`
+    found on its single read (the scale anchor forbids a second one)."""
+    return [(stem, f"`{rel}` empieza con la carátula de un repositorio («{m}»): los localizadores "
+                   f"«p. N» leídos de ese PDF están corridos en 1 — quitale la página 1 al PDF e "
+                   f"instalalo con `replace_pdf.py {stem} <pdf> --source <…> --reason`, y re-paginá "
+                   f"(`repaginate.py`, #494)")
+            for stem, rel, m in covers]
 
 
 def _adder(out: dict):
@@ -6875,13 +6893,14 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     Los hallazgos se juntan en `found`, por `Categoria.clave`, en el orden del barrido."""
     alcance = cierre_scope(slug)
     files = note_files()
-    fulltext_files, fulltext, illegible_txt, ft_hash, divergent_txt = scan_fulltext()
+    fulltext_files, fulltext, illegible_txt, ft_hash, divergent_txt, _covers = scan_fulltext()
     pdf_on_disk = pdfs_on_disk()
     # ── "no evaluado" (D-43 / INV-87): un chequeo que NO PUDO correr no aporta un cero, reporta
     # error — la categoría CUENTA para el exit ≠ 0 y la normal correspondiente se SUPRIME del
     # reporte (`suppressed_titles`) en vez de mostrar su cero. Cada poblador agrega (qué, por qué).
     found: dict[str, list] = defaultdict(list)
     found["illegible_txt"] = illegible_txt
+    found["pdf_con_caratula"] = check_repository_cover(_covers)                   # #531
     found["divergent_txt"] = divergent_txt
     found["alias_faltante"], found["alias_rechazado"], found["foreign_alias"] = check_simbad_aliases()
     found["gt_sin_ficha"], _gt_total = check_gt_without_star()
@@ -7077,6 +7096,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   '(#252: visible, no es deuda)', SEV_BACKLOG, tuple(found['alias_rechazado']), poblacion='ground_truth'),
         Categoria('foreign_alias', '⚠ Alias que SIMBAD no reconoce para esta estrella (WARN — puede meter papers de otro objeto)',
                   SEV_WARN, tuple(found['foreign_alias']), poblacion='ground_truth'),
+        Categoria('pdf_con_caratula', '📑 PDF con la CARÁTULA de un repositorio (HAL) como página 1: cada «p. N» leído de él queda corrido en 1 (#531, backlog)', SEV_BACKLOG, tuple(found['pdf_con_caratula']), poblacion='papers'),
         Categoria('pdf_sin_procedencia', '📄 PDF en disco con `pdf_source: null` (desconocido): el campo decide lecturas y no se re-deriva — declaralo en su carril de config (#415/#479, backlog)', SEV_BACKLOG, tuple(found['pdf_sin_procedencia']), poblacion='papers'),
         Categoria('pdf_source_contradictorio', '⛔ `pdf_source` de editor con `eprint_version`: contradicción interna, la nota manda a re-verificar contra el documento equivocado (#383)',
                   SEV_BLOQUEANTE, tuple(found['pdf_source_contradictorio']), poblacion='papers'),
