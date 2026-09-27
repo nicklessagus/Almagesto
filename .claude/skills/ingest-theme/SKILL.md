@@ -345,7 +345,7 @@ Progreso del ingest del tema <tema>:
    en alguna ficha o concepto. La suficiencia la juzgás vos, igual que en la ficha de estrella.)
    ⚠ Ese backlog es el que cierra este paso: un paper que pagó la extracción y no aparece citado en
    ninguna entidad es extracción perdida. O lo sintetizás donde corresponda, o declarás por qué no
-   va: `no_sintetizado: <motivo>` en su nota (la marca sin motivo se sigue reportando).
+   va: `no_sintetizado: [{sujeto, motivo}]` en su nota (#553; la marca sin motivo se sigue reportando).
 
 6. **Bookkeeping.** Re-estampar el índice (`python scripts/make_notes.py --restamp-index`, #237),
    appendear a `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **Fecha de síntesis**

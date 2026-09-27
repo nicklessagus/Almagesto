@@ -835,7 +835,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   citado en ninguna ficha ni concepto — la extracción nunca llegó a la síntesis, y es el único paso
   salteable sin otro rastro (su modo de falla es omisión; `verify-citations` no lo ve: valida cada
   afirmación, no la cobertura del conjunto). Se cierra sintetizando o declarando
-  `no_sintetizado: <motivo>`. Dos recortes de población: la cita debe estar en nota de **entidad**
+  `no_sintetizado: [{sujeto, motivo}]` (#553: por sujeto, como `no_vista`; el escalar viejo es la
+  categoría bloqueante `old_no_sintetizado`, `make_notes.py --migrate-no-sintetizado`, que reparte el
+  motivo a los sujetos que NO citan el paper). Dos recortes de población: la cita debe estar en nota de **entidad**
   (una `queries/` es respuesta puntual) y la nota no-core (`relevance: low`) no entra.
 - **Vista fechada sin fuente en disco** (#217): la lectura ocurrió y ya no hay contra qué
   re-verificarla (los artefactos los borró `--drop-core`). Ninguna otra red lo ve: el ancla de

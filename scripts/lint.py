@@ -3145,17 +3145,23 @@ def check_unsynthesized(extracted, cited_in_entity) -> list:
         if stem in cited_in_entity:
             continue
         if marca is not _SIN_MARCA:
-            # Un motivo es TEXTO con contenido. Cualquier otra cosa (número, lista, mapa, `true`,
-            # vacío) es la marca pelada que la doc dice seguir reportando: cerraba el hallazgo en
-            # silencio, que es exactamente lo que "motivo obligatorio" existe para impedir.
-            if not cfg.declared_motive(marca):     # #545: the one reader of a motive
-                unsynthesized.append((stem, "`no_sintetizado` sin motivo → poné POR QUÉ no se "
-                                            "inlinea (regla de poda, aporta sólo vía roll-up, …)"))
+            # #553 — la forma es `[{sujeto, motivo}]`; el escalar lo bloquea `old_no_sintetizado`
+            # y no se reporta dos veces. Una lista vacía o con una entrada sin motivo es la marca
+            # pelada: cerraba el hallazgo en silencio, que es lo que «motivo obligatorio» impide.
+            if isinstance(marca, list):
+                try:
+                    ok = bool(cfg.load_no_sintetizado({"no_sintetizado": marca}, entry=stem))
+                except cfg.VistasError:
+                    ok = False
+                if not ok:
+                    unsynthesized.append((stem, "`no_sintetizado` sin `sujeto` o sin motivo → "
+                                                "poné POR QUÉ no se inlinea, por sujeto (#553)"))
             continue
         # @inv INV-45
         unsynthesized.append((stem, "extraído (`methods` poblado) pero su bibcode no está citado en "
                                     "ninguna ficha ni concepto → sintetizarlo donde corresponda, o "
-                                    "marcar `no_sintetizado: <motivo>` en la nota del paper"))
+                                    "declarar `no_sintetizado: [{sujeto, motivo}]` en la nota "
+                                    "del paper (#553)"))
     return unsynthesized
 
 
@@ -4575,6 +4581,19 @@ def check_state_header(stem: str, f, text: str, slug_ent) -> list:
                            "(¿faltó re-correr después del último paso?) → "
                            f"`{cfg.make_notes_cmd(slug_ent)}`"))
     return estado_desfasado
+
+
+def check_old_no_sintetizado(stem: str, f, fm: dict, err) -> list:
+    """`old_no_sintetizado` — the scalar `no_sintetizado: <motivo>` of #75 (BLOQUEANTE, #553).
+
+    The hatch is per pair (paper, subject), like `no_vista`: the scalar let the motive one subject
+    wrote rule over every subject sharing the paper. Retired schema, no tolerant reader — migrate
+    once."""
+    v = fm.get("no_sintetizado")
+    if not in_dir(f, "papers") or err or v is None or isinstance(v, list):
+        return []
+    return [(stem, "`no_sintetizado` escalar (schema pre-#553): la escotilla es por sujeto, "
+                   "`[{sujeto, motivo}]` → `python scripts/make_notes.py --migrate-no-sintetizado`")]
 
 
 def check_paper_destination(stem: str, f, fm: dict, err) -> tuple:
@@ -6812,6 +6831,7 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     _pd1, _pd2 = check_paper_destination(stem, f, fm, err)
     add("sin_destino", _pd1)
     add("old_bearing", _pd2)
+    add("old_no_sintetizado", check_old_no_sintetizado(stem, f, fm, err))
     for key, items in zip(("alcance_corto", "alcance_wikilink", "bad_status",
                            "status_vs_evidencia"),
                           check_hypothesis_note(stem, f, fm, text, err)):
@@ -7186,6 +7206,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bad_status', '⛔ `status` de hipótesis fuera del vocabulario cerrado (D-37)', SEV_BLOQUEANTE, tuple(found['bad_status']), poblacion='entidades'),
         Categoria('status_vs_evidencia', '`status: sostenida` contra su propia tabla de evidencia (D-37, #177)', SEV_BACKLOG, tuple(found['status_vs_evidencia']), poblacion='entidades'),
         Categoria('old_bearing', '⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis', SEV_BLOQUEANTE, tuple(found['old_bearing']), poblacion='papers'),
+        Categoria('old_no_sintetizado', '⛔ `no_sintetizado` escalar en una nota de paper (schema pre-#553) — la escotilla es por sujeto → `make_notes.py --migrate-no-sintetizado`', SEV_BLOQUEANTE, tuple(found['old_no_sintetizado']), poblacion='papers'),
         Categoria('sin_destino', '⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad', SEV_BLOQUEANTE, tuple(found['sin_destino']), poblacion='papers'),
         Categoria('identidad_dup', '⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)', SEV_BLOQUEANTE, tuple(found['identidad_dup']), poblacion='papers'),
         Categoria('alias_con_nota', '⛔ Bibcode listado en `versions[]` que TIENE su propia nota: apaga los dos chequeos de identidad (#229)', SEV_BLOQUEANTE, tuple(found['alias_con_nota']), poblacion='papers'),

@@ -348,7 +348,7 @@ Progreso del ingest de <estrella>:
    citado en alguna ficha o concepto (#75) — pero la suficiencia la juzgás vos.)
    ⚠ **El backlog *extraído pero no sintetizado* es el que cierra este paso:** un paper que pagó la
    extracción y no aparece citado en ninguna entidad es extracción perdida. O lo sintetizás donde
-   corresponda, o declarás por qué no va: `no_sintetizado: <motivo>` en su nota (la **regla de poda**
+   corresponda, o declarás por qué no va: `no_sintetizado: [{sujeto, motivo}]` en su nota (#553; la **regla de poda**
    es motivo válido; la marca sin motivo se sigue reportando).
 
 5. **Bookkeeping.** Re-estampar el índice —`python scripts/make_notes.py --restamp-index`, #237:

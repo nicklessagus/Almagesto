@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.362.3"
+ALMAGESTO_VERSION = "1.363.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4315,6 +4315,33 @@ def load_no_vista(meta: dict, *, entry: str = "?") -> list:
         if faltan:
             raise VistasError(_no_vista_error(
                 entry, f"a una entrada de `no_vista` le falta {', '.join(faltan)}"))
+        out.append(dict(x, sujeto=sujeto, motivo=motivo))
+    return out
+
+
+def load_no_sintetizado(meta: dict, *, entry: str = "?") -> list:
+    """`no_sintetizado: [{sujeto, motivo}]` — the paper extracted and deliberately not synthesised,
+    PER SUBJECT (#553). Same form and reason as `no_vista`: the hatch belongs to the pair (paper,
+    subject), and the scalar of #75 let the motive one subject wrote («HD 40307 is a row…») rule
+    over every other subject sharing the paper — measured, 15 of 52 hatched notes had ≥2 subjects.
+
+    ⛔ No tolerant reader: the scalar raises and `make_notes.py --migrate-no-sintetizado` converts
+    it once; the lint blocks the scalar."""
+    v = meta.get("no_sintetizado")
+    if v is None:
+        return []
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        raise VistasError(
+            f"'{entry}': `no_sintetizado` es una lista de `{{sujeto, motivo}}` (#553): el motivo "
+            f"suelto no dice para QUÉ sujeto vale, y en un paper compartido eximía a todos → "
+            f"`python scripts/make_notes.py --migrate-no-sintetizado`")
+    out = []
+    for x in v:
+        sujeto, motivo = str(x.get("sujeto") or "").strip(), declared_motive(x.get("motivo"))
+        faltan = [k for k, val in (("sujeto", sujeto), ("motivo", motivo)) if not val]
+        if faltan:
+            raise VistasError(f"'{entry}': a una entrada de `no_sintetizado` le falta "
+                              f"{', '.join(faltan)} (#553)")
         out.append(dict(x, sujeto=sujeto, motivo=motivo))
     return out
 

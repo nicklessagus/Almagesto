@@ -583,11 +583,11 @@ portadores:
         estado: fuera-de-alcance
         motivo: Ídem — el slug del sujeto en curso viene del CLI (`excluidos_del_sujeto`).
       - modulo: scripts/make_notes.py
-        estado: fuera-de-alcance
+        estado: usa
         motivo: >-
-          Sus tres llamadas al carril son sobre el slug de la ficha que está estampando. La
-          resolución nombre→sujeto que sí hace (los reclamos de `stars[]`) es por NOMBRE contra
-          NOMBRE y no toca la curación.
+          Sus tres llamadas al carril son sobre el slug de la ficha que está estampando. #553 —
+          `migrate_all_no_sintetizado` resuelve el nombre de cada reclamo (`stars`, `thesis_links`)
+          con `subject_slug` para encontrar la ficha y ver si cita el paper.
       - modulo: scripts/harvest_views.py
         estado: fuera-de-alcance
         motivo: >-

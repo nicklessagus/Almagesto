@@ -231,7 +231,7 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   `thesis_links` y **la vista del sujeto** (`vistas[]` + `## Vista — <sujeto>`, #188), contrastar contra el `## Inventario por eje` de la nota destino, sintetizar
   **en su lugar** (no una sección nueva), y re-estampar la tabla `## Papers` con
   `python scripts/make_notes.py <slug>` para que el estado de cada paper deje de mentir. Si un paper
-  legítimamente no se inlinea, declarar `no_sintetizado: <motivo>` en su nota — con motivo, como
+  legítimamente no se inlinea, declarar `no_sintetizado: [{sujeto, motivo}]` en su nota — con motivo, como
   todo descarte. Al cerrar, **re-declarar la fecha de síntesis**
   (`python scripts/triage.py <slug> --sintesis --n-papers <N>` + `make_notes.py <slug>`): si no, la
   ficha sigue diciendo que se sintetizó cuando se sintetizó la vez pasada.
@@ -271,8 +271,8 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   a una ficha ni a un concepto. Releer su `## Vista — <sujeto>` (schema #188; en una nota sin migrar, su `## Extracción (LLM)`) y decidir: si aporta algo al sujeto,
   **sintetizarlo** en la nota viva (rige la regla de poda) y cerrar con `verify-citations`; si
   legítimamente no se inlinea —tangencial, o aporta sólo vía roll-up—, declararlo en la nota del
-  paper con `no_sintetizado: <motivo>`. La marca **sin motivo** vuelve a reportarse: mismo criterio
-  que el `--reason` del triage, no curar en silencio.
+  paper con `no_sintetizado: [{sujeto, motivo}]`. La marca **sin motivo** vuelve a reportarse: no curar en
+  silencio.
 - **PDF ↔ disco / cuerpo** (drift del campo `pdf` o del link de cabecera) → linkear el PDF bajado o
   corregir el puntero roto; después `python scripts/make_notes.py --restamp-pdf-links` para que el link
   `[📄 PDF]` de la cabecera siga al frontmatter (#47 — barre todas las notas de papers:

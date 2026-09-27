@@ -1083,6 +1083,18 @@ def _no_vista_declarada(fm: dict, stem: str, sujetos: set) -> bool:
     return bool(declaradas & sujetos)
 
 
+def _no_sintetizado_declarado(fm: dict, stem: str, sujetos: set) -> bool:
+    """Did this note declare `no_sintetizado` for the subject of this roll-up? (#553)
+
+    Same fallback as `_no_vista_declarada`: a malformed field (the retired scalar included) does not
+    abort the chain — the ladder stays plain and the lint reports the field on its own."""
+    try:
+        declaradas = {v["sujeto"] for v in cfg.load_no_sintetizado(fm, entry=stem)}
+    except cfg.VistasError:
+        return False
+    return bool(declaradas & sujetos)
+
+
 def view_stub_kind(text: str, sujeto: str, theme: bool) -> str:
     """What the `## Vista — <subject>` section IS: `""` (written prose), `"plantilla"` or `"estado"`.
 
@@ -1994,6 +2006,60 @@ def migrate_all_vistas() -> tuple[int, list]:
     return migradas, ambiguas
 
 
+def migrate_all_no_sintetizado() -> tuple[int, list]:
+    """One-shot migrator of #553: `no_sintetizado: <motivo>` → `[{sujeto, motivo}]`.
+
+    The motive goes to each subject that claims the paper (`stars`, `thesis_links`, or a theme via
+    `methods`) and does NOT cite it in its note: where the ficha synthesises it the hatch did
+    nothing, and copying it there is exactly the measured defect (the HD 40307 motive over a ficha
+    that does synthesise the paper). Which subject should keep each motive is judgement, not done here.
+
+    Returns `(migrated, warnings)`: a mark without motive is not migrated —there is nothing to
+    distribute— and one left with no subject is retired, saying so."""
+    themes = {} if cfg.themes_error() else (cfg.load_themes() or {})
+    n, avisos = 0, []
+    for f in cfg.note_paths(cfg.PAPERS):
+        texto = f.read_text(encoding="utf-8")
+        fm = cfg.split_fm(texto) or {}
+        v = fm.get("no_sintetizado")
+        if v is None or isinstance(v, list):
+            continue
+        motivo = cfg.declared_motive(v)
+        if not motivo:
+            avisos.append(f"{f.stem}: `no_sintetizado` sin motivo — no hay qué repartir, "
+                          f"escribilo a mano en la forma nueva")
+            continue
+        sujetos = [str(x) for k in ("stars", "thesis_links") for x in cfg.as_list(fm.get(k))]
+        for slug_t, meta in themes.items():
+            if any(theme_membership(
+                    str(cfg.as_map(meta).get("concept") or slug_t), fm)):
+                sujetos.append(slug_t)
+        entradas = []
+        for sujeto in dict.fromkeys(sujetos):
+            dest = cfg.entity_note(cfg.subject_slug(sujeto) or sujeto)
+            if dest and cfg.wikilink_re(f.stem).search(_prosa(dest.read_text(encoding="utf-8"))):
+                continue
+            entradas.append(sujeto)
+        ini, fin = cfg.fm_bounds(texto)          # never None here: `split_fm` found the field
+        head = "\n".join(cfg.drop_fm_keys_from_block(texto[ini:fin], ["no_sintetizado"]))
+        if entradas:
+            head = head.rstrip("\n") + "\nno_sintetizado:\n" + "".join(
+                f"  - sujeto: {cfg.yaml_scalar(s)}\n    motivo: {cfg.yaml_scalar(motivo)}\n"
+                for s in entradas)
+        else:
+            avisos.append(f"{f.stem}: todos los sujetos que lo reclaman lo sintetizan — la escotilla "
+                          f"se retira (motivo era: «{motivo[:80]}»)")
+        salida = texto[:ini] + head.rstrip("\n") + texto[fin:]
+        # #244: the reader before the writer. ⚠ An atajo `--guardas` reports as a survivor: no
+        # fixture makes this rebuild unparsable, and dropping it would trade a guard for nothing.
+        if not cfg.split_fm(salida):
+            avisos.append(f"{f.stem}: la migración dejaría el frontmatter sin parsear: no se escribió")
+            continue
+        cfg.write_text_atomic(f, salida)
+        n += 1
+    return n, avisos
+
+
 def migrate_all_bearing() -> int:
     """Migrador de un solo uso de D-21: saca `bearing:` del frontmatter de las notas de paper.
 
@@ -2834,6 +2900,9 @@ ESTADO_SIN_EXTRAER = "sin extraer"
 #: valía nada en el roll-up — la misma escotilla que #256 hizo alcanzable, ignorada por las otras
 #: tres redes que cuentan esa nota.
 ESTADO_SIN_VISTA = "sin vista (declarado)"
+#: #553 · extraído y deliberadamente no sintetizado PARA ESTE SUJETO (`no_sintetizado` + motivo).
+#: Sin él la declaración se publicaba como `extraído, no sintetizado`, o sea deuda (AUD-207).
+ESTADO_NO_SINTETIZADO = "no sintetizado (declarado)"
 ESTADO_FUERA = "fuera del filtro"
 # #116: el paper que el USUARIO sacó del sujeto con `--drop-core`. Distinto de `fuera del filtro`
 # (que lo decidió la lente) y sobre todo de `sin extraer` (que se lee como «todavía no llegamos»,
@@ -2922,7 +2991,9 @@ def _estado_paper(stem: str, fm: dict, cuerpo: str, dropeados: set, sujetos: set
     if not (fm.get("methods") or []):
         return ESTADO_SIN_EXTRAER
     # AUD-509 — the whole wikilink, not a prefix: `[[2011Naika]]` does not cite `2011Naik`.
-    return ESTADO_SINTETIZADO if cfg.wikilink_re(stem).search(cuerpo) else ESTADO_EXTRAIDO
+    if cfg.wikilink_re(stem).search(cuerpo):
+        return ESTADO_SINTETIZADO
+    return ESTADO_NO_SINTETIZADO if _no_sintetizado_declarado(fm, stem, sujetos) else ESTADO_EXTRAIDO
 
 
 def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
@@ -4827,6 +4898,10 @@ def main() -> int:
                     help="migración #528: re-firma cada `warn_revisada` del ancla de PÁRRAFO al "
                          "bloque que parte el lint; la firma que cubría varios bloques no se "
                          "reparte: se declara. Idempotente. No requiere slug.")
+    ap.add_argument("--migrate-no-sintetizado", action="store_true", dest="migrate_no_sintetizado",
+                    help="migración #553: `no_sintetizado: <motivo>` → `[{sujeto, motivo}]`, "
+                         "repartido a los sujetos que reclaman el paper y no lo citan. "
+                         "Idempotente. No requiere slug.")
     ap.add_argument("--migrate-bearing", action="store_true", dest="migrate_bearing",
                     help="migración D-21: saca `bearing:` del frontmatter de las notas de paper (la "
                          "postura vive en la tabla de evidencia de la hipótesis). No requiere slug.")
@@ -4948,6 +5023,12 @@ def main() -> int:
         return restamp_vista_stub()
     if args.clean_catalog_markup:
         return clean_catalog_markup_notes()
+    if args.migrate_no_sintetizado:
+        n, avisos = migrate_all_no_sintetizado()
+        for a in avisos:
+            cfg.print_seguro(f"  ⚠ {a}")
+        cfg.print_seguro(f"`no_sintetizado` migrado a la forma por sujeto en {n} nota(s) (#553).")
+        return 0
     if args.migrate_bearing:
         n = migrate_all_bearing()
         cfg.print_seguro(f"`bearing` retirado de {n} nota(s) de paper (D-21).")
@@ -5034,7 +5115,7 @@ def main() -> int:
                  "--restamp-headers, --restamp-abstracts, --fill-abstracts, --restamp-vista-stub, "
                  "--restamp-transcribed-note, "
                  "--restamp-alcance, --restamp-lente, --clean-catalog-markup, "
-                 "--migrate-disputes, --migrate-bearing, --migrate-extracciones, "
+                 "--migrate-disputes, --migrate-bearing, --migrate-no-sintetizado, --migrate-extracciones, "
                  "--migrate-source-fields, "
                  "--migrate-txt-fields, --migrate-vistas, --sync-mirror y --rename-paper)")
 

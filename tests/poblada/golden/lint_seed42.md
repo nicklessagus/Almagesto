@@ -215,6 +215,9 @@
 ## ⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis (0)
 > sobre 60 notas de `papers/`
 
+## ⛔ `no_sintetizado` escalar en una nota de paper (schema pre-#553) — la escotilla es por sujeto → `make_notes.py --migrate-no-sintetizado` (0)
+> sobre 60 notas de `papers/`
+
 ## ⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad (0)
 > sobre 60 notas de `papers/`
 
@@ -404,8 +407,8 @@
 
 ## Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (2)
 > sobre 60 notas de `papers/`
-- 1996Alm00057A → extraído (`methods` poblado) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o marcar `no_sintetizado: <motivo>` en la nota del paper
-- 2019Alm00056A → extraído (`methods` poblado) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o marcar `no_sintetizado: <motivo>` en la nota del paper
+- 1996Alm00057A → extraído (`methods` poblado) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o declarar `no_sintetizado: [{sujeto, motivo}]` en la nota del paper (#553)
+- 2019Alm00056A → extraído (`methods` poblado) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o declarar `no_sintetizado: [{sujeto, motivo}]` en la nota del paper (#553)
 
 ## Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog) (2)
 > sobre 29 notas de entidad (fichas, conceptos, queries)

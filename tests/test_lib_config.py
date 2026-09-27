@@ -4173,3 +4173,14 @@ def test_550_entity_slug_y_entity_note_son_inversas(toy_vault):
     assert cfg.entity_slug(cfg.PAPERS / "ica-concepto.md") is None, "fuera de concepts/ no es concepto"
     toy_vault.THEMES_YAML.write_text("ica: [roto\n", encoding="utf-8")
     assert cfg.entity_slug(concepto) is None, "con themes.yaml ilegible no se adivina"
+
+
+def test_553_load_no_sintetizado_forma_por_sujeto_y_rehusa_el_escalar():
+    """#553 — misma forma dura que `no_vista`: sin sujeto la escotilla eximía a todos."""
+    assert cfg.load_no_sintetizado({}) == []
+    assert cfg.load_no_sintetizado({"no_sintetizado": [{"sujeto": " S ", "motivo": "poda"}]}) == [
+        {"sujeto": "S", "motivo": "poda"}]
+    for malo in ("poda", True, ["poda"], [{"sujeto": "S"}], [{"motivo": "poda"}],
+                 [{"sujeto": "S", "motivo": "true"}]):
+        with pytest.raises(cfg.VistasError):
+            cfg.load_no_sintetizado({"no_sintetizado": malo}, entry="x")

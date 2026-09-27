@@ -510,10 +510,10 @@ resuelve, no promedia. Vocabulario **cerrado** y bloqueante.
 
 #### Escotillas y metadata de estado
 
-- `no_sintetizado: <motivo>` (#75): declara que este paper **ya extraído** legítimamente no se
-  inlinea en ninguna ficha ni concepto —típicamente por la **regla de poda**—. Motivo
-  **obligatorio** (mismo criterio que el `--reason` del triage: no curar en silencio); sin ella, el
-  lint lo reporta como *extraído pero no sintetizado*.
+- `no_sintetizado: [{sujeto, motivo}]` (#75, **por sujeto** #553 — el escalar bloquea,
+  `--migrate-no-sintetizado`): este paper **ya extraído** legítimamente no se inlinea en la nota de
+  ese sujeto —típicamente por la **regla de poda**—. Motivo **obligatorio** (no curar en silencio);
+  sin ella, el lint lo reporta como *extraído pero no sintetizado*.
 - `retracted: true` + `retraction{type,notice_doi,date,source}`: lo estampa
   `scripts/check_retractions.py` (Crossref) y el lint lo surface como **bloqueante** (fuente no
   válida).

@@ -536,7 +536,7 @@ def test_posicion_con_ref_y_source_no_esquiva_el_vocabulario(toy_vault, capsys):
 def test_role_fuera_del_vocabulario_es_bloqueante(toy_vault, capsys):
     """Mismo trato que un `thesis_links` que no matchea ninguna nota: un typo deja el campo mudo
     para la operación que existe para consumirlo, sin que nadie se entere.  @inv INV-46"""
-    paper_extraido(toy_vault, role=["fundacinal"], no_sintetizado="tangencial")
+    paper_extraido(toy_vault, role=["fundacinal"], no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "tangencial"}])
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "`role: fundacinal` no está en el vocabulario" in out
@@ -546,8 +546,8 @@ def test_role_fuera_del_vocabulario_es_bloqueante(toy_vault, capsys):
 def test_role_valido_escalar_o_lista(toy_vault, capsys, rol):
     """El issue admite "uno o varios": un rol solo se puede escribir como escalar o como lista de
     un elemento, y las dos formas valen (`merge_frontmatter_list` deja una, `make_notes` la otra)."""
-    paper_extraido(toy_vault, stem="2020esc....1E", role=rol, no_sintetizado="tangencial")
-    paper_extraido(toy_vault, stem="2020lis....1L", role=[rol], no_sintetizado="tangencial")
+    paper_extraido(toy_vault, stem="2020esc....1E", role=rol, no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "tangencial"}])
+    paper_extraido(toy_vault, stem="2020lis....1L", role=[rol], no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "tangencial"}])
     rc, out = run_lint(capsys)
     assert rc == 0
     # #129: la categoría dejó de ser sólo de `role` — es el bucket de TODO campo con
@@ -558,11 +558,11 @@ def test_role_valido_escalar_o_lista(toy_vault, capsys, rol):
 
 
 def test_role_multiple_valida_cada_elemento(toy_vault, capsys):
-    paper_extraido(toy_vault, role=["fundacional", "arbitro"], no_sintetizado="tangencial")
+    paper_extraido(toy_vault, role=["fundacional", "arbitro"], no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "tangencial"}])
     rc, out = run_lint(capsys)
     assert rc == 0
     paper_extraido(toy_vault, stem="2021mal....1M", role=["arbitro", "revisión"],
-                   no_sintetizado="tangencial")
+                   no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "tangencial"}])
     rc, out = run_lint(capsys)
     assert rc == 1 and "`role: revisión`" in out
 
@@ -570,7 +570,7 @@ def test_role_multiple_valida_cada_elemento(toy_vault, capsys):
 def test_paper_extraido_sin_role_es_backlog(toy_vault, capsys):
     """El campo lo puebla la EXTRACCIÓN (la regex del clasificador clasifica tema, no rol), así que
     sin red nace muerto — el patrón de #87, "se guarda y nunca se usa", en su versión previa."""
-    paper_extraido(toy_vault, no_sintetizado="tangencial")
+    paper_extraido(toy_vault, no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "tangencial"}])
     rc, out = run_lint(capsys)
     assert rc == 0                                       # backlog: no bloquea
     assert "paper extraído sin `role`" in out
@@ -677,7 +677,7 @@ def test_dos_notas_con_el_mismo_stem_no_voltean_el_lint(toy_vault, capsys):
     paper_extraido(toy_vault, role=["arbitro"])
     mk_note(toy_vault.QUERIES, "2020ext....1E",
             {"tags": ["paper"], "relevance": "high", "methods": ["periodograma"],
-             "no_sintetizado": "copia de trabajo"}, "")
+             "no_sintetizado": [{"sujeto": "Estrella Test", "motivo": "copia de trabajo"}]}, "")
     link_from_log(toy_vault, "2020ext....1E")
     rc, out = run_lint(capsys)
     assert "Traceback" not in out
@@ -715,7 +715,7 @@ def test_relevance_low_capitalizado_tambien_excluye_de_extraido(toy_vault, capsy
 def test_no_sintetizado_con_motivo_cierra_el_hallazgo(toy_vault, capsys):
     """La escotilla que pide el issue: la regla de poda manda dejar lo tangencial fuera de la prosa,
     así que un extraído puede legítimamente no aterrizar — pero se declara, con su motivo."""
-    paper_extraido(toy_vault, no_sintetizado="metodología RV genérica: no cambia cómo se lee ninguna señal")
+    paper_extraido(toy_vault, no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "metodología RV genérica: no cambia cómo se lee ninguna señal"}])
     rc, out = run_lint(capsys)
     assert rc == 0
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (0)" in out
@@ -724,10 +724,10 @@ def test_no_sintetizado_con_motivo_cierra_el_hallazgo(toy_vault, capsys):
 def test_no_sintetizado_sin_motivo_sigue_reportando(toy_vault, capsys):
     """Mismo criterio que el `--reason` obligatorio del triage: no curar en silencio. Una marca
     pelada cierra el hallazgo sin dejar el porqué, que es lo único no regenerable."""
-    paper_extraido(toy_vault, no_sintetizado=True)
+    paper_extraido(toy_vault, no_sintetizado=[{"sujeto": "Estrella Test", "motivo": True}])
     rc, out = run_lint(capsys)
     assert rc == 0
-    assert "`no_sintetizado` sin motivo" in out and "2020ext....1E" in out
+    assert "`no_sintetizado` sin `sujeto` o sin motivo" in out and "2020ext....1E" in out
 
 
 def test_no_sintetizado_no_string_tambien_se_reporta_sin_motivo(toy_vault, capsys):
@@ -735,10 +735,10 @@ def test_no_sintetizado_no_string_tambien_se_reporta_sin_motivo(toy_vault, capsy
     chequeo de tipo tiene que atraparla antes de llegar a `.strip()`, que sólo existe en `str`: sin
     el `isinstance`, un valor no-string cierra el hallazgo #75 en falso (o revienta el barrido, si
     el tipo no tiene `.strip()`) en vez de seguir pidiendo el motivo."""
-    paper_extraido(toy_vault, no_sintetizado=5)
+    paper_extraido(toy_vault, no_sintetizado=[{"sujeto": "Estrella Test", "motivo": 5}])
     rc, out = run_lint(capsys)
     assert rc == 0
-    assert "`no_sintetizado` sin motivo" in out and "2020ext....1E" in out
+    assert "`no_sintetizado` sin `sujeto` o sin motivo" in out and "2020ext....1E" in out
 
 
 # ── #70: el frontmatter de stars/ es espejo puro de NEA ──────────────────────
@@ -3788,7 +3788,7 @@ def _ficha_con_inventario(toy_vault, filas: str, n_papers: int = 2):
     for b in bibs:
         (cfg.PAPERS / f"{b}.md").write_text(
             f"---\nbibcode: {b}\nstars: [Estrella Test]\nmethods: [gp]\nrole: [aplicacion]\n"
-            f"year: 2020\ntags: [paper]\nno_sintetizado: 'poda'\n---\n# T\n", encoding="utf-8")
+            f"year: 2020\ntags: [paper]\nno_sintetizado: [{{sujeto: X, motivo: poda}}]\n---\n# T\n", encoding="utf-8")
     citas = " ".join(f"[[{b}]]" for b in bibs)
     mk_note(toy_vault.STARS, "con_inv", {"tags": ["star"]},
             f"# con_inv\n\n## Resumen\nAlgo {citas}.\n\n## Inventario por eje\n{filas}\n")
@@ -4868,7 +4868,7 @@ def paper_con_vista(toy_vault, stem="2020vis....1V", *, vistas=None, body=None, 
     """Nota de paper en el schema NUEVO: `vistas[]` + su sección `## Vista — <sujeto>`."""
     vistas = [{"sujeto": "Estrella Test", "tipo": "star"}] if vistas is None else vistas
     fm = {"tags": ["paper"], "relevance": "high", "methods": ["periodograma"],
-          "stars": ["Estrella Test"], "role": ["aplicacion"], "no_sintetizado": "tangencial",
+          "stars": ["Estrella Test"], "role": ["aplicacion"], "no_sintetizado": [{"sujeto": "Estrella Test", "motivo": "tangencial"}],
           "vistas": vistas}
     fm.update(extra)
     if body is None:
@@ -4883,7 +4883,7 @@ def test_schema_viejo_sin_vistas_es_bloqueante(toy_vault, capsys):
     lee como si tuviera la vista hecha — que es el falso limpio que #188 existe para cerrar.
 
     @inv INV-134"""
-    paper_extraido(toy_vault, no_sintetizado="tangencial", role=["aplicacion"],
+    paper_extraido(toy_vault, no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "tangencial"}], role=["aplicacion"],
                    body="## Extracción (LLM)\n\n- **Planetas** — —\n")
     r = lint.collect()
     cat = r.por_clave("vistas_schema_viejo")
@@ -4981,7 +4981,7 @@ def test_reclamo_sin_vista_no_se_le_pide_a_una_nota_del_schema_viejo(toy_vault, 
     leyó nunca). Pedirle además una vista por sujeto duplicaría el hallazgo en cada nota vieja del
     corpus, que es cómo un backlog nace con 900 ítems y se deja de mirar."""
     paper_extraido(toy_vault, thesis_links=["s_index"], role=["aplicacion"],
-                   no_sintetizado="tangencial", body="## Extracción (LLM)\n\n- x\n")
+                   no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "tangencial"}], body="## Extracción (LLM)\n\n- x\n")
     assert lint.collect().por_clave("reclamo_sin_vista").items == ()
 
 
@@ -9258,10 +9258,28 @@ def test_check_unsynthesized_exige_MOTIVO_y_no_acepta_la_marca_pelada(toy_vault)
     assert lint.check_unsynthesized([("2001X", S)], {"2001X"}) == [], "citado ⇒ sintetizado"
     filas = lint.check_unsynthesized([("2001X", S)], set())
     assert len(filas) == 1 and "no está citado" in filas[0][1]
+    assert lint.check_unsynthesized([("2001X", [{"sujeto": "X", "motivo": "regla de poda"}])],
+                                    set()) == []
+    # #553 — el escalar lo bloquea `old_no_sintetizado`: acá no se reporta dos veces
     assert lint.check_unsynthesized([("2001X", "regla de poda")], set()) == []
-    for marca in ("", "   ", True, 3, ["x"], "true", "sí", "SI", "yes"):
+    for motivo in ("", "   ", True, 3, ["x"], "true", "sí", "SI", "yes"):
+        filas = lint.check_unsynthesized([("2001X", [{"sujeto": "X", "motivo": motivo}])], set())
+        assert len(filas) == 1 and "sin `sujeto` o sin motivo" in filas[0][1], (motivo, filas)
+    for marca in ([], ["x"], [{"motivo": "poda"}]):
         filas = lint.check_unsynthesized([("2001X", marca)], set())
-        assert len(filas) == 1 and "sin motivo" in filas[0][1], (marca, filas)
+        assert len(filas) == 1 and "sin `sujeto` o sin motivo" in filas[0][1], (marca, filas)
+
+
+def test_553_no_sintetizado_escalar_es_schema_retirado_y_BLOQUEA(toy_vault, capsys):
+    """#553 — el motivo que escribió un sujeto regía para todos los que comparten el paper (medido:
+    15 de 52 notas con la escotilla tenían ≥2 sujetos). Sin lector tolerante: se migra una vez."""
+    paper_extraido(toy_vault, no_sintetizado="tangencial")
+    rc, out = run_lint(capsys)
+    assert rc == 1 and "--migrate-no-sintetizado" in out and "2020ext....1E" in out
+    assert lint.check_old_no_sintetizado("x", cfg.PAPERS / "x.md", {"no_sintetizado": [
+        {"sujeto": "X", "motivo": "poda"}]}, None) == []
+    assert lint.check_old_no_sintetizado("x", cfg.STARS / "x.md", {"no_sintetizado": "p"}, None) == []
+    assert lint.check_old_no_sintetizado("x", cfg.PAPERS / "x.md", {"no_sintetizado": "p"}, "roto") == []
 
 
 def test_check_contraste_pendiente_solo_donde_el_contraste_es_POSIBLE(toy_vault):

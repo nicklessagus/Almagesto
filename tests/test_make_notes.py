@@ -6382,3 +6382,49 @@ def test_552_el_apendice_dice_que_suma_su_numero_no_traidos(toy_vault):
     tabla = mn.excluded_table("test_star")
     assert "corrida 2026-09-26 · 2 registros (query + extra_core + chaining)" in tabla
     assert "traídos" not in tabla
+
+
+def test_553_no_sintetizado_es_por_SUJETO_en_el_rollup(toy_vault):
+    """#553 — la escotilla vale por par (paper, sujeto): el roll-up la muestra como declarada sólo
+    para el sujeto que la declaró; para otro sigue siendo deuda. Y la cita gana: si la ficha lo
+    sintetiza, está sintetizado aunque otro sujeto lo haya declarado."""
+    fm = {"methods": ["gls"], "no_sintetizado": [{"sujeto": "HD 40307", "motivo": "una fila"}]}
+    assert mn._estado_paper("2011P", fm, "", set(), {"HD 40307"}) == mn.ESTADO_NO_SINTETIZADO
+    assert mn._estado_paper("2011P", fm, "", set(), {"toliman"}) == mn.ESTADO_EXTRAIDO
+    assert mn._estado_paper("2011P", fm, "ver [[2011P]]", set(), {"HD 40307"}) == mn.ESTADO_SINTETIZADO
+    assert mn._estado_paper("2011P", {**fm, "no_sintetizado": "escalar"}, "", set(),
+                            {"HD 40307"}) == mn.ESTADO_EXTRAIDO, "el escalar no vale: lo bloquea el lint"
+
+
+def test_553_el_migrador_reparte_el_motivo_sólo_a_quien_NO_lo_cita(toy_vault, capsys):
+    """El caso medido: el motivo escrito para HD 40307 regía sobre toliman, que sí lo sintetiza. El
+    migrador se lo da sólo al sujeto donde la escotilla hacía algo; idempotente."""
+    write_yaml(cfg.STARS_YAML, {"HD 40307": {"slug": "hd_40307"}, "toliman": {"slug": "toliman"}})
+    mk_note(cfg.STARS, "hd_40307", {"tags": ["star"], "name": "HD 40307"}, "prosa sin citarlo\n")
+    mk_note(cfg.STARS, "toliman", {"tags": ["star"], "name": "toliman"}, "lo sintetiza [[2011P]]\n")
+    p = mk_note(cfg.PAPERS, "2011P", {"tags": ["paper"], "bibcode": "2011P", "methods": ["gls"],
+                                      "stars": ["HD 40307", "toliman"],
+                                      "no_sintetizado": "HD 40307 es una fila: roll-up"}, "# p\n")
+    sola = mk_note(cfg.PAPERS, "2012Q", {"tags": ["paper"], "bibcode": "2012Q", "methods": ["rv"],
+                                         "stars": ["toliman"], "no_sintetizado": "viejo"}, "# p\n")
+    (cfg.STARS / "toliman.md").write_text("---\ntags: [star]\n---\n[[2011P]] y [[2012Q]]\n",
+                                          encoding="utf-8")
+    pelada = mk_note(cfg.PAPERS, "2013R", {"tags": ["paper"], "bibcode": "2013R",
+                                           "no_sintetizado": True}, "# p\n")
+    mk_note(cfg.PAPERS, "2014S", {"tags": ["paper"], "bibcode": "2014S"}, "# p\n")   # sin escotilla
+    ya = mk_note(cfg.PAPERS, "2015T", {"tags": ["paper"], "bibcode": "2015T",
+                                       "no_sintetizado": [{"sujeto": "X", "motivo": "m"}]}, "# p\n")
+    antes_ya = ya.read_text(encoding="utf-8")
+    # un TEMA que lo reclama por `methods` y todavía no tiene nota: también recibe el motivo
+    write_yaml(cfg.THEMES_YAML, {"gls": {"title": "GLS", "concept": "gls", "area": "methods"}})
+    n, avisos = mn.migrate_all_no_sintetizado()
+    assert n == 2 and len(avisos) == 2, avisos
+    assert ya.read_text(encoding="utf-8") == antes_ya, "la forma nueva no se toca"
+    assert cfg.load_no_sintetizado(cfg.split_fm(p.read_text(encoding="utf-8"))) == [
+        {"sujeto": "HD 40307", "motivo": "HD 40307 es una fila: roll-up"},
+        {"sujeto": "gls", "motivo": "HD 40307 es una fila: roll-up"}]
+    assert "no_sintetizado" not in cfg.split_fm(sola.read_text(encoding="utf-8")), "nadie la usaba"
+    assert cfg.split_fm(pelada.read_text(encoding="utf-8"))["no_sintetizado"] is True, "sin motivo no se toca"
+    assert any("2012Q" in a and "se retira" in a for a in avisos)
+    assert any("2013R" in a and "sin motivo" in a for a in avisos)
+    assert mn.migrate_all_no_sintetizado()[0] == 0, "idempotente"
