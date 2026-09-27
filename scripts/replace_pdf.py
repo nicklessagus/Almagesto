@@ -114,6 +114,7 @@ def check_incoming(bibcode: str, nuevo: Path, source: str) -> list:
     primeras = first_pages_text(nuevo)
     # ⛔ #531 — la carátula de un repositorio (HAL) corre en 1 TODOS los localizadores «p. N»: la
     # página impresa N del artículo queda en la N+1 del archivo, y nada lo avisa después.
+    # @inv INV-168
     if (caratula := cfg.repository_cover(text=primeras)):
         errores.append(f"la página 1 del PDF entrante es una CARÁTULA de repositorio "
                        f"(«{caratula}»): instalado así, cada «p. N» queda corrido en 1. "

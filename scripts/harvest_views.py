@@ -974,6 +974,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         if refuta:
             entrada["refuta"] = refuta
             refutados.append((bib, refuta))
+        # @inv INV-160
         # ⛔ #526 — lo que una verificación refutó sigue en el JSON (#311, add-only): re-escribirlo
         # en la nota —la vía es `--force`— deshace la corrección. Se decide ANTES de declarar la
         # vista: rehusar la sección y re-fechar `vistas[]` igual afirmaba una lectura que no se

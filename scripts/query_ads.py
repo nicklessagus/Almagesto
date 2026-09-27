@@ -1632,6 +1632,7 @@ def main() -> int:
         ap.error('--registrar va con `<slug> [--theme] --probe` y con --criterio "<por qué se recorta>"')
     if args.registrar and args.dry_run:
         # AUD-504 — the `--probe` branch returns before `args.dry_run` is read.
+        # @inv INV-59
         cfg.refuse_dry_run(ap, "`--registrar` appendea a `probes:` del registro")
     if args.probe is not None:
         # #208 — `--probe` previsualizaba SIEMPRE con la lente global, o sea con la que D-26 declara

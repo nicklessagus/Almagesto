@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.358.1"
+ALMAGESTO_VERSION = "1.359.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1044,6 +1044,7 @@ REPOSITORY_COVER_RE = re.compile(r"HAL Id\s*:|archives-ouvertes\.fr|To cite this
 
 
 def repository_cover(pdf=None, *, text: str | None = None) -> str | None:
+    # @inv INV-168
     """The marker of a repository COVER PAGE on page 1, or `None` (#531) — of `pdf` (read with
     `pdftotext`), or of `text` already extracted (only up to its first form feed: page 1).
 
@@ -3876,6 +3877,7 @@ def acepta_preprint_bibcodes() -> dict:
 
 
 def preprint_allowed(bibcode, aceptados: dict | None = None) -> bool:
+    # @inv INV-165
     """May the chain adopt the PREPRINT as the reading document of `bibcode`? (#512)
 
     Yes when there is no published version (arXiv-only, thesis: the eprint IS the source) or when
@@ -3898,6 +3900,7 @@ def abstract_pending(text: str) -> bool:
 
 
 def solo_abstract_motivo(fm: dict) -> str:
+    # @inv INV-167
     """The declared motive that this source IS its abstract (#520), or `""`.
 
     A conference abstract has no paper behind it: the verbatim `## Abstract` is the whole source,
@@ -4321,6 +4324,7 @@ WARN_REVISABLE = ("impl_leaks", "bloque_con_varios_hechos", "costura_unidad")
 
 
 def load_reviewed_warn(meta: dict, *, entry: str = "?") -> list:
+    # @inv INV-167
     """`warn_revisada: [{categoria, ancla, motivo}]` — a WARN hit REVIEWED AND DISCARDED (#502).
 
     The sibling of `segunda_mano_revisada` (#433) and `metadata_revisada` (#463) for the three WARN
@@ -4959,6 +4963,7 @@ def save_descubrimiento(slug: str, entrada: dict) -> None:
 
 
 def save_probe(slug: str, entrada: dict) -> None:
+    # @inv INV-59
     """APPENDS a `--probe --registrar` run to `probes: []` of the subject's registro (#524).
 
     A declared corpus (`query: null` + `extra_core`, #384) is often a hand cut of a probe: without
@@ -5845,6 +5850,7 @@ from lib_quotes import (  # noqa: E402,F401
 
 
 def refuse_dry_run(ap, modo: str) -> None:
+    # @inv INV-169
     """Refuse `--dry-run` in a mode that does not honour it: argparse's exit 2, never ignore it (#507).
 
     A script that declares `--dry-run` promises it writes nothing IN EVERY MODE. A mode either

@@ -1241,6 +1241,7 @@ _LARGA_516 = ("which requires the latent signals to be whitened before the model
 
 
 def test_516_la_firma_cubre_LA_cita_y_LA_fuente(toy_vault):
+    # @inv INV-167
     """#516 — la firma es por cita (prefijo normalizado, como la corta el reporte) y por `ref`: otra
     cita u otra fuente no la heredan; sin PDF en disco o con atribución ambigua (#316) no se ofrece
     firma; y la forma dura rechaza el escalar, la lista de strings y la entrada sin `motivo`."""

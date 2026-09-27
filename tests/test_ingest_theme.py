@@ -121,6 +121,7 @@ def test_guardia_expansion_frena_la_cadena_ads(toy_vault, fake_run, fake_notes, 
     {"bibcode": "2020core...000A", "via": "usuario", "motivo": "m"}]}])
 def test_529_la_mitad_ADS_de_un_tema_MIXTO_tambien_pasa_por_la_guardia(
         toy_vault, fake_run, fake_notes, monkeypatch, decl):
+    # @inv INV-166
     """#529 — el carril off-ADS corre la sub-cadena ADS (`query:` o `extra_core:`) y NO llamaba a
     la guardia: la primera ingesta de un tema mixto bajaba sin checkpoint, aun con #37."""
     import json
@@ -148,6 +149,7 @@ def _mixed_with_local_pdf(toy_vault, tmp_path):
 
 def test_529_tema_mixto_con_PDF_LOCAL_en_sources_igual_frena_la_primera_vez(
         toy_vault, fake_run, fake_notes, monkeypatch, tmp_path):
+    # @inv INV-166
     """AUD-537 — el loop de `sources:` copia el PDF local a `raw/pdfs/<slug>/` ANTES de la guardia,
     y `first_ingest` lo contaba como «ya bajó alguna vez»: la primera ingesta seguía a bajar."""
     _mixed_with_local_pdf(toy_vault, tmp_path)

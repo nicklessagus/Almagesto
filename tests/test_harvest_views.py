@@ -2124,6 +2124,7 @@ def test_507_el_dry_run_con_DOS_extracciones_del_mismo_bib_anuncia_los_deltas_de
 
 @pytest.mark.parametrize("modo", [["--restamp-salvedades"], ["--propose-pdf-leido"]])
 def test_507_los_otros_modos_con_dry_run_tampoco_escriben(toy_vault, monkeypatch, modo):
+    # @inv INV-169
     """#507 — la regla es POR MODO: cada modo del script que declara `--dry-run` lo respeta."""
     from conftest import tree_digest
     sembrar(toy_vault)
@@ -2134,6 +2135,7 @@ def test_507_los_otros_modos_con_dry_run_tampoco_escriben(toy_vault, monkeypatch
 
 
 def test_526_force_NO_re_escribe_lo_que_una_verificacion_REFUTO(toy_vault, capsys):
+    # @inv INV-160
     """#526 — la nota se corrigió contra el PDF, pero el JSON inmutable (#311) conserva el texto
     refutado: `--force` lo volvía a escribir en la vista. Con `_refutado` la sección no se toca."""
     data = extraccion(aporte="usa una grilla aleatoria",

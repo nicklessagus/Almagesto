@@ -881,6 +881,7 @@ def test_match_prioriza_el_ancla_intacta_sobre_el_parecido():
     ("no-soportada", "acota: SNR > 50", None, False),       # ancla intacta: nada cambió
 ])
 def test_539_carry_needs_reverify(veredicto, condicion, ancla, esperado):
+    # @inv INV-82
     """#539 — sólo el emparejamiento POR COBERTURA con una fila que exigía acción va a re-verificar."""
     par = lb.pairs_of("## X\n\nEl período vale 4,3 días [[2020aaa...1..1A]].\n")[0]
     fila = lb.Row(n="1", claim="El período vale 4,3 días", bibcode=par.bibcode, verdict=veredicto,

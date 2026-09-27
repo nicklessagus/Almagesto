@@ -325,6 +325,7 @@ def test_480_reanclar_REHUSA_el_par_que_hay_que_re_verificar_y_sin_hermano(toy_v
 
 
 def test_539_la_fila_que_exigia_accion_no_se_lleva_a_la_afirmacion_corregida(toy_vault, capsys):
+    # @inv INV-82
     """#539 — la corrección de una `no-soportada` conserva casi todo el texto: la cobertura la daba
     por re-anclable y el escritor le colgaba el veredicto viejo a una afirmación que nadie leyó. Ni
     `--reanclar` ni una ronda acotada que no la juzgó la llevan: queda con SU ancla,
@@ -1414,3 +1415,16 @@ def test_AUD480_la_barrera_RECHAZA_el_veredicto_fuera_del_vocabulario_del_fanout
     assert any("2020Pdf.json" in e and "veredicto" in e for e in errs), errs
     with pytest.raises(ws.SidecarError, match="veredicto"):
         ws.write(nota, d, fecha="2026-03-01")
+
+
+@pytest.mark.parametrize("modo", [["--migrate-verdict-chain", "--todo"],
+                                  ["--refutar-extraccion", "abc123:2020X", "--texto", "t",
+                                   "--reason", "r"]])
+def test_AUD535_fecha_en_un_modo_que_no_la_honra_REHUSA(toy_vault, capsys, modo):
+    """AUD-535 — `--migrate-verdict-chain` conserva la fecha del bloque y `--refutar-extraccion`
+    fecha la anotación con hoy: los dos aceptaban `--fecha` y la ignoraban en silencio. Un flag
+    aceptado que no hace nada se lee como hecho; el modo que no la honra rehúsa (como #507)."""
+    with pytest.raises(SystemExit) as e:
+        ws.main(modo + ["--fecha", "2026-03-01"])
+    assert e.value.code == 2
+    assert "--fecha" in capsys.readouterr().err

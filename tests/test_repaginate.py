@@ -647,6 +647,7 @@ def test_AUD460_pagina_null_SIN_motivo_se_rehusa(toy_vault):
 
 
 def test_507_out_con_dry_run_REHUSA_en_vez_de_escribir_el_paquete(toy_vault, tmp_path):
+    # @inv INV-169
     """#507 — `--out` escribe el paquete y no tiene preview: con `--dry-run` rehúsa (exit 2 de
     argparse) en vez de ignorar el flag. `--list` no escribe y `--apply` lo respeta."""
     out = tmp_path / "o"
@@ -656,6 +657,7 @@ def test_507_out_con_dry_run_REHUSA_en_vez_de_escribir_el_paquete(toy_vault, tmp
 
 
 def test_507_apply_con_dry_run_no_escribe_la_extraccion_ni_la_nota(toy_vault, tmp_path, capsys):
+    # @inv INV-169
     """AUD-548 — `--apply` respeta `--dry-run` en sus tres escritores: la extracción y los dos
     re-estampados de la nota (celda de la vista y salvedad por texto exacto). Ida: el árbol queda
     igual y la salida anuncia lo que cambiaría. Vuelta: sin el flag se escribe."""

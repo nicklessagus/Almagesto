@@ -130,6 +130,7 @@ def main() -> int:
     # Acá sólo baja lo que no tiene publicado (arXiv-only, tesis) o lo que el usuario aceptó con
     # `acepta_preprint`; el resto va a `fetch_pdf`, que prueba el editor y deja el residuo.
     aceptados = cfg.acepta_preprint_bibcodes()
+    # @inv INV-165
     todo = [r for r in recs if r.get("arxiv_id") and cfg.preprint_allowed(r["bibcode"], aceptados)]
     publicados = [r for r in recs
                   if r.get("arxiv_id") and not cfg.preprint_allowed(r["bibcode"], aceptados)]

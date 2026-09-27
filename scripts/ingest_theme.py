@@ -157,6 +157,7 @@ EXPANSION_NEW = 50         # …y además, mínimo de papers nuevos (evita frena
 
 
 def first_ingest(slug: str) -> bool:
+    # @inv INV-166
     """Is this the subject's FIRST download? (#529) No `fetch_arxiv`/`fetch_pdf` in its registro's
     `cadena` (D-57: each script stamps itself) and no PDF under its own `raw/pdfs/<slug>/` — the
     second clause keeps a subject ingested before D-57 from reading as new. ⚠ Not «no notes»: a new
@@ -186,6 +187,7 @@ def print_download_list(core: list) -> None:
 
 
 def expansion_guard(slug: str, yes: bool) -> None:
+    # @inv INV-166
     """Frena la cadena DESPUÉS de query_ads y ANTES del primer paso que gasta red y disco, si el
     pool core se multiplicó respecto de lo ya ingestado del sujeto.
 

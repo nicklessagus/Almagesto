@@ -5155,6 +5155,7 @@ def test_vista_solo_abstract_se_juzga_por_sujeto(toy_vault, capsys):
 
 @pytest.mark.parametrize("declarado", [False, True])
 def test_resumen_de_congreso_declarado_solo_abstract(toy_vault, capsys, declarado):
+    # @inv INV-167
     """#520 — un resumen de congreso no tiene PDF: el `## Abstract` es TODA la fuente. Sin la
     escotilla, las cuatro categorías piden un documento que no existe; con `solo_abstract:
     <motivo>` salen, se lista aparte, y la cita se evalúa contra el `## Abstract` de la nota."""
@@ -5477,6 +5478,7 @@ def test_refuta_de_un_sujeto_que_ya_no_reclama_no_es_hallazgo(toy_vault, capsys)
 
 
 def test_refuta_FIRMADO_con_drop_core_sale_de_la_deuda(toy_vault, capsys):
+    # @inv INV-160
     """#543 — `--drop-core` deja el reclamo en `stars` a propósito (#116), así que el lint, que sólo
     miraba el frontmatter, pedía para siempre el comando que ya se había corrido. La firma vive en
     `decisiones` del registro por SLUG y el reclamo lleva el NOMBRE: se cruza como en `proposals`
@@ -11192,6 +11194,7 @@ def test_503_institucional_es_vocabulario_y_como_venue_exige_bibtex_url(toy_vaul
 
 
 def test_502_la_WARN_revisada_se_FIRMA_por_bloque_y_vuelve_si_el_bloque_cambia(toy_vault, capsys):
+    # @inv INV-167
     """#502 — una WARN «se revisa a mano» tiene que tener dónde firmarse la revisión: si no, el hit
     revisado y descartado se lista igual que el que nadie miró (medido: 25 de 25 fugas eran el
     parámetro del propio paper, citado con página). La firma es `(categoria, ancla)` y el ancla
@@ -11221,6 +11224,7 @@ def test_502_la_WARN_revisada_se_FIRMA_por_bloque_y_vuelve_si_el_bloque_cambia(t
 
 
 def test_502_warn_revisada_sin_motivo_o_con_categoria_ajena_NO_exime(toy_vault, capsys):
+    # @inv INV-167
     """#502 — forma dura (D-58, como `segunda_mano_revisada`): sin `motivo`, o con una categoría que
     no es una de las tres WARN de juicio, la firma no exime nada y la nota se reporta."""
     mk_note(toy_vault.CONCEPTS / "methods", "nota",
@@ -11433,6 +11437,7 @@ def test_pending_con_el_PDF_en_disco_no_pide_la_fuente(toy_vault):
 
 
 def test_531_el_txt_que_empieza_con_la_CARATULA_de_HAL_es_backlog(toy_vault, capsys):
+    # @inv INV-168
     """#531 — la red bajo el rehúso de `replace_pdf`: un PDF que entró antes con la carátula de HAL
     deja su `.txt` empezando por ella. Sólo la PRIMERA página: HAL citado más adelante no cuenta."""
     from conftest import mk_note

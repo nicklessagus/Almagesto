@@ -62,6 +62,7 @@ def _matches(doc: dict, titulo: str, familia: str, year) -> bool:
 
 
 def find(get, doi=None, title=None, first_author=None, year=None) -> tuple:
+    # @inv INV-151
     """`(record | None, reason, not_measured)` — the HAL deposit of one work, or why there is none.
 
     `record` = `{halid, bibtex_url, pdf, via}`. `not_measured` is non-empty only when HAL did not

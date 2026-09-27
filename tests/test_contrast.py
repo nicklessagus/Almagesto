@@ -1373,6 +1373,7 @@ def _entrada_pegable(texto: str) -> dict:
 
 
 def test_516_la_cita_confirmada_en_la_pagina_se_FIRMA_y_calla_en_los_DOS_portadores(toy_vault):
+    # @inv INV-167
     """#516 — la respuesta del PDF a #220/#333 no tenía dónde escribirse: 45 citas releídas verbatim
     en la hoja quedaban listadas para siempre y la próxima sesión pagaba los mismos lectores. La
     firma `cita_revisada` cubre un ESTADO (la cita + el sha del PDF de `ref`) y calla en los DOS
@@ -1418,6 +1419,7 @@ def test_516_la_cita_confirmada_en_la_pagina_se_FIRMA_y_calla_en_los_DOS_portado
 
 
 def test_526_lo_REFUTADO_no_sale_pegable_y_en_la_lectura_sale_MARCADO(toy_vault, capsys):
+    # @inv INV-160
     """#526 — la extracción inmutable (#311) conserva lo que una verificación refutó; con la marca
     `_refutado`, `--filas`/`--cita` no lo sirven como cadena «que no se re-tipea» (#322) y la
     lectura (`--grep`, `--eje`) lo muestra con la refutación al lado."""

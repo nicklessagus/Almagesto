@@ -629,6 +629,7 @@ def main() -> int:
             # ⛔ #505 — y antes de declararlo, HAL: el depósito del autor publica la exportación
             # oficial (medido: 1 de 8 huecos de una bóveda real estaba ahí). Lo que encuentre se
             # PROPONE y no se estampa: es el carril `institucional`, que pega una persona (#503).
+            # @inv INV-151
             rec, hal_por_que, hal_no_medido = hal.find(requests.get, fm.get("doi"), fm.get("title"),
                                                        fm.get("first_author"), fm.get("year"))
             if rec:

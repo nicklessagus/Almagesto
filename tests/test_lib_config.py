@@ -4060,6 +4060,7 @@ def test_511_la_cita_de_la_BIBLIOGRAFIA_no_es_el_sello_de_arxiv():
     ("2019PhDT.......12X", False), ("2010MsT.........1X", False),
 ])
 def test_512_has_published_version(bib, publicado):
+    # @inv INV-165
     """Una sola decisión para los fetchers y el lint: el depósito de arXiv y la tesis no tienen una
     versión publicada que preferir; el eprint ES la fuente."""
     assert cfg.has_published_version(bib) is publicado
@@ -4091,6 +4092,7 @@ def test_512_acepta_preprint_vale_por_bibcode_en_cualquier_sujeto(toy_vault):
     [{"bibcode": "2014MNRAS.437.3540F", "motivo": "x"}],            # sin fecha
 ])
 def test_512_acepta_preprint_forma_dura(toy_vault, malo):
+    # @inv INV-165
     """Misma forma dura que `extra_core` (D-58): sin motivo ni fecha la aceptación no distingue
     «se aceptó el preprint» de «nadie buscó el publicado»."""
     _acepta(toy_vault, malo)
@@ -4127,6 +4129,7 @@ def test_AUD510_raw_notation_entre_dos_dolares_ESCAPADOS_se_reporta():
 
 
 def test_AUD541_solo_abstract_sin_motivo_REAL_no_abre_la_escotilla():
+    # @inv INV-167
     """AUD-541 — «sin motivo no aplica» (#520): un booleano o el `<motivo>` de la plantilla no dicen
     POR QUÉ la fuente es su abstract, que es lo que vuelve auditable la exención (D-58)."""
     for valor in (True, "<motivo>", "  ", None, False):

@@ -260,6 +260,7 @@ def is_eprint_candidate(url: str, src: str | None) -> bool:
 
 def fetch_free_copy(slug: str, r: dict, dest: Path, token: str,
                     eprint_ok: bool = True) -> tuple[bool, list]:
+    # @inv INV-165
     """Walk EVERY open-access candidate for record `r` (#358) and publish the first real PDF at
     `dest` → `(got one, [{url, src}] tried)` — deduplicated by URL, each with the `pdf_source` it
     would have recorded (#518: a blocked `publisher` copy is installed with `--source publisher`).
@@ -293,6 +294,7 @@ def fetch_free_copy(slug: str, r: dict, dest: Path, token: str,
         if pdf and write_pdf_atomic(dest, pdf):
             # ⛔ #531 — la copia de HAL llega con SU carátula adelante: instalada, cada «p. N»
             # queda corrida en 1. No se instala; queda en el residuo, marcada, para quitarla.
+            # @inv INV-168
             if (caratula := cfg.repository_cover(dest)):
                 dest.unlink()
                 tried[-1]["caratula"] = caratula
@@ -486,6 +488,7 @@ def main() -> int:
     for i, r in enumerate(todo, 1):
         bib = r["bibcode"]
         dest = destdir / f"{safe_name(bib)}.pdf"
+        # @inv INV-165
         eprint_ok = cfg.preprint_allowed(bib, aceptados)          # #512 — publisher-first
         cands = candidate_urls(esource_records(bib, token))
         salteado = not eprint_ok and any(t == "EPRINT_PDF" for t, _ in cands)

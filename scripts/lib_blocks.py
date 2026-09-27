@@ -1864,6 +1864,7 @@ def match_rows_to_pairs(pairs: list, rows: list, umbral: float = 0.60) -> tuple:
 
 
 def carry_needs_reverify(pair, row) -> bool:
+    # @inv INV-82
     """Must this pairing go to RE-VERIFY even though the extract still matches? (#539)
 
     Only a pairing by COVERAGE (the anchor moved: the block was edited) whose row demanded action —

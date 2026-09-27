@@ -624,6 +624,7 @@ def fulltext_readings(bibcode: str) -> list:
 
 
 def abstract_source(bibcode: str) -> list:
+    # @inv INV-167
     """Readings of the note's verbatim `## Abstract` when the note declares it IS the source (#520).
 
     `[]` unless the paper note declares `solo_abstract: <motivo>` and the section holds a real
@@ -1354,6 +1355,7 @@ def _fold(texto) -> str:
 
 
 def refuted_in(data: dict, texto) -> list:
+    # @inv INV-160
     """The `_refutado` entries of this extraction whose refuted string appears in `texto` (#526).
 
     ONE implementation for every reader that serves or re-writes the extraction's text: `contrast`
@@ -1383,6 +1385,7 @@ REVIEWED_QUOTE_KEYS = ("ref", "cita", "pdf_sha", "pagina", "motivo")
 
 
 def load_reviewed_quotes(meta: dict, *, entry: str = "?") -> list:
+    # @inv INV-167
     """`cita_revisada: [{ref, cita, pdf_sha, pagina, motivo[, fecha]}]` — a quote CONFIRMED on the page (#516).
 
     The sibling of `warn_revisada` (#502), `segunda_mano_revisada` (#433) and `metadata_revisada`
@@ -1433,6 +1436,7 @@ def _file_sha10(path: str, _mtime_ns: int, _size: int) -> str:
 
 
 def reviewed_quote(firmas: list, refs, cita: str) -> dict | None:
+    # @inv INV-167
     """The `cita_revisada` entry that covers THIS quote under one of `refs`, or None (#516).
 
     ⛔ ONE function decides the match for both carriers of `quote_verdict` (lint #220/#333 and

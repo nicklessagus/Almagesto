@@ -6205,6 +6205,7 @@ def _modos_de_make_notes() -> list:
 
 @pytest.mark.parametrize("modo", _modos_de_make_notes(), ids=lambda m: " ".join(m))
 def test_507_todo_modo_que_no_respeta_el_dry_run_REHUSA_sin_escribir(toy_vault, monkeypatch, modo):
+    # @inv INV-169
     """#507 — un `--dry-run` no escribe en NINGÚN modo: el que no lo soporta sale con exit 2."""
     from conftest import tree_digest
     antes = tree_digest(toy_vault.ROOT)

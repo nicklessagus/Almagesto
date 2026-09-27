@@ -272,6 +272,7 @@ def test_all_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
 
 
 def test_512_no_baja_el_eprint_de_un_publicado_sin_aceptacion(toy_vault, no_sleep, monkeypatch):
+    # @inv INV-165
     """#512 — el eprint de un paper con versión PUBLICADA no se adopta en silencio: va al residuo
     para que `fetch_pdf` pruebe el editor. Con `acepta_preprint` declarado, sí se baja."""
     import yaml

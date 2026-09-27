@@ -140,6 +140,7 @@ def test_guardia_yes_continua(toy_vault, fake_run, monkeypatch):
 
 def test_529_la_PRIMERA_ingesta_frena_con_la_lista_de_lo_que_se_va_a_bajar(toy_vault, fake_run,
                                                                            monkeypatch, capsys):
+    # @inv INV-166
     """#529 — pedir un sujeto NO es aprobar su core (medido: el usuario conservó el 6-13 %, y una
     primera corrida bajó 21 PDFs que se tiraron). La primera ingesta frena siempre, con la lista
     —publicado o sólo eprint— que el usuario usa para recortar y para traer los publicados. Aunque

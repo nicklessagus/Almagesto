@@ -194,6 +194,7 @@ def _corregida(celda_veredicto="soportada", celda_condicion=""):
     ("soportada→contradice", ""),
 ])
 def test_539_solo_nuevos_manda_a_re_verificar_la_fila_corregida(tmp_path, veredicto, condicion):
+    # @inv INV-82
     """#539 — medido en una instancia: `--solo-nuevos` mandó 1 par donde las fuentes corregidas
     tenían 38. La corrección por `acota`/`no-soportada`/`contradice` conserva casi todo el texto, así
     que la cobertura la daba por re-anclable y la ronda nunca la juzgaba."""

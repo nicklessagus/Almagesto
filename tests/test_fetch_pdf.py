@@ -678,6 +678,7 @@ def _acepta(toy_vault, bib):
 
 
 def test_512_publicado_prueba_editor_y_nunca_el_eprint(toy_vault, monkeypatch, capsys):
+    # @inv INV-165
     """El caso del issue (2014ApJ...793L..24R: IOP entregaba el PUB_PDF): con versión publicada y
     sin `acepta_preprint`, el orden es ADS_PDF → PUB_PDF; EPRINT_PDF ni se pide."""
     ads_json(toy_vault.ROOT, "test_star", [PUB_CON_ARXIV])
@@ -692,6 +693,7 @@ def test_512_publicado_prueba_editor_y_nunca_el_eprint(toy_vault, monkeypatch, c
 
 
 def test_512_aceptado_si_prueba_el_eprint(toy_vault, monkeypatch):
+    # @inv INV-165
     ads_json(toy_vault.ROOT, "test_star", [PUB_CON_ARXIV])
     _acepta(toy_vault, "2014ApJ...793L..24R")
     monkeypatch.setattr(fp, "esource_records", lambda bib, tok: ESOURCES_3)
@@ -702,6 +704,7 @@ def test_512_aceptado_si_prueba_el_eprint(toy_vault, monkeypatch):
 
 
 def test_512_cascada_abierta_saltea_arxiv_si_no_hay_aceptacion(toy_vault, monkeypatch):
+    # @inv INV-165
     """La copia libre de arXiv —marcada `eprint`, o una ubicación de OpenAlex en arxiv.org sin
     procedencia— es el eprint por otra puerta: se saltea igual."""
     ads_json(toy_vault.ROOT, "test_star", [PUB_CON_ARXIV])
@@ -757,6 +760,7 @@ def test_530_el_residuo_publicado_lista_las_copias_libres_con_su_link(toy_vault,
 
 
 def test_531_la_copia_libre_con_CARATULA_no_se_instala_y_queda_marcada(toy_vault, monkeypatch):
+    # @inv INV-168
     """#531 — la cascada abierta baja la copia de HAL CON su carátula: instalada, cada «p. N» queda
     corrida en 1. No se instala: queda en `copias_libres` con la marca, para quitarla a mano."""
     dest = cfg.PDFS / "s" / "x.pdf"
@@ -794,6 +798,7 @@ def _pdf_con_texto(*paginas: str) -> bytes:
 
 @pytest.mark.skipif(not __import__("shutil").which("pdftotext"), reason="sin pdftotext")
 def test_AUD549_la_caratula_se_detecta_sobre_el_PDF_REAL_no_sobre_un_doble(toy_vault, monkeypatch):
+    # @inv INV-168
     """AUD-549 — el test de #531 dobla `repository_cover`; la rama que usa `fetch_pdf` (pdftotext
     sobre el archivo bajado) quedaba anulable en verde. Acá corre sobre un PDF real: la carátula en
     la página 1 frena la instalación; la misma marca en la página 2 no."""

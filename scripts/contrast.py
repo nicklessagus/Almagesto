@@ -205,6 +205,7 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
                 mostrado = f"{que} → {texto}"
             if rx and not rx.search(f"{que} {texto} {regimen}"):
                 continue
+            # @inv INV-160
             # ⛔ #526 — lo que una verificación refutó y la extracción inmutable (#311) conserva: en
             # la vista de lectura sale MARCADO; como fila o fragmento pegable (#322/#385) no sale.
             hits = cfg.refuted_in(data, f"{que} {texto} {regimen} {mostrado} "

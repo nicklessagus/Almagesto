@@ -4716,6 +4716,7 @@ def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf
         for v_ in cfg.as_list(fm.get("vistas")) if isinstance(v_, dict))
     # #520 — la escotilla declarada se lista APARTE (AUD-207): visible, no es deuda.
     if (_sa := cfg.solo_abstract_motivo(fm)):
+        # @inv INV-167
         solo_abstract_ok.append((stem, f"`solo_abstract: {_sa}`"))
     if _marca_sc is not _SIN_MARCA:
         # Escotilla declarada: motivo OBLIGATORIO, mismo criterio que `no_vista` /
@@ -5485,6 +5486,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
             for suj in cfg.as_list(v.get("refuta")):
                 if str(suj).strip() in _reclamados:
                     _s = cfg.subject_slug(str(suj))
+                    # @inv INV-160
                     if _s and (_firma := _pr.dropped_signature(_s, stem)):
                         reclamo_refutado_firmado.append(
                             (stem, f"la vista de **{v.get('sujeto')}** refuta **{suj}** y "
@@ -6304,6 +6306,7 @@ _ANTES_DE_UNIDAD_OK = re.compile(
 
 
 def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: dict) -> tuple:
+    # @inv INV-167
     """`(impl_leaks, bloque_con_varios_hechos, costura_unidad, revisadas, huerfanas)` (#502).
 
     Each WARN hit of the three categories that a PERSON decides (`cfg.WARN_REVISABLE`) is matched
@@ -6615,6 +6618,7 @@ def check_pdf_provenance(stem: str, fm: dict, pdf_on_disk: dict) -> list:
 
 
 def check_repository_cover(covers: list) -> list:
+    # @inv INV-168
     """#531 — the `.txt` starts with a repository's COVER page (HAL): the PDF it was extracted from
     has page 1 = the cover, so every «p. N» locator read from it is off by one. Backlog: the net
     under `replace_pdf`'s refusal for PDFs that entered before it. `covers` is what `scan_fulltext`

@@ -1127,6 +1127,7 @@ def test_AUD454_force_no_rebaja_lo_pegado_a_mano_y_lo_dice(tmp_path, monkeypatch
 
 
 def test_505_antes_de_declarar_el_hueco_se_consulta_HAL_y_se_PROPONE(tmp_path, monkeypatch, capsys):
+    # @inv INV-151
     """#505 — HAL tiene la exportación oficial del depósito: el hueco no se estampa, y el bloque
     sale PROPUESTO con `bibtex_source: institucional` + `bibtex_url` (lo pega una persona, #503).
     Y cuando HAL no lo tiene, el `sin_bibtex` dice que se consultó."""

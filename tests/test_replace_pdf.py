@@ -658,6 +658,7 @@ HAL = "HAL Id: hal-01441972\nhttps://hal.science/hal-01441972\nTo cite this vers
 
 
 def test_531_rehusa_la_CARATULA_de_repositorio_y_da_el_comando(toy_vault, tmp_path, monkeypatch):
+    # @inv INV-168
     """#531 — HAL antepone SU carátula al PDF del editor: instalado así, la página impresa N queda
     en la N+1 del archivo y cada «p. N» (vista, verify, `repaginate`) sale corrido en 1, sin aviso.
     Rehúsa en la primera copia (#513, donde #437 no tiene saliente) y en el reemplazo, con el

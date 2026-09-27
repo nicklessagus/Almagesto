@@ -2826,6 +2826,7 @@ def test_458_query_ads_PAGINA_y_registra_lo_que_VOLVIO(toy_classifier, ads_token
 # ── #524 · el probe que decide un recorte deja rastro ────────────────────────
 def test_probe_registrar_deja_la_busqueda_y_el_criterio_en_el_registro(toy_vault, toy_classifier,
                                                                        monkeypatch, capsys):
+    # @inv INV-59
     """#524 — un corpus declarado (`query: null` + `extra_core`, #384) que sale de recortar un probe
     guardaba sólo lo elegido: la query, el `fq`, la lente y el universo core del que se recortó no
     estaban en ningún archivo versionado. `--registrar` los appendea a `probes:` con el criterio."""
@@ -2846,6 +2847,8 @@ def test_probe_registrar_deja_la_busqueda_y_el_criterio_en_el_registro(toy_vault
     assert p["query"] == "abs:activity" and p["criterio"] == "sólo los del grupo X"
     assert p["bibcodes_core"] == ["2020a....1A"] and p["n_core"] == 1 and p["n_found"] == 40
     assert "facets" in p["lente"] and "fq" in p
+    # INV-59 — la única escritura del preview es `probes:` del registro: ninguna otra sección
+    assert set(cfg.load_registro("hd_1")) <= {"slug", "probes"}, cfg.load_registro("hd_1")
     # sin criterio rehúsa: el recorte sin su porqué es la mitad que el registro existe para guardar
     with pytest.raises(SystemExit):
         run_main(monkeypatch, ["hd_1", "--probe", "abs:activity", "--registrar"])
@@ -2854,6 +2857,7 @@ def test_probe_registrar_deja_la_busqueda_y_el_criterio_en_el_registro(toy_vault
 
 def test_507_probe_registrar_con_dry_run_REHUSA_sin_escribir_el_registro(toy_vault, toy_classifier,
                                                                          monkeypatch):
+    # @inv INV-59, INV-169
     """AUD-504 — `--probe --registrar --dry-run` appendeaba a `probes:` del registro versionado y
     salía rc 0: la rama `--probe` retornaba antes de mirar `--dry-run`. Un modo que no honra el flag
     rehúsa (#507), antes de consultar ADS."""

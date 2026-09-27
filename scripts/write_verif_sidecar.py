@@ -1068,9 +1068,15 @@ def main(argv=None) -> int:
                     help="fecha del bloque. Default: hoy sólo con `--from` (una ronda de "
                          "fan-out); con `--reanclar`, `--restamp-section`, `--resolver`/"
                          "`--resoluciones` y `--migrate-condition-prefix`, la que el bloque ya "
-                         "tiene (nada se verificó, #395) — pasarla re-fecha el bloque")
+                         "tiene (nada se verificó, #395) — pasarla re-fecha el bloque. Con "
+                         "`--refutar-extraccion` o `--migrate-verdict-chain` rehúsa (AUD-535)")
     ap.add_argument("--dry-run", action="store_true", help="no escribe: dice qué haría")
     args = ap.parse_args(argv)
+    if args.fecha and (args.refutar or args.migrate_chain):
+        # AUD-535 — the chain keeps the block's date (D-4) and `_refutado` dates the annotation:
+        # neither honours `--fecha`, so it is refused instead of ignored in silence (as #507).
+        ap.error("`--fecha` no aplica a `--refutar-extraccion` ni a `--migrate-verdict-chain`: "
+                 "rehúso en vez de ignorarla (AUD-535)")
     if args.refutar:
         return _main_refutar(args)
     if args.restamp:
