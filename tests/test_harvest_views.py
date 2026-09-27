@@ -569,6 +569,24 @@ def test_un_documento_largo_no_recibe_conclusiones(toy_vault):
     assert "## Traducción del abstract\nEsto sí." in texto, "la traducción del abstract sí, que es corta"
 
 
+def test_538_sin_conclusiones_se_PROPONE_y_no_se_escribe(toy_vault, capsys):
+    """#538 — la lectura que vuelve sin conclusiones (una Letter que cierra en la discusión) deja la
+    nota con la deuda del lint y nadie le decía al operador la salida. El cosechador imprime la línea
+    lista para pegar y NO la escribe: si la sección falta en la fuente lo decide quien leyó."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(conclusiones="", abstract_es="A."))
+    hv.harvest("test_star")
+    out = capsys.readouterr().out
+    assert "sin_conclusiones:" in out and "#538" in out
+    assert "sin_conclusiones" not in dest.read_text(encoding="utf-8"), "propone, no escribe"
+    # con conclusiones, con la escotilla ya declarada o en un documento largo: nada que proponer
+    for fm_extra, concl in (({}, "C."), ({"sin_conclusiones": "Letter"}, ""),
+                            ({"unidad_cita": "pagina", "alcance": "cap. 1"}, "")):
+        assert hv.conclusions_hatch_proposal(
+            "---\n" + "".join(f"{k}: {v}\n" for k, v in fm_extra.items()) + "---\n\nx\n",
+            {"conclusiones": concl}) is None, (fm_extra, concl)
+
+
 def test_las_ayudas_de_lectura_son_idempotentes(toy_vault):
     """Regla del framework: corré dos veces y el contenido no cambia."""
     _con_pdf(toy_vault)
