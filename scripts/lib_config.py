@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.345.0"
+ALMAGESTO_VERSION = "1.346.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3351,20 +3351,28 @@ def registro_error(slug: str) -> str | None:
     tolerant loader collapses three states into one `{}` — file absent (legitimate: a subject may
     never have been ingested), broken YAML, and valid YAML with the wrong shape — and the strict
     callers need to tell them apart. An absent file is **not** an error.  @inv INV-139"""
+    return _read_registro(slug)[1]
+
+
+def _read_registro(slug: str) -> tuple:
+    """`(data, error)` from ONE parse of `<slug>.yaml`: `data` is a dict or None, `error` is what
+    `registro_error` reports. The strict path (`load_decisiones`) used to parse twice —once to
+    judge, once to read— and #536 put it on the lint's per-star path (the parse budget that
+    `test_escala` gates)."""
     f = registro_path(slug)
     try:
         data = yaml.safe_load(f.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return None                      # ausente es legítimo: el sujeto puede no estar ingestado
+        return None, None                # ausente es legítimo: el sujeto puede no estar ingestado
     except (yaml.YAMLError, UnicodeDecodeError) as exc:
-        return (f"{f} no parsea como YAML: {' '.join(str(exc).split())} — es el archivo que guarda "
-                f"la curación del sujeto (`decisiones`) y el universo de sus búsquedas")
+        return None, (f"{f} no parsea como YAML: {' '.join(str(exc).split())} — es el archivo que "
+                      f"guarda la curación del sujeto (`decisiones`) y el universo de sus búsquedas")
     except OSError as exc:
-        return f"{f} no se pudo leer: {exc}"
+        return None, f"{f} no se pudo leer: {exc}"
     if data is not None and not isinstance(data, dict):
-        return (f"{f} parsea, pero no a un mapa (es {type(data).__name__}) — el registro es un "
-                f"mapa con `decisiones`/`busquedas`/`cadena`")
-    return None
+        return None, (f"{f} parsea, pero no a un mapa (es {type(data).__name__}) — el registro es "
+                      f"un mapa con `decisiones`/`busquedas`/`cadena`")
+    return data, None
 
 
 def save_registro(slug: str, data: dict) -> None:
@@ -3480,11 +3488,12 @@ def load_decisiones(slug: str) -> dict:
     que #112 cerró, disparados por un `:` sin comillas y sin que nada lo diga. Es la misma doctrina
     que la lente ilegible de INV-80: una config que no parsea rehúsa operar, no degrada en
     silencio.  @inv INV-139"""
-    if (err := registro_error(slug)):
+    data, err = _read_registro(slug)
+    if err:
         raise UnreadableRegistro(
             f"{err}\n   ⛔ No se puede aplicar la curación de `{slug}`: un registro ilegible se "
             f"leería como «no hay ninguna decisión» y los papers descartados volverían a entrar.")
-    d = load_registro(slug).get("decisiones") or {}
+    d = (data or {}).get("decisiones") or {}
     if not isinstance(d, dict):
         return {}
     # una entrada que no es mapa (edición a mano: `2006R: descartado`) se descarta en vez de

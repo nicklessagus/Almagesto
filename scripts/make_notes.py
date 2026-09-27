@@ -3117,14 +3117,19 @@ def planetas_table(fm: dict) -> str:
     return "\n".join(out)
 
 
-def metodos_rows(name: str) -> list:
+def metodos_rows(name: str, slug: str) -> list:
     """`[(método, stem, año)]` — los métodos DE los papers de esta estrella (no todo paper de la
     bóveda que use el método). Es el mismo recorte que documenta `CLAUDE.md` para el equivalente
     determinista, y se parsea con `split_fm`, **no** con grep: `stars: [tau Cet]` en flow style y
-    en bloque conviven en el mismo corpus, y el matcheo textual confunde `GJ 71` con `GJ 710`."""
+    en bloque conviven en el mismo corpus, y el matcheo textual confunde `GJ 71` con `GJ 710`.
+
+    ⛔ #536 — a paper taken out of THIS subject with `--drop-core` contributes no methods: its note
+    survives (it has an extraction) and its `stars:` still names the star, so the name filter alone
+    published as «applied to this star» the methods of a paper the user declared foreign (#112)."""
+    dropeados = set(cfg.dropped_from_subject(slug))
     filas = []
     for stem, fm in papers_fm_index().items():
-        if name not in cfg.as_list(fm.get("stars")):
+        if name not in cfg.as_list(fm.get("stars")) or stem in dropeados:
             continue
         for m in cfg.as_list(fm.get("methods")):
             filas.append((str(m), stem, fm.get("year") or ""))
@@ -3288,16 +3293,18 @@ def missing_anchors(dest, headers) -> list:
 DATOS_HEADER = "## Datos públicos"
 
 
-def datos_rows(name: str) -> list:
+def datos_rows(name: str, slug: str) -> list:
     """`[(stem, year, que, ref, localizador)]` — the public data the papers of this star declare
     (#424).
 
     Same cut and same parser as `metodos_rows`: `split_fm`, never grep — `stars: [tau Cet]` in flow
     style and in block style coexist in the same corpus, and text matching confuses `GJ 71` with
-    `GJ 710`."""
+    `GJ 710`. ⛔ And the same curation cut (#536): a paper taken out of THIS star with
+    `--drop-core` does not declare data for it."""
+    dropeados = set(cfg.dropped_from_subject(slug))
     filas = []
     for stem, fm in papers_fm_index().items():
-        if name not in cfg.as_list(fm.get("stars")):
+        if name not in cfg.as_list(fm.get("stars")) or stem in dropeados:
             continue
         for d in cfg.as_list(fm.get("data_availability")):
             if not isinstance(d, dict):
@@ -3401,12 +3408,15 @@ def matrix_rows(fms: dict | None = None) -> dict:
             nombre = fm.get("name") or f.stem
         estrellas.append([f.stem, nombre, 0])
         por_nombre.setdefault(nombre, []).append(f.stem)
+    # #536 — a column is the star MINUS what the user took out of it with `--drop-core` (#112):
+    # a discarded (paper, star) pair is not «a paper of that star».
+    dropeados = {s: set(cfg.dropped_from_subject(s)) for s, _n, _c in estrellas}
     n_con_methods: dict = {}
     metodos: dict = {}
     for f in cfg.note_paths(cfg.PAPERS):
         fm = _fm(f)
         slugs = sorted({s for n in cfg.as_list(fm.get("stars"))
-                        for s in por_nombre.get(str(n), [])})
+                        for s in por_nombre.get(str(n), []) if f.stem not in dropeados[s]})
         nombres = [str(m) for m in cfg.as_list(fm.get("methods")) if cfg.method_key(m)]
         for s in slugs:
             if nombres:
@@ -3554,11 +3564,12 @@ def stamp_star_rollups(slug: str, dest) -> bool:
         name = fm.get("name") or slug
     tocado = _reemplazar_seccion(dest, PLANETAS_HEADER, planetas_table(fm))
     tocado = _reemplazar_seccion(dest, INDICADORES_HEADER, indicadores_table(fm)) or tocado   # #250
-    tocado = _reemplazar_seccion(dest, METODOS_HEADER, metodos_table(metodos_rows(name))) or tocado
+    tocado = _reemplazar_seccion(dest, METODOS_HEADER,
+                                 metodos_table(metodos_rows(name, slug))) or tocado
     # #424 — la sección es nueva: la ficha que ya existía no la tiene, y `_reemplazar_seccion` no
     # la inventa. Se agrega ANTES del apéndice de excluidos, que va siempre último.
     tocado = _ensure_section(dest, DATOS_HEADER, EXCLUDED_HEADER) or tocado
-    return _reemplazar_seccion(dest, DATOS_HEADER, datos_table(datos_rows(name))) or tocado
+    return _reemplazar_seccion(dest, DATOS_HEADER, datos_table(datos_rows(name, slug))) or tocado
 
 
 def stamp_concept_rollup(slug: str, dest) -> bool:

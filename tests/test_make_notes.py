@@ -2887,10 +2887,33 @@ def test_metodos_se_estampa_con_el_recorte_correcto(toy_vault):
     (cfg.PAPERS / "2020Ajeno.md").write_text(
         "---\nbibcode: 2020Ajeno\nstars: [Otra]\nmethods: [gp]\nyear: 2020\ntags: [paper]\n---\n# T\n",
         encoding="utf-8")
-    filas = mn.metodos_rows("Estrella Test")
+    filas = mn.metodos_rows("Estrella Test", "test_star")
     assert [f[1] for f in filas] == ["2020Mio", "2020Mio"], filas
     t = mn.metodos_table(filas)
     assert "2 método(s) · 2 aplicación(es)" in t and "gp" in t and "2020Ajeno" not in t
+
+
+def test_los_rollups_de_estrella_respetan_el_drop_core(toy_vault):
+    """#536 — `## Métodos aplicados`, `## Datos públicos` y la matriz método × estrella agregan
+    papers DE un sujeto, así que respetan la curación declarada (`dropped_from_subject`, #112/#409).
+    `--drop-core` conserva la nota con extracción y su `stars:` sigue nombrando a la estrella; el
+    filtro por nombre solo publicaba sus métodos como aplicados (medido: 2 pares · 16 entradas)."""
+    _dos_estrellas(toy_vault)
+    _paper("2020Mio", stars=("Estrella Test",), methods=["gp"])
+    _paper("2020Drop", stars=("Estrella Test", "Otra Test"), methods=["3SD"])
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text(
+        "decisiones:\n  2020Drop:\n    decision: descartado\n    origen: sujeto\n"
+        "    motivo: nombra la estrella una vez\n", encoding="utf-8")
+    assert {f[1] for f in mn.metodos_rows("Estrella Test", "test_star")} == {"2020Mio"}
+    datos = mn.matrix_rows()
+    assert datos["metodos"]["3sd"]["estrellas"] == {"otra_star": ["2020Drop"]}, \
+        "el par descartado sale de SU columna y sólo de ésa"
+    assert dict((s, c) for s, _n, c in datos["estrellas"]) == {"test_star": 1, "otra_star": 1}
+    (cfg.PAPERS / "2020Drop.md").write_text(
+        "---\ntags: [paper]\nbibcode: 2020Drop\nstars: [Estrella Test]\ndata_availability:\n"
+        "  - doi: 10.1/x\n    que: RVs\n    localizador: p. 1\n---\n# x\n", encoding="utf-8")
+    assert mn.datos_rows("Estrella Test", "test_star") == []
 
 
 def test_metodos_solo_linkea_el_que_tiene_nota(toy_vault):
@@ -5772,7 +5795,7 @@ def test_el_rollup_de_datos_publicos_junta_lo_que_los_papers_DECLARAN(toy_vault)
                 f"  - {k}: {v!r}\n" if i else f"  - {k}: {v!r}\n"
                 for d in da for i, (k, v) in enumerate(d.items())).replace("  - que", "    que")
             .replace("  - localizador", "    localizador") + "---\n\n# x\n", encoding="utf-8")
-    filas = mn.datos_rows("Estrella Test")
+    filas = mn.datos_rows("Estrella Test", "test_star")
     assert len(filas) == 2, filas
     assert {f[0] for f in filas} == {"2024A&A...688A.112V", "2007A&A...469L..43U"}, \
         "sólo los papers de ESTA estrella"

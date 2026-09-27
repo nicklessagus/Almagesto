@@ -4116,3 +4116,13 @@ extracciones, y probablemente la que falta se cerró con v1.344.0 al validar #53
 `rv-doppler/2023AnRSA..10..623H`. Al cerrarla, el `_repaginado` viejo se conserva, gana `sueltos: {…}`
 y `alcance: sueltos`. Todo cierre nuevo ya nace con `alcance`. La estimación del issue (~1600
 corridos) es una **estimación**, no una medición: sólo la relectura lo dice.
+
+## #536 — los roll-ups de estrella cuentan los métodos del `--drop-core` (v1.346.0)
+
+**Copia de `vault/wiki` + `vault/config` de Almagesto-Tesis (2026-09-26):** con v1.345.0,
+`metodos_rows` de `hd_41248` da **117** filas, **16** de ellas de los 2 pares descartados con
+`origen: sujeto` (`2022A&A...667A.104S`, `2023A&A...674A..10H`). Con v1.346.0 da **101**, 0 de pares
+descartados; la ficha re-estampada pasa a `68 método(s) · 101 aplicación(es)` y no lista `3SD`. La
+matriz baja de **2114 a 2098** celdas (método, estrella, paper) y la columna `hd_41248` de 11 a 9
+papers con `methods`. Las otras 5 estrellas no cambian (0 pares descartados con `methods`).
+`## Datos públicos` lleva la misma regla; en la instancia no cambia (0 filas de pares descartados).

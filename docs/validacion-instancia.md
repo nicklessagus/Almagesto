@@ -1486,3 +1486,18 @@ sueltos, pero no estampaban `alcance`, y la marca no guarda la versión. Releerl
 
 **Devolver si** una extracción cerrada con v1.345.0 o posterior aparece en la lista, o si la ronda
 emite ítems que no son sueltos.
+
+## §#536 · v1.346.0 — `--drop-core` sale de `## Métodos aplicados` y de la matriz
+
+```bash
+python scripts/make_notes.py hd_41248
+python scripts/make_notes.py --restamp-matrix
+```
+
+**Esperado (medido en una copia de la bóveda):** `## Métodos aplicados a esta estrella` de
+`hd_41248` pasa de 117 a **101** aplicaciones y deja de listar `3SD`, `astrometric orbit fitting` y
+`genetic algorithm`. La matriz pierde 16 celdas y la columna `hd_41248` pasa de 11 a 9 papers con
+`methods`. `## Papers` sigue listando los dos papers como `excluido a mano` (#116).
+
+**Devolver si** un paper con `--drop-core` sigue aportando métodos o datos a la ficha de esa
+estrella, o si desaparece de la columna de OTRA estrella que no lo descartó.

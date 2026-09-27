@@ -2802,3 +2802,33 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: "Cuenta `pairs_of` para el hermano `.verif.md`; no re-emite prosa de la nota."
+  - issue: 536
+    regla: >-
+      Todo consumidor que AGREGA papers de un sujeto respeta la curación declarada del par
+      `(paper, sujeto)` (`--drop-core`, #112): `--drop-core` conserva la nota con extracción y su
+      `stars:` sigue nombrando a la estrella, así que el filtro por nombre solo la deja pasar.
+      Medido en Almagesto-Tesis (`hd_41248`): `## Métodos aplicados` y la matriz publicaban 16
+      entradas de método de 2 pares descartados.
+    funcion: lib_config.dropped_from_subject
+    patron: "get\\([\"']stars[\"']\\)"
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: >-
+          `metodos_rows`, `datos_rows` y `matrix_rows` restan el par descartado; `papers_universe`
+          lo lista A PROPÓSITO con estado `excluido a mano` (#116: «queda VISIBLE»).
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "No sirve al paso 3b las extracciones del par descartado (#329)."
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: "Cruza `refuta` contra la decisión firmada del carril `sujeto` (#435)."
+      - modulo: scripts/query_ads.py
+        estado: usa
+        motivo: "`excluidos_del_sujeto`: el core del sujeto resta el `--drop-core`."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Lee `stars` para saber si una vista REFUTA un reclamo vigente (#212); no agrega papers de un sujeto. Sus roll-ups los compara contra `make_notes`, que es quien lleva la regla."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "Lee `stars` al ejecutar el `--drop-core` para decidir si la nota tiene OTRO dueño y se conserva; es el escritor de la curación, no un agregador."
