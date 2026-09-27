@@ -1329,7 +1329,7 @@ def fill_abstracts(*, dry_run: bool = False) -> int:
         # arranca en «1. Introduction» no tiene abstract, y OpenAlex devuelve igual el arranque de
         # la introducción para ese DOI: llenarlo fabrica una sección. Es el simétrico de
         # `sin_conclusiones` (#277), que existía para el mismo caso del otro lado.
-        if (motivo := str(fm.get("sin_abstract_motivo") or "").strip()):
+        if (motivo := cfg.declared_motive(fm.get("sin_abstract_motivo"))):
             cfg.print_seguro(f"  · {dest.stem}: la fuente no lo tiene ({motivo}) — no se llena")
             no_tiene += 1
             continue
@@ -1926,7 +1926,7 @@ def migrate_all_source_fields() -> tuple[int, list]:
         for campo, valor in sorted(malos.items()):
             lineas.append(f"{campo}: null")
             notas.append(f"[{campo} decía] {valor}")
-        if destino == "pending_motivo" and not str(fm.get("pending_motivo") or "").strip():
+        if destino == "pending_motivo" and not cfg.declared_motive(fm.get("pending_motivo")):
             lineas = [ln for ln in lineas if not ln.startswith("pending_motivo:")]
             lineas.append(f"pending_motivo: {json.dumps(' · '.join(notas), ensure_ascii=False)}")
         elif not fm.get("salvedades"):

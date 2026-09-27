@@ -676,7 +676,7 @@ def main() -> int:
             huecos.append(f"{f.stem}: {motivo}")
             stamp_bibtex_gap(f, fm, text.split("\n---\n", 1)[-1], motivo, hoy)
             continue
-        if str(fm.get("sin_bibtex") or "").strip():
+        if fm.get("sin_bibtex") not in (None, ""):      # #545: presence, not motive
             # El hueco se cerró: el motivo describía un estado que ya no es. Dejarlo haría que la
             # nota publique «no tiene exportación oficial» arriba de su propia entrada.
             # ⛔ #475 — el simétrico del de arriba, y por el mismo motivo: `sin_bibtex` es texto

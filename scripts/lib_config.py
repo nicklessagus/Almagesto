@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.360.1"
+ALMAGESTO_VERSION = "1.361.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3908,9 +3908,23 @@ def solo_abstract_motivo(fm: dict) -> str:
     hatch is declared with its motive (same criterion as `sin_conclusiones` / `no_vista`); without
     a motive it does not apply — nor with a boolean or the unfilled `<motivo>` of the template
     (AUD-541): neither says WHY, which is what makes the exemption auditable (D-58)."""
-    v = (fm or {}).get("solo_abstract")
-    v = v.strip() if isinstance(v, str) else ""
-    return "" if v.startswith("<") and v.endswith(">") else v
+    return declared_motive((fm or {}).get("solo_abstract"))
+
+
+def declared_motive(value) -> str:
+    """The motive an escape hatch declares, or `""` when it declares none (#545).
+
+    ONE reader for every hatch that requires a motive (`sin_bibtex`, `sin_abstract_motivo`,
+    `sin_conclusiones`, `pending_motivo`, `no_sintetizado`, `no_vista[].motivo`,
+    `corpus_sin_probe`, `solo_abstract`): the motive is what makes the exemption auditable (D-58),
+    and `true` says THAT something was exempted, not WHY. A non-string, an empty string, a bare
+    affirmative or the unfilled `<motivo>` of the template is no motive. Each reader used to write
+    its own `str(x or "").strip()`, which accepts all four."""
+    # @inv INV-167
+    v = value.strip() if isinstance(value, str) else ""
+    if v.startswith("<") and v.endswith(">") or v.lower() in ("true", "false", "sí", "si", "yes", "no"):
+        return ""
+    return v
 
 
 def config_items() -> list:
@@ -4265,7 +4279,7 @@ def load_no_vista(meta: dict, *, entry: str = "?") -> list:
                    "a todos"))
     out = []
     for x in v:
-        sujeto, motivo = str(x.get("sujeto") or "").strip(), str(x.get("motivo") or "").strip()
+        sujeto, motivo = str(x.get("sujeto") or "").strip(), declared_motive(x.get("motivo"))
         faltan = [k for k, val in (("sujeto", sujeto), ("motivo", motivo)) if not val]
         if faltan:
             raise VistasError(_no_vista_error(

@@ -2709,6 +2709,11 @@
   {
    "number": 544,
    "title": "Confirmar contra la fuente es ver la página renderizada: `pdftotext` sobre el PDF es la misma capa que el `.txt`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 545,
+   "title": "Toda escotilla con motivo lo lee con una función: `true` o `<motivo>` no son motivo (AUD-541 en las otras siete)",
    "state": "OPEN"
   }
  ]

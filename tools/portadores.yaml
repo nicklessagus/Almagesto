@@ -1298,6 +1298,12 @@ portadores:
       - modulo: scripts/openalex.py
         estado: fuera-de-alcance
         motivo: Ídem — es uno de los tres backends de descubrimiento que lo pueblan.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Matchea desde #545 porque el docstring de `declared_motive` NOMBRA a
+          `sin_abstract_motivo` entre las escotillas que leen su motivo por ahí; no afirma nada
+          sobre el `## Abstract` transcrito.
       - modulo: scripts/search_arxiv.py
         estado: fuera-de-alcance
         motivo: Ídem.
@@ -2946,3 +2952,28 @@ portadores:
       - modulo: scripts/triage.py
         estado: usa
         motivo: "`_notes_citing`: las notas que citan el paper que se descarta (avisa)."
+  - issue: 545
+    regla: >-
+      Toda escotilla que exige motivo lo lee con UNA función: un booleano, un número, el vacío, un
+      «sí» pelado o la plantilla `<motivo>` no son motivo (D-58). Cada lector escribía su propio
+      `str(x or "").strip()`, que acepta `true` y la plantilla.
+    funcion: lib_config.declared_motive
+    patron: 'get\("(sin_bibtex|sin_abstract_motivo|sin_conclusiones|pending_motivo|corpus_sin_probe)"\)'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          `sin_bibtex`, `sin_conclusiones`, `pending_motivo`, `corpus_sin_probe` y
+          `no_sintetizado` leen el motivo por `declared_motive`; la PRESENCIA de `sin_bibtex` (para
+          la contradicción con `bibtex`) sigue siendo la clave misma.
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`sin_abstract_motivo` (--fill-abstracts) y `pending_motivo` (migrador de fuentes)."
+      - modulo: scripts/ingest_theme.py
+        estado: usa
+        motivo: "El `pending_motivo` de un item de `sources:` (lo encontró el barrido, no el grep del issue)."
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Pregunta por PRESENCIA de `sin_bibtex` (sacar el hueco cuando llegó el bloque), no por su
+          motivo: un `sin_bibtex: true` también tiene que salir.

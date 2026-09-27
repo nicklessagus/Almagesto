@@ -6501,6 +6501,20 @@ def test_sin_conclusiones_sin_motivo_sigue_siendo_deuda(toy_vault, capsys):
     assert "2020aaa...1..1A" in _seccion(rep, "sin `## Conclusiones` ni exención"), rep
 
 
+@pytest.mark.parametrize("valor", [True, "<motivo>", "true"])
+def test_545_sin_conclusiones_con_true_o_plantilla_sigue_siendo_deuda(toy_vault, capsys, valor):
+    """#545 — `true` dice QUE se eximió, no POR QUÉ; la plantilla sin llenar tampoco. Cada lector
+    tenía su `str(x or "").strip()`, que aceptaba las dos: ahora leen con `cfg.declared_motive`."""
+    # @inv INV-167
+    _paper_completo(body=f"# p\n\n{mn.LLM_DISCLAIMER['paper']}\n\n## Abstract\nx\n",
+                    fm={"sin_conclusiones": valor})
+    _pdf_en_disco()
+    link_from_log(toy_vault, "2020aaa...1..1A")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2020aaa...1..1A" in _seccion(rep, "sin `## Conclusiones` ni exención"), rep
+    assert "2020aaa...1..1A" not in _seccion(rep, "DECLARADA con motivo"), rep
+
+
 def test_paper_sin_aviso_de_capa_llm_es_backlog(toy_vault, capsys):
     """#247 — la nota de paper es la que más contenido generado tiene y era la única de las tres
     clases sin el aviso que dice cuál de sus capas es auditable. Nadie lo chequeaba."""

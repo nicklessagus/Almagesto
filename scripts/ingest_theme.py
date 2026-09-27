@@ -393,7 +393,7 @@ def ingest_offads(slug: str, meta: dict, force: bool, yes: bool = False) -> None
                 sys.exit(f"{key}: `pending: {_pend}` fuera del vocabulario "
                          f"({' | '.join(cfg.PENDING_OK)}). Un valor que nadie valida deja al "
                          f"consumidor leyendo algo que no significa nada.")
-            if not str(s.get("pending_motivo") or "").strip():
+            if not cfg.declared_motive(s.get("pending_motivo")):
                 sys.exit(f"{key}: `pending: {_pend}` sin `pending_motivo`. En seis meses la "
                          f"categoría sola no dice si la fuente se pidió, se descartó o se olvidó — "
                          f"escribí qué pasa con esta fuente y quién la consigue.")

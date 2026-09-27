@@ -3159,8 +3159,7 @@ def check_unsynthesized(extracted, cited_in_entity) -> list:
             # Un motivo es TEXTO con contenido. Cualquier otra cosa (número, lista, mapa, `true`,
             # vacío) es la marca pelada que la doc dice seguir reportando: cerraba el hallazgo en
             # silencio, que es exactamente lo que "motivo obligatorio" existe para impedir.
-            if (not isinstance(marca, str) or not marca.strip()
-                    or marca.strip().lower() in ("true", "sí", "si", "yes")):
+            if not cfg.declared_motive(marca):     # #545: the one reader of a motive
                 unsynthesized.append((stem, "`no_sintetizado` sin motivo → poné POR QUÉ no se "
                                             "inlinea (regla de poda, aporta sólo vía roll-up, …)"))
             continue
@@ -4721,7 +4720,7 @@ def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf
     if _marca_sc is not _SIN_MARCA:
         # Escotilla declarada: motivo OBLIGATORIO, mismo criterio que `no_vista` /
         # `no_sintetizado` / el `--reason` del triage. Sin motivo sigue siendo deuda.
-        if str(_marca_sc or "").strip():
+        if cfg.declared_motive(_marca_sc):
             sin_conclusiones_ok.append((stem, f"`sin_conclusiones: {_marca_sc}`"))
         else:
             sin_conclusiones.append(
@@ -4826,14 +4825,17 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     # que la nota SIN entrada no aparecía en ningún reporte y el lint daba rc 0 con ella adentro
     # (medido: 17 de 272, y `bibtex_accessed` poblado en 0 de las 17). El hueco declarado va
     # APARTE del mudo (AUD-207): uno es una decisión registrada, el otro es «nadie preguntó».
-    _motivo_hueco = str(fm.get("sin_bibtex") or "").strip()
+    # #545 — the motive through the one reader; PRESENCE (for the contradiction) is the key itself.
+    _motivo_hueco = cfg.declared_motive(fm.get("sin_bibtex"))
+    _hueco_puesto = fm.get("sin_bibtex") not in (None, "")
     if not _btx:
         if _motivo_hueco:
             sin_bibtex.append((stem, f"{_motivo_hueco} (consultado el "
                                      f"{str(fm.get('bibtex_accessed') or 's/f')})"))
         else:
             sin_bibtex_mudo.append(
-                (stem, "sin `bibtex` y sin `sin_bibtex`: no se distingue «no tiene exportación "
+                (stem, ("`sin_bibtex` sin motivo" if _hueco_puesto else "sin `bibtex` y sin "
+                        "`sin_bibtex`") + ": no se distingue «no tiene exportación "
                        "oficial» de «nadie preguntó», y es el campo que existe para que una cita "
                        f"impresa no se redacte de memoria → `python scripts/fetch_bibtex.py "
                        f"--paper {stem}` (#467)"))
@@ -4843,9 +4845,9 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     # en la categoría equivocada. Lo produce un borrado que rehusó (#244) con su retorno ignorado
     # —el defecto de #475— y también lo produciría una edición a mano.
     # @inv INV-158
-    if _btx and _motivo_hueco:
+    if _btx and _hueco_puesto:
         bibtex_hueco_contradictorio.append(
-            (stem, f"tiene `bibtex` Y `sin_bibtex: {_motivo_hueco[:60]}`: el hueco declarado dice "
+            (stem, f"tiene `bibtex` Y `sin_bibtex: {str(fm.get('sin_bibtex'))[:60]}`: el hueco declarado dice "
                    f"que no hay exportación oficial arriba de la que la nota publica, y un "
                    f"consumidor no puede saber cuál rige → `python scripts/fetch_bibtex.py "
                    f"--paper {stem}` (re-pregunta y deja UNA de las dos, #475)"))
@@ -4962,7 +4964,7 @@ def check_bibtex_no_pegable(stem: str, fm: dict) -> tuple:
     _btx = str(fm.get("bibtex") or "").strip()
     # AUD-502 / INV-158 — with `sin_bibtex` beside it the note is already blocking in
     # `bibtex_hueco_contradictorio`, whose exit (`fetch_bibtex --paper`) settles this one too.
-    if not _btx or str(fm.get("sin_bibtex") or "").strip():
+    if not _btx or fm.get("sin_bibtex") not in (None, ""):
         return [], []
     pend, res = [], []
     for clase, detalle in cfg.bibtex_no_pegable(_btx):
@@ -5073,7 +5075,7 @@ def check_paper_pending(stem: str, fm: dict, aceptados: dict | None = None) -> t
         # la miró nunca, y `adquisicion` (un libro en camino) no es un fallo como los otros
         # tres. El motivo no se puede inventar, así que esto es backlog y no bloqueante:
         # nombra la nota para que alguien lo escriba.
-        _falta = ("" if str(fm.get("pending_motivo") or "").strip() else
+        _falta = ("" if cfg.declared_motive(fm.get("pending_motivo")) else
                   " — ⚠ sin `pending_motivo`: escribí qué pasa con esta fuente y quién la consigue")
         if _p not in cfg.PENDING_OK:
             # #129: el TYPO de vocabulario es bloqueante, como en `role` y `unidad_cita`.
@@ -6197,7 +6199,7 @@ def check_declared_corpus_probe() -> tuple:
         if [p for p in cfg.as_list((cfg.load_registro(_slug) or {}).get("probes"))
                 if isinstance(p, dict)]:
             continue
-        if str(_tm.get("corpus_sin_probe") or "").strip():
+        if cfg.declared_motive(_tm.get("corpus_sin_probe")):
             declarado.append((f"tema `{_slug}`", f"corpus_sin_probe: {_tm['corpus_sin_probe']}"))
             continue
         sin.append(

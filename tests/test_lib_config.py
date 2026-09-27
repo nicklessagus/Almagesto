@@ -1481,6 +1481,17 @@ def test_no_vista_sin_motivo_detectado(toy_vault):
         cfg.load_no_vista({"no_vista": [{"motivo": "m"}]}, entry="X")
 
 
+def test_545_declared_motive_rechaza_lo_que_no_dice_por_que(toy_vault):
+    """#545 — el lector único de motivos: un booleano, un número, el vacío, un «sí» pelado o la
+    plantilla `<motivo>` no son motivo; un texto sí, recortado."""
+    # @inv INV-167
+    for v in (True, False, 1, None, "", "  ", "<motivo>", "true", "Sí", "yes", ["x"]):
+        assert cfg.declared_motive(v) == "", v
+    assert cfg.declared_motive("  catálogo de datos  ") == "catálogo de datos"
+    with pytest.raises(cfg.VistasError):
+        cfg.load_no_vista({"no_vista": [{"sujeto": "s", "motivo": "<motivo>"}]}, entry="X")
+
+
 def test_no_vista_normaliza_y_no_muta(toy_vault):
     meta = {"no_vista": [{"sujeto": " s_index ", "motivo": " roll-up "}]}
     assert cfg.load_no_vista(meta, entry="X") == [{"sujeto": "s_index", "motivo": "roll-up"}]

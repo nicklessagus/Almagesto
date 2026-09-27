@@ -80,7 +80,7 @@ no sea sólo prosa del prompt»), y son cinco cosas independientes:
 | # | mecanismo | qué cierra |
 |---|---|---|
 | 1 | el paquete (`guia`) y el resultado (`pagina` + `evidencia`) son **schemas distintos**, validados contra `RESULT_SCHEMA` | devolver el paquete **rebota** |
-| 2 | `--apply` **no lee el paquete**: recomputa los ítems desde la extracción | no existe camino de código de `guia` a `linea` (el test lo prueba **borrando** el paquete) |
+| 2 | `--apply` **no lee el paquete**: recomputa los ítems desde la extracción | no existe camino de código de `guia` a `linea` (el test lo prueba **borrando** el paquete)  Desde AUD-496 (v1.357.0) el paquete lleva además `localizadores_sha` (hash de `(id, linea)`), el resultado lo devuelve y `--apply` rehúsa el archivo si no coincide: sigue sin leer el paquete. |
 | 3 | cada página confirmada viaja con `evidencia` —palabras de esa hoja— que el escritor cruza contra el `.txt` partido por página | quien copió la guía sin abrir no tiene qué poner ahí; quien abrió la hoja equivocada se contradice con el índice |
 | 4 | `pdf_sha` del resultado == disco == el de la marca | se leyó el documento que hay, no un tercero |
 | 5 | `pagina: null` → `no hallado (relectura …)`, **nunca** la guía | el hueco se declara |
