@@ -4149,3 +4149,15 @@ acción. Hay 2 huérfanas: una es la cita que la corrección retiró (`retira`).
 encontró la ronda ciega (2024A&A...687A.281Z) **no** la manda este criterio: su fila previa no
 exigía acción. El issue deja ese caso afuera a propósito, porque la cobertura sigue decidiendo para
 las filas `soportada` sin `acota` pendiente.
+
+## Prompts sin arqueología y el juez con su propio archivo (v1.350.0)
+
+Auditoría de prompts en la instancia Almagesto-Tesis (2026-09-26). El prompt del extractor viaja en
+cada extracción (36 en una sola estrella) y llevaba cuatro relatos de incidente: la fecha de una
+medición del `.txt`, los contornos de #281, un detector de otra capa con precisión 0/5 sobre 268
+notas y un extractor que inventó una degradación. Se reescribieron como regla más porqué en
+presente. Cada juez del fan-out de verify leía el `SKILL.md` entero (863 líneas, casi todo del
+orquestador); en la ficha `toliman` fueron 32 + 13 + 2 jueces de ~90-110 k tokens cada uno. Las
+reglas del juez pasaron a `reference/juez.md` y el `SKILL.md` bajó de 66 499 B a 57 225 B. Al fijar
+el techo, los relatos «Medido…» en `.claude/skills/**/*.md` eran 45 (41 en los `SKILL.md`, como
+contó el issue, más 4 en `reference/`); el párrafo de §3 bajó uno y el techo queda en 44.

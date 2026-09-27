@@ -225,3 +225,11 @@ def toy_vault(tmp_path, monkeypatch):
     write_yaml(paths["STARS_YAML"], STARS)
     write_yaml(paths["THEMES_YAML"], {})
     return SimpleNamespace(**paths)
+
+
+import re  # noqa: E402  (kept down here so the lines the invariant map cites do not move)
+
+# A subagent prompt carries the rule and its why in the present tense; the date of a measurement
+# and precision/recall counts live in `docs/mediciones.md` (docs/desarrollo.md § «Texto que lee un
+# agente»). Shared by the prompt tests of `extraction_prompt` and `verify_fanout`.
+PROMPT_ARCHAEOLOGY_RE = re.compile(r"[Mm]edido el \d{4}-\d{2}-\d{2}|precisión \*{0,2}\d+/\d+")

@@ -47,7 +47,17 @@ def test_cada_prompt_lleva_sus_pares_el_fence_y_la_salida(tmp_path):
     assert all(a in texto for a in anclas) and "Pares a juzgar: 2" in texto
     assert "```json" in texto and "NINGUNA OTRA" in texto
     assert (out / "2020A.json").as_posix() in texto
-    assert vf.SKILL in texto, "las reglas no se caen en el fan-out: el prompt manda leerlas"
+    assert vf.JUEZ in texto, "las reglas no se caen en el fan-out: el prompt manda leerlas"
+
+
+def test_el_prompt_del_juez_no_lleva_arqueologia_de_mediciones(tmp_path):
+    """docs/desarrollo.md § «Texto que lee un agente»: the judge prompt travels in every subagent
+    of the fan-out, so it carries rules, not measurement dates or precision counts."""
+    from conftest import PROMPT_ARCHAEOLOGY_RE
+    out = tmp_path / "r1"
+    vf.write_round(_nota(tmp_path), out)
+    for f in (out / "prompts").glob("*.md"):
+        assert not PROMPT_ARCHAEOLOGY_RE.findall(f.read_text(encoding="utf-8")), f.name
 
 
 def test_una_nota_sin_pares_no_es_un_cierre_en_verde(tmp_path, capsys):

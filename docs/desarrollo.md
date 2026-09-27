@@ -42,6 +42,23 @@ tres techos **sólo bajan** y ninguno es un rojo: son deuda anterior a la conven
 fuera de la lista `conocidos` pone el test en rojo aunque el total no suba (impide que la deuda
 rote). Los números los dan las funciones del test, no esta prosa.
 
+## Texto que lee un agente
+
+**Todo texto que lee un agente —`CLAUDE.md`, un `SKILL.md` y su `reference/`, un prompt generado
+para un subagente— lleva la regla y su porqué en presente, en una cláusula, con su ancla `(#N)`.**
+La fecha, el conteo y el relato del incidente van a `docs/mediciones.md` bajo esa ancla. Es la
+división que `CLAUDE.md` ya hace consigo mismo (#465, AUD-475), extendida a los otros textos que
+lee un modelo: un modelo que sigue el prompt de cerca toma cada frase como instrucción, así que la
+anécdota compite con la regla. El `log.md` y el `STATUS.md` de una instancia quedan afuera: son
+historia por definición. Cada juez del fan-out de verify lee sólo `reference/juez.md`, no el skill
+entero del orquestador.
+
+Redes: los prompts generados (`extraction_prompt.build_prompt`, `verify_fanout.prompt_for`) no
+pueden llevar una fecha de medición ni un conteo de precisión
+(`conftest.PROMPT_ARCHAEOLOGY_RE`, test duro en `tests/test_extraction_prompt.py` y
+`tests/test_verify_fanout.py`), y los relatos «Medido…» de `.claude/skills/` tienen techo exacto
+que sólo baja (`medido_skills` en `tools/doc-size-ratchet.yaml`, `tests/test_doc_size.py`).
+
 ## Al escribir código: las diez redes (regla permanente)
 
 Toda función nueva de `scripts/` **y de `tools/`** pasa por esto **antes de cerrar el issue**; la 6

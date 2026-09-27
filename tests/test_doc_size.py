@@ -203,3 +203,37 @@ def test_la_suba_del_techo_de_un_skill_esta_declarada():
         "techo de `skills:` distinto del que declara la última suba firmada:\n  " +
         "\n  ".join(f"{n}: {a} contra {b}" for n, (a, b) in sorted(desync.items()))
     )
+
+
+MEDIDO_RE = re.compile(r"\bMedido\b|\bmedido el\b")
+
+
+def _medido_en_skills() -> int:
+    return sum(len(MEDIDO_RE.findall(p.read_text(encoding="utf-8")))
+               for p in (RAIZ / ".claude" / "skills").rglob("*.md"))
+
+
+def test_los_relatos_de_medicion_en_skills_solo_bajan():
+    """docs/desarrollo.md § «Texto que lee un agente»: a skill (and the `reference/` a subagent
+    prompt sends it to) carries the rule and its why; the date, the count and the story of the
+    incident go to `docs/mediciones.md`. Exact ceiling: above it a new story came in; below it, the
+    ceiling is lowered in the same change that cleaned the story, so it can only go down."""
+    techo = int(_ratchet()["medido_skills"])
+    n = _medido_en_skills()
+    assert n <= techo, (
+        f"{n} relatos «Medido…» en .claude/skills/ contra techo {techo}: la regla va con su porqué "
+        f"en presente y su ancla (#N); la fecha, el conteo y el relato, a docs/mediciones.md")
+    assert n == techo, f"bajaron a {n}: bajá `medido_skills` en tools/doc-size-ratchet.yaml a {n}"
+
+
+def test_el_techo_de_relatos_no_sube_contra_HEAD():
+    """The half the exact ceiling cannot see: raising `medido_skills` together with the count. Same
+    guard as the other ratchets (`cfg.ratchet_raises`, AUD-139), escape hatch included."""
+    import sys
+    import pytest
+    sys.path.insert(0, str(RAIZ / "scripts"))
+    import lib_config as cfg
+    subidas = cfg.ratchet_raises("tools/doc-size-ratchet.yaml", ("medido_skills",), RAIZ)
+    if subidas is None:
+        pytest.skip("no evaluable: sin git, o el archivo todavía no está en HEAD")
+    assert subidas == [], f"`medido_skills` subió sin escotilla: {subidas}"

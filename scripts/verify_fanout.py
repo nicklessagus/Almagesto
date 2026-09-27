@@ -30,7 +30,7 @@ of «faltan 114» — declared, not indistinguishable from a fan-out that died h
 
 ⛔ It does not launch anything and does not touch `vault/`: the fan-out is the operator's (one
 `general-purpose` subagent per source, in parallel, #100/#219). The prompt points the subagent at
-the skill for the judging rules — a rule that lives only in prose falls off in the fan-out.
+the judge's rules (`reference/juez.md`) — a rule that lives only in prose falls off in the fan-out.
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ import lib_blocks as lb   # noqa: E402
 import lib_config as cfg  # noqa: E402
 
 MANIFEST = "_esperado.json"
-SKILL = ".claude/skills/verify-citations/SKILL.md"
+JUEZ = ".claude/skills/verify-citations/reference/juez.md"
 
 
 def by_source(pairs: list) -> dict:
@@ -58,8 +58,8 @@ def by_source(pairs: list) -> dict:
 def prompt_for(nota: Path, bibcode: str, pares: list, out_dir: Path) -> str:
     """The prompt of ONE verifier: its pairs, the fence, the output path, and where the rules are."""
     partes = [f"# Verificación de citas — fuente `{bibcode}` · nota `{nota.name}`", "",
-              f"⛔ Antes de juzgar, leé las reglas del verificador en `{SKILL}` (§2): grounding-first, "
-              f"claims multi-cláusula, completitud de transcripciones. Leés SÓLO esta fuente, del PDF "
+              f"⛔ Antes de juzgar, leé las reglas del juez en `{JUEZ}`: la fuente, el veredicto y su "
+              f"evidencia, la condición y su clase, la completitud y los claims multi-cláusula. Leés SÓLO esta fuente, del PDF "
               f"(`vault/raw/pdfs/**/{bibcode}.pdf`); el `.txt` sirve para ubicar con `grep`, no para "
               f"citar.", "",
               f"Pares a juzgar: {len(pares)}. Cada uno vuelve con su `ancla` tal cual.", ""]

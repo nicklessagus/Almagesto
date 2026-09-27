@@ -180,9 +180,9 @@ def _media_note(slug: str, bibcode: str) -> str:
         "ninguno se equivoque. Se cita `Fig. N, p. M, contorno del X %` (o el nivel que "
         "corresponda), y si el dato necesita varios niveles, se dan todos. Antes de leer, mirá la "
         "escala de color o la leyenda de niveles: si la figura tiene una, es un campo.\n"
-        "  ⛔ Leer «la curva» de un campo es la forma de producir tres lecturas incompatibles y "
-        "archivarlas como hueco. Medido (#281): una banda de 30-50 M_J leída como 2-3, 1,8-4 y "
-        "3,5-6 UA eran los contornos del 10, 50 y 90 % de la MISMA figura.\n"
+        "  Leer «la curva» de un campo da lecturas incompatibles —en realidad, contornos "
+        "distintos de la misma figura— que terminan archivadas como hueco "
+        "(#281).\n"
         "  ⛔ **Si dos lecturas de la misma figura no reconcilian, la primera hipótesis es figura "
         "SUBESPECIFICADA (¿es un campo? ¿leíste dos niveles distintos?), no dato ilegible.** El "
         "orden importa: la segunda cierra la puerta —el hueco declarado es una promesa de que la "
@@ -501,10 +501,8 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
     txt_nota = f"""
 ⛔ **El `.txt` NO es fuente.** `{_txt_rel(slug, bibcode)}` lo produce `pdftotext` y es el **índice
 de búsqueda** del corpus, no material de lectura: sirve para *ubicar* dónde se menciona el sujeto,
-nunca para transcribir ni para citar. Medido el 2026-08-28 sobre dos papers, uno de ellos con los
-tres chequeos de calidad **en verde**: el `.txt` había perdido el radical `√` (sale como una `r`
-suelta), la prima de `p′` (como `p0`), superíndices de transpuesta, y un subíndice que hacía leer
-una autocovarianza como una inversa. Nada de eso se ve desde el `.txt`.
+nunca para transcribir ni para citar. `pdftotext` pierde sin avisar radicales, primas,
+superíndices y subíndices, aun cuando los chequeos de calidad del `.txt` dan bien.
 """ if (hay_pdf and hay_txt) else ""
     return f"""Sos un extractor de UNA sola fuente. Trabajás desde la raíz del repo.
 
@@ -613,16 +611,14 @@ si hablás del PDF de **otra** fuente. ⚠ Son DOS ejes (#456): `documento` es *
 `leido` —opcional, mismo vocabulario— **de qué se construyó tu vista**. Normalmente coinciden y
 alcanza con el primero; si el PDF fue reemplazado después de la lectura, los dos son ciertos y
 distintos, y declarar los dos es lo único que deja escribir la salvedad entera. Los tres testigos del disco la deciden sola. En prosa no:
-ahí hay que adivinar de quién habla la oración, y el detector que lo intentaba midió 5 hallazgos
-con precisión **0/5** sobre 268 notas.
+ahí un script no puede saber de qué documento habla la oración.
 
 Todo lo demás va como **string**, y la nota lo publica marcado **⚠ NO VERIFICADA — juicio del
 extractor**, en su propio bloque. La razón: una salvedad sobre el **artefacto** no lleva
 `[[bibcode]]` —es una afirmación sobre el archivo, no sobre el paper— así que `verify-citations` la
-deja afuera **por construcción**, y ninguna red la mira. Medido: un extractor afirmó una degradación
-del `.txt` que **no existía**, invocando #205 para darse autoridad, y lo cazó un duplicado
-accidental de la extracción. Esa afirmación iba a entrar bajo `**Salvedades:**`, que es justo la
-sección que el consumidor lee para saber **cuánto confiar** en la extracción.
+deja afuera **por construcción**, y ninguna red la mira: una salvedad equivocada entra sin control
+bajo `**Salvedades:**`, que es justo la sección que el consumidor lee para saber **cuánto confiar**
+en la extracción.
 ⚠ La estructurada que **no resista su propio chequeo NO se publica** y el cosechador la grita con tu
 nombre de archivo. Si la afirmación es decidible, estructurala: es más barata y más fuerte que la
 prosa.

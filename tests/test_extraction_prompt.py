@@ -806,3 +806,18 @@ def test_paper_CORTO_sin_seccion_de_conclusiones_deja_los_campos_vacios(toy_vaul
     assert "dejá `conclusiones` y `conclusiones_es` vacíos" in plano
     assert "decí en `salvedades` qué sección cierra el paper" in plano
     assert "No transcribas la Discusión" in plano
+
+
+def test_el_prompt_no_lleva_arqueologia_de_mediciones(toy_vault):
+    """docs/desarrollo.md § «Texto que lee un agente»: the prompt travels in every extraction, so it
+    carries the rule and its why, not the date of a measurement or a precision count. Built with
+    PDF and `.txt` on disk, the branch that emits the `.txt` warning."""
+    from conftest import PROMPT_ARCHAEOLOGY_RE, mk_note
+    mk_note(toy_vault.PAPERS, "2020corto", {"bibcode": "2020corto", "tags": ["paper"],
+                                      "thesis_links": ["ica"]}, "# t\n")
+    for base, ext in ((toy_vault.PDFS, "pdf"), (toy_vault.FULLTEXT, "txt")):
+        (base / "ica").mkdir(parents=True, exist_ok=True)
+        (base / "ica" / f"2020corto.{ext}").write_text("x\n", encoding="utf-8")
+    p = ep.build_prompt("ica", "2020corto", "ica", ["ICA"], kind="theme")
+    assert "`.txt` NO es fuente" in " ".join(p.split()), "the PDF+txt branch did not run"
+    assert not PROMPT_ARCHAEOLOGY_RE.findall(p)
