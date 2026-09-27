@@ -19,6 +19,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import mutar
 
 
+@pytest.fixture(autouse=True)
+def _template_clone(monkeypatch):
+    """#542 — `--ratchet` sits behind `lint.is_instance()`, which reads the REAL clone's remotes.
+
+    Unpinned, every ratchet test measures the instance guard in an instance (rc 2 either way).
+    Pinned to the template here; the instance test overrides it with `True`. Reaching
+    `git remote` from any other path is a test that depends on where it runs: it fails."""
+    import lint
+    monkeypatch.setattr(lint, "is_instance", lambda: False)
+    monkeypatch.setattr(lint, "git_remotes",
+                        lambda: pytest.fail("test reached the real clone's `git remote` (#542)"))
+
+
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
 
