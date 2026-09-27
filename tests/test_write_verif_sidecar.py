@@ -1424,6 +1424,7 @@ def test_AUD535_fecha_en_un_modo_que_no_la_honra_REHUSA(toy_vault, capsys, modo)
     """AUD-535 — `--migrate-verdict-chain` conserva la fecha del bloque y `--refutar-extraccion`
     fecha la anotación con hoy: los dos aceptaban `--fecha` y la ignoraban en silencio. Un flag
     aceptado que no hace nada se lee como hecho; el modo que no la honra rehúsa (como #507)."""
+    # @inv INV-169
     with pytest.raises(SystemExit) as e:
         ws.main(modo + ["--fecha", "2026-03-01"])
     assert e.value.code == 2

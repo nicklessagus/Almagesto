@@ -1075,6 +1075,7 @@ def main(argv=None) -> int:
     if args.fecha and (args.refutar or args.migrate_chain):
         # AUD-535 — the chain keeps the block's date (D-4) and `_refutado` dates the annotation:
         # neither honours `--fecha`, so it is refused instead of ignored in silence (as #507).
+        # @inv INV-169
         ap.error("`--fecha` no aplica a `--refutar-extraccion` ni a `--migrate-verdict-chain`: "
                  "rehúso en vez de ignorarla (AUD-535)")
     if args.refutar:
