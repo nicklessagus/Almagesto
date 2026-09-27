@@ -161,22 +161,26 @@ def first_ingest(slug: str) -> bool:
     `cadena` (D-57: each script stamps itself) and no PDF under its own `raw/pdfs/<slug>/` — the
     second clause keeps a subject ingested before D-57 from reading as new. ⚠ Not «no notes»: a new
     subject whose core overlaps papers of other subjects already has notes, and the old test let
-    it through whenever fewer than `EXPANSION_NEW` were new."""
+    it through whenever fewer than `EXPANSION_NEW` were new. A PDF of a declared `sources:` item
+    does not count (AUD-537): the off-ADS loop copies it there before the mixed theme's ADS half
+    reaches this guard, and that copy is not a download."""
     pasos = {str(cfg.as_map(c).get("paso")) for c in cfg.as_list(cfg.load_registro(slug).get("cadena"))}
-    return not pasos & {"fetch_arxiv", "fetch_pdf"} and not any((cfg.PDFS / slug).glob("*.pdf"))
+    locales = {make_notes.safe_name(str(cfg.as_map(s).get("key") or ""))
+               for s in cfg.as_list(cfg.as_map(cfg.load_themes().get(slug)).get("sources"))}
+    return not pasos & {"fetch_arxiv", "fetch_pdf"} and not any(
+        p.stem not in locales for p in (cfg.PDFS / slug).glob("*.pdf"))
 
 
 def print_download_list(core: list) -> None:
     """The list the user curates the first ingest with (#529): per core paper, bibcode, DOI,
     venue and whether it has a PUBLISHED version (#512: the one the vault reads) or is eprint-only,
     and whether a PDF of it is already on disk under another subject (reused, D-18)."""
-    en_disco = {p.stem for p in cfg.PDFS.glob("*/*.pdf")}
     n_pub = sum(cfg.has_published_version(r["bibcode"]) for r in core)
     cfg.print_seguro(f"  {n_pub} con versión PUBLICADA (se lee ésa, #512) · {len(core) - n_pub} sólo eprint "
                      f"(arXiv/tesis: el eprint ES la fuente):")
     for r in sorted(core, key=lambda r: r["bibcode"]):
         estado = "publicado" if cfg.has_published_version(r["bibcode"]) else "sólo eprint"
-        disco = " · ya en disco" if make_notes.safe_name(r["bibcode"]) in en_disco else ""
+        disco = " · ya en disco" if cfg.pdf_slug(make_notes.safe_name(r["bibcode"])) else ""
         cfg.print_seguro(f"    {r['bibcode']:<20} {estado:<11} {r.get('bibstem') or '—':<10} "
                          f"doi: {r.get('doi') or '—'}{disco}")
 
@@ -206,9 +210,9 @@ def expansion_guard(slug: str, yes: bool) -> None:
                      f"corpus con el usuario y persistilo (`extra_core` con `query: null`, o "
                      f"`triage.py {slug} --drop-core <bib> --reason`); (2) re-corré con --yes (baja "
                      f"sólo del editor, #512); (3) rescate manual del residuo "
-                     f"(`reference/rescate-pdfs.md`); (4) recién ahí pedile al usuario lo que falte "
+                     f"(`.claude/skills/ingest-star/reference/rescate-pdfs.md`); (4) recién ahí pedile al usuario lo que falte "
                      f"de `build/{slug}/missing_pdf.json`, con sus links (`replace_pdf.py <bib> <pdf> "
-                     f"--source publisher`); (5) lo que no consiga: `triage.py {slug} "
+                     f"--source publisher --reason \"<de dónde salió>\"`); (5) lo que no consiga: `triage.py {slug} "
                      f"--acepta-preprint <bib> --reason \"el usuario no consiguió la versión "
                      f"publicada\"`.")
         cfg.print_seguro("  → --yes: corpus aprobado, sigo a bajar.")
@@ -476,10 +480,11 @@ def ingest_offads(slug: str, meta: dict, force: bool, yes: bool = False) -> None
     # ICA: la enumeración manual trajo 11 papers y dejó afuera familias enteras que la query
     # encuentra sola. Con `query:` poblada corre la búsqueda completa (misma lente, mismas puertas
     # de D-26, misma compuerta de triage) y `extra_core` sigue siendo el override de siempre.
+    escotillas = ["--yes"] if yes else []          # INV-44 (AUD-538): same trace as `ingest_ads`
     if meta.get("query"):
         cfg.print_seguro(f"\nquery declarada en un tema off-ADS (tema mixto, #104) → descubrimiento ADS completo")
         for script, sargs in ads_subchain(slug, extra_only=False):
-            rc = run(script, *sargs)
+            rc = run(script, *sargs, flags=escotillas)
             if rc:
                 sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                          "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")
@@ -488,7 +493,7 @@ def ingest_offads(slug: str, meta: dict, force: bool, yes: bool = False) -> None
     elif extra:
         cfg.print_seguro(f"\nextra_core: {len(extra)} paper(s) con bibcode ADS (tema mixto) → sub-cadena ADS")
         for script, sargs in ads_subchain(slug, extra_only=True):
-            rc = run(script, *sargs)
+            rc = run(script, *sargs, flags=escotillas)
             if rc:
                 sys.exit(f"{script} falló (rc={rc}) — cadena abortada. La cadena es idempotente: "
                          "corregí y re-corré ingest_theme.py (lo ya bajado no se re-baja).")

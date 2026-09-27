@@ -381,7 +381,8 @@ python scripts/reverify_subset.py vault/wiki/papers/<bib>.md   # lo tocado vence
 La `guia` dice **dónde abrir**, no qué escribir: cada página confirmada vuelve con `evidencia`
 —palabras vistas en ESA hoja— que el escritor cruza contra el `.txt`; la no hallada se declara
 `pagina: null` + `motivo`. La ronda con ítems rehusados deja `_repaginado_parcial` y el lint la
-sigue contando. Medido: 11 reemplazos →
+sigue contando.
+Si corregiste un localizador tras `--out`, `--apply` rehúsa (AUD-496). Medido: 11 reemplazos →
 **76 pares** por re-verificar, así que el reemplazo se decide de a uno, mirando el `--dry-run`.
 **Y mirá el aviso de páginas del `--dry-run` (#437):** la copia del editor puede ser peor que el
 preprint (medido: 7 páginas sin Supplementary contra 33, con la ficha citando §S1.1). Es aviso, no

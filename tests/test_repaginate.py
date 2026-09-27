@@ -152,12 +152,19 @@ def test_494_el_paquete_REHUSA_en_vez_de_describir_otro_documento(toy_vault, tmp
 
 
 def _resultado(tmp_path: Path, filas: list, sha: str | None = None, bib: str = BIB,
-               extraccion: str | None = None) -> Path:
+               extraccion: str | None = None, loc_sha: str | None = None) -> Path:
+    """The reader's result. `localizadores_sha` is echoed from the package; by default that is the
+    extraction as it stands now (nobody touched it between `--out` and `--apply`)."""
+    extraccion = extraccion or f"ica_ruido/{bib}"
+    if loc_sha is None:
+        f = cfg.EXTRACCION / f"{extraccion}.json"
+        loc_sha = rp.locators_sha(json.loads(f.read_text(encoding="utf-8"))) if f.exists() else ""
     r = tmp_path / f"{bib}.json"
-    r.write_text(json.dumps({"bibcode": bib, "extraccion": extraccion or f"ica_ruido/{bib}",
+    r.write_text(json.dumps({"bibcode": bib, "extraccion": extraccion,
                              "items": filas,
                              "pdf_sha": sha if sha is not None
-                             else _sha(cfg.PDFS / "ica_ruido" / f"{bib}.pdf")},
+                             else _sha(cfg.PDFS / "ica_ruido" / f"{bib}.pdf"),
+                             "localizadores_sha": loc_sha},
                             ensure_ascii=False), encoding="utf-8")
     return r
 
@@ -225,6 +232,27 @@ def test_494_la_GUIA_no_puede_llegar_al_linea_por_ningun_camino(toy_vault, tmp_p
     r = rp.apply(BIB, res)
     assert r["cerrada"] and json.loads(
         r["extraccion"].read_text(encoding="utf-8"))["ground_truth"][0]["linea"] == "p. 2010"
+
+
+def test_494_un_localizador_corregido_A_MANO_entre_out_y_apply_NO_se_pisa(toy_vault, tmp_path):
+    """AUD-496 — `viejo` salía de la extracción ACTUAL, así que la guarda de `_replace_locator` se
+    comparaba consigo misma: una corrección a mano hecha entre `--out` y `--apply` se pisaba con la
+    página del lector. El resultado trae la huella de los localizadores que leyó el paquete; si la
+    extracción ya no es ésa, rehúsa el archivo entero y no escribe nada."""
+    d = _extraccion()
+    _txt_paginado()
+    paq = rp.write_round(BIB, tmp_path / "paq")
+    filas = [{"id": it["id"], "pagina": "2010", "evidencia": "Received 3 March 2013", "motivo": ""}
+             for it in rp.items(d)]
+    f = cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json"
+    a_mano = json.loads(f.read_text(encoding="utf-8"))
+    a_mano["salvedades"][0] = a_mano["salvedades"][0].replace("(p. 3)", "(p. 7)")
+    a_mano["ground_truth"][0]["linea"] = "p. 12"
+    f.write_text(json.dumps(a_mano, ensure_ascii=False), encoding="utf-8")
+    antes = f.read_bytes()
+    with pytest.raises(rp.ApplyError, match="a mano"):
+        rp.apply(BIB, _resultado(tmp_path, filas, loc_sha=paq["localizadores_sha"]))
+    assert f.read_bytes() == antes
 
 
 @pytest.mark.parametrize("caso", ["otro_bibcode", "paquete_en_vez_de_resultado", "sha_distinto",
@@ -481,7 +509,8 @@ def test_494_apply_vuelve_al_ARCHIVO_que_el_resultado_declara(toy_vault, tmp_pat
     res = tmp_path / "r.json"
     res.write_text(json.dumps({"bibcode": BIB, "extraccion": f"ica_ruido/{BIB}__orden",
                                "items": filas,
-                               "pdf_sha": _sha(cfg.PDFS / "ica_ruido" / f"{BIB}.pdf")}),
+                               "pdf_sha": _sha(cfg.PDFS / "ica_ruido" / f"{BIB}.pdf"),
+                               "localizadores_sha": rp.locators_sha(d2)}),
                    encoding="utf-8")
     r = rp.apply(BIB, res)
     assert r["extraccion"].stem == f"{BIB}__orden", r["extraccion"]
@@ -537,7 +566,8 @@ def test_494_el_MISMO_PAPER_bajo_DOS_SLUGS_no_colisiona_y_converge(toy_vault, tm
                   "motivo": ""} for it in paq["items"]]
         res = tmp_path / f"{paq['extraccion'].replace('/', '_')}.json"
         res.write_text(json.dumps({"bibcode": BIB, "extraccion": paq["extraccion"],
-                                   "items": filas, "pdf_sha": paq["pdf_sha"]}), encoding="utf-8")
+                                   "items": filas, "pdf_sha": paq["pdf_sha"],
+                                   "localizadores_sha": paq["localizadores_sha"]}), encoding="utf-8")
         r = rp.apply(BIB, res)
         assert r["cerrada"] and not r["rehusados"], (paq["extraccion"], r["rehusados"])
         assert rp.file_id(r["extraccion"]) == paq["extraccion"]
@@ -623,6 +653,36 @@ def test_507_out_con_dry_run_REHUSA_en_vez_de_escribir_el_paquete(toy_vault, tmp
     with pytest.raises(SystemExit) as e:
         rp.main([BIB, "--out", str(out), "--dry-run"])
     assert e.value.code == 2 and not out.exists()
+
+
+def test_507_apply_con_dry_run_no_escribe_la_extraccion_ni_la_nota(toy_vault, tmp_path, capsys):
+    """AUD-548 — `--apply` respeta `--dry-run` en sus tres escritores: la extracción y los dos
+    re-estampados de la nota (celda de la vista y salvedad por texto exacto). Ida: el árbol queda
+    igual y la salida anuncia lo que cambiaría. Vuelta: sin el flag se escribe."""
+    from conftest import tree_digest
+    _extraccion(vista={"sujeto": "tema", "tipo": "theme"})
+    _txt_paginado()
+    d = json.loads((cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    nota = cfg.PAPERS / f"{BIB}.md"
+    nota.write_text(
+        "---\nbibcode: 2013Voss\ntags: [paper]\n---\n\n## Abstract\n\nx\n\n"
+        "## Vista — tema\n\n| Qué | Valor | Localizador |\n|---|---|---|\n"
+        f"| blanqueo | «{CITA}» | p. 4 |\n\n" + cfg.SALVEDAD_MARCAS[1] + "\n\n"
+        f"- {d['salvedades'][0]}\n", encoding="utf-8")
+    filas = [{"id": it["id"], "pagina": "2010", "evidencia": "Received 3 March 2013", "motivo": ""}
+             for it in rp.items(d)]
+    res = _resultado(tmp_path, filas)
+    antes = tree_digest(toy_vault.ROOT)
+    assert rp.main([BIB, "--apply", str(res), "--dry-run"]) == 0
+    assert tree_digest(toy_vault.ROOT) == antes, "un --dry-run no escribe un byte"
+    out = capsys.readouterr().out
+    assert "1 celda(s) re-estampada(s)" in out and "2 sustituida(s)" in out, out
+    assert rp.main([BIB, "--apply", str(res)]) == 0
+    assert "| p. 2010 |" in nota.read_text(encoding="utf-8")
+    assert "(p. 3)" not in nota.read_text(encoding="utf-8")
+    assert "_paginacion" not in json.loads(
+        (cfg.EXTRACCION / "ica_ruido" / f"{BIB}.json").read_text(encoding="utf-8"))
 
 
 def test_533_dos_numeraciones_se_repaginan_CADA_UNA_con_la_suya_o_se_rehusa(toy_vault, tmp_path):

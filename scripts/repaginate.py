@@ -87,6 +87,7 @@ def file_id(path) -> str:
 RESULT_SCHEMA = {"bibcode": "<bibcode>",
                  "extraccion": "<el `extraccion` que traía el paquete: `<slug>/<stem>`>",
                  "pdf_sha": "<el sha10 que traía el paquete>",
+                 "localizadores_sha": "<el `localizadores_sha` que traía el paquete, tal cual>",
                  "items": [{"id": "<el id del item, tal cual>",
                             "pagina": "<la página en la que está: la que muestra la hoja o el "
                                       "índice del PDF (#500); una LISTA con una página por "
@@ -118,6 +119,16 @@ def items_for(data: dict) -> list:
     """The items a round owes: all of them while the debt is open, the loose ones of a
     pre-#534 closure (#535)."""
     return loose_debt(data) or items(data)
+
+
+def locators_sha(data: dict) -> str:
+    """sha10 of the locators a round reads, `(id, linea)` per item (AUD-496).
+
+    The package carries it and the result echoes it back, so `apply` knows the extraction still
+    holds the locators the reader was shown — without reading the package, whose `guia` must not
+    reach a `linea` (#494). A locator corrected by hand in between changes it."""
+    return lb.sha10(json.dumps([[it["id"], it["linea"]] for it in items_for(data)],
+                               ensure_ascii=False))
 
 
 def pending() -> list:
@@ -363,7 +374,7 @@ def write_round(bibcode: str, out_dir: Path, *, extraccion=None) -> dict:
                          f"un tercer documento")
     los = items_for(data)
     paquete = {"bibcode": bibcode, "extraccion": file_id(f), "lente": lens_of(f),
-               "ruta": f.as_posix(), "pdf_sha": sha,
+               "ruta": f.as_posix(), "pdf_sha": sha, "localizadores_sha": locators_sha(data),
                "items": [{**it, "guia": guide(it, bibcode)} for it in los],
                "version": cfg.ALMAGESTO_VERSION}
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -454,9 +465,10 @@ def _replace_locator(texto: str, ocurrencia: int, viejo: str, etiquetas: list) -
     """Swap the labels of the locator ADJACENT to the `ocurrencia`-th quote, or `None` if it moved.
 
     ⛔ Anchored on the quote and not on the token, because two quotes of one string can name the
-    same page: counting `p. 3` would swap the wrong one. And it matches the token EXACTLY as the
-    package read it, so a locator somebody already fixed by hand is reported, never rewritten —
-    the same rule that protects a correction in `restamp_salvedades` (#453)."""
+    same page: counting `p. 3` would swap the wrong one. `viejo` is the token of the extraction
+    as it stands, which `apply` already tied to the one the package read (`localizadores_sha`,
+    AUD-496): a locator somebody fixed by hand after `--out` is refused, never rewritten — the
+    same rule that protects a correction in `restamp_salvedades` (#453)."""
     desde = 0
     for n, cita in enumerate(cfg.quotes_in(texto), 1):
         pos = texto.find(cita, desde)
@@ -561,6 +573,12 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
     if {x.get("id") for x in filas} != set(los):
         raise ApplyError(f"los `id` del resultado no son los de la extracción "
                          f"({len(filas)} contra {len(los)}): el paquete quedó viejo, re-emitilo")
+    # ⛔ AUD-496 — `viejo` below comes from the extraction as it is NOW, so without this the
+    # per-item guard compared the extraction with itself and a hand correction was overwritten
+    if str(res.get("localizadores_sha") or "") != locators_sha(data):
+        raise ApplyError("la extracción no tiene los localizadores que leyó el paquete "
+                         "(`localizadores_sha` distinto): alguien corrigió alguno a mano después "
+                         "de `--out` — re-emití el paquete; lo corregido queda como está")
     hoy = _dt.date.today().isoformat()
     escritos, no_hallados, rehusados, para_nota, para_nota_texto = [], [], [], [], []
     sin_cambio: list = []

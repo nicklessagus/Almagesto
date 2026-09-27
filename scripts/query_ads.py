@@ -30,7 +30,7 @@ Escribe TAMBIÉN el registro de búsqueda VERSIONADO del sujeto, `vault/config/r
 **lente** con la que se clasificó) — #64: el ads.json es scratch regenerable, pero saber sobre qué
 universo afirma una ficha y con qué filtro se recortó tiene que viajar con la bóveda. No se escribe
 en los modos que no consultan un sujeto (`--probe`) ni en los que no clasifican de nuevo
-(`--dry-run`), que retornan antes — salvo `--probe --registrar`, que appendea a `probes:` (#524).
+(`--dry-run`), que retornan antes — salvo `--probe --registrar`, que appendea a `probes:` (#524) y rehúsa `--dry-run`.
 
 Usa la API REST de ADS directamente (control total de campos y filas). Rate: ~5000/día.
 La query por estrella se arma con `title:`/`abs:` sobre nombre+alias (ver `build_query`; `object:`
@@ -1630,6 +1630,9 @@ def main() -> int:
         # #524 — un probe registrado sin sujeto no tiene registro donde vivir, y sin criterio no
         # dice por qué se recortó: es la mitad que el registro existe para guardar.
         ap.error('--registrar va con `<slug> [--theme] --probe` y con --criterio "<por qué se recorta>"')
+    if args.registrar and args.dry_run:
+        # AUD-504 — the `--probe` branch returns before `args.dry_run` is read.
+        cfg.refuse_dry_run(ap, "`--registrar` appendea a `probes:` del registro")
     if args.probe is not None:
         # #208 — `--probe` previsualizaba SIEMPRE con la lente global, o sea con la que D-26 declara
         # «activamente dañina» para un tema de método, y sobre exactamente la población que el tema

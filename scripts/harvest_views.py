@@ -783,7 +783,8 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
 
     ⛔ `dry_run` (#507) writes NOTHING: every writer runs on a scratch COPY of the note, so the
     preview announces exactly what a real run would write (same writers, same guards), and prints
-    the per-note line delta. Until #507 the flag reached only `--restamp-salvedades` and a
+    the line delta of each extraction (one scratch copy per note, so a second lens of the same
+    bibcode runs on what the first wrote, AUD-505). Until #507 the flag reached only `--restamp-salvedades` and a
     «preview» of the harvest wrote 5 files, +177 lines."""
     src = cfg.EXTRACCION / slug              # #311: versionadas, no en `build/`
     n = {"cosechadas": 0, "rechazadas": 0, "sin_nota": 0, "sin_cambios": 0, "txt_traidos": 0,
@@ -864,7 +865,9 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         real = dest
         if scratch is not None:
             dest = Path(scratch.name) / real.name
-            cfg.copy_file_atomic(real, dest)
+            if not dest.exists():     # AUD-505: a 2nd extraction of the bib sees what the 1st wrote
+                cfg.copy_file_atomic(real, dest)
+            antes = dest.read_text(encoding="utf-8")
         # #207 · de QUÉ se construyó la vista. Lo DECLARA el extractor (es el único que sabe qué
         # abrió) y acá se CRUZA contra el disco: `fuente: pdf` sin PDF es una contradicción, y
         # estamparla dejaría una vista de ocho líneas de abstract leyéndose como lectura del paper.
@@ -1020,7 +1023,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             n["txt_traidos"] += 1
         n["cosechadas" if toco else "sin_cambios"] += 1
         if scratch is not None and toco:
-            _a = real.read_text(encoding="utf-8").splitlines()
+            _a = antes.splitlines()
             _d = [ln for ln in difflib.unified_diff(_a, dest.read_text(encoding="utf-8").splitlines(),
                                                     lineterm="", n=0)
                   if ln[:1] in "+-" and not ln.startswith(("+++", "---"))]

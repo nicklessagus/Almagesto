@@ -2092,6 +2092,36 @@ def test_507_el_dry_run_de_la_COSECHA_no_escribe_nada_y_anuncia_lo_que_la_real_e
     assert any(p["paso"] == "harvest_views" for p in cfg.load_cadena("test_star"))
 
 
+def test_507_el_dry_run_con_DOS_extracciones_del_mismo_bib_anuncia_los_deltas_de_la_real(
+        toy_vault, monkeypatch, capsys):
+    """AUD-505 — con la canónica + `<bib>__<lente>.json`, el dry-run re-copiaba la nota real al
+    scratch para la segunda, así que su preview salía de la nota SIN lo que escribió la primera."""
+    import difflib
+    import re
+    ruido = extraccion(enfasis="ruido", aporte="lee el ruido",
+                       vista={"sujeto": "Estrella Test", "tipo": "star", "txt": "test_star",
+                              "enfasis": "ruido"})
+    dest = sembrar(toy_vault)
+    segunda = cfg.EXTRACCION / "test_star" / f"{BIB}__ruido.json"
+    segunda.write_text(json.dumps(ruido), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["harvest_views.py", "test_star", "--dry-run"])
+    hv.main()
+    seco = re.findall(r"\(dry-run\) \S+: \+(\d+)/-(\d+)", capsys.readouterr().out)
+
+    def delta(a, b):
+        d = [ln for ln in difflib.unified_diff(a.splitlines(), b.splitlines(), lineterm="", n=0)
+             if ln[:1] in "+-" and not ln.startswith(("+++", "---"))]
+        return (str(sum(ln[0] == "+" for ln in d)), str(sum(ln[0] == "-" for ln in d)))
+    segunda.unlink()                              # real, paso a paso: la canónica primero
+    t0 = dest.read_text(encoding="utf-8")
+    hv.harvest("test_star")
+    t1 = dest.read_text(encoding="utf-8")
+    segunda.write_text(json.dumps(ruido), encoding="utf-8")
+    hv.harvest("test_star")
+    t2 = dest.read_text(encoding="utf-8")
+    assert seco == [delta(t0, t1), delta(t1, t2)], seco
+
+
 @pytest.mark.parametrize("modo", [["--restamp-salvedades"], ["--propose-pdf-leido"]])
 def test_507_los_otros_modos_con_dry_run_tampoco_escriben(toy_vault, monkeypatch, modo):
     """#507 — la regla es POR MODO: cada modo del script que declara `--dry-run` lo respeta."""

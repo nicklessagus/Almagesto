@@ -6231,13 +6231,23 @@ def test_507_fill_abstracts_dry_run_no_deja_correr_otro_modo_que_escribe(toy_vau
 
 
 def test_507_fill_abstracts_dry_run_solo_corre_y_no_escribe(toy_vault, monkeypatch):
+    """#507 — el CLI le pasa el flag a `fill_abstracts`. AUD-547: sin una nota que llenar el test no
+    podía fallar; acá hay una (con `doi` y placeholder) y OpenAlex contesta. Ida: nada cambia.
+    Vuelta: sin el flag, la nota se llena."""
     from conftest import tree_digest
     import openalex
-    monkeypatch.setattr(openalex, "entity_by_doi", lambda doi: None)
+    d = cfg.PAPERS / "1997Wentzell.md"
+    d.write_text(f"---\ntags: [paper]\nbibcode: 1997Wentzell\ndoi: 10.1/a\n---\n\n"
+                 f"## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n", encoding="utf-8")
+    monkeypatch.setattr(openalex, "entity_by_doi",
+                        lambda doi: {"abstract_inverted_index": {"MLPCA": [0]}})
     antes = tree_digest(toy_vault.ROOT)
     monkeypatch.setattr(sys, "argv", ["make_notes.py", "--fill-abstracts", "--dry-run"])
     assert mn.main() == 0
     assert tree_digest(toy_vault.ROOT) == antes
+    monkeypatch.setattr(sys, "argv", ["make_notes.py", "--fill-abstracts"])
+    assert mn.main() == 0
+    assert "MLPCA" in d.read_text(encoding="utf-8")
 
 
 def test_stamp_pdf_despendea_la_nota_ADS_cuando_llega_el_PDF(toy_vault):

@@ -2850,3 +2850,19 @@ def test_probe_registrar_deja_la_busqueda_y_el_criterio_en_el_registro(toy_vault
     with pytest.raises(SystemExit):
         run_main(monkeypatch, ["hd_1", "--probe", "abs:activity", "--registrar"])
     assert len(cfg.load_registro("hd_1")["probes"]) == 1
+
+
+def test_507_probe_registrar_con_dry_run_REHUSA_sin_escribir_el_registro(toy_vault, toy_classifier,
+                                                                         monkeypatch):
+    """AUD-504 — `--probe --registrar --dry-run` appendeaba a `probes:` del registro versionado y
+    salía rc 0: la rama `--probe` retornaba antes de mirar `--dry-run`. Un modo que no honra el flag
+    rehúsa (#507), antes de consultar ADS."""
+    monkeypatch.setattr(qa, "query_ads", lambda *a, **k: pytest.fail("consultó ADS"))
+    write_yaml(cfg.STARS_YAML, {"HD 1": {"slug": "hd_1", "ads_object": "HD 1"}})
+    antes = cfg.registro_path("hd_1").read_text() if cfg.registro_path("hd_1").exists() else None
+    with pytest.raises(SystemExit) as e:
+        run_main(monkeypatch, ["hd_1", "--probe", "abs:activity", "--registrar",
+                               "--criterio", "x", "--dry-run"])
+    assert e.value.code == 2
+    despues = cfg.registro_path("hd_1").read_text() if cfg.registro_path("hd_1").exists() else None
+    assert despues == antes

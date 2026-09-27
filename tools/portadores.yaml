@@ -819,10 +819,11 @@ portadores:
           Abre la primera página del PDF que la fuente DECLARA en su `pdf:`, para cruzar autor/año
           (#353). Es el archivo declarado, no una búsqueda por bibcode.
       - modulo: scripts/ingest_theme.py
-        estado: fuera-de-alcance
+        estado: usa
         motivo: >-
-          Copia el PDF local que el usuario declaró en `sources[]` hacia el slug del tema: es una
-          escritura, y el destino es por definición el slug del sujeto.
+          `print_download_list` marca «ya en disco» con `pdf_slug` (AUD-526). La copia del PDF
+          local de `sources[]` al slug del tema y `first_ingest` (PDFs bajo el slug PROPIO) no
+          resuelven una lectura.
       - modulo: scripts/repaginate.py
         estado: usa
         motivo: "Resuelve bajo qué slug está el PDF que hay que releer: la relectura es del PDF (#205) y el paper puede vivir bajo otro sujeto."
@@ -2400,8 +2401,8 @@ portadores:
         estado: fuera-de-alcance
         motivo: "El cruce lo respeta (el registro no se escribe); `--firmar` imprime el bloque y no escribe nunca."
       - modulo: scripts/query_ads.py
-        estado: fuera-de-alcance
-        motivo: "`--dry-run` ES un modo (delta de re-clasificación offline) y se despacha antes que todo modo que escribe; `--probe`, que va primero, no escribe."
+        estado: usa
+        motivo: "`--dry-run` ES un modo (delta de re-clasificación offline) y se despacha antes que todo modo que escribe; `--probe` va primero y no escribe salvo con `--registrar` (appendea a `probes:`, #524), que con `--dry-run` rehúsa (AUD-504)."
 
   - issue: 509
     regla: >-

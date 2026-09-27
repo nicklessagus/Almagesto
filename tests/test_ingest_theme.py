@@ -134,6 +134,60 @@ def test_529_la_mitad_ADS_de_un_tema_MIXTO_tambien_pasa_por_la_guardia(
     assert [c[0] for c in fake_run.calls] == ["query_ads.py"]
 
 
+def _mixed_with_local_pdf(toy_vault, tmp_path):
+    import json
+    src = tmp_path / "rw.pdf"
+    src.write_bytes(b"%PDF-1.4")
+    topic(source="local-pdfs", query="abs:gp",
+          sources=[{"key": "2006Rasmussen", "pdf": str(src), "via": "usuario", "motivo": "m"}])
+    d = toy_vault.ROOT / "build" / "gp"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"records": [
+        {"bibcode": "2020core...000A", "relevant": True}]}), encoding="utf-8")
+
+
+def test_529_tema_mixto_con_PDF_LOCAL_en_sources_igual_frena_la_primera_vez(
+        toy_vault, fake_run, fake_notes, monkeypatch, tmp_path):
+    """AUD-537 — el loop de `sources:` copia el PDF local a `raw/pdfs/<slug>/` ANTES de la guardia,
+    y `first_ingest` lo contaba como «ya bajó alguna vez»: la primera ingesta seguía a bajar."""
+    _mixed_with_local_pdf(toy_vault, tmp_path)
+    monkeypatch.setattr(make_notes, "stamp_pdf", lambda *a, **k: None)
+    with pytest.raises(SystemExit, match="primera vez"):
+        run_main(monkeypatch)
+    assert [c[0] for c in fake_run.calls] == ["query_ads.py"]
+
+
+def test_INV44_el_camino_MIXTO_propaga_el_yes_a_la_sub_cadena_ADS(
+        toy_vault, fake_run, fake_notes, monkeypatch, tmp_path):
+    """AUD-538 — la rama ADS pura pasa `flags=["--yes"]`; la sub-cadena del tema mixto no, y la
+    escotilla que saltea la guardia de #529 no dejaba traza en la `cadena` del registro."""
+    _mixed_with_local_pdf(toy_vault, tmp_path)
+    monkeypatch.setattr(make_notes, "stamp_pdf", lambda *a, **k: None)
+    run_main(monkeypatch, ("gp", "--yes"))
+    sub = {s: f for s, f in fake_run.flags if s in ("query_ads.py", "fetch_arxiv.py",
+                                                    "fetch_pdf.py", "make_notes.py")}
+    assert len(sub) == 4 and all(f == ["--yes"] for f in sub.values()), sub
+
+
+def test_530_el_mensaje_de_la_primera_ingesta_da_comandos_que_corren(toy_vault):
+    """AUD-529/AUD-530 — el paso (4) sugería `replace_pdf.py … --source publisher` sin `--reason`
+    (argparse lo rechaza) y el (3) apuntaba a `reference/rescate-pdfs.md`, que no resuelve."""
+    import json
+    import re
+    d = toy_vault.ROOT / "build" / "gp"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ads.json").write_text(json.dumps({"records": [
+        {"bibcode": "2020core...000A", "relevant": True}]}), encoding="utf-8")
+    with pytest.raises(SystemExit) as e:
+        it.expansion_guard("gp", False)
+    msg = str(e.value.code)
+    rp = re.search(r"`(replace_pdf\.py [^`]*)`", msg).group(1)
+    assert "--reason" in rp, rp
+    rutas = re.findall(r"`([^`\s]*rescate-pdfs\.md)`", msg)
+    repo = Path(__file__).resolve().parents[1]
+    assert rutas and all((repo / r).exists() for r in rutas), rutas
+
+
 def test_handoff_nombra_los_pasos_salteables(toy_vault, fake_run, fake_notes, monkeypatch, capsys):
     """Hermano del de `ingest_star`: el hand-off es lo que el operador lee al terminar la cadena.
     Le faltaba el contraste (3c, #72) —saltaba del retro-tag a la síntesis— y el régimen (#74), que
