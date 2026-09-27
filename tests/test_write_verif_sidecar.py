@@ -319,6 +319,30 @@ def test_480_reanclar_REHUSA_el_par_que_hay_que_re_verificar_y_sin_hermano(toy_v
     assert ws.main(["--reanclar"]) == 2
 
 
+def test_539_la_fila_que_exigia_accion_no_se_lleva_a_la_afirmacion_corregida(toy_vault, capsys):
+    """#539 — la corrección de una `no-soportada` conserva casi todo el texto: la cobertura la daba
+    por re-anclable y el escritor le colgaba el veredicto viejo a una afirmación que nadie leyó. Ni
+    `--reanclar` ni una ronda acotada que no la juzgó la llevan: queda «sin verificar», que es verdad."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {"2019Txt": "no-soportada"}, ronda="r1"), fecha="2026-03-01")
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "La amplitud es 2.5 m/s [[2019Txt]].", "La amplitud es 2.5 m/s, medida en 2019 [[2019Txt]]."),
+        encoding="utf-8")
+    hermano = cfg.verif_sidecar(nota).read_text(encoding="utf-8")
+    assert ws.main([str(nota), "--reanclar"]) == 1
+    assert "RE-VERIFICAR" in capsys.readouterr().out
+    assert cfg.verif_sidecar(nota).read_text(encoding="utf-8") == hermano, "no se escribió nada"
+
+    d = _acotar(_fanout(toy_vault, nota, {}, ronda="r2"), "2019Txt")
+    ws.write(nota, d, fecha="2026-03-02")
+    assert [f.bibcode for f in lb.verif_rows(nota)] == ["2020Pdf"], \
+        "la fila `no-soportada` no se arrastra a la afirmación corregida"
+
+    r3 = _acotar(_fanout(toy_vault, nota, {}, ronda="r3"), "2020Pdf")
+    ws.write(nota, r3, fecha="2026-03-03")
+    assert {f.bibcode: f.verdict for f in lb.verif_rows(nota)}["2019Txt"] == "soportada"
+
+
 # ── #430 · la prosa del triage se pierde en silencio ────────────────────────────────────────────
 # `free_text_of` comparaba el arranque de la sub-sección SIN normalizar el markdown (regla de
 # método nº 4, quinta vez: #168, #276, #283, #309). Una sub-sección adornada o con paréntesis

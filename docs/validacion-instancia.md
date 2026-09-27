@@ -1517,3 +1517,20 @@ venían en el JSON: una fila por línea y un `>` en cada línea. La prosa se sig
 
 **Devolver si** una tabla, un blockquote, un fence o un `$$…$$` de `nuevo` queda re-envuelto, o si un
 elemento de prosa deja de re-envolverse.
+
+## §#539 · v1.348.0 — `--solo-nuevos` re-verifica la fila corregida
+
+```bash
+python scripts/reverify_subset.py vault/wiki/stars/<slug>.md
+python scripts/verify_fanout.py vault/wiki/stars/<slug>.md --out build/<slug>/verif/rN --solo-nuevos
+```
+
+**Esperado:** tras corregir bloques cuya fila era `no-soportada`, `contradice` o `acota` sin
+`→resuelta`, esos pares salen **a re-verificar**, aunque el texto se parezca. `reverify_subset`
+imprime «de ésos, N con fila parecida cuyo veredicto exigía acción». Además,
+`write_verif_sidecar --reanclar` rehúsa esos pares y una ronda acotada no les arrastra la fila
+vieja. Medido sobre `toliman` reconstruida: pasa de 2 a 6 pares. Las filas `soportada` sin `acota`
+pendiente siguen re-anclándose.
+
+**Devolver si** un par corregido cuya fila exigía acción queda entre los re-anclables, o si una fila
+`soportada` sin `acota` pendiente pasa a re-verificar sólo por una edición.

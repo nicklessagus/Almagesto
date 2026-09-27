@@ -336,8 +336,11 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
     # dejaba ciega a la fila para la ronda siguiente: medido, 9 filas `contextualiza` sobre un JSON
     # que decía `acota`. La igualdad es EXACTA y nunca cruza `bibcode`: no resucita un ancla muerta
     # cualquiera, sólo la que la fila previa de ese par ya declaraba.
+    # #539 — salvo que la fila previa exigiera acción: ese juicio es de la afirmación VIEJA, la que
+    # se corrigió por estar mal, y llevarlo a la nueva es publicar un veredicto que nadie emitió.
     de_fila_previa = {(previa.bibcode, previa.anchor): p
-                      for p, (previa, _s) in asignado.items() if previa is not None}
+                      for p, (previa, _s) in asignado.items()
+                      if previa is not None and not lb.carry_needs_reverify(p, previa)}
     reanclados = {c: de_fila_previa[c] for c in sobrantes if c in de_fila_previa}
     sobrantes = [c for c in sobrantes if c not in reanclados]
     clave_de = {p: c for c, p in reanclados.items()}
@@ -359,8 +362,10 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
         par = juzgados.get((p.bibcode, p.anchor)) or juzgados.get(clave_de.get(p))
         previa = asignado.get(p, (None, 0.0))[0]
         if par is None:
-            if previa is None:
-                continue                      # sin veredicto ni fila que llevar: «sin verificar»
+            # sin veredicto ni fila que llevar: «sin verificar». #539 — tampoco se lleva la fila cuyo
+            # veredicto exigía acción sobre un bloque que cambió: se corrigió, va a re-verificar.
+            if previa is None or lb.carry_needs_reverify(p, previa):
+                continue
             # fuera del alcance de esta ronda: el veredicto se LLEVA y el ancla se recalcula (#257)
             n += 1
             rows.append(lb.Row(n=str(n), claim=lb.truncate_claim(lb.normalize_ws(p.block.text)),
@@ -814,7 +819,8 @@ def reanchor(note: Path, fecha: str | None = None, dry_run: bool = False) -> dic
         raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado y no se pasó "
                            f"`--fecha`: re-fechar es una decisión, no un default")
     pares = lb.pairs_of(text)
-    _asignado, sin_fila, huerfanas = lb.match_rows_to_pairs(pares, rows)
+    asignado, sin_fila, huerfanas = lb.match_rows_to_pairs(pares, rows)
+    sin_fila += [p for p, (fila, _s) in asignado.items() if lb.carry_needs_reverify(p, fila)]  # #539
     if sin_fila:
         raise SidecarError(
             f"{len(sin_fila)} par(es) del cuerpo sin fila que llevar: eso es RE-VERIFICAR, no "

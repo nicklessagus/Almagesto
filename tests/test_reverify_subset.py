@@ -170,3 +170,47 @@ def test_main_rehusa_sobre_una_nota_que_no_existe(tmp_path, monkeypatch):
     re-verificar»: el falso limpio de D-43. Se rehúsa con rc 2."""
     monkeypatch.setattr(sys, "argv", ["reverify_subset.py", str(tmp_path / "no.md")])
     assert rs.main() == 2
+
+
+# ── #539 · la fila que exigía acción NO se re-ancla por parecido ─────────────────────────────────
+
+_CLAUSULA = ("Ninguna fuente aplica separación ciega de componentes independientes",
+             "Ninguna fuente aplica separación ciega de componentes independientes sobre espectros "
+             "ya corregidos")
+
+
+def _corregida(celda_veredicto="soportada", celda_condicion=""):
+    """La nota con la fila 2 en el estado dado y su bloque corregido agregándole una cláusula:
+    cobertura del extracto 1,0 —muy sobre el umbral— y el ancla movida."""
+    texto = _nota_con_anclas().replace(
+        "| soportada | «…» (p. 7) |", f"| {celda_veredicto} | «…» (p. 7) |").replace(
+        "| pdf:cccccccccc |  |", f"| pdf:cccccccccc | {celda_condicion} |")
+    return texto.replace(*_CLAUSULA, 1)
+
+
+@pytest.mark.parametrize("veredicto,condicion", [
+    ("soportada", "acota: sólo sobre espectros corregidos"),
+    ("no-soportada", ""),
+    ("soportada→contradice", ""),
+])
+def test_539_solo_nuevos_manda_a_re_verificar_la_fila_corregida(tmp_path, veredicto, condicion):
+    """#539 — medido en una instancia: `--solo-nuevos` mandó 1 par donde las fuentes corregidas
+    tenían 38. La corrección por `acota`/`no-soportada`/`contradice` conserva casi todo el texto, así
+    que la cobertura la daba por re-anclable y la ronda nunca la juzgaba."""
+    import verify_fanout as vf
+    nota = _en_disco(tmp_path, _corregida(veredicto, condicion))
+    r = rs.classify(nota, nota.read_text(encoding="utf-8"), 0.60)
+    assert [p.bibcode for p in r["sin_fila"]] == ["2021bbb...2..2B"] and r["huerfanas"] == []
+    m = vf.write_round(nota, tmp_path / "r2", solo_nuevos=True)
+    assert m["pares"] == 1 and set(m["fuentes"]) == {"2021bbb...2..2B"}
+
+
+@pytest.mark.parametrize("veredicto,condicion", [
+    ("soportada", "acota→resuelta: Régimen de validez · sólo sobre espectros corregidos"),
+    ("soportada", "contextualiza: sobre espectros corregidos"),
+])
+def test_539_la_fila_sin_accion_pendiente_se_sigue_re_anclando(tmp_path, veredicto, condicion):
+    """El control: sin veredicto ni `acota` pendiente la cobertura sigue decidiendo (#282)."""
+    nota = _en_disco(tmp_path, _corregida(veredicto, condicion))
+    r = rs.classify(nota, nota.read_text(encoding="utf-8"), 0.60)
+    assert r["sin_fila"] == [] and len(r["asignado"]) == 2

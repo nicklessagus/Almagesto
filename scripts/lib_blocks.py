@@ -1863,6 +1863,22 @@ def match_rows_to_pairs(pairs: list, rows: list, umbral: float = 0.60) -> tuple:
     return asignado, sin_fila, [r for r in rows if id(r) not in usadas]
 
 
+def carry_needs_reverify(pair, row) -> bool:
+    """Must this pairing go to RE-VERIFY even though the extract still matches? (#539)
+
+    Only a pairing by COVERAGE (the anchor moved: the block was edited) whose row demanded action —
+    verdict in force `no-soportada`/`contradice` (#450), or an `acota` in force not `→resuelta`
+    (#451). That block was corrected precisely because the claim was wrong, so carrying the old
+    verdict over the new wording publishes a judgement nobody made (#282/#203). Measured on an
+    instance: `--solo-nuevos` sent 1 pair where the corrected sources held 38, and the blind round
+    over those found a new `acota`. The untouched pair (identical anchor) keeps its row: nothing
+    changed, and the pending state stays visible where it was."""
+    if row is None or row.anchor == pair.anchor:
+        return False
+    return (current_verdict(row.verdict) in VERDICTS_SIN_RESOLVER
+            or (condition_kind(row.condition) == "acota" and not condition_resolved(row.condition)))
+
+
 # ── #259 · el SCHEMA de la salida del fan-out de `verify-citations` ─────────────────────────────
 #
 # QUÉ PROBLEMA CIERRA. El skill le dice al verificador **qué campos** devolver y nunca fijó **la

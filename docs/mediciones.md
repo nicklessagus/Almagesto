@@ -4136,3 +4136,16 @@ Ninguna guarda saltaba: los pares suben. Con v1.347.0 la tabla y el blockquote q
 La red de #527 (bloques pedidos = bloques escritos) ahora cuenta un elemento `verbatim` por sus
 propios bloques: una tabla cuenta uno por fila. Portadores (`carriers --propose apply_fixes.rewrap`):
 ningún otro módulo re-envuelve bloques de una nota.
+
+## #539 — la fila que exigía acción no se re-ancla por parecido (v1.348.0)
+
+**Worktree de Almagesto-Tesis (`c7adf65`), ficha `toliman`.** El estado previo a la ronda 2 no
+estaba en git: se reconstruyó deshaciendo `build/toliman/fixes{2,1}` con `apply_fixes` y
+escribiendo el hermano desde `verif/r1`. Resultado: 78 de 79 pares juzgados, con 2 veredictos que
+exigían acción y 3 `acota` sin resolver, como decía el issue. El bloque del hueco movido no se pudo
+reconstruir. Con el cuerpo corregido, `verify_fanout --solo-nuevos` pasa de **2 pares en 2
+fuentes** (v1.345.0) a **6 en 6**: 4 de esos pares tienen una fila parecida cuyo veredicto exigía
+acción. Hay 2 huérfanas: una es la cita que la corrección retiró (`retira`). La `acota` nueva que
+encontró la ronda ciega (2024A&A...687A.281Z) **no** la manda este criterio: su fila previa no
+exigía acción. El issue deja ese caso afuera a propósito, porque la cobertura sigue decidiendo para
+las filas `soportada` sin `acota` pendiente.

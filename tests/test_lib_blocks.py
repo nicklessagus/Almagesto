@@ -871,6 +871,25 @@ def test_match_prioriza_el_ancla_intacta_sobre_el_parecido():
     assert sin_fila == [] and huerf == [parecida]
 
 
+@pytest.mark.parametrize("veredicto,condicion,ancla,esperado", [
+    ("no-soportada", "", "zzzzzzzzzz", True),
+    ("soportada→contradice", "", "zzzzzzzzzz", True),
+    ("soportada", "acota: SNR > 50", "zzzzzzzzzz", True),
+    ("soportada", "acota→resuelta: Régimen · SNR > 50", "zzzzzzzzzz", False),
+    ("soportada", "contextualiza: SNR > 50", "zzzzzzzzzz", False),
+    ("soportada", "", "zzzzzzzzzz", False),
+    ("no-soportada", "acota: SNR > 50", None, False),       # ancla intacta: nada cambió
+])
+def test_539_carry_needs_reverify(veredicto, condicion, ancla, esperado):
+    """#539 — sólo el emparejamiento POR COBERTURA con una fila que exigía acción va a re-verificar."""
+    par = lb.pairs_of("## X\n\nEl período vale 4,3 días [[2020aaa...1..1A]].\n")[0]
+    fila = lb.Row(n="1", claim="El período vale 4,3 días", bibcode=par.bibcode, verdict=veredicto,
+                  evidence="e", anchor=ancla or par.anchor, source_hash="pdf:" + "b" * 10,
+                  condition=condicion)
+    assert lb.carry_needs_reverify(par, fila) is esperado
+    assert lb.carry_needs_reverify(par, None) is False
+
+
 def test_match_no_cruza_bibcodes():
     """⛔ Un par es (afirmación, FUENTE). Llevar un veredicto de una fuente a otra sería fabricar
     justamente la atribución que este framework mide como su modo de falla dominante — 7 de 13

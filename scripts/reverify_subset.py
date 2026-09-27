@@ -51,10 +51,16 @@ def classify(nota: Path, text: str, umbral: float) -> dict:
         # D-43: a note with no block (or with the pre-1.54.0 template) is NOT "zero expired pairs".
         # It is a note nobody can evaluate, and saying otherwise is the invented zero the lint exists
         # not to produce. Every pair goes to the subset, and the caller is told why.
-        return {"sin_bloque": True, "pares": pares, "asignado": {}, "sin_fila": pares, "huerfanas": []}
+        return {"sin_bloque": True, "pares": pares, "asignado": {}, "sin_fila": pares, "huerfanas": [],
+                "corregidas": []}
     asignado, sin_fila, huerfanas = lb.match_rows_to_pairs(pares, filas, umbral=umbral)
+    # #539 — la fila corregida por un veredicto que exigía acción NO se re-ancla: va a re-verificar
+    # aunque la cobertura pase el umbral. Sigue emparejada (no es huérfana), sólo no se lleva.
+    corregidas = [p for p, (fila, _s) in asignado.items() if lb.carry_needs_reverify(p, fila)]
+    for p in corregidas:
+        del asignado[p]
     return {"sin_bloque": False, "pares": pares, "asignado": asignado,
-            "sin_fila": sin_fila, "huerfanas": huerfanas}
+            "sin_fila": sin_fila + corregidas, "huerfanas": huerfanas, "corregidas": corregidas}
 
 
 #: #285 · por debajo de esta cobertura el re-anclaje se lista para revisar a mano. En el caso
@@ -122,6 +128,9 @@ def main() -> int:
     else:
         print(f"  ✅ re-anclables (el veredicto se lleva, el ancla se recalcula) … {len(r['asignado']):4}")
         print(f"  ⛔ A RE-VERIFICAR (sin fila que llevar) ……………………………… {len(r['sin_fila']):4}")
+        if r["corregidas"]:
+            print(f"     de ésos, {len(r['corregidas'])} con fila parecida cuyo veredicto exigía acción "
+                  f"(no-soportada/contradice/acota sin resolver): se corrigió, no se re-ancla (#539)")
         print(f"  ⚠ filas huérfanas (la afirmación ya no está en el cuerpo) … {len(r['huerfanas']):4}")
 
     if r["sin_fila"]:
