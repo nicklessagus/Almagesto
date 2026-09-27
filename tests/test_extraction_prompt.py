@@ -172,7 +172,7 @@ def test_el_prompt_declara_que_el_txt_NO_es_fuente():
     del `.txt` y los patrones de `grep` razonablemente concluye que puede transcribir de ahí."""
     p = ep.build_prompt("gp", "2006Rasmussen", "GP", [], "Texto limpio.\n", kind="theme")
     plano = " ".join(p.split())          # el prompt viene reflowado: la frase cruza saltos de línea
-    assert "El `.txt` NO es fuente" in plano
+    assert "El `.txt` no es fuente" in plano
     assert "vault/raw/fulltext/gp/2006Rasmussen.txt" in p, "el .txt sigue nombrado, para ubicar"
     assert "índice de búsqueda" in plano
 
@@ -282,10 +282,10 @@ def test_dos_lecturas_que_no_reconcilian_apuntan_primero_a_la_figura():
 
     @inv INV-100"""
     nota = ep._media_note("hd40307", "2023A&A...680A..64D")
-    assert "SUBESPECIFICADA" in nota
+    assert "subespecificada" in nota
     salida = "sigue siendo un **hueco declarado**"
     assert salida in nota, "la escotilla de #195 no se reemplaza: se extiende"
-    assert nota.index("SUBESPECIFICADA") < nota.index(salida), \
+    assert nota.index("subespecificada") < nota.index(salida), \
         "primero se sospecha de la figura; el hueco declarado es la última salida, no la primera"
 
 
@@ -547,9 +547,9 @@ def test_sin_PDF_el_prompt_manda_al_abstract_y_no_al_PDF(toy_vault):
     @inv INV-144"""
     prompt = ep.build_prompt("test_star", "2020SinPDF", "Estrella Test", ["HD 12345"])
     assert "Leé el PDF" not in prompt, "no se manda leer un archivo que no está"
-    assert "NO HAY PDF" in prompt and "fuente: abstract" in prompt, \
+    assert "No hay PDF" in prompt and "fuente: abstract" in prompt, \
         "se dice cuál es la fuente real y cómo declararla (#207)"
-    assert "afirma DE MÁS" in prompt, \
+    assert "afirma de más" in prompt, \
         "y viaja con la advertencia de generalization bias que #207 pide para este caso"
 
 
@@ -565,8 +565,8 @@ def test_con_PDF_el_prompt_no_cambia(toy_vault):
     """La otra mitad: la rama normal —PDF y `.txt` en disco— sigue diciendo lo de siempre. Sin este
     test, «no mandes leer el PDF» se podría cumplir no mandándolo nunca.  @inv INV-144"""
     prompt = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
-    assert "Leé el PDF" in prompt and "NO HAY PDF" not in prompt
-    assert "grep -niE" in prompt and "El `.txt` NO es fuente" in prompt
+    assert "Leé el PDF" in prompt and "No hay PDF" not in prompt
+    assert "grep -niE" in prompt and "El `.txt` no es fuente" in prompt
 
 
 # ── #245 · el prompt muestra el vocabulario que la bóveda ya tiene ──────────────────────────────
@@ -666,14 +666,14 @@ def test_el_prompt_de_una_SEGUNDA_lente(toy_vault):
     texto = ep.build_prompt("ica_ruido", "2002Cardoso", "ICA ruidosa", [], kind="theme",
                             sujeto="ica-ruido", enfasis="ruido por canal",
                             ejes_cli=["heterocedasticidad", "canales"])
-    assert "SEGUNDA lectura" in texto and "«ruido por canal»" in texto
+    assert "segunda lectura" in texto and "«ruido por canal»" in texto
     assert '"enfasis": "ruido por canal"' in texto
     assert "no re-narres" in texto and "## Conclusiones" in texto
     assert '"ejes":{"heterocedasticidad":"","canales":""}' in texto
     # sin `--enfasis`, el prompt es el de siempre (la primera lectura no cambia)
     normal = ep.build_prompt("ica_ruido", "2002Cardoso", "ICA ruidosa", [], kind="theme",
                              sujeto="ica-ruido")
-    assert "SEGUNDA lectura" not in normal
+    assert "segunda lectura" not in normal
 
 
 def test_con_enfasis_el_prompt_NO_manda_pisar_la_primera_lente(toy_vault):
@@ -819,5 +819,5 @@ def test_el_prompt_no_lleva_arqueologia_de_mediciones(toy_vault):
         (base / "ica").mkdir(parents=True, exist_ok=True)
         (base / "ica" / f"2020corto.{ext}").write_text("x\n", encoding="utf-8")
     p = ep.build_prompt("ica", "2020corto", "ica", ["ICA"], kind="theme")
-    assert "`.txt` NO es fuente" in " ".join(p.split()), "the PDF+txt branch did not run"
+    assert "`.txt` no es fuente" in " ".join(p.split()), "the PDF+txt branch did not run"
     assert not PROMPT_ARCHAEOLOGY_RE.findall(p)

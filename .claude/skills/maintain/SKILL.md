@@ -55,7 +55,7 @@ Progreso del refresh de <entidad>:
    motivo; dudoso → al usuario). Ver paso 2c del skill `ingest-star`.
 2. **Identificar lo nuevo:** `git status` sobre `vault/wiki/papers/` muestra los stubs recién creados. Leer
    **sólo esos** fulltext y hacer su extracción (methods/`role`/thesis_links/P·K/indicadores).
-   ⛔ **Es UNA VISTA del sujeto que se está refrescando (#188)**, no «la extracción del paper»:
+   **Es una vista del sujeto que se está refrescando (#188)**, no «la extracción del paper»:
    la nota declara `vistas: [{sujeto, tipo, fecha, txt, lente, fuente}]` y lleva su `## Vista — <sujeto>`.
    Armá el prompt con `python scripts/extraction_prompt.py <slug> <bibcode> [--theme]` y cosechá
    con `python scripts/harvest_views.py <slug> [--theme]`, que estampa `fecha`/`txt`/`lente` y
@@ -113,7 +113,7 @@ python scripts/entity.py delete <slug> --yes        # aplica
 python scripts/entity.py rename <viejo> <nuevo> --yes
 ```
 
-⛔ **Sin `--yes` es dry-run**, a propósito: la capa 2 (`config/registro/<slug>.yaml`) es el **único
+**Sin `--yes` es dry-run**, a propósito: la capa 2 (`config/registro/<slug>.yaml`) es el **único
 artefacto no regenerable** de la bóveda. Lo que la herramienta **no** hace sola, y avisa:
 - **no borra los papers compartidos**: a una nota con `stars: [A, B]` le saca A y la deja;
 - **no repara los `[[wikilink]]` rotos** — apuntan a una nota que ya no existe y el lint los da
@@ -311,7 +311,7 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   encabezado que se lee como vigente: la nota no afirma falso, afirma **de menos** sobre lo que
   chequeó. Si el hallazgo es "bloque sin fecha en el encabezado", re-fechalo
   (`## Verificación de citas (AAAA-MM-DD)`): sin fecha el chequeo no puede saber si sigue vigente.
-  ⛔ **El hallazgo ya viene filtrado y dice qué cambió (#431):** la fecha del archivo es sólo el
+  **El hallazgo ya viene filtrado y dice qué cambió (#431):** la fecha del archivo es sólo el
   disparador y lo que se compara es la **prosa fuera de las secciones estampadas**, así que una
   edición confinada a `## Verificación de citas` —el triage de la corrida, una `acota` marcada como
   resuelta, un re-anclaje— **no** se reporta. Si el mensaje dice *«no se pudo aislar la prosa: se
@@ -349,11 +349,11 @@ existe justamente porque, repartidas, se corren cinco y la sexta nunca:
 | snapshot web | la URL citada cambió | ✅ (1.35.0) — el **más silencioso**: una fuente web no tiene DOI ni bibcode, y como el `.txt` local **no** se toca, el ancla de fuente tampoco se entera |
 | citas-puerta2 | un paper cruzó el `fundacional_min_citas` del tema → sería core (o dejaría de serlo) sin que nadie editara nada | ✅ (1.46.0) — la única metadata que **cambia sola** y admite core. Su gemelo **offline** lo reporta el lint (`puerta2_cruces`): ése ve *«editaste el umbral»*, éste ve *«el mundo se movió»* |
 
-⛔ **Reporta, no aplica sola**: muestra el diff y pregunta — ⚠ con **una excepción declarada**: `check_retractions` estampa `retracted:`/`corrections:` en las notas sin preguntar (lo dice el header de `sweep_external.py`); `--yes` gatea sólo el ground-truth. Un snapshot que se actualiza solo cambia
+**Reporta, no aplica sola**: muestra el diff y pregunta — ⚠ con **una excepción declarada**: `check_retractions` estampa `retracted:`/`corrections:` en las notas sin preguntar (lo dice el header de `sweep_external.py`); `--yes` gatea sólo el ground-truth. Un snapshot que se actualiza solo cambia
 valores **bajo los pies de la prosa que ya los citó**. El renombre preprint→publicado **nunca** es
 automático (reescribe wikilinks de toda la bóveda): se propone el comando.
 
-⛔ **El caso frecuente NO es el renombre: es que la nota tenga el bibcode publicado y lea el
+**El caso frecuente no es el renombre: es que la nota tenga el bibcode publicado y lea el
 preprint** (#298 — medido, 161 de 264 notas de paper, la categoría de backlog más grande). Ahí no
 hay problema de identidad y el PDF del editor casi siempre lo trae el usuario a mano:
 
@@ -365,10 +365,10 @@ python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher --reason "
 Copia a **todos** los slugs donde vive el PDF, re-extrae **sólo ese** `.txt`
 (`extract_fulltext --bibcode`: el `--force` del slug entero vencería las anclas de **todos** los
 papers del tema), escribe `pdf_sha`/`pdf_source`, anula `eprint_version` y **emite el alcance de la
-re-verificación** listo para `verify_fanout --fuentes`. ⛔ **No re-verifica ni re-pagina**: la
+re-verificación** listo para `verify_fanout --fuentes`. **No re-verifica ni re-pagina**: la
 extracción queda marcada `_paginacion` —es versionada y no regenerable (#311)— y el lint la reporta.
 
-⛔ **Esa deuda se cierra RELEYENDO EL PDF (#494)**, nunca con la página que el `.txt` deduce:
+**Esa deuda se cierra releyendo el PDF (#494)**, nunca con la página que el `.txt` deduce:
 
 ```bash
 python scripts/repaginate.py --list                            # la deuda, por fuente
@@ -383,7 +383,7 @@ La `guia` dice **dónde abrir**, no qué escribir: cada página confirmada vuelv
 `pagina: null` + `motivo`. La ronda con ítems rehusados deja `_repaginado_parcial` y el lint la
 sigue contando. Medido: 11 reemplazos →
 **76 pares** por re-verificar, así que el reemplazo se decide de a uno, mirando el `--dry-run`.
-⛔ **Y mirá el aviso de PÁGINAS del `--dry-run` (#437):** la copia del editor puede ser peor que el
+**Y mirá el aviso de páginas del `--dry-run` (#437):** la copia del editor puede ser peor que el
 preprint (medido: 7 páginas sin Supplementary contra 33, con la ficha citando §S1.1). Es aviso, no
 rehúse — el que decide es quien mira. El reemplazo queda **firmado** en la nota
 (`pdf_reemplazo`, add-only) con el motivo: es lo que hace falta si hay que revertirlo. Un reemplazo hecho **a mano** antes del comando se backfillea con
@@ -419,7 +419,7 @@ fuente. Dejar en el `log` qué se revisó.
 python scripts/contrast.py --validar-todo        # SIN slug: toda la bóveda (exit ≠ 0 si hay hallazgos)
 ```
 
-⛔ **Sin slug.** El paso de cierre de cada operación lo corre **con el slug del sujeto** (#323), y
+**Sin slug.** El paso de cierre de cada operación lo corre **con el slug del sujeto** (#323), y
 eso mira sólo las notas de ese sujeto: medido en una bóveda real, el acotado devolvía **0** mientras
 el global devolvía **1**, así que cuatro sujetos cerraron con `lint --cierre` en 0 sobre un gate
 global que **nunca estuvo en verde**, y sin que nada lo dijera (#386). Es el chequeo **fuerte** de

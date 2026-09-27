@@ -69,7 +69,7 @@ padre-hijo de un hub/radio.
 > **prohibido normalizar espacios** sin partir antes cada línea física en la canaleta (empalma el
 > final de una columna con el principio de la otra y fabrica adyacencias que el paper no tiene).
 >
-> ⛔ **Un `grep` en 0 NO es una ausencia** hasta agotar esa escalera. Acá el modo de falla es **peor**
+> **Un `grep` en 0 no es una ausencia** hasta agotar esa escalera. Acá el modo de falla es **peor**
 > que en `verify-citations`: allá un falso negativo degrada un veredicto visible; acá **fabrica una
 > ausencia** —"el corpus no dice nada de X"— que sale al chat como conclusión, se usa para decidir y
 > no deja ningún rastro de que fue un artefacto de grep. Se suma al caveat de los papers
@@ -107,7 +107,7 @@ padre-hijo de un hub/radio.
    | `parcial` | evidencia en los dos sentidos, o vale sólo en un régimen | — |
    | `sin evidencia` | el corpus **calla**: la escalera se agotó y no hay ni una fila con cita | no significa que la hipótesis sea falsa, ni que no exista evidencia afuera |
 
-   ⛔ **`sin evidencia` sólo se emite tras AGOTAR la escalera de matcheo** del bloque de arriba
+   **`sin evidencia` sólo se emite tras agotar la escalera de matcheo** del bloque de arriba
    (fragmento distintivo de 3–6 palabras, reintento partiendo por el guión de corte, prohibido
    normalizar espacios sin partir antes la canaleta) y, con papers pre-digitales en el alcance, tras
    corroborar el 0 por otra vía. Lo que **no** agotó la escalera es una **búsqueda no concluyente**,
@@ -181,7 +181,7 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
 
 8. **Chequeo de salud**: correr `python scripts/contrast.py --validar vault/wiki/concepts/hypotheses/<slug-hipotesis>.md`
    (#323: el cruce barato de las citas contra la extracción, antes de pagar el verify) y después
-   `python scripts/lint.py --cierre` antes de commitear (#121). ⛔ **Sin slug**: `--cierre <slug>`
+   `python scripts/lint.py --cierre` antes de commitear (#121). **Sin slug**: `--cierre <slug>`
    acota a un sujeto de `stars.yaml`/`themes.yaml` y con el slug de una hipótesis **rehúsa** (rc 2,
    `entidad desconocida`); una nota de `concepts/hypotheses/` nunca entra a ese alcance, así que el
    cierre de una hipótesis es el **global**. Debe quedar en **0**

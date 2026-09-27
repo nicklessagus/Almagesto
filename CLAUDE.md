@@ -22,21 +22,21 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > avanzan por separado (D-12): **búsqueda** (última corrida + universo acumulado + escotillas),
 > **síntesis** (se **declara**, `cfg.save_sintesis` / `triage.py --sintesis`: `git` fecha el archivo,
 > no la reescritura) y **verificación** (fecha del bloque, con la salvedad fija *"vigencia por par: la
-> dicen las anclas"*). ⛔ **El ARRASTRE del re-anclaje se declara al lado (#499)**: `· re-anclado
+> dicen las anclas"*). **El arrastre del re-anclaje se declara al lado (#499)**: `· re-anclado
 > AAAA-MM-DD` en el encabezado del bloque, `, re-anclado AAAA-MM-DD` en esta línea — `--reanclar`
 > conserva la fecha (nada se verificó, #395) y el lint compara contra ésa. Con una sola fecha,
 > refrescar hacía parecer re-verificado lo que nadie volvió a chequear (INV-82).
 
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial
 > reciente) para orientarte.** *(En el repo **template** esos dos son la **semilla**; el handoff del
-> framework vive en `docs/internal/HANDOFF.md`, no versionado.)* ⛔ **`index.md` se ESTAMPA
+> framework vive en `docs/internal/HANDOFF.md`, no versionado.)* **`index.md` se estampa
 > (`python scripts/make_notes.py --restamp-index`, #237), no se edita a mano**: las tablas se
 > materializan por verdad de frontmatter (Dataview queda debajo como comodidad, #60) y el lint
 > reporta el índice desactualizado nombrando los stems. La "memoria" del proyecto es in-repo: este
 > `CLAUDE.md` + `vault/STATUS.md` + `vault/wiki/log.md` + `vault/wiki/index.md` — no la memoria local
 > de Claude (`~/.claude/...`), que no viaja. Tras cada operación, re-estampá `index.md`, appendeá a
 > `log.md` (entrada `## AAAA-MM-DD — <op>: <título>` + bullets) y, si cambió el estado,
-> `vault/STATUS.md`. ⛔ **El `STATUS.md` se REESCRIBE, no se appendea (#302)**: estado vigente + **una**
+> `vault/STATUS.md`. **El `STATUS.md` se reescribe, no se appendea (#302)**: estado vigente + **una**
 > lista de próximos pasos; lo histórico va al `log`, con fecha. El lint levanta el apilamiento.
 
 ## Layout del repo — la bóveda vive en `vault/`
@@ -84,7 +84,7 @@ por merge; editarlos en la instancia **da conflictos**. En la instancia sólo se
 (#377)**: anotá el nº en `vault/STATUS.md`/`log.md` y seguí; la instancia **no commitea framework**.
 *(En el repo template mismo, editar framework **es** la tarea.)*
 
-⛔ **Y todo issue —al REPORTARLO y al CERRARLO— contesta «¿quién MÁS lleva esta regla?» (#409).** El
+**Y todo issue —al reportarlo y al cerrarlo— contesta «¿quién más lleva esta regla?» (#409).** El
 issue nombra **la regla**, no sólo el síntoma (el fix contra el caso es la familia de defectos más
 grande del repo), y antes de cerrarlo se enumeran los portadores con
 `python tools/carriers.py --propose <mod>.<simbolo> --patron '<re>'` — `--check` en 0 **no alcanza**
@@ -178,13 +178,13 @@ backlog; uno inventado se lee como verdad.
 
 > **Anclas.** Cada regla lleva su `(#N)` o `(D-N)`: el issue público
 > (`github.com/nicklessagus/Almagesto/issues`) tiene el caso y la medición; `docs/contrato.md`, el
-> invariante; `docs/mediciones.md`, la evidencia. ⛔ **El issue se CREA antes de escribir su número
+> invariante; `docs/mediciones.md`, la evidencia. **El issue se crea antes de escribir su número
 > (#292):** el `(#N)` escrito antes se lo lleva el issue siguiente: trazabilidad **mal atribuida**.
 > Red: `tests/test_docs_ejecutables.py::test_todo_numero_de_issue_que_el_repo_cita_existe` contra
 > `tools/issues.json` (`tools/refresh_issues.py` por tanda, **del template**: en una
 > instancia rehúsa, #517).
 
-⛔ **Criterio de admisión a ESTE archivo (#465): entra la regla que un agente necesita ANTES de
+**Criterio de admisión a este archivo (#465): entra la regla que un agente necesita antes de
 escribir o correr algo en cualquier sesión de una instancia.** Lo que sólo hace falta al escribir
 código del framework va a `docs/desarrollo.md`; el catálogo por categoría, a `docs/lint.md`; la
 mecánica de una operación, a su skill; el porqué largo, al *Apéndice A* de `docs/operacion.md`. Se
@@ -221,7 +221,7 @@ que la ficha alcance sola), la sección estampada **`## Indicadores de actividad
 puente al concepto que explica cada uno, resuelto por alias y sin la glosa entre paréntesis (#250)—
 y el apéndice **`## Excluidos por el filtro`** (los no-core, top por citas con link a ADS).
 
-⛔ **Un `## Huecos` —de ficha o de concepto— declara su ALCANCE, igual que una hipótesis (D-34,
+**Un `## Huecos` —de ficha o de concepto— declara su alcance, igual que una hipótesis (D-34,
 #342):** `> Alcance <fecha> · temas: […] + estrellas: […] · N papers`, **dentro de la sección**. Un
 hueco es una afirmación **negativa** sin `[[bibcode]]`, así que no la mira ninguna capa de
 verificación; el alcance la vuelve *acotada verdadera*, y el lint lo cruza contra el disco.
@@ -250,7 +250,7 @@ dice cuán lejos llegó cada paper (`fuera del filtro` → `sin extraer` → `ex
 `sintetizado`). En un concepto el roll-up es la **unión** de `methods` y `thesis_links`, con la
 columna *Entró por* (D-24), y **las mismas dos garantías** (#300).
 
-⛔ **El cuarto es la MATRIZ método × estrella** (`--restamp-matrix`, #429): fila = método por clave
+**El cuarto es la matriz método × estrella** (`--restamp-matrix`, #429): fila = método por clave
 normalizada, columna = ficha, celda = los `[[bibcode]]` de los papers **de esa estrella** que lo
 declaran en `methods`; `—` = *ninguno en este corpus lo declara*, afirmación **negativa**, así que la
 sección declara su alcance (D-34). ⚠ **No** espeja `methods_applied.literature` (sin clave de join):
@@ -266,13 +266,13 @@ equivalente determinista parsea el frontmatter con el mismo parser que el toolin
 python -c "import sys,glob;sys.path.insert(0,'scripts');import lib_config as c;[print(f) for f in sorted(glob.glob('vault/wiki/papers/*.md')) if '<nombre>' in (c.split_fm(open(f,encoding='utf-8').read()).get('stars') or [])]"
 ```
 
-⛔ **No uses `grep`/`awk` sobre el frontmatter para esto.** Las listas conviven en **bloque** y en
+**No uses `grep`/`awk` sobre el frontmatter para esto.** Las listas conviven en **bloque** y en
 **flow style** (`stars: [tau Cet]`, como la deja `merge_frontmatter_list`), y el matcheo textual
 confunde `GJ 71` con `GJ 710`; `split_fm` compara por elemento.
 
-⛔ **El roll-up compara `methods` por CLAVE NORMALIZADA, no por string exacto (#243):** `casefold` +
+**El roll-up compara `methods` por clave normalizada, no por string exacto (#243):** `casefold` +
 NFKD + `[^a-z0-9]+ → -` (`lib_config.method_key`), compartida por roll-up y lint — el campo lo puebla
-un LLM con vocabulario abierto (`PCA`/`pca`) y el string crudo subdeclara el universo. ⛔ Se
+un LLM con vocabulario abierto (`PCA`/`pca`) y el string crudo subdeclara el universo. Se
 normaliza al **comparar**, nunca al escribir (la grafía del extractor es información). Los
 **sinónimos** (`gls` / `periodograma-gls`) **no** se juntan solos: es juicio, va a un backlog que
 propone y no aplica.
@@ -310,15 +310,15 @@ bibtex, bibtex_source(ads|crossref|datacite|doi|arxiv|venue|institucional), bibt
 
 ⛔ **El `bibtex` se TRAE de una exportación oficial, nunca se redacta (#397).** Lo baja
 `fetch_bibtex.py` (cierra la cadena) por la cascada **ADS → `doi.org` → arXiv**; un libro o manual
-sin exportación deja el campo **VACÍO** — un hueco es correcto, una cita inventada no. ⛔ **`venue` es
-la exportación del SITIO del venue (JMLR, NeurIPS, PMLR) (#484): la pega una persona, así que exige
+sin exportación deja el campo **VACÍO** — un hueco es correcto, una cita inventada no. **`venue` es
+la exportación del sitio del venue (JMLR, NeurIPS, PMLR) (#484): la pega una persona, así que exige
 `bibtex_url`** y no se re-baja. El lint **bloquea** el `bibtex` sin `bibtex_source` y reporta el
 drift frontmatter ↔ exportación.
-⛔ **Y el HUECO se declara: `sin_bibtex: <motivo>` + `bibtex_accessed` del intento (#467)**; lo estampa
+**Y el hueco se declara: `sin_bibtex: <motivo>` + `bibtex_accessed` del intento (#467)**; lo estampa
 `fetch_bibtex` y **lo borra** al cerrarse. ⚠ Antes de declararlo pregunta si el DOI existe, en **dos
 etapas** (#466), y a **HAL**, que propone el bloque y no lo escribe (#505).
-⛔ **Y se pide en la forma en que se PEGA: un bloque que NO SE PEGA no está cerrado (#471/#473).** ADS
-se pide con `journalformat: 3` (sin macros AASTeX). ⛔ **NO se post-procesa** (sería redactar la
+**Y se pide en la forma en que se pega: un bloque que no se pega no está cerrado (#471/#473).** ADS
+se pide con `journalformat: 3` (sin macros AASTeX). **No se post-procesa** (sería redactar la
 cita), y **cada forma de no pegarse declara su consecuencia** (`cfg.BIBTEX_NO_PEGABLE`, #473):
 `pendiente` se re-baja · **`descartable` NO se guarda** y la cascada sigue (el cascarón sin
 `author`/`editor`/`title` imprime una cita **VACÍA**) · `residuo` se **nombra** y no se re-baja. ⚠ La
@@ -341,20 +341,20 @@ estampada: es lo que `verify-citations` contrasta. El lint **bloquea** la incohe
 sentidos (vista sin sección; sección sin declarar) y el schema viejo (`## Extracción (LLM)` sin
 `vistas[]`). **Forma dura como `extra_core`** (D-58): el escalar y la lista de strings bloquean.
 
-⛔ **`txt` se cruza contra el DISCO al estamparse (#230):** si el `.txt` vive bajo otro slug se apunta
+**`txt` se cruza contra el disco al estamparse (#230):** si el `.txt` vive bajo otro slug se apunta
 ahí; si no existe **la clave no se escribe** (*no consta*, nunca un puntero falso).
 
-⛔ **`fuente` dice DE QUÉ se construyó: `pdf` | `abstract` (#207).** Lo **declara el extractor** y
+**`fuente` dice de qué se construyó: `pdf` | `abstract` (#207).** Lo **declara el extractor** y
 el **cosechador lo cruza contra el disco**: `fuente: pdf` sin PDF **rechaza la extracción entera**.
 Ausente = *no consta*, backlog; `fuente: abstract` también, y ahí el pedido es **conseguir el PDF**.
 
-⛔ **La `fecha` es lo que dice que la lectura OCURRIÓ.** El stub nace con la vista **sin** fecha
+**La `fecha` es lo que dice que la lectura ocurrió.** El stub nace con la vista **sin** fecha
 (backlog). La estampa el **cosechador** (`harvest_views.py <slug> [--theme]`), que además mergea
 `methods`/`thesis_links`/`role` add-only, escribe la sección mientras siga siendo la plantilla del
 stub —prosa redactada no se pisa sin `--force`— y **trae el `.txt` al slug del sujeto** (D-18).
 
-⛔ **Las `salvedades` sobre el ARTEFACTO se chequean con un script, o se publican marcadas NO
-VERIFICADAS (#213)** — no llevan `[[bibcode]]`, así que `verify-citations` no las mira:
+**Las `salvedades` sobre el artefacto se chequean con un script, o se publican marcadas no
+verificadas (#213)** — no llevan `[[bibcode]]`, así que `verify-citations` no las mira:
 
 - La **decidible sobre un archivo** se emite **estructurada**, con vocabulario cerrado
   (`lib_config.SALVEDAD_TIPOS`: `txt_pierde` + `cadena`, `pdf_paginas` + `n`, **`pdf_leido` +
@@ -364,53 +364,53 @@ VERIFICADAS (#213)** — no llevan `[[bibcode]]`, así que `verify-citations` no
   tira). El chequeo que **no pudo correr** sale **no evaluable con su motivo** (D-43).
 - Todo lo demás va en su **propio bloque**, marcado *«⚠ NO VERIFICADAS — juicio del extractor»*.
 
-⛔ **`pdf_leido` son DOS EJES (#456): `documento` = qué hay en disco (lo verifican los tres
-testigos) y `leido` = de qué se construyó la VISTA** (opcional; su testigo es la firma
+**`pdf_leido` son dos ejes (#456): `documento` = qué hay en disco (lo verifican los tres
+testigos) y `leido` = de qué se construyó la vista** (opcional; su testigo es la firma
 `pdf_reemplazo`, #441). En un PDF **reemplazado** divergen: la vista es anterior al reemplazo y sus
 localizadores son del documento viejo (como marca `_paginacion`, #436).
 
-⛔ **Y la que dice QUÉ DOCUMENTO hay en disco se cruza contra el disco (#449):** marca de arXiv del
+**Y la que dice qué documento hay en disco se cruza contra el disco (#449):** marca de arXiv del
 `.txt`, firma `pdf_reemplazo` y `pdf_source` son tres testigos. Lo levanta el lint (backlog: cuál
 mitad está mal lo decide quien lee) y `replace_pdf` **avisa al firmar** cuántas líneas quedaron
-diciendo preprint; avisa y **no reescribe**. ⛔ **El ancla es el DOCUMENTO, no la palabra** (frases
+diciendo preprint; avisa y **no reescribe**. **El ancla es el documento, no la palabra** (frases
 que predican sobre el archivo; frontmatter, `SECCIONES_ESTAMPADAS` (#214) y bloques que nombran otro
-`[[bibcode]]` quedan afuera; unidad = **bloque**, #224). ⛔ **La salida es emitirla ESTRUCTURADA
+`[[bibcode]]` quedan afuera; unidad = **bloque**, #224). **La salida es emitirla estructurada
 (`pdf_leido`, #452)**; la categoría del lint queda como **residuo**. Propuesta lista para pegar:
 `harvest_views.py <slug> --propose-pdf-leido` — **propone y no escribe** (#311), entre `publisher` y
 `ads` **no elige** (#296), decide por la **cláusula** que el ancla matcheó, con negación simétrica,
 `web` como clase, y **cruza el disco** y saltea la nota sin PDF antes de proponer.
-⛔ **Cobrarla NO re-cosecha la vista:
+**Cobrarla no re-cosecha la vista:
 `harvest_views.py <slug> --restamp-salvedades [--paper <bib>] [--dry-run]` (#453)** — `--force`
 **re-fecha la lectura** (#395). No toca `vistas[]` ni la prosa; rehúsa el bloque con prosa ajena. ⚠ La
 salvedad estructurada lleva **`evidencia`** (lo que el lector vio; el JSON es su registro, #311).
-⛔ **Y CRUZA EL DISCO antes de escribir** (el JSON puede ser más viejo que la nota): rehúsa la nota
-nombrándola, avisa la chequeada que dejó de serlo y **migra** el bloque pre-#213. ⛔ **Regla
-ESTRUCTURAL y SIMÉTRICA: una salvedad en prosa ya escrita NO SE PIERDE** —agregar pasa; reescribirla
+**Y cruza el disco antes de escribir** (el JSON puede ser más viejo que la nota): rehúsa la nota
+nombrándola, avisa la chequeada que dejó de serlo y **migra** el bloque pre-#213. **Regla
+estructural y simétrica: una salvedad en prosa ya escrita no se pierde** —agregar pasa; reescribirla
 y **borrarla** se rehúsan; borrar una `⚙ verificada` pasa avisando; el bullet que se **estructuró**
 no es un borrado (su texto sigue en `evidencia`).
 
-⛔ **La lectura puede RETRACTAR el reclamo que la trajo: `refuta: [<sujeto>]` (#212)** —único canal
-en esa dirección (típico: **polisemia**)—. ⛔ El cosechador **registra y propone, no aplica**: deja
+**La lectura puede retractar el reclamo que la trajo: `refuta: [<sujeto>]` (#212)** —único canal
+en esa dirección (típico: **polisemia**)—. El cosechador **registra y propone, no aplica**: deja
 el `refuta` en la vista e imprime el `--drop-core` con su motivo (la decisión es del **par (paper,
 sujeto)**). El lint lo reporta como **backlog**; el add-only **no se afloja**.
 
-⛔ **Una SEGUNDA lectura del mismo sujeto con otra lente CONVIVE: `enfasis` (#239), y se PIDE con
+**Una segunda lectura del mismo sujeto con otra lente convive: `enfasis` (#239), y se pide con
 `extraction_prompt.py … --enfasis "<lente>" [--ejes a,b]` (#308)** —el prompt manda leer la vista
 anterior y **rehúsa** si `(sujeto, enfasis)` ya tiene lectura—. Identidad = `(sujeto, enfasis)`;
 sección `### Lente — <énfasis>` **dentro** de la `## Vista` del sujeto (AUD-178). El cosechador
-**rehúsa** cambiar un valor ya escrito bajo la misma clave. ⛔ **Su extracción va a
+**rehúsa** cambiar un valor ya escrito bajo la misma clave. **Su extracción va a
 `<bibcode>__<lente>.json` (#371)**: al canónico pisaba un artefacto no regenerable (#311).
 
-⛔ **La sección de una vista SIN LEER es una LÍNEA DE ESTADO, no un prompt (#398):** *«reclamado, sin
+**La sección de una vista sin leer es una línea de estado, no un prompt (#398):** *«reclamado, sin
 leer»* o *«no leído desde X (fecha): motivo»*. Backfill: `make_notes.py --restamp-vista-stub`.
 
-⛔ **`vistas[]` la escribe SÓLO la lectura, nunca el retro-link.** `stars`/`thesis_links`/`methods`
+**`vistas[]` la escribe sólo la lectura, nunca el retro-link.** `stars`/`thesis_links`/`methods`
 son **reclamos** (add-only sin leer); `vistas[]`, **lecturas**. Un reclamo sin vista es backlog y se
 cierra haciendo la vista o declarándola `no_vista: [{sujeto, motivo}]` —vale en **las cuatro** redes
 que cuentan la nota (#268), estado `sin vista (declarado)`—. **Motivo obligatorio y por sujeto**.
 Cuenta como reclamo: `stars` y `thesis_links` siempre; `methods` **sólo si es un tema declarado**.
 
-⛔ **Sacar `pending_source` no puede romper el frontmatter (#244):** el borrado de una clave es **una
+**Sacar `pending_source` no puede romper el frontmatter (#244):** el borrado de una clave es **una
 sola función** (un `startswith` deja huérfanas las líneas de continuación); se re-parsea y **no se
 escribe** si dejó de parsear (#222).
 
@@ -433,13 +433,13 @@ por verdad de disco (#356)**, deja `bibstem` en `null`, agrega el alias —con `
 vieja era ERRÓNEA y el rastro va al `log` (#355)— y **reescribe los wikilinks de toda la bóveda**.
 Alcance declarado: `vault/`.
 
-⛔ **El duplicado SIN `doi` ni `arxiv_id` lo reporta otra categoría (#216, backlog)**, por el
-**arranque del `## Abstract` verbatim** normalizado. ⛔ **NO se deduplica por título**, y **reporta,
+**El duplicado sin `doi` ni `arxiv_id` lo reporta otra categoría (#216, backlog)**, por el
+**arranque del `## Abstract` verbatim** normalizado. **No se deduplica por título**, y **reporta,
 no fusiona**. La salida es `--rename-paper` + `versions[]`, o `--drop-core`.
 
 #### `data_availability` — dónde están los DATOS del paper (#424)
 
-⛔ **El puntero público a los datos que publicó un paper vive en SU nota**, como
+**El puntero público a los datos que publicó un paper vive en su nota**, como
 `data_availability: [{doi|url, que, localizador}]`, y la ficha lo agrega en la sección estampada
 `## Datos públicos`. Es un hecho **que el paper afirma**, citable con página y verificable; el lint
 reporta como backlog la entrada incompleta. ⚠ Es lo **contrario** de `data_local` (ruta
@@ -453,12 +453,12 @@ corpus (`grep`) (#205). Los estampan por **verdad de disco** —`fulltext` `extr
 (`stamp_fulltext`), `pdf` su gemelo `stamp_pdf` desde `fetch_pdf` y `--restamp-pdf-links` (#304)—,
 con `null` si no hay archivo.
 
-⛔ **Los dos `*_source` NO se comportan igual cuando el archivo desaparece (#230).**
+**Los dos `*_source` no se comportan igual cuando el archivo desaparece (#230).**
 `fulltext_source` se limpia con el archivo (backlog el par `fulltext: null` + valor). **`pdf_source`
 sobrevive**: es la **procedencia de la lectura que ocurrió**; el par `pdf: null` + `pdf_source`
 **no es hallazgo**. ⛔ **El REEMPLAZO del PDF sí (#383):** `stamp_pdf` guarda `pdf_sha`, y si el
 archivo cambió deja `pdf_source`/`eprint_version` en `null`; editor + `eprint_version` bloquea.
-⛔ **Lo que `replace_pdf` FIRMA no lo revierte `build/` (#446):** precedencia de `pdf_source` = marca
+**Lo que `replace_pdf` firma no lo revierte `build/` (#446):** precedencia de `pdf_source` = marca
 de arXiv → **`pdf_reemplazo`** (si su `pdf_sha` es el del disco) → `sources:` → `build/`. Y
 `extract_fulltext --bibcode` re-estampa **sólo** las notas cuyo `.txt` tocó.
 
@@ -480,7 +480,7 @@ cuando se conoce), `ads` (escaneo alojado por ADS), `publisher`, `web` (snapshot
 en el `.txt` y se detecta re-corriendo `extract_fulltext` sin re-bajar (misma re-corrida = backfill
 de la marca de garble). Con `eprint`, una discrepancia numérica contra un valor publicado es
 candidata a **diferencia de versión** y NO se "corrige" la nota hacia el preprint.
-⛔ **Con versión PUBLICADA el preprint no se adopta sin decisión (#512):** la cadena prueba el
+**Con versión publicada el preprint no se adopta sin decisión (#512):** la cadena prueba el
 editor y lo no conseguido queda en `missing_pdf.json` (`publicado-no-conseguido`); el eprint entra
 sólo con `acepta_preprint: [{bibcode, motivo, fecha}]` junto a `extra_core` (`triage.py <slug>
 --acepta-preprint <bib> --reason`), y vale por bibcode. arXiv-only y tesis: el eprint ES la fuente.
@@ -524,20 +524,20 @@ resuelve, no promedia. Vocabulario **cerrado** y bloqueante.
 
 #### El aviso de capa LLM y las cuatro secciones de lectura (#124, #247)
 
-⛔ **La nota de paper lleva el AVISO DE CAPA LLM (#247)**, que nombra las tres capas: lo
+**La nota de paper lleva el aviso de capa LLM (#247)**, que nombra las tres capas: lo
 **auditable** (`## Abstract` verbatim + frontmatter de catálogo), la **traducción** (ayuda de
 lectura, **nunca fuente de la que citar**) y la **síntesis lenteada** (la vista). Backfill:
 `--restamp-headers`.
 
 ⛔ **`## Abstract` va en TODA nota de paper, verbatim (#124)** —capa auditable; `classify_offline` la
-lee (D-49)—. Una vista construida desde ahí se declara `fuente: abstract` (#207). ⛔ **Se llena desde
-el CATÁLOGO, no sólo desde el PDF (#413):** `make_notes.py --fill-abstracts` (OpenAlex por `doi`),
-único camino para un `pending_source`. ⛔ Reemplaza **el placeholder, nunca el encabezado** (#417), y
+lee (D-49)—. Una vista construida desde ahí se declara `fuente: abstract` (#207). **Se llena desde
+el catálogo, no sólo desde el PDF (#413):** `make_notes.py --fill-abstracts` (OpenAlex por `doi`),
+único camino para un `pending_source`. Reemplaza **el placeholder, nunca el encabezado** (#417), y
 respeta **`sin_abstract_motivo`** (un capítulo sin abstract). La sección la escriben los dos raíles
 al crear —`_(no disponible)_` si no hay copia— y el cosechador la completa sin pisar un verbatim
 (#124/#277). Backfill: `make_notes.py --restamp-abstracts`; el lint la **bloquea**.
 
-⛔ **Y la nota lleva tres AYUDAS DE LECTURA (#124): `## Traducción del abstract`, `## Conclusiones` y
+**Y la nota lleva tres ayudas de lectura (#124): `## Traducción del abstract`, `## Conclusiones` y
 `## Traducción de las conclusiones`** —las conclusiones son lo que el paper afirma **sin lente**, lo
 que abarata una segunda vista—. Las estampa el cosechador desde el JSON, van **antes** de la vista, y
 **la traducción va al lado del original, nunca en su lugar**. ⚠ Se llaman `## Traducción …` con el
@@ -551,13 +551,13 @@ Exclusión **estructural**, no umbral de largo.
 los **chequea contra el cuerpo**; si el cuerpo dice menos, es un hallazgo sobre la **fuente** y va a
 `salvedades`.
 
-⛔ Las cuatro secciones están en `SECCIONES_ESTAMPADAS`, así que `verify-citations` **no las mira**:
+Las cuatro secciones están en `SECCIONES_ESTAMPADAS`, así que `verify-citations` **no las mira**:
 lo que de acá llegue a una **ficha** sí se verifica contra el PDF — **son ayuda de lectura, nunca
 fuente de la que citar.**
 
 #### Notas off-ADS y fuentes largas
 
-⛔ **El item de `sources:` —y el de `extra_core` (#479)— declara `pdf_source` (#415)**: sin fetcher
+**El item de `sources:` —y el de `extra_core` (#479)— declara `pdf_source` (#415)**: sin fetcher
 ni marca de arXiv el campo quedaba `null` para siempre. Precedencia: marca de arXiv → **lo
 declarado** → `build/`. Vocabulario cerrado (#296): el valor fuera de lista se avisa y **no se
 escribe**; el lint lista el `null` por carril.
@@ -570,12 +570,12 @@ paywall|scan|unextractable|adquisicion` (el lint la lista como precondición).
 lo que el usuario va a conseguir (no falló, tiene otra latencia); los otros tres, por qué falló. Un
 typo aborta la cadena y el lint lo nombra.
 
-⛔ **Una fuente LARGA declara cómo se la cita y qué parte entró (#80):** `unidad_cita:
+**Una fuente larga declara cómo se la cita y qué parte entró (#80):** `unidad_cita:
 linea|pagina|seccion` (default `linea`) y **`alcance`** (qué entró; obligatorio si la unidad no es
 la línea), **en `sources:` o en `extra_core` (#382)** — sin `alcance`, el chequeo de completitud no
 distingue un recorte deliberado de una omisión. Eje distinto del `txt:`/`pdf:` de #117.
-⛔ **Se RE-SINCRONIZAN: la autoridad es la config (#312):** `make_notes.py --restamp-alcance`; el lint
-reporta el desfasaje. ⛔ **Y LLEGAN AL EXTRACTOR (#241):** `extraction_prompt` ramifica por
+**Se re-sincronizan: la autoridad es la config (#312):** `make_notes.py --restamp-alcance`; el lint
+reporta el desfasaje. **Y llegan al extractor (#241):** `extraction_prompt` ramifica por
 `unidad_cita` (índice primero, `alcance` pegado textual sin ampliarlo —lo de afuera se declara en
 `salvedades`—, `conclusiones` vacío, cita **por página**; sin `alcance` dice *«NO DECLARADO»*).
 
@@ -608,13 +608,13 @@ El hub referencia cada radio explícitamente y el radio abre con su "Para qué" 
 hub. Un radio es una nota de concepto normal (mismo frontmatter y estándar de autosuficiencia);
 "hub/radio" es sólo la metáfora organizativa.
 
-⛔ **El ALCANCE de un tema es su `query` + su `facet` (#127):** se parte en radio cuando cada parte
+**El alcance de un tema es su `query` + su `facet` (#127):** se parte en radio cuando cada parte
 necesita **su propia query y su propia faceta** (terminología que no se solapa). Un radio es un
 **tema propio** (slug, query, faceta, registro y corpus propios) cuya nota apunta al hub. Ejemplo:
 *noisy ICA* es radio (su vocabulario no lo trae una query de «independent component»); *PCA* queda en
 el hub y *PCA heterocedástico* va al radio — se parte **por régimen**.
 
-⛔ **El hub nombra cada radio con `[[wikilink]]`, no con el slug entre backticks** (sin link no hay
+**El hub nombra cada radio con `[[wikilink]]`, no con el slug entre backticks** (sin link no hay
 grafo ni link entrante). El lint lo reporta como backlog.
 
 ### concepts/hypotheses/
@@ -672,7 +672,7 @@ según destino:** en `vault/wiki/` SIEMPRE `$...$` (Obsidian lo renderiza); en *
 Genera/afina `vault/config/objective.yaml` (la **lente**: `name`/`description` + `relevance.facets`,
 el clasificador de papers core). El agente traduce el foco del usuario a la regex —el usuario **no**
 escribe regex— y la valida contra papers reales con `python scripts/query_ads.py --probe "<query>"`
-(muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. ⛔ **La lente del BUSCADOR
+(muestra el corte core/no-core sin bajar nada) iterando hasta que cierre. **La lente del buscador
 también sale del objetivo (#85): `relevance.search_fq`** — el `fq` de Solr que acota el universo
 **server-side, antes de traer nada** (la mitad **más restrictiva** del filtro). Tres estados: sin
 declarar → `database:astronomy`; con valor → ése; **`search_fq: null`** → no acota, a propósito.
@@ -695,45 +695,45 @@ ser `core = facet propia Y (puerta 2 OR puerta 3)`:
 | **2 · fundacional en su campo** | `citation_count >= fundacional_min_citas` | `query_ads.classify_theme` |
 | **3 · lente astro global** | pasa `relevance.facets` de `objective.yaml` | ídem |
 
-⛔ **Los EJES DE LECTURA también son del tema (#307): `ejes:` en `themes.yaml`.** Mismos tres estados;
+**Los ejes de lectura también son del tema (#307): `ejes:` en `themes.yaml`.** Mismos tres estados;
 sin declararlos el probe y el lint avisan (#360); la `lente` de la vista guarda **los ejes que se
 preguntaron** (D-49).
-⛔ **El `search_fq` también es del tema (#295)** —es la mitad más restrictiva y ninguna `facet:`
+**El `search_fq` también es del tema (#295)** —es la mitad más restrictiva y ninguna `facet:`
 recupera lo que el `fq` excluyó—, con los **mismos tres estados** (sin declarar → hereda el objetivo ·
 con valor → ése · `null` → no acota). El registro guarda el **resuelto** y entra en la lente.
-⛔ **El tema de método que NO lo declara recibe un AVISO (#351)** —probe y backlog del lint—: con
+**El tema de método que no lo declara recibe un aviso (#351)** —probe y backlog del lint—: con
 `database:astronomy` heredado la puerta fundacional **no abre nunca**. Sólo aviso: un `null`
 **declarado** lo calla.
-⛔ **La re-clasificación del tema va sobre el corpus COMPLETO, no sólo sobre la query directa
+**La re-clasificación del tema va sobre el corpus completo, no sólo sobre la query directa
 (#455)** —la segunda pasada por fecha (#79) y el chaining clasifican con la lente global—: corre
 después de todo lo que suma registros y **antes** de la exclusión declarada (#112); **`relevant:
 True` con `puertas: []` es un estado IMPOSIBLE** para un tema con faceta propia y se reporta.
-⛔ **El PREVIEW de un tema se corre con esa lente (#208):**
+**El preview de un tema se corre con esa lente (#208):**
 `python scripts/query_ads.py <slug> --theme --probe` —con la global el veredicto es el opuesto—.
 Cada fila lleva **por qué puerta entró**; con un slug inexistente o sin `facet:`, **rehúsa**.
-⛔ **El probe dice POR QUÉ quedó afuera cada no-core (#289):** *sin la faceta propia* (apretala) vs
+**El probe dice por qué quedó afuera cada no-core (#289):** *sin la faceta propia* (apretala) vs
 *pasa la faceta y muere en la puerta* (`extra_core` o `fundacional_min_citas`); el segundo bloque es
 de donde sale `extra_core`.
-⛔ **El DELTA de re-clasificación de un tema también (#447):** `query_ads.py <slug> --theme
+**El delta de re-clasificación de un tema también (#447):** `query_ads.py <slug> --theme
 --dry-run` y la *Lente desincronizada* del lint aplican la regla del tema (`cfg.theme_core`) y
 eximen la curación **por bibcode**.
-⛔ **Para una ESTRELLA la query también se DERIVA (#248): `python scripts/query_ads.py <slug>
+**Para una estrella la query también se deriva (#248): `python scripts/query_ads.py <slug>
 --probe`** — la tipeada a mano no expande variantes de espaciado ni alias, y el universo
 previsualizado no es el ingestado.
 
-⛔ **Queda registrado POR CUÁL puerta entró cada paper (#126): `puertas: [fundacional|astro|manual]`
+**Queda registrado por cuál puerta entró cada paper (#126): `puertas: [fundacional|astro|manual]`
 en el registro** —lo único que distingue **sin leer** un fundamento de una aplicación astro—. Con eso
 `triage.py <slug> --prioridad` agrupa los core por política y el recorte de lectura se decide **una
 vez** (`--extraccion subconjunto --reason`). Lista vacía = no es core; el campo existe siempre.
-⛔ **`manual` es la procedencia de la CURACIÓN y la escriben las dos ramas del merge de `extra_core`
+**`manual` es la procedencia de la curación y la escriben las dos ramas del merge de `extra_core`
 (#303)**; el `via` del registro es siempre el **declarado** en la config.
 
 ⚠ **`fundacional_min_citas` no tiene default** (depende del campo): sin declararlo la puerta 2 **no
-abre** y el motivo va a `why_excluded`. ⛔ **Compara contra el contador de ADS (#357)**, que en otra
+abre** y el motivo va a `why_excluded`. **Compara contra el contador de ADS (#357)**, que en otra
 disciplina mide cuánto lo cita astro; el probe muestra el rango y avisa. *(Abierta en
 `docs/decisiones-abiertas.md`.)*
 
-⛔ **La puerta 1 («lo cita tu corpus») PROPONE, no clasifica**: alimenta los candidatos del triage
+**La puerta 1 («lo cita tu corpus») propone, no clasifica**: alimenta los candidatos del triage
 con `via: citado-por-corpus`, nunca marca core (INV-24). La sostiene `scripts/citation_index.py`
 (índice invertido obra→citadores, lookup **offline**, vive en `build/`), que se construye aparte. Los
 backends fuera de ADS son `scripts/search_arxiv.py` (⚠ `ingest_theme.py` no lo corre solo: lo alcanza
@@ -748,13 +748,13 @@ que `query_ads.to_record`, fijado por `tests/test_backends_schema.py`.
 
 - **La cascada** (`cascade`, CLI `discover.py --theme <slug>`) corre **los tres** y mergea; cada
   backend recibe la query **en su idioma**: ADS el Solr de `query:`, arXiv los términos de
-  `aliases:`, OpenAlex el `topic:`. ⛔ **Declará `topic:` en `themes.yaml`** (inferido del `title`
-  en castellano no matchea la taxonomía inglesa). ⛔ **`topic:` acepta una LISTA (#293)**, buscada en
+  `aliases:`, OpenAlex el `topic:`. **Declará `topic:` en `themes.yaml`** (inferido del `title`
+  en castellano no matchea la taxonomía inglesa). **`topic:` acepta una lista (#293)**, buscada en
   OR (`topics.id:T1|T2`). ⚠ `ingest_theme.py` no corre la cascada solo: es el paso 0b del skill.
 - **La cobertura distingue tres estados** (`print_cobertura`): corrió con N, **FALLÓ** y **NO
-  CORRIÓ** con motivo. ⛔ **El anclaje también, con fila `anclaje` en el registro; y el lint reporta
+  CORRIÓ** con motivo. **El anclaje también, con fila `anclaje` en el registro; y el lint reporta
   el tema off-ADS/mixto cuya cascada nunca corrió, corrió vacía o con backends caídos (#361).** Citas
-  que el backend no publica se muestran **`?`, no `0`**. ⛔ **`--topics` declara sus dos ceros
+  que el backend no publica se muestran **`?`, no `0`**. **`--topics` declara sus dos ceros
   (#290)**: «la taxonomía no tiene nada parecido» vs **FALLÓ**.
 - **Dedup por DOI, nunca por título** (`ident`/`dedup`); lo que no tiene DOI ni arXiv id se devuelve
   **aparte, como no-deduplicable**. Cada registro acumula `found_in`: la procedencia **enruta**, la
@@ -764,15 +764,15 @@ que `query_ads.to_record`, fijado por `tests/test_backends_schema.py`.
   la mitad astro del propio tema**, rankeadas por cuántos papers las citan (la puerta 1 para un tema
   **nuevo**).
 - **La cola especialista se alcanza con `seed_terms`** (slice de texto por término dentro del topic,
-  #107): canje cobertura ↔ costo de triage, **opt-in** por tema; avisa por término. ⛔ **El aviso manda
-  subir una perilla que EXISTE y el slice se PAGINA (#294):** `rows_por_termino` (campo del tema y
-  flag `--rows-por-termino`). ⛔ **El filtro por topic se decide POR TÉRMINO, con el conteo, y se
+  #107): canje cobertura ↔ costo de triage, **opt-in** por tema; avisa por término. **El aviso manda
+  subir una perilla que existe y el slice se pagina (#294):** `rows_por_termino` (campo del tema y
+  flag `--rows-por-termino`). **El filtro por topic se decide por término, con el conteo, y se
   declara (#293).** Capítulos, actas y papers sin los términos del tema van por curación a mano,
   registrando **por qué** (`extra_core` con `via`/`motivo`, o `sources`).
 - **Encontrar ≠ conseguir** (`resolve_pdf`): la cascada del archivo es **OpenAlex → Unpaywall →
   Europe PMC → HAL → arXiv por título EXACTO** (#313/#358/#505) y **propone una URL y para** (no reescribe un
-  `pending:` ni edita `sources:`). ⛔ **El carril ADS de `fetch_pdf` la recorre ENTERA al agotar los
-  `esource` (#358)** y el residuo distingue «sin copia libre» de «bloqueada» (`estado`). ⛔ Nunca por
+  `pending:` ni edita `sources:`). **El carril ADS de `fetch_pdf` la recorre entera al agotar los
+  `esource` (#358)** y el residuo distingue «sin copia libre» de «bloqueada» (`estado`). Nunca por
   título **aproximado**; el motivo enumera **lo consultado**.
 
 ### Ingest (una fuente → cascada de páginas)
@@ -799,16 +799,16 @@ verificable:
 
 5. harvest_views      →  la única compuerta que corre `is_extraction` (INV-103).
                          Estampa la vista (fecha · txt · lente) y la sección de la nota.
-                         ⛔ Y cruza cada cita del JSON contra el `.txt` (#359): avisa.
+                         Y cruza cada cita del JSON contra el `.txt` (#359): avisa.
 
 6. verify-citations   →  un subagente por fuente (`verify_fanout.py`, #369) lee el PDF; DOS hashes
                          por par; el hermano lo escribe `write_verif_sidecar.py` (#403 — `--from`
                          repetible, y el ancla muerta se descarta sólo DECLARADA, #428).
 ```
 
-⛔ **La fuente es el PDF; el `.txt` es el ÍNDICE (#205).** El `.txt` sirve para el `grep` de
-**prosa** sobre el corpus y, en un **documento largo** (#80), para ubicar la página a abrir. ⛔ **El
-`.txt` NO se genera con el modelo**: tiene que ser determinista. ⚠ **Consecuencia:** un
+**La fuente es el PDF; el `.txt` es el índice (#205).** El `.txt` sirve para el `grep` de
+**prosa** sobre el corpus y, en un **documento largo** (#80), para ubicar la página a abrir. **El
+`.txt` no se genera con el modelo**: tiene que ser determinista. ⚠ **Consecuencia:** un
 `pending_source` es **bloqueo real** — sin PDF no hay de dónde extraer.
 
 ⚠ **Excepción nombrada: la fuente WEB.** Un snapshot de `fetch_web` (`source_url` poblado, `pdf:
@@ -819,7 +819,7 @@ De los chequeos de calidad del `.txt` quedan `is_legible` (dispara el OCR) e `is
 garbleada degrada el índice); `measure_layout` sigue (`CANALETA_MIN` es el contrato para grepear un
 `.txt` entrelazado).
 
-⛔ **Esos chequeos miden el TEXTO, así que ninguno ve el dato que vive en una IMAGEN (#195).** El
+**Esos chequeos miden el texto, así que ninguno ve el dato que vive en una imagen (#195).** El
 prompt (`extraction_prompt._media_note`) trata los casos:
 
 - **tabla extraída como texto** → se cita por línea, declarando **cómo se verificó la fila**;
@@ -833,7 +833,7 @@ prompt (`extraction_prompt._media_note`) trata los casos:
 Por eso la columna de la vista se llama **`Localizador`** y no `Línea`: lleva `L1234`, `p. 271` o
 `Fig. 3, p. 7` según de dónde salga el dato (la clave del JSON sigue siendo `linea`).
 
-⛔ **La prosa que va a una CELDA se escapa: `\|` fuera de la matemática, `\vert` adentro (#240); y el
+**La prosa que va a una celda se escapa: `\|` fuera de la matemática, `\vert` adentro (#240); y el
 `$` suelto de cualquier prosa que va a una nota, también (`escape_dollars`, #457)** — el span `$…$`
 bien formado **no se toca**. Un `|` crudo parte la fila y la vuelve invisible. Lo hace `escape_cell`
 en el cosechador, el único punto de escritura.
@@ -864,9 +864,9 @@ el `.txt`.
    candidato a **diferencia de versión**). **Cada valor (#103)** va con su **localizador** (sección,
    figura, tabla o ecuación primero; la página como pista, en la numeración que sea, #500), **el
    régimen** en que la fuente lo afirma y —si la fuente lo atribuye a otro trabajo— la marca
-   **segunda mano** con la cita a X. ⛔ **El cruce que la síntesis levanta se acredita NOMBRANDO al
-   dueño —o se FIRMA revisado (#433)** en `segunda_mano_revisada: [{ref, que, motivo}]` del
-   frontmatter de la ficha o el concepto. ⛔ **Nada de prosa comparativa en la nota de paper**:
+   **segunda mano** con la cita a X. **El cruce que la síntesis levanta se acredita nombrando al
+   dueño —o se firma revisado (#433)** en `segunda_mano_revisada: [{ref, que, motivo}]` del
+   frontmatter de la ficha o el concepto. **Nada de prosa comparativa en la nota de paper**:
    comparar dos papers es `inferencia` y va al `## Inventario por eje` (2b).
 
 2b. **Contraste cross-paper (#72)** ⚠ *(**3b** en `ingest-star`, **3c** en `ingest-theme`)* — **entre
@@ -876,33 +876,33 @@ el `.txt`.
    adoptado" ni "por qué"** (regla #0). El `role` (#73) dice qué operación corresponde entre dos
    filas. **La red (#101):** el lint reporta la ficha con la **fila vacía de la plantilla** y ≥2
    papers extraídos citados.
-   ⛔ **Herramienta: `python scripts/contrast.py <slug>` (#314/#317)** — nunca trunca una cita,
-   agrupa por campo, arrastra `linea`/`segunda_mano` y ⛔ **no sirve lo que `--drop-core` sacó
+   **Herramienta: `python scripts/contrast.py <slug>` (#314/#317)** — nunca trunca una cita,
+   agrupa por campo, arrastra `linea`/`segunda_mano` y **no sirve lo que `--drop-core` sacó
    (#329)** (`--incluir-dropeados` lo muestra). Propone: el inventario lo escribís vos.
-   ⛔ **Para la PROSA, `--cita --grep <re>` (#385):** emite «valor» (loc) [[bibcode]] pegable.
-   ⛔ **Agrupar N fuentes bajo un MECANISMO común exige haberlo visto en las N (#370).**
-   ⛔ **Al corregir, la primera opción es SACAR la parte equivocada, no reescribirla (#389)**
+   **Para la prosa, `--cita --grep <re>` (#385):** emite «valor» (loc) [[bibcode]] pegable.
+   **Agrupar N fuentes bajo un mecanismo común exige haberlo visto en las N (#370).**
+   **Al corregir, la primera opción es sacar la parte equivocada, no reescribirla (#389)**
    (`apply_fixes` avisa el material AGREGADO por bloque).
-   ⛔ **La fila de `--filas` sale CON EL VALOR ADENTRO y NO SE RE-TIPEA (#322):** vos escribís **la
-   glosa**; **una fila, una fuente**. ⛔ **Las comillas son las del EXTRACTOR: el script no pone
+   **La fila de `--filas` sale con el valor adentro y no se re-tipea (#322):** vos escribís **la
+   glosa**; **una fila, una fuente**. **Las comillas son las del extractor: el script no pone
    ninguna (#330)**; lo que sale sin comillas NO es verbatim y no se entrecomilla.
-   ⛔ **La extracción es testigo de lo que el SINTETIZADOR re-tipeó, nunca de lo que la MÁQUINA copió
+   **La extracción es testigo de lo que el sintetizador re-tipeó, nunca de lo que la máquina copió
    de ella (#454):** en el bloque de salvedades de una `## Vista` el único testigo independiente es
    el `.txt`; si calla, sale **no evaluable** con la marca `⚠verificar en el PDF`.
-   ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`** (#315/#317) y bloquea sólo con
+   **La cita se verifica contra la extracción, no contra el `.txt`** (#315/#317) y bloquea sólo con
    **evidencia positiva** (#318/#321): la frase bajo **otro** bibcode, o prefijo largo con cola
-   divergente; el **silencio** no. ⛔ **Pero PRIMERO se prueba contra el `.txt` de SU fuente, con UNA
+   divergente; el **silencio** no. **Pero primero se prueba contra el `.txt` de su fuente, con una
    implementación (`lib_quotes.quote_verdict`, #324).**
-   ⛔ **El `.txt` también puede ACUSAR, en un dominio acotado (#333):** prefijo largo presente y cola
-   distinta, en prosa, desde un **borde de palabra**, sin `$…$` ni celda. ⛔ **El EMPALME DE COLUMNAS
-   no acusa si la cita REANUDA (#364/#388).** ⛔ **No bloquea**: la salida es la **marca `⚠verificar en
+   **El `.txt` también puede acusar, en un dominio acotado (#333):** prefijo largo presente y cola
+   distinta, en prosa, desde un **borde de palabra**, sin `$…$` ni celda. **El empalme de columnas
+   no acusa si la cita reanuda (#364/#388).** **No bloquea**: la salida es la **marca `⚠verificar en
    el PDF`**, que `contrast --validar` deja **lista para pegar** y no aplica (#341).
-   ⛔ **La extracción de un PDF REEMPLAZADO no acusa sola (#437):** se mide contra el `.txt` nuevo.
-   ⛔ **Alcanza `## Vista` sumando el bibcode de la NOTA a los adyacentes (#373); el LINT usa esa regla
-   y esa función (#394), y el bibcode propio SUMA, nunca reemplaza** (`cfg.with_own_bibcode`).
-   ⛔ **Ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
+   **La extracción de un PDF reemplazado no acusa sola (#437):** se mide contra el `.txt` nuevo.
+   **Alcanza `## Vista` sumando el bibcode de la nota a los adyacentes (#373); el lint usa esa regla
+   y esa función (#394), y el bibcode propio suma, nunca reemplaza** (`cfg.with_own_bibcode`).
+   **Ese cruce es paso de cierre de toda operación que sintetice, antes del verify (#323):**
    `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
-   población y no evaluables) — un `grep` de segundos antes que N subagentes. ⛔ **Sin slug es además
+   población y no evaluables) — un `grep` de segundos antes que N subagentes. **Sin slug es además
    pasada periódica de `maintain` (#386)**, registrada en `_citas.yaml`.
 
 #### El CICLO DE LA LENTE — cómo se encadenan las piezas (#310)
@@ -911,7 +911,7 @@ En orden, con su consecuencia:
 
 1. **La lente de SUJETO es lo que hace que una vista no sea un resumen** (#188): se pregunta *«qué
    dice sobre {sujeto}»* con los alias pegados. ⚠ En la primera pasada **no puede ser angosta**.
-2. ⛔ **Los EJES no se declaran antes de leer: se DESCUBREN al contrastar** — pedirlos antes es pedir
+2. **Los ejes no se declaran antes de leer: se descubren al contrastar** — pedirlos antes es pedir
    la respuesta que la operación existe para producir, y **cierra hallazgos**.
 3. **El contraste (2b) es el PRODUCTOR de ejes, no un resumen**: ahí nace el vocabulario del tema.
 4. **El eje descubierto tiene tres destinos**: la **config** del tema (`ejes:`, #307), la
@@ -919,12 +919,12 @@ En orden, con su consecuencia:
    inventario *es* una query).
 5. **Los ejes son DEL USUARIO**: viven en `themes.yaml`, el contraste los **propone y no los escribe**
    (misma doctrina que `--drop-core` y AUD-160), y sin declarar rigen los de `relevance.facets` (D-43).
-6. ⛔ **Qué se propaga solo y qué no**: la vista nueva → nota del paper (#239) y el roll-up del
+6. **Qué se propaga solo y qué no**: la vista nueva → nota del paper (#239) y el roll-up del
    concepto, **sí**; la vista → **prosa de la ficha**, **NO**: reescribir un bloque **vence las
    anclas** (D-4/D-20), obliga a re-verificar (#203) y ese ciclo no converge solo (#282).
 
 **El invariante (INV-146):** toda vista declara **los ejes vigentes al leerla** (`vistas[].lente`; con
-`enfasis`, los de ESA lente, #372). ⛔ **La LENTE PREGUNTADA la escribe el PROMPT (#395)**, no el
+`enfasis`, los de ESA lente, #372). **La lente preguntada la escribe el prompt (#395)**, no el
 cosechador, y no se deriva de las claves de `ejes` (ésas son lo **contestado**, #270). Migrador:
 `make_notes.py --restamp-lente`. Cambiar los ejes de un tema produce un **diff computable**, nunca
 una re-interpretación silenciosa: la vista vieja sigue válida, cambia su **cobertura**.
@@ -952,7 +952,7 @@ una re-interpretación silenciosa: la vista vieja sigue válida, cambia su **cob
 > `extra_core:` = corpus declarado (#384)**. Lo inconseguible → `pending: …` (stub `pending_source`),
 > sin frenar. **`ingest-star` sigue astro-only.** Papers sin bibcode ADS → clave sintética
 > `AAAA+Autor`; páginas web → **snapshot `.txt` determinista** (`fetch_web.py` vía defuddle, que crea
-> además el stub). ⛔ **Una `url:` que sirve un PDF NO se snapshotea: se BAJA como PDF (#242)**
+> además el stub). **Una `url:` que sirve un PDF no se snapshotea: se baja como PDF (#242)**
 > (`fetch_web` mira el `Content-Type`). La **frontera dura sigue rigiendo**: sólo bibliografía citable.
 
 ### Registro de ingesta (`vault/config/registro/<slug>.yaml` — versionado, #51/#64)
@@ -991,11 +991,11 @@ Toda decisión de curación deja registro **versionado**, en los cuatro casos:
 | **con bibcode ADS** | `extra_core: {bibcode, via, motivo[, fecha]}` (D-58) | candidato del chaining: `triage --drop … --reason` (#51) · **core del sujeto: `triage --drop-core … --reason` (#112)** |
 | **fuente off-ADS** | `sources: {…, via, fecha, motivo}` (#111) | `triage --drop-source … --reason` (#81) |
 
-⛔ **`extra_core` fuerza la ENTRADA; `--drop-core` es su simétrico (#112).** Una decisión de curación
+**`extra_core` fuerza la entrada; `--drop-core` es su simétrico (#112).** Una decisión de curación
 que el clasificador ignora en silencio es peor que no tomarla. Propiedades del carril:
 - **El carril es `sujeto`, no global**: la exclusión es del par `(paper, sujeto)`.
 - **El paper excluido queda VISIBLE**, con `via: manual-drop` y el motivo en `why_excluded`.
-- **Los artefactos se borran** (PDF y `.txt`; si quedan, #108 los reporta para siempre). ⛔ **En la nota que SE CONSERVA, `drop_core` re-apunta
+- **Los artefactos se borran** (PDF y `.txt`; si quedan, #108 los reporta para siempre). **En la nota que se conserva, `drop_core` re-apunta
   `pdf:`/`fulltext:` por verdad de disco (#217).** **La vista y la extracción no se tocan** (el lint
   dice que ya no hay contra qué re-verificar). La **nota** se borra **sólo si el paper no pertenece a
   otro sujeto Y no tiene extracción**. Los `[[wikilink]]` rotos **no se reparan** (#132).
@@ -1011,16 +1011,16 @@ entró). En **`sources:`** es **cerrado y BINARIO** (#206): `usuario` (lo trajo 
 carril hace que el loader **rechace duro**. En `sources:`, **`motivo`** es obligatorio; el lint
 **bloquea** la entrada sin `via` o sin `motivo`, fuera del vocabulario o con valor **retirado**. ⚠ El
 PDF que cierra un `pending_source` no necesita `via` propio.
-⛔ **Lo declarado se CRUZA contra su `doi` o la primera página del PDF al ingestar (`check_sources`,
+**Lo declarado se cruza contra su `doi` o la primera página del PDF al ingestar (`check_sources`,
 #353):** autor/año desmentidos por Crossref **bloquean**, el resto es backlog; no reescribe `sources:`.
-⛔ **Cuando el equivocado es el CATÁLOGO se FIRMA, no se corrige el dato correcto (#463):
+**Cuando el equivocado es el catálogo se firma, no se corrige el dato correcto (#463):
 `metadata_revisada: [{campo, declarado, catalogo, motivo, fecha}]`**, que
 `check_sources.py <slug> --firmar <key> --campo <c> --motivo "<por qué>"` imprime listo para pegar.
-⛔ **El drift `bibtex` ↔ frontmatter (#397) lleva la MISMA firma, en la nota** (#483), vía
-`fetch_bibtex.py --paper <bib> --firmar --campo <c> --motivo`. ⛔ **Cubre un ESTADO, no un campo:** si
+**El drift `bibtex` ↔ frontmatter (#397) lleva la misma firma, en la nota** (#483), vía
+`fetch_bibtex.py --paper <bib> --firmar --campo <c> --motivo`. **Cubre un estado, no un campo:** si
 `declarado` o `catalogo` cambian, vuelve; la firma vieja o rota **no se ignora** (D-4, #71).
 
-⛔ **El carril off-ADS tiene salida hacia la ingesta** (#111): `python scripts/triage.py <slug>
+**El carril off-ADS tiene salida hacia la ingesta** (#111): `python scripts/triage.py <slug>
 --accept-source <doi> --via <via> --reason "<motivo>"` arma la entrada completa **lista para pegar**;
 **`--promote-source <key> --bibcode <bib>`** migra a `extra_core` la fuente con bibcode ADS (#353).
 Ninguno escribe `themes.yaml`.
@@ -1066,12 +1066,12 @@ PDF** (obligatoria; sin cita ⇒ no-soportada: tiene que tocar el **contenido di
 `inferencia`, o taguearla). ⚠ Los ejes de **grado** (`parcial`, columna `Score`) se eliminaron y no
 vuelven.
 
-⛔ **La condición se CLASIFICA, con vocabulario cerrado: `acota` | `contextualiza` (#221).** Test:
+**La condición se clasifica, con vocabulario cerrado: `acota` | `contextualiza` (#221).** Test:
 ***¿la afirmación queda falsa si se saca la condición?*** → **`acota`** (se resuelve sí o sí: fila de
 `## Régimen de validez`) / **`contextualiza`** (va al reporte). Es **columna, no prosa**.
-⛔ **Clase UNA vez; la resolución la escribe `write_verif_sidecar --resolver
-<ancla>[:<bibcode>]=<dónde>` (#427)** — migrador `--migrate-condition-prefix`. ⛔ **Se direcciona por
-el PAR, no por el ancla (#434).** ⛔ **La condición de una ronda posterior no se pierde (#451):** rige
+**Clase una vez; la resolución la escribe `write_verif_sidecar --resolver
+<ancla>[:<bibcode>]=<dónde>` (#427)** — migrador `--migrate-condition-prefix`. **Se direcciona por
+el par, no por el ancla (#434).** **La condición de una ronda posterior no se pierde (#451):** rige
 el **último eslabón** (#450); la condición **distinta** se encadena —`acota→resuelta: <dónde> · <vieja>
 ⟂ acota: <nueva>`— y la fila vuelve a contar como pendiente; el escritor **declara** la que no quedó
 vigente.
@@ -1084,38 +1084,38 @@ línea de cabecera**, **las tres sub-secciones** de hallazgos y un **puntero**. 
 directorio, **no** un `.verif/` con punto (Obsidian lo esconde). Las **anclas** hashean bloques **de
 la nota**. El par es un **iff** (INV-148): tabla todavía adentro (→ `make_notes.py
 --migrate-verif-sidecar`), cabecera sin hermano y hermano huérfano **bloquean**; cabecera
-desincronizada de su tabla es R-1. ⛔ **Una sola función resuelve dónde vive**
+desincronizada de su tabla es R-1. **Una sola función resuelve dónde vive**
 (`lib_blocks.verif_rows`). Un hermano **no es una nota** (`cfg.note_paths` lo saca de todo
 enumerador), pero sus `[[bibcode]]` cuentan para los wikilinks rotos y los reescribe todo renombre;
 es la **octava capa** de `entity.py`.
 
 **El bloque `## Verificación de citas`** — una fila por par, en el hermano:
 `| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`
-- ⛔ **Sin fila no hay dónde colgar el ancla**: no colapsar las soportadas en prosa.
-- ⛔ **Sólo `Afirmación (extracto)` se trunca (#226)**; `Evidencia` lleva su localizador **al final y
-  completo** (#122). ⛔ **El corte no cae dentro de `$…$`, `` ` `` ni `[[ ]]`** (#274b/#257c:
-  `lib_blocks.truncate_claim`). ⛔ **La celda lleva PROSA, nunca un `repr()`** (#274a).
+- **Sin fila no hay dónde colgar el ancla**: no colapsar las soportadas en prosa.
+- **Sólo `Afirmación (extracto)` se trunca (#226)**; `Evidencia` lleva su localizador **al final y
+  completo** (#122). **El corte no cae dentro de `$…$`, `` ` `` ni `[[ ]]`** (#274b/#257c:
+  `lib_blocks.truncate_claim`). **La celda lleva prosa, nunca un `repr()`** (#274a).
 - ⛔ **`Hash fuente` declara CONTRA QUÉ ARCHIVO se verificó: `txt:<sha10>` o `pdf:<sha10>` (#117).**
   En filas nuevas: `pdf:`. Sin prefijo el lint **bloquea** (`make_notes.py --migrate-verif-archivo`).
   Excepción (#223): la fila `no verificable por extracción` **no declara archivo**.
-- ⛔ **Documento largo leído del `.txt`: los DOS localizadores (#200)**; desde #205 no se produce en
+- **Documento largo leído del `.txt`: los dos localizadores (#200)**; desde #205 no se produce en
   filas nuevas.
 - ⛔ **Un veredicto que exige acción NO queda registrado y sin resolver (#91):** `no-soportada` /
   `contradice` **pelados bloquean**.
-- ⛔ **Con DOS RONDAS, la segunda ANOTA, no pisa (#232):** `contradice→corregida`; con más rondas la
-  celda encadena (#274c). ⛔ **El veredicto VIGENTE es el ÚLTIMO eslabón, y la resolución va DESPUÉS
+- **Con dos rondas, la segunda anota, no pisa (#232):** `contradice→corregida`; con más rondas la
+  celda encadena (#274c). **El veredicto vigente es el último eslabón, y la resolución va después
   de él (#450):** `soportada→contradice` es una contradicción **abierta**. Partición, `(N resueltas)`
   y re-anclaje (#366) van por el vigente; lo que eso oculta se declara (`revertidas`). ⚠ La anotación
   es **texto libre** (#316).
-- ⛔ **La cabecera la genera el mismo código que lee la tabla** (`lib_blocks.verif_summary`, INV-81):
+- **La cabecera la genera el mismo código que lee la tabla** (`lib_blocks.verif_summary`, INV-81):
   los **cuatro** veredictos y, tras un **`—`**, `con_condicion`. Las **tres sub-secciones** van
-  **aunque digan «ninguna»**. ⛔ Su línea se lee **normalizada** y el fragmento, por la **plantilla que
+  **aunque digan «ninguna»**. Su línea se lee **normalizada** y el fragmento, por la **plantilla que
   lo escribe** (#430); red **por SECCIÓN**. Migrador `--restamp-section`.
 
 **Los dos hashes (el ancla, D-4/D-20)**: el **ancla** hashea el **bloque markdown normalizado** que
 contiene la cita —reflowear no la mueve, cambiar un número sí; un blockquote hard-wrapped es UN
 bloque (#224); una fila sin `[[bibcode]]` propio hereda el del caption— y el **hash de fuente**, el
-archivo **leído**. Los calcula `lib_blocks.py`: **no se escriben a ojo**. ⛔ **El bloque escrito se
+archivo **leído**. Los calcula `lib_blocks.py`: **no se escriben a ojo**. **El bloque escrito se
 re-parsea antes de publicarse (#284):** `lib_blocks.render_verif_table` escapa cada celda y
 **rehúsa** un bloque cuya lectura no reproduce lo escrito.
 
@@ -1132,7 +1132,7 @@ verificable por extracción`. Es **juicio de LLM**, no prueba: su tasa de error 
 énfasis markdown alrededor no cambia nada (#276); `inferencial` no cuenta.
 
 **Regla dura — todo lo apuntable es chequeable:** toda afirmación fáctica va **citada `[[bibcode]]`
-o marcada `inferencia`** — nada sin respaldo. ⛔ **Y la cita textual lleva su `[[bibcode]]` PEGADO
+o marcada `inferencia`** — nada sin respaldo. **Y la cita textual lleva su `[[bibcode]]` pegado
 (#316/#325):** `«…» [[bib]]`, `«…» (p. 4) [[bib]]`, `«…» ([[bib]], p. 4)` (#488) o, en una fila,
 la celda *Fuente*; con prosa en el medio la **mención** posterior roba la cita. ⚠ La matemática
 **parte** el chequeo como la elipsis (#326). Excepción: los valores de ground-truth (NEA) en `stars/`
@@ -1147,7 +1147,7 @@ framework). **Cuándo:** a pedido explícito, **nunca** como paso de cierre — 
 pseudocódigo desde la nota y anotar dónde se traba*), la nota contra sí misma, integridad del
 artefacto, aritmética, cadena de verdad, coherencia con el mundo declarado, y la nota contra su
 cadena—, cada uno declarando **su población**; barrera; corrección **serial** volviendo a la fuente;
-y **re-verificación de lo tocado** (#203). ⛔ **Lo que no se pudo cerrar sale marcado en la nota** con
+y **re-verificación de lo tocado** (#203). **Lo que no se pudo cerrar sale marcado en la nota** con
 la cuarta marca en línea (abajo), no en un reporte que se pierde.
 
 ### Contradicciones (desacuerdo claim↔claim — skill `find-contradictions`)
@@ -1165,21 +1165,21 @@ en el skill.
 **Seis** caducidades se miran en **una sola pasada**: retracciones, correcciones, **versiones** (el
 preprint salió publicado, D-19), **snapshot web** (el modo más silencioso: ni DOI ni bibcode),
 **ground-truth** (NEA cambia valores entre releases) y el **conteo de citas de la puerta 2** (#106).
-⛔ **El hallazgo de VERSIONES sobrevive a la corrida (#298): `versions_disponible: <bibcode>`
+**El hallazgo de versiones sobrevive a la corrida (#298): `versions_disponible: <bibcode>`
 estampado en la nota** + backlog del lint con el `--rename-paper`; declara su población. ⚠ La nota
 con bibcode publicado que igual lee el preprint es backlog aparte.
-⛔ **Ese backlog se CIERRA con un comando (#436): `python scripts/replace_pdf.py <bibcode>
+**Ese backlog se cierra con un comando (#436): `python scripts/replace_pdf.py <bibcode>
 <ruta.pdf> --source publisher --reason "<motivo>"`.** Copia a **todos** los slugs, re-extrae **sólo
 ese** `.txt` (`extract_fulltext --bibcode`), anula `eprint_version` y **emite el alcance de la
-re-verificación**. ⛔ La extracción queda **marcada** `_paginacion` y se **re-pagina RELEYENDO el PDF**
-(`repaginate.py`, #494), nunca con la página que el `.txt` deduce. ⛔ **Firma `pdf_reemplazo` en la
-nota, add-only, y AVISA si el entrante tiene menos páginas (#437)** — avisa, no rehúsa.
-⛔ **Los slugs son la UNIÓN de PDF y `.txt` (#448).**
-⛔ **El REUSO entre slugs (D-18) deja una pregunta hecha, no una respuesta (#297):** la línea del
+re-verificación**. La extracción queda **marcada** `_paginacion` y se **re-pagina RELEYENDO el PDF**
+(`repaginate.py`, #494), nunca con la página que el `.txt` deduce. **Firma `pdf_reemplazo` en la
+nota, add-only, y avisa si el entrante tiene menos páginas (#437)** — avisa, no rehúsa.
+**Los slugs son la unión de PDF y `.txt` (#448).**
+**El reuso entre slugs (D-18) deja una pregunta hecha, no una respuesta (#297):** la línea del
 reuso declara `pdf_source`, fecha y que la antigüedad **no se chequeó** (preprint y publicado no
 colisionan por DOI, #216); el detector se corre acotado con `sweep_external.py --bibcodes b1,b2` (no
 registra la pasada), y el lint lo levanta como backlog, junto con *«`_red.yaml` no existe»*.
-⛔ **Reporta, no aplica solo — con UNA excepción nombrada** (AUD-206): **`retracciones`**
+**Reporta, no aplica solo — con una excepción nombrada** (AUD-206): **`retracciones`**
 (`check_retractions` estampa `retracted:` / `corrections:` **sin preguntar**: una fuente retractada
 citada rompe la frontera dura, y lo que escribe es metadata). Versiones y web proponen el comando,
 ground-truth pregunta, citas-puerta2 reporta. El renombre preprint→publicado **nunca** es automático.
@@ -1195,7 +1195,7 @@ otra vía—: se **marca en línea** con `[[bibcode]] ⛔retractada`. Sin la mar
 lint **pide la marca** `⚠desactualizado` pegada al valor: no se borra, se hace visible.
 
 **El conteo de citas que mueve la puerta 2 (#106 / INV-104).** Es la única metadata que **cambia
-sola**. ⛔ La regla es **"todo cambio de veredicto es visible y fechado"**: **`lib_config.puerta2_cruces`**
+sola**. La regla es **"todo cambio de veredicto es visible y fechado"**: **`lib_config.puerta2_cruces`**
 (offline, lint) compara el umbral vigente con el del registro —*"editaste el umbral"*— y
 **`sweep_external.sweep_citas`** re-consulta los conteos —*"el mundo se movió"*—. Ninguno aplica. El
 umbral se persiste con `query_ads.lens_used(meta)` y se compara con `in`, no por truthiness
@@ -1207,7 +1207,7 @@ definición, `lib_quotes.verificar_pdf_mark`—: **no destruye**, es **visible**
 y **se saca cuando alguien la verifica**, con la evidencia. **Ante la menor duda se marca**. ⚠ No es
 excusa para no verificar: si la fuente está en disco, se abre.
 
-⛔ **El `log.md` NO afirma citas textuales (#391)** —ninguna capa de verificación lo audita—: la cita
+**El `log.md` no afirma citas textuales (#391)** —ninguna capa de verificación lo audita—: la cita
 va **a su nota**; si una entrada necesita mostrarla, va en un **blockquote** (mención, no afirmación,
 #387). La exención es **estructural** (`Block.kind`) y la decide UNA función
 (`lib_quotes.log_quote_exempt`, #386, INV-141). Vale **sólo en `log.md`**. La vieja marca
@@ -1235,11 +1235,11 @@ ground-truth sin `--force` explícito. Detalle en el skill.
 
 ### Propuestas (lo que el sistema sugiere y espera una firma — `scripts/proposals.py`)
 
-⛔ **Una PROPUESTA no es deuda, y por eso tiene su propia superficie (#328):** la deuda se **agenda**
+**Una propuesta no es deuda, y por eso tiene su propia superficie (#328):** la deuda se **agenda**
 (la reporta el lint); la propuesta necesita que alguien **firme** y se pierde si nadie la lee.
 `python scripts/proposals.py [<slug>]` las junta con **su motivo textual**, declara su población y
 **lo que no puede barrer** (un eje descubierto en 3b vive en la conversación). Reporta y no aplica.
-⛔ **Cada categoría declara DÓNDE aterriza su firma y si el barrido la cruza (#435):** *cruzada*,
+**Cada categoría declara dónde aterriza su firma y si el barrido la cruza (#435):** *cruzada*,
 *no cruzable* (la fila trae el valor vigente al lado) o *se cierra sola*. Lo firmado se lista
 **aparte** (AUD-207), nunca silenciado.
 
@@ -1250,7 +1250,7 @@ append-knowledge, maintain, find-contradictions, query archivada, test de hipót
 commitear** y **después** del verify (resolver una cita no-soportada cambia la prosa); más una
 pasada completa periódica. Es barato. Correr `python scripts/lint.py`.
 
-⛔ **El catálogo completo —cada categoría, su severidad y cómo se cierra— vive en `docs/lint.md`.**
+**El catálogo completo —cada categoría, su severidad y cómo se cierra— vive en `docs/lint.md`.**
 El reporte del lint es autodescriptivo (cada categoría nombra su resolución); esta sección fija las
 reglas del gate que hay que saber antes de correrlo.
 
@@ -1286,28 +1286,28 @@ cierre lo invocan con el flag; la higiene de `maintain`, sin él.
 
 ## Reglas de método 4-6 (las de operar la bóveda)
 
-⛔ **Las reglas 1-3 (tests, dobles, mutación), la convención de idioma del código y las diez redes
+**Las reglas 1-3 (tests, dobles, mutación), la convención de idioma del código y las diez redes
 viven en `docs/desarrollo.md` (#465):** se leen al escribir código del framework, que es operación
 explícita del template; una instancia no edita framework (#377). La numeración no cambia. Las tres
 que siguen rigen **operaciones de bóveda** y por eso se quedan:
 
 4. **Un mapa que atribuye mal es peor que uno vacío**: el vacío se ve, la atribución falsa se lee
    como verdad. Vale para `docs/trazabilidad.md`, `docs/contrato.md` y cualquier tabla estampada.
-   ⛔ **Todo chequeo que mire texto de una nota NORMALIZA EL MARKDOWN primero** (#168, #276, #283,
+   **Todo chequeo que mire texto de una nota normaliza el markdown primero** (#168, #276, #283,
    #309).
 5. **Cuando dos mediciones no reconcilian y no se puede re-medir, se DECLARA la discrepancia**; elegir en silencio es cómo un documento empieza a mentir.
 6. **Fan-out para LEER, aplicador serial para ESCRIBIR, barrera antes de CONSUMIR — y lo escrito se
    RE-VERIFICA.** Dos correctores sobre el mismo bloque lo corrompen en cadena (#197) y derivar
    trabajo de una etapa que todavía corre deja hallazgos que no mira nadie (#199). **Un solo
    escritor, y una barrera antes de que algo consuma resultados.**
-   - ⛔ **El aplicador comparte la definición de «bloque» con quien produce los pares (#222)**: la red
+   - **El aplicador comparte la definición de «bloque» con quien produce los pares (#222)**: la red
      barata es **contar los pares antes y después y abortar si bajaron**.
-   - ⛔ **La cuarta cláusula (#203): el ciclo cierra en *corregir → re-verificar lo tocado*** — un
+   - **La cuarta cláusula (#203): el ciclo cierra en *corregir → re-verificar lo tocado*** — un
      aplicador no valida lo que aplica.
    - ⚠ **Y ese ciclo NO CONVERGE solo (#282):** la salida **no es aflojar el ancla** (#224): es
      distinguir la corrección que **cambia lo que la afirmación dice** (se re-verifica) de la
      **derivada de la propia verificación** (se re-ancla). Lo emite `python scripts/reverify_subset.py
-     <nota>` (#257): re-anclables / a re-verificar / filas huérfanas. ⛔ **Propone y no escribe**;
+     <nota>` (#257): re-anclables / a re-verificar / filas huérfanas. **Propone y no escribe**;
      empareja por **cobertura del extracto** (#226) y **nunca cruza `bibcode`**.
 
 Corolario que las cruza a todas: **una promesa que el sistema dejó de cumplir en silencio es peor
@@ -1317,7 +1317,7 @@ no se arregle en el momento.
 ## Token / secretos
 El token ADS va en `vault/config/ads_dev_key` (**gitignored** — nunca se commitea) o en la variable de
 entorno `ADS_DEV_KEY`. Token gratis en <https://ui.adsabs.harvard.edu/user/settings/token>.
-⛔ **El `mailto` del polite pool (OpenAlex, Crossref, Unpaywall) es OPT-IN y no sale de `git config
+**El `mailto` del polite pool (OpenAlex, Crossref, Unpaywall) es opt-in y no sale de `git config
 user.email`:** se declara en `vault/config/mailto` (gitignored) o en `ALMAGESTO_MAILTO`; **sin
 declararlo no sale ninguna dirección** y las tres APIs funcionan igual, en el pool público.
 `build/` y `outputs/` gitignored. PDFs por git-lfs (`vault/raw/pdfs/**/*.pdf`). El resto de

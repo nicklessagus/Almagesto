@@ -56,7 +56,7 @@ completa; 24/24 localizados con fragmentos cortos).
 3. Sólo **agotados 1 y 2** corresponde considerar artefacto de extracción (ecuación/tabla/escaneo)
    → abrir el PDF o marcar `no verificable por extracción`.
 
-⛔ **Prohibido normalizar espacios sobre el archivo entero** (`re.sub(r"\s+", " ", texto)` o
+**Prohibido normalizar espacios sobre el archivo entero** (`re.sub(r"\s+", " ", texto)` o
 equivalente): en una línea física a dos columnas eso **empalma el final de la columna 1 con el
 principio de la columna 2**, fabricando adyacencias que el paper no tiene — puede hacer pasar como
 `soportada` una afirmación **inventada** (falso positivo: el modo peligroso, peor que el falso
@@ -74,7 +74,7 @@ fuente. También pierde tablas-imagen y todo lo que vive en una figura. Medido e
 paper de 2005 con capa de texto tipográfica y todos los detectores en verde: el radical `√` salía
 como una `r` suelta, `p′` como `p0`, y un subíndice hacía leer una autocovarianza como una inversa.
 Por eso los detectores que avisaban de esto (`symbols_lost`, `fulltext_layout`) se **retiraron**: no
-discriminaban, y hoy la fuente es siempre el PDF. ⛔ **Nunca declares `no-soportada` porque una
+discriminaban, y hoy la fuente es siempre el PDF. **Nunca declares `no-soportada` porque una
 fórmula, una fila de tabla o un valor no aparezcan en el `.txt`** — el índice no los tiene y su
 ausencia no dice nada sobre el paper.
 

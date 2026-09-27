@@ -47,7 +47,7 @@ verificar y los papers sin sintetizar, el cierre deja **tres cosas a la vista**.
 El **eje** a barrer: una estrella (`slug`), un concepto, o "todo el corpus". Si no se da, preguntar o
 tomar la última entidad tocada.
 
-⛔ **Toda contradicción declara su entidad DESTINO (D-40).** Análogo de "no hay papers sueltos": una
+**Toda contradicción declara su entidad destino (D-40).** Análogo de "no hay papers sueltos": una
 contradicción es siempre **sobre algo**, y ese algo es una entidad de la bóveda.
 
 | Sobre qué discrepan | Dónde va |
@@ -98,8 +98,8 @@ Juntar, para el eje elegido, qué afirma **cada** paper sobre **cada** hecho:
 > así que una diferencia numérica puede ser **de versión y no entre fuentes** (#57). Un par con
 > alguna de esas marcas se anota y se excluye del fan-out, o entra con la salvedad explícita.
 >
-> ⛔ **Mirá también el `role` de cada nota (#73): no todo par se contrasta igual, y uno de los cuatro
-> casos NO es contraste.** El rol lo pobló la extracción (`fundacional` introduce el
+> **Mirá también el `role` de cada nota (#73): no todo par se contrasta igual, y uno de los cuatro
+> casos no es contraste.** El rol lo pobló la extracción (`fundacional` introduce el
 > método/mecanismo · `aplicacion` lo instancia en un caso · `arbitro` reanaliza y resuelve una
 > tensión previa):
 > - **fundacional ↔ fundacional** → comparar supuestos y derivaciones.
@@ -231,7 +231,7 @@ de concepto) que se agregaría en cada caso, y **pedir aprobación**. Formato de
   tiene `## Inventario por eje` (#72), el desacuerdo real va **además** como filas de ese eje.
 Los **no-concluyentes** se listan aparte (no se tocan; sirven para no re-flaggearlos).
 
-⛔ **Los `aparente` de un CONCEPTO no se descartan (#74).** En una estrella, "distinto régimen,
+**Los `aparente` de un concepto no se descartan (#74).** En una estrella, "distinto régimen,
 distinta definición, distinta época" es un no-hallazgo y se tira. En un concepto **es el hallazgo**:
 dos papers dicen cosas distintas y **los dos tienen razón** porque valen bajo condiciones distintas
 (SNR, muestreo, tamaño de muestra, definición del observable). Cada `aparente` de un concepto se

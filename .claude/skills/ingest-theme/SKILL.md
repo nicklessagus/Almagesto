@@ -66,7 +66,7 @@ Progreso del ingest del tema <tema>:
      query y reconfirmar. **No** bajar PDFs hasta que apruebe query y corpus (#529). (`--probe`
      recibe la query cruda, así que corre sin que el tema exista todavía en `themes.yaml` —
      `--theme <slug>` recién funciona después del paso d.)
-   - ⛔ **c1. Para un tema de MÉTODO, re-corré el probe CON la lente del tema, después del paso d:**
+   - **c1. Para un tema de método, re-corré el probe con la lente del tema, después del paso d:**
      `python scripts/query_ads.py <slug> --theme --probe` (la query sale de `query:`; se puede pasar
      otra como argumento). Sin `--theme`, el preview clasifica con la lente **global**, que D-26
      declara *activamente dañina* para un tema de método — y no es «menos preciso»: es el veredicto
@@ -76,13 +76,13 @@ Progreso del ingest del tema <tema>:
      además **por qué puerta entró** (`fundacional` / `astro`, #126), que es lo que decide el
      recorte de lectura, y la línea de cierre manda a `themes.yaml` (`facet:`,
      `fundacional_min_citas`), que es el archivo que decide este corte.
-     ⛔ **Leé el desglose del NO-CORE (#289) antes de tocar nada:** distingue *sin la faceta propia*
+     **Leé el desglose del no-core (#289) antes de tocar nada:** distingue *sin la faceta propia*
      (la faceta está bien / apretala más) de *pasa la faceta y ninguna puerta abre* (la faceta
      acertó y el problema es la puerta) — piden acciones **opuestas** y antes se mostraban
      idénticas. Medido: 261 contra 32, con los dos papers que el tema existía para capturar entre
      los 32; aflojar la faceta —el movimiento que sugería la pantalla— deja entrar los otros 261.
      El bloque *«no-core que PASAN la faceta»* es de donde sale `extra_core`.
-     ⛔ **Y si el tema es de otra disciplina, mirá el `search_fq` (#295).** Es la mitad **más
+     **Y si el tema es de otra disciplina, mirá el `search_fq` (#295).** Es la mitad **más
      restrictiva** del filtro (acota server-side, antes de traer nada) y sale del **objetivo** salvo
      que el tema declare el suyo: en una bóveda astro, un tema de estadística o signal processing se
      busca sobre un universo que excluye su literatura **por construcción**, y ninguna `facet:`
@@ -118,7 +118,7 @@ Progreso del ingest del tema <tema>:
    mitad de lo que decide el corte. Y **`fundacional_min_citas` se acuerda con el usuario o no se
    pone**: el número depende del campo (30k citas es normal en ML y muchísimo en astro) y el
    framework **no tiene default** — sin declararlo la puerta 2 no abre y el motivo queda en
-   `why_excluded`, visible en el apéndice "Excluidos por el filtro". ⛔ **Y el umbral se compara
+   `why_excluded`, visible en el apéndice "Excluidos por el filtro". **Y el umbral se compara
    contra el `citation_count` de ADS (#357)**: en un tema de otra disciplina eso mide cuánto lo cita
    astro, no cuán fundacional es en su campo (medido en `icasso`: 21/21 en tema, 0 core con
    cualquier umbral; el fundacional tiene 9 en ADS y 284 en OpenAlex, y 6 de 10 no están en ADS).
@@ -150,7 +150,7 @@ Progreso del ingest del tema <tema>:
    puntero, no copia: no lo repliques acá ni en otros docs. Todo idempotente (si algo falla se
    re-corre, o se corre el script puntual con sus flags finos).
 
-   ⛔ **La mecánica de la cadena se describe en UN solo lugar (#67):**
+   **La mecánica de la cadena se describe en un solo lugar (#67):**
    `.claude/skills/ingest-star/reference/cadena-ads.md` — el mismo archivo que apunta `ingest-star`,
    porque es **la misma cadena**: la **guardia de expansión**, el citation chaining, el rate limit de
    `fetch_arxiv`, la cascada publisher-first de `fetch_pdf` (#512), el residuo `build/<slug>/missing_pdf.json`
@@ -181,7 +181,7 @@ Progreso del ingest del tema <tema>:
      Lista los core ordenados por **cuántas facetas del objetivo toca cada uno** (citas como
      desempate). Acá el orden importa más que en una estrella: en un tema de método conviven
      fundamentos y aplicaciones astro por diseño, y el `citation_count` solo ordena por campo (30k
-     citas es normal en ML y muchísimo en astro), no por pertinencia a esta bóveda. ⛔ No filtra ni
+     citas es normal en ML y muchísimo en astro), no por pertinencia a esta bóveda. No filtra ni
      toca la lente: ordena lo que **ya** es core.
    - Si no se leen todos, **se avisa al usuario** y el motivo queda **registrado**:
      ```bash
@@ -200,7 +200,7 @@ Progreso del ingest del tema <tema>:
    `## Vista — <concept>` enfocada **en el eje del tema** — el stub la trae ya ramificada por tipo
    de sujeto (#76): *aporte al tema* (definición, mecanismo/ecuación, método, signo) y *régimen de
    validez*, no planetas ni actividad de una estrella concreta.
-   ⛔ **Es UNA VISTA, no «la extracción del paper» (#188)**: el mismo paper leído desde una estrella
+   **Es una vista, no «la extracción del paper» (#188)**: el mismo paper leído desde una estrella
    da otra. El sujeto de la vista es el **`concept`** (lo que el paper declara en `thesis_links`),
    no el slug del tema. Cosechá con `python scripts/harvest_views.py <slug> --theme`, que estampa
    `fecha`/`txt`/`lente`, mergea add-only y corre `is_extraction` (INV-103) — cosechar a mano pisó
@@ -221,7 +221,7 @@ Progreso del ingest del tema <tema>:
    pasar) → agregar add-only `thesis_links` (y `methods` si aplica) a su nota. El roll-up del concept es una tabla
    **estampada**: junta también por `methods:` sin re-taguear, pero **no acumula sola** — al
    terminar el retro-tag hay que re-correr `python scripts/make_notes.py <slug> --theme`.
-   ⛔ **El retro-tag NO escribe vistas, y es a propósito (#188).** Tagear es declarar un
+   **El retro-tag no escribe vistas, y es a propósito (#188).** Tagear es declarar un
    **reclamo**: nadie leyó ese paper desde este tema todavía. El lint lo reporta como *reclamado sin
    vista* (backlog) — hacé la vista (`extraction_prompt.py <slug> <bibcode> --theme` + cosecha) o
    declarala con `no_vista: [{sujeto, motivo}]` si el paper sólo aporta al roll-up. Es justo la
@@ -233,7 +233,7 @@ Progreso del ingest del tema <tema>:
    es un retro-tag que no se hizo.
 
 3c. **Contraste cross-paper (#72) — antes de escribir la síntesis.**
-   ⛔ **Usá `python scripts/contrast.py <slug>` — no improvises un digest (#314/#317).** Es el único
+   **Usá `python scripts/contrast.py <slug>` — no improvises un digest (#314/#317).** Es el único
    eslabón de la cadena que no tenía herramienta, y su modo de falla está medido: leer 32 JSON de
    ~25 KB lleva a imprimir un resumen recortado, el recorte cae **dentro de la cita textual** y el
    modelo la completa con lo plausible. **2 citas fabricadas sobre 139 pares**, las dos en el
@@ -241,14 +241,14 @@ Progreso del ingest del tema <tema>:
    por campo (`--campo`, `--grep`, `--eje`, `--paper`), arrastra `linea` y `segunda_mano`, emite
    filas de **una fuente cada una** (`--filas`) y **por default no trunca una cita**: si no entra,
    filtrá menos filas (el corte por flag se RETIRÓ en la auditoría 2026-09-04: contradecía #314).
-   ⛔ **La fila sale de `--filas` CON EL VALOR ADENTRO: no lo re-tipees (#322).** Los 12 verdaderos
+   **La fila sale de `--filas` con el valor adentro: no lo re-tipees (#322).** Los 12 verdaderos
    positivos medidos son errores de **copiado** —6 de atribución (la frase de un paper bajo otro), 6
    de cola alterada—, **ninguno** de comprensión: o sea, de mover una cadena de un archivo a otro,
    que es lo que un script hace perfecto y un LLM mal. Vos escribís **la glosa** y elegís qué filas
    entran; la cadena y su `[[bibcode]]` vienen de la máquina. Si la cita no entra en la
    celda, se **parafrasea SIN comillas** — nunca se recorta entre comillas. Y **una fila, una
    fuente**: agrupar bibcodes bajo una glosa compartida es cómo se fabrican atribuciones.
-   ⛔ **Las comillas de la celda son las del EXTRACTOR: el script no pone ninguna (#330).** `valor`
+   **Las comillas de la celda son las del extractor: el script no pone ninguna (#330).** `valor`
    no es «la cita»: es lo que escribió el extractor, y llega en tres formas — **entre «»** (es cita
    textual), **con «» adentro** (glosa del extractor **con** la cita adentro: la glosa NO es del
    paper) y **sin «»** (dato de tabla o prosa: **no es verbatim, y no se entrecomilla al pegarlo**).
@@ -271,7 +271,7 @@ Progreso del ingest del tema <tema>:
    `[[bibcode]]` y se evapora que los otros dos existen — que es exactamente lo que el concept
    promete responder sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero
    no sintetizado*).
-   ⛔ **Y este paso es el PRODUCTOR de los ejes del tema (#310), no un resumen.** Un eje sólo existe
+   **Y este paso es el productor de los ejes del tema (#310), no un resumen.** Un eje sólo existe
    al poner las vistas una al lado de la otra: acá nace el vocabulario del tema (medido en una
    ingesta real: 6 ejes y 43 filas, ninguno declarado antes de leer; el mismo término nombrando
    **cinco objetos distintos** y el alias central significando dos operaciones según la escuela).
@@ -292,7 +292,7 @@ Progreso del ingest del tema <tema>:
 > (#316): un párrafo que **contrasta** dos fuentes legítimamente las cita a las dos — lo que no
 > puede pasar es que una **cita entrecomillada** quede sin su `[[bibcode]]` al lado, porque ahí el
 > chequeo no sabe de quién es y la prueba contra todas (la convención es `«…» [[bibcode]]`).
-> ⛔ **«Al lado» es literal (#325):** entre la cita y su link sólo puntuación y, si va, el paréntesis
+> **«Al lado» es literal (#325):** entre la cita y su link sólo puntuación y, si va, el paréntesis
 > del localizador — con prosa en el medio el chequeo declara ambigüedad, y una **mención** posterior
 > («…atribuyendo eso a [[X]]») ya no se lleva la atribución. En una fila manda la columna *Fuente*. Cuando enumeres
 > quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
@@ -312,7 +312,7 @@ Progreso del ingest del tema <tema>:
    <concept>` **o** `methods: <concept>`) se regenera con `python scripts/make_notes.py <slug> --theme`
    — no acumula solo. **Citar los papers clave por `[[bibcode]]`** en la prosa
    (además de trazabilidad, da links entrantes → no quedan huérfanos).
-   ⛔ **Una ECUACIÓN que va a la nota se levanta del PDF, no del `.txt`, y viaja con su página.**
+   **Una ecuación que va a la nota se levanta del PDF, no del `.txt`, y viaja con su página.**
    El `.txt` puede haber vaciado la fórmula, haberla dejado con el cuerpo **cambiado** o no haberse
    podido medir — y **dos de los cuatro casos medidos se veían perfectos**: `si = 1` donde el paper
    dice `si = ±1` (el supuesto binario **es** el ±1) y «model (8)» donde dice «model (3)». Una
@@ -404,13 +404,13 @@ este paso 0b y no algo que el orquestador haga solo (#95 sigue abierto como **de
 defecto). Lo único que `source:` decide de fondo es una propiedad del **corpus**: *«este tema tiene
 papers sin bibcode ADS, así que además de la query hay una lista declarada»*.
 
-⛔ **Este paso tiene red desde #361:** el lint reporta como backlog (`cascada_sin_correr`) el tema
+**Este paso tiene red desde #361:** el lint reporta como backlog (`cascada_sin_correr`) el tema
 off-ADS o mixto cuyo registro no tiene `descubrimientos`, los tiene vacíos o con un backend que
 FALLÓ en todas las corridas. Medido: un tema se cerró con todos los gates en verde sin este paso, y
 lo detectó el usuario preguntando «¿falta algo?». Y el anclaje ya no muere con traceback: deja su
 fila `anclaje` en la cobertura, con los tres estados.
 
-⛔ **No le digas al usuario "no tengo los fundacionales" habiendo mirado un solo buscador.** Fue un
+**No le digas al usuario "no tengo los fundacionales" habiendo mirado un solo buscador.** Fue un
 defecto medido: ADS devuelve **0 de 8** del canon de ICA/BSS y `author:"Hyvarinen, A"` trae dos
 papers sobre gotas de ácido sulfúrico (es otro Hyvärinen) — pero OpenAlex los tiene **8 de 8**, con
 DOI y conteo de citas. La lista declarada a mano es el **último** recurso, no el primero:
@@ -423,7 +423,7 @@ python scripts/discover.py --theme <slug> --rows-por-termino 600   # el slice se
 python scripts/discover.py --resolve 10.1016/…              # ¿hay copia libre de ese DOI?
 ```
 
-⛔ **Para un tema de método, preguntá por `seed_terms` (#210).** Los cuatro ejes de arriba rankean
+**Para un tema de método, preguntá por `seed_terms` (#210).** Los cuatro ejes de arriba rankean
 por citas, y eso tiene un **piso**: los papers especialistas de un tema viven entre **11 y 72
 citas** dentro de un topic de 169.988 works (⚠ `CLAUDE.md` publica 169.977 para el mismo topic: dos
 consultas a OpenAlex en fechas distintas, no reconciliables sin re-medir — regla de método nº 5),
@@ -443,16 +443,16 @@ que declara sus dos ceros (#290): *«la taxonomía de OpenAlex no tiene nada que
 contrario. Y declará `topic:` en la entrada del tema: sin él, la mitad OpenAlex se infiere del
 `title` y con títulos en castellano no matchea la taxonomía inglesa.
 
-⛔ **Declará los EJES DE LECTURA del tema si no son los de la bóveda: `ejes:` (#307).** El extractor
+**Declará los ejes de lectura del tema si no son los de la bóveda: `ejes:` (#307).** El extractor
 pregunta por los ejes de `relevance.facets` salvo que el tema declare los suyos — y para un tema de
 método eso es preguntar los ejes de una bóveda astro: medido, 4 de 8 ejes vacíos en 25 de 32 papers,
 y los ejes que el tema necesitaba (identificabilidad, heterocedasticidad por época y por canal)
 **no se preguntaron nunca**, así que volvieron desparramados en `aporte` y sin clave con la que
-compararlos entre papers. ⛔ **Pero NO se piden antes de leer (#310):** la primera pasada hereda
+compararlos entre papers. **Pero no se piden antes de leer (#310):** la primera pasada hereda
 las facetas; los ejes se **descubren** en el contraste (3c), el usuario los declara en `ejes:` y
 rigen la re-lectura (`--enfasis`). Tres estados: sin declarar hereda las facetas globales, declarado son
 ésos, `ejes: []` es la decisión explícita de no preguntar ejes.
-⛔ **Red desde #360:** sin `ejes:` el probe del tema avisa y el lint lo reporta como backlog
+**Red desde #360:** sin `ejes:` el probe del tema avisa y el lint lo reporta como backlog
 (`tema_ejes_heredados`), y `vista_ejes_faltantes` sale *no evaluable* para las vistas de ese tema
 —compararía contra la lente equivocada—. Es **backlog** que se cierra tras el contraste, no un
 pedido previo a la extracción (AUD-404). El aviso propone; los ejes los firmás vos.
@@ -463,7 +463,7 @@ flujo de una bóveda viva —lo que se aprende define qué había que haber preg
 **no se pisa** (conviven como sub-secciones de la misma `## Vista`), el prompt manda leerla primero
 para no re-narrarla, y rehúsa si `(sujeto, enfasis)` ya tiene lectura.
 
-⛔ **`topic:` acepta una LISTA, y para un tema que cruza disciplinas hay que usarla (#293).**
+**`topic:` acepta una lista, y para un tema que cruza disciplinas hay que usarla (#293).**
 Medido: la familia del blanqueo heterocedástico está repartida en **cinco** topics, y el mismo
 trabajo cae en topics distintos según sea preprint o publicado — con un solo topic, cuatro quintos
 son inalcanzables hagas los `seed_terms` que hagas. `--topics` te muestra los candidatos; declarálos
@@ -488,7 +488,7 @@ canónicos sin declarar nada, y ordena mejor que las citas globales. Es además 
 lo que ninguna keyword del tema alcanza — en ICA, la familia de **PCA con ruido** (el blanqueo), que
 un barrido por "independent component analysis" nunca ve.
 
-⛔ Todo esto **propone**; no clasifica. Lo no-astro va al **triage** como candidato (INV-24: core
+Todo esto **propone**; no clasifica. Lo no-astro va al **triage** como candidato (INV-24: core
 sigue siendo función de `(paper, lente)`), y `--resolve` propone una URL sin tocar `sources:`.
 
 Qué cambia respecto del flujo ADS de arriba:
@@ -499,17 +499,17 @@ Qué cambia respecto del flujo ADS de arriba:
   `relevance.chain_autoaccept: never`, que manda todo candidato a triage). Sin `query:`, la mitad astro entra sólo por los
   bibcodes que enumeres en `extra_core:` — medido en ICA: 11 papers a mano contra familias enteras
   que la query encuentra sola.
-- ⛔ **Y `sources:` puede quedar VACÍA en la primera corrida (#211).** Es el orden que este mismo
+- **Y `sources:` puede quedar vacía en la primera corrida (#211).** Es el orden que este mismo
   skill prescribe: el paso 0b manda barrer los tres backends **antes** de declarar nada a mano, y el
   **anclaje** —lo que más rinde— necesita la mitad ADS ya bajada. Así que la primera corrida de un
   tema mixto es `query:` poblada + `sources: []`, se declaran las fuentes off-ADS después, y se
   vuelve a correr (la cadena es idempotente). El orquestador aborta sólo si el tema no tiene
   **ninguna** vía de papers (ni `sources:`, ni `query:`, ni `extra_core:`) y **avisa** cuando corre
-  sólo la mitad ADS, para que no se lea como que corrió todo. ⛔ **Corpus declarado con bibcode ADS
+  sólo la mitad ADS, para que no se lea como que corrió todo. **Corpus declarado con bibcode ADS
   (#384): `source: ads` + `query: null` + `extra_core:`** corre la sub-cadena `--extra-only` sin
   aviso de tema mixto — no hace falta mentir con `local-pdfs` + `sources: []`, que afirma
-  bibliografía fuera de ADS que no existe y dispara ese aviso donde es falso. ⛔ **Si ese
-  `extra_core` sale de recortar un probe, el probe se REGISTRA (#524):** `--probe … --registrar
+  bibliografía fuera de ADS que no existe y dispara ese aviso donde es falso. **Si ese
+  `extra_core` sale de recortar un probe, el probe se registra (#524):** `--probe … --registrar
   --criterio "<recorte>"` (o `corpus_sin_probe: <motivo>`). Hasta 1.76.2 el guard abortaba con
   `sources:` vacía, o sea medía la premisa que #104 rompió, y el orden de arriba era un **deadlock**.
 - **Sin ADS (si `query:` queda en null):** se saltean `query_ads.py`, `fetch_arxiv.py`, `fetch_pdf.py` y `fetch_ground_truth.py`. En
@@ -525,8 +525,8 @@ Qué cambia respecto del flujo ADS de arriba:
   entrada declaró autor, título, clave y `motivo` a partir de `RAICAR-N.pdf`, y el paper era de
   otros autores. La cadena corre `check_sources.py` al ingestar (Crossref por `doi`; si no, la
   primera página del PDF), registra el veredicto y el lint bloquea autor/año desmentidos por
-  Crossref. ⛔ **Si el equivocado es el CATÁLOGO —pasa: InTech cargó `family: R.` y perdió «Naik»—
-  se FIRMA, no se corrige el dato correcto (#463):** `check_sources.py <slug> --firmar <key>
+  Crossref. **Si el equivocado es el catálogo —pasa: InTech cargó `family: R.` y perdió «Naik»—
+  se firma, no se corrige el dato correcto (#463):** `check_sources.py <slug> --firmar <key>
   --campo <c> --motivo "<por qué>"` imprime el bloque para pegar. Antes de declarar: `pdftotext -f 1 -l 1 <pdf> -` y leé la primera página. Si el
   paper **tiene bibcode ADS** no va en `sources:`: va en `extra_core` (ADS trae la metadata).
   ⛔ **Y mirá lo que hay AL LADO del PDF antes de escribir nada (#392):** un `.bib`, `.xlsx`, `.csv`

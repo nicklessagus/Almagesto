@@ -25,7 +25,7 @@ Antes de refrescar un sujeto viejo, mirá ese número: si el pool explotó, revi
 combinación** en `objective.yaml` (skill `setup`) antes de bajar nada — podar las regex no alcanza si
 la combinación sigue siendo OR. `--yes` continúa a sabiendas.
 
-### ⛔ La PRIMERA ingesta frena siempre (#529)
+### La primera ingesta frena siempre (#529)
 
 Pedir un sujeto **no** es aprobar su core (medido: el usuario conservó el 6-13 % del core, y una
 primera corrida bajó 21 PDFs que se tiraron). Si el sujeto nunca bajó nada (sin `fetch_arxiv`/
@@ -39,7 +39,7 @@ bajar». Con la lista, en este orden:
 2. **Re-correr el orquestador con `--yes`**: la cadena es publisher-first (#512) y no baja un
    preprint en silencio.
 3. **Rescate manual del residuo** (`reference/rescate-pdfs.md`).
-4. ⛔ **Recién ahí, pedirle al usuario lo que falte** —el residuo de `missing_pdf.json`, que
+4. **Recién ahí, pedirle al usuario lo que falte** —el residuo de `missing_pdf.json`, que
    `fetch_pdf` imprime con el DOI y las copias libres como links—, nunca el core entero (#530). Se
    instalan con `replace_pdf.py <bib> <ruta.pdf> --source publisher --reason "…"`, que rehúsa la copia
    con la carátula de HAL y cruza las páginas contra ADS (#531, `reference/rescate-pdfs.md`).
@@ -74,7 +74,7 @@ Los papers **sin arXiv** —y los que tienen arXiv pero cuya bajada falló— lo
 que resuelve contra ADS en cascada: `EPRINT_PDF` → `ADS_PDF` (escaneo alojado por ADS, con token) →
 `PUB_PDF` (publisher), con **fallback `curl`**.
 
-⛔ **Publisher-first (#512): con versión PUBLICADA el eprint no se adopta sin decisión.** Si el
+**Publisher-first (#512): con versión publicada el eprint no se adopta sin decisión.** Si el
 bibcode no es de arXiv ni una tesis (`cfg.has_published_version`) y ninguna config declara
 `acepta_preprint` para él, `fetch_arxiv` no lo baja y `fetch_pdf` prueba sólo `ADS_PDF` → `PUB_PDF`
 y la cascada abierta **sin** los candidatos de arXiv. Lo que así no sale queda en el residuo como
@@ -96,7 +96,7 @@ número: con `eprint` el `.txt` es el **preprint** y puede traer otros valores q
 Lo que ni así sale queda en `build/<slug>/missing_pdf.json`: el **residuo completo del ingest, verdad
 de disco**. Cada entrada trae su `bibstem` y un `hint` con la rama por donde seguir.
 
-⛔ **"Bajar manual por DOI" no alcanza** — medido en un ingest real: el resolver falló en **5 de 17**
+**"Bajar manual por DOI" no alcanza** — medido en un ingest real: el resolver falló en **5 de 17**
 (pre-arXiv de 2000–2015: SPIE, The Messenger, A&A viejo) y **4 de 5 se recuperaron** por las ramas
 de la cascada manual. Esa cascada vive en `reference/rescate-pdfs.md` (del skill `ingest-star`,
 canónica ahí para los dos).

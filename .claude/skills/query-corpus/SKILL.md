@@ -36,7 +36,7 @@ usar `test-hypothesis`).
 > **prohibido normalizar espacios** sin partir antes cada línea física en la canaleta (empalma el
 > final de una columna con el principio de la otra y fabrica adyacencias que el paper no tiene).
 >
-> ⛔ **Un `grep` en 0 NO es una ausencia** hasta agotar esa escalera. Acá el modo de falla es **peor**
+> **Un `grep` en 0 no es una ausencia** hasta agotar esa escalera. Acá el modo de falla es **peor**
 > que en `verify-citations`: allá un falso negativo degrada un veredicto visible; acá **fabrica una
 > ausencia** —"el corpus no dice nada de X"— que sale al chat como conclusión, se usa para decidir y
 > no deja ningún rastro de que fue un artefacto de grep. Se suma al caveat de los papers

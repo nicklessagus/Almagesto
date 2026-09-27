@@ -36,7 +36,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      es la palanca real contra el ruido. Si el usuario no identifica ninguna, se queda en OR.
    No avanzar sin un foco claro.
 
-   ⛔ **Y después de escuchar, PROPONER (#83).** Ofrecer **2–4 facetas adyacentes que el usuario no
+   **Y después de escuchar, proponer (#83).** Ofrecer **2–4 facetas adyacentes que el usuario no
    nombró**, cada una con una línea de por qué, para que las acepte o descarte. El usuario sigue
    decidiendo; lo que cambia es que la lente deja de quedar limitada a lo que recordó en una
    conversación corta. La asimetría está al revés de donde debería: el usuario conoce su foco, pero
@@ -78,7 +78,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      **otras** facetas ya **no cambia el corte** (core ⟺ matchea la eje ∧ doctype limpio) — sólo etiqueta.
      Lo que hay que cuidar es el **recall de la faceta-eje**: listar todos sus sinónimos e instrumentos.
      Las demás facetas siguen siendo útiles como etiquetas (y para `min_facets ≥ 2`).
-   - `relevance.search_fq`: ⛔ **la lente del BUSCADOR** (#85, #152 — faltaba en este skill). Es el
+   - `relevance.search_fq`: **la lente del buscador** (#85, #152 — faltaba en este skill). Es el
      `fq` de Solr que acota el universo **server-side, antes de traer nada**: la mitad **más
      restrictiva** del filtro, más que `relevance.facets`, que actúa después sobre lo ya traído.
      Tres estados, y los tres son decisiones distintas:
@@ -90,7 +90,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      signal processing) cuya bibliografía canónica ADS no clasifica como astronomía, el default los
      mata antes de que `facets` los vea. Preguntárselo al usuario en el paso 1, no asumirlo.
    - `noise_doctypes`: el default (**dataset**, catalog, proposal, abstract, erratum, bookreview,
-     newsletter, pressrelease, circular, software) salvo razón. ⛔ **`dataset` es el que filtra los
+     newsletter, pressrelease, circular, software) salvo razón. **`dataset` es el que filtra los
      catálogos VizieR y hasta 1.247.0 faltaba** (#421, medido contra ADS el 2026-09-06:
      `bibstem:yCat doctype:catalog` → **0**, `bibstem:yCat doctype:dataset` → **23.351**, o sea
      todos). Entran al core porque el CDS **le copia el abstract al paper**, así que `classify()`
@@ -123,7 +123,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
      `abs:"radial velocity" OR abs:"stellar activity"`). **Ojo:** la query de prueba **no es** la regex
      — es solo para traer una muestra de papers del área y ver cómo los corta el clasificador.
    - Correr: `python scripts/query_ads.py --probe "<query de prueba>" --rows 50`
-     ⛔ La primera línea es `fq: … (del objetivo | del tema | heredado | null — no acota)` (#354): un
+     La primera línea es `fq: … (del objetivo | del tema | heredado | null — no acota)` (#354): un
      `0 papers` sin ese filtro a la vista NO es «no está en ADS» — seis ceros medidos eran
      `database:astronomy` aplicado en silencio.
    - Leer el corte que imprime: `N CORE / no-core`, el top por citas con marcador `[CORE/—]` + qué
@@ -134,7 +134,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    - **Juzgar:** ¿se cuela ruido (marcó CORE algo que no debería)? ¿se pierde algo
      bueno (marcó — un paper claramente relevante)? **Editar `relevance.facets`** (sumar/sacar términos o
      buckets) y **re-correr `--probe`**. Iterar 1–3 veces hasta que el corte cierre.
-   - ⛔ **Y mirar el bloque «¿FALTA UNA FACETA?»** que el probe imprime (#83): los términos que se
+   - **Y mirar el bloque «¿falta una faceta?»** que el probe imprime (#83): los términos que se
      repiten entre los **no-core** y que ninguna faceta matchea. No son términos inventados — son
      las `keywords` que ADS devuelve, el único vocabulario de la bóveda que no sale de una regex
      nuestra ni de la memoria de un LLM. Si varios papers pertinentes caen afuera **por la misma
@@ -161,7 +161,7 @@ papers). Este skill lo hace **el agente**, y lo **valida contra papers reales** 
    `vault/config/stars.yaml` / el tema a `vault/config/themes.yaml`, y correr `ingest-star` /
    `ingest-theme`.
 
-   ⛔ **Si la bóveda YA tiene contenido, el cierre no termina acá: hay que re-clasificar.** Cambiar
+   **Si la bóveda ya tiene contenido, el cierre no termina acá: hay que re-clasificar.** Cambiar
    `relevance.facets` (o la regla de combinación `require`/`min_facets`) **re-clasifica el corpus
    entero**: papers que dejan de ser core, papers que recién ahora entran, y apéndices "Excluidos por
    el filtro" estampados con el corte viejo. Nada de eso pasa solo — sin este paso el usuario se va

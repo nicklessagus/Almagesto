@@ -68,7 +68,7 @@ población declarada. Ninguno edita: **todos reportan**. La escritura la hace el
 Contra el *Estándar transversal* de `CLAUDE.md`: **autosuficiente**, **dual-audiencia**, y para
 `concepts/methods` además **implementation-ready con el régimen explícito** (los indicadores viven ahí: son métodos chicos, #246).
 
-⛔ **La prueba operativa, que es lo que hace este frente medible:** *escribir el pseudocódigo (o la
+**La prueba operativa, que es lo que hace este frente medible:** *escribir el pseudocódigo (o la
 receta de uso) desde la nota y anotar dónde se traba.* Cada punto donde haya que abrir la fuente es
 un hallazgo. Y por cada uno, decir **cuál de las tres cosas es**:
 
@@ -150,7 +150,7 @@ La ficha no vive sola: sus papers, sus artefactos y su registro tienen que decir
 
 ---
 
-## ⛔ La marca: `⚠verificar en el PDF`
+## La marca: `⚠verificar en el PDF`
 
 **Es la cuarta marca en línea del sistema**, y la razón de que este skill escriba en la nota en vez
 de dejar un reporte que se pierde.
@@ -164,7 +164,7 @@ Propiedades, las mismas que `⛔retractada` y `⚠desactualizado`:
 - **la levanta el lint** como backlog, así que la deuda no se olvida;
 - **se saca cuando alguien la verifica**, con la evidencia.
 
-⛔ **Cuándo marcar, y el criterio es amplio a propósito:** todo lo que el frente correspondiente no
+**Cuándo marcar, y el criterio es amplio a propósito:** todo lo que el frente correspondiente no
 pudo cerrar. Un valor cuya página no se pudo confirmar. Una cita cuya fuente no está en disco. Una
 afirmación cuya condición no se pudo triar. Un número que no reconcilia. **Ante la menor duda, se
 marca** — el costo de una marca de más es que alguien abra un PDF; el de una de menos es que la
@@ -208,7 +208,7 @@ evidencia**, clasificados:
 - **`FRAMEWORK`** — el contrato o el tooling permite/produce esto; va como issue al template.
 - **`DECLARADO`** — ya está anotado como pendiente; confirmarlo, no re-reportarlo.
 
-⛔ **Ningún frente edita.** Y un frente que vuelve limpio **declara su población**: qué miró, sobre
+**Ningún frente edita.** Y un frente que vuelve limpio **declara su población**: qué miró, sobre
 cuántos archivos, y por qué eso alcanza. Un «todo bien» sin población no sirve — es el falso limpio
 que todo este framework existe para no producir.
 
@@ -220,7 +220,7 @@ hallazgos que no miró nadie.
 
 ### 3. Resolver — serial, un solo escritor
 
-⛔ **Un hallazgo dice DÓNDE mirar, no QUÉ escribir.** Medido dos veces: correcciones redactadas
+**Un hallazgo dice dónde mirar, no qué escribir.** Medido dos veces: correcciones redactadas
 copiando el encuadre del reporte **introdujeron errores nuevos**. Antes de escribir, **re-abrir la
 fuente**.
 
@@ -244,13 +244,13 @@ A escala, las correcciones **no se aplican a mano**: `python scripts/apply_fixes
 sin verificar —el ancla se movió— y toda cita que la corrección haya agregado es un **par nuevo**:
 correr `verify-citations` sobre **ese subconjunto**. No sobre la nota entera: sobre lo que cambió.
 
-⛔ **Y ANTES del fan-out, `python scripts/contrast.py --preflight` (#490):** tres clases de defecto
+**Y antes del fan-out, `python scripts/contrast.py --preflight` (#490):** tres clases de defecto
 del corrector son decidibles sobre las líneas AGREGADAS —negativa o superlativa (fuera de `##
 Huecos` y de un blockquote), cita que su extracción contradice, `role` que el paper no declara—, sin
 gastar un subagente. Medido: 14 defectos introducidos, `lint` 0, fan-out a ciegas 11. ⚠ No
 reemplaza la re-verificación: los 7 de «condición que se cae al transcribir» piden abrir la fuente.
 
-⛔ **El subconjunto lo emite un comando, no se arma a ojo:**
+**El subconjunto lo emite un comando, no se arma a ojo:**
 
 ```bash
 python scripts/reverify_subset.py <nota> --json build/<slug>/reverif.json
@@ -260,7 +260,7 @@ Reparte los pares en tres: **re-anclables**, **a re-verificar** y **filas huérf
 emite **las tres listas** (#285) — el subconjunto por fuente, el **emparejamiento propuesto con su
 `score`** y las huérfanas.
 
-⛔ **Mirá la banda de revisión antes de aceptar el re-anclaje.** Lo que cae por debajo de `--banda`
+**Mirá la banda de revisión antes de aceptar el re-anclaje.** Lo que cae por debajo de `--banda`
 (0,85) sale listado en el stdout con las dos puntas del emparejamiento: es donde un error **transfiere
 el veredicto al par equivocado** y publica una cita real, verificada, bajo la afirmación que no es.
 Medido: de 86 propuestas, **2 iban a la fila equivocada** —scores 0,60 y 0,67— y las dos eran **del
@@ -278,7 +278,7 @@ vencen igual y no son lo mismo:
   su propio dictamen no es verificación. Se **re-ancla**: el veredicto se lleva, el ancla se
   recalcula. Medido: de 78 vencidos, **72 de este tipo**.
 
-⛔ **El prompt de la re-verificación va CIEGO, y la regla no se copia acá: vive en
+**El prompt de la re-verificación va ciego, y la regla no se copia acá: vive en
 `verify-citations` (#258).** Lo que se lanza al fan-out es `verify-citations` sobre el subconjunto,
 así que rige su forma de prompt — se manda el par (la afirmación tal como está hoy y su fuente), no
 la historia de qué marcó la ronda anterior ni qué se corrigió, con la excepción del par marcado
@@ -286,7 +286,7 @@ la historia de qué marcó la ronda anterior ni qué se corrigió, con la excepc
 más: `re_anclaje` es la historia. El detalle, con la medición que lo motiva, en el paso *Resolver lo
 que falla* de `.claude/skills/verify-citations/SKILL.md`.
 
-⛔ El re-anclaje es una **propuesta**: dice que la afirmación sigue siendo reconociblemente la misma,
+El re-anclaje es una **propuesta**: dice que la afirmación sigue siendo reconociblemente la misma,
 **no** que la corrección haya sido fiel. Quien lo acepta lo declara con
 `write_verif_sidecar.py <nota> --reanclar` (#480, con `re_verificar` vacío), que estampa el sufijo
 `· re-anclado AAAA-MM-DD` en el encabezado (#499) — no una línea a mano.
@@ -310,7 +310,7 @@ arreglan en la instancia (regla de oro).
 
 ## Concurrencia
 
-⛔ El harness corta en **20 subagentes concurrentes** y el error llega mezclado con los lanzamientos
+El harness corta en **20 subagentes concurrentes** y el error llega mezclado con los lanzamientos
 exitosos del mismo mensaje. Con siete frentes no hay problema; **con un fan-out por fuente (paso 4)
 sí**. Lotear, y contar lanzados contra existentes **antes** de contar devueltos contra lanzados.
 

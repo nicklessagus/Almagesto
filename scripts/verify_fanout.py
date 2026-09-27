@@ -58,7 +58,7 @@ def by_source(pairs: list) -> dict:
 def prompt_for(nota: Path, bibcode: str, pares: list, out_dir: Path) -> str:
     """The prompt of ONE verifier: its pairs, the fence, the output path, and where the rules are."""
     partes = [f"# Verificación de citas — fuente `{bibcode}` · nota `{nota.name}`", "",
-              f"⛔ Antes de juzgar, leé las reglas del juez en `{JUEZ}`: la fuente, el veredicto y su "
+              f"Antes de juzgar, leé las reglas del juez en `{JUEZ}`: la fuente, el veredicto y su "
               f"evidencia, la condición y su clase, la completitud y los claims multi-cláusula. Leés SÓLO esta fuente, del PDF "
               f"(`vault/raw/pdfs/**/{bibcode}.pdf`); el `.txt` sirve para ubicar con `grep`, no para "
               f"citar.", "",

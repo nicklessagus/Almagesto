@@ -53,6 +53,13 @@ anécdota compite con la regla. El `log.md` y el `STATUS.md` de una instancia qu
 historia por definición. Cada juez del fan-out de verify lee sólo `reference/juez.md`, no el skill
 entero del orquestador.
 
+**El ⛔ marca sólo los límites cuya violación rompe la bóveda**: la regla #0 y la frontera dura
+(incluido validar contra la fuente), no editar framework en una instancia, el driver `merge=ours`,
+la identidad que no sale de memoria (#392) y lo que el lint bloquea. Una regla corriente va en
+negrita, sin mayúsculas de énfasis: cuando todo está marcado como crítico la marca deja de
+informar, y el tono se traslada a la conducta (sobre-aplicación en los casos grises). La marca en
+línea `⛔retractada` es otra cosa y no se toca.
+
 Redes: los prompts generados (`extraction_prompt.build_prompt`, `verify_fanout.prompt_for`) no
 pueden llevar una fecha de medición ni un conteo de precisión
 (`conftest.PROMPT_ARCHAEOLOGY_RE`, test duro en `tests/test_extraction_prompt.py` y

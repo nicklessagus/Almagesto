@@ -86,10 +86,10 @@ Progreso del append de <fuente> → <destino>:
 4. **Síntesis a la nota viva — INTEGRAR EN SU LUGAR (D-31).** Plegar a la ficha/concept **sólo lo
    que cambia la lectura**, reescribiendo **los bloques afectados donde están**. Los dos extremos
    están descartados:
-   - ⛔ **Sección nueva: no.** `## Resumen` + `## Actualización 2026-09` + `## Actualización 2026-11`
+   - **Sección nueva: no.** `## Resumen` + `## Actualización 2026-09` + `## Actualización 2026-11`
      deja de ser un snapshot, y una contradicción queda **sentada al lado de lo viejo sin resolver**
      — justo lo que la ficha existe para evitar.
-   - ⛔ **Re-validar todo: no.** Un paper que habla del `P_rot` no justifica re-verificar las 40
+   - **Re-validar todo: no.** Un paper que habla del `P_rot` no justifica re-verificar las 40
      citas del inventario de señales.
 
    **Procedimiento:** extraer → identificar **qué ejes toca** → por cada eje comparar contra lo que

@@ -40,7 +40,7 @@ genérico**, **pasado → presente**, **descriptivo → prescriptivo**—: los m
 fan-out de esta bóveda, con la diferencia de que los dos primeros la taxonomía de #103 **no los tenía
 nombrados** (caían dentro de «régimen omitido»). Dos hallazgos que cambian cómo se escribe este paso:
 
-- ⛔ **Pedir exactitud en el prompt la EMPEORA.** Los prompts que piden explícitamente evitar
+- **Pedir exactitud en el prompt la empeora.** Los prompts que piden explícitamente evitar
   imprecisiones **duplicaron** la sobre-generalización frente a un pedido de resumen simple (los
   autores lo llaman *algorithmic ironic rebound effect*). Por eso en el skill no hay ningún «sé
   preciso», «no inventes» ni «tené cuidado»: **una súplica de exactitud no es una instrucción, es
@@ -64,7 +64,7 @@ Al copiar un valor a la nota de paper:
   paper dice *«was associated»*, la nota **no** dice *«is associated»*; si dice *«el 75 % de la
   muestra»*, la nota **no** dice *«la muestra»*. Y un resultado descriptivo no se convierte en
   recomendación.
-- ⛔ **nada de prosa comparativa en la nota de paper.** Comparar dos papers es `inferencia` y su lugar
+- **nada de prosa comparativa en la nota de paper.** Comparar dos papers es `inferencia` y su lugar
   es el `## Inventario por eje` de la ficha (paso 3b). Escribirla acá es lo que produjo los 3 casos
   de «inferencia con voz de cita».
 

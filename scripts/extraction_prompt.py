@@ -183,11 +183,11 @@ def _media_note(slug: str, bibcode: str) -> str:
         "  Leer «la curva» de un campo da lecturas incompatibles —en realidad, contornos "
         "distintos de la misma figura— que terminan archivadas como hueco "
         "(#281).\n"
-        "  ⛔ **Si dos lecturas de la misma figura no reconcilian, la primera hipótesis es figura "
-        "SUBESPECIFICADA (¿es un campo? ¿leíste dos niveles distintos?), no dato ilegible.** El "
+        "  **Si dos lecturas de la misma figura no reconcilian, la primera hipótesis es figura "
+        "subespecificada (¿es un campo? ¿leíste dos niveles distintos?), no dato ilegible.** El "
         "orden importa: la segunda cierra la puerta —el hueco declarado es una promesa de que la "
         "bóveda no puede responder— y la primera la abre.\n"
-        "  ⛔ Es un **permiso, no una obligación**: si la figura no permite leer el valor con "
+        "  Es un **permiso, no una obligación**: si la figura no permite leer el valor con "
         "confianza, sigue siendo un **hueco declarado**. Forzar un número de una curva ilegible es "
         "peor que el hueco.\n")
 
@@ -207,7 +207,7 @@ Antes de recorrer el paper, leé **abstract y conclusiones**. De ahí sale la li
 trabajo dice aportar, y con esa lista vas al cuerpo — es más rápido que leer linealmente y no te
 perdés lo que el paper considera su resultado.
 
-⛔ **Tratalas como hipótesis a confirmar, no como resumen confiable.** Está medido (RSOS 2025, 4900
+**Tratalas como hipótesis a confirmar, no como resumen confiable.** Está medido (RSOS 2025, 4900
 resúmenes / 10 modelos): el resumen afirma **más fuerte** que el cuerpo — genérico donde el cuerpo
 acota, presente donde el cuerpo usa pasado, prescriptivo donde el cuerpo describe. Por cada eje,
 chequeá en el cuerpo si se sostiene y **con qué condiciones**. Si el cuerpo dice menos que las
@@ -215,11 +215,11 @@ conclusiones, eso va en `salvedades`: es un hallazgo sobre la FUENTE, no un erro
 """How to read a SHORT source: the whole paper rasterises, so it starts from the conclusions."""
 
 LARGO = """## Cómo leerlo: es un DOCUMENTO LARGO — empezá por el ÍNDICE
-⛔ **No lo rasterices entero.** Esta fuente declara `unidad_cita: {unidad}`: es un libro, un handbook
+**No lo rasterices entero.** Esta fuente declara `unidad_cita: {unidad}`: es un libro, un handbook
 o una tesis. Abrí **las primeras páginas** del PDF, ubicá el índice y de ahí los rangos de página de
 los capítulos que entran. Después grepeá el `.txt` para afinar y abrí **sólo esas páginas** del PDF.
 
-⛔ **El ALCANCE declarado, que es lo que entra y nada más:**
+**El alcance declarado, que es lo que entra y nada más:**
     {alcance}
 Si lo que el sujeto necesita está **fuera** de ese alcance, **no lo amplíes solo**: extraé lo que hay
 dentro y decilo en `salvedades`. Ampliar el alcance en silencio deja el campo `alcance` de la nota
@@ -252,12 +252,12 @@ def _long_document(bibcode: str) -> tuple[str, str]:
     return (unidad, str(fm.get("alcance") or "").strip()) if unidad and unidad != "linea" else ("", "")
 
 
-SIN_PDF = """⛔ **NO HAY PDF de esta fuente en disco** (`{pdf}` no existe). La vista sale del
+SIN_PDF = """**No hay PDF de esta fuente en disco** (`{pdf}` no existe). La vista sale del
 **`## Abstract` de la nota** — `vault/wiki/papers/{bibcode}.md` — y de nada más, así que la
 **declarás `fuente: abstract`** en `vista` (#207). No inventes páginas: sin PDF no hay localizador
 de página, y el `linea` de cada valor dice de dónde salió (`abstract`).
 
-⛔ **El abstract es justo donde la fuente afirma DE MÁS.** Medido (RSOS 2025, 4900 resúmenes / 10
+**El abstract es justo donde la fuente afirma de más.** Medido (RSOS 2025, 4900 resúmenes / 10
 modelos): el resumen es genérico donde el cuerpo acota, presente donde el cuerpo usa pasado,
 prescriptivo donde el cuerpo describe. Todo lo que saques de acá viaja con esa condición, y lo que
 el paper sostenga en su cuerpo **no se puede afirmar desde esta lectura**: eso va a `hueco`.
@@ -268,7 +268,7 @@ del sujeto, decilo — es un resultado válido."""
 """Reading block when the paper has NO PDF on disk (#255): the abstract is the source, and it says so."""
 
 SIN_TXT = """## Búsqueda — NO HAY ÍNDICE
-⛔ **No existe `{txt}`**, así que no hay `grep` que correr sobre esta fuente. Un `grep` que **no
+**No existe `{txt}`**, así que no hay `grep` que correr sobre esta fuente. Un `grep` que **no
 corrió** no es «el paper no lo dice» (D-43): si no podés confirmar algo, va a `hueco`, no a una
 afirmación negativa."""
 """Search block when there is no `.txt` (#255): saying so beats emitting greps over a missing file."""
@@ -286,7 +286,7 @@ def _source_section(slug: str, bibcode: str, name: str, alias_str: str) -> str:
 
     @inv INV-144'''
     if cfg.pdf_slug(bibcode, slug):        # #305: bajo CUALQUIER slug, como el cosechador
-        return f"""⛔ **Leé el PDF: `{_pdf_rel(slug, bibcode)}`.** `Read` lo rasteriza, así que **ves** la página —
+        return f"""**Leé el PDF: `{_pdf_rel(slug, bibcode)}`.** `Read` lo rasteriza, así que **ves** la página —
 ecuaciones, tablas y figuras incluidas. Extraé lo que esa fuente dice sobre **{name}**
 (alias: {alias_str}), y **citá por PÁGINA del PDF**."""
     return SIN_PDF.format(pdf=_pdf_rel(slug, bibcode), bibcode=bibcode)
@@ -335,7 +335,7 @@ def _lens_section(bibcode: str, sujeto: str, enfasis: str) -> str:
     if not enfasis:
         return ""
     return f"""
-⛔ **Ésta es una SEGUNDA lectura del mismo sujeto, bajo la lente «{enfasis}» (#239).** La vista
+**Ésta es una segunda lectura del mismo sujeto, bajo la lente «{enfasis}» (#239).** La vista
 anterior **no se pisa**: las dos conviven como sub-secciones de la misma `## Vista — {sujeto}`.
 - Leé primero lo que ya está en `vault/wiki/papers/{bibcode}.md` (`## Vista — {sujeto}` y las
   `## Conclusiones`, que son sin lente): **no re-narres** lo que la vista anterior ya dice.
@@ -499,7 +499,7 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
     hay_pdf = cfg.pdf_slug(bibcode, slug) is not None    # #305: la misma resolución que el cosechador
     hay_txt = cfg.txt_slug(bibcode, slug) is not None    # #405: ídem, la misma regla que el PDF
     txt_nota = f"""
-⛔ **El `.txt` NO es fuente.** `{_txt_rel(slug, bibcode)}` lo produce `pdftotext` y es el **índice
+**El `.txt` no es fuente.** `{_txt_rel(slug, bibcode)}` lo produce `pdftotext` y es el **índice
 de búsqueda** del corpus, no material de lectura: sirve para *ubicar* dónde se menciona el sujeto,
 nunca para transcribir ni para citar. `pdftotext` pierde sin avisar radicales, primas,
 superíndices y subíndices, aun cuando los chequeos de calidad del `.txt` dan bien.
@@ -531,18 +531,18 @@ da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vi
 - Mirá si el PDF es un **preprint** de arXiv (marca de agua al margen): si lo es, decilo en
   `salvedades` **estructurada** —`{{"tipo":"pdf_leido","documento":"eprint"}}` (#452), ver abajo—,
   porque un valor que discrepa del publicado es candidato a diferencia de versión.
-- ⛔ **Tu texto va a la bóveda TAL CUAL, así que escribilo en su notación (#525):** toda matemática
+- **Tu texto va a la bóveda tal cual, así que escribilo en su notación (#525):** toda matemática
   en `$…$` (`$10^{{-3}}$`, `$\\log C_{{cf}}$`, `$\\sigma$`, `$\\geq 4\\sigma$`) y el castellano con
   tildes, en `que`, `valor`, `regimen`, `aporte` y `hueco`. La extracción es inmutable y
   `contrast --filas` la copia literal: lo que escribas `10^-3` o `minimos` se publica así. **Dentro
   de «…» no**: la cita va como está en la fuente.
-- ⛔ **Nada de prosa comparativa con otros papers.** Comparar dos fuentes es tarea del
+- **Nada de prosa comparativa con otros papers.** Comparar dos fuentes es tarea del
   orquestador y va al `## Inventario por eje`, no a esta nota.
 
 ## Métodos: reusá el vocabulario que la bóveda ya tiene (#245)
 Estos métodos ya tienen nota en `concepts/`. Si el paper usa uno de ellos, **escribilo con ese
 nombre** (o con uno de sus alias) en `methods`; así el roll-up lo linkea en vez de dejarlo colgando.
-⛔ El vocabulario **no está cerrado**: si el paper usa un método que no está en la lista, escribilo
+El vocabulario **no está cerrado**: si el paper usa un método que no está en la lista, escribilo
 como lo nombra el paper — eso es una respuesta legítima, no un error.
 
 {metodos_conocidos}
@@ -561,13 +561,13 @@ Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** 
  "aporte":"","hueco":"","salvedades":[],
  "abstract":"","abstract_es":"","conclusiones":"","conclusiones_es":""}}
 
-⛔ Sin comas finales: tiene que parsear con `json.loads`. El nombre del archivo lleva el bibcode
+Sin comas finales: tiene que parsear con `json.loads`. El nombre del archivo lleva el bibcode
 porque varios extractores corren en paralelo y un nombre genérico se pisa **en silencio**.
 `vista` va tal cual: dice de quién es esta lectura y de qué copia del `.txt` salió. La `fecha` la
-estampa el cosechador. ⛔ **`lente` va tal cual, sin tocar** (#395): son los ejes que ESTA lectura
+estampa el cosechador. **`lente` va tal cual, sin tocar** (#395): son los ejes que ESTA lectura
 preguntó, y es lo único que el cosechador no puede saber —él conoce los ejes vigentes cuando cosecha,
 que es otra pregunta—. No la completes ni la recortes según lo que hayas contestado.
-⛔ **Las ayudas de lectura** (#124). `abstract_es` es la traducción al castellano del `## Abstract`
+**Las ayudas de lectura** (#124). `abstract_es` es la traducción al castellano del `## Abstract`
 —la traducción va **al lado**, el original no se pisa—. `abstract`: dejalo **vacío** si la nota ya
 trae la sección (viene del catálogo y es la capa auditable); llenalo, transcrito del PDF, **sólo si
 la nota no la tiene** — pasa en fuentes off-ADS viejas, y el texto lo tenés a mano porque ya
@@ -580,17 +580,17 @@ un paper que cierra con «Discussion»— **dejá `conclusiones` y `conclusiones
 `salvedades` qué sección cierra el paper. No transcribas la Discusión ni los párrafos finales en
 su lugar: transcribir una sección que no existe fabrica contenido. Vacío = no consta; el cosechador
 no crea la sección, y la nota lo declara con `sin_conclusiones` (#277).
-⛔ Y la regla de uso: **son ayuda de lectura, nunca fuente de la que citar.** Si citás, citás del
+Y la regla de uso: **son ayuda de lectura, nunca fuente de la que citar.** Si citás, citás del
 original con su página.
 
-⛔ **`ground_truth` se publica como TABLA, así que la `|` de tu prosa PARTE la fila (#240).** No
+**`ground_truth` se publica como tabla, así que la `|` de tu prosa parte la fila (#240).** No
 tenés que escaparla vos —el cosechador lo hace al renderizar la celda—, pero sabé que va a
 aparecer escapada: `\\|` en prosa y `\\vert` dentro de `$…$`, porque en LaTeX `\\|` es la doble
 barra ‖ y escapar a ciegas cambiaría la fórmula. Si transcribís las columnas de una tabla del
 paper, preferí describirlas en palabras: una fila partida deja la afirmación **invisible para el
 lector** aunque el lint la siga contando como verificada.
 
-⛔ **Las `salvedades` que afirman algo DECIDIBLE sobre un archivo van ESTRUCTURADAS (#213),
+**Las `salvedades` que afirman algo decidible sobre un archivo van estructuradas (#213),
 porque un script las chequea.** Vocabulario cerrado, cuatro formas:
 
     {{"tipo":"txt_pierde","cadena":"ζ_{{×+×}}"}}     → el `.txt` NO contiene esa cadena
@@ -599,13 +599,13 @@ porque un script las chequea.** Vocabulario cerrado, cuatro formas:
     {{"tipo":"nota_estado","literal":"(no disponible)","presente":true}}
                                                    → qué publica LA NOTA hoy (#497)
 
-⛔ **Lo que digas sobre la BÓVEDA —la nota, su frontmatter, sus secciones— va en `nota_estado`,
+**Lo que digas sobre la bóveda —la nota, su frontmatter, sus secciones— va en `nota_estado`,
 nunca en prosa.** Es la más decidible de las cuatro (el archivo está a un `grep`) y la que más
 rápido **envejece**: la anotás porque algo está mal, la operación siguiente lo arregla, y tu
 extracción es inmutable (#311) — así que en prosa la nota queda afirmando para siempre algo falso
 sobre sí misma. `presente` es lo que AFIRMÁS: `true` = «la nota todavía lo publica».
 
-⛔ **La del documento leído va SIEMPRE que el PDF sea un preprint** (`documento`: `eprint` |
+**La del documento leído va siempre que el PDF sea un preprint** (`documento`: `eprint` |
 `publisher` | `ads` | `web`, el mismo vocabulario que `pdf_source`), y lleva `"bibcode":"<otro>"`
 si hablás del PDF de **otra** fuente. ⚠ Son DOS ejes (#456): `documento` es **qué hay en disco** y
 `leido` —opcional, mismo vocabulario— **de qué se construyó tu vista**. Normalmente coinciden y
@@ -623,7 +623,7 @@ en la extracción.
 nombre de archivo. Si la afirmación es decidible, estructurala: es más barata y más fuerte que la
 prosa.
 
-⛔ **`refuta` es el único campo que puede DESHACER un reclamo (#212).** El frontmatter de la nota
+**`refuta` es el único campo que puede deshacer un reclamo (#212).** El frontmatter de la nota
 trae `stars[]` / `thesis_links[]` sembrados **antes** de leer: son **reclamos**, no lecturas. Si
 leíste el paper entero y el sujeto que lo reclama **no tiene ningún sustento** —el caso típico es
 la **polisemia**: un paper de flujos de acreción entró a un tema de ICA porque dice *«six mutually
@@ -633,7 +633,7 @@ reclamo es FALSO». Nadie borra nada por tu cuenta: el cosechador lo **registra*
 imprime el comando de curación listo para pegar — la decisión de sacar el paper del sujeto es del
 usuario, porque el paper puede ser core de OTRO sujeto.
 
-⛔ **`fuente` dice DE QUÉ construiste la vista.** `pdf` es el caso normal. Poné **`abstract`** si el
+**`fuente` dice de qué construiste la vista.** `pdf` es el caso normal. Poné **`abstract`** si el
 PDF no está y sólo pudiste leer el `## Abstract` de la nota: la vista igual vale, pero una lectura
 de ocho líneas no puede quedar indistinguible de haber leído el paper —y el abstract es justo donde
 la fuente afirma **de más**—. El cosechador lo cruza contra el disco: declarar `pdf` sin PDF

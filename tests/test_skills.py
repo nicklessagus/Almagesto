@@ -427,7 +427,7 @@ def _seccion_desde(texto: str, patron: str) -> str:
 
 
 def _reverificacion_de_verify() -> str:
-    return _seccion_desde(_skill("verify-citations"), r"^⛔ \*\*Corregir es ESCRIBIR")
+    return _seccion_desde(_skill("verify-citations"), r"^\*\*Corregir es escribir")
 
 
 def test_la_reverificacion_se_prompta_ciega():

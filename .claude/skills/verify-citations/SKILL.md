@@ -16,10 +16,10 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 > *retrieval* —la parte que mete errores en los verificadores generales—: ya sabemos qué archivo
 > leer. El chequeo es passage-matching directo contra el documento real.
 
-⛔ **La fuente es el PDF (#205).** `Read` lo rasteriza, así que **ves** la página: prosa,
+**La fuente es el PDF (#205).** `Read` lo rasteriza, así que **ves** la página: prosa,
 ecuaciones, tablas y figuras. **Citá por PÁGINA** y hasheá el PDF (`pdf:<sha10>`).
 
-⛔ **El `.txt` NO es fuente: es el ÍNDICE.** `vault/raw/fulltext/**/<bibcode>.txt` lo produce
+**El `.txt` no es fuente: es el índice.** `vault/raw/fulltext/**/<bibcode>.txt` lo produce
 `pdftotext` y sirve para **ubicar** con `grep -n` en qué parte del paper mirar — nunca para citar ni
 para transcribir. Medido el 2026-08-28 sobre dos papers, uno con los **tres chequeos de calidad en
 verde**: el `.txt` había perdido igual el radical `√` (sale como una `r` suelta), la prima de `p′`
@@ -30,10 +30,10 @@ Las reglas de lectura de la fuente —localizar antes de leer (las mañas de gre
 en `reference/convenciones-fulltext.md`), `pdf_source: eprint` (#57), documento largo (#80),
 fuente web (#205 / AUD-204) y agotar antes de concluir— están en `reference/juez.md` § *La fuente*.
 
-> ⛔ **La cita textual la chequea un script ANTES que vos (#220).** `python scripts/lint.py` marca
+> **La cita textual la chequea un script antes que vos (#220).** `python scripts/lint.py` marca
 > como backlog (`cita_no_verbatim`) cada `«…»` de ≥ 40 caracteres que no aparezca en el `.txt` de
 > ninguna de las fuentes que cita su bloque, y **declara aparte** las no evaluables (sin `.txt` o
-> con OCR; `eprint` dejó de eximir en #275 — el `.txt` sale del mismo PDF que se leyó). ⛔ Y tiene
+> con OCR; `eprint` dejó de eximir en #275 — el `.txt` sale del mismo PDF que se leyó). Y tiene
 > un segundo juez que **sí frena**: `cita_inventada` (#318) cruza la cita contra la **extracción**
 > —la transcripción hecha leyendo el PDF— y **bloquea con `--cierre`** cuando no está ni en el
 > `.txt` ni ahí (la fabricó el sintetizador); `python scripts/contrast.py --validar <nota>` es la
@@ -78,7 +78,7 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
 > filas de la **tabla de inventario** marcadas NEA siguen bajo la excepción de ground-truth de abajo.
 
 **Excepciones (no se verifican, pero se chequea la marca):**
-- ⛔ **Las secciones que ESTAMPA la máquina** (AUD-205). Son metadata **derivada**, no afirmaciones
+- **Las secciones que estampa la máquina** (AUD-205). Son metadata **derivada**, no afirmaciones
   de la bóveda: no hay nada que contrastar contra la fuente, y su `[[bibcode]]` no es una cita.
   Verificarlas infla el fan-out con pares que siempre vuelven `soportada` (una fila de `## Papers`
   dice que el paper existe) y, peor, ata **anclas** a bloques que el próximo `make_notes` reescribe
@@ -115,7 +115,7 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
 python scripts/verify_fanout.py <nota.md> --out build/<slug>/verif/<ronda>
 ```
 
-⛔ **El reparto lo escribe el generador, no vos (#369).** Escribe un prompt por fuente en
+**El reparto lo escribe el generador, no vos (#369).** Escribe un prompt por fuente en
 `<out>/prompts/<bibcode>.md` —sus pares con sus anclas, el fence generado y el path exacto de
 salida— y el **manifiesto** `<out>/_esperado.json` con el plan (`fuentes: {bibcode: n}`, `pares`).
 Era el único eslabón de esta cadena sin herramienta, y justo el que decide sobre qué corre el gate:
@@ -129,7 +129,7 @@ mensaje), cada uno con su prompt. Cada uno juzga **todos los pares que citan su 
 > veces. Medido el 2026-08-25 sobre una ficha real: **68 pares sobre 16 fuentes → 52 re-lecturas**,
 > con 18 subagentes abriendo los mismos 300 KB.
 
-⛔ **El tipo es `general-purpose`, NO `Explore` — y el motivo es de contrato, no de ergonomía
+**El tipo es `general-purpose`, no `Explore` — y el motivo es de contrato, no de ergonomía
 (#219).** `Explore` **no tiene herramientas de escritura**, y toda la cadena aguas abajo espera
 archivos: `scripts/apply_fixes.py <nota.md> <dir-de-fixes>` consume **JSON de un directorio**, y el
 fan-out gemelo del mismo framework —el de **extracción**— ya le pide al subagente que escriba él
@@ -147,7 +147,7 @@ Esto **no** contradice la regla de método nº 6 (*fan-out para leer, aplicador 
 escribir*): el subagente escribe **su propio JSON en `build/`**, que es scratch; lo que sigue
 prohibido es que escriba en `vault/`.
 
-⛔ **Hay un TOPE DE 20 SUBAGENTES CONCURRENTES, y lanzar de más corta en silencio (#218).** Con 30
+**Hay un tope de 20 subagentes concurrentes, y lanzar de más corta en silencio (#218).** Con 30
 fuentes, el tercer lote devuelve `Concurrent subagent limit reached. You can run 20 subagents at
 once. Do not retry.` — **mezclado con los lanzamientos exitosos del mismo mensaje**, así que es
 fácil no verlo: quedan fuentes sin verificar y el bloque `## Verificación de citas` se escribe
@@ -163,7 +163,7 @@ la completitud de transcripciones (#49 y el `## Inventario por eje`, #72) y los 
 multi-cláusula—. Es lo que el prompt generado manda leer a cada subagente: el juez no paga la
 orquestación de este archivo. Leelas también antes de resolver (paso 4).
 
-⛔ **Y la FORMA del archivo es ésta, literal (#259).** Pegá este fence en el prompt tal cual — no lo
+**Y la forma del archivo es ésta, literal (#259).** Pegá este fence en el prompt tal cual — no lo
 describas en prosa:
 
 ```json
@@ -182,7 +182,7 @@ describas en prosa:
   ]
 }
 ```
-⛔ **Estas 7 claves por par y NINGUNA OTRA.** Una clave de más rebota el archivo entero en la barrera, con la lectura del PDF ya pagada. Lo que no entre en ellas va en `nota` (#365).
+**Estas 7 claves por par y ninguna otra.** Una clave de más rebota el archivo entero en la barrera, con la lectura del PDF ya pagada. Lo que no entre en ellas va en `nota` (#365).
 
 Un objeto por par, en `pares`, identificado por su **`ancla`** (la de la fila del bloque). `condicion`,
 `cond_tipo`, `completitud` y `nota` van vacías cuando no aplican; ninguna otra clave entra.
@@ -192,7 +192,7 @@ cerrar una ficha real (2026-08-29: 8 rondas, ~60 subagentes, el mismo prompt sal
 clave de la lista llegó en **tres** formas —`pares`, `veredictos`, `resultados`— y el identificador
 del par en **dos** —`ancla`, `n`—: el consumidor reventó **dos veces con `KeyError`** con 60
 lecturas de PDF ya pagadas, y terminó en un lector tolerante
-(`data.get('pares') or data.get('veredictos') or …`) que este repo prohíbe. ⛔ Y el `KeyError` es el
+(`data.get('pares') or data.get('veredictos') or …`) que este repo prohíbe. Y el `KeyError` es el
 modo benigno: un consumidor menos paranoico lee **0 veredictos de un archivo que sí los tiene** y
 sigue. El fence lo **genera** `lib_blocks.verify_fanout_json_block()` desde
 `lib_blocks.VERIF_FANOUT_SCHEMA`, que es la misma constante que valida el paso 2b — el prompt y el
@@ -224,7 +224,7 @@ Escribí el resultado en `build/<slug>/verif/<ronda>/<bibcode>.json` con EXACTAM
 JSON de arriba —clave `pares`, un objeto por par identificado por su `ancla`—: otra forma no la lee
 nadie."*
 
-⛔ **La pregunta de completitud es la del contrato, y se ensancha sin que nada avise (#198).**
+**La pregunta de completitud es la del contrato, y se ensancha sin que nada avise (#198).**
 Es *«¿la **tabla o lista de la fuente** tiene más filas/ítems que los transcritos?»*. Al armar el
 prompt es fácil escribirla como *«¿el paper dice **más sobre este eje**?»*, que suena equivalente y
 **no lo es**: sobre una fila que resume lo que un paper aporta a un eje, la respuesta es **sí casi
@@ -251,7 +251,7 @@ filas ahí — y si hay más de una tabla en la página, decí de cuál estás c
 
 ### 2b. Barrera: el trabajo derivado se arma cuando el fan-out CERRÓ
 
-⛔ **Antes de triar, resolver o escribir el bloque, contá DOS veces y declaralo: (a) *lanzadas vs
+**Antes de triar, resolver o escribir el bloque, contá dos veces y declaralo: (a) *lanzadas vs
 existentes* y (b) *devueltas vs lanzadas*.** Si alguno de los dos no cierra, o esperás, o decís
 sobre cuántas fuentes estás afirmando.
 
@@ -272,13 +272,13 @@ D-43 devuelve *no evaluado* y no `ok`— y nunca se había enunciado para el **c
 fan-out, que es donde este skill manda derivar trabajo. Es barato de mecanizar: `len(out/*.json)`
 contra el nº de fuentes.
 
-⛔ **Y los dos conteos se corren, no se estiman (#259):**
+**Y los dos conteos se corren, no se estiman (#259):**
 
 ```bash
 python scripts/check_verify_fanout.py build/<slug>/verif/<ronda>
 ```
 
-⛔ **Sin `--esperados`: la barrera lee el manifiesto (#369).** Rehúsa un `--esperados` que lo
+**Sin `--esperados`: la barrera lee el manifiesto (#369).** Rehúsa un `--esperados` que lo
 contradiga —un conteo a ojo equivocado en la misma dirección que la fuente que falta daba ✅ sobre un
 fan-out incompleto— y **nombra la fuente que falta**, que es lo que el conteo no puede.
 
@@ -298,7 +298,7 @@ corrección o disputa (paso 4), no como cita rota. Por qué no hay grado:
 
 ### 4. Resolver lo que falla (no dejar pasar)
 
-⛔ **Y la primera opción es SACAR la parte equivocada, no reescribirla con más cuidado (#389).**
+**Y la primera opción es sacar la parte equivocada, no reescribirla con más cuidado (#389).**
 Reemplazá sólo si esa cláusula es portante para lo que la nota afirma. Medido sobre 15 defectos
 de un concepto de 22 fuentes: 3 nacieron AL CORREGIR y los 3 llegaron con material agregado —una
 cita de otra fuente al final del párrafo, una narración sobre el segundo objeto, una atribución
@@ -307,14 +307,14 @@ detalle, el defecto desapareció y no volvió. Una fila de régimen declara una 
 el paper. `apply_fixes` avisa por bloque cuando un fix AGREGA citas: es la pregunta «¿es
 portante?» hecha por la máquina.
 
-⛔ **Un hallazgo dice DÓNDE mirar, no QUÉ escribir.** La corrección se redacta **volviendo a la
+**Un hallazgo dice dónde mirar, no qué escribir.** La corrección se redacta **volviendo a la
 fuente**, no copiando el encuadre del reporte del verificador. Medido: en una sola sesión, dos
 correcciones hechas desde el reporte **introdujeron un error nuevo** — un resultado atribuido a
 `N=2` cuando el paper lo reporta para `N=10`, y «este pipeline corrige actividad con regresión
 multilineal» cuando el paper dice que **no corrige actividad en absoluto**. El verificador acierta
 al señalar el problema y su nota es un resumen, no la redacción final.
 
-⛔ **A escala, las correcciones NO se aplican a mano ni con un `replace` ingenuo: usá
+**A escala, las correcciones no se aplican a mano ni con un `replace` ingenuo: usá
 `python scripts/apply_fixes.py <nota.md> <dir-de-fixes> [--write]`** (#197). El fan-out es para
 **leer**; la escritura es de **un solo aplicador serial**. Cada corrector devuelve su corrección
 como JSON —`{bibcode, fixes:[{n, viejo, nuevo, por_que, confirmado_en}], rechazados:[…]}`— y el
@@ -333,7 +333,7 @@ aplicador la pone. Los dos modos de falla están medidos sobre una corrida de 75
   línea, aplican bien). El aplicador lo localiza por su forma normalizada y lo reescribe re-envuelto,
   conservando la sangría.
 
-⛔ **El contrato de `viejo`: UN BLOQUE ENTERO, tal como lo parte `lib_blocks.split_blocks` — ni un
+**El contrato de `viejo`: un bloque entero, tal como lo parte `lib_blocks.split_blocks` — ni un
 fragmento sub-línea, ni dos ítems juntos (#222).** Es la parte que el skill nunca decía, y las dos
 mitades se pagaron en la misma corrida:
 - **Fragmento sub-línea.** Los correctores verificaban —correctamente, y varios lo declararon— que
@@ -356,13 +356,13 @@ pedidos (dos párrafos van como lista, #408) (#527). Una corrección no hace des
 sin fusionar— no se escribe **ninguno**. Un reemplazo que adivina es peor que uno que falla, y una
 nota a medio corregir es indistinguible de una corregida.
 
-⛔ **La segunda ronda PISA el veredicto y ARRASTRA la resolución (#232).** Sin esa regla, la ronda
+**La segunda ronda pisa el veredicto y arrastra la resolución (#232).** Sin esa regla, la ronda
 de re-verificación **blanquea** la primera: medido, 3 `contradice` de la ronda 1 y **0** en el bloque
 final —las tres arregladas en la prosa, y nadie que abra la nota puede saber que hasta ayer tres de
 sus afirmaciones decían lo contrario de su fuente—. La celda se escribe `contradice→corregida`, que
 es la notación que la plantilla de acá ya publica y la que `lib_blocks.resueltos()` sabe leer.
 Y la cabecera se **genera**, no se escribe: `lib_blocks.verif_summary(filas)` da la línea con los
-cuatro conteos (INV-81 — el encabezado y sus filas salen del mismo código). ⛔ **Y los conteos de
+cuatro conteos (INV-81 — el encabezado y sus filas salen del mismo código). **Y los conteos de
 las tres sub-secciones también** (#280): `lib_blocks.verif_subsection_lines(filas, prosa)`. A mano
 derivan — medido, «las 20 marcadas `acota`» sobre una tabla que tenía **3**, y «cinco inferencias»
 sobre **seis** marcas del cuerpo. *Omisiones en transcripciones* **no lleva número generado**: la
@@ -370,7 +370,7 @@ completitud es la mitad de juicio del fan-out y no está en la tabla, así que u
 inventado. Y la condición `acota` ya resuelta se anota en su celda: `acota→resuelta: <dónde>`,
 misma notación que el veredicto de al lado (#232: la segunda ronda anota, no pisa).
 
-⛔ **Esa celda NO se edita a mano: la escribe el mismo módulo que arma la tabla (#427).**
+**Esa celda no se edita a mano: la escribe el mismo módulo que arma la tabla (#427).**
 
 ```bash
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde se resolvió>   # repetible
@@ -379,7 +379,7 @@ python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json         
 python scripts/write_verif_sidecar.py <nota.md> --refutar-extraccion <ancla>:<bib> --texto "<frag>" --reason "…"  # #526
 ```
 
-⛔ **La dirección es el PAR, no el ancla (#434).** Un ancla hashea el **bloque**, así que un bloque
+**La dirección es el par, no el ancla (#434).** Un ancla hashea el **bloque**, así que un bloque
 que cita N fuentes tiene N filas con la misma: `<ancla>=` resuelve la única `acota` del bloque
 aunque una `contextualiza` comparta el ancla, y si hay **dos `acota`** rehúsa nombrando los bibcodes
 para que desambigües con `<ancla>:<bibcode>=`. Antes esas filas **no se podían marcar resueltas por
@@ -398,7 +398,7 @@ resuelve, la celda lo dice, y el conteo la sigue contando como pendiente para si
 ya no la duplica y el lint la levanta; para el corpus heredado:
 `python scripts/write_verif_sidecar.py <nota.md> --migrate-condition-prefix`.
 
-⛔ **Corregir es ESCRIBIR, y lo escrito se verifica: la operación cierra en corregir → RE-VERIFICAR
+**Corregir es escribir, y lo escrito se verifica: la operación cierra en corregir → re-verificar
 lo tocado (#203).** No cierra en *corregir*. Después de aplicar, los pares que tocaste están **sin
 verificar** —el ancla cambió— y las citas que la corrección haya agregado son **pares nuevos**. Hay
 que regenerar el bloque y **volver a lanzar el fan-out sobre ese subconjunto**.
@@ -415,7 +415,7 @@ sobre esa fila. El mecanismo funcionó, pero sólo porque alguien miró los pare
 por qué: si la edición no hubiera movido el ancla, la afirmación falsa se quedaba. Por eso la
 segunda pasada se **manda** acá en vez de aparecer como un hallazgo a interpretar.
 
-⛔ **Y el prompt de esa segunda ronda va CIEGO: se manda el par, no la historia (#258).** El
+**Y el prompt de esa segunda ronda va ciego: se manda el par, no la historia (#258).** El
 verificador recibe **la afirmación tal como está hoy y su fuente**, nada más. Prohibido *«antes decía
 X»*, *«la ronda anterior marcó Y»* y *«verificá que Z»*: eso es *leading the witness* —el juez entra
 sabiendo qué respuesta se espera, y se la da **quien escribió la corrección que tiene que juzgar**—,
@@ -436,7 +436,7 @@ vigente»*), subida acá a la ronda **obligatoria**.
   cruzando `bibcode`) y encadena el veredicto (`contradice→corregida`). Sin eso, un `contradice`
   resuelto corrigiendo la afirmación cambia el ancla por definición, el viejo queda huérfano y el
   bloque publica **0 contradicen** sobre una nota que afirmó lo contrario de su fuente — medido: 1
-  en 10 rondas, 62 huérfanos. ⛔ **Con 0 a re-verificar no hay ronda: el comando es
+  en 10 rondas, 62 huérfanos. **Con 0 a re-verificar no hay ronda: el comando es
   `write_verif_sidecar.py <nota> --reanclar` (#480)** — conserva la fecha del bloque (nada se
   verificó, #395) y **rehúsa** si algún par no tiene fila que llevar.
 - **Dirigir la pregunta, no la respuesta.** Si hace falta orientar la atención, se orienta al lugar
@@ -477,7 +477,7 @@ cerrar:
 
 ### 5. Escribir el bloque de veredicto — la nota y su HERMANO (#344)
 
-⛔ **No lo armes a mano: lo escribe un script (#403).** Con el fan-out cerrado (paso 2b en verde):
+**No lo armes a mano: lo escribe un script (#403).** Con el fan-out cerrado (paso 2b en verde):
 
 ```bash
 python scripts/write_verif_sidecar.py <nota.md> --from build/<slug>/verif/<ronda> [--fecha AAAA-MM-DD] [--dry-run]
@@ -497,7 +497,7 @@ Lo que **no** escribe es el texto libre de las tres sub-secciones: ése es el tr
 queda marcado `⚠ triage de la corrida pendiente` hasta que lo completes. Correrlo dos veces sobre el
 mismo fan-out no cambia un byte.
 
-⛔ **`--from` es REPETIBLE, y el ancla muerta no tira la ronda entera (#428).** El fan-out es el
+**`--from` es repetible, y el ancla muerta no tira la ronda entera (#428).** El fan-out es el
 paso caro: un artefacto ya pagado tiene que poder consumirse.
 
 ```bash
@@ -546,13 +546,13 @@ Omisiones en transcripciones: <tabla/lista, qué faltaba, cómo se resolvió> �
 Condiciones perdidas (afirmaciones sobre-generalizadas) — 88 con condición: 3 `acota` (3 resueltas) / 75 `contextualiza` / 10 sin clasificar: <las `acota` y cómo se resolvió cada una>.
 ```
 
-⛔ **La línea de cabecera se GENERA** —`lib_blocks.verif_summary(filas)`— y el lint la compara
+**La línea de cabecera se genera** —`lib_blocks.verif_summary(filas)`— y el lint la compara
 contra la tabla del hermano (INV-148: INV-81 cruzando archivos). El puntero lo da
 `lib_blocks.verif_pointer(nota)`; es un link markdown, **nunca** un `[[wikilink]]` (el hermano no es
 una nota y el link se reportaría roto).
 
-⛔ **El texto libre de las tres sub-secciones —el triage de la corrida— lo escribís vos, y el
-escritor lo PRESERVA (#280/#430).** Su línea se lee **normalizada** (adorno, paréntesis aclaratorio,
+**El texto libre de las tres sub-secciones —el triage de la corrida— lo escribís vos, y el
+escritor lo preserva (#280/#430).** Su línea se lee **normalizada** (adorno, paréntesis aclaratorio,
 espaciado) y el fragmento de conteo se reconoce por la **misma plantilla que lo escribe**: crudo, el
 lector no reconocía la sub-sección adornada y el placeholder se estampaba **encima del triage** —10
 sub-secciones en 4 notas, y 2 ya publicando dos conteos contradictorios en la misma línea—. La red
@@ -588,7 +588,7 @@ python scripts/write_verif_sidecar.py --restamp-section --todo           # toda 
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).
 
-⛔ **Sólo `Afirmación (extracto)` se trunca — `Evidencia` y `Condición` van ENTERAS (#226).** Lo
+**Sólo `Afirmación (extracto)` se trunca — `Evidencia` y `Condición` van enteras (#226).** Lo
 dice el encabezado de la primera: es un extracto por definición, y su ancla vive en la nota, no en
 la celda. Las otras dos son el **output del fan-out**, y cortarlas lo tira sin recuperación: medido
 sobre las 99 filas de una nota real, **81 `Evidencia` y 79 `Condición`** cortadas con `…` a
@@ -598,24 +598,24 @@ va al final de la cita, así que se lo lleva el corte y **62 de 90** filas queda
 cruce de #122 devolviendo 0 sobre el 69 % de la nota. `python scripts/lint.py` hoy reporta las dos
 cosas (celda cortada; #122 no evaluable en esa fila).
 
-⛔ **El corte de `Afirmación (extracto)` no puede caer dentro de `$…$`, `` ` `` ni `[[ ]]`**
+**El corte de `Afirmación (extracto)` no puede caer dentro de `$…$`, `` ` `` ni `[[ ]]`**
 (#274b): retrocede al límite del bloque. Medido en una ficha real, **10 de 88** filas cortadas a
 media fórmula —las únicas 10 celdas con `$` impar de toda la nota—, y en Obsidian un `$` huérfano se
 traga texto hasta el próximo `$`; un `[[` partido es peor, porque es **bloqueante** del lint. Si
 generás la tabla con un script, el corte lo hace `lib_blocks.truncate_claim`.
 
-⛔ **Las celdas llevan PROSA. Nunca un `repr()` de la salida del fan-out** (#274a): los corchetes,
+**Las celdas llevan prosa. Nunca un `repr()` de la salida del fan-out** (#274a): los corchetes,
 los `', '` y los `\'` llegan tal cual al lector, y `\'` **no es un escape de markdown** —
 Python-Markdown imprime la barra y markdown-it se la come, así que la misma celda se lee distinto
 según el parser. Dentro de una celda se escapa **sólo** `|`; las comillas van crudas.
 
-⛔ **Más de dos rondas: la celda ENCADENA** (#274c) — `no-soportada→contradice→corregida`. Con una
+**Más de dos rondas: la celda encadena** (#274c) — `no-soportada→contradice→corregida`. Con una
 sola flecha no se distingue *«una ronda lo corrigió»* de *«tres lo pelearon»*: medido, una nota que
 corrió **ocho** rondas emitió 13 veredictos malos y publicó 11. La partición de la cabecera sigue
 siendo por el **primer** veredicto (el que dice qué hizo mal la nota) y las cadenas se publican
 aparte.
 
-⛔ **Al citar NO se normaliza la notación del original** (#288). Medido abriendo cinco hallazgos
+**Al citar no se normaliza la notación del original** (#288). Medido abriendo cinco hallazgos
 uno por uno: una cita correcta y bien atribuida figuraba como no-verbatim porque la nota había
 sacado la numeración de la lista del paper (`1. g1 (u) is a good…` → `$G_1$ is a good…`) y el
 argumento de la función. Si hay que recortar, se marca la elisión con `…` —el comparador la
@@ -627,7 +627,7 @@ Desde #205 el `.txt` es el **índice**, no la fuente: en un paper a dos columnas
 en medio de la frase, y una cita perfectamente correcta aparece rota. Se confirma en el **PDF**; si
 el PDF la dice, el defecto es de la extracción y la cita **no se toca**.
 
-⛔ **La celda `Condición` arranca con su CLASE: `acota: …` o `contextualiza: …`** (#221) — como la
+**La celda `Condición` arranca con su clase: `acota: …` o `contextualiza: …`** (#221) — como la
 fila 4 del ejemplo. El adorno no rompe nada (`**contextualiza** — …` se lee igual desde #283), pero
 la clase **tiene que estar**: es lo que separa la condición que obliga a editar de la que sólo va al
 reporte, y sin ella el lint la reporta fila por fila.
@@ -638,7 +638,7 @@ escrito**, rehusando devolver un bloque que no se lee como se escribió (#284). 
 reconstrucción real: sin esa puerta, **73 de 131** filas quedaron con el ancla vacía, todas ellas
 filas cuya `Evidencia` transcribe una tabla del paper.
 
-⛔ **La barra vertical dentro de una celda va escapada `\|`** (INV-99). Es el caso normal, no el
+**La barra vertical dentro de una celda va escapada `\|`** (INV-99). Es el caso normal, no el
 raro: el fan-out junta varias citas textuales con ` | ` de separador, y una cita puede traer la suya
 —una fila de tabla del paper—. Sin escapar, la celda se parte en dos y **todas las columnas a su
 derecha se corren**: el `Ancla` se lee de la celda de al lado y el par vuelve *«vencido por
@@ -649,7 +649,7 @@ el bloque con un script, **sustituir** o escapar; nunca dejar la barra cruda.
 
 ### El ancla: una fila por par, con sus dos hashes (D-4/D-20)
 
-⛔ **Una fila por par, sin excepción.** La tentación es colapsar las soportadas en un párrafo de
+**Una fila por par, sin excepción.** La tentación es colapsar las soportadas en un párrafo de
 prosa y dejar en la tabla sólo las que fallaron (así estaba una ficha real). **No**: sin fila no hay
 dónde colgar el ancla, y el lint no puede distinguir "verificada" de "nunca se miró".
 
@@ -725,7 +725,7 @@ real. Una nota que nace con pares sin fila arranca con deuda que nadie va a dist
 legítima.
 
 ### 6. Lint + cierre
-⛔ **Antes del lint: si el paso 4 corrigió algo, la segunda ronda ya tiene que haber corrido**
+**Antes del lint: si el paso 4 corrigió algo, la segunda ronda ya tiene que haber corrido**
 (#203). `lint --cierre` es la **red**, no el disparador: los *vencidos por edición* y *sin
 verificar* que reporta son exactamente los pares que la corrección dejó sin respaldo. Llegar acá con
 esos números en rojo significa que la operación no terminó.
@@ -761,7 +761,7 @@ Ninguno es paso de cierre: se corren **a pedido**, y por eso viven en
 - **Benchmark** — `python scripts/bench_verify.py seed` siembra citas **falsas deterministas** entre
   pares reales, el verificador las juzga a ciegas y
   `python scripts/bench_verify.py score --modelo <id>` reporta el **recall**. Le pone un número al
-  "juicio de LLM". ⛔ **Pasá `--modelo`** (INV-75): el número se reporta **atado a su condición**
+  "juicio de LLM". **Pasá `--modelo`** (INV-75): el número se reporta **atado a su condición**
   —corpus, modelo, fecha, muestra—, nunca como cifra absoluta del framework, y el script no puede
   saber qué modelo juzgó. Sin el flag el reporte dice «no declarado», que es la verdad pero no sirve
   para comparar dos corridas. **Regla #0: nada del benchmark entra a `vault/`** (vive en

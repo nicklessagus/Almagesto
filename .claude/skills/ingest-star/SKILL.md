@@ -64,10 +64,10 @@ Progreso del ingest de <estrella>:
    `scripts/ingest_star.py`** — puntero, no copia: no lo repliques acá ni en otros docs. Para un
    flag fino (`--rows`, `--all`, `--force` de un paso) corré el script puntual.
 
-   ⛔ **La mecánica de la cadena se describe en UN solo lugar (#67):**
+   **La mecánica de la cadena se describe en un solo lugar (#67):**
    `.claude/skills/ingest-star/reference/cadena-ads.md`, que `ingest-theme` apunta también. Ahí
    están la **guardia de expansión** (el checkpoint humano que frena si el pool se multiplicó, y
-   ⛔ en la primera ingesta, siempre: #529), el
+   en la primera ingesta, siempre: #529), el
    citation chaining, el rate limit de `fetch_arxiv`, la cascada publisher-first de `fetch_pdf` (#512) y su residuo
    `build/<slug>/missing_pdf.json`, los dos chequeos de `extract_fulltext`, `check_retractions` y
    `extra_core` como **curación persistente y versionada**. Leelo la primera vez y ante cualquier
@@ -168,7 +168,7 @@ Progreso del ingest de <estrella>:
      Lista los core ordenados por **cuántas facetas del objetivo toca cada uno** (citas como
      desempate). El criterio es deliberado: citas/año mide atención de la comunidad, facetas mide
      **pertinencia a lo que esta bóveda quiere saber**, que es la pregunta que la priorización tiene
-     que responder — y sale gratis, porque `classify()` ya la computó. ⛔ **No es un filtro y no toca
+     que responder — y sale gratis, porque `classify()` ya la computó. **No es un filtro y no toca
      la lente**: es un orden sobre los que **ya** son core.
    - Si no se leen todos, **se avisa al usuario** y el motivo queda **registrado**:
      ```bash
@@ -185,7 +185,7 @@ Progreso del ingest de <estrella>:
    afirma (muestra, época, corte de datos, modelo), la marca **segunda mano** con su cita si la
    fuente se lo atribuye a otro trabajo, y **el tiempo verbal y el cuantificador de la fuente, tal
    cual** (*«was associated»* no se vuelve *«is associated»*; *«el 75 % de la muestra»* no se vuelve
-   *«la muestra»*). ⛔ **Nada de prosa comparativa en la nota de paper:** comparar dos papers es
+   *«la muestra»*). **Nada de prosa comparativa en la nota de paper:** comparar dos papers es
    `inferencia` y va al `## Inventario por eje` (paso 3b).
 
    Los seis mecanismos de error que esa regla ataca —medidos sobre una ficha real: 68 pares, 14
@@ -202,7 +202,7 @@ Progreso del ingest de <estrella>:
    acotado, y hace el paso **auditable**: cada extracción tiene su corrida. Lanzalos en tandas
    paralelas; el orquestador (vos) mergea y escribe las notas.
 
-   ⛔ **Tope de 20 subagentes concurrentes: lotealos de a ≤ 15 y NO reintentes a ciegas (#218).**
+   **Tope de 20 subagentes concurrentes: lotealos de a ≤ 15 y no reintentes a ciegas (#218).**
    Pasado el tope, el error `Concurrent subagent limit reached … Do not retry.` llega **mezclado
    con los lanzamientos exitosos del mismo mensaje**: los que no se lanzaron no se ven, y el paso
    sigue como si hubieran corrido. Antes de cosechar, contá **dos** veces —*lanzados vs papers* y
@@ -215,7 +215,7 @@ Progreso del ingest de <estrella>:
    grep que no corrió no es «el paper no lo dice»—. Antes ordenaba leer un PDF inexistente y el
    único aviso iba a `stderr`, que todo pipe descarta.
 
-   ⛔ **El prompt de cada subagente se GENERA, no se escribe a mano (INV-100):**
+   **El prompt de cada subagente se genera, no se escribe a mano (INV-100):**
    ```bash
    python scripts/extraction_prompt.py <slug> <bibcode>      # --theme si el slug es un tema
    ```
@@ -228,7 +228,7 @@ Progreso del ingest de <estrella>:
    frontera — y mientras el prompt sea memoria del agente, el paso **no es reproducible**, así que
    dos corridas del mismo ingest no comparan nada.
 
-   ⛔ **Lo que produce cada subagente es UNA VISTA, no «la extracción del paper» (#188).** El
+   **Lo que produce cada subagente es una vista, no «la extracción del paper» (#188).** El
    prompt pregunta *«¿qué dice sobre {sujeto}?»*, con los `grep` armados desde **sus** alias: el
    mismo paper leído desde otro sujeto da otra vista. Por eso la sección de la nota es
    `## Vista — <sujeto>` y el JSON trae `vista{sujeto,tipo,txt,fuente}` (#207). Sin el scope, el silencio de la
@@ -254,7 +254,7 @@ Progreso del ingest de <estrella>:
      `## Vista — <sujeto>` — sus bullets ya vienen ramificados por tipo de sujeto (#76):
      ground-truth (P/K/e por planeta), los **ejes de `relevance.facets`** del objetivo de esta
      bóveda, métodos y aporte al objetivo. Llenar los que el stub trae, no una lista fija de memoria.
-     ⛔ **El esqueleto de `ejes` del JSON lo DERIVA el generador de esas facetas (#254).** Era un
+     **El esqueleto de `ejes` del JSON lo deriva el generador de esas facetas (#254).** Era un
      literal de cinco claves —las del `objective.yaml` de ejemplo del template— y `extraction_prompt`
      no leía el objetivo en ninguna parte, así que **toda faceta que una instancia declarara de más
      no se le preguntaba a ningún extractor**, y la vista volvía sin la clave: indistinguible de
@@ -292,7 +292,7 @@ Progreso del ingest de <estrella>:
    sin abrir un paper. La red de que el contraste ocurrió es #75 (*extraído pero no sintetizado*):
    un paper que pagó la extracción y no aparece en la nota sale como backlog.
 
-   ⛔ **Todo valor que va a la nota viaja con su página del PDF (#205).** Desde que la extracción
+   **Todo valor que va a la nota viaja con su página del PDF (#205).** Desde que la extracción
    lee el PDF esto es lo normal, no una excepción para ecuaciones. Si la vista del paper ya trae el
    dato **con su página**, se copia con esa procedencia; si llega **sin** página —una vista vieja,
    escrita cuando se leía el `.txt`— nadie lo verificó contra la fuente: abrí el PDF acá. Vale
@@ -304,7 +304,7 @@ Progreso del ingest de <estrella>:
 > (#316): un párrafo que **contrasta** dos fuentes legítimamente las cita a las dos — lo que no
 > puede pasar es que una **cita entrecomillada** quede sin su `[[bibcode]]` al lado, porque ahí el
 > chequeo no sabe de quién es y la prueba contra todas (la convención es `«…» [[bibcode]]`).
-> ⛔ **«Al lado» es literal (#325):** entre la cita y su link sólo puntuación y, si va, el paréntesis
+> **«Al lado» es literal (#325):** entre la cita y su link sólo puntuación y, si va, el paréntesis
 > del localizador — con prosa en el medio el chequeo declara ambigüedad, y una **mención** posterior
 > («…atribuyendo eso a [[X]]») ya no se lleva la atribución. En una fila manda la columna *Fuente*. Cuando enumeres
 > quién hizo qué —«PCA vía SVD [[A]], [[B]]; Wapiti [[C]], [[D]]; YARARA [[E]]»— dale a cada fuente
@@ -404,6 +404,6 @@ Progreso del ingest de <estrella>:
   de texto ve. Las mediciones y qué hacer en cada caso están en `reference/rescate-pdfs.md`.
 - **PDFs que la cadena no pudo bajar, y OCR:** todo lo que quedó en `build/<slug>/missing_pdf.json`
   se resuelve por la **cascada manual** —Messenger / página del instrumento / mirrors / tablas del
-  CDN / derivar al usuario, y ⛔ **nunca** gastar intentos en `aanda.org` (DataDome)—, canónica en
+  CDN / derivar al usuario, y **nunca** gastar intentos en `aanda.org` (DataDome)—, canónica en
   `reference/rescate-pdfs.md` (`ingest-theme` y `append-knowledge` apuntan al mismo archivo). Ahí
   también está el OCR de `extract_fulltext` y el síntoma del "escaneo con marca de agua".

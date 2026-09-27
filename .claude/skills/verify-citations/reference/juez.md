@@ -6,16 +6,16 @@
 
 ## La fuente
 
-⛔ **La fuente es el PDF (#205).** `Read` lo rasteriza, así que **ves** la página: prosa, ecuaciones,
+**La fuente es el PDF (#205).** `Read` lo rasteriza, así que **ves** la página: prosa, ecuaciones,
 tablas y figuras. Citá por **página**. El `.txt` es el **índice**: sirve para ubicar con `grep -n`,
 nunca para citar — `pdftotext` pierde sin avisar radicales, primas, superíndices y subíndices.
 
 | Regla | En una línea |
 |---|---|
 | **localizar antes de leer** | `grep -n` sobre el `.txt` te dice **en qué zona** está la afirmación; después abrís esa parte del PDF. En un paper corto podés leerlo entero y saltear el paso. ⚠ Grepear un `.txt` tiene sus mañas —entrelazado de columnas, guiones de corte, espacios que no se normalizan— y están en `convenciones-fulltext.md`. |
-| **`pdf_source: eprint`** (#57) | el PDF es el **preprint**: una discrepancia numérica contra un valor publicado es candidata a **diferencia de versión**, no a cita rota. ⛔ Nunca "corregir" la nota hacia el eprint. `null` = desconocido, que **no** es "publicado". |
+| **`pdf_source: eprint`** (#57) | el PDF es el **preprint**: una discrepancia numérica contra un valor publicado es candidata a **diferencia de versión**, no a cita rota. Nunca "corregir" la nota hacia el eprint. `null` = desconocido, que **no** es "publicado". |
 | **documento largo** (#80) | un libro no se rasteriza entero. Ahí el `.txt` como índice es **imprescindible**: grepeás, sacás la página, abrís **esas** páginas del PDF. La unidad de cita la declara `unidad_cita` y el recorte, `alcance`. |
-| **fuente WEB** (#205 / AUD-204) | ⛔ **excepción nombrada: acá el `.txt` SÍ es la fuente.** Una nota con `source_url` poblado (`pdf: null`, snapshot de `fetch_web`) no tiene PDF **por diseño**, y el argumento de #205 no le aplica: ahí el `.txt` no es una copia degradada de un original, **es la captura**. Es determinista (defuddle, URL + fecha) y es lo que la cita referencia con `accessed`. Se cita por **línea** y la fila lleva **`txt:<sha10>`**. |
+| **fuente WEB** (#205 / AUD-204) | **excepción nombrada: acá el `.txt` sí es la fuente.** Una nota con `source_url` poblado (`pdf: null`, snapshot de `fetch_web`) no tiene PDF **por diseño**, y el argumento de #205 no le aplica: ahí el `.txt` no es una copia degradada de un original, **es la captura**. Es determinista (defuddle, URL + fecha) y es lo que la cita referencia con `accessed`. Se cita por **línea** y la fila lleva **`txt:<sha10>`**. |
 | **agotar antes de concluir** | si la afirmación no aparece donde el índice la ubica, ampliá la ventana de páginas antes de concluir. `no verificable por extracción` queda para el PDF que es un escaneo ilegible incluso a ojo — distinto de `no-soportada`. |
 
 ## Qué devolvés por cada par
@@ -27,7 +27,7 @@ Por cada fuente, el subagente:
   `.txt` es la fuente (ver la tabla de § La fuente).
   **Ojo:** los nombres tienen `&` y puntos → citarlos entre comillas simples al leer/grep.
 - Lee **sólo esa fuente** (grounding-first; **prohibido** responder de memoria o de otro paper).
-- ⛔ **Una cita entrecomillada que lleva OTRO `[[bibcode]]` adyacente no es tuya (#316).** El par se
+- **Una cita entrecomillada que lleva otro `[[bibcode]]` adyacente no es tuya (#316).** El par se
   arma por **bloque**, así que un párrafo que contrasta dos o tres fuentes te llega entero: la
   afirmación que tenés que juzgar es la del bloque, no cada `«…»` que aparezca en él. Si la cita
   pertenece a otra fuente del mismo bloque, **decilo en la `nota` y no la cuentes en contra** —
@@ -58,7 +58,7 @@ Por cada fuente, el subagente:
     menos" de las tablas truncadas, en versión conceptual: la nota no afirma falso, afirma **de
     más**. En una nota de **concepto** la resolución tiene lugar propio: la condición va a
     `## Régimen de validez`; en una ficha, se agrega a la afirmación.
-  - ⛔ **Y la CLASIFICA, con vocabulario cerrado (#221): `acota` o `contextualiza`.** El test es
+  - **Y la clasifica, con vocabulario cerrado (#221): `acota` o `contextualiza`.** El test es
     operativo: ***¿la afirmación queda FALSA si se saca la condición?*** Sí → `acota` (el umbral es
     de otra estrella, la medición no es sobre RVs, el escalado es por fila): **se resuelve sí o sí**
     —fila de `## Régimen de validez`, o corrección de la prosa—. No → `contextualiza` (instrumento,
