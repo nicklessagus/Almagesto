@@ -126,7 +126,7 @@ def referencias(nombre: str, tipo: str) -> tuple[list, list]:
         texto = f.read_text(encoding="utf-8")
         if nombre in cfg.as_list(cfg.split_fm(texto).get(campo)):
             papers.append(f)
-        if f"[[{nombre}]]" in texto or f"[[{nombre}|" in texto:
+        if cfg.wikilink_re(nombre).search(texto):          # AUD-509: also `#`/`^` anchors
             wikis.append(f)
     return papers, wikis
 

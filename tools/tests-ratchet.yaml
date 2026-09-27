@@ -19,6 +19,7 @@
 #   - un NOMBRE que no esté en `conocidos` → rojo aunque el total no suba (la deuda no rota).
 #   - conteo por DEBAJO → pasa y avisa que hay que bajar el techo acá (AUD-07).
 #   - el techo NUNCA se sube. Si una función nueva lo necesita, su test está en el archivo equivocado.
+#   - la guarda contra subidas es `cfg.ratchet_raises` (`tests/test_ratchets.py`, INV-140, AUD-485).
 medido_en: "2026-09-11"
 techo: 27
 conocidos:

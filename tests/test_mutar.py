@@ -1354,3 +1354,14 @@ def test_ratchet_en_una_INSTANCIA_rehusa_sin_mutar(monkeypatch, capsys):
     monkeypatch.setattr(mutar, "mutar_archivo", lambda *a, **k: pytest.fail("no debía mutar"))
     assert _args_main(monkeypatch, ["--todo", "--ratchet"]) == 2
     assert "INSTANCIA" in capsys.readouterr().out
+
+
+def test_AUD551_la_suite_de_cada_mutante_corre_sin_escribir_bytecode(tmp_path, monkeypatch):
+    """AUD-551 — la invalidación del `.pyc` es por mtime+tamaño: dos mutantes del mismo tamaño
+    escritos en el mismo segundo podían medir el bytecode del anterior (muerte falsa). Con `-B` la
+    corrida no deja `.pyc` que reusar."""
+    vistos = []
+    monkeypatch.setattr(mutar.subprocess, "run",
+                        lambda cmd, **k: vistos.append(cmd) or SimpleNamespace(returncode=0))
+    assert mutar._suite_verde(tmp_path)
+    assert vistos and vistos[0][:2] == [sys.executable, "-B"], vistos

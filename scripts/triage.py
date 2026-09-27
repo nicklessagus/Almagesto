@@ -442,12 +442,12 @@ def _tema_meta(slug: str) -> dict:
 def _notes_citing(bibcode: str) -> list:
     """Notas de `wiki/` con un `[[bibcode]]` a este paper (#132).
 
-    Mismo matcheo que `entity.referencias`: el wikilink pelado y el que lleva alias (`[[b|texto]]`).
+    Mismo matcheo que `entity.referencias`: `cfg.wikilink_re` (pelado, con alias o con ancla `#`/`^`).
     Se usa para AVISAR, nunca para reescribir."""
     stem = cfg.note_stem(bibcode)
     return [f for f in sorted(cfg.WIKI.rglob("*.md"))
             if f.name != f"{stem}.md"
-            and (f"[[{stem}]]" in (txt := f.read_text(encoding="utf-8")) or f"[[{stem}|" in txt)]
+            and cfg.wikilink_re(stem).search(f.read_text(encoding="utf-8"))]      # AUD-509
 
 
 def drop_core(slug: str, bibcodes: list, motivo: str) -> int:

@@ -1597,32 +1597,40 @@ def migrate_warn_anchor(dest, leak_patterns) -> tuple[int, list]:
             if 0 <= i < len(lineas):
                 nuevas.setdefault((cat, lb.paragraph_anchor(lineas, i)), set()).add(
                     lb.warn_anchor(lineas, i))
+    # Target per signature, in list order: its new anchor, or None (covers nothing today, or
+    # covered several blocks — declared). ⛔ AUD-540: grouping by the old anchor WITHOUT the category
+    # made two categories with different blocks look ambiguous and fell into a silent `continue`.
     por_ancla: dict = {}
     declaradas = []
     for f in firmas:
         destino = nuevas.get((f.get("categoria"), str(f.get("ancla"))))
-        if destino is None:
-            continue
-        if len(destino) > 1:
+        if destino is not None and len(destino) > 1:
             declaradas.append((stem, f.get("categoria"), f.get("ancla"), len(destino)))
-            destino = {None}
-        por_ancla.setdefault(str(f.get("ancla")), set()).update(destino)
-    reemplazo = {}
-    for vieja, destino in por_ancla.items():
-        if destino == {None} or len(destino) > 1:
-            continue                  # ambigua (o dos categorías en desacuerdo): no se toca
-        (nueva,) = destino
-        if nueva != vieja:
-            reemplazo[vieja] = nueva
+        por_ancla.setdefault(str(f.get("ancla")), []).append(
+            next(iter(destino)) if destino and len(destino) == 1 else None)
+    reemplazo = {}                    # old anchor → the new one for each of its occurrences
+    for vieja, destinos in por_ancla.items():
+        if all(d in (None, vieja) for d in destinos):
+            continue
+        ocurrencias = len(re.findall(r"\b" + re.escape(vieja) + r"\b", head))
+        if ocurrencias == len(destinos):
+            reemplazo[vieja] = iter([d or vieja for d in destinos])
+        elif len(set(destinos)) == 1:              # one destination: every occurrence goes there
+            reemplazo[vieja] = iter(destinos * ocurrencias)
+        else:
+            # the anchor also shows up outside its signatures: which occurrence is whose is unknown
+            declaradas += [(stem, f.get("categoria"), vieja, len(set(destinos)))
+                           for f in firmas if str(f.get("ancla")) == vieja]
     if not reemplazo:
         return 0, declaradas
+    n = sum(d not in (None, v) for v in reemplazo for d in por_ancla[v])
     head2 = re.sub(r"\b(" + "|".join(map(re.escape, reemplazo)) + r")\b",
-                   lambda mm: reemplazo[mm.group(1)], head)
+                   lambda mm: next(reemplazo[mm.group(1)]), head)
     if not cfg.split_fm(head2 + body):
         cfg.print_seguro(f"  ⛔ {stem}: el frontmatter dejó de parsear — no se escribe (#222)")
         return 0, declaradas
     cfg.write_text_atomic(dest, head2 + body)
-    return len(reemplazo), declaradas
+    return n, declaradas
 
 
 def migrate_all_warn_anchor() -> int:
@@ -2911,7 +2919,8 @@ def _estado_paper(stem: str, fm: dict, cuerpo: str, dropeados: set, sujetos: set
         return ESTADO_SIN_VISTA
     if not (fm.get("methods") or []):
         return ESTADO_SIN_EXTRAER
-    return ESTADO_SINTETIZADO if f"[[{stem}" in cuerpo else ESTADO_EXTRAIDO
+    # AUD-509 — the whole wikilink, not a prefix: `[[2011Naika]]` does not cite `2011Naik`.
+    return ESTADO_SINTETIZADO if cfg.wikilink_re(stem).search(cuerpo) else ESTADO_EXTRAIDO
 
 
 def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
@@ -3885,9 +3894,13 @@ def _move_extraction(old_stem: str, new_bibcode: str) -> int:
     alone: choosing between two paid readings is judgement, not mechanics.
     """
     movidos = 0
+    viejo_n = safe_name(old_stem)
+    # AUD-499 — also the lens readings `<old>__<lens>.json` (#371): the glob saw only `<old>.json`,
+    # so a second reading kept the old bibcode inside and fell out of the harvester (#228).
     # @inv INV-160
-    for viejo in sorted(cfg.EXTRACCION.glob(f"*/{safe_name(old_stem)}.json")):
-        nuevo = viejo.with_name(f"{safe_name(new_bibcode)}.json")
+    for viejo in sorted([*cfg.EXTRACCION.glob(f"*/{viejo_n}.json"),
+                         *cfg.EXTRACCION.glob(f"*/{viejo_n}__*.json")]):
+        nuevo = viejo.with_name(safe_name(new_bibcode) + viejo.name[len(viejo_n):])
         if nuevo.exists():
             cfg.print_seguro(f"  ⚠ {nuevo.parent.parent.name}: ya hay extracción para "
                              f"{new_bibcode}; la de {old_stem} se deja donde está (elegir entre dos "

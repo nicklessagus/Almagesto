@@ -124,3 +124,14 @@ def test_el_cli_acepta_el_alcance_y_rehusa_la_fuente_desconocida(tmp_path, capsy
     assert vf.main([str(nota), "--out", str(tmp_path / "r2"), "--fuentes", una]) == 0
     out = capsys.readouterr().out
     assert "alcance `fuentes`" in out and "FUERA" in out and "re-anclan" in out
+
+
+def test_la_regex_de_arqueologia_caza_lo_que_declara():
+    """AUD-550 — los dos usos de `PROMPT_ARCHAEOLOGY_RE` son asserts NEGATIVOS: una regex que no
+    matchea nada los deja verdes. Control positivo: las formas que declara, y el localizador que
+    declara dejar pasar."""
+    from conftest import PROMPT_ARCHAEOLOGY_RE as R
+    for forma in ("Medido el 2026-08-24", "medido sobre 40 pares", "Medido: 7 de 13",
+                  "precisión **12/15", "cambió en 1.39.0"):
+        assert R.search(forma), forma
+    assert not R.search("p. 3 de 12"), "un «N de M» pelado es un localizador"

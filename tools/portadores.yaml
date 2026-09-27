@@ -2924,3 +2924,25 @@ portadores:
         estado: fuera-de-alcance
         motivo: "DEFINE los vocabularios y el fence del prompt; `fanout_errors` mira forma, no valor, por diseño declarado."
 
+  - issue: AUD-509
+    regla: >-
+      Si una nota cita un stem se decide por el wikilink ENTERO (`[[stem]]`, `[[stem|…]]`,
+      `[[stem#…]]`, `[[stem^…]]`), nunca por el prefijo `[[stem`: `[[2011Naika]]` no cita a
+      `2011Naik`. Por prefijo el roll-up marcaba `sintetizado` un paper que la ficha no nombra,
+      mientras el lint (LINK_RE exacto) decía lo contrario sobre el mismo par; con `]]`/`|` a mano
+      se perdían las anclas `#`/`^`.
+    funcion: lib_config.wikilink_re
+    patron: '\[\[\{[^}]+\}[^"]*" in '
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`_estado_paper` (columna Estado del roll-up) y los dos renombres."
+      - modulo: scripts/bench_verify.py
+        estado: usa
+        motivo: "`claim_for_bibcode` elige la cláusula que porta ESA cita."
+      - modulo: scripts/entity.py
+        estado: usa
+        motivo: "`referencias` y `rename`: qué notas linkean la entidad."
+      - modulo: scripts/triage.py
+        estado: usa
+        motivo: "`_notes_citing`: las notas que citan el paper que se descarta (avisa)."

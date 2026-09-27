@@ -4959,7 +4959,9 @@ def check_bibtex_no_pegable(stem: str, fm: dict) -> tuple:
     is PASTED, never post-processed — a macro → name table, or a month rewritten here, would be a
     field of the citation written in the repo, which is what #397 forbids."""
     _btx = str(fm.get("bibtex") or "").strip()
-    if not _btx:
+    # AUD-502 / INV-158 — with `sin_bibtex` beside it the note is already blocking in
+    # `bibtex_hueco_contradictorio`, whose exit (`fetch_bibtex --paper`) settles this one too.
+    if not _btx or str(fm.get("sin_bibtex") or "").strip():
         return [], []
     pend, res = [], []
     for clase, detalle in cfg.bibtex_no_pegable(_btx):
@@ -5744,7 +5746,8 @@ def check_note_links(stem: str, f, text: str, names, fulltext: dict, incoming: d
         # ser huérfano y el detector —que BLOQUEA— quedaba en 0 permanente. Mismo criterio con
         # que las secciones estampadas quedan fuera del fan-out y del detector de fuga (#214):
         # metadata derivada no es evidencia. Lo cazó el corpus sintético al mover el golden.
-        if tgt in incoming and stem not in ("index", mn.MATRIX_STEM):
+        # AUD-500 — a self-link reaches nothing from outside (INV-163): it does not count.
+        if tgt in incoming and stem not in ("index", mn.MATRIX_STEM) and tgt != stem:
             incoming[tgt] += 1
         elif tgt not in names:
             # @inv INV-02
@@ -7450,6 +7453,7 @@ def is_instance() -> bool:
     Same signal the sync recipe relies on (`git -c merge.ours.driver=true merge upstream/main`,
     #390). Tools that write a FRAMEWORK file (`tools/issues.json`, the mutation ratchet) refuse
     here: in an instance that file is not editable (golden rule, #377)."""
+    # @inv INV-68
     return "upstream" in git_remotes()
 
 

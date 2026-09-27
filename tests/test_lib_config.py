@@ -4117,3 +4117,18 @@ def test_raw_notation_ve_la_matematica_fuera_de_dolares_y_no_la_cita():
     assert cfg.raw_notation("es sum_{i=1} a_i") == "sum_{i=1}"
     assert cfg.raw_notation("\\sigma = 1") == "\\sigma"
     assert cfg.raw_notation("«y^3» [[2001A^b]] `x^2` $x^2$ H$\\alpha$ y sigma <= 3") is None
+
+
+def test_AUD510_raw_notation_entre_dos_dolares_ESCAPADOS_se_reporta():
+    """AUD-510 — `\\$` es el `$` literal que escribe `escape_dollars` (#457): no delimita matemática,
+    así que lo que queda entre dos de ellos se muestra crudo en Obsidian y es hallazgo."""
+    assert cfg.raw_notation("precio \\$ 10^3 \\$") == "10^3"
+    assert cfg.raw_notation("$10^3$ y \\$5") is None, "el span sin escapar sigue siendo matemática"
+
+
+def test_AUD541_solo_abstract_sin_motivo_REAL_no_abre_la_escotilla():
+    """AUD-541 — «sin motivo no aplica» (#520): un booleano o el `<motivo>` de la plantilla no dicen
+    POR QUÉ la fuente es su abstract, que es lo que vuelve auditable la exención (D-58)."""
+    for valor in (True, "<motivo>", "  ", None, False):
+        assert cfg.solo_abstract_motivo({"solo_abstract": valor}) == "", valor
+    assert cfg.solo_abstract_motivo({"solo_abstract": " resumen de congreso "}) == "resumen de congreso"

@@ -54,7 +54,8 @@ Deben quedar en **0**:
 - **Papers retractados** (flag `retracted`, lo estampa `scripts/check_retractions.py` vía Crossref;
   la cadena de ingest chequea sólo el slug con `--slug`, el barrido completo es la pasada periódica
   de `maintain`): una fuente retractada citada rompe la frontera dura.
-- **Páginas huérfanas.** ⚠ El `index.md` **no** cuenta como link entrante (#249): desde que se
+- **Páginas huérfanas.** Un auto-link (`[[x]]` dentro de `x`) no es entrante (AUD-500). ⚠ El
+  `index.md` **no** cuenta como link entrante (#249): desde que se
   estampa por verdad de disco lista todo, así que contarlo dejaba el detector en 0 permanente —
   **metadata derivada no es evidencia**. ⚠ La misma decisión vale para el **grafo de Obsidian**
   (#301): `vault/.obsidian/graph.json` viene con `search: -path:wiki/log.md -path:wiki/index.md`,
@@ -690,8 +691,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   **de `split_blocks`** (#528: párrafo, ítem de lista, blockquote o fila — el mismo que producen
   los pares; con el párrafo, una firma sobre un ítem eximía a la lista entera): si la prosa cambia,
   la firma deja de cubrir y el hit vuelve — lo juzgado ES la prosa. Migrador de las firmas
-  pre-v1.339.0: `make_notes.py --migrate-warn-anchor` (re-firma la que cae en UN bloque; la que
-  cubría varios la **declara** y no la reparte). Forma dura (D-58): sin `motivo` o con una categoría fuera de las tres,
+  pre-v1.339.0: `make_notes.py --migrate-warn-anchor` (re-firma **cada firma** que cae en UN bloque,
+  aunque comparta el ancla vieja con otra categoría, AUD-540; la que cubría varios la **declara** y no
+  la reparte). Forma dura (D-58): sin `motivo` o con una categoría fuera de las tres,
   no exime nada. Las WARN de higiene no se firman: se cierran arreglando.
 - **`warn_revisada` que no corresponde a ningún hit** (#502/#256, backlog): el bloque cambió
   (re-revisalo y firmá el ancla nueva) o el hit ya no dispara (sacá la entrada).
@@ -811,7 +813,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   rechaza antes el cosechador (#207).
 - **Fuente que ES su abstract** (#520, `solo_abstract_ok`, listada aparte: no es deuda): un resumen
   de congreso no tiene paper detrás, así que el `## Abstract` verbatim es **toda** la fuente. Se
-  declara `solo_abstract: <motivo>` en la nota (sin motivo no aplica) y entonces: no pide PDF
+  declara `solo_abstract: <motivo>` en la nota (sin motivo no aplica: ni `true` ni el `<motivo>`
+  de la plantilla, AUD-541) y entonces: no pide PDF
   (`vista_solo_abstract`), no reporta la fuente perdida (`vista_sin_fuente_en_disco`), y las citas
   a ese paper se evalúan contra su `## Abstract` en vez del `.txt` (`unverifiable`, `cita_opaca`,
   y `contrast --validar` por la misma función, `lib_quotes.abstract_source`).
@@ -1153,7 +1156,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   **la exportación se pide en la forma en que se PEGA, y un bloque que no se pega no está
   cerrado**. Esta categoría junta las formas que **re-correr la cadena cierra**, así que la salida
   es `python scripts/fetch_bibtex.py --paper <stem>` (o la cadena entera, idempotente: el bloque
-  cuenta como pendiente **sin `--force`**). Dos hoy:
+  cuenta como pendiente **sin `--force`**). La nota que además declara `sin_bibtex` no cuenta acá:
+  ya bloquea en `bibtex_hueco_contradictorio` (INV-158, AUD-502). Dos hoy:
   - **la revista como macro de AASTeX** (#471): ADS exporta `journal = {\aap}` por defecto
     (`journalformat: 1`) y sin `aas_macros.sty` —que el `.bib` de un informe normal no carga— el
     campo compila **vacío**; la ficha no lleva el nombre en ningún otro lado (`bibstem` es la

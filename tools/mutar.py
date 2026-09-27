@@ -119,7 +119,9 @@ def _copia_del_repo(destino: Path) -> Path:
 
 def _suite_verde(cwd: Path, subset: Path | None = None) -> bool:
     blanco = str(subset) if subset else "tests/"
-    r = subprocess.run([sys.executable, "-m", "pytest", blanco, "-q", "-x", "--no-header"],
+    # AUD-551 — `-B`: the `.pyc` check is mtime+size, so two same-size mutants written in the same
+    # second could run the previous one's bytecode (a false death). No bytecode, nothing to reuse.
+    r = subprocess.run([sys.executable, "-B", "-m", "pytest", blanco, "-q", "-x", "--no-header"],
                        cwd=cwd, capture_output=True, text=True, timeout=600)
     return r.returncode == 0
 

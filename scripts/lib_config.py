@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.357.0"
+ALMAGESTO_VERSION = "1.358.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1290,7 +1290,9 @@ def _escape_dollar_run(trozo: str) -> str:
 #: code, wikilinks and URLs. ⚠ The math span pairs each `$` with the NEXT one, glued or not:
 #: `H$\alpha$` renders in Obsidian, and `_DOLLAR_MATH_RE` (pandoc's stricter rule, built to protect
 #: currency) left it out — measured, 5 false positives in 10 on a real vault.
-_NOTATION_MASK_RE = re.compile(r"\$\$.*?\$\$|\$[^$\n]+\$|«[^»]*»|`[^`]*`|\[\[[^\]]*\]\]|https?://\S+")
+#: ⛔ AUD-510 · an escaped `\$` (what `escape_dollars` writes, #457) is a literal, never a delimiter.
+_NOTATION_MASK_RE = re.compile(r"(?<!\\)\$\$.*?(?<!\\)\$\$|(?<!\\)\$[^$\n]+(?<!\\)\$"
+                               r"|«[^»]*»|`[^`]*`|\[\[[^\]]*\]\]|https?://\S+")
 #: #525 · raw math outside `$…$`, only the unambiguous forms: a superscript (`10^-3`, `y^3`), a braced
 #: subscript (`sum_{i=1}`) or a LaTeX command. Measured on a real vault: 5 of 5 inventory rows and a
 #: sample of 33 of the 288 table-row hits read by hand, all true; `sigma`, `<=` or `A_b` alone were
@@ -3901,8 +3903,11 @@ def solo_abstract_motivo(fm: dict) -> str:
     A conference abstract has no paper behind it: the verbatim `## Abstract` is the whole source,
     so every check that asks for a PDF or a `.txt` asks for a document that does not exist. The
     hatch is declared with its motive (same criterion as `sin_conclusiones` / `no_vista`); without
-    a motive it does not apply."""
-    return str((fm or {}).get("solo_abstract") or "").strip()
+    a motive it does not apply — nor with a boolean or the unfilled `<motivo>` of the template
+    (AUD-541): neither says WHY, which is what makes the exemption auditable (D-58)."""
+    v = (fm or {}).get("solo_abstract")
+    v = v.strip() if isinstance(v, str) else ""
+    return "" if v.startswith("<") and v.endswith(">") else v
 
 
 def config_items() -> list:

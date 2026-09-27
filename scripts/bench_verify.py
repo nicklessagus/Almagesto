@@ -171,7 +171,7 @@ def claim_for_bibcode(block: str, bib: str) -> str:
     m = LEADIN_RE.match(block)
     leadin, rest = (m.group(1), block[m.end():]) if m else ("", block)
     segs = SENT_SPLIT_RE.split(rest)
-    own = [s for s in segs if f"[[{bib}" in s]
+    own = [s for s in segs if cfg.wikilink_re(bib).search(s)]         # AUD-509: not by prefix
     if len(segs) < 2 or not own:
         return block
     return " ".join([leadin, *own]).strip() if leadin else " ".join(own).strip()

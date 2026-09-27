@@ -11473,3 +11473,23 @@ def test_535_la_deuda_de_sueltos_de_un_cierre_viejo_se_reporta(toy_vault):
     out, poblacion = lint.check_depaginated_extractions()
     assert poblacion == 2 and [e for e, _ in out] == ["gj_581/2010V"], out
     assert "1 localizador(es) suelto(s)" in out[0][1]
+
+
+def test_AUD500_un_concepto_que_solo_se_linkea_a_si_mismo_es_huerfano(toy_vault):
+    """AUD-500 / INV-163 — huérfana es la nota «que ningún link alcanza»; un auto-link no la alcanza
+    desde afuera, y contarlo como entrante la sacaba del bloqueante."""
+    mk_note(toy_vault.CONCEPTS / "methods", "suelta", {"tags": ["concept"], "name": "suelta"},
+            "ver [[suelta]]\n")
+    huerfanas = [s for s, _ in lint.collect().por_clave("orphans").items]
+    assert "suelta" in huerfanas, huerfanas
+    assert "suelta" not in [t for _s, t in lint.collect().por_clave("broken").items], \
+        "el auto-link no es un link roto"
+
+
+def test_AUD502_bibtex_Y_sin_bibtex_no_se_cuenta_ademas_como_no_pegable():
+    """AUD-502 / INV-158 — la contradicción bloquea «sin contarse en ninguna de las dos categorías
+    vecinas»: con `sin_bibtex` al lado, el bloque no pegable ya está en `bibtex_hueco_contradictorio`
+    y `fetch_bibtex --paper` resuelve las dos a la vez."""
+    fm = {"bibtex": _BTX_MACRO, "bibtex_source": "ads", "sin_bibtex": "no hay exportación"}
+    assert [s for s, _ in lint.check_paper_bibtex("2020aaa...1..1A", fm)[5]] == ["2020aaa...1..1A"]
+    assert lint.check_bibtex_no_pegable("2020aaa...1..1A", fm) == ([], [])

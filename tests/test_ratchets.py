@@ -4,6 +4,8 @@
 techo sólo puede bajar»— y hasta 1.73.0 la mecánica que la sostenía existía **sólo** para el
 primero, hardcodeada en `trace_invariants`. En los otros tres nada impedía subir el techo en el
 mismo commit que rompía la cobertura: el agujero que #96 cerró una vez, abierto en tres copias.
+AUD-485 encontró una copia más, `tests-ratchet.yaml`, y entró a la lista. `doc-size` tiene su guarda
+en `test_doc_size`.
 """
 from __future__ import annotations
 
@@ -27,6 +29,9 @@ RATCHETS = [
     ("tools/idioma-ratchet.yaml", ("techo", "docstrings_castellano", "sin_docstring")),
     ("tools/cobertura-ratchet.yaml", ("techo",)),
     ("tools/mutacion-ratchet.yaml", ("techo",)),
+    # AUD-485 — declared «sólo puede BAJAR» and was read only by its own test, against the tree:
+    # raising `techo` together with a new name in `conocidos` passed in the same commit.
+    ("tools/tests-ratchet.yaml", ("techo",)),
 ]
 
 

@@ -425,3 +425,10 @@ def test_origen_arma_el_localizador_desde_la_CLAVE(toy_vault):
     # sin entrada NO se inventa una: `?` dice que no consta, que es distinto de una nota llamada así
     assert bv._origen(origen, {"id": "p999"}) == "?:L?"
     assert bv._origen({}, {"id": "p000"}) == "?:L?"
+
+
+def test_AUD509_claim_for_bibcode_no_toma_un_bibcode_que_lo_EXTIENDE():
+    """AUD-509 — `[[2011Naika]]` no es una cita de `2011Naik`: la cláusula se elige por el wikilink
+    entero (`cfg.wikilink_re`), no por prefijo."""
+    bloque = "Primera frase con [[2011Naika]] como fuente. Segunda frase con [[2011Naik]] propia."
+    assert bv.claim_for_bibcode(bloque, "2011Naik") == "Segunda frase con [[2011Naik]] propia."

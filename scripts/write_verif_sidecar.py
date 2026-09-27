@@ -707,6 +707,7 @@ def refute_extraction(note: Path, address: str, texto: str, motivo: str,
         raise SidecarError("`--texto` y `--reason` son obligatorios: qué se refutó y por qué")
     por = f"{note.stem}.verif#{ancla}"
     tocadas, ya = [], []
+    # @inv INV-160
     for f in sorted(cfg.EXTRACCION.glob("*/*.json")) if cfg.EXTRACCION.exists() else []:
         try:
             data = json.loads(f.read_text(encoding="utf-8"))

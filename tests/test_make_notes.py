@@ -6310,3 +6310,60 @@ def test_528_migrar_warn_anchor_re_firma_un_bloque_y_DECLARA_la_que_cubria_vario
     assert mn.migrate_all_warn_anchor() == 0
     out = capsys.readouterr().out
     assert "0 ancla(s) re-firmada(s)" in out and f"varios: `impl_leaks` · ancla `{notas['varios'][1]}` → 2 bloques" in out
+
+
+def test_AUD499_el_renombre_mueve_tambien_la_extraccion_de_LENTE(toy_vault):
+    """AUD-499 — la segunda lectura con énfasis vive en `<bib>__<lente>.json` (#371), y el glob del
+    renombre sólo veía `<bib>.json`: la lectura de lente quedaba con el bibcode viejo adentro,
+    huérfana del cosechador (la falla de #228). Un stem que EXTIENDE al viejo no se toca."""
+    d = _con_artefactos("2020preX...1..1X")
+    (d / "2020preX...1..1X__ruido.json").write_text(
+        json.dumps({"bibcode": "2020preX...1..1X", "enfasis": "ruido"}), encoding="utf-8")
+    (d / "2020preX...1..1Xb__ruido.json").write_text(
+        json.dumps({"bibcode": "2020preX...1..1Xb"}), encoding="utf-8")
+    mn.rename_paper("2020preX...1..1X", "2021pubY...1..1Y")
+    assert not (d / "2020preX...1..1X__ruido.json").exists(), "la lectura de lente quedó atrás"
+    lente = d / "2021pubY...1..1Y__ruido.json"
+    assert json.loads(lente.read_text(encoding="utf-8"))["bibcode"] == "2021pubY...1..1Y"
+    assert (d / "2020preX...1..1Xb__ruido.json").exists(), "movió la de otro paper (prefijo)"
+
+
+def test_AUD509_estado_paper_no_toma_una_cita_que_EXTIENDE_el_stem():
+    """AUD-509 — `[[2011Naika]]` no cita a `2011Naik`: por prefijo el roll-up marcaba `sintetizado`
+    un paper que la ficha no nombra, mientras `check_sintesis_no_declarada` (LINK_RE exacto) decía
+    lo contrario sobre el mismo par."""
+    fm = {"methods": ["ica"]}
+    assert mn._estado_paper("2011Naik", fm, "cita [[2011Naika]] sola", set(), set()) \
+        == mn.ESTADO_EXTRAIDO
+    for forma in ("[[2011Naik]]", "[[2011Naik|N11]]", "[[2011Naik#Abstract]]"):
+        assert mn._estado_paper("2011Naik", fm, f"cita {forma}", set(), set()) \
+            == mn.ESTADO_SINTETIZADO, forma
+
+
+def test_AUD540_dos_categorias_con_la_misma_ancla_vieja_se_re_firman_cada_una(toy_vault,
+                                                                               monkeypatch):
+    """AUD-540 — dos firmas de categorías DISTINTAS sobre la misma ancla de párrafo, cada una con su
+    hit en UN bloque distinto: el migrador agrupaba por ancla sin categoría, veía dos destinos y
+    hacía `continue` en silencio — ni re-firmaba ni declaraba. Cada firma es inequívoca: se
+    re-firma cada una a su bloque."""
+    import lib_blocks as lb
+    lineas = ["- La perilla ξ de la ec. 33 regula el peso.", "- Un ítem largo con varios hechos."]
+    vieja = lb.paragraph_anchor(lineas, 0)
+    nueva0, nueva1 = lb.warn_anchor(lineas, 0), lb.warn_anchor(lineas, 1)
+    assert len({vieja, nueva0, nueva1}) == 3
+    nota = mk_note(toy_vault.CONCEPTS / "methods", "dos", {"tags": ["methods"], "warn_revisada": [
+        {"categoria": "impl_leaks", "ancla": vieja, "motivo": "m1"},
+        {"categoria": "bloque_con_varios_hechos", "ancla": vieja, "motivo": "m2"}]},
+        "\n".join(lineas) + "\n")
+    texto = nota.read_text(encoding="utf-8")
+    body = cfg.frontmatter_span(texto)[1]
+    offset = len(texto[:len(texto) - len(body)].split("\n")) - 1
+    li = [i for i, ln in enumerate(body.split("\n")) if ln in lineas]
+    monkeypatch.setattr(lint, "warn_hits", lambda stem, *a: {
+        "impl_leaks": [(stem, f"L{li[0] + 1 + offset}: x")],
+        "bloque_con_varios_hechos": [(stem, f"L{li[1] + 1 + offset}: y")]})
+    assert mn.migrate_warn_anchor(nota, []) == (2, [])
+    firmas = read_fm(nota)["warn_revisada"]
+    assert [(f["categoria"], f["ancla"], f["motivo"]) for f in firmas] == [
+        ("impl_leaks", nueva0, "m1"), ("bloque_con_varios_hechos", nueva1, "m2")]
+    assert mn.migrate_warn_anchor(nota, []) == (0, [])          # idempotente
