@@ -7,8 +7,8 @@
 ## La fuente
 
 **La fuente es el PDF (#205).** `Read` lo rasteriza, así que **ves** la página: prosa, ecuaciones,
-tablas y figuras. Citá por **página**. El `.txt` es el **índice**: sirve para ubicar con `grep -n`,
-nunca para citar — `pdftotext` pierde sin avisar radicales, primas, superíndices y subíndices.
+tablas y figuras. Citá por **página**. La capa de texto —el `.txt`, o `pdftotext` corrido sobre el PDF
+(#544)— es el **índice**: sirve para ubicar con `grep -n`, nunca para confirmar ni para citar — `pdftotext` pierde sin avisar radicales, primas, superíndices y subíndices.
 
 | Regla | En una línea |
 |---|---|

@@ -502,7 +502,8 @@ def build_prompt(slug: str, bibcode: str, name: str, aliases, texto: str = "",
 **El `.txt` no es fuente.** `{_txt_rel(slug, bibcode)}` lo produce `pdftotext` y es el **índice
 de búsqueda** del corpus, no material de lectura: sirve para *ubicar* dónde se menciona el sujeto,
 nunca para transcribir ni para citar. `pdftotext` pierde sin avisar radicales, primas,
-superíndices y subíndices, aun cuando los chequeos de calidad del `.txt` dan bien.
+superíndices y subíndices, aun cuando los chequeos de calidad del `.txt` dan bien. Correr
+`pdftotext` sobre el PDF da la misma capa (#544): confirmar un valor es **ver la página**.
 """ if (hay_pdf and hay_txt) else ""
     return f"""Sos un extractor de UNA sola fuente. Trabajás desde la raíz del repo.
 

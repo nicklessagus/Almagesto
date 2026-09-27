@@ -19,7 +19,7 @@ plenamente respaldadas). Acá cada afirmación se contrasta contra el texto real
 **La fuente es el PDF (#205).** `Read` lo rasteriza, así que **ves** la página: prosa,
 ecuaciones, tablas y figuras. **Citá por PÁGINA** y hasheá el PDF (`pdf:<sha10>`).
 
-**El `.txt` no es fuente: es el índice.** `vault/raw/fulltext/**/<bibcode>.txt` lo produce
+**El `.txt` no es fuente: es el índice** (ni `pdftotext` sobre el PDF: misma capa, #544). `vault/raw/fulltext/**/<bibcode>.txt` lo produce
 `pdftotext` y sirve para **ubicar** con `grep -n` en qué parte del paper mirar — nunca para citar ni
 para transcribir. Medido el 2026-08-28 sobre dos papers, uno con los **tres chequeos de calidad en
 verde**: el `.txt` había perdido igual el radical `√` (sale como una `r` suelta), la prima de `p′`

@@ -117,11 +117,11 @@ otra síntesis, confirmá que la fuente dice eso **antes** de propagarlo — che
 re-lectura del paper. La prosa de una ficha es **capa LLM** y `verify-citations` es **juicio de LLM,
 no prueba** (medido: 7 de 13 defectos eran de atribución, invisibles desde la ficha).
 
-**Cómo (#205):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) y citá **página**. El `.txt`
-(`vault/raw/fulltext/**/<bibcode>.txt`) sirve para *ubicar* con `grep -n`, no para citar: pierde
-fórmulas, tablas-imagen y figuras **sin avisar**, así que un `grep` vacío **no** significa que la
-ficha esté mal. Con `pdf_source: eprint` el PDF es el preprint: una discrepancia numérica es
-candidata a diferencia de versión, no a error de la ficha.
+**Cómo (#205):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) y citá la **página** vista. La
+capa de texto (el `.txt` de `vault/raw/fulltext/**/`, o `pdftotext` sobre el PDF, #544) sirve para
+*ubicar*, no para confirmar ni citar: pierde fórmulas, tablas-imagen y figuras **sin avisar**, así
+que un `grep` vacío **no** significa que la ficha esté mal. Con `pdf_source: eprint` el PDF es el
+preprint: una discrepancia numérica es candidata a diferencia de versión, no a error de la ficha.
 
 Si al validar encontrás una discrepancia, **no la arregles en silencio de tu lado**: es un hallazgo
 de la bóveda — reportalo, o el próximo consumidor tropieza con lo mismo.

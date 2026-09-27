@@ -66,7 +66,8 @@ de 8+ espacios es separador de columnas, no espacio — el umbral vive en
 pineados en `tests/test_multicolumn_matching.py`; la prevalencia en una bóveda concreta la mide
 `scripts/measure_layout.py`.
 
-⚠ **Lo que el `.txt` pierde sin avisar — por eso no se cita de él (#205).** `pdftotext` deja el
+⚠ **Lo que el `.txt` pierde sin avisar — por eso no se cita de él (#205)**, ni de `pdftotext` corrido de nuevo
+sobre el PDF: es la misma capa (#544). `pdftotext` deja el
 marcador `(3)` y **vacía su cuerpo**, o peor: lo deja con el cuerpo **cambiado** por sustitución de
 fuente. También pierde tablas-imagen y todo lo que vive en una figura, aun con capa de texto
 tipográfica y todos los detectores en verde: el radical `√` sale como una `r` suelta, `p′` como

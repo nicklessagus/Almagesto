@@ -2689,7 +2689,7 @@
   {
    "number": 540,
    "title": "Los prompts de subagente narran incidentes (fechas, conteos, anécdotas) y el juez del fan-out lee las 863 líneas de verify-citations: regla + porqué en una cláusula, la historia afuera",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 541,
@@ -2699,11 +2699,16 @@
   {
    "number": 542,
    "title": "Tres tests de `--ratchet` en `test_mutar.py` fallan en toda instancia: el guardia de #517 lee el clon real y el test no lo fija",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 543,
    "title": "El lint sigue pidiendo `--drop-core` para un `refuta` que ya se firmó: #435 cruzó la firma en `proposals` y no en `reclamo_refutado`",
+   "state": "CLOSED"
+  },
+  {
+   "number": 544,
+   "title": "Confirmar contra la fuente es ver la página renderizada: `pdftotext` sobre el PDF es la misma capa que el `.txt`",
    "state": "OPEN"
   }
  ]
