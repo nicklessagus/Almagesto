@@ -149,12 +149,6 @@ def block_hits(lines: list, old: str) -> list:
     return hits
 
 
-def find_block(lines: list, old: str) -> tuple | None:
-    """The single range of `block_hits`; `None` if 0 or >1 match."""
-    hits = block_hits(lines, old)
-    return hits[0] if len(hits) == 1 else None
-
-
 def verbatim(block: str) -> bool:
     """#537 — `block` is structure, not prose: its lines are written as they come, never re-wrapped.
 
@@ -218,7 +212,7 @@ def rewrap(new, first_line: str) -> list:
 def blocks_within(blocks: list, span: tuple) -> list:
     """The `lib_blocks` blocks that start inside a half-open line span (0-indexed).
 
-    #222 — the guard that was missing. `find_block` calls a block «a run of contiguous non-empty
+    #222 — the guard that was missing. `find_block` (now `block_hits`) called a block «a run of contiguous non-empty
     lines»; `lib_blocks.split_blocks` —which is what produces the PAIRS, the ANCHORS and the text
     the corrector actually saw— splits a list or a table into one block per item/row. So a `viejo`
     spanning several items resolved fine and `rewrap` rewrote them as a SINGLE paragraph (or, if it

@@ -361,7 +361,7 @@ escribir cada función nueva».
 >
 > ```bash
 > python tools/mutar.py --dirigida scripts/apply_fixes.py            # todas las funciones
-> python tools/mutar.py --dirigida scripts/apply_fixes.py --solo find_block
+> python tools/mutar.py --dirigida scripts/apply_fixes.py --solo block_hits
 > ```
 >
 > Muta **un** módulo, corre **sólo `tests/test_<módulo>.py`** y **no escala**: ~0,44 s por mutación

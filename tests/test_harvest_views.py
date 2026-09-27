@@ -587,6 +587,26 @@ def test_538_sin_conclusiones_se_PROPONE_y_no_se_escribe(toy_vault, capsys):
             {"conclusiones": concl}) is None, (fm_extra, concl)
 
 
+def test_546_lectura_sin_conclusiones_contra_nota_que_las_publica_AVISA_y_no_escribe():
+    """#546 — #538 miraba sólo hacia adelante: una lectura vieja copió la Discusión a
+    `## Conclusiones` y la nueva, que vuelve vacía y lo DECLARA en `salvedades`, no avisaba. La
+    señal es vacío + declaración (el vacío solo es ruido, medido: 26 de 29), y la salvedad que habla
+    de conclusiones que afirman de más NO es ausencia (10 falsos positivos con `conclusi` pelado)."""
+    nota = "---\nbibcode: X\n---\n\n## Conclusiones\nLa Discusión copiada.\n"
+    dice = "El paper no tiene sección de conclusiones: cierra con la Sección 6 (Discussion)"
+    vacia = {"conclusiones": "", "salvedades": [dice]}
+    assert hv.conclusions_conflict(nota, vacia) == dice
+    assert hv.conclusions_conflict(nota, {**vacia, "salvedades": [
+        "Las conclusiones (p. 10) afirman más fuerte que el cuerpo"]}) is None
+    assert hv.conclusions_conflict(nota, {**vacia, "salvedades": []}) is None, "vacío solo: ruido"
+    assert hv.conclusions_conflict(nota, {**vacia, "conclusiones": "C."}) is None
+    assert hv.conclusions_conflict(nota.replace("bibcode: X", "bibcode: X\nsin_conclusiones: Letter"),
+                                   vacia) is None, "ya declarada"
+    assert hv.conclusions_conflict(nota.replace("bibcode: X", "bibcode: X\nunidad_cita: pagina"),
+                                   vacia) is None, "documento largo: la exención estructural"
+    assert hv.conclusions_conflict("---\nbibcode: X\n---\n\nx\n", vacia) is None, "eso es #538"
+
+
 def test_las_ayudas_de_lectura_son_idempotentes(toy_vault):
     """Regla del framework: corré dos veces y el contenido no cambia."""
     _con_pdf(toy_vault)

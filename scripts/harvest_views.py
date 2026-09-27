@@ -535,6 +535,32 @@ def conclusions_hatch_proposal(texto_nota: str, data: dict) -> str | None:
     return 'sin_conclusiones: "<motivo: p. ej. Letter que cierra en la discusión>"'
 
 
+#: #546 — how an extractor says the source has no conclusions section (the prompt asks it to name
+#: the closing section in `salvedades`): «cierra con la Discusión», «sin sección de conclusiones».
+#: ⚠ The ABSENCE phrase, not the word: measured on a real vault, bare `conclusi` also caught 10
+#: caveats about conclusions that overstate the body (the prompt's conclusions-vs-body check).
+_SIN_CONCLUSIONES_RE = re.compile(
+    r"(?:no tiene|sin|carece de)\s+(?:una\s+)?secci[oó]n\s+(?:de\s+)?conclusi"
+    r"|\b(?:cierra|termina)\s+(?:con|en)\s+(?:la\s+)?secci[oó]n", re.I)
+
+
+def conclusions_conflict(texto_nota: str, data: dict) -> str | None:
+    """The caveat of a reading that says «no conclusions» while the note publishes them (#546).
+
+    #538 only looked forward (no `## Conclusiones` yet). An older reading may have copied the
+    Discussion there; a new one that comes back empty AND says so in `salvedades` contradicts it,
+    and nobody saw. The empty field alone is not the signal —a reader may skip re-transcribing what
+    the note has— so it takes the declaration. Proposes, never writes: which reading is right is
+    decided looking at the PDF."""
+    fm = cfg.split_fm(texto_nota) or {}
+    if (str(fm.get("unidad_cita") or "").strip() not in ("", "linea") or "sin_conclusiones" in fm
+            or str(data.get("conclusiones") or "").strip()
+            or cfg.section_start(texto_nota, "## Conclusiones") < 0):
+        return None
+    return next((str(x).strip() for x in cfg.as_list(data.get("salvedades"))
+                 if isinstance(x, str) and _SIN_CONCLUSIONES_RE.search(x)), None)
+
+
 def upsert_section(dest: Path, header: str, cuerpo: str) -> bool:
     """Reemplaza la sección `header` si existe; si no, la agrega **antes de la primera `## Vista`**.
 
@@ -1038,6 +1064,11 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         if (_sc := conclusions_hatch_proposal(dest.read_text(encoding="utf-8"), data)):
             cfg.print_seguro(f"  → {bib}: la lectura volvió sin conclusiones; si la fuente no tiene "
                              f"esa sección, declaralo en la nota (#538, no se escribe solo): {_sc}")
+        if (_cc := conclusions_conflict(dest.read_text(encoding="utf-8"), data)):
+            cfg.print_seguro(f"  ⚠ {bib}: esta lectura dice que la fuente no tiene conclusiones "
+                             f"(«{_cc}») y la nota publica `## Conclusiones` de otra lectura. Mirá "
+                             f"el PDF: si no las tiene, sacá la sección y declará "
+                             f"`sin_conclusiones: <motivo>` (#546, no se escribe solo)")
         if bring_fulltext(slug, mn.safe_name(bib), dry_run=dry_run):
             n["txt_traidos"] += 1
         n["cosechadas" if toco else "sin_cambios"] += 1

@@ -343,7 +343,7 @@ def test_dos_fixes_disjuntos_en_orden_INVERSO_no_se_solapan(tmp_path):
 
 
 def test_el_viejo_no_puede_cruzar_una_linea_en_blanco(tmp_path):
-    """`find_block` corta en la línea vacía, y eso es lo que impide que un `viejo` mal armado una
+    """`block_hits` corta en la línea vacía, y eso es lo que impide que un `viejo` mal armado una
     dos párrafos distintos en uno. Sin ese corte, el matcher los concatena y `rewrap` los funde —
     el mismo daño que #222 mide para los ítems de lista, un separador más arriba."""
     nota = _nota222(tmp_path, "primer párrafo ([[2020aaaa]])\n\nsegundo párrafo ([[2020aaaa]])\n")

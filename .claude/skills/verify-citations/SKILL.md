@@ -323,7 +323,7 @@ mitades se pagaron en la misma corrida:
   su `viejo` *«aparece exactamente una vez en el archivo»*. **Ése es el chequeo equivocado**: pasa
   para fragmentos que el aplicador no puede resolver. Medido: **26 de 52** fixes fallaron en el
   primer intento, y como es todo-o-nada, abortaron los 52. El auto-chequeo correcto es
-  ***«¿`find_block` lo resuelve?»***, o sea correr el aplicador en dry-run.
+  ***«¿`block_hits` lo resuelve?»***, o sea correr el aplicador en dry-run.
 - **Varios bloques.** `lib_blocks` parte una lista o una tabla en **un bloque por ítem/fila**, y un
   `viejo` que abarcaba dos ítems resolvía igual y los **fundía en uno**: los pares de la nota
   cayeron de **96 a 89** —siete afirmaciones citadas dejaron de existir como par verificable—,
