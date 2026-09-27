@@ -1501,3 +1501,19 @@ python scripts/make_notes.py --restamp-matrix
 
 **Devolver si** un paper con `--drop-core` sigue aportando métodos o datos a la ficha de esa
 estrella, o si desaparece de la columna de OTRA estrella que no lo descartó.
+
+## §#537 · v1.347.0 — `apply_fixes` no re-envuelve tablas ni blockquotes
+
+Con la próxima corrección de `audit-note`/`verify-citations` cuyo `nuevo` sea una lista con una tabla
+o un blockquote:
+
+```bash
+python scripts/apply_fixes.py <nota.md> <dir-de-fixes> --write
+```
+
+**Esperado:** `✂ el bloque se PARTE en N`, y la tabla y el blockquote quedan en el archivo tal como
+venían en el JSON: una fila por línea y un `>` en cada línea. La prosa se sigue re-envolviendo a
+100 columnas.
+
+**Devolver si** una tabla, un blockquote, un fence o un `$$…$$` de `nuevo` queda re-envuelto, o si un
+elemento de prosa deja de re-envolverse.

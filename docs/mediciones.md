@@ -4126,3 +4126,13 @@ descartados; la ficha re-estampada pasa a `68 método(s) · 101 aplicación(es)`
 matriz baja de **2114 a 2098** celdas (método, estrella, paper) y la columna `hd_41248` de 11 a 9
 papers con `methods`. Las otras 5 estrellas no cambian (0 pares descartados con `methods`).
 `## Datos públicos` lleva la misma regla; en la instancia no cambia (0 filas de pares descartados).
+
+## #537 — tabla y blockquote de un `nuevo` lista se escriben tal cual (v1.347.0)
+
+Reproducción del issue sobre v1.345.0: un bullet y un fix `nuevo: [bullet, tabla de 2 filas,
+blockquote de 2 líneas]`. `--write` dejaba la tabla en una línea y el blockquote sin su `>` interior.
+Ninguna guarda saltaba: los pares suben. Con v1.347.0 la tabla y el blockquote quedan byte a byte,
+`split` = 3 y no hay fallas. El test `test_537_…` da rojo con el código viejo y verde con el nuevo.
+La red de #527 (bloques pedidos = bloques escritos) ahora cuenta un elemento `verbatim` por sus
+propios bloques: una tabla cuenta uno por fila. Portadores (`carriers --propose apply_fixes.rewrap`):
+ningún otro módulo re-envuelve bloques de una nota.

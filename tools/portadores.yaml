@@ -2832,3 +2832,15 @@ portadores:
       - modulo: scripts/triage.py
         estado: fuera-de-alcance
         motivo: "Lee `stars` al ejecutar el `--drop-core` para decidir si la nota tiene OTRO dueño y se conserva; es el escritor de la curación, no un agregador."
+
+  - issue: 537
+    regla: >-
+      El re-envoltorio es sólo para PROSA: una tabla, un blockquote, un bloque de código o `$$…$$`
+      se escriben tal cual, línea por línea (`apply_fixes.verbatim`, que clasifica con el
+      `Block.kind` de `lib_blocks.split_blocks`). Re-envuelto, un elemento de `nuevo` lista dejaba
+      la tabla en UNA línea y el blockquote sin sus `>` interiores, y ninguna guarda lo veía
+      porque los pares SUBEN. Enumerado: ningún otro escritor re-envuelve bloques de una nota
+      (`contrast`, `lint` y `lib_config` leen `split_blocks` sin re-emitir su texto).
+    funcion: apply_fixes.rewrap
+    patron: 'textwrap\.(wrap|fill|TextWrapper)|\bwrap\(|\bfill\('
+    consumidores: []

@@ -534,3 +534,20 @@ def test_527_sacar_una_clausula_citada_se_DECLARA_con_retira(tmp_path):
     assert nota.read_text(encoding="utf-8") == f"# n\n\n{nuevo}\n"
     res, _ = corre({"retira": ["2020X"]})                  # sigue en `nuevo`: la declaración miente
     assert res.applied == 0 and "retira" in res.failed[0][2], res.failed
+
+
+def test_537_tabla_y_blockquote_de_una_lista_se_escriben_tal_cual(tmp_path):
+    """#537 — `rewrap` re-envolvía como párrafo cada elemento de un `nuevo` lista: la tabla quedaba
+    en UNA línea y el blockquote perdía sus `>` interiores. Ninguna guarda lo veía (los pares
+    SUBEN). El re-envoltorio es sólo para prosa; tabla, blockquote, fence y `$$` van tal cual."""
+    viejo = "- Un hueco citado [[A]] con texto."
+    tabla = "| a | b |\n|---|---|\n| 1 [[A]] | 2 |\n| 3 [[B]] | 4 |"
+    cita = "> una cita\n> en blockquote [[A]]"
+    nota = _note(tmp_path, f"# T\n\n{viejo}\n")
+    res = af.apply(nota, _fixes(tmp_path, ("A", [{"n": 1, "viejo": viejo,
+                                                  "nuevo": [viejo, tabla, cita]}])), write=True)
+    assert not res.failed and res.split == [("A", 1, 3)], res.failed
+    cuerpo = nota.read_text(encoding="utf-8")
+    assert tabla in cuerpo and cita in cuerpo, cuerpo
+    assert af.rewrap("```\na  b\n```", "") == ["```", "a  b", "```"]
+    assert af.rewrap("$$\nx = 1\n$$", "") == ["$$", "x = 1", "$$"]

@@ -153,6 +153,18 @@ def find_block(lines: list, old: str) -> tuple | None:
     return hits[0] if len(hits) == 1 else None
 
 
+def verbatim(block: str) -> bool:
+    """#537 — `block` is structure, not prose: its lines are written as they come, never re-wrapped.
+
+    A table, a blockquote, a code fence or `$$…$$`: joining their lines with a space is not a
+    reflow, it destroys them (a table in ONE line does not render; a blockquote loses its inner
+    `>`). The kind is `lib_blocks.split_blocks`'s own (`Block.kind`); a fence yields no block at all
+    and `$$` reads as a paragraph there, so those two are named here."""
+    s = str(block).strip()
+    return (s.startswith(("```", "$$"))
+            or any(b.kind in ("fila", "blockquote") for b in lb.split_blocks(s)))
+
+
 def rewrap(new, first_line: str) -> list:
     """Re-wrap keeping the block's indentation: a list item's continuations stay indented.
 
@@ -167,7 +179,11 @@ def rewrap(new, first_line: str) -> list:
     several lines and the table stops being a table: the `## Verificación de citas` block, whose
     rows carry the anchors, would be destroyed by the very step that exists to keep it honest. A
     row applies as ONE line, however long. Blockquotes keep their `>` markers, which the matcher
-    strips to compare and this puts back."""
+    strips to compare and this puts back.
+
+    ⛔ #537 — the re-wrap is for PROSE only: a `verbatim` block (table, blockquote, fence, `$$`)
+    is written as it comes, line by line, with the block's own `>`/indentation put back. A table
+    row is the one-line case of the same rule."""
     if isinstance(new, list):
         out: list = []
         for i, bloque in enumerate(new):
@@ -179,8 +195,8 @@ def rewrap(new, first_line: str) -> list:
     bare = _bare(first_line)
     indent = re.match(r"\s*", bare).group(0)
     stripped = bare.lstrip()
-    if stripped.startswith("|"):
-        return [quote + indent + normalise(new)]        # una fila de tabla es UNA línea
+    if verbatim(new):                               # #537: estructura, no prosa (una fila, UNA línea)
+        return [quote + indent + ln.rstrip() for ln in str(new).strip("\n").split("\n")]
     bullet = bool(re.match(r"([-*+]|\d+\.)\s", stripped))
     cont = indent + ("  " if bullet else "")
     # #527 — `$…$` viaja con sus espacios como NUL durante el wrap; una línea que abriría un
@@ -299,7 +315,9 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     reemplazos = {}
     for span, bib, n, new, kind, _ in planned:
         repl = [new] if kind == "exact" else rewrap(new, lines[span[0]])
-        pedidos = (len(new) if isinstance(new, list)
+        # #537 — un elemento `verbatim` pide los bloques que él mismo es (una tabla, uno por fila).
+        pedidos = (sum(len(lb.split_blocks(e)) if verbatim(e) else 1 for e in new)
+                   if isinstance(new, list)
                    else len(lb.split_blocks("\n".join(lines[span[0]:span[1]]))))
         salen = len(lb.split_blocks("\n".join(repl)))
         if salen != pedidos:
