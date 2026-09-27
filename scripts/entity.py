@@ -13,23 +13,25 @@ es una lista de cosas que alguien puede saltear, y las que se saltean no dejan r
 tenía red para `wiki/` (wikilinks rotos, huérfanos) y **ninguna** para el registro, los directorios
 de `raw/`, la entrada del YAML ni `build/`.
 
-LAS OCHO CAPAS de una entidad, que es la lista que hay que no olvidar:
+LAS OCHO CAPAS de una entidad, en el orden de `CAPAS` (la lista que `plan` cuenta):
 
-  1. la clave en `vault/config/stars.yaml` (o `themes.yaml`)
-  2. `vault/config/registro/<slug>.yaml`   ← el ÚNICO artefacto no regenerable
-  3. `vault/raw/ground_truth/<slug>.json`
-  4. `vault/raw/pdfs/<slug>/`
-  5. `vault/raw/fulltext/<slug>/` y `vault/raw/extraccion/<slug>/` (#311: la extracción es el
-     artefacto MÁS caro y vive versionada, no en `build/`)
+  1. `vault/config/registro/<slug>.yaml`   ← el ÚNICO artefacto no regenerable
+  2. `vault/raw/ground_truth/<slug>.json`
+  3. `vault/raw/pdfs/<slug>/`
+  4. `vault/raw/fulltext/<slug>/`
+  5. `vault/raw/extraccion/<slug>/` (#311: la extracción es el artefacto MÁS caro y vive
+     versionada, no en `build/`)
   6. la nota: `vault/wiki/stars/<slug>.md` (estrella) o `concepts/<area>/<concept>.md` (tema)
   7. su hermano de auditoría `<nota>.verif.md` (#344: la tabla de verificación vive ahí)
   8. `build/<slug>/`  (scratch, pero si queda se re-propone triage de una entidad que no existe)
 
-  …más las **referencias**: los `[[wikilink]]` de toda la bóveda y los `stars:` / `thesis_links:`
-  del frontmatter de las notas de paper.
+  …más la clave en `vault/config/stars.yaml` (o `themes.yaml`), que no es un archivo propio, y las
+  **referencias**: los `[[wikilink]]` de toda la bóveda y los `stars:` / `thesis_links:` del
+  frontmatter de las notas de paper.
 
 ⛔ **DESTRUCTIVO: no aplica sin `--yes`.** Sin el flag imprime el plan y sale. Es la misma doctrina
-que `sweep_external` ("reporta, no aplica solo"), y acá con más razón: la capa 2 no se regenera.
+que `sweep_external` ("reporta, no aplica solo"), y acá con más razón: el registro (capa 1) no se
+regenera.
 
 ⚠ **Un paper compartido NO se borra.** Una nota con `stars: [A, B]` pertenece a las dos: al borrar
 A se le saca A del frontmatter y la nota queda. Si con eso se queda **sin ningún destino** (D-23)
@@ -95,7 +97,7 @@ def capas(slug: str, tipo: str, meta: dict) -> list[tuple[str, Path]]:
         ("fulltext", cfg.FULLTEXT / slug),
         ("extraccion", cfg.EXTRACCION / slug),     # #311
         ("nota", nota_de(tipo, slug, meta)),
-        # #344 — la OCTAVA capa: el hermano de auditoría de la nota. Borrar la nota y dejarlo es
+        # #344 — la SÉPTIMA capa: el hermano de auditoría de la nota. Borrar la nota y dejarlo es
         # exactamente el hermano huérfano que el lint bloquea, y renombrar sin llevarlo lo deja
         # apuntando a una nota que ya no existe.
         ("verif", cfg.verif_sidecar(nota_de(tipo, slug, meta))),

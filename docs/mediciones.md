@@ -7,6 +7,18 @@
 > Regla de la casa: **lo medido y lo derivado van separados**, y una salvedad que invalida un número
 > se escribe al lado del número, no en otro lado (regla de método #5).
 
+## AUD-544 · las mediciones de las convenciones del `.txt` (#29, #44, #205)
+
+Salieron de `.claude/skills/verify-citations/reference/convenciones-fulltext.md`, que el juez del
+fan-out lee (vía `reference/juez.md`) y por eso lleva sólo la regla y su porqué (#540):
+
+- **#29 · form feeds.** 532/535 `.txt` del corpus traían un `\x0c` por página; con `splitlines()`,
+  en un paper de 12 páginas la última cita quedaba ~10 líneas afuera.
+- **#44 · entrelazado de columnas.** 472/644 `.txt` del corpus (73 %) multi-columna; buscar la
+  oración completa no encontró 9/24 pares (~38 %), y con fragmentos cortos se localizaron 24/24.
+- **#205 · lo que el `.txt` pierde.** El radical, la prima y el subíndice son los del paper de 2005
+  de § *2026-08-28 · `.txt` vs PDF como fuente de extracción*.
+
 ## #498 · el tier 2 estaba rojo en toda instancia que no fuera la semilla (2026-09-20)
 
 `pytest.ini` declara el tier 2 como **«gate del deploy»**, y corrido por primera vez contra

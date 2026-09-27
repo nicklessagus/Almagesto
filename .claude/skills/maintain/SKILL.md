@@ -102,7 +102,7 @@ Progreso del refresh de <entidad>:
 
 ### B0. Borrar una ENTIDAD entera (estrella o tema) → `entity.py` (INV-19)
 
-Una entidad vive en **ocho capas** (la octava es el hermano `.verif.md`, #344) y el procedimiento a mano de abajo era nueve pasos en orden
+Una entidad vive en **ocho capas** (la séptima es el hermano `.verif.md`, #344) y el procedimiento a mano de abajo era nueve pasos en orden
 sobre siete lugares distintos — o sea una lista de cosas que se pueden saltear, y las salteadas no
 dejaban rastro (el lint tenía red para `wiki/` y **ninguna** para el registro, `raw/` ni `build/`).
 Hay herramienta:
@@ -113,7 +113,7 @@ python scripts/entity.py delete <slug> --yes        # aplica
 python scripts/entity.py rename <viejo> <nuevo> --yes
 ```
 
-**Sin `--yes` es dry-run**, a propósito: la capa 2 (`config/registro/<slug>.yaml`) es el **único
+**Sin `--yes` es dry-run**, a propósito: la capa 1 (`config/registro/<slug>.yaml`) es el **único
 artefacto no regenerable** de la bóveda. Lo que la herramienta **no** hace sola, y avisa:
 - **no borra los papers compartidos**: a una nota con `stars: [A, B]` le saca A y la deja;
 - **no repara los `[[wikilink]]` rotos** — apuntan a una nota que ya no existe y el lint los da

@@ -102,8 +102,9 @@ fila de tabla con un valor, cada bullet o frase que asevera un hecho. Para cada 
   los **mecanismos**, la **síntesis**, y cualquier **valor que el prose atribuya a un paper** (si la
   oración cita a Mayor+2009, el número debe ser el de Mayor, no el de NEA → si no, corregir el prose a
   los valores de la fuente y dejar NEA en la tabla).
-- Afirmaciones marcadas **`inferencia`** explícitamente → se **saltean** del fan-out y se listan aparte
-  como "inferencia declarada" (válidas sin cita; ver frontera/estilo en `CLAUDE.md`).
+- Afirmaciones marcadas **`(inferencia de [[b1]], [[b2]])`** → **van al fan-out**, un par por
+  premisa: el juez de cada `[[bibcode]]` chequea que su premisa esté en su fuente (paso 4, excepción
+  nombrada); lo que ninguna fuente dice es la combinación, y ésa la declara la marca (D-42).
 - Definiciones/derivaciones internas (sanity-checks de unidades, etc.) sin `[[bibcode]]` → no requieren
   fuente, pero si **afirman un hecho del mundo** sí.
 - Una afirmación con número/aseveración fáctica y **sin** `[[bibcode]]` ni marca `inferencia` →
@@ -164,8 +165,8 @@ la completitud de transcripciones (#49 y el `## Inventario por eje`, #72) y los 
 multi-cláusula—. Es lo que el prompt generado manda leer a cada subagente: el juez no paga la
 orquestación de este archivo. Leelas también antes de resolver (paso 4).
 
-**Y la forma del archivo es ésta, literal (#259).** Pegá este fence en el prompt tal cual — no lo
-describas en prosa:
+**Y la forma del archivo es ésta, literal (#259).** El prompt generado la lleva tal cual
+(`lb.verify_fanout_json_block()`); acá está para leerla, no para pegarla:
 
 ```json
 {
@@ -204,30 +205,13 @@ validador no pueden divergir.
 hoy lo escribe quien arma la fila, no el juez: la barrera lo acepta sólo sin PDF ni `.txt`. (b) `nota` se pide y **no tiene columna** en el
 bloque (`VERIF_COLS`) ni campo en `Row`: sirve al triage y muere en `build/`.
 
-Prompt sugerido por agente: *"Leé SOLO el PDF `<ruta pdf>` (Read lo rasteriza: **ves** la página,
-con sus ecuaciones, tablas y figuras). Si el paper es largo, ubicá primero la zona con
-`grep -n '<fragmento>' <ruta .txt>` y abrí esas páginas — el `.txt` es índice, NO fuente: no cites
-de ahí. ¿El paper respalda esta afirmación: «…»?
-Si la afirmación tiene varias cláusulas atribuidas a distintas fuentes, juzgá si el documento
-respalda **la cláusula que le toca** y decí cuál en la nota — que respalde una cláusula vecina de
-otra fuente, o el encuadre genérico, no cuenta. Respondé veredicto
-(soportada/no-soportada/contradice) + cita textual con **nº de página del PDF** + nota. Si no
-encontrás respaldo textual, es no-soportada; y es no-soportada TAMBIÉN si la cita sólo toca terreno
-común del tema — que el paper hable de lo mismo NO alcanza, tiene que tocar el contenido
-distintivo; si el paper afirma lo CONTRARIO, es contradice (pegá la frase que lo contradice).
-Decime APARTE del veredicto: ¿el paper afirma esto bajo CONDICIONES que la afirmación no menciona
-(SNR, muestreo, tamaño de muestra, definición del observable, época, rango)? Si sí, citalas con su
-página — la afirmación puede estar bien y aun así estar sobre-generalizada — y CLASIFICALAS con una
-sola palabra: `acota` si la afirmación queda FALSA sin esa condición, `contextualiza` si sigue
-siendo cierta y la condición sólo agrega procedencia. No uses memoria ni otros
-papers.
-Escribí el resultado en `build/<slug>/verif/<ronda>/<bibcode>.json` con EXACTAMENTE la forma del
-JSON de arriba —clave `pares`, un objeto por par identificado por su `ancla`—: otra forma no la lee
-nadie."*
+**El prompt no se escribe a mano (#369, #540):** lo genera `verify_fanout.py` y manda a cada juez a
+`reference/juez.md`, que lleva las reglas (multi-cláusula, contenido distintivo, condición y su
+clase). Un prompt reescrito pierde las que no se copiaron.
 
 **La pregunta de completitud es la del contrato, y se ensancha sin que nada avise (#198).**
-Es *«¿la **tabla o lista de la fuente** tiene más filas/ítems que los transcritos?»*. Al armar el
-prompt es fácil escribirla como *«¿el paper dice **más sobre este eje**?»*, que suena equivalente y
+Es *«¿la **tabla o lista de la fuente** tiene más filas/ítems que los transcritos?»*. Al leerla o
+al triarla es fácil tomarla como *«¿el paper dice **más sobre este eje**?»*, que suena equivalente y
 **no lo es**: sobre una fila que resume lo que un paper aporta a un eje, la respuesta es **sí casi
 siempre** —un paper siempre tiene más que una fila—. Medido: **201 avisos sobre 179 filas**, de los
 que **66** eran reales al triarlos. Los 66 no son ruido (incluían tres teoremas transcritos sin una
@@ -244,11 +228,8 @@ propiedades de la que la nota transcribía una y después invocaba «las cuatro�
 > poblado en **casi todos** los pares, eso es señal de que la pregunta se ensanchó, no de que la
 > nota esté rota.
 
-**Addendum para transcripciones** (agregar al prompt cuando el par sale de una tabla o lista de la
-fuente): *"Esta afirmación es una fila/ítem de una transcripción. La nota transcribe de este paper la
-lista completa: «…». Decime APARTE del veredicto: ¿la tabla/lista del paper tiene MÁS filas/ítems que
-ésos? Si sí, listá los que faltan con su página. Estás mirando la tabla en el PDF, así que contá sus
-filas ahí — y si hay más de una tabla en la página, decí de cuál estás contando."*
+**La pregunta de completitud de una transcripción la lleva `reference/juez.md`** (campo `completitud`
+y § *Transcripciones*): no se agrega al prompt.
 
 ### 2b. Barrera: el trabajo derivado se arma cuando el fan-out CERRÓ
 

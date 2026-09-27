@@ -147,7 +147,10 @@ Cuando le pedís ingestar una estrella o un tema, el agente:
    **no-core**. Si esa regla deja entrar demasiado, se puede exigir facetas **obligatorias**
    (`relevance.require`) o un mínimo de facetas (`relevance.min_facets`); las configura el skill
    `setup` y el preview muestra cuánto cambiaría el corte.
-2. Los **core** se bajan (PDF + fulltext) y el LLM los **lee y destila** en la ficha: métodos, P/K/e,
+2. En la **primera** ingesta de un sujeto el agente **frena** antes de bajar y te muestra la lista
+   de core para que la recortes (#529): pedir la estrella no es aprobar su core. Después los
+   **core** se bajan (PDF + fulltext) —del **editor** primero: el preprint de un paper que ya salió
+   publicado no se baja sin tu decisión (`acepta_preprint`, #512)— y el LLM los **lee y destila** en la ficha: métodos, P/K/e,
    indicadores y por qué es relevante, cada dato con su cita `[[bibcode]]` (trazable hasta el PDF).
    Antes de escribir la prosa hay un paso de **contraste**: donde los papers no coinciden, la ficha
    lleva una tabla con qué dice cada uno y con qué método. Esa tabla **no tiene columna de "valor
@@ -306,7 +309,7 @@ Todo lo que puede ser determinista lo es, y lo que no, queda marcado como tal en
 | Verificar que cada cita respalde su afirmación | **El modelo**, con un subagente independiente por fuente (#100), que juzga todos los pares que la citan |
 | Detectar contradicciones entre papers | **El modelo propone, vos aprobás** antes de que se escriba nada |
 | Lo que caduca **afuera** después del ingest | **Determinista**, una sola pasada (`sweep_external.py`) con **seis** detectores: retracciones y correcciones (Crossref por DOI), preprint→publicado, snapshot web, ground-truth y cruces del umbral de la puerta 2 (#106). **Reporta, no aplica solo** —con una excepción nombrada: `retracciones` estampa `retracted:`/`corrections:` sin preguntar (AUD-206), porque una fuente retractada citada rompe la frontera dura— |
-| Borrar o renombrar una entidad sin dejar capas colgadas | **Determinista** (`entity.py`, ocho capas —la octava es el hermano `.verif.md`, #344—, dry-run por defecto) |
+| Borrar o renombrar una entidad sin dejar capas colgadas | **Determinista** (`entity.py`, ocho capas —la séptima es el hermano `.verif.md`, #344—, dry-run por defecto) |
 | Salud estructural (lint) y registro de qué se buscó | **Determinista** |
 
 ### Cómo se acota cada parte que hace el modelo, y cómo la chequeás

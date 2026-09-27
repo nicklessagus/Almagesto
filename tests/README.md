@@ -198,7 +198,7 @@ Los tres números (159 categorías, 16 anomalías, 5 de ruido declarado) **salen
 así que agregar una categoría al lint sin sembrarla deja el desbalance a la vista en vez de
 esconderlo. ⛔ **Y se cruzan en DOS tiers, partidos por lo que cada uno puede decidir (#438):** el
 conteo de categorías en **tier 0** (`tests/test_conteos_publicados.py`, ~0,2 s) porque la lista de
-categorías es independiente del corpus —medido: 135·41·4 sobre el vault del template, sobre un
+categorías es independiente del corpus —los mismos conteos sobre el vault del template, sobre un
 `toy_vault` y sobre el corpus sembrado—, y las anomalías del generador más el ruido declarado en
 `poblada`, que es quien los conoce. El mismo test de tier 0 chequea que **el título de cada
 categoría esté en el golden**: el golden completo (mensajes, conteos, poblaciones) sigue en

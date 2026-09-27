@@ -58,7 +58,7 @@ sale_obligatorio_desde: "2026-09-14"
 # mandar a leer). La regla vive en `docs/desarrollo.md` § «Texto que lee un agente»: la fecha, el
 # conteo y el relato van a `docs/mediciones.md`. Techo exacto: sólo baja, y bajarlo va en el mismo
 # cambio que limpia el relato. Lo mide `tests/test_doc_size.py`.
-medido_skills: 42
+medido_skills: 40
 
 skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de CLAUDE.md
   append-knowledge: 12200
@@ -71,7 +71,7 @@ skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de
   query-corpus: 6000
   setup: 15300
   test-hypothesis: 15700
-  verify-citations: 57300
+  verify-citations: 55700
 
 crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por suba
   - fecha: "2026-09-17"

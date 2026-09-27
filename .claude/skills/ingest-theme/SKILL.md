@@ -14,7 +14,6 @@ del repo.
 - La búsqueda ADS es **por keywords** (query Solr cruda), no por nombre vía SIMBAD.
 - El producto durable es un **concept** (`concepts/<area>/<concept>.md`), no una ficha de estrella.
 - **No hay ground-truth** (no existe NEA/SIMBAD para un tema) → se **saltea `fetch_ground_truth.py`**.
-- **No** se toca la matriz método×estrella.
 - Las notas de paper llevan `stars: []` y `thesis_links` pre-sembrado al concept.
 
 > **Default = vía ADS** (los **Pasos** de abajo — la plomería con descubrimiento automático). Si el
@@ -350,7 +349,7 @@ Progreso del ingest del tema <tema>:
 
 6. **Bookkeeping.** Re-estampar el índice (`python scripts/make_notes.py --restamp-index`, #237),
    appendear a `vault/wiki/log.md`, y `vault/STATUS.md` si cambió el estado. **Fecha de síntesis**
-   (INV-82, #523): `triage.py <slug> --sintesis --n-papers <N>` + `make_notes.py <slug> --theme`. **No** tocar la matriz método×estrella.
+   (INV-82, #523): `triage.py <slug> --sintesis --n-papers <N>` + `make_notes.py <slug> --theme`. Re-estampar la matriz: `make_notes.py --restamp-matrix` (#429; la extracción suma `methods` a papers con `stars`).
    (El `lint` va **después** del verify del paso 6b: `CLAUDE.md` lo pide "antes de lint/commit",
    porque resolver una cita no-soportada suele cambiar la prosa.)
 

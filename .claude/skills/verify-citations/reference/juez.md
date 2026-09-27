@@ -12,11 +12,11 @@ nunca para citar — `pdftotext` pierde sin avisar radicales, primas, superíndi
 
 | Regla | En una línea |
 |---|---|
-| **localizar antes de leer** | `grep -n` sobre el `.txt` te dice **en qué zona** está la afirmación; después abrís esa parte del PDF. En un paper corto podés leerlo entero y saltear el paso. ⚠ Grepear un `.txt` tiene sus mañas —entrelazado de columnas, guiones de corte, espacios que no se normalizan— y están en `convenciones-fulltext.md`. |
+| **localizar antes de leer** | `grep -n` sobre el `.txt` te dice **en qué zona** está la afirmación; después abrís esa parte del PDF. En un paper corto podés leerlo entero y saltear el paso. ⚠ Grepear un `.txt` tiene sus mañas —entrelazado de columnas, guiones de corte, espacios que no se normalizan— y están en `.claude/skills/verify-citations/reference/convenciones-fulltext.md`. |
 | **`pdf_source: eprint`** (#57) | el PDF es el **preprint**: una discrepancia numérica contra un valor publicado es candidata a **diferencia de versión**, no a cita rota. Nunca "corregir" la nota hacia el eprint. `null` = desconocido, que **no** es "publicado". |
 | **documento largo** (#80) | un libro no se rasteriza entero. Ahí el `.txt` como índice es **imprescindible**: grepeás, sacás la página, abrís **esas** páginas del PDF. La unidad de cita la declara `unidad_cita` y el recorte, `alcance`. |
 | **fuente WEB** (#205 / AUD-204) | **excepción nombrada: acá el `.txt` sí es la fuente.** Una nota con `source_url` poblado (`pdf: null`, snapshot de `fetch_web`) no tiene PDF **por diseño**, y el argumento de #205 no le aplica: ahí el `.txt` no es una copia degradada de un original, **es la captura**. Es determinista (defuddle, URL + fecha) y es lo que la cita referencia con `accessed`. Se cita por **línea** y la fila lleva **`txt:<sha10>`**. |
-| **agotar antes de concluir** | si la afirmación no aparece donde el índice la ubica, ampliá la ventana de páginas antes de concluir. `no verificable por extracción` queda para el PDF que es un escaneo ilegible incluso a ojo — distinto de `no-soportada`. |
+| **agotar antes de concluir** | si la afirmación no aparece donde el índice la ubica, ampliá la ventana de páginas antes de concluir. `no verificable por extracción` no es tuyo: lo escribe quien arma la fila cuando la nota no tiene PDF ni `.txt` en disco (#223). Un escaneo ilegible incluso a ojo es `no-soportada` (sin cita textual no hay respaldo), con el motivo en la `nota`. |
 
 ## Qué devolvés por cada par
 
@@ -70,7 +70,7 @@ Por cada fuente, el subagente:
     reporta como backlog la que no lo declara.
   - `completitud` (**sólo cuando el par sale de una transcripción** de tabla o lista de la fuente):
     ¿la tabla/lista del paper tiene **más filas/ítems** que los que la nota transcribe? Si sí,
-    **listarlos** (con nº de línea). Es un **hallazgo aparte**, no un grado de soporte: no cambia el
+    **listarlos** (con su página). Es un **hallazgo aparte**, no un grado de soporte: no cambia el
     veredicto de la fila que sí está.
 
 > **Claims multi-cláusula (espeja la regla del paso 1).** Una afirmación suele arrastrar varias

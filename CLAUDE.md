@@ -1087,7 +1087,7 @@ la nota**. El par es un **iff** (INV-148): tabla todavía adentro (→ `make_not
 desincronizada de su tabla es R-1. **Una sola función resuelve dónde vive**
 (`lib_blocks.verif_rows`). Un hermano **no es una nota** (`cfg.note_paths` lo saca de todo
 enumerador), pero sus `[[bibcode]]` cuentan para los wikilinks rotos y los reescribe todo renombre;
-es la **octava capa** de `entity.py`.
+es la **séptima capa** de `entity.py` (`CAPAS`).
 
 **El bloque `## Verificación de citas`** — una fila por par, en el hermano:
 `| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`
@@ -1220,9 +1220,9 @@ corrección lista para pegar, #355).
 ### Mantenimiento (cuidar lo ya ingestado — skill `maintain`)
 **No crea entidades** (eso es Ingest); opera sobre estrellas/conceptos que **ya existen**. Sub-modos:
 **refrescar** (papers nuevos → re-sintetizar sólo lo nuevo), **borrar** y **renombrar** una entidad
-—`python scripts/entity.py delete|rename` (INV-19): las **ocho** capas (clave del YAML, registro,
-ground-truth, `raw/pdfs`, `raw/fulltext`, extracción, nota + su hermano `.verif.md` (#344),
-`build/`), dry-run sin `--yes` porque el registro es
+—`python scripts/entity.py delete|rename` (INV-19): las **ocho** capas de `CAPAS` (registro,
+ground-truth, `raw/pdfs`, `raw/fulltext`, extracción, nota, su hermano `.verif.md` (#344),
+`build/`) más la clave del YAML, dry-run sin `--yes` porque el registro es
 el único artefacto no regenerable. Lo que no hace solo lo **avisa**: no borra el paper compartido, no
 repara los `[[wikilink]]` rotos ni la nota que queda sin destino; del otro lado, el lint reporta las
 **capas colgadas** de un slug que ya no existe—, **re-clasificar** tras cambiar `relevance.facets`,
@@ -1266,7 +1266,7 @@ se trabaja con `maintain`). No existe "informativo" (AUD-207): lo declarado-y-re
 **Bloqueantes** (0 para cerrar; la lista viva es `SEV_BLOQUEANTE` de `scripts/lint.py`, AUD-237, y
 el detalle con sus migradores está en `docs/lint.md` § *Bloqueantes*; la enumeración completa
 que había acá, en el *Apéndice A*): wikilinks rotos, frontmatter inválido, fuentes retractadas (y citadas sin
-`⛔retractada`), huérfanas (el `index.md` estampado NO cuenta como link entrante, #249), contradicciones con ground-truth, schemas retirados, vocabularios
+`⛔retractada`), huérfanas (`index.md` y matriz, estampados, NO cuentan como link entrante, #249), contradicciones con ground-truth, schemas retirados, vocabularios
 cerrados violados, veredictos sin resolver, identidad duplicada, `inferencia` sin premisas, paper sin
 `## Abstract` o sin destino, par nota↔`.verif.md` roto, driver `merge=ours` registrado (#390) y
 `bibtex` sin `bibtex_source` (#397) o a la vez con `sin_bibtex` (#475). Si agregás una, va a esa
@@ -1275,9 +1275,9 @@ lista.
 **La fuga de implementación** (regla #0) es **WARN**: heurística de alta señal, cada hit se revisa
 a mano. No mira las `SECCIONES_ESTAMPADAS` (#214), y la exención no alcanza a `## Vista — <sujeto>`.
 
-**El cierre toma el SUJETO: `python scripts/lint.py --cierre <slug>` (R-1, #121).** Sin flag, los
-pares de verificación vencidos (D-4/D-20) y la cobertura de verificación reportan como **backlog**
-(la nota «stale» lo es por el **conjunto de anclas** de sus bloques citables, #445); con `--cierre`
+**El cierre toma el SUJETO: `python scripts/lint.py --cierre <slug>` (R-1, #121).** Sin flag, las
+cuatro `SEV_CIERRE` —pares vencidos (D-4/D-20), cobertura y cabecera de verificación, `cita_inventada`
+(#318)— son **backlog** (el «stale» va por el conjunto de anclas de los bloques, #445); con `--cierre`
 **bloquean** — un par sin verificar significa que no terminaste (D-5). Con el slug, el alcance son
 las notas del sujeto (ficha/concepto + papers, incluidos los retro-linkeados); ⚠ **el reporte no se
 acota** (la deuda ajena se lista, marcada *«no frena»*) y **el alcance acota sólo la severidad de
@@ -1306,9 +1306,9 @@ que siguen rigen **operaciones de bóveda** y por eso se quedan:
      aplicador no valida lo que aplica.
    - ⚠ **Y ese ciclo NO CONVERGE solo (#282):** la salida **no es aflojar el ancla** (#224): es
      distinguir la corrección que **cambia lo que la afirmación dice** (se re-verifica) de la
-     **derivada de la propia verificación** (se re-ancla). Lo emite `python scripts/reverify_subset.py
-     <nota>` (#257): re-anclables / a re-verificar / filas huérfanas. **Propone y no escribe**;
-     empareja por **cobertura del extracto** (#226) y **nunca cruza `bibcode`**.
+     **derivada de la propia verificación** (se re-ancla, salvo si la fila exigía acción, #539). Lo
+     emite `python scripts/reverify_subset.py <nota>` (#257): re-anclables / a re-verificar /
+     huérfanas. **Propone y no escribe**; empareja por **cobertura** (#226) y **no cruza `bibcode`**.
 
 Corolario que las cruza a todas: **una promesa que el sistema dejó de cumplir en silencio es peor
 que una que nunca hizo.** Si al tocar algo se rompe una promesa declarada, eso **se anota**, aunque

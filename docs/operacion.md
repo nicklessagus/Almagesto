@@ -151,7 +151,7 @@ python scripts/proposals.py [<slug>]
                                     # #328/#435 · las PROPUESTAS que esperan una firma (no es la
                                     #   deuda del lint). Cada categoría declara dónde aterriza su
                                     #   firma y si el barrido la cruza; lo ya firmado se lista aparte
-python scripts/entity.py plan   <slug>              # las ocho capas de una entidad (#344: la octava es el
+python scripts/entity.py plan   <slug>              # las ocho capas de una entidad (#344: la séptima es el
                                                     #   hermano `.verif.md`) — no escribe
 python scripts/entity.py delete <slug> --yes        # borrar sin dejar nada colgado (INV-19)
 python scripts/entity.py rename <viejo> <nuevo> --yes
@@ -179,7 +179,7 @@ python scripts/discover.py --topics "<tema en inglés>"   # el id T… de OpenAl
                                     #   y declara sus dos ceros: taxonomía vacía vs FALLÓ — #290)
 python scripts/discover.py --theme <slug> --rows-por-termino 600   # el slice de `seed_terms` se PAGINA (#294)
 python scripts/discover.py --resolve 10.1016/…           # ¿hay copia libre de ese DOI? (OpenAlex → Unpaywall →
-                                    #   Europe PMC → HAL → arXiv por título exacto; #358: el carril ADS de
+                                    #   Europe PMC → HAL (#505) → arXiv por título exacto; #358: el carril ADS de
                                     #   `fetch_pdf` recorre la misma cascada antes de rendirse)
 ```
 
@@ -1980,7 +1980,7 @@ sin hermano, hermano huérfano —las tres bloqueantes— y cabecera desincroniz
 cruzando archivos: R-1, la escribe el paso de cierre). ⛔ **Una sola función resuelve dónde vive**
 (`lib_blocks.verif_rows`) para los cuatro consumidores —lint, `make_notes`, `reverify_subset`,
 `contrast`—. Un hermano **no es una nota** (`cfg.note_paths` lo saca de todo enumerador), pero sus
-`[[bibcode]]` cuentan para los wikilinks rotos y los reescribe todo renombre; es la **octava capa**
+`[[bibcode]]` cuentan para los wikilinks rotos y los reescribe todo renombre; es la **séptima capa**
 de `entity.py`.
 
 **El bloque `## Verificación de citas`** — una fila por par, en el hermano:
@@ -2070,7 +2070,7 @@ dónde se traba*), la nota contra sí misma, integridad del artefacto, aritméti
 coherencia con el mundo declarado, y la nota contra su cadena—, cada uno declarando **su
 población**; barrera; corrección **serial** volviendo a la fuente; y **re-verificación de lo
 tocado** (#203). ⛔ **Lo que no se pudo cerrar sale
-marcado en la nota** con la cuarta marca en línea (arriba), no en un reporte que se pierde.
+marcado en la nota** con la cuarta marca en línea (abajo), no en un reporte que se pierde.
 
 #### A · Pasada de red (lo que cambia AFUERA — `scripts/sweep_external.py`)
 
@@ -2220,7 +2220,7 @@ se trabaja con `maintain`). No existe "informativo" (AUD-207): lo declarado-y-re
 
 **Bloqueantes** (0 para cerrar; detalle y migradores en `docs/lint.md`): wikilinks rotos ·
 frontmatter no parseable o con forma inválida ·
-papers retractados · páginas huérfanas (el `index.md` estampado NO cuenta como link entrante, #249)
+papers retractados · páginas huérfanas (el `index.md` y la matriz, estampados, NO cuentan como link entrante, #249)
 · contradicciones ground-truth↔ficha, campo por campo (#70) · masa inconsistente con la m·sini
 implícita · `thesis_links` sin página destino · `disputes` mal formadas, con `ref` sin destino o en
 schema viejo (#71) · schemas retirados (`topics:`, `busqueda:`, `bearing`, `symbols_lost`/
@@ -2243,8 +2243,9 @@ o a la vez con `sin_bibtex` (#475) — la lista `SEV_BLOQUEANTE` de
 a mano. No mira las `SECCIONES_ESTAMPADAS` (#214), y la exención no alcanza a `## Vista — <sujeto>`.
 
 **El cierre toma el SUJETO: `python scripts/lint.py --cierre <slug>` (R-1, #121).** Un solo detector,
-dos severidades: sin flag, los pares de verificación vencidos (D-4/D-20) y la cobertura de
-verificación reportan como **backlog** (pasada periódica — y la nota «stale» lo es por el **conjunto
+dos severidades: sin flag, las cuatro categorías `SEV_CIERRE` —pares de verificación vencidos
+(D-4/D-20), cobertura (`unverified`), cabecera del bloque (`verif_cabecera`) y `cita_inventada`
+(#318)— reportan como **backlog** (pasada periódica — y la nota «stale» lo es por el **conjunto
 de anclas** de sus bloques citables, #445: la línea en blanco que el propio lint pide no dispara);
 con `--cierre` **bloquean** — un par sin
 verificar significa que no terminaste (D-5: la nota nace 100% verificada, así que "citas sin bloque"
@@ -2282,7 +2283,8 @@ que siguen rigen **operaciones de bóveda** y por eso se quedan:
      los pares vecinos y produce trabajo del tamaño de la anterior. La salida **no es aflojar el
      ancla** (#224: el sub-disparo es la única dirección prohibida): es distinguir la corrección que
      **cambia lo que la afirmación dice** (se re-verifica) de la **derivada de la propia
-     verificación** (se re-ancla, no se re-pregunta). Lo emite `python scripts/reverify_subset.py
+     verificación** (se re-ancla, no se re-pregunta — salvo la fila que exigía acción,
+     `no-soportada`/`contradice` vigente o `acota` sin resolver, que va a re-verificar, #539). Lo emite `python scripts/reverify_subset.py
      <nota>` (#257): re-anclables / a re-verificar / filas huérfanas. ⛔ **Propone y no escribe**;
      empareja por **cobertura del extracto** (#226) y **nunca cruza `bibcode`** — llevar un
      veredicto de una fuente a otra sería fabricar la atribución que este framework más persigue.

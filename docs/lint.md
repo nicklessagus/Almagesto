@@ -24,8 +24,9 @@ que la deuda real no quede mezclada con la que alguien ya cerró declarándola.
 
 ## El cierre: `--cierre` y `--cierre <slug>` (R-1, #121)
 
-Un solo detector, dos severidades: sin flag es la **pasada periódica** (los pares vencidos y la
-cobertura de verificación reportan como backlog); con `python scripts/lint.py --cierre` cuentan para
+Un solo detector, dos severidades: sin flag es la **pasada periódica** (las cuatro categorías
+`SEV_CIERRE` —`stale_pairs`, `unverified`, `verif_cabecera` y `cita_inventada`— reportan como
+backlog); con `python scripts/lint.py --cierre` cuentan para
 el exit — es el paso de cierre de toda operación que tocó la nota, donde un par sin verificar
 significa que **no terminaste**. Los skills de cierre lo invocan con el flag; la pasada de higiene de
 `maintain`, sin él.
@@ -55,7 +56,8 @@ Deben quedar en **0**:
   la cadena de ingest chequea sólo el slug con `--slug`, el barrido completo es la pasada periódica
   de `maintain`): una fuente retractada citada rompe la frontera dura.
 - **Páginas huérfanas.** Un auto-link (`[[x]]` dentro de `x`) no es entrante (AUD-500). ⚠ El
-  `index.md` **no** cuenta como link entrante (#249): desde que se
+  `index.md` **no** cuenta como link entrante (#249), ni la matriz `method_star` (también
+  estampada): desde que se
   estampa por verdad de disco lista todo, así que contarlo dejaba el detector en 0 permanente —
   **metadata derivada no es evidencia**. ⚠ La misma decisión vale para el **grafo de Obsidian**
   (#301): `vault/.obsidian/graph.json` viene con `search: -path:wiki/log.md -path:wiki/index.md`,
@@ -159,7 +161,7 @@ Deben quedar en **0**:
     pares y la tabla que la respalda no está en ningún lado — no es «cero vencidos», es una
     afirmación que nadie puede evaluar (D-43).
   - **Hermano `.verif.md` HUÉRFANO** (su nota ya no existe): un rastro de auditoría que no se puede
-    cerrar contra nada. Lo llevan solos `entity.py delete|rename` (octava capa, INV-19) y
+    cerrar contra nada. Lo llevan solos `entity.py delete|rename` (séptima capa, INV-19) y
     `--rename-paper`; aparece cuando algo movió la nota a mano.
 - **Celda `Hash fuente` sin prefijo `txt:`/`pdf:`** (#117): *no consta* no es `txt`; se migra con
   `python scripts/make_notes.py --migrate-verif-archivo`. Excepción nombrada (#223): la fila
@@ -339,7 +341,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   comando que el propio framework manda correr para cerrar esta categoría —`write_verif_sidecar
   --reanclar` (#480)— **conserva** la fecha del bloque a propósito (#395: re-anclar no es
   verificar), así que la comparación por fecha dejaba encendida para siempre justo la corrección
-  DERIVADA de la verificación (#282/#257), que se re-ancla y no se re-pregunta. Hoy `--reanclar`
+  DERIVADA de la verificación (#282/#257), que se re-ancla y no se re-pregunta (salvo la fila que
+  exigía acción —`no-soportada`/`contradice` vigente o `acota` sin resolver—, que va a
+  re-verificar, #539). Hoy `--reanclar`
   **declara** el arrastre en el encabezado (`## Verificación de citas (2026-09-20 · re-anclado
   2026-09-22)`) y el detector compara contra esa fecha; el mensaje nombra las dos. Medido en
   `Almagesto-Tesis` (2026-09-22): **9 de 14** notas de entidad, 1499 pares, `--reanclar` moviendo

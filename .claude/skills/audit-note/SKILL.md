@@ -276,7 +276,8 @@ vencen igual y no son lo mismo:
 - la **derivada de la propia verificación** —el texto nuevo son las palabras que el verificador sacó
   de la fuente, con su página— → el texto quedó **más** anclado, y re-preguntarle al juez si confirma
   su propio dictamen no es verificación. Se **re-ancla**: el veredicto se lleva, el ancla se
-  recalcula. Medido: de 78 vencidos, **72 de este tipo**.
+  recalcula. **Salvo que la fila exigiera acción** (`no-soportada`/`contradice` vigente, o `acota`
+  sin resolver): ese veredicto era de la afirmación vieja, y va a re-verificar (#539).
 
 **El prompt de la re-verificación va ciego, y la regla no se copia acá: vive en
 `verify-citations` (#258).** Lo que se lanza al fan-out es `verify-citations` sobre el subconjunto,

@@ -64,10 +64,20 @@ def test_el_prompt_del_juez_no_lleva_arqueologia_de_mediciones(tmp_path):
         leidos |= set(re.findall(r"\.claude/skills/[\w./-]+\.md", texto))
     # #540 — the file the prompt SENDS the judge to read is prompt too: moving the rules there
     # took them out of this net, and the ratchet on skills only tolerates what was already there.
+    # AUD-544 — and so is every file THAT file sends it to: the net follows the chain, not one hop.
     assert vf.JUEZ in leidos
     raiz = Path(__file__).resolve().parents[1]
-    for rel in sorted(leidos):
-        assert not PROMPT_ARCHAEOLOGY_RE.findall((raiz / rel).read_text(encoding="utf-8")), rel
+    pendientes, vistos = sorted(leidos), set()
+    while pendientes:
+        rel = pendientes.pop()
+        if rel in vistos:
+            continue
+        vistos.add(rel)
+        texto = (raiz / rel).read_text(encoding="utf-8")
+        assert not PROMPT_ARCHAEOLOGY_RE.findall(texto), rel
+        pendientes += re.findall(r"\.claude/skills/[\w./-]+\.md", texto)
+    assert ".claude/skills/verify-citations/reference/convenciones-fulltext.md" in vistos, \
+        "juez.md manda a leer convenciones-fulltext.md: la red tiene que llegar"
 
 
 def test_una_nota_sin_pares_no_es_un_cierre_en_verde(tmp_path, capsys):

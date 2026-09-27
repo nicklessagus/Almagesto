@@ -1,4 +1,4 @@
-# Cómo se lee y se cita el `.txt` — las convenciones, con su medición
+# Cómo se lee y se cita el `.txt` — las convenciones y su porqué
 
 > ⚠ **Alcance desde #205: esto rige para GREPEAR el `.txt`, que es el índice — no para citar.**
 > La fuente es el PDF y la cita va por página. Estas reglas siguen valiendo enteras para el paso de
@@ -6,11 +6,11 @@
 > una oración completa puede no aparecer con `grep` aunque el paper la diga. Lo que ya **no** se
 > hace es concluir nada desde acá: si el índice no la encuentra, se abre el PDF.
 
-**Referencia de `verify-citations`.** El `SKILL.md` deja las **reglas duras en una línea** (contar
-con `grep -n`, patrones cortos, prohibido normalizar espacios, OCR y
-`eprint` con su salvedad). Acá está **por qué** cada una existe y qué se midió — que es lo que hay
-que leer la primera vez, cuando una regla parece arbitraria, o cuando un par no cierra y hay que
-decidir si es artefacto de extracción o cita rota.
+**Referencia de `verify-citations`.** `reference/juez.md` § *La fuente* nombra estas mañas en una
+línea (entrelazado de columnas, guiones de corte, espacios que no se normalizan) y manda acá. Acá
+está **por qué** cada una existe — que es lo que hay que leer la primera vez, cuando una regla
+parece arbitraria, o cuando un par no cierra y hay que decidir si es artefacto de extracción o cita
+rota. Las mediciones que las sostienen están en `docs/mediciones.md` (AUD-544).
 
 Estas convenciones son **canónicas para toda la bóveda**: `ingest-star`, `ingest-theme`,
 `test-hypothesis`, `query-corpus` y `find-contradictions` apuntan acá en vez de repetirlas.
@@ -26,26 +26,24 @@ desordenar doble-columna, ecuaciones, tablas, ligaduras y guionado; y un PDF **e
 texto** da `.txt` vacío/basura. Por eso: si una afirmación **no** aparece textual en el `.txt` —
 **tras agotar la estrategia de matcheo de abajo (#44)** — antes
 de declararla `no-soportada` considerar que puede ser un **artefacto de extracción** (ecuación/tabla)
-→ en ese caso abrir el **PDF** (`vault/raw/pdfs/<slug>/<bibcode>.pdf`) para esa afirmación puntual, o
-marcarla **`no verificable por extracción`** (distinto de `no-soportada`).
+→ en ese caso abrir el **PDF** (`vault/raw/pdfs/<slug>/<bibcode>.pdf`) para esa afirmación puntual.
+(`no verificable por extracción` no es del juez: lo escribe quien arma la fila cuando no hay PDF ni
+`.txt` en disco, #223.)
 
 **Cómo se cuentan las líneas (convención fija, #29):** el nº de línea de la evidencia se obtiene
 con **`grep -n`** o leyendo el archivo directamente (Read) — **no** con `splitlines()` de Python:
 los `.txt` de `pdftotext` traen un **form feed** (`\x0c`) por página que Python cuenta como salto
-de línea extra → la numeración se corre **+1 por página** y el error CRECE a lo largo del archivo
-(medido: 532/535 `.txt` del corpus con form feeds; en un paper de 12 páginas la última cita queda
-~10 líneas afuera — suficiente para que una revisión posterior no encuentre la frase y la marque
-como rota). Si hace falta Python, `split("\n")` numera igual que `grep -n`.
+de línea extra → la numeración se corre **+1 por página** y el error CRECE a lo largo del archivo, hasta que una
+revisión posterior no encuentra la frase y la marca como rota. Si hace falta Python, `split("\n")` numera igual que `grep -n`.
 Relacionado: en papers a **dos columnas** `pdftotext -layout` entrelaza ambas columnas en la misma
 línea física — un rango de líneas **no** es un rango de lectura contigua (una oración puede
 arrancar en la columna izquierda de L229 y seguir en la derecha de L204). Los números de línea
 son **punteros greppables**, no extractos para leer de corrido.
 
 **Cómo buscar en el `.txt` (estrategia de matcheo, #44).** El entrelazado de arriba obliga a
-buscar distinto: `grep` es orientado a líneas, y en un `.txt` multi-columna (medido: 472/644 del
-corpus, 73%) una oración cruza el salto de línea física — buscarla entera da **falso negativo**
-aunque el texto esté y sea legible (medido: 9/24 pares ~38% no encontrados con la oración
-completa; 24/24 localizados con fragmentos cortos).
+buscar distinto: `grep` es orientado a líneas, y en un `.txt` multi-columna una oración cruza el
+salto de línea física — buscarla entera da **falso negativo** aunque el texto esté y sea legible;
+un fragmento corto la localiza.
 1. **Escalera de acortamiento:** empezar por la oración completa y, si no aparece, acortar a un
    **fragmento distintivo contenido en una sola línea física** (típicamente 3–6 palabras; el largo
    útil depende del ancho de columna del PDF, por eso se **acorta hasta encontrar** en vez de fijar
@@ -54,7 +52,7 @@ completa; 24/24 localizados con fragmentos cortos).
    palabra con guión (`mag-` / `nitude`): reintentar partiendo el patrón por el guión, o buscar
    un fragmento que lo esquive.
 3. Sólo **agotados 1 y 2** corresponde considerar artefacto de extracción (ecuación/tabla/escaneo)
-   → abrir el PDF o marcar `no verificable por extracción`.
+   → abrir el PDF.
 
 **Prohibido normalizar espacios sobre el archivo entero** (`re.sub(r"\s+", " ", texto)` o
 equivalente): en una línea física a dos columnas eso **empalma el final de la columna 1 con el
@@ -70,10 +68,9 @@ pineados en `tests/test_multicolumn_matching.py`; la prevalencia en una bóveda 
 
 ⚠ **Lo que el `.txt` pierde sin avisar — por eso no se cita de él (#205).** `pdftotext` deja el
 marcador `(3)` y **vacía su cuerpo**, o peor: lo deja con el cuerpo **cambiado** por sustitución de
-fuente. También pierde tablas-imagen y todo lo que vive en una figura. Medido el 2026-08-28 sobre un
-paper de 2005 con capa de texto tipográfica y todos los detectores en verde: el radical `√` salía
-como una `r` suelta, `p′` como `p0`, y un subíndice hacía leer una autocovarianza como una inversa.
-Por eso los detectores que avisaban de esto (`symbols_lost`, `fulltext_layout`) se **retiraron**: no
+fuente. También pierde tablas-imagen y todo lo que vive en una figura, aun con capa de texto
+tipográfica y todos los detectores en verde: el radical `√` sale como una `r` suelta, `p′` como
+`p0`, y un subíndice hace leer una autocovarianza como una inversa. Por eso los detectores que avisaban de esto (`symbols_lost`, `fulltext_layout`) se **retiraron**: no
 discriminaban, y hoy la fuente es siempre el PDF. **Nunca declares `no-soportada` porque una
 fórmula, una fila de tabla o un valor no aparezcan en el `.txt`** — el índice no los tiene y su
 ausencia no dice nada sobre el paper.

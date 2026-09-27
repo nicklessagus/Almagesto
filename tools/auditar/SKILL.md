@@ -10,7 +10,7 @@ Operación de **auditoría del andamiaje** (`scripts/`, `tests/`, `tools/`, `doc
 `README.md`, `CLAUDE.md`). **No audita la bóveda** — para eso están `lint.py`, `verify-citations` y
 `find-contradictions`. Trabajar desde la raíz del repo.
 
-> ⛔ **Sólo en el repo template.** Auditar el framework desde una instancia no tiene sentido: ahí el
+> **Sólo en el repo template.** Auditar el framework desde una instancia no tiene sentido: ahí el
 > framework no se edita (regla de oro de `CLAUDE.md`). Si `git remote -v` muestra un `upstream`
 > apuntando a Almagesto, esto no es el template — decirlo y parar.
 
@@ -89,7 +89,7 @@ Correr en este orden y **copiar los números crudos** al artefacto. No interpret
    2026-08-24 el techo de mutación pasó de 7 a 10 y **ninguna función había empeorado** — el 7 se
    había medido sobre 268 de 328. Dos mediciones de universos distintos no se comparan: se declara
    la discrepancia (regla de método #5) y se fija el alcance para que de ahí en más sólo baje.
-   ⛔ No es permiso para subir un techo — la única justificación admisible es que la población
+   **No es permiso para subir un techo** — la única justificación admisible es que la población
    cambió, dicha explícitamente, con el antes y el después.
 
 Si un gate sale por encima del techo, **eso ya es un hallazgo** (`AUD-nn`, frente `gate`) y va al
@@ -156,7 +156,7 @@ evidencia, de más fuerte a más débil:
 **Si un carril recorta** (top-N, muestreo, "no llegué a leer X"), lo **declara**. La regla
 *no silent caps* rige para este skill igual que para lo que audita.
 
-⛔ **No generalizar desde una medición.** Si mediste `X` y el hallazgo afirma sobre `X e Y`, medí
+**No generalizar desde una medición.** Si mediste `X` y el hallazgo afirma sobre `X e Y`, medí
 también `Y` o acotá el enunciado a `X`. Ocurrió en la corrida 2026-08-24: un carril grepeó
 `search_arxiv`, no encontró llamador, y reportó *"ninguna de las dos tiene llamador en producción"*
 — `openalex` **sí** lo tenía (`citation_index` lo usa). Un hallazgo mitad cierto es la forma más

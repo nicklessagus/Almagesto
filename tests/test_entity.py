@@ -66,7 +66,7 @@ def test_plan_lista_las_siete_capas_y_no_escribe(toy_vault, capsys):
 
 
 def test_delete_sin_yes_es_dry_run(toy_vault, capsys):
-    """⛔ Destructivo: la capa 2 no se regenera, así que no se aplica sin pedirlo."""
+    """⛔ Destructivo: el registro (capa 1) no se regenera, así que no se aplica sin pedirlo."""
     slug, _ = poblar()
     assert run(["delete", slug]) == 0
     assert "dry-run" in capsys.readouterr().out
@@ -328,7 +328,7 @@ def test_delete_borra_el_hermano_de_verificacion(toy_vault):
     slug, _ = poblar()
     h = _con_hermano(slug)
     assert run(["delete", slug, "--yes"]) == 0
-    assert not h.exists(), "la octava capa quedó colgada"
+    assert not h.exists(), "la séptima capa (el hermano) quedó colgada"
 
 
 def test_rename_mueve_el_hermano_de_verificacion(toy_vault):
