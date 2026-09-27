@@ -232,4 +232,8 @@ import re  # noqa: E402  (kept down here so the lines the invariant map cites do
 # A subagent prompt carries the rule and its why in the present tense; the date of a measurement
 # and precision/recall counts live in `docs/mediciones.md` (docs/desarrollo.md § «Texto que lee un
 # agente»). Shared by the prompt tests of `extraction_prompt` and `verify_fanout`.
-PROMPT_ARCHAEOLOGY_RE = re.compile(r"[Mm]edido el \d{4}-\d{2}-\d{2}|precisión \*{0,2}\d+/\d+")
+# #540 — also «medido sobre N» / «medido: N de M …» and «en 1.39.0» (a rule phrased relative to a
+# version); a bare «N de M» is left alone so page locators do not trip it.
+PROMPT_ARCHAEOLOGY_RE = re.compile(
+    r"[Mm]edido (?:el \d{4}-\d{2}-\d{2}|sobre \d+)|[Mm]edido: \d+|precisión \*{0,2}\d+/\d+"
+    r"|\ben \d+\.\d+\.\d+\b")

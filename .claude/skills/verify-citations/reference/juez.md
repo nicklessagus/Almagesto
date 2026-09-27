@@ -30,9 +30,9 @@ Por cada fuente, el subagente:
 - **Una cita entrecomillada que lleva otro `[[bibcode]]` adyacente no es tuya (#316).** El par se
   arma por **bloque**, así que un párrafo que contrasta dos o tres fuentes te llega entero: la
   afirmación que tenés que juzgar es la del bloque, no cada `«…»` que aparezca en él. Si la cita
-  pertenece a otra fuente del mismo bloque, **decilo en la `nota` y no la cuentes en contra** —
-  medido: 12 de 12 hallazgos duros de un hub eran esto, y «resolverlos» reatribuyendo la cita al
-  bibcode contra el que se testeó **habría destruido la inferencia que la nota declara**.
+  pertenece a otra fuente del mismo bloque, **decilo en la `nota` y no la cuentes en contra**:
+  «resolverla» reatribuyendo la cita al bibcode contra el que se testeó **destruye la inferencia
+  que la nota declara**.
 - Devuelve, para la afirmación dada:
   - `veredicto`: `soportada` | `no-soportada` | `contradice` — **vocabulario cerrado**, y el eje es
     **sólo el respaldo textual**: ¿la fuente dice esto? La pregunta «¿está completa la afirmación?»
@@ -46,8 +46,8 @@ Por cada fuente, el subagente:
     **contenido distintivo** de la afirmación (el sujeto/valor/mecanismo que la hace específica); si
     lo único que matchea es terreno común del tema (el fenómeno general, un término suelto, la mera
     cercanía temática) ⇒ `no-soportada`. **Sin punto medio**: ablandar un claim genérico a un
-    veredicto tibio es el modo de falla típico del verificador — es exactamente lo que mide el
-    benchmark, y por eso `parcial` salió del vocabulario en 1.39.0 (ver abajo).
+    veredicto tibio es el modo de falla típico del verificador, y por eso no existe un veredicto
+    intermedio (ver abajo).
   - `nota`: una línea de por qué (sobre todo en `no-soportada`: qué dice el paper en cambio).
     Si la afirmación es **multi-cláusula**, decir **qué cláusula** respalda el paper y cuáles no.
   - `condicion` (**siempre; el hallazgo que ninguna capa veía, #74**): ¿el paper afirma esto **bajo
@@ -63,13 +63,10 @@ Por cada fuente, el subagente:
     de otra estrella, la medición no es sobre RVs, el escalado es por fila): **se resuelve sí o sí**
     —fila de `## Régimen de validez`, o corrección de la prosa—. No → `contextualiza` (instrumento,
     tamaño de muestra, año, definición): **va al reporte y no obliga a editar**, y ahí rige la regla
-    de poda. Medido sobre 96 pares: **86 con condición poblada (89 %)** contra **7 % de
-    completitud**, que #198 ya había acotado. Sin clasificar, «resolvé cada condición no vacía» es
-    la nota entera —86 filas de régimen sobre 413 líneas, contra la regla de poda—, así que se deja
-    de cumplir **en silencio**. ⚠ Y el 89 % **no es ruido**: *«el S/N está medido en el continuo a
-    4000 Å»*, *«el umbral crítico baja de 200 a 75 para la enana K»*, *«la medición no es sobre
-    RVs»* — varias vuelven **falsa** la afirmación fuera de su régimen. Lo que faltaba era el
-    criterio, no la señal. La celda del bloque se escribe `acota: …` / `contextualiza: …`, y el lint
+    de poda. La mayoría de los pares trae alguna condición, así que sin clasificar «resolvé cada
+    condición no vacía» es la nota entera y se deja de cumplir **en silencio**. Y la condición **no
+    es ruido**: *«el S/N está medido en el continuo a 4000 Å»*, *«la medición no es sobre RVs»*
+    vuelven **falsa** la afirmación fuera de su régimen. La celda del bloque se escribe `acota: …` / `contextualiza: …`, y el lint
     reporta como backlog la que no lo declara.
   - `completitud` (**sólo cuando el par sale de una transcripción** de tabla o lista de la fuente):
     ¿la tabla/lista del paper tiene **más filas/ítems** que los que la nota transcribe? Si sí,
@@ -81,15 +78,12 @@ Por cada fuente, el subagente:
 > fuentes citadas al lado. El subagente juzga **la parte que se le atribuye a su paper** — que el
 > archivo respalde una cláusula vecina (de otra fuente, o el encuadre genérico) **no** hace
 > `soportada` a la afirmación: es exactamente la mezcla "el dato de A atribuido a B" que este
-> chequeo existe para atrapar. Sin esta instrucción el subagente juzga el conjunto y **hedgea**.
-> Medido el 2026-08-25: de 14 defectos reales encontrados en una ficha, **3 eran justamente eso**
-> —un número leído en A que A atribuye a B— y uno sobrevivió una corrida entera como veredicto tibio
-> antes de que la segunda lo llamara `no-soportada` tras grepear el archivo y no encontrarlo.
+> chequeo existe para atrapar. Sin esta instrucción el subagente juzga el conjunto y **hedgea**:
+> un número leído en A que A atribuye a B pasa como veredicto tibio.
 
 > **Transcripciones: chequear también lo que la nota OMITE (#49).** El fan-out valida lo que la nota
 > **afirma**; una tabla transcrita **sin un solo error** pero a la que le faltan filas vuelve
-> **100% soportada** — cada par verificado era verdadero (medido: 14 registros transcritos, los 14
-> correctos… sobre una tabla de **21 filas** en el paper). Es un modo de falla **distinto** del *grounding gap*: la nota no afirma nada falso,
+> **100% soportada** — cada par verificado es verdadero y la tabla del paper tiene más filas. Es un modo de falla **distinto** del *grounding gap*: la nota no afirma nada falso,
 > **afirma de menos**, y una tabla truncada se lee como completa. Por eso, cuando el par sale de una
 > **transcripción** (tabla o lista de la fuente), el subagente recibe además la pregunta de
 > **completitud** (arriba) y el faltante se reporta como **hallazgo propio**, distinto del veredicto

@@ -32,3 +32,17 @@ Un eje de **grado** en este bloque siempre reintroduce el mismo problema: el umb
 no se puede definir, y las divergencias entre dos jueces independientes caen **exactamente ahí**. Lo
 que parece un grado o es una **condición** (→ la columna `Condición`, que es un eje aparte) o es una
 cita que no toca el contenido distintivo (→ `no-soportada`). No hay tercer caso.
+
+## Las mediciones detrás de las reglas de `juez.md` (#540)
+
+`juez.md` lo lee cada juez del fan-out, así que lleva la regla y su porqué en presente; lo medido
+vive acá.
+
+- **La cita de otro `[[bibcode]]` del mismo bloque** (#316): 12 de 12 hallazgos duros de un hub eran
+  esto, y reatribuirlos habría destruido la inferencia declarada.
+- **Clasificar la condición** (#221): sobre 96 pares, 86 con condición poblada (89 %) contra 7 % de
+  completitud (#198); sin clasificar eran 86 filas de régimen sobre una nota de 413 líneas.
+- **Claims multi-cláusula** (2026-08-25): de 14 defectos reales de una ficha, 3 eran un número leído
+  en A que A atribuye a B; uno sobrevivió una corrida entera como veredicto tibio.
+- **Completitud de transcripciones** (#49): 14 registros transcritos, los 14 correctos, sobre una
+  tabla de 21 filas en el paper.

@@ -7,6 +7,7 @@ leer un «TOTAL 60 en 16 fuentes» y transcribirlo. Medido: 15 subagentes para 1
 from __future__ import annotations
 
 import json
+import re
 import pytest
 import sys
 from pathlib import Path
@@ -56,8 +57,17 @@ def test_el_prompt_del_juez_no_lleva_arqueologia_de_mediciones(tmp_path):
     from conftest import PROMPT_ARCHAEOLOGY_RE
     out = tmp_path / "r1"
     vf.write_round(_nota(tmp_path), out)
+    leidos = set()
     for f in (out / "prompts").glob("*.md"):
-        assert not PROMPT_ARCHAEOLOGY_RE.findall(f.read_text(encoding="utf-8")), f.name
+        texto = f.read_text(encoding="utf-8")
+        assert not PROMPT_ARCHAEOLOGY_RE.findall(texto), f.name
+        leidos |= set(re.findall(r"\.claude/skills/[\w./-]+\.md", texto))
+    # #540 — the file the prompt SENDS the judge to read is prompt too: moving the rules there
+    # took them out of this net, and the ratchet on skills only tolerates what was already there.
+    assert vf.JUEZ in leidos
+    raiz = Path(__file__).resolve().parents[1]
+    for rel in sorted(leidos):
+        assert not PROMPT_ARCHAEOLOGY_RE.findall((raiz / rel).read_text(encoding="utf-8")), rel
 
 
 def test_una_nota_sin_pares_no_es_un_cierre_en_verde(tmp_path, capsys):
