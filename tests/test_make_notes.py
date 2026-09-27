@@ -4560,6 +4560,10 @@ def test_el_rollup_agrupa_por_clave_y_muestra_las_variantes(toy_vault):
     assert "`PCA`" in t and "`pca`" in t, "las dos grafías se muestran"
     assert "| 3 | 2019-2021 |" in t, "3 papers, rango de años"
     assert "(1 método(s) · 3 aplicación(es))" in t, "el encabezado publica los DOS números (#262)"
+    # #551 — un paper que escribe el método de DOS maneras es UNA aplicación, como en la columna
+    t = mn.metodos_table(filas + [("FastICA", "2024d", "2024"), ("fastica", "2024d", "2024")],
+                         names=set())
+    assert "(2 método(s) · 4 aplicación(es))" in t, t.split("\n")[0]
 
 
 def test_el_tope_declara_cuantos_metodos_quedan_adentro(toy_vault):
@@ -6368,3 +6372,13 @@ def test_AUD540_dos_categorias_con_la_misma_ancla_vieja_se_re_firman_cada_una(to
     assert [(f["categoria"], f["ancla"], f["motivo"]) for f in firmas] == [
         ("impl_leaks", nueva0, "m1"), ("bloque_con_varios_hechos", nueva1, "m2")]
     assert mn.migrate_warn_anchor(nota, []) == (0, [])          # idempotente
+
+
+def test_552_el_apendice_dice_que_suma_su_numero_no_traidos(toy_vault):
+    """#552 — el encabezado ponía `n_total` (query + extra_core + chaining) bajo la palabra
+    «traídos», que en el registro es `traidos`: lo que devolvió la query sola (medido: 334 vs 326)."""
+    ads_json([rec("2020n....01.nA", relevant=False), rec("2020n....02.nB", relevant=True)])
+    cfg.save_busqueda("test_star", {"fecha": "2026-09-26", "traidos": 1, "n_total": 2})
+    tabla = mn.excluded_table("test_star")
+    assert "corrida 2026-09-26 · 2 registros (query + extra_core + chaining)" in tabla
+    assert "traídos" not in tabla

@@ -2374,13 +2374,15 @@ def excluded_table(slug: str) -> str:
     extra = len(out) - len(rows)
     tail = f"\n\n_(+ {extra} más excluidos por el filtro)_" if extra > 0 else ""
     # #481 — a qué corrida corresponde el snapshot: la fecha y el `n_total` de la última búsqueda
-    # del registro (D-12, como la línea de estado). Si el `ads.json` en disco no cuadra con ella
-    # —`build/` es scratch y puede ser de otra corrida—, se DICE en vez de dejar un número que no
+    # del registro. ⚠ #552: `n_total` es query + extra_core + chaining; «traídos» es `traidos`, lo
+    # que devolvió la query sola — otro campo, así que el rótulo dice qué suma. Si el `ads.json`
+    # en disco no cuadra con ella —`build/` es scratch y puede ser de otra corrida—, se DICE en vez de dejar un número que no
     # reconcilia contra nada.
     bs = cfg.load_busquedas(slug)
     b = bs[-1] if bs else {}
     if b.get("fecha"):
-        corrida = f"corrida {b['fecha']} · {b.get('n_total', '?')} traídos"
+        corrida = (f"corrida {b['fecha']} · {b.get('n_total', '?')} registros "
+                   "(query + extra_core + chaining)")
         if isinstance(b.get("n_total"), int) and b["n_total"] != len(records):
             corrida += (f" — ⚠ el `ads.json` en disco tiene {len(records)} registros: es OTRA "
                         f"corrida, re-corré `query_ads`")
@@ -3222,7 +3224,10 @@ def metodos_table(rows: list, names: set | None = None, tope: int = TOPE_METODOS
         g["papers"].add(stem)
         if str(year).strip():
             g["anios"].add(str(year).strip())
-    out = [f"{METODOS_HEADER} ({len(grupos)} método(s) · {len(rows)} aplicación(es))", ""]
+    # #551 — las aplicaciones también por clave: pares (clave, paper) distintos, la suma de la
+    # columna. `len(rows)` contaba dos veces al paper que escribe el método de dos maneras.
+    n_apl = sum(len(g["papers"]) for g in grupos.values())
+    out = [f"{METODOS_HEADER} ({len(grupos)} método(s) · {n_apl} aplicación(es))", ""]
     if not rows:
         out += ["_(ningún paper de esta estrella declara `methods` todavía — o no se extrajo "
                 "ninguno, o la extracción no pobló el campo.)_", ""]
