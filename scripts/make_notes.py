@@ -266,7 +266,8 @@ def _stamp_pdf_field(dest, rel: str) -> bool:
     sha = lb.sha10((dest.parent / rel).resolve().read_bytes())
     guardado = next((ln.split(":", 1)[1].strip().strip("'\"") for ln in lines
                      if ln.startswith("pdf_sha:")), None)
-    if cur and (dest.parent / cur).resolve().exists():
+    cur_ok = bool(cur) and (dest.parent / cur).resolve().exists()
+    if guardado and guardado != sha:
         # #383 — #230 decide que `pdf_source` SOBREVIVE al archivo porque describe la lectura que
         # ocurrió. Son dos casos y había un tercero: el archivo se REEMPLAZA por otro de distinta
         # procedencia (el preprint v1 por el publicado). Ahí la lectura vieja se descarta —hay que
@@ -274,22 +275,27 @@ def _stamp_pdf_field(dest, rel: str) -> bool:
         # sobre el PDF del editor, con `eprint_version: v1` al lado. Medido: las dos versiones
         # diferían en RESULTADOS, no en redacción. El hash es lo que distingue «se mantiene» de
         # «se reemplazó», y se guarda en `pdf_sha:` al estampar.
+        # AUD-498: la comparación corre AUNQUE el `pdf:` vigente no resuelva (puntero muerto o
+        # `null`, el publicado puesto bajo otro slug): si no, la estampa de abajo pisaba el
+        # `pdf_sha` guardado —el único testigo del reemplazo— sin anular nada.
         # @inv INV-157
-        if guardado and guardado != sha:
-            for campo in ("pdf_source", "eprint_version"):
-                if any(ln.startswith(f"{campo}:") for ln in lines):
-                    _set_campo(dest, campo, "null")
-            _set_campo(dest, "pdf_sha", sha)
-            cfg.print_seguro(f"  ⚠ {dest.name}: el PDF cambió de hash respecto del que se estampó "
-                             f"({guardado} → {sha}): `pdf_source` y `eprint_version` quedan en null "
-                             f"(desconocido, que es la verdad). Hay que re-extraer y re-verificar lo "
-                             f"anclado a ese PDF (#383)")
+        for campo in ("pdf_source", "eprint_version"):
+            if any(ln.startswith(f"{campo}:") for ln in lines):
+                _set_campo(dest, campo, "null")
+        _set_campo(dest, "pdf_sha", sha)
+        cfg.print_seguro(f"  ⚠ {dest.name}: el PDF cambió de hash respecto del que se estampó "
+                         f"({guardado} → {sha}): `pdf_source` y `eprint_version` quedan en null "
+                         f"(desconocido, que es la verdad). Hay que re-extraer y re-verificar lo "
+                         f"anclado a ese PDF (#383)")
+        if cur_ok:
             return True
-        if guardado is None or guardado == sha:
-            # Sin hash guardado no se toca: el reemplazo sólo se detecta en notas estampadas desde
-            # esta versión (registrar el hash en las 169 existentes sería el diff de 169 archivos
-            # que #378 evitó). Con el mismo hash, idempotente.
-            return False
+        _stamp_pdf_field(dest, rel)       # re-lee la nota: queda repuntar `pdf:` (mismo hash ya)
+        return True
+    if cur_ok:
+        # Sin hash guardado no se toca: el reemplazo sólo se detecta en notas estampadas desde
+        # esta versión (registrar el hash en las 169 existentes sería el diff de 169 archivos
+        # que #378 evitó). Con el mismo hash, idempotente.
+        return False
     want = f"pdf_sha: {sha}"
     for i, ln in enumerate(lines):
         if ln.startswith("pdf_sha:"):

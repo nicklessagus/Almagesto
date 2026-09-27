@@ -1221,6 +1221,17 @@ def test_iter_pdf_candidates_devuelve_todos_en_orden_con_su_procedencia(monkeypa
     assert [c[2] for c in cands] == ["publisher", None, None, "eprint"]
 
 
+def test_AUD508_una_ubicacion_OA_submittedVersion_es_el_eprint(monkeypatch):
+    """AUD-508 — `_oa_source` colapsaba todo lo no-`publishedVersion` a `None`: un preprint de
+    bioRxiv o de un repositorio (`submittedVersion`) llegaba a `fetch_pdf` como desconocido, y con
+    versión publicada sin `acepta_preprint` se instalaba en silencio. Es el eprint: se declara así,
+    y el `acceptedVersion` (post-referato) sigue desconocido."""
+    assert d._oa_source({"version": "submittedVersion"}) == "eprint"
+    assert d._oa_source({"version": "acceptedVersion"}) is None
+    assert d._oa_source({"version": "publishedVersion"}) == "publisher"
+    assert d._oa_source({}) is None
+
+
 def test_resolve_pdf_nombra_a_europepmc_entre_lo_consultado(monkeypatch):
     """#358 — el motivo enumera LO QUE SE CONSULTÓ (un `pending` congela la fuente hasta que
     alguien se acuerde): si Europe PMC entró a la cascada, tiene que figurar."""

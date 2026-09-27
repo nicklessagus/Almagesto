@@ -1157,3 +1157,24 @@ def test_505_antes_de_declarar_el_hueco_se_consulta_HAL_y_se_PROPONE(tmp_path, m
     assert "hal-00460653" in out and "institucional" in out and "Handbook of Blind" in out, out
     fm_sin = cfg.split_fm(sin.read_text(encoding="utf-8")) or {}
     assert "HAL" in str(fm_sin.get("sin_bibtex") or ""), fm_sin
+
+
+def test_AUD536_HAL_encuentra_y_el_export_FALLA_no_sale_como_bloque_a_pegar(tmp_path, monkeypatch,
+                                                                             capsys):
+    """AUD-536 — con el depósito encontrado y la exportación caída (503), el mensaje de error salía
+    como el bloque «tal cual» a pegar y la corrida en rc 0. Es la consulta que no contestó (#468):
+    NO EVALUADA, rc 2, sin hueco estampado."""
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    monkeypatch.setattr(cfg, "get_ads_token", lambda: "tok")
+    monkeypatch.setattr(fb, "doi_candidate", lambda *a, **k: ("", "sin candidato en Crossref", ""))
+    monkeypatch.setattr(fb.hal, "find", lambda *a, **k: (
+        {"halid": "hal-00460653", "bibtex_url": "u", "pdf": None, "via": "HAL título"}, "", ""))
+    fake_net(monkeypatch, get=lambda url, **k: Resp(503, text="down"),
+             post=lambda *a, **k: Resp(200, payload={"export": ""}))
+    nota = _nota(tmp_path, {"bibcode": "2010ComonJutten", "tags": ["paper"], "year": 2010,
+                            "title": "Handbook", "first_author": "Comon, Pierre"})
+    monkeypatch.setattr(sys, "argv", ["fetch_bibtex.py"])
+    assert fb.main() == 2
+    out = capsys.readouterr().out
+    assert "tal cual" not in out and "NO EVALUADA" in out and "hal-00460653" in out, out
+    assert not (cfg.split_fm(nota.read_text(encoding="utf-8")) or {}).get("sin_bibtex")

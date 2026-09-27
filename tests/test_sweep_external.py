@@ -535,6 +535,23 @@ def test_el_detector_de_versiones_declara_su_poblacion(toy_vault, monkeypatch):
     assert meta == {"miradas": 1, "notas": 3}
 
 
+def test_AUD525_versiones_usa_LA_regla_de_preprint_de_lib_config(toy_vault, monkeypatch):
+    """AUD-525 — el detector decidía «¿es el preprint?» con `"arXiv" in bibcode`, una segunda copia
+    de `cfg.has_published_version`: un bibcode viejo `astro.ph` quedaba fuera de la población, y un
+    resultado de ADS `astro.ph`/`PhDT` pasaba como «versión publicada»."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "1999astro.ph..1234X.md").write_text(
+        "---\nbibcode: 1999astro.ph..1234X\narxiv_id: 'astro-ph/9901234'\n---\n\n## Abstract\n\nx\n",
+        encoding="utf-8")
+    import query_ads
+    monkeypatch.setattr(query_ads, "query_ads", lambda q, **k: [
+        {"bibcode": "2000PhDT.......123X"}, {"bibcode": "2000ApJ...530..100X"}])
+    meta = {}
+    hallazgos, _ = sw.discover_versions(meta=meta)
+    assert meta["miradas"] == 1, meta
+    assert hallazgos == [("1999astro.ph..1234X", "2000ApJ...530..100X")], hallazgos
+
+
 # ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
 
 # AUD-222 — cerrado en la pasada de fix de la auditoría 2026-09-04

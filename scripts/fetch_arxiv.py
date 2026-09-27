@@ -1,4 +1,4 @@
-"""Baja PDFs desde export.arxiv.org para los papers relevantes de una estrella.
+"""Baja de export.arxiv.org el eprint de los papers relevantes SIN versión publicada o con `acepta_preprint`.
 
 Uso:
     python scripts/fetch_arxiv.py <slug> [--all] [--limit N] [--force]
@@ -11,8 +11,9 @@ invisible para la cascada manual); fetch_pdf, el siguiente paso de la cadena, in
 todo lo que siga sin PDF en disco vía el resolver de ADS.
 
 ⛔ #512 — publisher-first: sólo baja el eprint de un bibcode SIN versión publicada (arXiv-only,
-tesis: `cfg.has_published_version`) o con `acepta_preprint` declarado en la config del sujeto
-(`cfg.preprint_allowed`). El resto va al residuo y `fetch_pdf` intenta el editor.
+tesis: `cfg.has_published_version`) o con `acepta_preprint` declarado (`cfg.preprint_allowed`) —por bibcode,
+no por sujeto: declarado bajo CUALQUIER estrella o tema de la bóveda vale en todas
+(`cfg.acepta_preprint_bibcodes`)—. El resto va al residuo y `fetch_pdf` intenta el editor.
 
 Deja además en build/<slug>/pdf_source.json de qué rama salió cada PDF (acá siempre `eprint`:
 arXiv sirve el EPRINT, que puede ser un v1 pre-referato distinto del publicado que cita el

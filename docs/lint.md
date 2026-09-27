@@ -975,7 +975,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   tesis (`PhDT`, `MsT`) no la tienen. Un `acepta_preprint` mal formado no tumba el lint: sale como
   **no evaluado**.
 - **Extracción con los localizadores del documento ANTERIOR** (#436, backlog): `replace_pdf` marca
-  con `_paginacion` la extracción de un PDF reemplazado. ⛔ **La deuda está ABIERTA mientras quede
+  con `_paginacion` la extracción de un PDF reemplazado; un segundo reemplazo antes de re-paginar
+  **conserva** el documento leído (`pdf_sha_anterior`, fecha, motivo), avanza `pdf_sha` y nombra el
+  intermedio en `intermedios` (AUD-507). ⛔ **La deuda está ABIERTA mientras quede
   una marca de `PAGINATION_OPEN_MARKS` (#494)** —`_paginacion` o `_repaginado_parcial`—: la ronda
   parcial cerró unos localizadores y dejó los otros nombrados en `pendientes`, y la categoría los
   cuenta. `_repaginado` **sale** de la categoría: ahí la relectura los actualizó. ⚠ Es la pregunta

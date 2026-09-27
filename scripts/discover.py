@@ -559,10 +559,13 @@ _NO_FREE_COPY = "sin copia libre en OpenAlex, Unpaywall, Europe PMC, HAL ni arXi
 
 
 def _oa_source(location: dict) -> str | None:
-    """`pdf_source` (#57) for an OA location: `publisher` only when the deposit says it is the
-    published version; anything else is unknown (`None`), which is honest — an accepted manuscript
-    in a repository is neither the publisher's file nor an eprint."""
-    return "publisher" if str((location or {}).get("version") or "") == "publishedVersion" else None
+    """`pdf_source` (#57) for an OA location: `publisher` when the deposit says it is the published
+    version, `eprint` when it says `submittedVersion` (a preprint, on arXiv or not — AUD-508: this
+    is what lets `fetch_pdf` skip it under #512 instead of installing it as unknown); anything else
+    is unknown (`None`), which is honest — an accepted manuscript in a repository is neither the
+    publisher's file nor an eprint."""
+    version = str((location or {}).get("version") or "")
+    return {"publishedVersion": "publisher", "submittedVersion": "eprint"}.get(version)
 
 
 def _europepmc_pdf(doi: str) -> tuple[str | None, str]:

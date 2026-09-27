@@ -2336,6 +2336,9 @@ portadores:
       - modulo: scripts/discover.py
         estado: usa
         motivo: "`iter_pdf_candidates` suma HAL (`fileMain_s`, por DOI) entre Europe PMC y arXiv, con `pdf_source` desconocido; `_NO_FREE_COPY` lo nombra entre lo consultado."
+      - modulo: scripts/fetch_pdf.py
+        estado: fuera-de-alcance
+        motivo: "No llama a `hal.find`: recorre la cascada de `discover.iter_pdf_candidates` (que la lleva) y nombra lo consultado reusando `discover._NO_FREE_COPY` (AUD-524)."
 
   - issue: 506
     regla: >-

@@ -709,3 +709,19 @@ def test_532_instalar_saca_el_bibcode_del_RESIDUO_de_todos_los_slugs(toy_vault, 
     assert json.loads((cfg.ROOT / "build" / "test_star" / "missing_pdf.json").read_text()) == [
         {"bibcode": "2015T"}]
     assert not (cfg.ROOT / "build" / "otro" / "missing_pdf.json").exists()
+
+
+def test_AUD507_un_SEGUNDO_reemplazo_antes_de_repaginar_conserva_el_documento_leido(toy_vault):
+    """AUD-507 — dos reemplazos seguidos sin re-paginar: los localizadores siguen siendo del
+    PRIMER documento, así que la marca conserva su `pdf_sha_anterior`, fecha y motivo; el nuevo
+    `pdf_sha` avanza y el intermedio queda nombrado."""
+    d = cfg.EXTRACCION / "t"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / "2011Naik.json"
+    f.write_text(json.dumps({"bibcode": "2011Naik"}), encoding="utf-8")
+    rp.stamp_depagination("2011Naik", "A" * 10, "B" * 10, "preprint→editor")
+    rp.stamp_depagination("2011Naik", "B" * 10, "C" * 10, "editor sin carátula")
+    marca = json.loads(f.read_text(encoding="utf-8"))["_paginacion"]
+    assert marca["pdf_sha_anterior"] == "A" * 10 and marca["motivo"] == "preprint→editor", marca
+    assert marca["pdf_sha"] == "C" * 10, marca
+    assert [i["pdf_sha"] for i in marca["intermedios"]] == ["B" * 10], marca

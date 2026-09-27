@@ -633,7 +633,13 @@ def main() -> int:
                                                        fm.get("first_author"), fm.get("year"))
             if rec:
                 bloque, no_bajado = hal.export(requests.get, rec["halid"], _utf8)
-                en_hal.append((f.stem, rec, bloque or no_bajado))
+                if bloque:
+                    en_hal.append((f.stem, rec, bloque))
+                else:
+                    # AUD-536 — la exportación que no llegó es la consulta que no contestó (#468):
+                    # ni bloque a pegar ni hueco estampado, y la corrida sale en rc 2.
+                    no_evaluadas.append(f"{f.stem}: HAL tiene el depósito `{rec['halid']}` y "
+                                        f"{no_bajado or 'su exportación vino vacía'}")
                 continue
             if hal_no_medido:
                 sin_medir.append(hal_no_medido)

@@ -746,7 +746,7 @@ def test_512_sin_eprint_a_la_vista_el_residuo_sigue_siendo_358(toy_vault, monkey
 def test_530_el_residuo_publicado_lista_las_copias_libres_con_su_link(toy_vault, capsys):
     """#530 — el residuo es LA lista que se le pide al usuario: cada copia libre va con su link
     (HAL/ORO/aanda sólo abren desde un navegador); la del editor sigue con su comando de #518."""
-    fp.print_published_residue("s", [{
+    fp.print_residue("s", [{
         "bibcode": "2016A&A...588A..31F", "estado": fp.ESTADO_PUBLICADO,
         "editor": "https://doi.org/10.1/x", "eprint": None,
         "copias_libres": [{"src": "hal", "url": "https://hal.science/hal-1/document"},
@@ -768,3 +768,97 @@ def test_531_la_copia_libre_con_CARATULA_no_se_instala_y_queda_marcada(toy_vault
     ok, tried = fp.fetch_free_copy("s", {"bibcode": "2014S", "doi": "10.1/s"}, dest, "tok")
     assert not ok and not dest.exists()
     assert tried == [{"url": "https://hal.science/hal-1/document", "src": None, "caratula": "HAL Id:"}]
+
+
+def _pdf_con_texto(*paginas: str) -> bytes:
+    """A real (tiny) PDF, one text line per page, that `pdftotext` reads."""
+    objs = ["<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [" + " ".join(f"{4 + 2 * i} 0 R" for i in range(len(paginas)))
+            + f"] /Count {len(paginas)} >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    for i, t in enumerate(paginas):
+        stream = f"BT /F1 12 Tf 72 720 Td ({t}) Tj ET"
+        objs.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                    f"/Resources << /Font << /F1 3 0 R >> >> /Contents {5 + 2 * i} 0 R >>")
+        objs.append(f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream")
+    out, offs = b"%PDF-1.4\n", []
+    for n, o in enumerate(objs, 1):
+        offs.append(len(out))
+        out += f"{n} 0 obj\n{o}\nendobj\n".encode()
+    xref = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
+    out += b"".join(f"{o:010d} 00000 n \n".encode() for o in offs)
+    out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return out
+
+
+@pytest.mark.skipif(not __import__("shutil").which("pdftotext"), reason="sin pdftotext")
+def test_AUD549_la_caratula_se_detecta_sobre_el_PDF_REAL_no_sobre_un_doble(toy_vault, monkeypatch):
+    """AUD-549 — el test de #531 dobla `repository_cover`; la rama que usa `fetch_pdf` (pdftotext
+    sobre el archivo bajado) quedaba anulable en verde. Acá corre sobre un PDF real: la carátula en
+    la página 1 frena la instalación; la misma marca en la página 2 no."""
+    dest = cfg.PDFS / "s" / "x.pdf"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter(
+        [("https://hal.science/hal-1/document", "HAL", None)]))
+    monkeypatch.setattr(fp, "download_pdf",
+                        lambda url, tok: _pdf_con_texto("HAL Id: hal-00460653", "Article text"))
+    ok, tried = fp.fetch_free_copy("s", {"bibcode": "2014S", "doi": "10.1/s"}, dest, "tok")
+    assert not ok and not dest.exists() and tried[0]["caratula"] == "HAL Id:", tried
+    monkeypatch.setattr(fp, "download_pdf",
+                        lambda url, tok: _pdf_con_texto("Article text", "HAL Id: hal-00460653"))
+    ok, _ = fp.fetch_free_copy("s", {"bibcode": "2014S", "doi": "10.1/s"}, dest, "tok")
+    assert ok and dest.exists()
+
+
+def test_AUD508_el_preprint_NO_arXiv_se_saltea_con_version_publicada(toy_vault, monkeypatch):
+    """AUD-508 — una ubicación OA `submittedVersion` (bioRxiv, un repositorio) llega como `eprint`
+    (`discover._oa_source`) y, sin `acepta_preprint`, se saltea como el de arXiv."""
+    import discover
+    src = discover._oa_source({"version": "submittedVersion"})
+    assert fp.is_eprint_candidate("https://www.biorxiv.org/x.full.pdf", src)
+    dest = cfg.PDFS / "s" / "x.pdf"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter(
+        [("https://www.biorxiv.org/x.full.pdf", "OpenAlex best_oa_location", src)]))
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: pytest.fail("no se intenta"))
+    ok, tried = fp.fetch_free_copy("s", {"bibcode": "2014S", "doi": "10.1/s"}, dest, "tok",
+                                   eprint_ok=False)
+    assert not ok and tried == []
+
+
+def test_AUD524_sin_copia_libre_enumera_lo_consultado_con_HAL(toy_vault, monkeypatch, capsys):
+    """AUD-524 — el mensaje del carril ADS enumeraba la cascada sin HAL, que `discover` consulta
+    desde #505: es la misma enumeración, y una sola (`discover._NO_FREE_COPY`)."""
+    import discover
+    ads_json(toy_vault.ROOT, "test_star", RECORDS[:1])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert discover._NO_FREE_COPY in capsys.readouterr().out
+
+
+def test_AUD531_el_arXiv_retenido_por_512_no_se_cuenta_como_bajada_fallida(toy_vault, monkeypatch,
+                                                                            capsys):
+    """AUD-531 — la cabecera contaba «con arXiv cuya bajada falló» sobre todo record con
+    `arxiv_id`, incluidos los que `fetch_arxiv` saltea a propósito (versión publicada sin
+    `acepta_preprint`, #512): no falló nada, es la política."""
+    ads_json(toy_vault.ROOT, "test_star", [PUB_CON_ARXIV])
+    monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    out = capsys.readouterr().out
+    assert "cuya bajada falló" not in out and "versión publicada" in out, out
+
+
+def test_AUD539_el_residuo_imprime_el_DOI_en_los_TRES_estados(toy_vault, capsys):
+    """AUD-539 — el residuo es la lista que se le pide al usuario (#530) y sólo salía el estado
+    `publicado-no-conseguido`, sin DOI; `bloqueado` y `sin-copia-libre` no salían."""
+    fp.print_residue("s", [
+        {"bibcode": "2016A", "estado": fp.ESTADO_PUBLICADO, "doi": "10.1/pub",
+         "editor": "https://doi.org/10.1/pub", "eprint": "1.1", "copias_libres": []},
+        {"bibcode": "2016B", "estado": "bloqueado", "doi": "10.1/bloq",
+         "copias_libres": [{"src": None, "url": "https://hal.science/hal-2/document"}]},
+        {"bibcode": "2016C", "estado": "sin-copia-libre", "doi": "10.1/sin", "copias_libres": []}])
+    out = capsys.readouterr().out
+    for doi in ("10.1/pub", "10.1/bloq", "10.1/sin"):
+        assert doi in out, (doi, out)
+    assert "https://hal.science/hal-2/document" in out, out

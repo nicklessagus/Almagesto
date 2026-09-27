@@ -258,11 +258,21 @@ def stamp_depagination(bibcode: str, sha_viejo: str, sha_nuevo: str, motivo: str
         if not isinstance(data, dict) or not (propio or cfg.extraction_identity(data) == bibcode):
             continue
         # @inv INV-160
-        data["_paginacion"] = {
-            "reemplazo": _dt.date.today().isoformat(), "pdf_sha_anterior": sha_viejo,
-            "pdf_sha": sha_nuevo, "motivo": motivo,
-            "aviso": "los localizadores de esta extracción son del documento ANTERIOR: el PDF se "
-                     "reemplazó y la paginación cambió (#436)"}
+        previa = data.get("_paginacion")
+        if isinstance(previa, dict) and previa.get("pdf_sha_anterior"):
+            # AUD-507 — un segundo reemplazo antes de re-paginar: los localizadores siguen siendo
+            # del PRIMER documento, así que su sha, fecha y motivo se conservan; avanza `pdf_sha`
+            # y el documento intermedio queda nombrado.
+            previa.setdefault("intermedios", []).append(
+                {"pdf_sha": previa.get("pdf_sha"), "reemplazo": _dt.date.today().isoformat(),
+                 "motivo": motivo})
+            previa["pdf_sha"] = sha_nuevo
+        else:
+            data["_paginacion"] = {
+                "reemplazo": _dt.date.today().isoformat(), "pdf_sha_anterior": sha_viejo,
+                "pdf_sha": sha_nuevo, "motivo": motivo,
+                "aviso": "los localizadores de esta extracción son del documento ANTERIOR: el PDF "
+                         "se reemplazó y la paginación cambió (#436)"}
         if not dry_run:
             cfg.write_text_atomic(f, json.dumps(data, ensure_ascii=False, indent=1) + "\n")
         tocadas.append(f)

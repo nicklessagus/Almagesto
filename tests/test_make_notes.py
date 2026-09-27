@@ -3077,6 +3077,34 @@ def test_reemplazar_el_PDF_por_otro_de_distinta_procedencia_deja_pdf_source_en_n
     assert "cambió de hash" in out and "re-extraer" in out
 
 
+@pytest.mark.parametrize("modo", ["otro_slug", "pdf_null"])
+def test_reemplazo_bajo_OTRO_slug_o_con_pdf_null_tambien_anula_pdf_source(toy_vault, capsys, modo):
+    # @inv INV-157
+    """AUD-498 — la detección del reemplazo sólo corría si el `pdf:` vigente RESOLVÍA. Con el
+    puntero muerto (el preprint borrado de un slug, el publicado puesto en otro) o en `null`, caía
+    a la estampa normal y pisaba el `pdf_sha` guardado —el único testigo del reemplazo— dejando
+    `pdf_source: eprint` + `eprint_version: v1` sobre el PDF nuevo."""
+    bib = "2020arXivX"
+    for s in ("rv", "ab"):
+        (cfg.PDFS / s).mkdir(parents=True, exist_ok=True)
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    viejo = cfg.PDFS / "rv" / f"{bib}.pdf"; viejo.write_bytes(b"%PDF-1.4 v1\n")
+    nota = cfg.PAPERS / f"{bib}.md"
+    nota.write_text(f"---\nbibcode: {bib}\ntags: [paper]\npdf: null\n"
+                    "pdf_source: eprint\neprint_version: v1\n---\n# F\n", encoding="utf-8")
+    assert mn.stamp_pdf(nota, bib) is True
+    viejo.unlink()
+    (cfg.PDFS / "ab" / f"{bib}.pdf").write_bytes(b"%PDF-1.4 PUBLICADO\n")
+    if modo == "pdf_null":
+        mn._set_campo(nota, "pdf", "null")
+    assert mn.stamp_pdf(nota, bib) is True
+    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
+    assert fm.get("pdf_source") is None and fm.get("eprint_version") is None, fm
+    assert fm["pdf"].endswith(f"ab/{bib}.pdf"), fm
+    assert "cambió de hash" in capsys.readouterr().out
+    assert mn.stamp_pdf(nota, bib) is False, "idempotente después"
+
+
 def test_el_mismo_PDF_no_toca_pdf_source(toy_vault):
     """El control de #230: sin cambio de archivo, `pdf_source` sobrevive intacto — y la segunda
     corrida es idempotente."""

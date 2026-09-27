@@ -1,4 +1,4 @@
-"""Baja PDFs de papers SIN arXiv vía el resolver de ADS (esources) — completa a fetch_arxiv.
+"""Baja el PDF de todo paper relevante que siga sin PDF (resolver de ADS + cascada abierta), editor primero.
 
 Uso:
     python scripts/fetch_pdf.py <slug> [--all] [--limit N] [--force]
@@ -21,7 +21,7 @@ descartan. Cada respuesta se valida por magic `%PDF` (el HTML de un paywall no s
 se reintenta con backoff (el host de escaneos throttlea ráfagas — medido en el probe).
 
 Si el resolver no entrega y el paper tiene `doi`, sigue la **cascada de acceso abierto** (#358,
-`fetch_free_copy`): OpenAlex → Unpaywall → Europe PMC → arXiv por título EXACTO (los candidatos
+`fetch_free_copy`): OpenAlex → Unpaywall → Europe PMC → HAL → arXiv por título EXACTO (los candidatos
 los arma `discover.iter_pdf_candidates`). Se recorren TODOS, no el primero — medido: la primera
 URL (OUP) contestó un desafío Cloudflare con HTTP 200 y la copia real era la de Europe PMC—, y
 cada uno se valida por magic `%PDF`.
@@ -47,8 +47,8 @@ Idempotente: no re-baja lo que ya está en vault/raw/pdfs/<slug>/; `--force` re-
 lo que ya tiene PDF (un PDF truncado por un corte anterior).
 
 Deja además en build/<slug>/pdf_source.json qué rama entregó cada PDF (`eprint` | `ads` |
-`publisher`; la cascada OA lo registra sólo cuando el candidato lo sabe —arXiv → `eprint`, una
-`publishedVersion` → `publisher`— y si no queda desconocido), que make_notes estampa como
+`publisher`; la cascada OA lo registra sólo cuando el candidato lo sabe —arXiv o una
+`submittedVersion` → `eprint`, una `publishedVersion` → `publisher`— y si no queda desconocido), que make_notes estampa como
 `pdf_source` en la nota (#57): distinguir el preprint de la versión publicada cambia cómo se lee
 una discrepancia numérica al verificar citas.
 """
@@ -264,16 +264,16 @@ def fetch_free_copy(slug: str, r: dict, dest: Path, token: str,
     `dest` → `(got one, [{url, src}] tried)` — deduplicated by URL, each with the `pdf_source` it
     would have recorded (#518: a blocked `publisher` copy is installed with `--source publisher`).
 
-    Cascade: OpenAlex → Unpaywall → Europe PMC → arXiv by exact title (`discover`). All of them,
+    Cascade: OpenAlex → Unpaywall → Europe PMC → HAL → arXiv by exact title (`discover`). All of them,
     not the first: measured, the first URL (OUP) answered a Cloudflare challenge with HTTP 200 and
     the real copy was Europe PMC's. `download_pdf` validates the `%PDF` magic, so that HTML never
     lands with a `.pdf` extension. The urls tried are what separates «no free copy» from «there
     was one and the host blocked it» in the residue — those two ask for opposite actions.
-    Records `pdf_source` (#57) only when the candidate knows it (arXiv → `eprint`, a
-    `publishedVersion` OA location → `publisher`); otherwise it stays unknown.
+    Records `pdf_source` (#57) only when the candidate knows it (arXiv or a `submittedVersion` OA
+    location → `eprint`, a `publishedVersion` one → `publisher`); otherwise it stays unknown.
 
-    `eprint_ok=False` (#512: published version, no `acepta_preprint`) skips the arXiv candidates —
-    they are not tried and not listed as tried."""
+    `eprint_ok=False` (#512: published version, no `acepta_preprint`) skips the eprint candidates
+    (arXiv, or a preprint server's `submittedVersion`, AUD-508) — not tried, not listed as tried."""
     bib = r["bibcode"]
     tried: list = []
     for url, why, src in oa_candidates(r.get("doi"), r.get("title")):
@@ -337,31 +337,44 @@ def print_publisher_copy(slug: str, bib: str, copias: list) -> None:
             return
 
 
-def print_published_residue(slug: str, missing: list) -> None:
-    """List the core papers whose PUBLISHED version could not be obtained, with their two ways out
+def _print_free_copies(slug: str, m: dict) -> None:
+    """The free copies of one residue entry, each with its link (#530); the publisher's goes with
+    its #513 install command (#518)."""
+    for c in m.get("copias_libres") or []:
+        if c.get("src") != "publisher":
+            nota = (" — trae CARÁTULA de repositorio: quitá la página 1 antes de instalar "
+                    "(#531)") if c.get("caratula") else ""
+            cfg.print_seguro(f"      copia libre ({c.get('src') or '?'}): {c.get('url')}{nota}")
+    print_publisher_copy(slug, m["bibcode"], m.get("copias_libres") or [])
+
+
+def print_residue(slug: str, missing: list) -> None:
+    """List the residue the user is asked for (#530), each entry with its DOI and free-copy links
+    — in the three states (AUD-539), not only the published one.
+
+    The core papers whose PUBLISHED version could not be obtained go first, with their two ways out
     (#512): bring the publisher's PDF, or declare `acepta_preprint`. The chain never falls back to
     the eprint on its own — same shape as the triage candidates: listed, the user decides."""
     pub = [m for m in missing if m.get("estado") == ESTADO_PUBLICADO]
-    if not pub:
-        return
-    cfg.print_seguro(f"\n⛔ {len(pub)} core con versión PUBLICADA sin conseguir — la cadena NO bajó el "
-                     f"preprint (#512):")
-    for m in pub:
-        cfg.print_seguro(f"  {m['bibcode']}  editor: {m['editor']}  eprint: "
-                         f"{('arXiv:' + m['eprint']) if m.get('eprint') else '—'}")
-        # #530 — this is THE list the user is asked for: every free copy goes with its link (the
-        # hosts behind an anti-bot challenge only open from a browser)
-        for c in m.get("copias_libres") or []:
-            if c.get("src") != "publisher":
-                nota = (" — trae CARÁTULA de repositorio: quitá la página 1 antes de instalar "
-                        "(#531)") if c.get("caratula") else ""
-                cfg.print_seguro(f"      copia libre ({c.get('src') or '?'}): {c.get('url')}{nota}")
-        print_publisher_copy(slug, m["bibcode"], m.get("copias_libres") or [])
-    cfg.print_seguro(f"  → traé el PDF del editor e instalalo declarando su procedencia (#513): "
-                     f"`python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher "
-                     f"--slug {slug} --reason \"…\"`, o aceptá el preprint: `python scripts/"
-                     f"triage.py {slug} --acepta-preprint <bibcode> --reason \"<motivo>\"` + pegar el "
-                     f"bloque + re-correr la cadena.")
+    resto = [m for m in missing if m.get("estado") != ESTADO_PUBLICADO]
+    if pub:
+        cfg.print_seguro(f"\n⛔ {len(pub)} core con versión PUBLICADA sin conseguir — la cadena NO "
+                         f"bajó el preprint (#512):")
+        for m in pub:
+            cfg.print_seguro(f"  {m['bibcode']}  doi: {m.get('doi') or '—'}  editor: {m['editor']}  "
+                             f"eprint: {('arXiv:' + m['eprint']) if m.get('eprint') else '—'}")
+            _print_free_copies(slug, m)
+        cfg.print_seguro(f"  → traé el PDF del editor e instalalo declarando su procedencia (#513): "
+                         f"`python scripts/replace_pdf.py <bibcode> <ruta.pdf> --source publisher "
+                         f"--slug {slug} --reason \"…\"`, o aceptá el preprint: `python scripts/"
+                         f"triage.py {slug} --acepta-preprint <bibcode> --reason \"<motivo>\"` + "
+                         f"pegar el bloque + re-correr la cadena.")
+    if resto:
+        cfg.print_seguro(f"\n· {len(resto)} sin conseguir, sin eprint que retener (#358):")
+        for m in resto:
+            cfg.print_seguro(f"  {m['bibcode']}  doi: {m.get('doi') or '— (sin DOI)'}  "
+                             f"[{m.get('estado') or '?'}]")
+            _print_free_copies(slug, m)
 
 
 def drop_filter(recs: list, slug: str) -> tuple[list, list]:
@@ -458,12 +471,18 @@ def main() -> int:
     token = cfg.get_ads_token()
 
     label = data.get("star") or data.get("title") or args.slug
-    n_arx = sum(1 for r in todo if r.get("arxiv_id"))
+    aceptados = cfg.acepta_preprint_bibcodes()
+    # AUD-531 — `fetch_arxiv` NO intenta el eprint de un publicado sin `acepta_preprint` (#512):
+    # ése no «falló», lo retuvo la política, y se cuenta aparte.
+    con_arx = [r for r in todo if r.get("arxiv_id")]
+    n_ret = sum(1 for r in con_arx if not cfg.preprint_allowed(r["bibcode"], aceptados))
+    n_arx = len(con_arx) - n_ret
     cfg.print_seguro(f"{label}: {len(todo)} sin PDF → resolver de ADS (esources)"
-                      + (f" ({n_arx} con arXiv cuya bajada falló)" if n_arx else ""))
+                      + (f" ({n_arx} con arXiv cuya bajada falló)" if n_arx else "")
+                      + (f" ({n_ret} con arXiv retenido: versión publicada sin `acepta_preprint`, "
+                         f"#512)" if n_ret else ""))
     got = 0
     missing = []
-    aceptados = cfg.acepta_preprint_bibcodes()
     for i, r in enumerate(todo, 1):
         bib = r["bibcode"]
         dest = destdir / f"{safe_name(bib)}.pdf"
@@ -517,7 +536,8 @@ def main() -> int:
                                  f"mano desde ahí antes del rescate manual")
                 print_publisher_copy(args.slug, bib, copias_libres)
             else:
-                cfg.print_seguro(f"      → sin copia libre en OpenAlex, Unpaywall, Europe PMC ni arXiv"
+                import discover                 # AUD-524: la enumeración de la cascada es UNA
+                cfg.print_seguro(f"      → {discover._NO_FREE_COPY}"
                                  + ("" if r.get("doi") else " (sin DOI: no se consultaron)")
                                  + f" → rescate manual [{r.get('bibstem') or 'sin bibstem'}]: {hint}")
         time.sleep(SLEEP_S)
@@ -525,7 +545,7 @@ def main() -> int:
     n_bloq = sum(1 for m in missing if m["estado"] == "bloqueado")
     cfg.print_seguro(f"Bajados {got}, ya estaban {skipped}, sin conseguir {len(missing)}"
                      + (f" ({n_bloq} con copia libre que el host bloqueó)" if n_bloq else "") + ".")
-    print_published_residue(args.slug, missing)
+    print_residue(args.slug, missing)
     miss = cfg.ROOT / "build" / args.slug / "missing_pdf.json"
     if limited:
         cfg.print_seguro(f"  ⚠ --limit activo: quedaron {len(pendientes) - len(todo)} paper(s) "

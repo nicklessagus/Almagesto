@@ -178,7 +178,8 @@ def discover_versions(solo: set | None = None, meta: dict | None = None) -> tupl
             continue
         fm = cfg.split_fm(f.read_text(encoding="utf-8"))
         arxiv = fm.get("arxiv_id")
-        if not arxiv or "arXiv" not in str(fm.get("bibcode") or ""):
+        # AUD-525 — «¿es el preprint?» es UNA regla (`cfg.has_published_version`), no una copia.
+        if not arxiv or cfg.has_published_version(fm.get("bibcode")):
             continue
         # #298 — la POBLACIÓN, declarada. El filtro es correcto por contrato (D-19 es sobre
         # IDENTIDAD, y una nota que ya tiene bibcode publicado no tiene problema de identidad), pero
@@ -200,7 +201,7 @@ def discover_versions(solo: set | None = None, meta: dict | None = None) -> tupl
             continue
         for r in recs:
             bib = r.get("bibcode")
-            if bib and "arXiv" not in bib and bib != f.stem and bib not in ya_alias:
+            if bib and cfg.has_published_version(bib) and bib != f.stem and bib not in ya_alias:
                 out.append((f.stem, bib))
                 if stamp_version_disponible(f.stem, bib):
                     cfg.print_seguro(f"    · {f.stem}: `versions_disponible: {bib}` estampado "
