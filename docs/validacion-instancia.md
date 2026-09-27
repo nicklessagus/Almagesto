@@ -1534,3 +1534,43 @@ pendiente siguen re-anclándose.
 
 **Devolver si** un par corregido cuya fila exigía acción queda entre los re-anclables, o si una fila
 `soportada` sin `acota` pendiente pasa a re-verificar sólo por una edición.
+
+## §#542 · v1.352.0 — los tests de `--ratchet` fijan el guardia de instancia
+
+```bash
+python -m pytest tests/test_mutar.py -q
+```
+
+**Esperado:** verde con el remote `upstream` declarado. Un fixture `autouse` fija
+`lint.is_instance` en `False` (el test de instancia lo pisa con `True`) y hace fallar a cualquier
+test que llegue a `git remote` del clon real.
+
+**Devolver si** algún test de `test_mutar.py` falla en la instancia y pasa en el template.
+
+## §#543 · v1.353.0 — el lint cruza la firma de un `refuta`
+
+```bash
+python scripts/lint.py | grep -A4 "REFUTA un reclamo\|ya FIRMADO"
+python scripts/proposals.py hd_41248
+```
+
+**Esperado:** `reclamo_refutado (0)` y `2023A&A...674A..10H` en la categoría nueva
+`reclamo_refutado_firmado` («visible, no es deuda»), con el motivo del `--drop-core`. `proposals.py`
+sin cambios.
+
+**Devolver si** un par firmado sigue en la deuda, o si un sujeto cuyo nombre no resuelve a slug sale
+como firmado.
+
+## §#540 · v1.354.0 — el archivo que lee el juez también pasa la red de arqueología
+
+```bash
+grep -nE "Medido|[0-9]+ de [0-9]+ |1\.[0-9]+\.[0-9]" .claude/skills/verify-citations/reference/juez.md
+python -m pytest tests/test_verify_fanout.py -q -k arqueologia
+```
+
+**Esperado:** el grep vacío; las mediciones pasaron a `reference/historia-veredictos.md`. El test
+recorre cada `.claude/skills/…md` que el prompt generado manda a leer, y la regex atrapa además
+«medido sobre N», «medido: N» y «en X.Y.Z». Con el `juez.md` de v1.351.0 da 5 hits.
+
+**Devolver si** el prompt del extractor o el juez vuelven a narrar una medición sin que el test lo
+note, o si la regex atrapa un localizador.

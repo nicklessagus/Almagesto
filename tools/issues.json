@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-26",
+ "fetched": "2026-09-27",
  "issues": [
   {
    "number": 2,
@@ -2669,22 +2669,22 @@
   {
    "number": 536,
    "title": "`## Métodos aplicados` y la matriz método×estrella cuentan los métodos de papers sacados con `--drop-core`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 537,
    "title": "`apply_fixes` re-envuelve como párrafo una tabla o un blockquote que viene en la lista `nuevo`, y ninguna guarda lo ve porque los pares suben",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 538,
    "title": "El prompt del extractor sólo exime al documento largo de transcribir conclusiones: un paper corto sin esa sección vuelve con la Discusión copiada (regla #277)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 539,
    "title": "`verify_fanout --solo-nuevos` re-ancla por parecido de texto las afirmaciones CORREGIDAS (no-soportada/contradice/acota): la ronda 2 no las re-verifica",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 540,
@@ -2694,6 +2694,16 @@
   {
    "number": 541,
    "title": "⛔ en casi todas las reglas (165 en CLAUDE.md): reservarlo para los límites que rompen la bóveda",
+   "state": "CLOSED"
+  },
+  {
+   "number": 542,
+   "title": "Tres tests de `--ratchet` en `test_mutar.py` fallan en toda instancia: el guardia de #517 lee el clon real y el test no lo fija",
+   "state": "OPEN"
+  },
+  {
+   "number": 543,
+   "title": "El lint sigue pidiendo `--drop-core` para un `refuta` que ya se firmó: #435 cruzó la firma en `proposals` y no en `reclamo_refutado`",
    "state": "OPEN"
   }
  ]
