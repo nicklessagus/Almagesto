@@ -30,11 +30,13 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lib_blocks as lb  # noqa: E402
+import lib_config as cfg  # noqa: E402
 
 
 def check_dir(directory: Path) -> tuple[dict, list[str]]:
@@ -58,6 +60,8 @@ def check_dir(directory: Path) -> tuple[dict, list[str]]:
             errors.append(f"{name}: no parsea como JSON — {exc}")
             continue
         errs = lb.fanout_errors(data, entry=name)
+        if not errs:
+            errs = verdict_errors(data, name)
         errors += errs
         if not errs:
             pairs[name] = len(data["pares"])
@@ -65,6 +69,36 @@ def check_dir(directory: Path) -> tuple[dict, list[str]]:
 
 
 MANIFEST = "_esperado.json"
+
+
+def verdict_errors(data: dict, name: str) -> list[str]:
+    """Verdicts of one shape-valid file outside what the fan-out may emit (AUD-480).
+
+    `fanout_errors` checks presence and shape, never the value, so a typo or a verdict with
+    another meaning reached the cell. The judge emits `lb.VERDICTS_FANOUT`; `no verificable por
+    extracción` means the source has NO PDF nor `.txt` on disk (#223), so it passes only there —
+    over a source with a file it is the judge's «illegible scan», a different claim nobody reads
+    back as such."""
+    # @inv INV-161
+    sin_archivo = None
+    out = []
+    for i, par in enumerate(data["pares"], 1):
+        v = str(par["veredicto"]).strip()
+        if v in lb.VERDICTS_FANOUT:
+            continue
+        if v in lb.VERDICTS_WITHOUT_SOURCE:
+            if sin_archivo is None:
+                bib = str(data["bibcode"])
+                sin_archivo = cfg.pdf_slug(bib) is None and cfg.txt_slug(bib) is None
+            if sin_archivo:
+                continue
+            out.append(f"{name}: `pares[{i}]` dice `{v}` y la fuente tiene PDF o `.txt` en disco: "
+                       f"ese veredicto es sólo para la fuente sin archivo (#223) — re-juzgá con "
+                       f"{' | '.join(lb.VERDICTS_FANOUT)}")
+            continue
+        out.append(f"{name}: `pares[{i}]` trae `veredicto` «{v}», fuera del vocabulario del "
+                   f"fan-out ({' | '.join(lb.VERDICTS_FANOUT)})")
+    return out
 
 
 def manifest_errors(pairs: dict, manifest: dict, expected: int | None) -> list[str]:
@@ -125,10 +159,44 @@ def plan_errors(directory: Path, pairs: dict, expected: int | None = None) -> tu
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         return {}, [f"{MANIFEST}: no parsea — {exc}"]
-    if not manifest:
-        return manifest, []
+    # AUD-495 — un plan PRESENTE que no se lee como plan no se cumple: `{}` salía ✅ sin contar
+    # nada (y sin el aviso «sin manifiesto») y `[1]` reventaba. Sólo el directorio SIN plan se exime.
+    if not (isinstance(manifest, dict) and isinstance(manifest.get("fuentes"), dict)
+            and isinstance(manifest.get("pares"), int)):
+        return {}, [f"{MANIFEST}: no es el plan del generador (hace falta un objeto con `fuentes` "
+                    f"y `pares`) — regenerá la ronda con `scripts/verify_fanout.py`"]
     return manifest, (manifest_errors(pairs, manifest, expected)
-                      + pair_count_errors(pairs, int(manifest.get("pares") or 0)))
+                      + pair_count_errors(pairs, manifest["pares"])
+                      + anchor_errors(directory, pairs, manifest))
+
+
+def anchor_errors(directory: Path, pairs: dict, manifest: dict) -> list[str]:
+    """The anchors each source returned against the anchors the plan sent it (AUD-494).
+
+    The count alone passes a file that judged one pair twice and another never: same number, and
+    the writer collapses the repeat and leaves the missing pair out. Compared as MULTISETS, because
+    two identical blocks citing the same source are two pairs with one anchor. Only files that
+    passed the shape are read; a manifest without `anclas` (older generator) is not crossed, and
+    the CLI says so."""
+    # @inv INV-161
+    plan = manifest.get("anclas")
+    if not isinstance(plan, dict):
+        return []
+    out = []
+    for name in sorted(pairs):
+        bib = Path(name).stem
+        if bib not in plan:
+            continue                    # la fuente que el plan no mandó ya la cuenta el conteo
+        data = json.loads((directory / name).read_text(encoding="utf-8"))
+        devueltas = Counter(str(p.get("ancla") or "") for p in data["pares"])
+        esperadas = Counter(str(a) for a in plan[bib])
+        if devueltas != esperadas:
+            de_mas = sorted((devueltas - esperadas).elements())
+            faltan = sorted((esperadas - devueltas).elements())
+            out.append(f"⛔ `{name}` no devuelve las anclas que el plan le mandó"
+                       + (f" — de más/repetidas: {', '.join(de_mas)}" if de_mas else "")
+                       + (f" — faltan: {', '.join(faltan)}" if faltan else ""))
+    return out
 
 
 def scope_line(manifest: dict, pairs: dict) -> str:
@@ -180,6 +248,9 @@ def main() -> int:
     errors += plan_errs
     if manifest:
         print(scope_line(manifest, pairs))
+        if not isinstance(manifest.get("anclas"), dict):
+            print("⚠ el manifiesto no trae `anclas` (generador anterior): se cuentan los pares, "
+                  "no se cruzan sus anclas — regenerá la ronda para que la barrera las cruce")
     elif manifest is None and args.esperados is None:
         print("⚠ sin manifiesto (`_esperado.json`) ni `--esperados`: la forma se valida, el CONTEO no "
               "— generá la ronda con `scripts/verify_fanout.py` para que la barrera sepa el plan")

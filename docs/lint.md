@@ -347,6 +347,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   de **cabecera `> _Estado —_` desfasada** (7 de las 9: las dos `queries/` no llevan esa línea),
   porque D-12 publica el arrastre al lado de la fecha de verificación — se cierra con el
   `python scripts/make_notes.py <slug>` que la propia categoría imprime.
+  ⛔ **Y el arrastre cubre la corrección todavía sin commitear (AUD-542).** El lint corre antes del
+  commit, así que «el commit a la fecha del arrastre» es HEAD sin la corrección: si **cada par del
+  cuerpo cuelga de una fila del hermano con su ancla exacta**, la nota no se reporta; si alguno no
+  cuelga (una edición posterior al arrastre), se compara contra git como siempre.
   ⛔ **Y «cambió» lo decide el CONJUNTO DE ANCLAS de los bloques citables (#445)**, que es lo que las
   filas cuelgan (D-4): una línea en blanco entre una tabla y un `## ` —la edición que *Forma del
   artefacto* pide—, un encabezado renombrado o un fence no mueven ninguna ancla y **no disparan**.

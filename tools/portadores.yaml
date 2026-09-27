@@ -743,6 +743,9 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: elige contra qué archivo se hashea la fila (`txt:` kind)
+      - modulo: scripts/check_verify_fanout.py
+        estado: usa
+        motivo: "`verdict_errors` acepta `no verificable por extracción` sólo si la fuente no tiene `.txt` NI PDF bajo ningún slug (#223, AUD-480)."
       - modulo: scripts/harvest_views.py
         estado: usa
         motivo: >-
@@ -796,6 +799,9 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: elige el `pdf:` kind y su hash por bytes
+      - modulo: scripts/check_verify_fanout.py
+        estado: usa
+        motivo: "`verdict_errors` acepta `no verificable por extracción` sólo si la fuente no tiene PDF NI `.txt` bajo ningún slug (#223, AUD-480)."
       - modulo: scripts/lib_quotes.py
         estado: usa
         motivo: "`quote_pdf_sha` hashea la copia que resuelve `pdf_slug`, la misma que `write_verif_sidecar` (#516)."
@@ -2881,3 +2887,36 @@ portadores:
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "Nombra `--reanclar` en el docstring de `check_stale_verif`; compara fechas, no lleva veredictos a pares."
+
+  - issue: AUD-494
+    regla: >-
+      Un `_esperado.json` PRESENTE se lee como plan o se rehúsa (AUD-495: `{}` daba ✅ sin contar,
+      `[1]` reventaba), y lo devuelto se cruza contra él por FUENTE, por CONTEO y por ANCLA como
+      multiconjunto (AUD-494: el conteo justo con un ancla repetida pasaba y el escritor perdía un
+      par). Una sola función la aplica a los dos consumidores: la barrera y el escritor del hermano.
+    funcion: check_verify_fanout.plan_errors
+    patron: '_esperado|MANIFEST'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "`load_fanout` corre la misma barrera antes de armar el hermano (AUD-478)."
+      - modulo: scripts/verify_fanout.py
+        estado: fuera-de-alcance
+        motivo: "Es el PRODUCTOR del plan (`write_round`, con `anclas`): lo escribe, no lo coteja."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "`_esperado` es un nombre de variable local (links esperados de una tabla), no el manifiesto."
+
+  - issue: AUD-480
+    regla: >-
+      La barrera valida el VALOR del veredicto, no sólo su presencia: el juez emite
+      `VERDICTS_FANOUT`, y `no verificable por extracción` pasa sólo sobre una fuente sin PDF ni
+      `.txt` en disco (#223) — con archivo es otro significado («escaneo ilegible») que nadie lee
+      como tal.
+    funcion: check_verify_fanout.verdict_errors
+    patron: 'VERDICTS_FANOUT|VERDICTS_WITHOUT_SOURCE'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "DEFINE los vocabularios y el fence del prompt; `fanout_errors` mira forma, no valor, por diseño declarado."
+

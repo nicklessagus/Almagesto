@@ -117,7 +117,8 @@ python scripts/verify_fanout.py <nota.md> --out build/<slug>/verif/<ronda>
 
 **El reparto lo escribe el generador, no vos (#369).** Escribe un prompt por fuente en
 `<out>/prompts/<bibcode>.md` —sus pares con sus anclas, el fence generado y el path exacto de
-salida— y el **manifiesto** `<out>/_esperado.json` con el plan (`fuentes: {bibcode: n}`, `pares`).
+salida— y el **manifiesto** `<out>/_esperado.json` con el plan (`fuentes: {bibcode: n}`, `pares`,
+`anclas: {bibcode: [ancla, …]}`).
 Era el único eslabón de esta cadena sin herramienta, y justo el que decide sobre qué corre el gate:
 medido, «TOTAL 60 en 16 fuentes» leído a ojo → **15** subagentes lanzados, y averiguar cuál faltaba
 costó un script ad-hoc. Lanzás un subagente por fuente, **en paralelo** (varios en un mismo
@@ -200,7 +201,7 @@ validador no pueden divergir.
 
 ⚠ **Dos divergencias declaradas, no resueltas acá.** (a) El fence ofrece **tres** veredictos y
 `lb.VERDICTS` tiene **cuatro**: `no verificable por extracción` es propiedad de la fuente (#223) y
-hoy lo escribe quien arma la fila, no el juez. (b) `nota` se pide y **no tiene columna** en el
+hoy lo escribe quien arma la fila, no el juez: la barrera lo acepta sólo sin PDF ni `.txt`. (b) `nota` se pide y **no tiene columna** en el
 bloque (`VERIF_COLS`) ni campo en `Row`: sirve al triage y muere en `build/`.
 
 Prompt sugerido por agente: *"Leé SOLO el PDF `<ruta pdf>` (Read lo rasteriza: **ves** la página,
@@ -285,7 +286,8 @@ fan-out incompleto— y **nombra la fuente que falta**, que es lo que el conteo 
 Valida **cada** `*.json` contra `VERIF_FANOUT_SCHEMA` **nombrando el archivo y la clave** que falta
 o sobra, y **aborta** si los pares devueltos no son los que se mandaron a juzgar (la red barata de
 #222: contar antes y después). Un subagente que devolvió la mitad de sus pares escribe un archivo
-**válido** —la forma no lo ve, el conteo sí—. Directorio inexistente → **rc 2**: rehúsa en vez de
+**válido** —la forma no lo ve, el conteo sí—. Cruza además las **anclas** contra el plan
+(AUD-494), el **valor** del veredicto (AUD-480) y rehúsa un plan vacío (AUD-495). Directorio inexistente → **rc 2**: rehúsa en vez de
 reportar un cero limpio (D-43). rc ≠ 0 ⇒ **no se deriva trabajo**: se re-corre la fuente que no
 cumple, nunca se afloja el lector.
 

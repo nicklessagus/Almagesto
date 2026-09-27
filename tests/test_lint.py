@@ -2149,6 +2149,32 @@ def test_499_stale_verif_compara_contra_el_ARRASTRE_declarado(toy_vault):
     assert "su último verify es del 2020-01-01 (re-anclado el 2020-03-01)" in filas[0][1], filas
 
 
+def test_AUD542_tras_reanclar_SIN_COMMITEAR_la_nota_no_sale_stale(toy_vault):
+    """AUD-542 — el flujo documentado corre el lint ANTES del commit. Tras la corrección derivada y
+    `--reanclar` (hoy), comparar la prosa contra el commit a la fecha del arrastre compara contra
+    HEAD, que no tiene la corrección: la nota salía stale y `--cierre` bloqueaba el caso de #499.
+    Lo que el arrastre certificó son las anclas del hermano: si todo par del cuerpo cuelga de una
+    fila, no hay nada sin verificar. Una edición POSTERIOR (ancla sin fila) sigue disparando."""
+    import datetime as dt
+    import lib_blocks as lb
+    _skip_sin_git(_repo_con_nota(toy_vault, CUERPO_VERIF, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    hoy = dt.date.today().isoformat()
+    p.write_text(p.read_text(encoding="utf-8").replace("Afirmación [[", "Afirmacion [[").replace(
+        "## Verificación de citas (2020-01-01)",
+        f"## Verificación de citas (2020-01-01 · re-anclado {hoy})"), encoding="utf-8")
+    filas = [lb.Row(n=str(i), claim="Afirmacion", bibcode=par.bibcode, verdict="soportada",
+                    anchor=par.anchor, source_hash="0123456789", source_kind="pdf",
+                    evidence="«x» (p. 1)")
+             for i, par in enumerate(lb.pairs_of(p.read_text(encoding="utf-8")), 1)]
+    _hermano(toy_vault).write_text(lb.render_verif_sidecar(p, lb.render_verif_table(filas)),
+                                   encoding="utf-8")
+    assert _stale(toy_vault, hoy=hoy) == [], "el arrastre de hoy cubre la corrección sin commitear"
+    p.write_text(p.read_text(encoding="utf-8").replace("Afirmacion [[", "Otra afirmación [["),
+                 encoding="utf-8")
+    assert len(_stale(toy_vault, hoy=hoy)) == 1, "y la edición posterior al arrastre sigue disparando"
+
+
 def test_prose_changed_since_devuelve_None_si_el_commit_no_TIENE_la_nota(toy_vault):
     """El commit más reciente hasta la fecha puede ser el que BORRÓ la nota (un `entity rename`, una
     nota movida y restaurada): ahí `git show <sha>:<ruta>` no devuelve nada. Sin la guarda se

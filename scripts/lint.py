@@ -5975,6 +5975,21 @@ def prose_changed_since(f: str, date: str, detail: list | None = None) -> bool |
     return True
 
 
+def _pairs_hang_from_rows(f: str) -> bool:
+    """Does every pair of note `f` have a sidecar row with its exact `(bibcode, anchor)`? (AUD-542)
+
+    `False` with no sidecar, no rows or no pairs: nothing was certified, so the git comparison
+    decides."""
+    try:
+        text = Path(f).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    filas = lb.verif_rows(Path(f)) or []
+    pares = lb.pairs_of(text)
+    return bool(filas and pares) and {(p.bibcode, p.anchor) for p in pares} <= {
+        (x.bibcode, x.anchor) for x in filas}
+
+
 def check_stale_verif(verif_blocks, changed: dict) -> list:
     """`stale_verif` — the note edited after its own verification block (D-4).
 
@@ -6008,6 +6023,12 @@ def check_stale_verif(verif_blocks, changed: dict) -> list:
             # cubierta por el juicio que alguien firmó. La de verificación no se mueve (#395).
             r = reanchor_of(f)
             base = max(d, r) if r else d
+            # AUD-542 — lo que el arrastre CERTIFICÓ son las anclas del hermano, no el commit de
+            # esa fecha: el lint corre antes del commit, así que con `r` = hoy el commit «a la
+            # fecha» es HEAD sin la corrección. Si cada par del cuerpo cuelga de una fila, no hay
+            # afirmación sin verificar; si no, se compara contra git como siempre.
+            if r and r > d and _pairs_hang_from_rows(f):
+                continue
             que: list = []
             cambio = prose_changed_since(f, base, que)
             if cambio is False:

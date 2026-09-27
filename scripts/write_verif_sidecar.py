@@ -362,9 +362,16 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
         par = juzgados.get((p.bibcode, p.anchor)) or juzgados.get(clave_de.get(p))
         previa = asignado.get(p, (None, 0.0))[0]
         if par is None:
-            # sin veredicto ni fila que llevar: «sin verificar». #539 — tampoco se lleva la fila cuyo
-            # veredicto exigía acción sobre un bloque que cambió: se corrigió, va a re-verificar.
-            if previa is None or lb.carry_needs_reverify(p, previa):
+            # sin veredicto ni fila que llevar: «sin verificar».
+            if previa is None:
+                continue
+            # #539 — la fila cuyo veredicto exigía acción sobre un bloque que cambió NO se lleva a
+            # la afirmación nueva. AUD-543 — pero tampoco se borra: queda TAL CUAL, con su ancla
+            # vieja (el lint la da vencida por edición, que es verdad), para que la ronda que la
+            # juzgue ANOTE (`contradice→corregida`, #232) en vez de escribir un veredicto pelado.
+            if lb.carry_needs_reverify(p, previa):
+                n += 1
+                rows.append(replace(previa, n=str(n)))
                 continue
             # fuera del alcance de esta ronda: el veredicto se LLEVA y el ancla se recalcula (#257)
             n += 1
@@ -517,7 +524,10 @@ def _lost_prose(vieja: str, nueva: str) -> list:
     perdidas = []
     for ln in vieja.split("\n"):
         s = ln.strip()
-        if s.startswith(("#", ">", "|")):       # encabezado, puntero y tabla: los estampa el script
+        # AUD-493 — sólo el ENCABEZADO de la sección se saltea (su fecha cambia en cada ronda). El
+        # puntero es una línea fija que reaparece igual, y un `>`, `|` o `###` que escribió alguien
+        # es prosa como cualquier otra: la tabla vive en el hermano desde #344.
+        if s.startswith(lb.VERIFY_HEADER):
             continue
         c = _contenido(s)
         if len(c) >= _NO_ES_PROSA and c not in nueva_plana:
@@ -526,8 +536,9 @@ def _lost_prose(vieja: str, nueva: str) -> list:
 
 
 def emit(note: Path, text: str, rows: list, fecha: str, *, dry_run: bool = False,
-         solo_seccion: bool = False, reanclado: str | None = None) -> None:
+         solo_seccion: bool = False, reanclado: str | None = None) -> str:
     """Render the sibling and the note's section from `rows`, and (unless `dry_run`) write them.
+    Returns the note's new text — written or not —, so a preview can compare it (AUD-506).
 
     The single writing point of this module — every mode that produces rows goes through here, so
     the round-trip guard (#284), the header line (INV-81) and the triage guard (#430) apply to all
@@ -552,10 +563,11 @@ def emit(note: Path, text: str, rows: list, fecha: str, *, dry_run: bool = False
     hermano = None if solo_seccion else lb.render_verif_sidecar(
         note, lb.render_verif_table(rows))                     # #284: round-trip o rehúsa
     if dry_run:
-        return
+        return nuevo
     if hermano is not None:
         cfg.write_text_atomic(cfg.verif_sidecar(note), hermano)
     cfg.write_text_atomic(note, nuevo)
+    return nuevo
 
 
 def _rewrite_rows(note: Path, cambios: dict, fecha: str | None, dry_run: bool) -> dict:
@@ -637,9 +649,12 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
             ya = lb.condition_resolution(fila.condition)
             if ya == str(donde).strip():
                 continue                          # misma resolución: no-op (idempotente)
+            # AUD-546 — la celda no se edita a mano (#427), y ningún modo reemplaza una resolución
+            # firmada: el mensaje no puede mandar a hacer lo que el skill prohíbe.
             raise SidecarError(f"el par {ancla}:{fila.bibcode} ya declara una resolución («{ya}») — "
-                               f"se anota, no se pisa (#232). Si cambió, editá el hermano a mano y "
-                               f"decí por qué en el `log`")
+                               f"se anota, no se pisa (#232), y la celda no se edita a mano (#427). "
+                               f"Si el lugar cambió, la resolución firmada queda como rastro: "
+                               f"anotá el lugar nuevo y el porqué en el `log`")
         # #451 — se reescribe el eslabón VIGENTE, no la celda entera: detrás puede haber la
         # resolución de una ronda anterior, que es una decisión firmada y no se pisa (#427).
         celda = lb.replace_current_condition(
@@ -755,11 +770,10 @@ def restamp_section(note: Path, fecha: str | None = None, dry_run: bool = False)
     if not d:
         raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado y no se pasó "
                            f"`--fecha`: re-fechar es una decisión, no un default")
-    antes = text
-    emit(note, text, rows, d, dry_run=dry_run, solo_seccion=True,
-         reanclado=cfg.reanchor_date(text))
-    return {"nota": note.name, "filas": len(rows), "fecha": d,
-            "cambio": dry_run or note.read_text(encoding="utf-8") != antes}
+    # AUD-506 — el preview compara el texto que ESCRIBIRÍA, no anuncia todo como cambiado
+    nuevo = emit(note, text, rows, d, dry_run=dry_run, solo_seccion=True,
+                 reanclado=cfg.reanchor_date(text))
+    return {"nota": note.name, "filas": len(rows), "fecha": d, "cambio": nuevo != text}
 
 
 def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = False,
@@ -1067,7 +1081,11 @@ def main(argv=None) -> int:
     if args.resolver or args.resoluciones or args.migrate_cond:
         return _main_condiciones(args)
     if not args.nota or not args.fanout:
-        cfg.print_seguro("⛔ hace falta la nota y `--from <dir>` (o `--restamp-section` / `--reanclar`)")
+        # AUD-534 — el mensaje nombra TODOS los modos, no los dos que había cuando se escribió
+        cfg.print_seguro("⛔ hace falta la nota y `--from <dir>`, o uno de los otros modos: "
+                         "`--restamp-section`, `--reanclar`, `--resolver`/`--resoluciones`, "
+                         "`--migrate-condition-prefix`, `--migrate-verdict-chain`, "
+                         "`--refutar-extraccion` (`--help` los describe)")
         return 2
     nota, fanouts = Path(args.nota), [Path(x) for x in args.fanout]
     if not nota.exists() or cfg.is_verif_sidecar(nota):

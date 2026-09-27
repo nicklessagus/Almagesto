@@ -16,9 +16,9 @@ it WRITES what it knows:
 
   · one prompt per source under `<out>/prompts/<bibcode>.md`, with that source's pairs, the fence
     of `lib_blocks.verify_fanout_json_block()` and the output path it must write;
-  · `<out>/_esperado.json` — `{nota, fuentes: {bibcode: n}, pares: N, alcance, nota_total}`. The
-    barrier reads it, refuses an `--esperados` that contradicts it, and names the source that is
-    missing.
+  · `<out>/_esperado.json` — `{nota, fuentes: {bibcode: n}, pares: N, anclas, alcance,
+    nota_total}`. The barrier reads it, refuses an `--esperados` that contradicts it, names the
+    source that is missing, and crosses each source's returned anchors against `anclas` (AUD-494).
 
 ⛔ A round can be SCOPED (#407): `--fuentes b1,b2` or `--solo-nuevos`. #282 prescribes exactly
 that —re-verify the pairs whose claim changed, re-anchor the rest— and `reverify_subset` emits the
@@ -116,6 +116,8 @@ def write_round(nota: Path, out_dir: Path, fuentes: list | None = None,
     manifest = {"nota": nota.as_posix(),
                 "fuentes": {bib: len(pares) for bib, pares in grupos.items()},
                 "pares": sum(len(pares) for pares in grupos.values()),
+                # AUD-494 — las anclas que se mandaron: la barrera cruza lo devuelto contra esto
+                "anclas": {bib: [p.anchor for p in pares] for bib, pares in grupos.items()},
                 "alcance": {"modo": modo, "fuentes": sorted(grupos)},
                 "nota_total": {"pares": sum(len(p) for p in todos.values()),
                                "fuentes": len(todos)},

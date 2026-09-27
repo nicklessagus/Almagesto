@@ -47,7 +47,8 @@ def _fanout(toy_vault, nota: Path, veredictos: dict, ronda="r1", **extra_par):
     # el escritor lo tiene que saltear, como hace la barrera
     (d / "_esperado.json").write_text(json.dumps(
         {"nota": nota.as_posix(), "fuentes": {b: len(ps) for b, ps in por_bib.items()},
-         "pares": len(pares)}), encoding="utf-8")
+         "pares": len(pares),
+         "anclas": {b: [x["ancla"] for x in ps] for b, ps in por_bib.items()}}), encoding="utf-8")
     return d
 
 
@@ -59,6 +60,7 @@ def _acotar(d: Path, *fuera: str) -> Path:
     for bib in fuera:
         (d / f"{bib}.json").unlink()
         plan["pares"] -= plan["fuentes"].pop(bib)
+        plan.get("anclas", {}).pop(bib, None)
     (d / "_esperado.json").write_text(json.dumps(plan), encoding="utf-8")
     return d
 
@@ -131,6 +133,9 @@ def test_la_condicion_lleva_su_clase_y_el_no_verificable_no_lleva_archivo(toy_va
     que separa la que obliga a editar de la que va al reporte; y el veredicto que no puede nombrar
     archivo no lo nombra, en vez de inventar un hash sobre la nada."""
     nota = _escena(toy_vault)
+    # #223 — el caso de ese veredicto: la fuente NO tiene archivo en disco (AUD-480: con archivo,
+    # la barrera lo rechaza)
+    (cfg.FULLTEXT / "s" / "2019Txt.txt").unlink()
     d = _fanout(toy_vault, nota, {"2019Txt": "no verificable por extracción"},
                 condicion="sólo para SNR > 50", cond_tipo="acota")
     ws.write(nota, d, fecha="2026-03-01")
@@ -322,7 +327,8 @@ def test_480_reanclar_REHUSA_el_par_que_hay_que_re_verificar_y_sin_hermano(toy_v
 def test_539_la_fila_que_exigia_accion_no_se_lleva_a_la_afirmacion_corregida(toy_vault, capsys):
     """#539 — la corrección de una `no-soportada` conserva casi todo el texto: la cobertura la daba
     por re-anclable y el escritor le colgaba el veredicto viejo a una afirmación que nadie leyó. Ni
-    `--reanclar` ni una ronda acotada que no la juzgó la llevan: queda «sin verificar», que es verdad."""
+    `--reanclar` ni una ronda acotada que no la juzgó la llevan: queda con SU ancla,
+    vencida por edición, que es verdad (AUD-543: borrarla perdía el veredicto que había)."""
     nota = _escena(toy_vault)
     ws.write(nota, _fanout(toy_vault, nota, {"2019Txt": "no-soportada"}, ronda="r1"), fecha="2026-03-01")
     nota.write_text(nota.read_text(encoding="utf-8").replace(
@@ -333,14 +339,18 @@ def test_539_la_fila_que_exigia_accion_no_se_lleva_a_la_afirmacion_corregida(toy
     assert "RE-VERIFICAR" in capsys.readouterr().out
     assert cfg.verif_sidecar(nota).read_text(encoding="utf-8") == hermano, "no se escribió nada"
 
+    ancla_vieja = next(f.anchor for f in lb.verif_rows(nota) if f.bibcode == "2019Txt")
     d = _acotar(_fanout(toy_vault, nota, {}, ronda="r2"), "2019Txt")
     ws.write(nota, d, fecha="2026-03-02")
-    assert [f.bibcode for f in lb.verif_rows(nota)] == ["2020Pdf"], \
-        "la fila `no-soportada` no se arrastra a la afirmación corregida"
+    nueva = next(p.anchor for p in lb.pairs_of(nota.read_text(encoding="utf-8"))
+                 if p.bibcode == "2019Txt")
+    assert {f.bibcode: f.anchor for f in lb.verif_rows(nota)}["2019Txt"] == ancla_vieja != nueva, \
+        "la fila `no-soportada` no se arrastra a la afirmación corregida: queda con SU ancla (AUD-543)"
 
     r3 = _acotar(_fanout(toy_vault, nota, {}, ronda="r3"), "2020Pdf")
     ws.write(nota, r3, fecha="2026-03-03")
-    assert {f.bibcode: f.verdict for f in lb.verif_rows(nota)}["2019Txt"] == "soportada"
+    assert {f.bibcode: f.verdict for f in lb.verif_rows(nota)}["2019Txt"] == "no-soportada→corregida", \
+        "la ronda que la juzga ANOTA sobre la fila que quedó (AUD-543, #232)"
 
 
 # ── #430 · la prosa del triage se pierde en silencio ────────────────────────────────────────────
@@ -670,7 +680,8 @@ def _fanout_condiciones(toy_vault, nota: Path, condiciones: dict, ronda="r1"):
         (d / f"{bib}.json").write_text(json.dumps({"bibcode": bib, "pares": ps}), encoding="utf-8")
     (d / "_esperado.json").write_text(json.dumps(
         {"nota": nota.as_posix(), "fuentes": {b: len(ps) for b, ps in por_bib.items()},
-         "pares": len(pares)}), encoding="utf-8")
+         "pares": len(pares),
+         "anclas": {b: [x["ancla"] for x in ps] for b, ps in por_bib.items()}}), encoding="utf-8")
     return d
 
 
@@ -812,7 +823,7 @@ def test_from_acepta_VARIAS_rondas_y_encadena(toy_vault):
     Encadenar en memoria da byte a byte lo mismo que las N corridas sucesivas."""
     nota = _escena(toy_vault)
     r1 = _fanout(toy_vault, nota, {"2020Pdf": "no-soportada"}, ronda="r1")
-    r2 = _fanout(toy_vault, nota, {"2020Pdf": "corregida"}, ronda="r2")
+    r2 = _fanout(toy_vault, nota, {"2020Pdf": "soportada"}, ronda="r2")
     ws.write(nota, r1, fecha="2026-03-01")
     ws.write(nota, r2, fecha="2026-03-02")
     serial = (nota.read_text(encoding="utf-8"), cfg.verif_sidecar(nota).read_text(encoding="utf-8"))
@@ -1282,3 +1293,124 @@ def test_refutar_extraccion_ANOTA_add_only_idempotente_y_rehusa_lo_que_no_se_ref
     assert ws.main(["no-existe.md", "--refutar-extraccion", ancla]) == 2
     assert ws.main(["--refutar-extraccion", ancla]) == 2
     assert ws.main([str(nota.with_suffix("")) + ".verif.md", "--refutar-extraccion", ancla]) == 2
+
+
+# ── G2 · auditoría 2026-09-27 · la cadena de verificación ───────────────────────────────────────
+
+@pytest.mark.parametrize("linea", [
+    "> Nota del agente: el par 3 se re-verificó a mano contra la p. 7.",
+    "| decisión | la fila 4 queda como disputa |",
+    "### Observaciones: el par 2 depende de la tabla 3",
+])
+def test_AUD493_la_prosa_que_empieza_con_marca_de_bloque_tambien_REHUSA(toy_vault, linea):
+    """AUD-493 — `_lost_prose` salteaba toda línea que empezara con `#`, `>` o `|` suponiendo que
+    eran el encabezado, el puntero y la tabla; la tabla vive en el hermano (#344) y el puntero es
+    una línea conocida, así que un blockquote, una fila o un sub-encabezado escritos a mano se
+    borraban sin rehusar (INV-162)."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    _con_triage(nota, "Omisiones en transcripciones: " + ws.PENDIENTE,
+                "Omisiones en transcripciones: " + ws.PENDIENTE + "\n\n" + linea)
+    antes = nota.read_bytes()
+    with pytest.raises(ws.SidecarError, match="se perdería"):
+        ws.write(nota, d, fecha="2026-03-01")
+    assert nota.read_bytes() == antes, "rehusó y NO escribió"
+
+
+def test_AUD494_el_ancla_REPETIDA_con_el_conteo_justo_no_pasa_la_barrera(toy_vault):
+    """AUD-494 — un JSON que trae la CANTIDAD de pares del plan con un ancla repetida (juzgó un par
+    dos veces y otro nunca) pasaba la barrera, y el escritor armaba el hermano sin ese par
+    diciendo `juzgadas` = todos. Las anclas se cruzan contra las del plan."""
+    nota = _escena(toy_vault, CUERPO + "\nEl período se confirma en 34.4 días [[2020Pdf]].\n")
+    d = _fanout(toy_vault, nota, {})
+    f = d / "2020Pdf.json"
+    data = json.loads(f.read_text(encoding="utf-8"))
+    assert len(data["pares"]) == 2
+    data["pares"][1]["ancla"] = data["pares"][0]["ancla"]
+    f.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ws.SidecarError, match="ancla"):
+        ws.write(nota, d, fecha="2026-03-01")
+    assert not cfg.verif_sidecar(nota).exists()
+
+
+@pytest.mark.parametrize("contenido", ["{}", "null", "[1]", '{"nota": "x.md"}'])
+def test_AUD495_el_manifiesto_VACIO_o_MAL_FORMADO_no_es_un_verde(toy_vault, contenido):
+    """AUD-495 — `_esperado.json` = `{}` salía ✅ sin aviso (la rama `if not manifest` lo leía como
+    «el plan se cumplió») y `[1]` reventaba con `AttributeError`. Un plan presente que no se deja
+    leer como plan no se cumple: se rehúsa nombrándolo."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    (d / "2019Txt.json").unlink()
+    (d / check_verify_fanout.MANIFEST).write_text(contenido, encoding="utf-8")
+    with pytest.raises(ws.SidecarError, match="_esperado"):
+        ws.write(nota, d, fecha="2026-03-01")
+
+
+def test_AUD506_restamp_dry_run_NO_cuenta_como_cambiada_la_nota_en_sincronia(toy_vault):
+    """AUD-506 — `"cambio": dry_run or …` anunciaba «se re-estamparía» sobre toda nota con hermano.
+    El preview dice lo que la corrida real haría: nada, sobre una nota ya en sincronía."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}), fecha="2026-03-01")
+    assert ws.restamp_section(nota)["cambio"] is False, "el fixture: ya en sincronía"
+    assert ws.restamp_section(nota, dry_run=True)["cambio"] is False
+    resumen = lb.verif_summary(lb.verif_rows(nota))
+    nota.write_text(nota.read_text(encoding="utf-8").replace(resumen, "0 pares"), encoding="utf-8")
+    antes = nota.read_bytes()
+    assert ws.restamp_section(nota, dry_run=True)["cambio"] is True, "y el que sí cambia, lo dice"
+    assert nota.read_bytes() == antes, "sin escribir"
+
+
+def test_AUD534_sin_argumentos_el_mensaje_nombra_TODOS_los_modos(capsys):
+    """AUD-534 — el mensaje nombraba 2 de los modos."""
+    assert ws.main([]) == 2
+    out = capsys.readouterr().out
+    for modo in ("--from", "--restamp-section", "--reanclar", "--resolver", "--resoluciones",
+                 "--migrate-condition-prefix", "--migrate-verdict-chain", "--refutar-extraccion"):
+        assert modo in out, (modo, out)
+
+
+def test_AUD543_la_ronda_acotada_NO_pierde_el_contradice_y_la_siguiente_ANOTA(toy_vault):
+    """AUD-543 — una fila `contradice` sobre un bloque corregido no se lleva a la afirmación nueva
+    (#539), pero la ronda acotada que no la juzgó la BORRABA: el hermano decía «0 contradicen» y la
+    ronda siguiente escribía `soportada` pelado en vez de `contradice→corregida` (#232). La fila
+    queda con SU ancla (vencida por edición, que es verdad) hasta que una ronda la juzgue."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {"2020Pdf": "contradice"}, ronda="r1"), fecha="2026-03-01")
+    ancla_vieja = next(f.anchor for f in lb.verif_rows(nota) if f.bibcode == "2020Pdf")
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "El período es de 34.5 días [[2020Pdf]].", "El período es de 34.6 días [[2020Pdf]]."),
+        encoding="utf-8")
+    ws.write(nota, _acotar(_fanout(toy_vault, nota, {}, ronda="r2"), "2020Pdf"), fecha="2026-03-02")
+    filas = {f.bibcode: f for f in lb.verif_rows(nota)}
+    assert filas["2020Pdf"].verdict == "contradice" and filas["2020Pdf"].anchor == ancla_vieja
+    assert any("2020Pdf" in m and "por edición" in m
+               for _s, m in lint.collect().por_clave("stale_pairs").items)
+    ws.write(nota, _fanout(toy_vault, nota, {}, ronda="r3"), fecha="2026-03-03")
+    filas = {f.bibcode: f for f in lb.verif_rows(nota)}
+    assert filas["2020Pdf"].verdict == "contradice→corregida", filas["2020Pdf"].verdict
+    assert len(lb.verif_rows(nota)) == 2, "la fila vieja se consumió: no quedan dos"
+
+
+def test_AUD546_el_rehuse_de_resolver_NO_manda_a_editar_a_mano(toy_vault):
+    """AUD-546 — el mensaje mandaba «editá el hermano a mano», justo lo que el skill prohíbe (#427)."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota"),
+             fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    ws.resolve_conditions(nota, {ancla: "fila A"})
+    with pytest.raises(ws.SidecarError) as exc:
+        ws.resolve_conditions(nota, {ancla: "fila B"})
+    assert "editá el hermano a mano" not in str(exc.value) and "ya declara" in str(exc.value)
+
+
+@pytest.mark.parametrize("veredicto", ["no verificable por extracción", "parcial", "soportada?"])
+def test_AUD480_la_barrera_RECHAZA_el_veredicto_fuera_del_vocabulario_del_fanout(toy_vault, veredicto):
+    """AUD-480 — la barrera validaba la forma y nunca el valor: `no verificable por extracción`
+    (que el juez no puede producir, #223) o un typo pasaban y llegaban a la celda."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {"2020Pdf": veredicto})
+    errs = check_verify_fanout.check_dir(d)[1]
+    assert any("2020Pdf.json" in e and "veredicto" in e for e in errs), errs
+    with pytest.raises(ws.SidecarError, match="veredicto"):
+        ws.write(nota, d, fecha="2026-03-01")

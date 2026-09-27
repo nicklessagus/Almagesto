@@ -27,6 +27,7 @@ SKILL = RAIZ / ".claude" / "skills" / "verify-citations" / "SKILL.md"
 def _ok(**cambios) -> dict:
     par = {k: "x" for k in lb.VERIF_FANOUT_SCHEMA["par"]}
     par.update({k: "" for k in lb.VERIF_FANOUT_SCHEMA["par_opt"]})
+    par["veredicto"] = "soportada"          # AUD-480: la barrera mira también el valor
     datos = {"bibcode": "2020ApJ...900....1A", "pares": [par]}
     datos.update(cambios)
     return datos
@@ -164,3 +165,39 @@ def test_la_barrera_lee_el_alcance_y_no_pide_lo_que_quedo_afuera(tmp_path, capsy
     # un manifiesto que declara alcance pero NO el total de la nota no puede decir cuántos quedan
     # afuera: se lee como completa en vez de inventar un «fuera» sin denominador (D-43)
     assert "ronda completa" in cvf.scope_line({"pares": 3, "alcance": {"modo": "fuentes"}}, {})
+
+
+# ── G2 · auditoría 2026-09-27 ────────────────────────────────────────────────
+
+@pytest.mark.parametrize("contenido", ["{}", "null", "[1]", '{"nota": "x.md"}'])
+def test_AUD495_un_plan_VACIO_o_que_no_es_plan_se_RECHAZA(tmp_path, contenido):
+    """AUD-495 — `{}` salía ✅ sin contar nada y `[1]` reventaba con `AttributeError`."""
+    d = _dir_con(tmp_path, **{"2020ApJ...900....1A": _ok()})
+    (d / cvf.MANIFEST).write_text(contenido, encoding="utf-8")
+    _, errs = cvf.plan_errors(d, cvf.check_dir(d)[0])
+    assert any(cvf.MANIFEST in e for e in errs), errs
+
+
+def test_AUD494_las_anclas_se_cruzan_contra_el_plan_como_MULTICONJUNTO(tmp_path):
+    """AUD-494 — el conteo justo con un ancla repetida pasaba; dos pares con la misma ancla que el
+    plan TAMBIÉN manda dos veces (bloques idénticos) no es un hallazgo."""
+    datos = _ok()
+    par = datos["pares"][0]
+    datos["pares"] = [dict(par, ancla="a" * 10), dict(par, ancla="a" * 10)]
+    d = _dir_con(tmp_path, **{"2020ApJ...900....1A": datos})
+    plan = {"nota": "x.md", "fuentes": {"2020ApJ...900....1A": 2}, "pares": 2,
+            "anclas": {"2020ApJ...900....1A": ["a" * 10, "b" * 10]}}
+    (d / cvf.MANIFEST).write_text(json.dumps(plan), encoding="utf-8")
+    _, errs = cvf.plan_errors(d, cvf.check_dir(d)[0])
+    assert any("repetidas" in e and "faltan: " + "b" * 10 in e for e in errs), errs
+    plan["anclas"]["2020ApJ...900....1A"] = ["a" * 10, "a" * 10]
+    (d / cvf.MANIFEST).write_text(json.dumps(plan), encoding="utf-8")
+    assert cvf.plan_errors(d, cvf.check_dir(d)[0])[1] == []
+
+
+def test_AUD480_el_veredicto_fuera_del_vocabulario_no_pasa_la_barrera(tmp_path):
+    """AUD-480 — la barrera miraba presencia y forma, nunca el valor."""
+    datos = _ok()
+    datos["pares"][0]["veredicto"] = "parcial"
+    pares, errs = cvf.check_dir(_dir_con(tmp_path, **{"2020ApJ...900....1A": datos}))
+    assert pares == {} and any("parcial" in e and "veredicto" in e for e in errs), errs
