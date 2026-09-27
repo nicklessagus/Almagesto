@@ -813,7 +813,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   y `contrast --validar` por la misma función, `lib_quotes.abstract_source`).
 - **La vista REFUTA un reclamo que sigue en el frontmatter** (#212): se leyó y el resultado dice
   que el reclamo es falso; la salida es el `--drop-core` que el cosechador imprime, no aflojar el
-  add-only.
+  add-only. **El firmado sale de la deuda (#543):** `--drop-core` deja el reclamo en `stars` a
+  propósito (#116), así que el lint cruza la firma en `decisiones` del sujeto —nombre → slug, como
+  `proposals` (#435)— y lista el par aparte (`reclamo_refutado_firmado`, *«visible, no es deuda»*).
 - **Extraído pero no sintetizado** (#75): paper con `methods` poblado cuyo bibcode no aparece
   citado en ninguna ficha ni concepto — la extracción nunca llegó a la síntesis, y es el único paso
   salteable sin otro rastro (su modo de falla es omisión; `verify-citations` no lo ve: valida cada

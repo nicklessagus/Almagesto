@@ -5302,6 +5302,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
     reclamo_sin_vista: list = []
     reclamo_sin_vista_declarado: list = []
     reclamo_refutado: list = []
+    reclamo_refutado_firmado: list = []
     doc_en_disco: list = []
     vista_fecha_no_str: list = []
     # aplicación NO es contraste sino instanciación, y leerlo como desacuerdo fabrica
@@ -5472,12 +5473,21 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # merge de `harvest_views` es add-only a propósito, así que el reclamo sembrado es
         # infalsificable por la lectura. Backlog: sacar el paper del sujeto es decisión del
         # usuario —puede ser core de OTRO— y el roll-up del concepto lo sigue listando
-        # mientras tanto.
+        # mientras tanto. #543: la firma es el `--drop-core` en `decisiones` del sujeto (el
+        # reclamo se queda a propósito, #116) — sin cruzarla, la deuda no se cerraba nunca. Se
+        # cruza como en `proposals` (#435) y el par firmado se lista aparte (AUD-207).
+        import proposals as _pr          # import local, como `make_notes` abajo
         _reclamados = {str(x).strip() for x in
                        cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))}
         for v in vistas:
             for suj in cfg.as_list(v.get("refuta")):
                 if str(suj).strip() in _reclamados:
+                    _s = cfg.subject_slug(str(suj))
+                    if _s and (_firma := _pr.dropped_signature(_s, stem)):
+                        reclamo_refutado_firmado.append(
+                            (stem, f"la vista de **{v.get('sujeto')}** refuta **{suj}** y "
+                                   f"`--drop-core` ya lo sacó de `{_s}`: {_firma}"))
+                        continue
                     reclamo_refutado.append(
                         (stem, f"la vista de **{v.get('sujeto')}** REFUTA el reclamo de "
                                f"**{suj}**, que sigue en el frontmatter: el roll-up lo va a "
@@ -5554,7 +5564,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                     reclamo_sin_vista.append(
                         (stem, f"lo reclama **{sujeto}** y nadie lo leyó desde ahí → hacer "
                                f"la vista, o declararla con `no_vista` y su motivo"))
-    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado, doc_en_disco, vista_fecha_no_str
+    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado, reclamo_refutado_firmado, doc_en_disco, vista_fecha_no_str
 
 
 def check_impl_leaks(stem: str, body_full: str, offset: int, leak_patterns, scan: bool) -> list:
@@ -6663,6 +6673,7 @@ def check_paper_note(stem: str, f: str, fm: dict, text: str, body_full: str, swe
                            "vista_sin_fecha", "vista_sin_fuente", "vista_sin_fuente_en_disco",
                            "vista_solo_abstract", "vista_con_plantilla", "vista_ejes_faltantes",
                            "reclamo_sin_vista", "reclamo_sin_vista_declarado", "reclamo_refutado",
+                           "reclamo_refutado_firmado",
                            "doc_en_disco", "vista_fecha_no_str"),
                           check_paper_views(stem, fm, text, _no_vista, _nv_error,
                                             sweep.theme_index, sweep.themes_by_subject)):
@@ -7255,6 +7266,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('vista_fecha_no_str', 'Vista con `fecha` sin comillas: YAML la lee como fecha y no como str, y toda comparación la deja afuera (#481, backlog)', SEV_BACKLOG, tuple(found['vista_fecha_no_str']), poblacion='papers'),
         Categoria('doc_en_disco', '💿 La prosa afirma QUÉ DOCUMENTO hay en disco y sus testigos la desmienten (#449, backlog)', SEV_BACKLOG, tuple(found['doc_en_disco']), poblacion='papers'),
         Categoria('reclamo_refutado', '↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog)', SEV_BACKLOG, tuple(found['reclamo_refutado']), poblacion='papers'),
+        Categoria('reclamo_refutado_firmado', 'Reclamo refutado y ya FIRMADO con `--drop-core` (#543: visible, no es deuda)', SEV_BACKLOG, tuple(found['reclamo_refutado_firmado']), poblacion='papers'),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(found['reclamo_sin_vista_declarado']), poblacion='papers'),
         Categoria('vista_ejes_faltantes', '🎯 La vista no contesta los ejes de su propia lente: el silencio se lee como «se miró y no hay nada» (#254/#270, backlog)', SEV_BACKLOG, tuple(found['vista_ejes_faltantes']), poblacion='papers'),
         Categoria('gt_prosa', '🪞 La prosa afirma sobre la autoridad algo que su ground-truth desmiente (#278, backlog)', SEV_BACKLOG, tuple(found['gt_prosa']), poblacion='ground_truth'),

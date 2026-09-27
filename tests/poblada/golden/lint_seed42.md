@@ -511,6 +511,9 @@
 ## ↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog) (0)
 > sobre 60 notas de `papers/`
 
+## Reclamo refutado y ya FIRMADO con `--drop-core` (#543: visible, no es deuda) (0)
+> sobre 60 notas de `papers/`
+
 ## Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda) (0)
 > sobre 60 notas de `papers/`
 

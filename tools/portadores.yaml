@@ -561,13 +561,19 @@ portadores:
       sin ella, `refuta: ["GJ 581"]` no encontraba la decisión firmada en `gj_581.yaml` y la
       propuesta quedaba pendiente para siempre (medido: 60 de 62 permanentes).
     funcion: lib_config.subject_slug
-    patron: 'subject_slug|dropped_from_subject'
+    patron: 'subject_slug|dropped_from_subject|get\("refuta"\)'
     consumidores:
       - modulo: scripts/proposals.py
         estado: usa
         motivo: >-
           `refutations` resuelve el nombre del reclamo a slug y recién entonces lee el carril
           `sujeto` (`dropped_signature` → `cfg.dropped_from_subject`).
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          #543 — `reclamo_refutado` cruza la firma con `proposals.dropped_signature`; el patrón
+          viejo matcheaba a quien YA cruzaba, así que el lint (que lee `refuta` y no cruzaba)
+          nunca apareció.
       - modulo: scripts/contrast.py
         estado: fuera-de-alcance
         motivo: >-
@@ -586,7 +592,10 @@ portadores:
         estado: fuera-de-alcance
         motivo: >-
           `split_subject_slugs` matchea por el nombre de la función y hace lo contrario: parte los
-          valores declarados de UN slug conocido; no resuelve un nombre ni lee `decisiones`.
+          valores declarados de UN slug conocido; no resuelve un nombre ni lee `decisiones`. Su
+          `get("refuta")` lee el JSON de la extracción en el momento de cosechar: registra el
+          campo e imprime la propuesta una vez; las superficies persistentes son `proposals` y
+          el lint.
   - issue: 435
     regla: >-
       El `alcance` vigente de una fuente larga tiene UNA autoridad (#312) repartida en dos legs

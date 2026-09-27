@@ -5450,6 +5450,28 @@ def test_refuta_de_un_sujeto_que_ya_no_reclama_no_es_hallazgo(toy_vault, capsys)
     assert "2012MNRAS.421..666G" not in _seccion(rep, "REFUTA un reclamo")
 
 
+def test_refuta_FIRMADO_con_drop_core_sale_de_la_deuda(toy_vault, capsys):
+    """#543 — `--drop-core` deja el reclamo en `stars` a propósito (#116), así que el lint, que sólo
+    miraba el frontmatter, pedía para siempre el comando que ya se había corrido. La firma vive en
+    `decisiones` del registro por SLUG y el reclamo lleva el NOMBRE: se cruza como en `proposals`
+    (#435) y el par firmado se lista aparte (AUD-207), con su motivo."""
+    mk_note(cfg.PAPERS, "2023A&A...674A..10H",
+            {"bibcode": "2023A&A...674A..10H", "tags": ["paper"], "stars": ["HD 41248"],
+             "vistas": [{"sujeto": "HD 41248", "tipo": "star", "fecha": "2026-09-25",
+                         "fuente": "pdf", "refuta": ["HD 41248"]}]},
+            "# 2023A&A...674A..10H\n\n## Vista — HD 41248\nNo habla de la estrella.\n")
+    link_from_log(toy_vault, "2023A&A...674A..10H")
+    (cfg.CONFIG / "stars.yaml").write_text("HD 41248:\n  slug: hd_41248\n", encoding="utf-8")
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("hd_41248").write_text(
+        "decisiones:\n  2023A&A...674A..10H:\n    decision: descartado\n    origen: sujeto\n"
+        "    motivo: polisemia del nombre\n    fecha: '2026-09-25'\n", encoding="utf-8")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2023A&A...674A..10H" not in _seccion(rep, "REFUTA un reclamo"), "firmado: no es deuda"
+    firm = _seccion(rep, "ya FIRMADO")
+    assert "2023A&A...674A..10H" in firm and "polisemia" in firm, "visible y aparte, con el motivo"
+
+
 def test_no_verificable_no_tiene_archivo_que_declarar(toy_vault, capsys):
     """#223 — `no verificable por extracción` es propiedad de la FUENTE: la nota de paper no tiene
     PDF ni `.txt` en disco (un `fuente: abstract` de #207, o un paper cuyos artefactos borró
@@ -10079,7 +10101,7 @@ def test_check_paper_views_no_pide_lo_que_no_se_puede_evaluar(toy_vault):
     def _v(fm, text="", nv=None, ti=None, tps=None):
         return lint.check_paper_views("2020X", fm, text, nv or {}, None, ti or {}, tps or {})
 
-    assert _v({}) == ([],) * 14, "una nota sin `vistas[]` ni reclamos no dispara nada"
+    assert _v({}) == ([],) * 15, "una nota sin `vistas[]` ni reclamos no dispara nada"
 
     # (a) ejes: sin lente o sin fecha no se compara; con el tema sin `ejes:` es NO EVALUABLE
     sin_fecha = {"vistas": [{"sujeto": "ica", "tipo": "theme", "lente": ["rv"]}],
