@@ -111,23 +111,7 @@ def _lines_with_section(body: str) -> list:
     return out
 
 
-def _entity_slug(path: str) -> str | None:
-    """The subject slug this entity note belongs to, or `None` if it is not one (#233).
-
-    A star note is named after its slug; a concept is named after the `concept` its theme declares,
-    which is **not** the slug — hence the lookup through `themes.yaml` instead of the filename.
-    Returns `None` for papers, queries and matrices: those carry no state line."""
-    nombre = Path(path).stem
-    if path.startswith(str(cfg.STARS)):
-        return nombre
-    if not path.startswith(str(cfg.CONCEPTS)):
-        return None
-    if cfg.themes_error():
-        return None
-    for slug_t, meta in (cfg.load_themes() or {}).items():
-        if str(cfg.as_map(meta).get("concept") or slug_t) == nombre:
-            return slug_t
-    return None
+_entity_slug = cfg.entity_slug                  # ONE definition (#550)
 # @inv INV-02
 # ⛔ Exige que después del target venga un delimitador (`]`, `|` o `#`) y **corta en el salto de
 # línea**. Sin eso, un `[[` sin cerrar se tragaba el link SIGUIENTE: medido el 2026-08-28,

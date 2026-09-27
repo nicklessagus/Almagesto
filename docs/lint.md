@@ -1096,7 +1096,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   puede derivar, y sin ella `estado_line` la omite **en silencio** —y `estado_desfasado` compara
   contra esa misma línea, así que no discrepaba nunca—. Medido sobre una bóveda real: 3 de 10
   sujetos (31, 33 y 26 sintetizados). Se cierra con `python scripts/triage.py <slug> --sintesis
-  --n-papers <N>` + `make_notes.py <slug>`.
+  --n-papers <N>`, que desde #550 estampa la línea en la ficha si ya existe (igual que
+  `write_verif_sidecar` estampa la fecha de verificación al escribir el bloque).
 - **Tema de MÉTODO sin `search_fq`** (#351): un tema que declara `facet:` propia es, por D-26, un
   tema de método; si no declara `search_fq` hereda el del objetivo —`database:astronomy` en una
   bóveda astro—, que acota el universo **server-side, antes de traer nada**, y ninguna `facet:`

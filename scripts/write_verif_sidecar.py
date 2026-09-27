@@ -567,6 +567,12 @@ def emit(note: Path, text: str, rows: list, fecha: str, *, dry_run: bool = False
     if hermano is not None:
         cfg.write_text_atomic(cfg.verif_sidecar(note), hermano)
     cfg.write_text_atomic(note, nuevo)
+    # #550 — the verification date of `> _Estado — …_` is read from THIS section, so the step that
+    # writes it re-stamps the line; before, it waited for a `make_notes` nobody ran after verify.
+    if (slug := cfg.entity_slug(note)):
+        import make_notes                # noqa: E402 — heavy, and only the writing path needs it
+        make_notes.stamp_estado(slug, note)
+        nuevo = note.read_text(encoding="utf-8")
     return nuevo
 
 

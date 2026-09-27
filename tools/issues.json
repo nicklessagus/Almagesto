@@ -2719,21 +2719,61 @@
   {
    "number": 546,
    "title": "Una lectura nueva que declara «la fuente no tiene conclusiones» no avisa si la nota ya publica `## Conclusiones` de una lectura vieja (#538 cubrió sólo hacia adelante)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 547,
    "title": "Dos filas de tabla idénticas comparten ancla: `apply_fixes` rehúsa con un mensaje que culpa a un fragmento sub-línea",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 548,
    "title": "Dos mensajes que confunden: el bibcode de ejemplo del fence de verify se lee como error, e `ingest_star` imprime «Sin PDF» antes de bajar",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 549,
    "title": "El aviso de reuso sin chequear versión (#297) no cruza `acepta_preprint` y re-cuenta los bibcodes ya publicados de #298: 27 de 31 son pregunta contestada",
+   "state": "CLOSED"
+  },
+  {
+   "number": 550,
+   "title": "`write_verif_sidecar` no re-estampa la línea `_Estado_`: la fecha de verificación falta tras el verify y `lint --cierre` no lo frena (familia de #523)",
+   "state": "OPEN"
+  },
+  {
+   "number": 551,
+   "title": "`## Métodos aplicados`: el encabezado cuenta aplicaciones como pares crudos (grafía, paper) y la columna como papers distintos (316 vs 314)",
+   "state": "OPEN"
+  },
+  {
+   "number": 552,
+   "title": "`## Excluidos por el filtro` rotula como «traídos» el `n_total` acumulado del registro",
+   "state": "OPEN"
+  },
+  {
+   "number": 553,
+   "title": "`no_sintetizado` es escalar por nota: en un paper compartido el motivo de un sujeto rige para todos, y el roll-up no lo muestra como declarado",
+   "state": "OPEN"
+  },
+  {
+   "number": 554,
+   "title": "`reverify_subset` propone re-anclar una corrección que cambia a qué objeto se atribuye la afirmación (score 0,938), y un juez ciego la aprobó",
+   "state": "OPEN"
+  },
+  {
+   "number": 555,
+   "title": "Ningún paso de cierre compara la paráfrasis de la ficha contra la vista de la nota del paper: 3 de 5 errores de una auditoría nacieron al sintetizar",
+   "state": "OPEN"
+  },
+  {
+   "number": 556,
+   "title": "Agregaciones sin marca `inferencia` en la prosa de la síntesis: el preflight de #490 sólo mira líneas agregadas por un corrector",
+   "state": "OPEN"
+  },
+  {
+   "number": 557,
+   "title": "Una nota de paper puede afirmar dos cosas incompatibles sobre el mismo localizador, y la síntesis copia la equivocada",
    "state": "OPEN"
   }
  ]

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.362.1"
+ALMAGESTO_VERSION = "1.362.2"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1922,6 +1922,33 @@ def subject_kinds(slug: str) -> tuple[str, ...]:
             continue
         kinds.append(kind)
     return tuple(kinds)
+
+
+def entity_slug(path) -> str | None:
+    """The subject slug this entity note belongs to, or `None` if it is not one (#233).
+
+    A star note is named after its slug; a concept is named after the `concept` its theme declares,
+    which is **not** the slug — hence the lookup through `themes.yaml` instead of the filename.
+    Returns `None` for papers, queries and matrices: those carry no state line.
+    Lives here since #550: `write_verif_sidecar` re-stamps the state line too."""
+    p = Path(path).resolve()                 # a CLI hands a relative path; the lint an absolute one
+    nombre = p.stem
+    if STARS.resolve() in p.parents:
+        return nombre
+    if CONCEPTS.resolve() not in p.parents:
+        return None
+    if themes_error():
+        return None
+    for slug_t, meta in (load_themes() or {}).items():
+        if str(as_map(meta).get("concept") or slug_t) == nombre:
+            return slug_t
+    return None
+
+
+def entity_note(slug: str) -> Path | None:
+    """The star or concept note of `slug`, found through `entity_slug` (its inverse), or `None`."""
+    return next((p for p in [*note_paths(STARS), *note_paths(CONCEPTS, "*/*.md")]
+                 if entity_slug(p) == slug), None)
 
 
 def make_notes_cmd(slug: str) -> str:

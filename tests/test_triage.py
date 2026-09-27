@@ -1087,6 +1087,19 @@ def test_el_proximo_paso_de_la_sintesis_NO_lleva_theme_en_una_ESTRELLA(toy_vault
     assert "`python scripts/make_notes.py test_star`" in out and "--theme" not in out
 
 
+def test_550_la_sintesis_se_ESTAMPA_en_la_ficha_que_existe(toy_vault, monkeypatch, capsys):
+    """#550 — el paso que declara la fecha la estampa: imprimir el comando dejaba la cabecera sin
+    ella cada vez que nadie lo corría (la familia de la fecha de verificación)."""
+    nota = cfg.STARS / "test_star.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text(f"---\ntags: [star]\n---\n\n{cfg.GENERATOR_LINE}9.9.9._\n\n# X\n",
+                    encoding="utf-8")
+    assert run_main(monkeypatch, ["test_star", "--sintesis", "--n-papers", "3"]) == 0
+    estado = [l for l in nota.read_text(encoding="utf-8").split("\n") if l.startswith("> _Estado")]
+    assert len(estado) == 1 and "síntesis " in estado[0] and "(3 papers)" in estado[0], estado
+    assert "estampada en `test_star.md`" in capsys.readouterr().out
+
+
 # ── #353 (T5b) · `--promote-source`: la fuente declarada que tenía bibcode ADS ──────────────────
 
 def _fuente_off_ads(toy_vault):

@@ -872,7 +872,14 @@ def main() -> int:
                          # culpa a `stars.yaml` de un slug bien definido en `themes.yaml`. Este
                          # script es el ÚNICO canal de la fecha de síntesis (INV-82), así que el
                          # hallazgo del lint sólo se podía cerrar sabiendo agregar el flag a mano.
-                         + f"\n  Estampala en la ficha: `{cfg.make_notes_cmd(args.slug)}`")
+                         )
+        # #550 — the same step that declares the date stamps it; printing the command left the
+        # header without it whenever nobody ran it (#331 was the command being wrong, too).
+        if (dest := cfg.entity_note(args.slug)) is not None:
+            make_notes.stamp_estado(args.slug, dest)
+            cfg.print_seguro(f"  estampada en `{dest.name}`")
+        else:
+            cfg.print_seguro(f"  (sin ficha todavía: la estampa `{cfg.make_notes_cmd(args.slug)}`)")
         return 0
 
     if args.extraccion:

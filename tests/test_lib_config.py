@@ -4149,3 +4149,27 @@ def test_AUD541_solo_abstract_sin_motivo_REAL_no_abre_la_escotilla():
     for valor in (True, "<motivo>", "  ", None, False):
         assert cfg.solo_abstract_motivo({"solo_abstract": valor}) == "", valor
     assert cfg.solo_abstract_motivo({"solo_abstract": " resumen de congreso "}) == "resumen de congreso"
+
+
+def test_550_entity_slug_y_entity_note_son_inversas(toy_vault):
+    """#550 — `write_verif_sidecar` y `triage --sintesis` estampan la línea `_Estado_`: necesitan
+    ir de la nota al slug y del slug a la nota. Un path RELATIVO (el que da un CLI) también vale."""
+    import os
+    nota = cfg.STARS / "estrella.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [star]\n---\n", encoding="utf-8")
+    cfg.verif_sidecar(nota).write_text("x\n", encoding="utf-8")
+    assert cfg.entity_slug(nota) == "estrella"
+    assert cfg.entity_slug(os.path.relpath(nota)) == "estrella", "relativo"
+    assert cfg.entity_slug(cfg.PAPERS / "x.md") is None, "un paper no tiene línea de estado"
+    assert cfg.entity_note("estrella") == nota and cfg.entity_note("otra") is None
+    # un concepto se nombra por su `concept`, que NO es el slug del tema
+    write_yaml(toy_vault.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods",
+                                               "concept": "ica-concepto"}})
+    concepto = mk_note(cfg.CONCEPTS / "methods", "ica-concepto", {"tags": ["methods"]}, "x")
+    suelto = mk_note(cfg.CONCEPTS / "methods", "otro", {"tags": ["methods"]}, "x")
+    assert cfg.entity_slug(concepto) == "ica" and cfg.entity_slug(suelto) is None
+    assert cfg.entity_note("ica") == concepto
+    assert cfg.entity_slug(cfg.PAPERS / "ica-concepto.md") is None, "fuera de concepts/ no es concepto"
+    toy_vault.THEMES_YAML.write_text("ica: [roto\n", encoding="utf-8")
+    assert cfg.entity_slug(concepto) is None, "con themes.yaml ilegible no se adivina"

@@ -1429,3 +1429,17 @@ def test_AUD535_fecha_en_un_modo_que_no_la_honra_REHUSA(toy_vault, capsys, modo)
         ws.main(modo + ["--fecha", "2026-03-01"])
     assert e.value.code == 2
     assert "--fecha" in capsys.readouterr().err
+
+
+def test_550_el_verify_re_estampa_la_linea_de_estado_con_su_fecha(toy_vault):
+    """#550 — la fecha de verificación de `> _Estado — …_` sale de la sección que escribe ESTE paso,
+    y se estampaba sólo si alguien corría `make_notes` después: dos fichas cerraron `lint --cierre`
+    en 0 con la línea sin la tercera fecha. El escritor re-estampa; un path relativo también vale."""
+    _escena(toy_vault)
+    cuerpo = ("\n> ⚠ **Capa LLM — revisar antes de citar.**\n"
+              f"{cfg.GENERATOR_LINE}9.9.9._\n\n" + CUERPO)
+    nota = mk_note(cfg.STARS, "estrella", {"tags": ["star"]}, cuerpo)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    estado = [l for l in nota.read_text(encoding="utf-8").split("\n") if l.startswith("> _Estado")]
+    assert len(estado) == 1 and "verificación 2026-03-01" in estado[0], estado
