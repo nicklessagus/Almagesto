@@ -792,3 +792,17 @@ def test_el_txt_bajo_OTRO_slug_si_es_indice_y_los_greps_apuntan_ahi(toy_vault):
     # y sin copia en NINGÚN lado la ruta sigue siendo la del sujeto: es donde `extract_fulltext`
     # la escribiría, y ahí el «no hay índice» es verdad
     assert "NO HAY ÍNDICE" in ep.build_prompt("test_star", "2020SinPDF", "Estrella Test", ["HD 12345"])
+
+
+def test_paper_CORTO_sin_seccion_de_conclusiones_deja_los_campos_vacios(toy_vault):
+    """#277 — the exemption covered only the long document (`unidad_cita: pagina`); a short paper
+    closing with «Discussion» fell outside it and the extractor transcribed the Discussion instead.
+    The rule reaches every paper: both fields empty, the closing section named in `salvedades`."""
+    from conftest import mk_note
+    mk_note(toy_vault.PAPERS, "2020corto", {"bibcode": "2020corto", "tags": ["paper"],
+                                      "thesis_links": ["ica"]}, "# t\n")
+    plano = " ".join(ep.build_prompt("ica", "2020corto", "ica", ["ICA"], kind="theme").split())
+    assert "no tiene una sección de conclusiones" in plano
+    assert "dejá `conclusiones` y `conclusiones_es` vacíos" in plano
+    assert "decí en `salvedades` qué sección cierra el paper" in plano
+    assert "No transcribas la Discusión" in plano

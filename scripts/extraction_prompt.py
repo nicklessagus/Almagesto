@@ -576,10 +576,12 @@ la nota no la tiene** — pasa en fuentes off-ADS viejas, y el texto lo tenés a
 abriste el PDF;
 `conclusiones` es la transcripción de las conclusiones del paper y `conclusiones_es` su traducción.
 Son lo que el paper afirma **sin lente**, así que sirven para leerlo "en chico" sin abrir el PDF y
-para que otro sujeto lo lea después sin re-abrirlo. ⚠ Si el `.txt`/PDF es un **documento largo**
-(`unidad_cita: pagina` en el frontmatter: un libro, un handbook) **dejá `conclusiones` vacío** — no
-tiene esa sección y transcribir algo que no existe fabrica contenido. Vacío = no consta; el
-cosechador no crea la sección.
+para que otro sujeto lo lea después sin re-abrirlo. ⚠ Si el paper **no tiene una sección de
+conclusiones** —un documento largo (`unidad_cita: pagina`), una Letter que termina en la discusión,
+un paper que cierra con «Discussion»— **dejá `conclusiones` y `conclusiones_es` vacíos** y decí en
+`salvedades` qué sección cierra el paper. No transcribas la Discusión ni los párrafos finales en
+su lugar: transcribir una sección que no existe fabrica contenido. Vacío = no consta; el cosechador
+no crea la sección, y la nota lo declara con `sin_conclusiones` (#277).
 ⛔ Y la regla de uso: **son ayuda de lectura, nunca fuente de la que citar.** Si citás, citás del
 original con su página.
 
