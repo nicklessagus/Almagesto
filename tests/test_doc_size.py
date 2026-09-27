@@ -209,8 +209,15 @@ MEDIDO_RE = re.compile(r"\bMedido\b|\bmedido el\b")
 
 
 def _medido_en_skills() -> int:
-    return sum(len(MEDIDO_RE.findall(p.read_text(encoding="utf-8")))
-               for p in (RAIZ / ".claude" / "skills").rglob("*.md"))
+    # Only versioned skills: a local one (e.g. excluded in `.git/info/exclude`) doesn't travel.
+    import subprocess
+    r = subprocess.run(["git", "ls-files", "--", ".claude/skills/*.md"], cwd=RAIZ,
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        import pytest
+        pytest.skip("sin git no se distingue una skill local (`.git/info/exclude`) de una versionada")
+    return sum(len(MEDIDO_RE.findall((RAIZ / f).read_text(encoding="utf-8")))
+               for f in r.stdout.split())
 
 
 def test_los_relatos_de_medicion_en_skills_solo_bajan():

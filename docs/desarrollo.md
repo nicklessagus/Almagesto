@@ -45,7 +45,7 @@ rote). Los números los dan las funciones del test, no esta prosa.
 ## Texto que lee un agente
 
 **Todo texto que lee un agente —`CLAUDE.md`, un `SKILL.md` y su `reference/`, un prompt generado
-para un subagente— lleva la regla y su porqué en presente, en una cláusula, con su ancla `(#N)`.**
+para un subagente— lleva la regla y su porqué en presente, en una cláusula, con su ancla `(#N)` (#540).**
 La fecha, el conteo y el relato del incidente van a `docs/mediciones.md` bajo esa ancla. Es la
 división que `CLAUDE.md` ya hace consigo mismo (#465, AUD-475), extendida a los otros textos que
 lee un modelo: un modelo que sigue el prompt de cerca toma cada frase como instrucción, así que la
@@ -55,7 +55,7 @@ entero del orquestador.
 
 **El ⛔ marca sólo los límites cuya violación rompe la bóveda**: la regla #0 y la frontera dura
 (incluido validar contra la fuente), no editar framework en una instancia, el driver `merge=ours`,
-la identidad que no sale de memoria (#392) y lo que el lint bloquea. Una regla corriente va en
+la identidad que no sale de memoria (#392) y lo que el lint bloquea (#541). Una regla corriente va en
 negrita, sin mayúsculas de énfasis: cuando todo está marcado como crítico la marca deja de
 informar, y el tono se traslada a la conducta (sobre-aplicación en los casos grises). La marca en
 línea `⛔retractada` es otra cosa y no se toca.

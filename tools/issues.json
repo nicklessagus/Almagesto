@@ -1,5 +1,5 @@
 {
- "fetched": "2026-09-25",
+ "fetched": "2026-09-26",
  "issues": [
   {
    "number": 2,
@@ -2664,6 +2664,36 @@
   {
    "number": 535,
    "title": "Las extracciones re-paginadas antes de #534 quedaron con ~2100 localizadores sueltos sin releer y no hay forma de reabrirlas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 536,
+   "title": "`## Métodos aplicados` y la matriz método×estrella cuentan los métodos de papers sacados con `--drop-core`",
+   "state": "OPEN"
+  },
+  {
+   "number": 537,
+   "title": "`apply_fixes` re-envuelve como párrafo una tabla o un blockquote que viene en la lista `nuevo`, y ninguna guarda lo ve porque los pares suben",
+   "state": "OPEN"
+  },
+  {
+   "number": 538,
+   "title": "El prompt del extractor sólo exime al documento largo de transcribir conclusiones: un paper corto sin esa sección vuelve con la Discusión copiada (regla #277)",
+   "state": "OPEN"
+  },
+  {
+   "number": 539,
+   "title": "`verify_fanout --solo-nuevos` re-ancla por parecido de texto las afirmaciones CORREGIDAS (no-soportada/contradice/acota): la ronda 2 no las re-verifica",
+   "state": "OPEN"
+  },
+  {
+   "number": 540,
+   "title": "Los prompts de subagente narran incidentes (fechas, conteos, anécdotas) y el juez del fan-out lee las 863 líneas de verify-citations: regla + porqué en una cláusula, la historia afuera",
+   "state": "OPEN"
+  },
+  {
+   "number": 541,
+   "title": "⛔ en casi todas las reglas (165 en CLAUDE.md): reservarlo para los límites que rompen la bóveda",
    "state": "OPEN"
   }
  ]
