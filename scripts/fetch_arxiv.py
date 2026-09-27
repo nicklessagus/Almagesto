@@ -178,9 +178,11 @@ def main() -> int:
         cfg.write_text_atomic(miss, json.dumps(
             [{"bibcode": r["bibcode"], "title": r["title"], "doi": r.get("doi")}
              for r in residue], indent=2, ensure_ascii=False))
-        cfg.print_seguro(f"Sin PDF ({len(no_arxiv)} sin arXiv + {len(publicados)} publicados sin "
-                          f"`acepta_preprint` + {len(failed)} fallidos) → {miss} "
-                          "(fetch_pdf los intenta vía el resolver de ADS; el residuo final es el suyo).")
+        # #548 — «Sin PDF» se leía como faltante final cuando fetch_pdf los resolvía todos: esto
+        # es lo que el carril arXiv le pasa al siguiente, no lo que falta.
+        cfg.print_seguro(f"Para fetch_pdf ({len(no_arxiv)} sin arXiv + {len(publicados)} publicados "
+                          f"sin `acepta_preprint` + {len(failed)} fallidos) → {miss} "
+                          "(todavía no es un faltante: el residuo final lo informa fetch_pdf).")
     cfg.save_paso(args.slug, "fetch_arxiv", flags=cfg.flags_usados(args, ap))
     return 0
 

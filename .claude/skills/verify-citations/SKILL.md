@@ -166,11 +166,11 @@ multi-cláusula—. Es lo que el prompt generado manda leer a cada subagente: el
 orquestación de este archivo. Leelas también antes de resolver (paso 4).
 
 **Y la forma del archivo es ésta, literal (#259).** El prompt generado la lleva tal cual
-(`lb.verify_fanout_json_block()`); acá está para leerla, no para pegarla:
+(`lb.verify_fanout_json_block(bibcode)`, #548); acá está para leerla, no para pegarla:
 
 ```json
 {
-  "bibcode": "2020ApJ...900....1A",
+  "bibcode": "<el bibcode de la fuente que juzgás>",
   "pares": [
     {
       "ancla": "<las 10 hex de la columna `Ancla` del par que se juzga>",

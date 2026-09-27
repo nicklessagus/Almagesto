@@ -1245,6 +1245,17 @@ def test_el_fence_dice_que_las_claves_son_CERRADAS():
     assert any("fuera del schema" in e for e in lb.fanout_errors(datos, entry="x"))
 
 
+def test_el_fence_del_prompt_lleva_el_bibcode_real_y_el_generico_un_marcador():
+    """#548 — el ejemplo `2020ApJ...900....1A` se leía como error de plantilla (3 verificadores en
+    una ronda lo dijeron). El prompt de UN verificador conoce su fuente: la inserta."""
+    real = _json.loads(re.search(r"```json\n(.*?)\n```",
+                                 lb.verify_fanout_json_block("2021AJ....161..230B"), re.S).group(1))
+    assert real["bibcode"] == "2021AJ....161..230B"
+    generico = _json.loads(re.search(r"```json\n(.*?)\n```",
+                                     lb.verify_fanout_json_block(), re.S).group(1))
+    assert generico["bibcode"].startswith("<")
+
+
 def test_el_generador_rehusa_una_clave_del_schema_sin_placeholder(monkeypatch):
     """Un campo que el schema exige y el prompt no explica es un campo que el productor no puede
     llenar: se rehúsa en vez de imprimir un relleno, que sería la prosa vaga otra vez."""

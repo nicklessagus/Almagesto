@@ -2714,6 +2714,21 @@
   {
    "number": 545,
    "title": "Toda escotilla con motivo lo lee con una función: `true` o `<motivo>` no son motivo (AUD-541 en las otras siete)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 546,
+   "title": "Una lectura nueva que declara «la fuente no tiene conclusiones» no avisa si la nota ya publica `## Conclusiones` de una lectura vieja (#538 cubrió sólo hacia adelante)",
+   "state": "OPEN"
+  },
+  {
+   "number": 547,
+   "title": "Dos filas de tabla idénticas comparten ancla: `apply_fixes` rehúsa con un mensaje que culpa a un fragmento sub-línea",
+   "state": "OPEN"
+  },
+  {
+   "number": 548,
+   "title": "Dos mensajes que confunden: el bibcode de ejemplo del fence de verify se lee como error, e `ingest_star` imprime «Sin PDF» antes de bajar",
    "state": "OPEN"
   }
  ]

@@ -67,7 +67,7 @@ def prompt_for(nota: Path, bibcode: str, pares: list, out_dir: Path) -> str:
         partes += [f"### Par {i} · ancla `{p.anchor}`", "", p.block.text.strip(), ""]
     partes += ["## Salida", "",
                f"Escribí el resultado en `{(out_dir / f'{bibcode}.json').as_posix()}` con "
-               f"EXACTAMENTE esta forma:", "", lb.verify_fanout_json_block(), ""]
+               f"EXACTAMENTE esta forma:", "", lb.verify_fanout_json_block(bibcode), ""]
     return "\n".join(partes)
 
 

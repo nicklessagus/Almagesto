@@ -1935,7 +1935,9 @@ VERDICTS_FANOUT = tuple(v for v in VERDICTS if v not in VERDICTS_WITHOUT_SOURCE)
 #: `no-soportada`— pero el schema no puede afirmar que llegue al artefacto que viaja. Darle columna
 #: o dejar de pedirla es decisión del contrato del bloque, no de este módulo.
 _FANOUT_PLACEHOLDERS = {
-    "bibcode": "2020ApJ...900....1A",
+    # #548 — a real-looking bibcode read as a template error to fill in (3 verifiers in one round
+    # stopped to say so). `verify_fanout.prompt_for` inserts the source's bibcode instead.
+    "bibcode": "<el bibcode de la fuente que juzgás>",
     "ancla": "<las 10 hex de la columna `Ancla` del par que se juzga>",
     "veredicto": " | ".join(VERDICTS_FANOUT),
     "evidencia": "«cita textual del PDF» (p. 7)",
@@ -1990,7 +1992,7 @@ def fanout_errors(data, *, entry: str) -> list[str]:
     return errors
 
 
-def verify_fanout_json_block() -> str:
+def verify_fanout_json_block(bibcode: str | None = None) -> str:
     """The literal ```json fence the skill pastes into the fan-out prompt, BUILT from the schema.
 
     Prose describing a shape is precisely what #259 measured failing: the same prompt, minus the
@@ -2000,6 +2002,8 @@ def verify_fanout_json_block() -> str:
 
     Raises `ValueError` for a schema key with no placeholder: printing a filler would ship a prompt
     that asks for a field without saying what goes in it, which is the prose-shaped failure again.
+
+    `bibcode` fills that key with the real source (#548): the prompt of one verifier knows it.
     """
     s = VERIF_FANOUT_SCHEMA
     # `pares` es la LISTA, no un valor: su contenido es el objeto `par` de abajo.
@@ -2009,6 +2013,8 @@ def verify_fanout_json_block() -> str:
         raise ValueError(f"claves del schema sin placeholder para el prompt: {falta}")
     par = {k: _FANOUT_PLACEHOLDERS[k] for k in s["par"] + s["par_opt"]}
     top = {k: [par] if k == "pares" else _FANOUT_PLACEHOLDERS[k] for k in s["top"]}
+    if bibcode:
+        top["bibcode"] = bibcode
     # #365 — the fence showed the keys and never said the list is CLOSED. That rule lived in
     # `CLAUDE.md`, prose the subagent never sees (rules fall off in the fan-out): measured, 2
     # incidents in 10 rounds, one bounced by the barrier AFTER paying the full PDF read (107 290
