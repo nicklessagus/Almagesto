@@ -41,6 +41,18 @@ def test_fila_de_tabla_se_reemplaza_exacta(tmp_path):
     assert "| nuevo | x |" in nota.read_text(encoding="utf-8")
 
 
+def test_dos_filas_identicas_rehusan_nombrando_el_duplicado_no_un_fragmento(tmp_path):
+    """#547 — dos filas idénticas comparten ancla y rehusar está bien; el mensaje culpaba a un
+    «fragmento sub-línea» cuando son dos bloques enteros. Ahora dice cuántas y dónde."""
+    fila = "| | [[2021AJ....161..230B]] | sin pico | r |"
+    nota = _note(tmp_path, f"# T\n\n| a | b | c | d |\n|---|---|---|---|\n{fila}\n| x | y | z | w |\n{fila}\n")
+    fix = _fixes(tmp_path, ("A", [{"n": 1, "viejo": fila, "nuevo": "| | [[2021AJ....161..230B]] | otro | r |"}]))
+    r = af.apply(nota, fix, write=True)
+    assert r.applied == 0 and len(r.failed) == 1
+    motivo = r.failed[0][2]
+    assert "2 veces idéntico" in motivo and "L5, L7" in motivo and "sub-línea" not in motivo
+
+
 def test_bloque_multilinea_se_localiza_por_su_forma_normalizada(tmp_path):
     """El `viejo` es una línea; en el archivo el bloque son tres. `replace` da 0 (14 de 75 medidos)."""
     #  @inv INV-137

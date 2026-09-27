@@ -126,13 +126,11 @@ def load_fixes(fix_dir: Path) -> tuple[list, list]:
     return fixes, rejected
 
 
-def find_block(lines: list, old: str) -> tuple | None:
-    """The half-open line range whose joined, normalised text is `old`; `None` if 0 or >1 match.
+def block_hits(lines: list, old: str) -> list:
+    """Every half-open line range whose joined, normalised text is `old` (#547: 0 and >1 differ).
 
-    ⚠ Two of its guards are **atajos, not behaviour**, and `--guardas` reports them as survivors on
-    purpose: skipping a blank start line is already covered by the inner `break`, and bailing out at
-    the second hit only saves work —the final `len(hits) == 1` returns `None` either way—. Chasing
-    them would mean writing a test that cannot distinguish anything, which is worse than the gap.
+    ⚠ Skipping a blank start line is an **atajo, not behaviour**, and `--guardas` reports it as a
+    survivor on purpose: the inner `break` already covers it.
     """
     target = normalise(old)
     hits = []
@@ -148,8 +146,12 @@ def find_block(lines: list, old: str) -> tuple | None:
             if normalise(" ".join(acc)) == target:
                 hits.append((i, j + 1))
                 break
-        if len(hits) > 1:
-            return None
+    return hits
+
+
+def find_block(lines: list, old: str) -> tuple | None:
+    """The single range of `block_hits`; `None` if 0 or >1 match."""
+    hits = block_hits(lines, old)
     return hits[0] if len(hits) == 1 else None
 
 
@@ -281,12 +283,22 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                 continue
             planned.append(((idx[0], idx[0] + 1), bib, n, new, "exact", retira))
             continue
-        span = find_block(lines, old)
-        if span is None:
-            res.failed.append((bib, n, "el bloque no se pudo localizar (0 o >1 candidatos) — "
+        hits = block_hits(lines, old)
+        if len(hits) > 1:
+            # #547 — dos bloques idénticos comparten ancla: no es un fragmento mal cortado, es que
+            # el texto no alcanza para decir cuál. Adivinar sería peor que rehusar.
+            donde = ", ".join(f"L{a + 1}" for a, _ in hits)
+            res.failed.append((bib, n, f"`viejo` aparece {len(hits)} veces idéntico ({donde}): "
+                                       "bloques idénticos comparten ancla y no se sabe cuál "
+                                       "corregir — hacelos distintos (la celda o frase que los "
+                                       "diferencia) y re-verificá"))
+            continue
+        if not hits:
+            res.failed.append((bib, n, "el bloque no se pudo localizar (0 candidatos) — "
                                        "`viejo` debe ser un bloque ENTERO tal como lo parte "
                                        "`lib_blocks.split_blocks`, no un fragmento sub-línea"))
             continue
+        span = hits[0]
         cubiertos = blocks_within(blocks, span)
         if len(cubiertos) > 1:
             res.failed.append((bib, n, f"`viejo` abarca {len(cubiertos)} bloques de "
