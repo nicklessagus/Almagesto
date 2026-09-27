@@ -1031,7 +1031,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   hubiera versión nueva la búsqueda habría traído otro bibcode y D-19 los une»— es falsa justo en el
   caso frecuente, porque el DOI del preprint identifica el **depósito** y #216 garantiza que
   preprint y publicado no colisionen. Se detecta por verdad de disco (mismo bibcode con PDF bajo ≥2
-  slugs) con `pdf_source: eprint` y sin `versions[]`, y el hallazgo trae el comando acotado
+  slugs) con `pdf_source: eprint`, sin `versions[]` y **con bibcode de arXiv** (#549: con bibcode
+  de revista la pregunta ya está contestada y el caso es de #298, que cruza `acepta_preprint`), y el
+  hallazgo trae el comando acotado
   (`sweep_external.py --bibcodes <b>`). En la misma categoría, *«`_red.yaml` no existe»*: una bóveda
   donde `sweep_external` nunca corrió no tiene **ninguna** de las seis caducidades chequeadas.
 - **Alternativa de faceta con POBLACIÓN CERO, o duplicada** (#291): la dirección **simétrica** de

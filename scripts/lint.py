@@ -2125,6 +2125,11 @@ def check_reused_artifact_unchecked(paper_fms: dict) -> list:
         _fm = paper_fms.get(_stem)
         if not _fm or str(_fm.get("pdf_source") or "") != "eprint" or cfg.as_list(_fm.get("versions")):
             continue
+        # #549 — con bibcode de revista la pregunta ya está contestada (salió publicado): es la
+        # población de #298, que además cruza `acepta_preprint`. Contarlo acá era doble conteo con
+        # dos acciones distintas, y la decisión firmada volvía como deuda (AUD-207).
+        if cfg.has_published_version(_fm.get("bibcode") or _stem):
+            continue
         reuso_sin_chequear.append(
             (_stem, f"reusado entre slugs ({', '.join(sorted(_slugs))}) con `pdf_source: eprint` y "
                     f"sin `versions[]`: el artefacto entró a otro sujeto sin que nadie chequeara si "

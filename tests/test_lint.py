@@ -7267,14 +7267,26 @@ def test_reuso_entre_slugs_con_eprint_y_sin_versions_es_backlog(toy_vault, capsy
     natural —«si hubiera versión nueva la búsqueda habría traído OTRO bibcode y D-19 los une»— es
     falsa justo en el caso frecuente: el DOI del preprint identifica el **depósito**, así que #216
     garantiza que preprint y publicado no colisionen. Medido: 62 % de un corpus real es `eprint`."""
-    paper_extraido(toy_vault, "2002Cardoso", pdf_source="eprint")
+    paper_extraido(toy_vault, "2002arXiv0201001C", pdf_source="eprint")
     for slug in ("ica", "ica_ruido"):
         (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
-        (cfg.PDFS / slug / "2002Cardoso.pdf").write_bytes(b"%PDF-1.4\n")
+        (cfg.PDFS / slug / "2002arXiv0201001C.pdf").write_bytes(b"%PDF-1.4\n")
     cat = lint.collect().por_clave("reuso_sin_chequear")
-    assert any(stem == "2002Cardoso" and "sin `versions[]`" in m for stem, m in cat.items)
-    assert any("--bibcodes 2002Cardoso" in m for _s, m in cat.items), "el comando, listo para pegar"
+    assert any(stem == "2002arXiv0201001C" and "sin `versions[]`" in m for stem, m in cat.items)
+    assert any("--bibcodes 2002arXiv0201001C" in m for _s, m in cat.items), "el comando, listo para pegar"
     assert cat.severidad == lint.SEV_BACKLOG
+
+
+def test_549_el_reuso_con_bibcode_de_revista_es_de_298_no_de_297(toy_vault):
+    """#549 — con bibcode de revista «¿salió publicado?» ya está contestado: es la población de
+    #298, que además manda el `acepta_preprint` firmado a «decisión declarada». Listarlo acá era
+    doble conteo con dos acciones distintas (medido: 27 de 31 en una bóveda real)."""
+    paper_extraido(toy_vault, "2016ApJ...821L..19N", pdf_source="eprint")
+    for slug in ("kapteyn", "gj_581"):
+        (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
+        (cfg.PDFS / slug / "2016ApJ...821L..19N.pdf").write_bytes(b"%PDF-1.4\n")
+    stems = {s for s, _m in lint.collect().por_clave("reuso_sin_chequear").items}
+    assert "2016ApJ...821L..19N" not in stems
 
 
 def test_el_reuso_ya_chequeado_no_es_hallazgo(toy_vault):
@@ -8630,17 +8642,20 @@ def test_check_reused_artifact_unchecked_solo_habla_del_eprint_sin_versions(toy_
     el `pdf_source` que no es `eprint`."""
     for slug in ("a", "b"):
         (cfg.PDFS / slug).mkdir(parents=True, exist_ok=True)
-        (cfg.PDFS / slug / "2001Test.pdf").write_bytes(b"%PDF-1.4\n")
+        (cfg.PDFS / slug / "2001astro.ph..1T.pdf").write_bytes(b"%PDF-1.4\n")
     assert lint.check_reused_artifact_unchecked({}) == [], "sin nota no es hallazgo de esta categoría"
     assert lint.check_reused_artifact_unchecked(
-        {"2001Test": {"pdf_source": "publisher"}}) == [], "un publicado no tiene versión que esperar"
+        {"2001astro.ph..1T": {"pdf_source": "publisher"}}) == [], "un publicado no tiene versión que esperar"
     assert lint.check_reused_artifact_unchecked(
-        {"2001Test": {"pdf_source": "eprint", "versions": ["2002Test"]}}) == []
-    filas = lint.check_reused_artifact_unchecked({"2001Test": {"pdf_source": "eprint"}})
-    assert len(filas) == 1 and "a, b" in filas[0][1] and "--bibcodes 2001Test" in filas[0][1]
+        {"2001astro.ph..1T": {"pdf_source": "eprint", "versions": ["2002astro.ph..2T"]}}) == []
+    filas = lint.check_reused_artifact_unchecked({"2001astro.ph..1T": {"pdf_source": "eprint"}})
+    assert len(filas) == 1 and "a, b" in filas[0][1] and "--bibcodes 2001astro.ph..1T" in filas[0][1]
+    # #549 — el mismo reuso con bibcode de revista es de #298
+    assert lint.check_reused_artifact_unchecked(
+        {"2001astro.ph..1T": {"pdf_source": "eprint", "bibcode": "2001ApJ...1..1T"}}) == []
     # bajo un solo slug no hay reuso
-    (cfg.PDFS / "b" / "2001Test.pdf").unlink()
-    assert lint.check_reused_artifact_unchecked({"2001Test": {"pdf_source": "eprint"}}) == []
+    (cfg.PDFS / "b" / "2001astro.ph..1T.pdf").unlink()
+    assert lint.check_reused_artifact_unchecked({"2001astro.ph..1T": {"pdf_source": "eprint"}}) == []
 
 
 def test_check_fulltext_y_pdf_without_note_saltean_lo_que_no_es_un_slug(toy_vault):

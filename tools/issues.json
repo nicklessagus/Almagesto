@@ -2730,6 +2730,11 @@
    "number": 548,
    "title": "Dos mensajes que confunden: el bibcode de ejemplo del fence de verify se lee como error, e `ingest_star` imprime «Sin PDF» antes de bajar",
    "state": "OPEN"
+  },
+  {
+   "number": 549,
+   "title": "El aviso de reuso sin chequear versión (#297) no cruza `acepta_preprint` y re-cuenta los bibcodes ya publicados de #298: 27 de 31 son pregunta contestada",
+   "state": "OPEN"
   }
  ]
 }

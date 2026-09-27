@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.362.0"
+ALMAGESTO_VERSION = "1.362.1"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -764,8 +764,12 @@ def reuse_note(bibcode: str, origen) -> str:
             src = None
     detalle = ", ".join(filter(None, [f"en disco desde {fecha}" if fecha else "",
                                       f"pdf_source: {src}" if src else "pdf_source: no consta"]))
+    # #549 — with a journal bibcode the question is answered (it WAS published); what stays open is
+    # whether the preprint is the one being read, which #298 / `acepta_preprint` already carry.
+    cola = ("bibcode publicado: si se lee el preprint, lo cubre #298 / `acepta_preprint`"
+            if has_published_version(bibcode) else "no se chequeó si hay versión publicada")
     return (f"  ↺ {bibcode}: ya estaba bajo `{Path(origen).parent.name}` — copiado sin ir "
-            f"a la red (D-18; {detalle}) — no se chequeó si hay versión publicada")
+            f"a la red (D-18; {detalle}) — {cola}")
 
 
 def facet_alternatives(patron: str) -> list:

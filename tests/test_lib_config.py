@@ -2273,15 +2273,18 @@ def test_la_linea_del_reuso_declara_lo_que_no_miro(toy_vault, tmp_path):
     pasó es que un sujeto nuevo heredó un artefacto cuya antigüedad nadie chequeó. INV-87 aplicado
     al reuso: lo que **no** se miró se declara."""
     (cfg.PDFS / "ica").mkdir(parents=True, exist_ok=True)
-    origen = cfg.PDFS / "ica" / "2002Cardoso.pdf"
+    origen = cfg.PDFS / "ica" / "2002arXiv0201001C.pdf"
     origen.write_bytes(b"%PDF-1.4\n")
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    (cfg.PAPERS / "2002Cardoso.md").write_text(
-        "---\nbibcode: 2002Cardoso\npdf_source: eprint\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
-    linea = cfg.reuse_note("2002Cardoso", origen)
+    (cfg.PAPERS / "2002arXiv0201001C.md").write_text(
+        "---\nbibcode: 2002arXiv0201001C\npdf_source: eprint\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
+    linea = cfg.reuse_note("2002arXiv0201001C", origen)
     assert "ya estaba bajo `ica`" in linea and "D-18" in linea
     assert "pdf_source: eprint" in linea
     assert "no se chequeó si hay versión publicada" in linea
+    # #549 — con bibcode de revista la pregunta ya está contestada: la línea no la re-hace
+    publicado = cfg.reuse_note("2016ApJ...821L..19N", origen)
+    assert "no se chequeó" not in publicado and "#298" in publicado
 
 
 def test_la_linea_del_reuso_no_inventa_la_procedencia(toy_vault):
