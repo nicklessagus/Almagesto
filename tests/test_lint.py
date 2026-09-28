@@ -11623,3 +11623,31 @@ def test_check_unsynthesized_by_subject_mide_el_PAR_con_reclamo_directo(toy_vaul
     mk_note(cfg.PAPERS, "2023M", solo_m, "# p\n")
     filas = lint.check_unsynthesized_by_subject({"2020P": conlink, "2023M": solo_m}, set())[0]
     assert "2023M" not in {st for st, _m in filas}, filas
+
+
+def test_558_par_tema_por_methods_pide_decision_y_la_cola_se_lista_con_fecha(toy_vault):
+    """#558 — el paper que llega a un tema por `methods` desde otro sujeto nacía sin decisión
+    (medido: 72 pares en 4 temas). `no_sintetizado` o `cola_tema` lo cierran; la cola se ve."""
+    write_yaml(cfg.STARS_YAML, {"Estrella S": {"slug": "s"}})
+    write_yaml(cfg.THEMES_YAML, {"gls": {"title": "GLS", "concept": "gls", "area": "methods"}})
+    mk_note(cfg.CONCEPTS / "methods", "gls", {"tags": ["methods"]}, "sin citas\n")
+    fm = {"tags": ["paper"], "bibcode": "2026P", "stars": ["Estrella S"], "methods": ["gls"],
+          "relevance": "high"}
+    mk_note(cfg.PAPERS, "2026P", fm, "# p\n")
+    sin, cola, ne = lint.check_theme_pairs({"2026P": fm})
+    assert ne == [] and cola == [] and [s for s, _m in sin] == ["2026P"] and "`gls`" in sin[0][1]
+    en_cola = {**fm, "cola_tema": [{"tema": "gls", "fecha": "2026-09-28", "motivo": "aporta"}]}
+    sin, cola, _ne = lint.check_theme_pairs({"2026P": en_cola})
+    assert sin == [] and cola == [("2026P", "en cola de `gls` desde 2026-09-28: aporta")]
+    no_ap = {**fm, "no_sintetizado": [{"sujeto": "gls", "motivo": "sólo lo usa"}]}
+    assert lint.check_theme_pairs({"2026P": no_ap})[0] == []
+    # por `thesis_links` es reclamo directo: eso es #559, no esta categoría — aun cuando el tema
+    # pasa el filtro barato por OTRO paper que sí llega sólo por `methods`
+    otro = {**fm, "bibcode": "2027Q"}
+    mk_note(cfg.PAPERS, "2027Q", otro, "# p\n")
+    sin = lint.check_theme_pairs({"2026P": {**fm, "thesis_links": ["gls"]}, "2027Q": otro})[0]
+    assert [s for s, _m in sin] == ["2027Q"], sin
+    roto = {**fm, "cola_tema": "gls"}
+    assert "forma inválida" in lint.check_theme_pairs({"2026P": roto})[1][0][1]
+    # el ítem es el PAPER: `--cierre <estrella>` frena en los pares que crearon sus papers
+    assert lint.collect().por_clave("par_tema_sin_decidir").severidad == lint.SEV_CIERRE

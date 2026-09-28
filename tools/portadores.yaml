@@ -2966,6 +2966,9 @@ portadores:
     funcion: lib_config.declared_motive
     patron: 'get\("(sin_bibtex|sin_abstract_motivo|sin_conclusiones|pending_motivo|corpus_sin_probe)"\)'
     consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "#558 — `theme_decision_proposals` lee el `motivo` de cada tema propuesto con `declared_motive`."
       - modulo: scripts/lint.py
         estado: usa
         motivo: >-

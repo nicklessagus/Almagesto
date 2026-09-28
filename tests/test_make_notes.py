@@ -6428,3 +6428,28 @@ def test_553_el_migrador_reparte_el_motivo_sólo_a_quien_NO_lo_cita(toy_vault, c
     assert any("2012Q" in a and "se retira" in a for a in avisos)
     assert any("2013R" in a and "sin motivo" in a for a in avisos)
     assert mn.migrate_all_no_sintetizado()[0] == 0, "idempotente"
+
+
+def test_558_cola_tema_es_estado_propio_y_la_estrella_re_estampa_sus_temas(toy_vault):
+    """#558 — el par (paper, tema) en cola es deuda con dueño y fecha, no el `extraído, no
+    sintetizado` que nadie decidió; y el tema se entera el día que la estrella se estampa."""
+    fm = {"methods": ["gls"], "cola_tema": [{"tema": "gls", "fecha": "2026-09-28", "motivo": "m"}]}
+    assert mn._estado_paper("P", fm, "", set(), {"gls"}) == mn.ESTADO_COLA
+    assert mn._estado_paper("P", fm, "", set(), {"otro"}) == mn.ESTADO_EXTRAIDO
+    assert mn._estado_paper("P", {**fm, "cola_tema": "roto"}, "", set(), {"gls"}) == mn.ESTADO_EXTRAIDO
+    decl = {**fm, "no_sintetizado": [{"sujeto": "gls", "motivo": "sólo lo usa"}]}
+    assert mn._estado_paper("P", decl, "", set(), {"gls"}) == mn.ESTADO_NO_SINTETIZADO
+    write_yaml(cfg.STARS_YAML, {"Estrella S": {"slug": "s"}})
+    write_yaml(cfg.THEMES_YAML, {"gls": {"title": "GLS", "concept": "gls", "area": "methods"},
+                                 "otro": {"title": "Otro", "concept": "otro", "area": "methods"},
+                                 "lomb": {"title": "Lomb", "concept": "lomb", "area": "methods"}})
+    mk_note(cfg.CONCEPTS / "methods", "gls", {"tags": ["methods"]},
+            f"# gls\n\n{mn.CONCEPT_ROLLUP_HEADER}\n\nvieja\n")
+    mk_note(cfg.CONCEPTS / "methods", "otro", {"tags": ["methods"]},
+            f"# otro\n\n{mn.CONCEPT_ROLLUP_HEADER}\n\nvieja\n")
+    mk_note(cfg.PAPERS, "2026P", {"tags": ["paper"], "bibcode": "2026P", "stars": ["Estrella S"],
+                                  "methods": ["GLS", "lomb"], "relevance": "high"}, "# p\n")
+    assert mn.stamp_touched_theme_rollups("s") == ["gls"], "`lomb` no tiene nota: no se inventa"
+    assert "[[2026P]]" in (cfg.CONCEPTS / "methods" / "gls.md").read_text(encoding="utf-8")
+    assert mn.stamp_touched_theme_rollups("s") == [], "idempotente"
+    assert mn.stamp_touched_theme_rollups("no-existe") == []

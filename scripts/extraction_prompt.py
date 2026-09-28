@@ -505,6 +505,19 @@ nunca para transcribir ni para citar. `pdftotext` pierde sin avisar radicales, p
 superíndices y subíndices, aun cuando los chequeos de calidad del `.txt` dan bien. Correr
 `pdftotext` sobre el PDF da la misma capa (#544): confirmar un valor es **ver la página**.
 """ if (hay_pdf and hay_txt) else ""
+    # #558 — los temas declarados que NO son el sujeto de esta lectura: si el paper les llega (por
+    # sus `methods` o `thesis_links`), el par (paper, tema) necesita una decisión, y quien leyó el
+    # paper es quien mejor la propone. Propone; el cosechador la imprime y no la escribe.
+    otros_temas = sorted({str(cfg.as_map(m).get("concept") or t)
+                          for t, m in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items()}
+                         - {str(sujeto or name)})
+    temas_nota = ("**`temas` (#558): si tus `methods` o `thesis_links` tocan otro tema declarado "
+                  f"de la bóveda ({', '.join(f'`{t}`' for t in otros_temas)}), devolvé una entrada "
+                  "por tema: `{\"tema\": …, \"aporta\": true|false, \"motivo\": \"<una "
+                  "línea>\"}`.** `aporta: false` = el paper sólo USA el método y no dice nada nuevo "
+                  "sobre él; `true` = el tema tendría que sintetizarlo. No se escribe solo: el "
+                  "cosechador lo propone y decide el usuario. Si no toca ninguno, lista vacía.\n"
+                  ) if otros_temas else ""
     return f"""Sos un extractor de UNA sola fuente. Trabajás desde la raíz del repo.
 
 {_source_section(slug, bibcode, name, alias_str)}
@@ -556,7 +569,7 @@ de la misma `## Vista`. Sin ese pedido, no lo pongas.
 Escribí el resultado en `{out}` y devolvé el mismo JSON en **un solo bloque** ```json:
 
 {{"bibcode":"{bibcode}","vista":{{"sujeto":"{sujeto}","tipo":"{tipo}","txt":"{slug}","fuente":"pdf"}},
- "role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],"refuta":[],
+ "role":["fundacional"|"aplicacion"|"arbitro"],"methods":[],"thesis_links":[],"refuta":[],"temas":[],
  "ground_truth":[{{"que":"","valor":"","linea":"","regimen":"","segunda_mano":null}}],
  "ejes":{ejes},"lente":{lente_pedida},
  "aporte":"","hueco":"","salvedades":[],
@@ -634,6 +647,7 @@ reclamo es FALSO». Nadie borra nada por tu cuenta: el cosechador lo **registra*
 imprime el comando de curación listo para pegar — la decisión de sacar el paper del sujeto es del
 usuario, porque el paper puede ser core de OTRO sujeto.
 
+{temas_nota}
 **`fuente` dice de qué construiste la vista.** `pdf` es el caso normal. Poné **`abstract`** si el
 PDF no está y sólo pudiste leer el `## Abstract` de la nota: la vista igual vale, pero una lectura
 de ocho líneas no puede quedar indistinguible de haber leído el paper —y el abstract es justo donde

@@ -4184,3 +4184,15 @@ def test_553_load_no_sintetizado_forma_por_sujeto_y_rehusa_el_escalar():
                  [{"sujeto": "S", "motivo": "true"}]):
         with pytest.raises(cfg.VistasError):
             cfg.load_no_sintetizado({"no_sintetizado": malo}, entry="x")
+
+
+def test_558_load_cola_tema_forma_dura():
+    """#558 — la cola sin fecha no envejece y sin motivo es la deuda en silencio que viene a cerrar."""
+    assert cfg.load_cola_tema({}) == []
+    ok = [{"tema": " rv ", "fecha": "2026-09-28", "motivo": "aporta un estimador"}]
+    assert cfg.load_cola_tema({"cola_tema": ok}) == [
+        {"tema": "rv", "fecha": "2026-09-28", "motivo": "aporta un estimador"}]
+    for malo in ("rv", True, [{"tema": "rv", "motivo": "x"}], [{"tema": "rv", "fecha": "f"}],
+                 [{"fecha": "f", "motivo": "m"}], ["rv"]):
+        with pytest.raises(cfg.VistasError):
+            cfg.load_cola_tema({"cola_tema": malo}, entry="x")

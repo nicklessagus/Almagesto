@@ -850,6 +850,13 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   par (#559):** el paper que otro sujeto sí cita pero que un sujeto que lo reclama **directamente**
   (`stars`, `thesis_links`) no cita ni declara: el mismo universo que `## Papers` publica como
   «extraído, no sintetizado». La pertenencia a un tema sólo por `methods` queda afuera (es #558).
+- **Par (paper, tema) sin decidir** (#558, `SEV_CIERRE`): el paper que llega a un tema sólo por
+  `methods`, desde la ingesta de OTRO sujeto, y que nadie decidió. Se cierra con `no_sintetizado`
+  para el tema (no aporta) o con `cola_tema: [{tema, fecha, motivo}]` (pendiente); el ítem es el
+  paper, así que `lint --cierre <estrella>` frena en los pares que crearon sus papers. `make_notes
+  <estrella>` re-estampa el roll-up de los temas que tocan sus papers, y el extractor propone
+  `temas: [{tema, aporta, motivo}]`, que el cosechador imprime listo para pegar. Medido en una
+  bóveda real: 91 pares. La **cola** se lista aparte, con fecha (`cola_tema`, backlog).
 - **Vista fechada sin fuente en disco** (#217): la lectura ocurrió y ya no hay contra qué
   re-verificarla (los artefactos los borró `--drop-core`). Ninguna otra red lo ve: el ancla de
   fuente no se entera de un archivo que **desapareció**.

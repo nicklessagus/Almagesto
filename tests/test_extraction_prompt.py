@@ -821,3 +821,13 @@ def test_el_prompt_no_lleva_arqueologia_de_mediciones(toy_vault):
     p = ep.build_prompt("ica", "2020corto", "ica", ["ICA"], kind="theme")
     assert "`.txt` no es fuente" in " ".join(p.split()), "the PDF+txt branch did not run"
     assert not PROMPT_ARCHAEOLOGY_RE.findall(p)
+
+
+def test_558_el_prompt_pide_temas_con_los_OTROS_temas_declarados(toy_vault):
+    """#558 — el extractor conoce los temas declarados y propone `aporta` por cada uno que toque;
+    el tema de ESTA lectura no se lista."""
+    from conftest import write_yaml
+    write_yaml(cfg.THEMES_YAML, {"gls": {"title": "GLS", "concept": "gls", "area": "methods"},
+                                 "ica": {"title": "ICA", "concept": "ica", "area": "methods"}})
+    p = ep.build_prompt("ica", "2020X", "ICA", [], kind="theme", sujeto="ica")
+    assert '"temas":[]' in p and "`gls`" in p and "`ica`," not in p and "(`ica`)" not in p

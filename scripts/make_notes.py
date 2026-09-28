@@ -1095,6 +1095,15 @@ def _no_sintetizado_declarado(fm: dict, stem: str, sujetos: set) -> bool:
     return bool(declaradas & sujetos)
 
 
+def _cola_declarada(fm: dict, stem: str, sujetos: set) -> bool:
+    """Did this note queue itself for the theme of this roll-up? (#558) Same fallback as its
+    siblings: a malformed field keeps the plain ladder and the lint reports it."""
+    try:
+        return bool({c["tema"] for c in cfg.load_cola_tema(fm, entry=stem)} & sujetos)
+    except cfg.VistasError:
+        return False
+
+
 def view_stub_kind(text: str, sujeto: str, theme: bool) -> str:
     """What the `## Vista — <subject>` section IS: `""` (written prose), `"plantilla"` or `"estado"`.
 
@@ -2903,6 +2912,10 @@ ESTADO_SIN_VISTA = "sin vista (declarado)"
 #: #553 · extraído y deliberadamente no sintetizado PARA ESTE SUJETO (`no_sintetizado` + motivo).
 #: Sin él la declaración se publicaba como `extraído, no sintetizado`, o sea deuda (AUD-207).
 ESTADO_NO_SINTETIZADO = "no sintetizado (declarado)"
+#: #558 · el par (paper, tema) que quedó PENDIENTE en la síntesis del tema, declarado y fechado
+#: (`cola_tema`). Es deuda, pero con dueño y fecha: no se confunde con el `extraído, no sintetizado`
+#: que nadie decidió.
+ESTADO_COLA = "en cola del tema (declarado)"
 ESTADO_FUERA = "fuera del filtro"
 # #116: el paper que el USUARIO sacó del sujeto con `--drop-core`. Distinto de `fuera del filtro`
 # (que lo decidió la lente) y sobre todo de `sin extraer` (que se lee como «todavía no llegamos»,
@@ -2993,7 +3006,9 @@ def _estado_paper(stem: str, fm: dict, cuerpo: str, dropeados: set, sujetos: set
     # AUD-509 — the whole wikilink, not a prefix: `[[2011Naika]]` does not cite `2011Naik`.
     if cfg.wikilink_re(stem).search(cuerpo):
         return ESTADO_SINTETIZADO
-    return ESTADO_NO_SINTETIZADO if _no_sintetizado_declarado(fm, stem, sujetos) else ESTADO_EXTRAIDO
+    if _no_sintetizado_declarado(fm, stem, sujetos):
+        return ESTADO_NO_SINTETIZADO
+    return ESTADO_COLA if _cola_declarada(fm, stem, sujetos) else ESTADO_EXTRAIDO
 
 
 def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
@@ -3661,6 +3676,29 @@ def stamp_star_rollups(slug: str, dest) -> bool:
     # la inventa. Se agrega ANTES del apéndice de excluidos, que va siempre último.
     tocado = _ensure_section(dest, DATOS_HEADER, EXCLUDED_HEADER) or tocado
     return _reemplazar_seccion(dest, DATOS_HEADER, datos_table(datos_rows(name, slug))) or tocado
+
+
+def stamp_touched_theme_rollups(star_slug: str) -> list:
+    """Re-stamp the roll-up of every theme a paper of this star claims (#558); the themes touched.
+
+    The theme's roll-up joins by `methods`/`thesis_links`, and nobody re-stamped it when a STAR
+    was ingested: the paper reached the theme days later, as a stale-table backlog nobody's close
+    looks at (measured: 72 pairs accumulated silently in 4 themes). Idempotent surgery on the
+    stamped section only — no prose is written in the theme, which is another reading."""
+    try:
+        nombre = cfg.star_by_slug(star_slug)[0]
+    except (KeyError, RuntimeError):
+        return []
+    fms = papers_fm_index()
+    suyos = [fm for fm in fms.values() if nombre in [str(x) for x in cfg.as_list(fm.get("stars"))]]
+    tocados = []
+    for slug_t, meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
+        dest = _concept_dest(slug_t)
+        concept = str(cfg.as_map(meta).get("concept") or slug_t)
+        if dest.exists() and any(any(theme_membership(concept, fm)) for fm in suyos):
+            if stamp_concept_rollup(slug_t, dest):
+                tocados.append(slug_t)
+    return tocados
 
 
 def stamp_concept_rollup(slug: str, dest) -> bool:
@@ -5162,6 +5200,10 @@ def main() -> int:
         else:
             stamp_papers_table(args.slug, dest_final, "star")
             stamp_star_rollups(args.slug, dest_final)
+            if (temas := stamp_touched_theme_rollups(args.slug)):
+                cfg.print_seguro(f"  roll-up re-estampado en {len(temas)} tema(s) que tocan sus "
+                                 f"papers: {', '.join(temas)} — cada par (paper, tema) nuevo pide "
+                                 f"una decisión: `no_sintetizado` o `cola_tema` (#558)")
     cfg.save_paso(args.slug, "make_notes", flags=cfg.flags_usados(args, ap))
     return 0
 

@@ -2197,3 +2197,18 @@ def test_526_force_NO_re_escribe_lo_que_una_verificacion_REFUTO(toy_vault, capsy
     (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(data), encoding="utf-8")
     r = hv.restamp_salvedades("test_star")
     assert [b for b, _ in r["rehusadas"]] == [BIB] and not r["tocadas"]
+
+
+def test_558_el_lector_propone_la_decision_del_par_paper_tema_y_no_la_escribe():
+    """#558 — quien leyó el paper propone `aporta` por tema; el cosechador imprime la entrada."""
+    data = {"temas": [{"tema": "gls", "aporta": False, "motivo": "sólo lo usa"},
+                      {"tema": "rv", "aporta": True, "motivo": "estimador nuevo"},
+                      {"tema": "x", "aporta": "sí", "motivo": "m"},          # no booleano
+                      {"tema": "y", "aporta": True, "motivo": ""},           # sin motivo
+                      {"tema": "", "aporta": True, "motivo": "m"}]}          # sin tema
+    props = hv.theme_decision_proposals({}, data, "2026-09-28")
+    assert props == ["no_sintetizado: - {sujeto: gls, motivo: sólo lo usa}",
+                     'cola_tema: - {tema: rv, fecha: "2026-09-28", motivo: estimador nuevo}']
+    ya = {"no_sintetizado": [{"sujeto": "gls", "motivo": "m"}],
+          "cola_tema": [{"tema": "rv", "fecha": "f", "motivo": "m"}]}
+    assert hv.theme_decision_proposals(ya, data, "2026-09-28") == [], "lo decidido no se re-propone"

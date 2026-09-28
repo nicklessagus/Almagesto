@@ -3165,7 +3165,7 @@ def check_unsynthesized(extracted, cited_in_entity) -> list:
     return unsynthesized
 
 
-def check_unsynthesized_by_subject(paper_fms: dict, ya: set) -> tuple:
+def check_unsynthesized_by_subject(paper_fms: dict, ya: set, sujetos=None) -> tuple:
     """`(filas, no_evaluados)` — the pair (paper, subject) the roll-up publishes as `extraído, no
     sintetizado` for a subject that claims the paper DIRECTLY (#559).
 
@@ -3178,7 +3178,7 @@ def check_unsynthesized_by_subject(paper_fms: dict, ya: set) -> tuple:
     `ya` = stems the per-note check already reports, so a paper is not listed twice."""
     filas: list = []
     no_evaluados: list = []
-    for kind, slug, nombre, meta in cfg.all_subjects():
+    for kind, slug, nombre, meta in (cfg.all_subjects() if sujetos is None else sujetos):
         dest = mn.subject_note(slug, kind)
         if not dest.exists():                    # `all_subjects` only yields declared ones
             continue
@@ -3211,6 +3211,60 @@ def check_unsynthesized_by_subject(paper_fms: dict, ya: set) -> tuple:
                                      f"→ sintetizalo ahí o declará `no_sintetizado: [{{sujeto: "
                                      f"{nombre}, motivo: …}}]` en la nota del paper (#559)"))
     return filas, no_evaluados
+
+
+def check_theme_pairs(paper_fms: dict, sujetos=None) -> tuple:
+    """`(sin_decidir, cola, no_evaluados)` — the pair (paper, theme) a theme gets through `methods`
+    alone, i.e. from ANOTHER subject's ingest (#558).
+
+    Nothing asked for a decision on it: the retro-tag of `ingest-theme` covers «new theme → old
+    papers», and «new paper → old themes» had no step (measured: 72 pairs accumulated in 4 themes,
+    29 of them from the last two star ingests). Two destinations close it: `no_sintetizado` for the
+    theme (does not contribute) or `cola_tema` (pending, dated). `sin_decidir` is SEV_CIERRE: the
+    item is the PAPER, so `lint --cierre <star>` stops on the pairs its own papers created. `cola`
+    is the declared queue, listed with its date — debt with an owner, not silence. Same universe as
+    the roll-up (`mn.papers_universe`), with a YAML-free gate first (`test_escala`)."""
+    sin_decidir: list = []
+    no_evaluados: list = []
+    cola: list = []
+    for stem, fm in paper_fms.items():
+        try:
+            for c in cfg.load_cola_tema(fm, entry=stem):
+                cola.append((stem, f"en cola de `{c['tema']}` desde {c['fecha']}: {c['motivo']}"))
+        except cfg.VistasError as e:
+            cola.append((stem, f"⛔ forma inválida: {e}"))
+    for kind, slug, nombre, meta in (cfg.all_subjects() if sujetos is None else sujetos):
+        if kind != "theme":
+            continue
+        dest = mn.subject_note(slug, kind)
+        if not dest.exists():
+            continue
+        concept = str(cfg.as_map(meta).get("concept") or slug)
+        nombres = {slug, str(nombre), concept}
+        citados = set(LINK_RE.findall(cfg.solo_prosa(dest.read_text(encoding="utf-8"))))
+        # ⚠ An atajo `--guardas` reports as a survivor: the loop below decides the same, slower.
+        decl = lambda fm: nombres & ({str(cfg.as_map(d).get("sujeto"))  # noqa: E731
+                                      for d in cfg.as_list(fm.get("no_sintetizado"))}
+                                     | {str(cfg.as_map(d).get("tema"))
+                                        for d in cfg.as_list(fm.get("cola_tema"))})
+        if not any(stem not in citados and not decl(fm)
+                   and mn.theme_membership(concept, fm) == (True, False)
+                   for stem, fm in paper_fms.items()):
+            continue
+        try:
+            universo = mn.papers_universe(slug, kind, paper_fms)
+        except Exception as _exc:                   # noqa: BLE001 — D-43: declared, not a zero
+            no_evaluados.append((f"pares (paper, tema) de `{slug}` (#558)",
+                                 f"{_exc.__class__.__name__}: {_exc}"))
+            continue
+        for r in universo:
+            if (r["estado"] == mn.ESTADO_EXTRAIDO
+                    and mn.theme_membership(concept, paper_fms.get(r["stem"]) or {}) == (True, False)):
+                sin_decidir.append((r["stem"], f"llega a `{concept}` por `methods` y nadie decidió "
+                                                f"el par → `no_sintetizado: [{{sujeto: {concept}, "
+                                                f"motivo}}]` si no aporta, o `cola_tema: [{{tema: "
+                                                f"{concept}, fecha, motivo}}]` si queda pendiente"))
+    return sin_decidir, cola, no_evaluados
 
 
 def check_dangling_thesis(thesis_refs: dict, dangling) -> list:
@@ -7172,8 +7226,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["incomplete"] += check_star_without_ground_truth(vistos_gt)
     orphans = check_orphans(sweep.incoming, sweep.kinds, refs_stems)
     found["unsynthesized"] = check_unsynthesized(sweep.extracted, sweep.cited_in_entity)
+    _sujetos = cfg.all_subjects()          # once: each call re-parses the two YAMLs (`test_escala`)
+    found["par_tema_sin_decidir"], found["cola_tema"], _tp_no_eval = check_theme_pairs(paper_fms,
+                                                                                        _sujetos)
+    found["not_evaluated"] += _tp_no_eval
     _us, _us_no_eval = check_unsynthesized_by_subject(
-        paper_fms, {stem for stem, _m in found["unsynthesized"]})
+        paper_fms, {stem for stem, _m in found["unsynthesized"]}, _sujetos)
     found["unsynthesized"] += _us
     found["not_evaluated"] += _us_no_eval
     # ⛔ UNA regla para las dos categorías dangling (#243/#348): «¿este nombre tiene nota
@@ -7333,6 +7391,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('radio_sin_link', '🛞 Hub que nombra un radio sin `[[wikilink]]`: el radio no entra al grafo (#235, backlog)', SEV_BACKLOG, tuple(found['radio_sin_link']), poblacion='entidades'),
         Categoria('cita_log', '❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog)', SEV_BACKLOG, tuple(found['cita_log']), poblacion='notas'),
         Categoria('cita_inventada', '❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318, BLOQUEA con `--cierre`)', SEV_CIERRE, tuple(found['cita_inventada']), poblacion='citas'),
+        Categoria('par_tema_sin_decidir', '🧭 Par (paper, tema) que llegó por `methods` desde otro sujeto y nadie decidió: `no_sintetizado` o `cola_tema` (#558' + (', BLOQUEA: modo --cierre)' if cierre else ', backlog; con `--cierre` bloquea)'), SEV_CIERRE, tuple(found['par_tema_sin_decidir']), poblacion='papers'),
+        Categoria('cola_tema', '⏳ Par (paper, tema) EN COLA del tema, declarado y fechado — deuda con dueño (#558, backlog)', SEV_BACKLOG, tuple(found['cola_tema']), poblacion='papers'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(found['cita_no_verbatim']), poblacion='citas'),
         Categoria('cita_txt_degradado', '❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog)', SEV_BACKLOG, tuple(found['cita_txt_degradado']), poblacion='citas'),
         Categoria('cita_txt_discrepa', '❝ Las DOS lecturas del mismo PDF no coinciden: `pdftotext` dice una cosa y la extracción otra — andá a la página (#333, backlog)', SEV_BACKLOG, tuple(found['cita_txt_discrepa']), poblacion='citas'),

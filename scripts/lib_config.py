@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.366.0"
+ALMAGESTO_VERSION = "1.367.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4343,6 +4343,30 @@ def load_no_sintetizado(meta: dict, *, entry: str = "?") -> list:
             raise VistasError(f"'{entry}': a una entrada de `no_sintetizado` le falta "
                               f"{', '.join(faltan)} (#553)")
         out.append(dict(x, sujeto=sujeto, motivo=motivo))
+    return out
+
+
+def load_cola_tema(meta: dict, *, entry: str = "?") -> list:
+    """`cola_tema: [{tema, fecha, motivo}]` — the pair (paper, theme) left PENDING in that theme's
+    synthesis, declared and dated (#558). The other destination of a paper that reaches a theme
+    through a star's ingest is `no_sintetizado` (does not contribute); nothing stays undecided.
+
+    Same hard form as `no_vista`: without the date the queue cannot age, and without the motive
+    it is the silent debt this exists to end."""
+    v = meta.get("cola_tema")
+    if v is None:
+        return []
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        raise VistasError(f"'{entry}': `cola_tema` es una lista de `{{tema, fecha, motivo}}` (#558)")
+    out = []
+    for x in v:
+        tema, fecha = str(x.get("tema") or "").strip(), str(x.get("fecha") or "").strip()
+        motivo = declared_motive(x.get("motivo"))
+        faltan = [k for k, val in (("tema", tema), ("fecha", fecha), ("motivo", motivo)) if not val]
+        if faltan:
+            raise VistasError(f"'{entry}': a una entrada de `cola_tema` le falta "
+                              f"{', '.join(faltan)} (#558)")
+        out.append(dict(x, tema=tema, fecha=fecha, motivo=motivo))
     return out
 
 

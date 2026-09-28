@@ -287,6 +287,12 @@
 ## ❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318, BLOQUEA con `--cierre`) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
+## 🧭 Par (paper, tema) que llegó por `methods` desde otro sujeto y nadie decidió: `no_sintetizado` o `cola_tema` (#558, backlog; con `--cierre` bloquea) (0)
+> sobre 60 notas de `papers/`
+
+## ⏳ Par (paper, tema) EN COLA del tema, declarado y fechado — deuda con dueño (#558, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## ❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
