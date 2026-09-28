@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -56,40 +55,6 @@ def by_source(pairs: list) -> dict:
     return out
 
 
-#: #557 · the paper note may gloss the same page twice, naming different objects, and the synthesis
-#: copies one of them. The judge sees both glosses next to the claim; they are a pointer, never evidence.
-NOTA_MISMA_PAGINA = ("Lo que la nota del paper dice sobre esa(s) misma(s) página(s): **no es "
-                     "evidencia**, es para que notes si la nota glosa el pasaje de dos maneras. Si "
-                     "nombran objetos distintos, decidí contra el PDF cuál es el correcto (#557).")
-
-
-def note_lines_at(bibcode: str, claim: str) -> list:
-    """Lines of the paper note's reading sections (from the first `## Vista` on) whose page
-    locators share a page with the claim's (#557). Empty when the claim has no page."""
-    paginas = {x for a, b in cfg.page_locators(claim) for x in cfg.page_span(a, b)}
-    nota = cfg.PAPERS / f"{cfg.note_stem(bibcode)}.md"
-    if not paginas or not nota.exists():
-        return []
-    texto = nota.read_text(encoding="utf-8")
-    if (i := texto.find("\n## Vista")) < 0:
-        return []
-    lineas = [ln.strip() for ln in texto[i:].split("\n")
-              if ln.strip() and not ln.startswith("#")
-              and paginas & {x for a, b in cfg.page_locators(ln) for x in cfg.page_span(a, b)}]
-    # same page is not same fact: a number the claim names besides its locator narrows it down
-    cifras = _numbers(claim) - _numbers(" ".join(m.group(0) for m in _LOC_RE.finditer(claim)))
-    return [ln for ln in lineas if cifras & _numbers(ln)] if cifras else lineas
-
-
-_NUM_RE = re.compile(r"(?<![\w.])\d+(?:[.,]\d+)?(?![\w])")
-_LOC_RE = re.compile(r"\b(?:pp?|Sects?|§|Fig|Figs|Tabla|Table|Eq|Ec)\.?\s*[\d.,\s–-]+", re.I)
-
-
-def _numbers(text: str) -> set:
-    """The numbers in a text, with the decimal comma read as a point."""
-    return {n.replace(",", ".") for n in _NUM_RE.findall(text)}
-
-
 def prompt_for(nota: Path, bibcode: str, pares: list, out_dir: Path) -> str:
     """The prompt of ONE verifier: its pairs, the fence, the output path, and where the rules are."""
     partes = [f"# Verificación de citas — fuente `{bibcode}` · nota `{nota.name}`", "",
@@ -100,8 +65,6 @@ def prompt_for(nota: Path, bibcode: str, pares: list, out_dir: Path) -> str:
               f"Pares a juzgar: {len(pares)}. Cada uno vuelve con su `ancla` tal cual.", ""]
     for i, p in enumerate(pares, 1):
         partes += [f"### Par {i} · ancla `{p.anchor}`", "", p.block.text.strip(), ""]
-        if (vecinas := note_lines_at(bibcode, p.block.text)):
-            partes += [NOTA_MISMA_PAGINA, ""] + [f"> {ln}" for ln in vecinas] + [""]
     partes += ["## Salida", "",
                f"Escribí el resultado en `{(out_dir / f'{bibcode}.json').as_posix()}` con "
                f"EXACTAMENTE esta forma:", "", lb.verify_fanout_json_block(bibcode), ""]

@@ -145,29 +145,3 @@ def test_la_regex_de_arqueologia_caza_lo_que_declara():
                   "precisión **12/15", "cambió en 1.39.0"):
         assert R.search(forma), forma
     assert not R.search("p. 3 de 12"), "un «N de M» pelado es un localizador"
-
-
-def test_el_juez_ve_lo_que_la_nota_del_paper_dice_de_la_misma_pagina(tmp_path, monkeypatch):
-    """#557 — la nota del paper glosaba la p. 13 de dos maneras («α Cen B b» / «Demory et al.
-    2015») y la ficha copió la equivocada: el juez ve las dos glosas al lado del claim, filtradas
-    por página Y por una cifra del claim que no sea su localizador (misma página ≠ mismo hecho)."""
-    papers = tmp_path / "papers"
-    papers.mkdir()
-    (papers / "2022X.md").write_text(
-        "---\n---\n## Abstract\nla señal de 19 d (p. 13)\n\n## Vista — b\n\n"
-        "- **planet:** la señal de ≈19 d no es el tránsito de Demory et al. 2015 (p. 13)\n"
-        "| Señal a 19 d | efeméride de α Cen B b | Sect. 4.2.2, p. 13 |\n"
-        "| Jitter | 1.72 m/s | p. 13 |\n"
-        "| Otra | 19 d | p. 7 |\n", encoding="utf-8")
-    monkeypatch.setattr(vf.cfg, "PAPERS", papers)
-    nota = tmp_path / "f.md"
-    nota.write_text("---\n---\n\n# F\n\nLa señal de 19 d no es α Cen B b (Sect. 4.2.2, p. 13) "
-                    "[[2022X]].\n", encoding="utf-8")
-    vf.write_round(nota, tmp_path / "r")
-    texto = (tmp_path / "r" / "prompts" / "2022X.md").read_text(encoding="utf-8")
-    assert "**no es evidencia**" in texto and "(#557)" in texto
-    assert "> - **planet:** la señal de ≈19 d no es el tránsito de Demory" in texto
-    assert "> | Señal a 19 d | efeméride de α Cen B b" in texto
-    assert "Jitter" not in texto, "misma página sin la cifra del claim: otro hecho"
-    assert "| Otra |" not in texto and "## Abstract" not in texto
-    assert vf.note_lines_at("2022X", "sin página [[2022X]]") == []
