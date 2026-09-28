@@ -91,6 +91,14 @@ def test_el_prompt_pide_la_notacion_de_la_boveda_fuera_de_las_citas():
     assert "Dentro\n  de «…» no" in p, "la cita va como está en la fuente"
 
 
+def test_el_prompt_pide_glosar_una_vez_cada_oracion_de_la_fuente():
+    """#557 — una nota decía «efeméride de α Cen B b» en un eje y «candidato de Demory et al. 2015»
+    en otro, sobre la misma oración de la p. 13; la ficha copió la equivocada. No hay detector léxico
+    (medido: 68–428 pares de ruido), así que la regla vive en el prompt."""
+    p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA)
+    assert "(#557)" in p and "se glosa UNA vez" in p and "citala textual" in p
+
+
 def test_prompt_declara_que_un_grep_vacio_no_prueba_ausencia():
     p = ep.build_prompt("tau_ceti", "2017AJ....154..135F", "tau Ceti", ALIASES, UNA_COLUMNA).lower()
     assert "ausencia" in p

@@ -542,6 +542,10 @@ da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vi
   resultado descriptivo no se convierte en recomendación.
 - Si la fuente **atribuye el valor a otro trabajo** («according to X», «(X et al.)»), marcalo
   **segunda mano** con la cita a X: el número **no es de esta fuente**.
+- **Una misma oración de la fuente se glosa UNA vez (#557).** Si la usás en dos lugares (un eje y
+  una fila, `aporte` y un eje), que nombren **el mismo objeto**. Si es ambigua sobre a qué se refiere
+  (un planeta, un candidato, el trabajo que lo propuso), **citala textual** entre «…» en vez de
+  resolverla: dos glosas distintas del mismo pasaje dejan a la síntesis elegir la equivocada.
 - Mirá si el PDF es un **preprint** de arXiv (marca de agua al margen): si lo es, decilo en
   `salvedades` **estructurada** —`{{"tipo":"pdf_leido","documento":"eprint"}}` (#452), ver abajo—,
   porque un valor que discrepa del publicado es candidato a diferencia de versión.
