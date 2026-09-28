@@ -11566,6 +11566,9 @@ def test_556_la_agregacion_sin_marca_ni_cita_propia_es_WARN_y_las_exenciones_son
                    "Lo que el corpus dice sobre su origen:",                       # introductor
                    "_Una fila por paper donde las fuentes no coinciden._"):        # plantilla
         assert hits(exento + "\n") == [], exento
+    # el introductor que YA afirma la agregación no está exento (validación en la instancia: la
+    # única de las cinco del issue que el chequeo no veía)
+    assert len(hits("**Ciclo.** Dos fuentes independientes dan un ciclo de ~8 años:\n")) == 1
     assert hits("## Huecos\n\nEl corpus no trae nada de 2020.\n") == [], "Huecos declara su alcance"
     assert hits("## Papers\n\nel corpus entero\n") == [], "sección estampada"
     # y sólo en notas de entidad: un paper no sintetiza varias fuentes

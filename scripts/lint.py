@@ -6375,6 +6375,7 @@ def warn_hits(stem: str, body_full: str, offset: int, impl_leaks: list, f=None) 
 #: gave 45, mostly real unmarked aggregations. Not widened without measuring again.
 AGREGACION_RE = re.compile(r"(?i)\b(?:el|del) corpus\b|\b(?:las|dos|tres|ambas) (?:\w+ )?fuentes\b"
                            r"|\bcasi tod[oa]s\b|\bla mayoría de\b|\bfuentes independientes\b")
+AGREGACION_FUERTE_RE = re.compile(r"(?i)\bindependientes\b|\bcasi tod[oa]s\b|\bla mayoría de\b")
 _ORACION_RE = re.compile(r"(?<=[.;:])\s+(?=[A-ZÁÉÍÓÚ¿«*⚠⛔_])")
 
 
@@ -6403,8 +6404,12 @@ def check_unmarked_aggregation(stem: str, body_full: str, offset: int) -> list:
             continue
         for oracion in _ORACION_RE.split(" ".join(b.text.split())):
             m = AGREGACION_RE.search(oracion)
-            if (m and "[[" not in oracion and not oracion.rstrip("*_ ").endswith(":")
-                    and not oracion.startswith("_")):
+            # the «…:» introducer is exempt only when it NAMES the corpus («Del corpus:»); one that
+            # already asserts the aggregate («Dos fuentes independientes dan un ciclo…:») is not —
+            # validation on the instance: the one case of the five the check missed.
+            introduce = (oracion.rstrip("*_ ").endswith(":")
+                         and not AGREGACION_FUERTE_RE.search(oracion))
+            if m and "[[" not in oracion and not introduce and not oracion.startswith("_"):
                 out.append((stem, f"L{b.first_line + offset}: «{m.group(0)}» sin `(inferencia de "
                                   f"[[…]])` ni cita propia en la oración — «{oracion[:90]}» → "
                                   f"marcala con sus premisas, citala, o firmá el hit (#556)"))
