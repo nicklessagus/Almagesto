@@ -1441,3 +1441,26 @@ def test_526_lo_REFUTADO_no_sale_pegable_y_en_la_lectura_sale_MARCADO(toy_vault,
         assert "REFUTADO «grilla aleatoria»" in out and visible in out, "la lectura lo muestra"
     ct.main(["t", "--grep", "frecuencias"])
     assert "REFUTADO" not in capsys.readouterr().out, "sólo el valor que lo contiene"
+
+
+def test_555_parafrasis_pone_la_afirmacion_de_la_ficha_al_lado_de_la_vista(toy_vault, capsys):
+    """#555 — 3 de 5 errores de una auditoría nacieron al sintetizar, con la nota del paper bien:
+    ningún paso ponía la paráfrasis de la ficha al lado de la vista. Lado a lado, sin veredicto; y
+    la fuente citada sin vista para este sujeto se dice."""
+    from conftest import write_yaml, mk_note
+    write_yaml(cfg.STARS_YAML, {"alpha Cen B": {"slug": "toliman"}})
+    nota = mk_note(cfg.STARS, "toliman", {"tags": ["star"], "name": "alpha Cen B"},
+                   "Se excluye la temporada 2013 [[2019L]].\n\nOtra cosa [[2020Z]].\n")
+    mk_note(cfg.PAPERS, "2019L", {"tags": ["paper"], "bibcode": "2019L"},
+            "## Vista — alpha Cen B (2026-09-26)\n\nLas observaciones de alta cadencia de 2013 "
+            "se excluyen.\n\n## Otra\n\nx\n")
+    mk_note(cfg.PAPERS, "2020Z", {"tags": ["paper"], "bibcode": "2020Z"}, "## Vista — GJ 581\n\ny\n")
+    filas = {b: (bl, v) for b, bl, v in ct.paraphrase_pairs(nota)}
+    assert filas["2019L"][0] == ["Se excluye la temporada 2013 [[2019L]]."]
+    assert "alta cadencia de 2013" in filas["2019L"][1] and "## Otra" not in filas["2019L"][1]
+    assert filas["2020Z"][1] is None, "citado sin lectura desde este sujeto"
+    assert [b for b, *_ in ct.paraphrase_pairs(nota, paper="2020Z")] == ["2020Z"]
+    assert ct.main(["--parafrasis", str(nota)]) == 0
+    out = capsys.readouterr().out
+    assert "2 fuente(s) · 1 sin vista" in out
+    assert ct.main(["--parafrasis", str(nota) + "x"]) == 2

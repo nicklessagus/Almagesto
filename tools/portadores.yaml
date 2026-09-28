@@ -487,6 +487,9 @@ portadores:
       - modulo: scripts/triage.py
         estado: usa
         motivo: "`subject_name` (la inversa) delega en `star_by_slug`."
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "#555 — `paraphrase_pairs` resuelve el nombre de la estrella del sujeto con `star_by_slug`."
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: >-
@@ -2363,6 +2366,9 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: usa
         motivo: "`view_stub_kind` / `restamp_vista_stub` leen la sección del sujeto con `section_span`."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "#555 — `paraphrase_pairs` corta la vista con `cfg.section_span`, que delega en `section_start` (nombre exacto): no hay un corte propio que pueda divergir."
       - modulo: scripts/lint.py
         estado: usa
         motivo: "Corta secciones fijas con `section_start`/`section_span`; la coherencia `vistas[] ↔ cuerpo` usa `vistas_en_cuerpo`, que extrae el sujeto completo por regex y corta sólo en espacio + puntuación: ya separaba `ica` de `ica-ruido`."

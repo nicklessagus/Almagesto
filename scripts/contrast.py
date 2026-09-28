@@ -835,6 +835,38 @@ def validar_todo(slug: str | None = None) -> int:
     return alteradas
 
 
+def paraphrase_pairs(nota: pathlib.Path, paper: str | None = None) -> list:
+    """`[(bibcode, [claim blocks], view text | None)]` — each source the note cites, next to what
+    its paper note READ for this subject (#555).
+
+    `verify-citations` judges the note against the PDF and `--validar` checks the QUOTES against the
+    extraction; nobody put the ficha's PARAPHRASE next to the paper note's view, where the synthesis
+    drifts (measured in one audit: 3 of 5 content errors were born synthesising, with a correct
+    paper note, and all three passed the blind round). This is the side-by-side, not a verdict:
+    whether a paraphrase says more than the view is read by whoever looks, before the fan-out."""
+    slug = cfg.entity_slug(nota)
+    nombres = [slug] if slug else []
+    if slug:
+        try:
+            nombres.insert(0, str(cfg.as_map(cfg.theme_by_slug(slug)[1]).get("concept") or slug))
+        except KeyError:
+            nombres.insert(0, cfg.star_by_slug(slug)[0])
+    por_bib: dict = {}
+    for par in lb.pairs_of(nota.read_text(encoding="utf-8")):
+        if paper and par.bibcode != paper:
+            continue
+        bloques = por_bib.setdefault(par.bibcode, [])
+        if par.block.text not in bloques:
+            bloques.append(par.block.text)
+    out = []
+    for bib, bloques in por_bib.items():
+        f = cfg.PAPERS / f"{cfg.note_stem(bib)}.md"
+        texto = f.read_text(encoding="utf-8") if f.exists() else ""
+        span = next((sp for n in nombres if (sp := cfg.section_span(texto, f"## Vista — {n}"))), None)
+        out.append((bib, bloques, texto[span[0]:span[1]].strip() if span else None))
+    return out
+
+
 def main(argv=()) -> int:
     """CLI: filtra las extracciones del sujeto, o valida una nota contra ellas (`--validar`)."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0],
@@ -860,12 +892,33 @@ def main(argv=()) -> int:
     ap.add_argument("--preflight", nargs="?", const="HEAD", metavar="REF",
                     help="#490: chequea las líneas AGREGADAS bajo vault/wiki/ contra REF "
                          "(default HEAD), ANTES del fan-out")
+    ap.add_argument("--parafrasis", metavar="NOTA",
+                    help="#555: por cada fuente que cita la NOTA, sus afirmaciones al lado de la "
+                         "`## Vista` de la nota del paper para este sujeto — para ver la deriva de "
+                         "la síntesis ANTES del fan-out; no da veredicto (con --paper, una fuente)")
     ap.add_argument("--validar-todo", action="store_true",
                     help="barrido: toda la bóveda, o las notas del sujeto si das el slug (#323)")
     args = ap.parse_args(list(argv) or None)
 
     if args.preflight:
         return preflight(args.preflight)
+    if args.parafrasis:
+        nota = pathlib.Path(args.parafrasis)
+        if not nota.exists():
+            cfg.print_seguro(f"⛔ no existe {nota}")
+            return 2
+        filas = paraphrase_pairs(nota, args.paper)
+        for bib, bloques, vista in filas:
+            cfg.print_seguro(f"\n### [[{bib}]] — {len(bloques)} bloque(s) de la nota")
+            for b in bloques:
+                cfg.print_seguro(f"  nota : {' '.join(b.split())}")
+            cfg.print_seguro("  vista: " + ("\n         ".join(vista.split("\n")) if vista else
+                             "⚠ sin `## Vista` para este sujeto: la nota cita una lectura que no "
+                             "se hizo desde acá"))
+        sin = sum(1 for *_x, v in filas if v is None)
+        cfg.print_seguro(f"\n  {len(filas)} fuente(s) · {sin} sin vista para este sujeto — sin "
+                         f"veredicto: la deriva se lee acá, antes de pagar el fan-out (#555)")
+        return 0
     if args.validar_todo:
         return 1 if validar_todo(args.slug) else 0
 
