@@ -1956,6 +1956,9 @@ portadores:
       - modulo: scripts/harvest_views.py
         estado: fuera-de-alcance
         motivo: "`restamp_view_locators` necesita el SPAN del token para reemplazarlo y `page_locators` devuelve etiquetas, no posiciones; usa `PAGE_LOC_RE`, que es la única definición sobre la que esta regla ancla, así que no hay segunda regex."
+      - modulo: scripts/verify_fanout.py
+        estado: usa
+        motivo: "`note_lines_at` (#557) lee las páginas del claim y de cada línea de la nota del paper con esta función, para mostrarle al juez las glosas de la misma página."
 
   - issue: 495
     regla: >-
@@ -2018,6 +2021,9 @@ portadores:
       - modulo: scripts/harvest_views.py
         estado: fuera-de-alcance
         motivo: "Reescribe el token tal cual lo leyó `PAGE_LOC_RE` —que ya respeta el prefijo— y no compara ni expande rangos, que es lo que esta regla obliga a hacer con `page_span`."
+      - modulo: scripts/verify_fanout.py
+        estado: usa
+        motivo: "`note_lines_at` (#557) cruza las páginas del claim con las de cada línea de la nota del paper: expande rangos, así que usa `page_span` para no plegar el prefijo."
 
   - issue: 497
     regla: >-
