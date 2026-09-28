@@ -6317,7 +6317,7 @@ _ANTES_DE_UNIDAD_OK = re.compile(
 
 def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: dict) -> tuple:
     # @inv INV-167
-    """`(impl_leaks, bloque_con_varios_hechos, costura_unidad, revisadas, huerfanas)` (#502).
+    """`(*one list per cfg.WARN_REVISABLE, revisadas, huerfanas)` (#502; #556 added the fourth).
 
     Each WARN hit of the three categories that a PERSON decides (`cfg.WARN_REVISABLE`) is matched
     against the note's `warn_revisada` by `(categoria, ancla)`: a signed one moves to its own list
@@ -6353,16 +6353,63 @@ def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: 
                                     f"`{f['ancla']}` y ningún hit corresponde → o el bloque cambió "
                                     f"(re-revisalo y firmá el ancla nueva) o ya no dispara (sacá "
                                     f"la entrada) (#502/#256)"))
-    return (quedan["impl_leaks"], quedan["bloque_con_varios_hechos"], quedan["costura_unidad"],
-            revisadas, huerfanas)
+    return (*(quedan[c] for c in cfg.WARN_REVISABLE), revisadas, huerfanas)
 
 
-def warn_hits(stem: str, body_full: str, offset: int, impl_leaks: list) -> dict:
-    """The hits of the three signable WARN categories (`cfg.WARN_REVISABLE`), by category. One
-    assembly for the sweep and for `make_notes --migrate-warn-anchor` (#528)."""
+def warn_hits(stem: str, body_full: str, offset: int, impl_leaks: list, f=None) -> dict:
+    """The hits of the signable WARN categories (`cfg.WARN_REVISABLE`), by category. One
+    assembly for the sweep and for `make_notes --migrate-warn-anchor` (#528). `f` scopes the
+    aggregation check to entity notes (#556); without it that check is not run."""
+    entidad = f is not None and (in_dir(f, "stars") or in_dir(f, "concepts"))
     return {"impl_leaks": impl_leaks,
             "bloque_con_varios_hechos": check_block_facts(stem, body_full, offset),
-            "costura_unidad": check_unit_seams(stem, body_full, offset)}
+            "costura_unidad": check_unit_seams(stem, body_full, offset),
+            "agregacion_sin_inferencia": (check_unmarked_aggregation(stem, body_full, offset)
+                                          if entidad else [])}
+
+
+#: #556 — a sentence that quantifies over the CORPUS or over several SOURCES aggregates them, and an
+#: aggregation is an `inferencia` (D-42). ⚠ Measured on a real vault (28 entity notes, 1097 prose
+#: blocks): the wider pattern the issue suggested («ningún», «todas», ranges «de X a Y») gave 136
+#: hits, mostly single-paper statements; this one, per sentence and without a citation of its own,
+#: gave 45, mostly real unmarked aggregations. Not widened without measuring again.
+AGREGACION_RE = re.compile(r"(?i)\b(?:el|del) corpus\b|\b(?:las|dos|tres|ambas) (?:\w+ )?fuentes\b"
+                           r"|\bcasi tod[oa]s\b|\bla mayoría de\b|\bfuentes independientes\b")
+_ORACION_RE = re.compile(r"(?<=[.;:])\s+(?=[A-ZÁÉÍÓÚ¿«*⚠⛔_])")
+
+
+def check_unmarked_aggregation(stem: str, body_full: str, offset: int) -> list:
+    """`agregacion_sin_inferencia` — prose of a ficha/concept that aggregates sources without the
+    `inferencia` mark (#556, WARN, signable like its siblings).
+
+    #490's pre-flight looks only at lines a CORRECTOR added; the synthesis's own prose had no net,
+    and an audit found five unmarked aggregations in a note whose verification block declared «no
+    own readings». Per SENTENCE: the one that carries its own `[[bibcode]]` is attributed, not
+    aggregated. Out by structure: `## Huecos` (declares its scope, D-34), blockquotes (mention,
+    #387), table rows, stamped sections, a block already marked `(inferencia de [[…]])`, a
+    sentence that only introduces what follows (ends in «:») and the `_…_` template lines."""
+    out: list = []
+    seccion_de: list = []
+    actual = ""
+    for ln in body_full.split("\n"):
+        if ln.startswith("## "):
+            actual = ln.strip()
+        seccion_de.append(actual)
+    for b in lb.split_blocks(body_full):
+        sec = seccion_de[b.first_line - 1] if b.first_line - 1 < len(seccion_de) else ""
+        # stamped sections never reach here: `split_blocks` does not read them
+        if (b.kind in ("blockquote", "fila") or sec.startswith("## Huecos")
+                or INFER_MARK.search(b.text)):
+            continue
+        for oracion in _ORACION_RE.split(" ".join(b.text.split())):
+            m = AGREGACION_RE.search(oracion)
+            if (m and "[[" not in oracion and not oracion.rstrip("*_ ").endswith(":")
+                    and not oracion.startswith("_")):
+                out.append((stem, f"L{b.first_line + offset}: «{m.group(0)}» sin `(inferencia de "
+                                  f"[[…]])` ni cita propia en la oración — «{oracion[:90]}» → "
+                                  f"marcala con sus premisas, citala, o firmá el hit (#556)"))
+                break
+    return out
 
 
 def check_block_facts(stem: str, body_full: str, offset: int) -> list:
@@ -6803,10 +6850,9 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     add("forma_sospechosa", _f2)
     # «Un bloque, un hecho» (#408) y la costura de unidad (#406): los dos WARN que miran la
     # PROSA entre las citas. #502 — y las tres se FIRMAN: el hit revisado sale aparte, con motivo.
-    for key, items in zip(("impl_leaks", "bloque_con_varios_hechos", "costura_unidad",
-                           "warn_revisada", "warn_revisada_huerfana"),
+    for key, items in zip((*cfg.WARN_REVISABLE, "warn_revisada", "warn_revisada_huerfana"),
                           split_reviewed_warn(stem, fm, body_full, _offset,
-                                              warn_hits(stem, body_full, _offset, _il))):
+                                              warn_hits(stem, body_full, _offset, _il, f))):
         add(key, items)
     # #233 — la cabecera `> _Estado — …_` que la nota PUBLICA contra la que el estampador daría hoy.
     add("estado_desfasado", check_state_header(stem, f, text, _entity_slug(f)))
@@ -7216,6 +7262,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(found['impl_leaks']), poblacion='notas'),
         Categoria('bloque_con_varios_hechos', '⚠ Bloque con más de un hecho: arriba del p90 en largo o en hechos citados — partilo (#408, WARN)', SEV_WARN, tuple(found['bloque_con_varios_hechos']), poblacion='notas'),
         Categoria('costura_unidad', '⚠ Costura de unidad: una unidad separada de su número, la firma de un empalme mal hecho (#406, WARN)', SEV_WARN, tuple(found['costura_unidad']), poblacion='notas'),
+        Categoria('agregacion_sin_inferencia', '⚠ Agregación de fuentes sin la marca `inferencia` en la prosa de la síntesis («el corpus», «las N fuentes», «casi todos») (#556, WARN)', SEV_WARN, tuple(found['agregacion_sin_inferencia']), poblacion='entidades'),
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(found['cond_sin_clasificar']), poblacion='entidades'),
         Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog)', SEV_BACKLOG, tuple(found['verif_estructura']), poblacion='entidades'),
         Categoria('verif_inline', '⛔ Tabla de verificación DENTRO de la nota (schema pre-1.165.0) → `make_notes.py --migrate-verif-sidecar` (#344)', SEV_BLOQUEANTE, tuple(found['verif_inline']), poblacion='entidades'),

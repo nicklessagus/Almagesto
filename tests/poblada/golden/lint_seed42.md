@@ -245,6 +245,9 @@
 ## ⚠ Costura de unidad: una unidad separada de su número, la firma de un empalme mal hecho (#406, WARN) (0)
 > sobre 89 notas de `vault/wiki/`
 
+## ⚠ Agregación de fuentes sin la marca `inferencia` en la prosa de la síntesis («el corpus», «las N fuentes», «casi todos») (#556, WARN) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
 ## ⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 

@@ -2739,22 +2739,22 @@
   {
    "number": 550,
    "title": "`write_verif_sidecar` no re-estampa la línea `_Estado_`: la fecha de verificación falta tras el verify y `lint --cierre` no lo frena (familia de #523)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 551,
    "title": "`## Métodos aplicados`: el encabezado cuenta aplicaciones como pares crudos (grafía, paper) y la columna como papers distintos (316 vs 314)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 552,
    "title": "`## Excluidos por el filtro` rotula como «traídos» el `n_total` acumulado del registro",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 553,
    "title": "`no_sintetizado` es escalar por nota: en un paper compartido el motivo de un sujeto rige para todos, y el roll-up no lo muestra como declarado",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 554,

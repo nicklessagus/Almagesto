@@ -11545,3 +11545,31 @@ def test_AUD502_bibtex_Y_sin_bibtex_no_se_cuenta_ademas_como_no_pegable():
     fm = {"bibtex": _BTX_MACRO, "bibtex_source": "ads", "sin_bibtex": "no hay exportación"}
     assert [s for s, _ in lint.check_paper_bibtex("2020aaa...1..1A", fm)[5]] == ["2020aaa...1..1A"]
     assert lint.check_bibtex_no_pegable("2020aaa...1..1A", fm) == ([], [])
+
+
+# ── #556 · agregación de fuentes sin la marca `inferencia` en la prosa de la síntesis ──────────
+
+def test_556_la_agregacion_sin_marca_ni_cita_propia_es_WARN_y_las_exenciones_son_estructurales():
+    """#556 — cinco agregaciones sin marca en una ficha que declaraba «no hace lecturas propias», y
+    ninguna red las miraba: el preflight de #490 sólo ve líneas que agregó un corrector. Por
+    ORACIÓN: la que lleva su `[[bibcode]]` está atribuida."""
+    def hits(texto):
+        return [m for _s, m in lint.check_unmarked_aggregation("n", texto, 0)]
+    assert len(hits("Las mediciones del corpus van de ~36 a ~40 d.\n")) == 1
+    h = hits("Intro [[2020A]].\n\nDos fuentes independientes dan un ciclo de 8 años.\n")
+    assert len(h) == 1 and h[0].startswith("L3:"), h
+    for exento in ("Las mediciones del corpus van de 36 a 40 d [[2020A]].",       # cita propia
+                   "El corpus no la sostiene. Sale de dos lecturas (inferencia de [[2020A]], "
+                   "[[2021B]]).",                                                 # bloque marcado
+                   "> El corpus no la sostiene.",                                  # blockquote
+                   "| Eje | el corpus dice | x |",                                   # fila
+                   "Lo que el corpus dice sobre su origen:",                       # introductor
+                   "_Una fila por paper donde las fuentes no coinciden._"):        # plantilla
+        assert hits(exento + "\n") == [], exento
+    assert hits("## Huecos\n\nEl corpus no trae nada de 2020.\n") == [], "Huecos declara su alcance"
+    assert hits("## Papers\n\nel corpus entero\n") == [], "sección estampada"
+    # y sólo en notas de entidad: un paper no sintetiza varias fuentes
+    assert lint.warn_hits("n", "El corpus no la sostiene.\n", 0, [],
+                          cfg.PAPERS / "n.md")["agregacion_sin_inferencia"] == []
+    assert lint.warn_hits("n", "El corpus no la sostiene.\n", 0, [],
+                          cfg.STARS / "n.md")["agregacion_sin_inferencia"]

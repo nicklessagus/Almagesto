@@ -299,6 +299,14 @@ Deben quedar en **0**:
   filtros medidos (número, cuantificador y preposición antes; unidad-anotación seguida de coma):
   53 → 19 → **3** hits sobre 224 notas, los 3 falsos positivos revisables. Lo que se midió y
   DESCARTÓ: el shingle repetido (74 falsos positivos, 0 verdaderos sobre el defecto real).
+- **Agregación sin `inferencia`** (#556, firmable como las anteriores): una oración de ficha o
+  concepto que cuantifica sobre el corpus o sobre varias fuentes («el corpus», «las N fuentes»,
+  «casi todos», «la mayoría de») sin `[[bibcode]]` propio ni la marca `(inferencia de [[…]])` en su
+  bloque. El preflight de #490 sólo mira líneas que agregó un corrector; la prosa de la síntesis no
+  tenía red. Afuera por estructura: `## Huecos`, blockquotes, filas, secciones estampadas, la
+  oración que sólo introduce («…:») y las líneas `_plantilla_`. Medido en una bóveda real (28 notas
+  de entidad): el patrón ancho del issue («ningún», «todas», rangos) daba 136 hits; éste, 27,
+  ~2/3 agregaciones reales.
 - **`.obsidian/` en la raíz del repo**: la bóveda se abrió mal (el grafo indexa el andamiaje);
   abrir `vault/` como vault y borrar ese directorio.
 - **Alias de más** (declarado en `stars.yaml` y que resuelve a otro objeto).

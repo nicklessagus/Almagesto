@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.363.0"
+ALMAGESTO_VERSION = "1.364.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4392,7 +4392,8 @@ def load_reviewed_second_hand(meta: dict, *, entry: str = "?") -> list:
 
 #: #502 — las WARN cuyo hit decide una PERSONA leyéndolo (regla #0, #408, #406). Las de higiene
 #: (objetivo, áreas, Obsidian, PDF ↔ disco) no llevan juicio: se cierran arreglando.
-WARN_REVISABLE = ("impl_leaks", "bloque_con_varios_hechos", "costura_unidad")
+WARN_REVISABLE = ("impl_leaks", "bloque_con_varios_hechos", "costura_unidad",
+                  "agregacion_sin_inferencia")                     # #556
 
 
 def load_reviewed_warn(meta: dict, *, entry: str = "?") -> list:
