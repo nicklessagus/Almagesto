@@ -1863,6 +1863,41 @@ def match_rows_to_pairs(pairs: list, rows: list, umbral: float = 0.60) -> tuple:
     return asignado, sin_fila, [r for r in rows if id(r) not in usadas]
 
 
+#: #554 — what a claim is ABOUT: an object designation (a Bayer-style `ε Eri`/`α Cen B`, a catalogue
+#: `GJ 581`/`HD 40307`, a planet letter after either), an author citation (`Demory et al. 2015`) or
+#: a number. Text coverage does not see a change of any of them: re-attributing a result from α Cen B
+#: to ε Eri kept 0.938 of the extract.
+_OBJETO_RE = re.compile(
+    r"[α-ωΑ-Ω]\s?[A-Z][a-z]{2}(?:\s[A-Z]\b)?(?:\s[b-h]\b)?"
+    r"|\b(?:GJ|Gl|Gliese|HD|HIP|TOI|LHS|Kepler|K2|TRAPPIST|Wolf|Ross|HR)[\s-]?\d+[A-Za-z]?(?:\s[b-h]\b)?"
+    r"|\b[A-Z][a-zà-ÿ]+ et al\.?(?:,?\s\(?\d{4})?"
+    r"|\d+(?:[.,]\d+)?")
+
+
+def _claim_tokens(text: str, hasta: int | None = None) -> set:
+    """The designations and numbers of `text` (#554), normalised. With `hasta` (a truncated extract's
+    length) only the ones starting 12 characters before it: the cut falls mid-token (#226)."""
+    t = normalize_ws(text)
+    fin = len(t) if hasta is None else min(hasta, len(t)) - 12
+    t = re.sub(r"\[\[[^\]]*\]\]", lambda m: " " * len(m.group(0)), t)   # a bibcode is not content
+    return {" ".join(m.group(0).replace(",", ".").split()) for m in _OBJETO_RE.finditer(t)
+            if m.start() < fin}
+
+
+def claim_objects_changed(extract: str, block: str) -> bool:
+    """Did the correction change WHAT the claim is about — an object, an author, a number? (#554)
+
+    `extract` is the row's (maybe truncated) claim, `block` the current text. Removed: a token of
+    the extract missing from the whole block. Added: a token in the block's opening window (the
+    extract's length) that the extract does not carry. Coverage cannot see either; both mean the
+    old verdict is about another claim."""
+    ext = normalize_ws(extract)
+    # an extract without the `…` of `truncate_claim` IS the whole claim: the window is the block
+    ventana = len(ext) if ext.endswith("…") else None
+    return bool(_claim_tokens(extract, hasta=ventana) - _claim_tokens(block)
+                or _claim_tokens(block, hasta=ventana) - _claim_tokens(extract))
+
+
 def carry_needs_reverify(pair, row) -> bool:
     # @inv INV-82
     """Must this pairing go to RE-VERIFY even though the extract still matches? (#539)
@@ -1877,7 +1912,11 @@ def carry_needs_reverify(pair, row) -> bool:
     if row is None or row.anchor == pair.anchor:
         return False
     return (current_verdict(row.verdict) in VERDICTS_SIN_RESOLVER
-            or (condition_kind(row.condition) == "acota" and not condition_resolved(row.condition)))
+            or (condition_kind(row.condition) == "acota" and not condition_resolved(row.condition))
+            # #554 — a correction that changes the object, the author or a number changes what the
+            # claim says, whatever the coverage score: re-verify (measured: 0.938, and a blind
+            # judge approved the wrong object).
+            or claim_objects_changed(row.claim or "", pair.block.text))
 
 
 # ── #259 · el SCHEMA de la salida del fan-out de `verify-citations` ─────────────────────────────

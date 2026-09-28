@@ -258,7 +258,7 @@ def test_la_ronda_ACOTADA_arrastra_los_pares_de_afuera_con_el_ancla_recalculada(
     # se edita la frase de 2019Txt SIN cambiar lo que afirma (cobertura alta) y se re-verifica SÓLO
     # 2020Pdf: la ronda acotada de #407
     texto = nota.read_text(encoding="utf-8").replace(
-        "La amplitud es 2.5 m/s [[2019Txt]].", "La amplitud es 2.5 m/s, medida en 2019 [[2019Txt]].")
+        "La amplitud es 2.5 m/s [[2019Txt]].", "La amplitud es 2.5 m/s, en promedio [[2019Txt]].")
     nota.write_text(texto, encoding="utf-8")
     d = _acotar(_fanout(toy_vault, nota, {"2020Pdf": "no-soportada"}, ronda="r2"), "2019Txt")
     r = ws.write(nota, d, fecha="2026-03-02")
@@ -284,7 +284,7 @@ def test_480_reanclar_lleva_las_filas_con_el_ancla_recalculada_y_conserva_la_fec
     hermano_antes = cfg.verif_sidecar(nota).read_text(encoding="utf-8")
     anclas_viejas = {f.bibcode: f.anchor for f in lb.verif_rows(nota)}
     nota.write_text(nota.read_text(encoding="utf-8").replace(
-        "La amplitud es 2.5 m/s [[2019Txt]].", "La amplitud es 2.5 m/s, medida en 2019 [[2019Txt]]."),
+        "La amplitud es 2.5 m/s [[2019Txt]].", "La amplitud es 2.5 m/s, en promedio [[2019Txt]]."),
         encoding="utf-8")
     assert lint.collect().por_clave("stale_pairs").items != (), "el fixture: el par venció"
     assert ws.main([str(nota), "--reanclar", "--dry-run"]) == 0

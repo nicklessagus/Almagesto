@@ -129,8 +129,9 @@ def main() -> int:
         print(f"  ✅ re-anclables (el veredicto se lleva, el ancla se recalcula) … {len(r['asignado']):4}")
         print(f"  ⛔ A RE-VERIFICAR (sin fila que llevar) ……………………………… {len(r['sin_fila']):4}")
         if r["corregidas"]:
-            print(f"     de ésos, {len(r['corregidas'])} con fila parecida cuyo veredicto exigía acción "
-                  f"(no-soportada/contradice/acota sin resolver): se corrigió, no se re-ancla (#539)")
+            print(f"     de ésos, {len(r['corregidas'])} con fila parecida que no se lleva: su veredicto "
+                  f"exigía acción (#539) o la corrección cambió un objeto, un autor o un número "
+                  f"(#554, aunque la cobertura sea alta)")
         print(f"  ⚠ filas huérfanas (la afirmación ya no está en el cuerpo) … {len(r['huerfanas']):4}")
 
     if r["sin_fila"]:

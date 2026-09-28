@@ -1908,3 +1908,24 @@ def test_528_warn_anchor_es_el_BLOQUE_de_split_blocks_no_el_parrafo():
     # fuera de lo que `split_blocks` lee (sección estampada) sigue el párrafo
     estampada = ["## Papers", "texto estampado", "sigue"]
     assert lb.warn_anchor(estampada, 2) == lb.sha10("texto estampado sigue")
+
+
+def test_554_cambiar_el_objeto_el_autor_o_un_numero_manda_a_re_verificar():
+    """#554 — «39 líneas… contra el índice S» corregida a «… en espectros de ε Eri» conservaba
+    0,938 del extracto: `reverify_subset` proponía llevar el `soportada` viejo a una afirmación
+    falsa. Cobertura de texto no mide DE QUÉ habla la afirmación."""
+    viejo = "Las 39 líneas con |τ| ≥ 0,5 se correlacionan contra el índice S"
+    assert lb.claim_objects_changed(viejo, viejo + " de ε Eri [[x]].")
+    assert lb.claim_objects_changed("coincide con la efeméride de α Cen B b",
+                                    "coincide con la efeméride del candidato de Demory et al. 2015")
+    assert lb.claim_objects_changed("el período es 4,3 días", "el período es 4,8 días")
+    assert lb.claim_objects_changed("en GJ 581 d", "en la señal de 67 d"), "sacar un objeto también"
+    # reformular sin tocar objetos ni números, o un extracto TRUNCADO a mitad de número: se lleva
+    assert not lb.claim_objects_changed(viejo, viejo.replace("se correlacionan", "correlacionan"))
+    assert not lb.claim_objects_changed("baja de 70,2 a 4,8 m/s al corr…",
+                                        "baja de 70,2 a 4,8 m/s al corregir esa correlación [[x]].")
+    par = lb.pairs_of("## X\n\nLas 39 líneas se miden en ε Eri [[2018AJ....156..180W]].\n")[0]
+    fila = lb.Row(n="1", claim="Las 39 líneas se miden en α Cen B", bibcode=par.bibcode,
+                  verdict="soportada", evidence="e", anchor="zzzzzzzzzz",
+                  source_hash="pdf:" + "b" * 10)
+    assert lb.carry_needs_reverify(par, fila), "soportada, pero de otro objeto: no se lleva"
