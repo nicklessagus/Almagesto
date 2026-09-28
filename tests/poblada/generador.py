@@ -397,6 +397,7 @@ def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int
     extracted_idx |= nosint_idx     # los anómalos de "no_sintetizado" están SIEMPRE extraídos
 
     to_cite = sorted(extracted_idx - nosint_idx)     # los que SÍ deben terminar citados en algún lado
+    to_cite_set = set(to_cite)
 
     home_slugs = [star_slugs[i % n_stars] for i in range(n_papers)]
     home_of_paper = {paper_stems[i]: home_slugs[i] for i in range(n_papers)}
@@ -444,6 +445,12 @@ def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int
     elif resto:
         raise ValueError("no hay conceptos citables (revisá n_concepts vs. cobertura_citas) pero "
                          f"hay {len(resto)} papers extraídos que necesitan cita")
+
+    # #559 — el lint mide «extraído, no sintetizado» también por PAR (paper, sujeto que lo reclama
+    # directamente). Acá cada paper reclama su estrella y la ficha sintética no lo cita: en el
+    # corpus limpio eso va DECLARADO, como lo haría el operador, para que la anomalía
+    # `no_sintetizado` siga siendo el único motivo del hallazgo.
+    citado_por = {st: c for c, sts in concept_citations.items() for st in sts}
 
     # ── escritura: ground-truth ───────────────────────────────────────────────────────────────
     for slug, gt in star_gt.items():
@@ -584,6 +591,11 @@ _(ninguno relevante — corpus sintético)_
             "pdf": None, "fulltext": ft_rel, "fulltext_source": ft_src, "pdf_source": None,
             "confidence": "medium", "tags": ["paper"],
         }
+        if i in to_cite_set and not vintage_old:
+            front["no_sintetizado"] = [
+                {"sujeto": suj, "motivo": "corpus sintético: se sintetiza en un concepto"}
+                for suj in [star_names[i % n_stars]] + [t for t in thesis_links
+                                                        if t != citado_por.get(stem)]]
         if vintage_old:
             # El corpus `vintage` existe para probar los DETECTORES de schema viejo, así que
             # sigue emitiendo `bearing` (pre-D-21) — es la anomalía, no un descuido.

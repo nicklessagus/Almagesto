@@ -3165,6 +3165,54 @@ def check_unsynthesized(extracted, cited_in_entity) -> list:
     return unsynthesized
 
 
+def check_unsynthesized_by_subject(paper_fms: dict, ya: set) -> tuple:
+    """`(filas, no_evaluados)` — the pair (paper, subject) the roll-up publishes as `extraído, no
+    sintetizado` for a subject that claims the paper DIRECTLY (#559).
+
+    `check_unsynthesized` measures by NOTE (cited in no entity at all), and the hatch is by PAIR
+    since #553: a paper cited in ficha A and claimed by ficha B —which neither cites nor declares
+    it— was debt in B's roll-up and invisible here (measured on an instance: 12 such pairs, lint 0).
+    The universe is `mn.papers_universe`, the SAME one `## Papers` stamps. ⚠ A theme's membership
+    through `methods` alone stays out, on purpose: that is a paper of ANOTHER subject using the
+    method, whose destination is the concept's roll-up, not its prose (91 of 103 pairs measured).
+    `ya` = stems the per-note check already reports, so a paper is not listed twice."""
+    filas: list = []
+    no_evaluados: list = []
+    for kind, slug, nombre, meta in cfg.all_subjects():
+        dest = mn.subject_note(slug, kind)
+        if not dest.exists():                    # `all_subjects` only yields declared ones
+            continue
+        concept = str(cfg.as_map(meta).get("concept") or slug)
+        # Cheap YAML-free gate first (the lint's parse budget is ratcheted by `test_escala`, and
+        # `papers_universe` reads the subject's config and registro): some extracted paper has to
+        # claim THIS subject directly, go uncited in its prose and undeclared for it. ⚠ An atajo
+        # `--guardas` reports as a survivor: the loop below decides the same, only slower.
+        nombres = {slug, str(nombre), concept}
+        citados = set(LINK_RE.findall(cfg.solo_prosa(dest.read_text(encoding="utf-8"))))
+        if not any(fm.get("methods") and stem not in citados and stem not in ya
+                   and nombres & {str(x) for k in ("stars", "thesis_links")
+                                  for x in cfg.as_list(fm.get(k))}
+                   and not (nombres & {str(cfg.as_map(d).get("sujeto")) for d in
+                                       cfg.as_list(fm.get("no_sintetizado"))})
+                   for stem, fm in paper_fms.items()):
+            continue
+        try:
+            universo = mn.papers_universe(slug, kind, paper_fms)
+        except Exception as _exc:                   # noqa: BLE001 — D-43: declared, not a zero
+            no_evaluados.append((f"«extraído, no sintetizado» de `{slug}` (#559)",
+                                 f"{_exc.__class__.__name__}: {_exc}"))
+            continue
+        for r in universo:
+            if r["estado"] != mn.ESTADO_EXTRAIDO or r["stem"] in ya:
+                continue
+            if kind == "theme" and not mn.theme_membership(concept, paper_fms.get(r["stem"]) or {})[1]:
+                continue
+            filas.append((r["stem"], f"extraído y reclamado por `{nombre}`, cuya nota no lo cita "
+                                     f"→ sintetizalo ahí o declará `no_sintetizado: [{{sujeto: "
+                                     f"{nombre}, motivo: …}}]` en la nota del paper (#559)"))
+    return filas, no_evaluados
+
+
 def check_dangling_thesis(thesis_refs: dict, dangling) -> list:
     """`dangling_thesis` — a `thesis_links` naming no note (BLOQUEANTE).
 
@@ -7124,6 +7172,10 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["incomplete"] += check_star_without_ground_truth(vistos_gt)
     orphans = check_orphans(sweep.incoming, sweep.kinds, refs_stems)
     found["unsynthesized"] = check_unsynthesized(sweep.extracted, sweep.cited_in_entity)
+    _us, _us_no_eval = check_unsynthesized_by_subject(
+        paper_fms, {stem for stem, _m in found["unsynthesized"]})
+    found["unsynthesized"] += _us
+    found["not_evaluated"] += _us_no_eval
     # ⛔ UNA regla para las dos categorías dangling (#243/#348): «¿este nombre tiene nota
     # destino?» por CLAVE NORMALIZADA, la del roll-up. Difieren en SEVERIDAD, nunca en qué cuenta
     # como destino, y dos copias de esa regla ya divergieron una vez.

@@ -11576,3 +11576,50 @@ def test_556_la_agregacion_sin_marca_ni_cita_propia_es_WARN_y_las_exenciones_son
                           cfg.PAPERS / "n.md")["agregacion_sin_inferencia"] == []
     assert lint.warn_hits("n", "El corpus no la sostiene.\n", 0, [],
                           cfg.STARS / "n.md")["agregacion_sin_inferencia"]
+
+
+def test_check_unsynthesized_by_subject_mide_el_PAR_con_reclamo_directo(toy_vault):
+    """#559 — el paper citado en la ficha A y reclamado por B, que no lo cita ni lo declara, era
+    deuda en el roll-up de B e invisible para el lint (medido: 12 pares, lint 0). Por reclamo
+    DIRECTO: la pertenencia a un tema sólo por `methods` es roll-up, no prosa."""
+    write_yaml(cfg.STARS_YAML, {"Estrella A": {"slug": "a"}, "Estrella B": {"slug": "b"}})
+    write_yaml(cfg.THEMES_YAML, {"gls": {"title": "GLS", "concept": "gls", "area": "methods"}})
+    mk_note(cfg.STARS, "a", {"tags": ["star"], "name": "Estrella A"}, "lo sintetiza [[2020P]]\n")
+    mk_note(cfg.STARS, "b", {"tags": ["star"], "name": "Estrella B"}, "no lo cita\n")
+    mk_note(cfg.CONCEPTS / "methods", "gls", {"tags": ["methods"]}, "tampoco\n")
+    fm = {"tags": ["paper"], "bibcode": "2020P", "stars": ["Estrella A", "Estrella B"],
+          "methods": ["gls"], "relevance": "high"}
+    mk_note(cfg.PAPERS, "2020P", fm, "# p\n")
+    fms = {"2020P": fm}
+    filas, no_eval = lint.check_unsynthesized_by_subject(fms, set())
+    assert no_eval == [] and len(filas) == 1 and "`Estrella B`" in filas[0][1], filas
+    assert lint.check_unsynthesized_by_subject(fms, {"2020P"})[0] == [], "ya reportado por nota"
+    # un sujeto declarado SIN nota todavía no tiene prosa que pueda citarlo: no es este hallazgo
+    write_yaml(cfg.STARS_YAML, {"Estrella A": {"slug": "a"}, "Estrella B": {"slug": "b"},
+                                "Estrella C": {"slug": "c"}})
+    sin_nota = {**fm, "stars": ["Estrella A", "Estrella B", "Estrella C"]}
+    assert [m.split("`")[1] for _s, m in lint.check_unsynthesized_by_subject(
+        {"2020P": sin_nota}, set())[0]] == ["Estrella B"]
+    declarado = {**fm, "no_sintetizado": [{"sujeto": "Estrella B", "motivo": "fila de muestra"}]}
+    assert lint.check_unsynthesized_by_subject({"2020P": declarado}, set())[0] == []
+    # pasado el filtro barato (hay UN candidato en B), el loop sigue descartando: el sintetizado
+    # en B, el que ya reportó el chequeo por nota, y el que el tema reclama sólo por `methods`
+    mk_note(cfg.STARS, "b", {"tags": ["star"], "name": "Estrella B"}, "cita [[2021S]]\n")
+    sint = {**fm, "bibcode": "2021S", "stars": ["Estrella B"]}
+    ya_rep = {**fm, "bibcode": "2022Y", "stars": ["Estrella B"]}
+    varios = {"2020P": fm, "2021S": sint, "2022Y": ya_rep}
+    for st, f_ in varios.items():
+        mk_note(cfg.PAPERS, st, f_, "# p\n")
+    filas = lint.check_unsynthesized_by_subject(varios, {"2022Y"})[0]
+    assert sorted(st for st, _m in filas) == ["2020P"], filas
+    assert all("`gls`" not in m for _s, m in filas), "tema sólo por `methods`: roll-up, no prosa"
+    mk_note(cfg.STARS, "b", {"tags": ["star"], "name": "Estrella B"}, "no lo cita\n")
+    # por `thesis_links` el tema SÍ lo reclama directamente
+    conlink = {**fm, "thesis_links": ["gls"]}
+    filas = lint.check_unsynthesized_by_subject({"2020P": conlink}, set())[0]
+    assert sorted(m.split("`")[1] for _s, m in filas) == ["Estrella B", "gls"], filas
+    # el tema pasa el filtro por un paper con `thesis_links`; el que sólo usa el método no entra
+    solo_m = {**fm, "bibcode": "2023M", "stars": []}
+    mk_note(cfg.PAPERS, "2023M", solo_m, "# p\n")
+    filas = lint.check_unsynthesized_by_subject({"2020P": conlink, "2023M": solo_m}, set())[0]
+    assert "2023M" not in {st for st, _m in filas}, filas

@@ -2759,21 +2759,31 @@
   {
    "number": 554,
    "title": "`reverify_subset` propone re-anclar una corrección que cambia a qué objeto se atribuye la afirmación (score 0,938), y un juez ciego la aprobó",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 555,
    "title": "Ningún paso de cierre compara la paráfrasis de la ficha contra la vista de la nota del paper: 3 de 5 errores de una auditoría nacieron al sintetizar",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 556,
    "title": "Agregaciones sin marca `inferencia` en la prosa de la síntesis: el preflight de #490 sólo mira líneas agregadas por un corrector",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 557,
    "title": "Una nota de paper puede afirmar dos cosas incompatibles sobre el mismo localizador, y la síntesis copia la equivocada",
+   "state": "OPEN"
+  },
+  {
+   "number": 558,
+   "title": "Un paper que entra por una estrella y reclama un tema no obliga a decidir nada en el tema: 72 pares (paper, tema) acumulados en silencio",
+   "state": "OPEN"
+  },
+  {
+   "number": 559,
+   "title": "«Extraído pero no sintetizado» mide por nota: el par (paper, sujeto) que el roll-up publica como deuda no lo ve el lint",
    "state": "OPEN"
   }
  ]

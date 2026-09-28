@@ -846,7 +846,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   `no_sintetizado: [{sujeto, motivo}]` (#553: por sujeto, como `no_vista`; el escalar viejo es la
   categoría bloqueante `old_no_sintetizado`, `make_notes.py --migrate-no-sintetizado`, que reparte el
   motivo a los sujetos que NO citan el paper). Dos recortes de población: la cita debe estar en nota de **entidad**
-  (una `queries/` es respuesta puntual) y la nota no-core (`relevance: low`) no entra.
+  (una `queries/` es respuesta puntual) y la nota no-core (`relevance: low`) no entra. **Y por
+  par (#559):** el paper que otro sujeto sí cita pero que un sujeto que lo reclama **directamente**
+  (`stars`, `thesis_links`) no cita ni declara: el mismo universo que `## Papers` publica como
+  «extraído, no sintetizado». La pertenencia a un tema sólo por `methods` queda afuera (es #558).
 - **Vista fechada sin fuente en disco** (#217): la lectura ocurrió y ya no hay contra qué
   re-verificarla (los artefactos los borró `--drop-core`). Ninguna otra red lo ve: el ancla de
   fuente no se entera de un archivo que **desapareció**.
