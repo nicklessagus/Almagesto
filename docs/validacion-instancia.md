@@ -1629,3 +1629,20 @@ separador de la tabla. Con `"nuevo": ""` o `[]`, o con un `retira` que no es exa
 conjunto de bibcodes de la fila, falla y no escribe.
 
 **Devolver si** un `null` sin `retira` escribe, o si los pares bajan más que `|retira|`.
+
+## §#563 · v1.372.0 — la tabla estampada se compara entera, no por sus links
+
+```bash
+python scripts/lint.py | grep -A6 "Lista de papers desactualizada"
+python scripts/lint.py | grep -A3 "index.md\` desactualizado"
+```
+
+**Esperado:** sin migración. En HEAD sigue saliendo sólo `ica` (cambió de universo), ahora con el
+encabezado viejo → nuevo además de los `faltan`. Sobre un árbol en `5f1c2250` sale también
+`pca-clasico` («cambió la fila de 2014arXiv1404.1100S», encabezado `3 · 2` → `3 · 3`). Las cuatro
+tablas de ficha nuevas en el detector (`## Planetas`, `## Indicadores…`, `## Métodos aplicados…`,
+`## Datos públicos`) no agregan hallazgos en las 7 fichas. Si alguno sale, se cierra con el
+`make_notes.py <slug>` que nombra el hallazgo.
+
+**Devolver si** una ficha recién estampada reporta alguna de sus tablas, o si un `Estado` que cambió
+no sale.

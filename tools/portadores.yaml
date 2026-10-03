@@ -3061,3 +3061,17 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: "Escribe el hermano `.verif.md`, no la prosa de la nota."
+  - issue: 563
+    regla: >-
+      Un detector de tabla estampada compara la SECCIÓN ENTERA contra lo que el estampador escribiría
+      hoy, con la MISMA función de render que el estampador: comparar sólo los links dejaba mudo el
+      `Estado` que se movió y el encabezado «N · M sintetizados» que mentía.
+    funcion: make_notes.star_rollup_sections
+    patron: '(planetas|metodos|indicadores|datos)_table\('
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: >-
+          `check_papers_table_stale` re-renderiza `## Papers`/roll-up (papers_table,
+          concept_rollup_table) y las cuatro tablas de ficha (`star_rollup_sections`); el índice
+          por `make_notes.index_section`; todo comparado por `lint.stamped_section_diff`.

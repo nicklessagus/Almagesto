@@ -786,9 +786,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   ruido que infla el backlog — se cierra unificando la grafía en las notas. ⛔ Los **sinónimos**
   (`gls`/`periodograma-gls`) no se juntan solos: eso es juicio.
 - **`index.md` desactualizado contra la verdad de disco** (#237, `indice_viejo`, backlog): cada
-  tabla estampada del índice se compara, por `[[wikilink]]`, contra lo que `make_notes.index_tables`
-  daría hoy, y el hallazgo **nombra los stems** que faltan y que sobran (no la diferencia de
-  conteos) → `python scripts/make_notes.py --restamp-index`.
+  tabla estampada del índice se compara **entera** (#563) contra lo que `restamp_index` escribiría
+  hoy (`make_notes.index_section`), y el hallazgo **nombra los stems** que faltan, que sobran y
+  cuya fila cambió (`P_rot`, `status`, `confidence` derivan del frontmatter) → `python
+  scripts/make_notes.py --restamp-index`.
 - **Matriz método × estrella desactualizada contra la extracción** (#429, `matriz_vieja`,
   backlog): la sección estampada de `vault/wiki/matrices/method_star.md` se compara contra lo que
   `make_notes.matrix_table` daría hoy —sin la línea `> Alcance`, que lleva la fecha y se mueve
@@ -905,6 +906,13 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   medido, 7 reportadas de 10, y las 3 mudas eran los tres libros del corpus.
 - **Roll-up estampado desactualizado** (D-10): se reporta **nombrando los stems** y el comando lo
   arma `cfg.make_notes_cmd` (INV-141), así que sale con `--theme` cuando corresponde.
+  ⛔ **Se compara la sección ENTERA contra su re-render, con la misma función que el estampador
+  (#563, `lint.stamped_section_diff`)**: comparar sólo los links dejaba mudo al paper que cambió de
+  `Estado` sin entrar ni salir del universo, y al encabezado «N · M sintetizados» que mentía. El
+  hallazgo nombra faltan / sobran / filas cambiadas y el encabezado viejo → nuevo. En la ficha
+  cubre además `## Planetas`, `## Indicadores de actividad esperados`, `## Métodos aplicados a esta
+  estrella` y `## Datos públicos` (`make_notes.star_rollup_sections`); ausentes no son deuda (el
+  estampador no las inventa).
   ⛔ **Cubre los DOS tipos de sujeto desde #338**: #300 llevó las dos garantías de D-10 al
   estampador de un concepto y el detector se había quedado en `stars/` —medido, 2 de 3 sujetos de
   una bóveda real son temas, y un paper que reclama una estrella y un tema con las dos tablas

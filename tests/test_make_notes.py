@@ -2951,6 +2951,34 @@ def test_stamp_star_rollups_es_idempotente_y_no_toca_la_prosa(toy_vault):
     assert "Síntesis LLM cara e irrepetible." in primera
 
 
+def test_star_rollup_sections_es_lo_que_estampa_stamp_star_rollups(toy_vault):
+    """#563 — UNA respuesta a «qué renderiza esta sección», leída por el estampador y el lint: lo
+    estampado es exactamente lo que `star_rollup_sections` devuelve, sección por sección."""
+    (toy_vault.GROUND_TRUTH / "test_star.json").write_text(json.dumps(GT), encoding="utf-8")
+    cfg.STARS.mkdir(parents=True, exist_ok=True)
+    mn.write_star_note("test_star", False)
+    dest = cfg.STARS / "test_star.md"
+    mn.stamp_star_rollups("test_star", dest)
+    texto = dest.read_text(encoding="utf-8")
+    secs = mn.star_rollup_sections("Estrella Test", "test_star", cfg.split_fm(texto), fms={})
+    assert set(secs) == {mn.PLANETAS_HEADER, mn.INDICADORES_HEADER, mn.METODOS_HEADER,
+                         mn.DATOS_HEADER}
+    for h, cuerpo in secs.items():
+        span = cfg.section_span(texto, h)
+        assert span and texto[span[0]:span[1]].strip() == cuerpo.strip(), h
+
+
+def test_index_section_es_lo_que_escribe_restamp_index(toy_vault):
+    """#563 — el lint compara contra `index_section`; tiene que ser lo que `restamp_index` deja."""
+    (cfg.WIKI / "index.md").write_text("# Índice\n", encoding="utf-8")
+    mn.restamp_index()
+    texto = (cfg.WIKI / "index.md").read_text(encoding="utf-8")
+    for h, cuerpo in mn.index_tables().items():
+        span = cfg.section_span(texto, h)
+        assert texto[span[0]:span[1]].strip() == mn.index_section(h, cuerpo).strip(), h
+        assert mn.INDEX_DATAVIEW[h] in mn.index_section(h, cuerpo)
+
+
 # ── INV-82 · las TRES fechas ────────────────────────────────────────────────
 
 def test_la_cabecera_lleva_las_tres_fechas(toy_vault):

@@ -874,6 +874,13 @@ def _index_papers(rows: list) -> str:
     return "\n".join(out)
 
 
+def index_section(header: str, cuerpo: str) -> str:
+    """One stamped section of `index.md`: header, table, and the Dataview block underneath.
+
+    ONE rendering, read by `restamp_index` and by the lint's stale detector (#563)."""
+    return f"{header}\n\n{cuerpo}\n\n{INDEX_DATAVIEW[header]}\n\n"
+
+
 def restamp_index() -> int:
     """Materialise `index.md`'s tables from disk (#237). Idempotent, surgical, prose untouched."""
     dest = cfg.WIKI / "index.md"
@@ -898,8 +905,7 @@ def restamp_index() -> int:
         cfg.write_text_atomic(dest, texto[:corte] + nuevo + texto[corte:])
         cfg.print_seguro(f"index.md: {len(faltan)} sección(es) creadas ({', '.join(faltan)})")
     cambios = sum(1 for h, cuerpo in index_tables().items()
-                  if _reemplazar_seccion(
-                      dest, h, f"{h}\n\n{cuerpo}\n\n{INDEX_DATAVIEW[h]}\n\n"))
+                  if _reemplazar_seccion(dest, h, index_section(h, cuerpo)))
     cfg.print_seguro(f"index.md: {cambios} de {len(INDEX_SECCIONES)} sección(es) actualizadas")
     return 0
 
@@ -3166,7 +3172,7 @@ def _titulo_corto(title, n: int) -> str:
     return t[:n].rstrip() + "…" if len(t) > n else t
 
 
-def indicadores_table(fm: dict) -> str:
+def indicadores_table(fm: dict, names: set | None = None, idx: dict | None = None) -> str:
     """`## Indicadores de actividad esperados` materialised, with its link to the concept (#250).
 
     `activity_indicators_expected` was the only list field of `stars/` whose entries had **no
@@ -3177,14 +3183,14 @@ def indicadores_table(fm: dict) -> str:
 
     The destination resolves through the alias index of #245 after dropping the gloss (#250): the
     field is prose for a human, so `BIS (bisector de la CCF)` has to reach `bis.md`."""
-    names = note_names()
+    names = note_names() if names is None else names
     inds = [str(x).strip() for x in cfg.as_list(fm.get("activity_indicators_expected"))
             if str(x).strip()]
     out = [f"{INDICADORES_HEADER} ({len(inds)})", ""]
     if not inds:
         out += ["_(la ficha no declara indicadores esperados todavía — los puebla la síntesis.)_", ""]
         return "\n".join(out)
-    idx = cfg.concept_alias_index()
+    idx = cfg.concept_alias_index() if idx is None else idx
     out += ["| Indicador | Concepto |", "|---|---|"]
     for ind in inds:
         destino = cfg.method_target(cfg.indicator_key(ind), idx)
@@ -3220,7 +3226,7 @@ def planetas_table(fm: dict) -> str:
     return "\n".join(out)
 
 
-def metodos_rows(name: str, slug: str) -> list:
+def metodos_rows(name: str, slug: str, fms: dict | None = None) -> list:
     """`[(método, stem, año)]` — los métodos DE los papers de esta estrella (no todo paper de la
     bóveda que use el método). Es el mismo recorte que documenta `CLAUDE.md` para el equivalente
     determinista, y se parsea con `split_fm`, **no** con grep: `stars: [tau Cet]` en flow style y
@@ -3231,7 +3237,7 @@ def metodos_rows(name: str, slug: str) -> list:
     published as «applied to this star» the methods of a paper the user declared foreign (#112)."""
     dropeados = set(cfg.dropped_from_subject(slug))
     filas = []
-    for stem, fm in papers_fm_index().items():
+    for stem, fm in (papers_fm_index() if fms is None else fms).items():
         if name not in cfg.as_list(fm.get("stars")) or stem in dropeados:
             continue
         for m in cfg.as_list(fm.get("methods")):
@@ -3279,7 +3285,8 @@ def method_label(variantes: list, names: set, idx: dict) -> str:
     return " · ".join(x for x in (etiqueta, variantes_txt) if x)
 
 
-def metodos_table(rows: list, names: set | None = None, tope: int = TOPE_METODOS) -> str:
+def metodos_table(rows: list, names: set | None = None, tope: int = TOPE_METODOS,
+                  idx: dict | None = None) -> str:
     """`## Métodos aplicados a esta estrella` materializada (D-11 / INV-81), **agrupada** (#273).
 
     ⚠ El método se estampa como `[[wikilink]]` **sólo si su nota existe** —por stem o por `aliases`
@@ -3298,7 +3305,7 @@ def metodos_table(rows: list, names: set | None = None, tope: int = TOPE_METODOS
     El detalle par a par sigue siendo recuperable con el one-liner determinista de `CLAUDE.md`.
     """
     names = note_names() if names is None else names
-    idx = cfg.concept_alias_index()
+    idx = cfg.concept_alias_index() if idx is None else idx
     # #262 — se cuenta por CLAVE NORMALIZADA, no por string crudo: `methods` lo puebla la extracción
     # con vocabulario abierto, así que el mismo método llega escrito de varias maneras y contar
     # grafías **sobre**declara el universo (medido: 297 publicados sobre 291 reales).
@@ -3399,7 +3406,7 @@ def missing_anchors(dest, headers) -> list:
 DATOS_HEADER = "## Datos públicos"
 
 
-def datos_rows(name: str, slug: str) -> list:
+def datos_rows(name: str, slug: str, fms: dict | None = None) -> list:
     """`[(stem, year, que, ref, localizador)]` — the public data the papers of this star declare
     (#424).
 
@@ -3409,7 +3416,7 @@ def datos_rows(name: str, slug: str) -> list:
     `--drop-core` does not declare data for it."""
     dropeados = set(cfg.dropped_from_subject(slug))
     filas = []
-    for stem, fm in papers_fm_index().items():
+    for stem, fm in (papers_fm_index() if fms is None else fms).items():
         if name not in cfg.as_list(fm.get("stars")) or stem in dropeados:
             continue
         for d in cfg.as_list(fm.get("data_availability")):
@@ -3668,14 +3675,28 @@ def stamp_star_rollups(slug: str, dest) -> bool:
         name, _ = cfg.star_by_slug(slug)
     except (KeyError, RuntimeError):
         name = fm.get("name") or slug
-    tocado = _reemplazar_seccion(dest, PLANETAS_HEADER, planetas_table(fm))
-    tocado = _reemplazar_seccion(dest, INDICADORES_HEADER, indicadores_table(fm)) or tocado   # #250
-    tocado = _reemplazar_seccion(dest, METODOS_HEADER,
-                                 metodos_table(metodos_rows(name, slug))) or tocado
+    secciones = star_rollup_sections(name, slug, fm)
     # #424 — la sección es nueva: la ficha que ya existía no la tiene, y `_reemplazar_seccion` no
     # la inventa. Se agrega ANTES del apéndice de excluidos, que va siempre último.
-    tocado = _ensure_section(dest, DATOS_HEADER, EXCLUDED_HEADER) or tocado
-    return _reemplazar_seccion(dest, DATOS_HEADER, datos_table(datos_rows(name, slug))) or tocado
+    tocado = _ensure_section(dest, DATOS_HEADER, EXCLUDED_HEADER)
+    for header, cuerpo in secciones.items():
+        tocado = _reemplazar_seccion(dest, header, cuerpo) or tocado
+    return tocado
+
+
+def star_rollup_sections(name: str, slug: str, fm: dict, fms: dict | None = None,
+                         names: set | None = None, idx: dict | None = None) -> dict:
+    """`{header: rendered section}` for the four star roll-ups besides `## Papers` (D-11, #563).
+
+    ⛔ ONE answer to «what does this section render to», read by the STAMPER and by the lint's
+    stale-table detector: two copies is how the detector and the stamper drift apart (#409).
+    `fms`/`names`/`idx` let the lint pass what it already parsed (budget of `test_escala`)."""
+    names = note_names() if names is None else names
+    idx = cfg.concept_alias_index() if idx is None else idx
+    return {PLANETAS_HEADER: planetas_table(fm),
+            INDICADORES_HEADER: indicadores_table(fm, names, idx),                       # #250
+            METODOS_HEADER: metodos_table(metodos_rows(name, slug, fms), names, idx=idx),
+            DATOS_HEADER: datos_table(datos_rows(name, slug, fms))}                       # #424
 
 
 def stamp_touched_theme_rollups(star_slug: str) -> list:

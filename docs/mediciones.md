@@ -4206,3 +4206,14 @@ sobre una fila y sobre prosa borraba sin documentar y con blanco doble). Reprodu
 `nuevo: null` sobre una copia en `5f1c2250`: `ica-constrained` 16 filas, pares 70 → 54;
 `pca-alta-dimension` 7, 51 → 44; `pca-clasico` 7, 33 → 26. Cero fallas, sin blanco doble, y la
 segunda corrida no resuelve ninguna fila (ya no están). `[]` pasa a rehusarse en las dos ramas.
+
+## La tabla estampada se compara entera (#563, v1.372.0)
+
+`check_papers_table_stale` comparaba conjuntos de stems y `check_index_stale` conjuntos de links:
+un paper que cambia de `Estado` sin entrar ni salir del universo quedaba con la tabla y el
+«N · M sintetizados» mintiendo y el lint en 0. Ahora se compara la sección entera contra el
+re-render del estampador. Lint sobre Almagesto-Tesis (worktree desechable, `scripts/` del template):
+en HEAD (`00d4a4b7`) la categoría queda igual, 1 hallazgo (`ica`), y el resto del reporte no cambia
+(diff de encabezados vacío). Sobre `5f1c2250` pasa de 1 a 2: aparece `pca-clasico`, encabezado
+`3 · 2` → `3 · 3` y la fila de `2014arXiv1404.1100S`, como midió el issue. El detector cubre además
+las cuatro tablas de ficha que no tenían ninguno, y en las 7 fichas no agrega hallazgos.

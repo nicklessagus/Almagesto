@@ -1497,7 +1497,49 @@ def check_identidad_duplicada(paper_fms: dict, ft_hash: dict, illegible_txt: lis
     return identidad_dup, alias_con_nota, alias, ya_reportados, incompletos
 
 
-def check_papers_table_stale(paper_fms: dict) -> tuple:
+def _row_key(line: str) -> str:
+    """What identifies a stamped table row: its first `[[link]]`, else its first cell."""
+    m = LINK_RE.search(line)
+    return m.group(1) if m else line.split("|")[1].strip()
+
+
+def _data_rows(lines: list) -> dict:
+    """`{row key: line}` for the lines that carry data: a link, or a table row that is neither the
+    separator nor the column header right above it."""
+    sep = {i for i, ln in enumerate(lines) if ln.startswith("|")
+           and set(ln.replace("|", "")) <= set("-: ")}
+    return {_row_key(ln): ln for i, ln in enumerate(lines)
+            if LINK_RE.search(ln) or (ln.startswith("|") and i not in sep and i + 1 not in sep)}
+
+
+def _cap(xs: list, n: int = 8) -> str:
+    """`xs` joined, cut at `n` with the cut declared."""
+    return ", ".join(xs[:n]) + (f" (+{len(xs) - n})" if len(xs) > n else "")
+
+
+def stamped_section_diff(visto: str, esperado: str) -> str | None:
+    """`None` when a stamped section equals its re-render; else WHAT changed (#563).
+
+    ⛔ The WHOLE section is compared, like `check_matrix_stale`: comparing only the set of links
+    missed the row whose `Estado` moved and the header whose «N · M sintetizados» lied (measured:
+    1 of 17 roll-ups of a real vault, lint at 0). The detail names the rows that are missing, that
+    are left over and that CHANGED, plus the header old → new — never a bare «stale»."""
+    v, e = str(visto or "").strip().split("\n"), str(esperado or "").strip().split("\n")
+    if v == e:
+        return None
+    filas_v, filas_e = _data_rows(v[1:]), _data_rows(e[1:])
+    faltan = sorted(filas_e.keys() - filas_v.keys())
+    sobran = sorted(filas_v.keys() - filas_e.keys())
+    cambian = sorted(k for k in filas_e.keys() & filas_v.keys() if filas_e[k] != filas_v[k])
+    detalle = ([f"encabezado «{v[0]}» → «{e[0]}»"] if v[0] != e[0] else []) + \
+        ([f"faltan {_cap(faltan)}"] if faltan else []) + \
+        ([f"sobran {_cap(sobran)}"] if sobran else []) + \
+        ([f"cambió la fila de {_cap(cambian)}"] if cambian else [])
+    return "; ".join(detalle) or "el cuerpo difiere del re-render"
+
+
+def check_papers_table_stale(paper_fms: dict, todos_fm: dict | None = None,
+                             alias_idx=None) -> tuple:
     """`(papers_table_stale, no_evaluados)` — the stamped roll-up against the truth on disk (D-10).
 
     Seventh block out of `lint.collect` (#396), same shape as the previous one: what it used to
@@ -1513,6 +1555,7 @@ def check_papers_table_stale(paper_fms: dict) -> tuple:
     #
     no_evaluados: list = []
     papers_table_stale: list = []
+    _star_ctx = None
     # UNA sola pasada de parseo de `papers/`, compartida por todas las estrellas: sin esto el lint
     # saltaba de ~2,0 a 5,9 parseos YAML por nota (medido por `tests/poblada/test_escala.py`, techo
     # 2,3) — el costo crece con el producto notas × estrellas.
@@ -1543,13 +1586,35 @@ def check_papers_table_stale(paper_fms: dict) -> tuple:
         # que publican: el roll-up declara además por cuál llave entró el paper (D-24). Hasta 1.156.0
         # sólo el roll-up normalizaba y el universo comparaba el string exacto — o sea que este
         # detector heredaba la subdeclaración del universo que compara.
+        # #563 — each lambda returns the RENDERED section, not its stems: the whole section is
+        # compared (`stamped_section_diff`), so a row whose `Estado` moved is seen.
         universos = [(mn.PAPERS_HEADER,
-                      lambda s=slug_s, k=_kind: {r["stem"]
-                                                 for r in mn.papers_universe(s, k, paper_fms)})]
+                      lambda s=slug_s, k=_kind: mn.papers_table(
+                          mn.papers_universe(s, k, paper_fms)))]
         if _kind == "theme":
             universos.append((mn.CONCEPT_ROLLUP_HEADER,
-                              lambda s=slug_s: {r["stem"]
-                                                for r in mn.concept_rollup_rows(s, paper_fms)}))
+                              lambda s=slug_s: mn.concept_rollup_table(
+                                  mn.concept_rollup_rows(s, paper_fms))))
+        else:
+            # #563 — the other four star roll-ups (D-11) had no detector at all. Same function as
+            # the stamper (`mn.star_rollup_sections`); names/alias index parsed once per run.
+            if _star_ctx is None:
+                # a paper whose frontmatter does not parse is `None` here: its own finding
+                _star_ctx = ({k: v for k, v in paper_fms.items() if isinstance(v, dict)},
+                             mn.note_names(),
+                             alias_idx() if alias_idx else cfg.concept_alias_index())
+            _memo: dict = {}           # rendered once per star, and only if a section is there
+
+            def _seccion(h, s=slug_s, n=_nombre_s, t=texto_s, d=dest_s, memo=_memo):
+                """The stamper's rendering of section `h` of this star."""
+                if not memo:
+                    fm_s = (todos_fm or {}).get(d.stem)
+                    memo.update(mn.star_rollup_sections(
+                        n, s, fm_s if fm_s is not None else (cfg.split_fm(t) or {}), *_star_ctx))
+                return memo[h]
+            for _h in (mn.PLANETAS_HEADER, mn.INDICADORES_HEADER, mn.METODOS_HEADER,
+                       mn.DATOS_HEADER):
+                universos.append((_h, lambda h=_h, f=_seccion: f(h)))
         # ⚠ `cfg.section_span`, nunca un `split("\n## Papers")`: `## Papers` es PREFIJO de
         # `## Papers que tocan este tema (auto)` y el corte crudo se llevaba el roll-up del tema
         # como si fuera la tabla de ficha (la trampa de #176, que `section_start` ya resuelve).
@@ -1565,12 +1630,10 @@ def check_papers_table_stale(paper_fms: dict) -> tuple:
             if span is None:
                 # En un tema los dos estampadores conviven y la nota lleva uno: el ausente no es
                 # deuda. En una estrella el roll-up es uno solo, así que su ausencia SÍ es la tabla
-                # que falta —y ése es el comportamiento histórico del detector—.
-                if _kind == "theme":
+                # que falta —y ése es el comportamiento histórico del detector—. Las otras cuatro
+                # tablas de la ficha no se inventan (`_reemplazar_seccion`): ausente no es deuda.
+                if _kind == "theme" or header_s != mn.PAPERS_HEADER:
                     continue
-                listados = set()
-            else:
-                listados = set(LINK_RE.findall(texto_s[span[0]:span[1]]))
             try:
                 esperados = universo()
             except Exception as _exc:                   # noqa: BLE001 — D-43, ver abajo
@@ -1582,16 +1645,16 @@ def check_papers_table_stale(paper_fms: dict) -> tuple:
                     (f"roll-up `{header_s}` de `{slug_s}`",
                      f"no se pudo armar el universo: {_exc.__class__.__name__}: {_exc}"))
                 continue
-            faltan, sobran = esperados - listados, listados - esperados
-            if faltan or sobran:
-                detalle = []
-                if faltan:
-                    detalle.append("faltan " + ", ".join(sorted(faltan)))
-                if sobran:
-                    detalle.append("sobran " + ", ".join(sorted(sobran)))
+            if span is None:
+                # Estrella sin `## Papers`: deuda sólo si hay universo que publicar (histórico).
+                faltan = sorted(LINK_RE.findall(esperados))
+                diff = f"faltan {_cap(faltan)}" if faltan else None
+            else:
+                diff = stamped_section_diff(texto_s[span[0]:span[1]], esperados)
+            if diff:
                 papers_table_stale.append(
-                    (slug_s, f"`{header_s}` no refleja el universo: " +
-                             "; ".join(detalle) + f" → `{cfg.make_notes_cmd(slug_s)}`"))
+                    (slug_s, f"`{header_s}` no refleja el universo: {diff}"
+                             f" → `{cfg.make_notes_cmd(slug_s)}`"))
     return papers_table_stale, no_evaluados
 
 
@@ -2202,15 +2265,14 @@ def check_index_stale(todos_fm: dict) -> list:
         _txt_idx = _idx.read_text(encoding="utf-8")
         for _h, _cuerpo in mn.index_tables(fms=todos_fm).items():
             _span = cfg.section_span(_txt_idx, _h)
-            _visto = set() if _span is None else set(
-                lb.LINK_RE.findall(_txt_idx[_span[0]:_span[1]]))
-            _esperado = set(lb.LINK_RE.findall(_cuerpo))
-            _faltan, _sobran = sorted(_esperado - _visto), sorted(_visto - _esperado)
-            if _faltan or _sobran:
+            # #563 — the whole section against what `restamp_index` writes (columns `P_rot`,
+            # `status`, `confidence`… derive from frontmatter too, and a links-only compare
+            # missed them). `mn.index_section` is the stamper's own rendering.
+            _diff = stamped_section_diff(
+                "" if _span is None else _txt_idx[_span[0]:_span[1]], mn.index_section(_h, _cuerpo))
+            if _diff:
                 indice_viejo.append(
-                    ("index", f"`{_h}` desactualizada"
-                              + (f" — faltan: {', '.join(_faltan[:8])}" if _faltan else "")
-                              + (f" — sobran: {', '.join(_sobran[:8])}" if _sobran else "")
+                    ("index", f"`{_h}` desactualizada — {_diff}"
                               + " → `python scripts/make_notes.py --restamp-index`"))
     return indice_viejo
 
@@ -7212,7 +7274,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["bibtex_clave_repetida"] = check_bibtex_claves_repetidas(sweep.bibtex_por_clave)
     found["abstract_dup"] = check_duplicate_without_id(paper_fms, paper_abstracts,
                                                        alias, ya_reportados)   # #216
-    found["papers_table_stale"], _pt_no_eval = check_papers_table_stale(paper_fms)   # D-10
+    found["papers_table_stale"], _pt_no_eval = check_papers_table_stale(
+        paper_fms, todos_fm, sweep.alias_idx)   # D-10
     found["not_evaluated"] += _pt_no_eval
     found["extraccion_no_declarada"] = check_extraccion_no_declarada(sweep.sin_extraer_por_sujeto)
     found["sintesis_no_declarada"], _si_no_eval = check_sintesis_no_declarada(paper_fms)   # #523

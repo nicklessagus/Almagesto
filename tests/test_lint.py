@@ -6345,7 +6345,7 @@ def test_index_desactualizado_nombra_los_stems(toy_vault, capsys):
     sec = _seccion(rep, "desactualizado contra la verdad de disco")
     # ⚠ #202 — «`un-metodo` aparece» lo cumple también el hallazgo INVERSO («sobran»), así que el
     # test pasaría con la tabla de conceptos vacía. Lo que hay que exigir es la dirección.
-    assert "faltan: un-metodo" in sec, sec
+    assert "faltan un-metodo" in sec and "Área" not in sec and "---" not in sec, sec
     assert "--restamp-index" in sec, "el hallazgo nombra el comando que lo cierra"
 
 
@@ -8694,9 +8694,16 @@ def test_check_index_stale_reporta_lo_que_falta_Y_lo_que_sobra(toy_vault):
     assert faltan and any("faltan" in m for _s, m in faltan), faltan
 
     tablas = mn.index_tables(fms=todos)
-    cuerpo = "".join(f"{h}\n{c}\n" for h, c in tablas.items())
+    cuerpo = "".join(mn.index_section(h, c) for h, c in tablas.items())
     (cfg.WIKI / "index.md").write_text(f"# Índice\n{cuerpo}", encoding="utf-8")
     assert lint.check_index_stale(todos) == [], "el índice al día es silencioso"
+
+    # #563 — una columna que deriva del frontmatter (`P_rot`) cambia sin que cambie ningún link:
+    # comparar sólo los links lo dejaba mudo.
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test", "P_rot_days": 12.5})
+    cambiado = lint.check_index_stale({})
+    assert cambiado and "cambió la fila de test_star" in cambiado[0][1], cambiado
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test"})
 
     # el link que SOBRA va DENTRO de la última sección: es lo que queda cuando se borra una entidad
     (cfg.WIKI / "index.md").write_text(f"# Índice\n{cuerpo}\n[[fantasma]]\n", encoding="utf-8")
@@ -10698,6 +10705,45 @@ def test_check_papers_table_stale_compara_el_roll_up_contra_el_DISCO(toy_vault):
     stale, _n = lint.check_papers_table_stale(
         {"2020X": {"bibcode": "2020X", "stars": ["Estrella Test"]}})
     assert stale and any("2020X" in m for _s, m in stale), stale
+
+
+def test_stamped_section_diff_nombra_encabezado_faltan_sobran_y_filas_cambiadas():
+    """#563 — matriz de ramas del comparador de sección entera."""
+    hdr = "## Papers que tocan este tema (auto) ({} · {} sintetizados en este concepto)"
+    fila = "| [[{}]] | 2014 | thesis_links | {} |"
+    vista = "\n".join([hdr.format(3, 2), "", fila.format("2014S", "sin extraer"), fila.format("A", "x")])
+    nueva = "\n".join([hdr.format(3, 3), "", fila.format("2014S", "sintetizado"), fila.format("B", "x")])
+    assert lint.stamped_section_diff(vista, vista + "\n\n") is None, "igual módulo blancos"
+    d = lint.stamped_section_diff(vista, nueva)
+    assert "(3 · 2 sintetizados" in d and "(3 · 3 sintetizados" in d, d
+    assert "faltan B" in d and "sobran A" in d and "cambió la fila de 2014S" in d, d
+    assert lint.stamped_section_diff("## X\n\ntexto", "## X\n\notro") == \
+        "el cuerpo difiere del re-render", "sin filas: no se queda mudo"
+    assert "(+2)" in lint._cap(list("abcdefghij")), "el corte se declara"
+
+
+def test_check_papers_table_stale_ve_el_ESTADO_y_las_tablas_de_ficha(toy_vault):
+    """#563 — el caso del issue: un paper que cambia de `Estado` sin entrar ni salir del universo
+    dejaba la tabla y el «N · M sintetizados» mintiendo con el lint en 0. Y `## Planetas` (D-11),
+    que no tenía detector."""
+    mk_note(cfg.PAPERS, "2020X", {"tags": ["paper"], "bibcode": "2020X",
+                                  "stars": ["Estrella Test"]})
+    fms = {"2020X": {"bibcode": "2020X", "stars": ["Estrella Test"]}}
+    mk_note(cfg.STARS, "test_star", {"tags": ["star"], "name": "Estrella Test",
+                                     "planets": [{"letter": "b", "P_days": 3.0}]},
+            "\n## Papers\n\n## Planetas (ground-truth NASA Exoplanet Archive)\n\n")
+    dest = cfg.STARS / "test_star.md"
+    for _ in range(2):
+        mn.stamp_papers_table("test_star", dest, "star")
+        mn.stamp_star_rollups("test_star", dest)
+    assert lint.check_papers_table_stale(fms)[0] == [], "recién estampada: silencio"
+    texto = dest.read_text(encoding="utf-8")
+    fila = next(ln for ln in texto.split("\n") if ln.startswith("| [[2020X]]"))
+    dest.write_text(texto.replace(fila, fila.rsplit("|", 2)[0] + "| sintetizado |")
+                    .replace("| b | 3.0 |", "| b | 4.0 |"), encoding="utf-8")
+    stale = [m for _s, m in lint.check_papers_table_stale(fms)[0]]
+    assert any("`## Papers`" in m and "cambió la fila de 2020X" in m for m in stale), stale
+    assert any("## Planetas" in m and "cambió la fila de b" in m for m in stale), stale
 
 
 def test_check_build_snapshots_junta_los_cuatro_veredictos_del_scratch(toy_vault):
