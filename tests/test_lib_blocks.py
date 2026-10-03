@@ -797,6 +797,21 @@ def test_el_corte_del_extracto_no_parte_un_wikilink():
     assert corte.count("[[") == corte.count("]]"), corte
 
 
+def test_el_corte_del_extracto_no_parte_una_cita_textual():
+    """#566 — 543 de 2996 extractos de una instancia terminaban con una `«` abierta: el corte
+    retrocede al borde anterior a la comilla; la cita que ABRE el extracto no tiene corte seguro y
+    vuelve entera (nunca un `»` inventado)."""
+    largo = ("El paper dice que " + "x " * 60 + "y luego cita «the principal components are not "
+             "necessarily the physically meaningful directions in the data space» [[b]]")
+    corte = lb.truncate_claim(largo)
+    assert corte.count("«") == corte.count("»") == 0, corte
+    assert corte.endswith("y luego cita…"), corte
+    cerrada = "«" + "corta» " + "z " * 100
+    assert lb.truncate_claim(cerrada, 50).startswith("«corta» z")  # cerrada: corta después
+    abre = "*«" + "the results " * 20 + "»"
+    assert lb.truncate_claim(abre, 50) == abre
+
+
 def test_el_extracto_corto_no_se_toca_y_el_impartible_vuelve_entero():
     """Las dos direcciones seguras: no se trunca lo que entra, y si NO hay corte seguro se devuelve
     entero — una celda rota es peor que una celda larga."""

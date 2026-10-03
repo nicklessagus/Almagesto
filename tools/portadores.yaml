@@ -2986,3 +2986,26 @@ portadores:
         motivo: >-
           Pregunta por PRESENCIA de `sin_bibtex` (sacar el hueco cuando llegó el bloque), no por su
           motivo: un `sin_bibtex: true` también tiene que salir.
+  - issue: 566
+    regla: >-
+      Un corte de texto que se publica en un artefacto no cae dentro de un span delimitado
+      (`$…$`, backticks, `[[…]]`, `«…»`): retrocede al último borde seguro, y sin borde seguro
+      devuelve el texto entero. La cita textual partida es lo que un lector-modelo completa (#314):
+      medido, 544 de 3004 extractos de una instancia terminaban con una `«` abierta.
+    funcion: lib_blocks.truncate_claim
+    patron: '\]\.rstrip\(\) \+ "…"|\[:\w+\]\s*\+\s*"…"'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Corta la cita de segunda mano en el mensaje y en el `que:` de la firma que propone (#433); los otros `[:70] + \"…\"` son mensajes del reporte, no artefactos."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "El escritor del hermano `.verif.md`: única celda truncable (#226)."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          `_titulo_corto` (títulos de `## Papers` / `## Excluidos`) corta a ciegas a n caracteres.
+          Medido sobre la instancia: 0 de 435 cortes de título caen dentro de `$`/`«`, y 0 de 212
+          filas estampadas con `…` tienen un span abierto. Hacerlo llevar `truncate_claim` movería
+          los 435 cortes a borde de palabra y dejaría desactualizado todo roll-up estampado por un
+          defecto no observado; vuelve si aparece un título con fórmula partida.

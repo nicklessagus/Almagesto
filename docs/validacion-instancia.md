@@ -1574,3 +1574,30 @@ recorre cada `.claude/skills/…md` que el prompt generado manda a leer, y la re
 
 **Devolver si** el prompt del extractor o el juez vuelven a narrar una medición sin que el test lo
 note, o si la regex atrapa un localizador.
+
+## §#566 · v1.369.0 — el extracto no corta dentro de una cita `«…»`
+
+Sin migración: los `.verif.md` existentes no se reescriben. Cada fila se re-corta sola la próxima
+vez que `write_verif_sidecar.py` re-escriba ese hermano (todas sus filas pasan por
+`truncate_claim`, también las que se llevan fuera del alcance de la ronda; la excepción es la fila
+que exigía acción sobre un bloque que cambió, que se lleva TAL CUAL hasta que una ronda la juzgue,
+#539/AUD-543).
+
+```bash
+python - <<'PY'
+import sys, glob; sys.path.insert(0, 'scripts'); import lib_blocks as lb
+n = 0
+for f in glob.glob('vault/wiki/**/*.verif.md', recursive=True):
+    for r in lb.parse_verif_table(open(f, encoding='utf-8').read()) or []:
+        c = r.claim
+        if c.endswith('…') and c.count('«') > c.count('»'):
+            new = lb.truncate_claim(c[:-1] + ' ' + 'z' * 400)
+            n += new.count('«') > new.count('»') and not new.endswith('z' * 400)
+print('abiertas tras re-cortar:', n)
+PY
+```
+
+**Esperado:** `abiertas tras re-cortar: 0` (antes: 544 de 3004 filas en 21 hermanos). Dos filas de
+`ica.verif.md` abren con `*«` y no tienen corte seguro: al re-escribirse vuelven **enteras**.
+
+**Devolver si** una fila re-escrita termina con `«` abierta o con un `»` que la fuente no cierra ahí.

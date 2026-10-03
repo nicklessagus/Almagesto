@@ -4173,3 +4173,14 @@ orquestador); en la ficha `toliman` fueron 32 + 13 + 2 jueces de ~90-110 k token
 reglas del juez pasaron a `reference/juez.md` y el `SKILL.md` bajó de 66 499 B a 57 225 B. Al fijar
 el techo, los relatos «Medido…» en `.claude/skills/**/*.md` eran 45 (41 en los `SKILL.md`, como
 contó el issue, más 4 en `reference/`); el párrafo de §3 bajó uno y el techo queda en 44.
+
+## #566 — el extracto cortado dentro de `«…»` (v1.369.0)
+
+Almagesto-Tesis (worktree de `HEAD`, 2026-10-03), todos los `*.verif.md`: **544 de 3004** celdas
+`Afirmación` terminaban en `…` con más `«` que `»`, en 21 hermanos (`harps-drs` 103, `icasso` 98,
+`ica-ruido` 76, `ica` 71, `rv-doppler` 57). Re-cortando cada celda con la función nueva (sin
+escribir; la celda guardada es prefijo del original y el corte nuevo sólo retrocede, así que se
+decide desde el prefijo): **0** quedan abiertas, 0 quedan vacías y **2** —extractos que abren con
+`*«`— no tienen corte seguro y vuelven enteros. Portador `make_notes._titulo_corto`: 0 de 435 cortes
+de título caen dentro de `$`/`«`, y 0 de 212 filas de roll-up estampadas con `…` tienen un span
+abierto; queda `fuera-de-alcance` con ese motivo.

@@ -1437,8 +1437,10 @@ TRUNCADO_CLAIM = 180
 # Aperturas que un corte no puede dejar sin cerrar. `$…$` es el caso medido (10 de 88 filas de una
 # ficha real cortadas a media fórmula, las únicas 10 con `$` impar de toda la nota: en Obsidian un
 # `$` huérfano se traga texto hasta el próximo `$`); `[[…]]` es peor todavía, porque un wikilink
-# partido es un **bloqueante** del lint (#257c).
-_SPANS_ABIERTOS = (("$", "$"), ("`", "`"), ("[[", "]]"))
+# partido es un **bloqueante** del lint (#257c). `«…»` (#566): la cita textual cortada en el carácter del
+# corte es lo que un lector-modelo tiende a completar (#314) — medido, 543 de 2996 extractos de una
+# instancia terminaban con una `«` abierta.
+_SPANS_ABIERTOS = (("$", "$"), ("`", "`"), ("[[", "]]"), ("«", "»"))
 
 
 def _cut_is_safe(texto: str, i: int) -> bool:
@@ -1457,10 +1459,14 @@ def truncate_claim(texto: str, limite: int = TRUNCADO_CLAIM) -> str:
     """The `Afirmación (extracto)` cell, cut at a **safe** boundary (#274b, #257c).
 
     Truncating is legal here and only here (#226: the extract's anchor lives in the note, not in the
-    cell), but the cut must not fall inside `$…$`, a backtick span or a `[[wikilink]]`: measured on a
-    real note, 10 of 88 rows were cut mid-formula and left an odd `$`, and a split `[[` is a lint
-    blocker. The cut retreats to the last safe word boundary; if there is none —the whole prefix is
-    one long span— the text is returned **whole**, because a broken cell is worse than a long one."""
+    cell), but the cut must not fall inside `$…$`, a backtick span, a `[[wikilink]]` or a verbatim
+    quote `«…»` (#566): measured on a real note, 10 of 88 rows were cut mid-formula and left an odd
+    `$`, a split `[[` is a lint blocker, and a quote cut mid-sentence invites the reader to complete
+    it (#314). The cut retreats to the last safe word boundary —so a quote that starts before the
+    limit is dropped from the extract, never closed with an invented `»`—; if there is none —the
+    whole prefix is one long span, e.g. an extract that OPENS with `«` (2 of 3004 rows measured)— the
+    text is returned **whole**, because a broken cell is worse than a long one, and a `…»` would
+    print a quote the source never ended there."""
     t = str(texto or "").strip()
     if len(t) <= limite:
         return t

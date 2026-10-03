@@ -1989,8 +1989,9 @@ de `entity.py`.
   distinguir "verificada" de "nunca se miró".
 - ⛔ **Sólo `Afirmación (extracto)` se trunca (#226)**; `Evidencia` y `Condición` no, y `Evidencia`
   lleva su localizador **al final y completo** — el corte se lo lleva y apaga el cruce de #122, que
-  sin él devuelve un 0 que se lee verde. ⛔ **El corte no cae dentro de `$…$`, `` ` `` ni `[[ ]]`**
-  (#274b/#257c: `lib_blocks.truncate_claim` retrocede al límite del bloque). ⛔ **La celda lleva
+  sin él devuelve un 0 que se lee verde. ⛔ **El corte no cae dentro de `$…$`, `` ` ``, `[[ ]]` ni `«…»`**
+  (#274b/#257c/#566: `lib_blocks.truncate_claim` retrocede al límite del bloque; sin borde seguro
+  —el extracto que ABRE con `«`— devuelve la celda entera, nunca un `»` inventado). ⛔ **La celda lleva
   PROSA, nunca un `repr()`** (#274a).
 - ⛔ **`Hash fuente` declara CONTRA QUÉ ARCHIVO se verificó: `txt:<sha10>` o `pdf:<sha10>` (#117).**
   La decisión la toma el verificador par por par, así que la declara la **fila**. En filas nuevas:
