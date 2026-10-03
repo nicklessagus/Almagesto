@@ -3134,6 +3134,9 @@ portadores:
       - modulo: scripts/triage.py
         estado: fuera-de-alcance
         motivo: "LEE `vistas[].fecha` para el estado del triage; no escribe vistas."
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: "#562 — nombra `vistas[].sujeto`/`.txt` sólo en los mensajes de `rename` (rehúso y lista final); no escribe vistas."
   - issue: 561
     regla: >-
       Una herramienta que reescribe la config CURADA (`themes.yaml`, `stars.yaml`) no puede perder

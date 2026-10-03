@@ -21,7 +21,7 @@
 #   - el techo NUNCA se sube. Si una función nueva lo necesita, su test está en el archivo equivocado.
 #   - la guarda contra subidas es `cfg.ratchet_raises` (`tests/test_ratchets.py`, INV-140, AUD-485).
 medido_en: "2026-09-11"
-techo: 27
+techo: 25
 conocidos:
   - bench_verify.py::flush
   - extract_fulltext.py::tesseract_version
@@ -43,8 +43,6 @@ conocidos:
   - lint.py::check
   - lint.py::inventario_sin_llenar
   - lint.py::merge_ours_driver_risk
-  - make_notes.py::index_tables
-  - make_notes.py::restamp_index
   - make_notes.py::restamp_matrix
   - refresh_issues.py::fetch
   - refresh_issues.py::main
