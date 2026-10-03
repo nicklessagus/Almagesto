@@ -1014,7 +1014,11 @@ vista anterior para no re-narrarla, y **rehúsa** si `(sujeto, enfasis)` ya tien
 identidad de una vista es el par `(sujeto, enfasis)` y su sección es `### Lente — <énfasis>` **dentro** de la
 `## Vista` del sujeto —partir el encabezado no serviría: `section_start` recorta el sufijo que
 arranca con puntuación (AUD-178) y las dos colapsarían—. El cosechador **rehúsa** cambiar un valor
-ya escrito bajo la misma clave: completa lo que falta, o manda declarar la lente. ⛔ **Y su extracción va a
+ya escrito bajo la misma clave: completa lo que falta, o manda declarar la lente. **Pero re-cosechar
+la MISMA lectura es «sin cambios» (#567):** no compara lo que él mismo fabrica al correr —`fecha`
+(el día de la cosecha; sólo `--force` la re-escribe, #395) y la `lente` recalculada cuando el JSON
+no declara una— ni un `txt` que nombra otro slug con el mismo `.txt` byte a byte; y trae el `.txt`
+al sujeto **antes** de resolver `txt`. ⛔ **Y su extracción va a
 `<bibcode>__<lente>.json` (#371):** al canónico pisaba, en silencio, un artefacto versionado y **no
 regenerable** (#311).
 

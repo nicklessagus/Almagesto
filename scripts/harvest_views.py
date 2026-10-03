@@ -716,8 +716,23 @@ class ViewUpsertError(RuntimeError):
 CAMPOS_DE_LECTURA = ("fecha", "fuente", "txt")
 
 
-def upsert_view(dest: Path, vista: dict, *, force: bool = False) -> bool:
+def _same_txt(stem: str, a: str, b: str) -> bool:
+    """Whether slugs `a` and `b` both hold this paper's `.txt` with identical bytes (#567).
+
+    Two `txt` values that name the same text are the same reading: the slug only says WHICH copy,
+    and D-18 copies the `.txt` between slugs on purpose."""
+    pa, pb = cfg.FULLTEXT / a / f"{stem}.txt", cfg.FULLTEXT / b / f"{stem}.txt"
+    return pa.is_file() and pb.is_file() and pa.read_bytes() == pb.read_bytes()
+
+
+def upsert_view(dest: Path, vista: dict, *, force: bool = False, derived: tuple = ()) -> bool:
     """Mergea `vista` en `vistas[]` del frontmatter, por `(sujeto, enfasis)`. True si modificó.
+
+    #567 · `derived` names the keys the CALLER fabricated (`fecha` = the harvest day, `lente`
+    recomputed when the extraction does not declare one) rather than read from the extraction:
+    without `force`, an already-written value of those keys wins and is not a clash — re-running
+    the harvester on the same reading is «nothing to change». A `txt` naming another slug whose
+    `.txt` is byte-identical is not a clash either (`_same_txt`).
 
     Reescribe **sólo el bloque `vistas:`**, dejando el resto del frontmatter byte a byte — mismo
     criterio que `merge_frontmatter_list`: ahí abajo hay campos que tocó la extracción LLM.
@@ -754,7 +769,10 @@ def upsert_view(dest: Path, vista: dict, *, force: bool = False) -> bool:
             # otra lectura mal declarada, y resolverla en silencio es lo que este issue arregla.
             choques = [k for k, nuevo in vista.items()
                        if k in v and str(v[k] or "").strip()
-                       and str(nuevo or "").strip() != str(v[k] or "").strip()]
+                       and str(nuevo or "").strip() != str(v[k] or "").strip()
+                       and not (k == "txt" and _same_txt(dest.stem, str(v[k]).strip(),
+                                                         str(nuevo or "").strip()))
+                       and (force or k not in derived)]
             if choques and not force:
                 raise ViewUpsertError(
                     f"la vista de «{vista['sujeto']}»"
@@ -1014,7 +1032,14 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         if (_enfasis := str((cfg.as_map(data.get("vista")) or {}).get("enfasis") or "").strip()):
             entrada["enfasis"] = _enfasis
             data["enfasis"] = _enfasis
-        txt_real = _resolve_txt_slug(bib, str(vista.get("txt") or slug))
+        # #567 — the `.txt` comes to the subject's slug BEFORE resolving `txt`: resolved first, the
+        # first harvest stamped another slug's copy and the re-run, now finding it here, clashed.
+        txt_decl = str(vista.get("txt") or slug)
+        traido = bring_fulltext(slug, mn.safe_name(bib), dry_run=dry_run)
+        n["txt_traidos"] += traido
+        # #507: under dry-run nothing was copied; preview what the real run stamps.
+        txt_real = (slug if dry_run and traido and txt_decl == slug
+                    else _resolve_txt_slug(bib, txt_decl))
         if txt_real:
             entrada["txt"] = txt_real
         else:
@@ -1044,7 +1069,9 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         # escribió (#395; devuelto por el validador).
         _refutados = cfg.refuted_in(data, render_view(sujeto, data))
         try:
-            toco = False if _refutados else upsert_view(dest, entrada, force=force)
+            toco = False if _refutados else upsert_view(
+                dest, entrada, force=force,
+                derived=("fecha",) if _declarada else ("fecha", "lente"))   # #567
         except ViewUpsertError as exc:
             # AUD-200 / INV-139 — si la vista no se puede DECLARAR, la sección del cuerpo tampoco
             # se escribe: una `## Vista — X` sin su entrada en `vistas[]` es la incoherencia que el
@@ -1095,8 +1122,6 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
                              f"(«{_cc}») y la nota publica `## Conclusiones` de otra lectura. Mirá "
                              f"el PDF: si no las tiene, sacá la sección y declará "
                              f"`sin_conclusiones: <motivo>` (#546, no se escribe solo)")
-        if bring_fulltext(slug, mn.safe_name(bib), dry_run=dry_run):
-            n["txt_traidos"] += 1
         n["cosechadas" if toco else "sin_cambios"] += 1
         if scratch is not None and toco:
             _a = antes.splitlines()

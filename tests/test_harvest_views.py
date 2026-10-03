@@ -155,11 +155,11 @@ def test_el_aviso_del_txt_sale_AUNQUE_la_vista_se_RECHACE(toy_vault, capsys):
         "which is why FastICA is very suitable for this purpose.", encoding="utf-8")
     hv.harvest("test_star")                          # primera: estampa la vista con la fecha de hoy
     capsys.readouterr()
-    # y ahora la vista queda declarando OTRA fecha, así que la segunda corrida la rechaza
-    mn.merge_frontmatter_list  # noqa: B018 — sólo para dejar claro de dónde sale el frontmatter
+    # y ahora la vista queda declarando OTRA fuente, así que la segunda corrida la rechaza (una
+    # fecha distinta ya no: la fecha la fabrica el cosechador, #567)
     dest = cfg.PAPERS / f"{BIB}.md"
-    dest.write_text(dest.read_text(encoding="utf-8").replace(_dt.date.today().isoformat(),
-                                                             "2020-01-01"), encoding="utf-8")
+    dest.write_text(dest.read_text(encoding="utf-8").replace("fuente: abstract", "fuente: pdf"),
+                    encoding="utf-8")
     hv.harvest("test_star")
     out = capsys.readouterr().out
     assert "RECHAZADAS" in out, "el escenario es el rechazo, no el «sin cambios»"
@@ -2218,3 +2218,70 @@ def test_565_render_view_sangra_el_valor_multilinea_y_view_axes_ve_los_ejes_sigu
     md = hv.render_view("X", {"ejes": {"method": "(a) uno\n(b) dos", "ml": "c"}})
     assert "- **method:** (a) uno\n  (b) dos\n- **ml:** c" in md
     assert hv.cfg.view_axes(md) == {("X", ""): {"method", "ml"}}
+# ---- #567 · la re-corrida sobre la MISMA lectura es «sin cambios», no rechazo -------------------
+
+def test_567_recorrida_otro_dia_y_otra_lente_recalculada_es_sin_cambios(toy_vault, capsys):
+    """`fecha` y `lente` (sin `lente` declarada en el JSON) los fabrica el cosechador: una vista ya
+    estampada con otros valores es la misma lectura. Antes: RECHAZADA por «fecha, lente»."""
+    sembrar(toy_vault)
+    hv.harvest("test_star")
+    dest = cfg.PAPERS / f"{BIB}.md"
+    texto = dest.read_text(encoding="utf-8").replace(_dt.date.today().isoformat(), "2020-01-01")
+    fm = cfg.split_fm(texto)
+    viejo = fm["vistas"][0]["lente"]
+    texto = texto.replace(f"- {viejo[0]}\n", "- eje-de-otra-epoca\n", 1)
+    dest.write_text(texto, encoding="utf-8")
+    capsys.readouterr()
+    r = hv.harvest("test_star")
+    assert r["rechazadas"] == 0 and r["sin_cambios"] == 1, capsys.readouterr().out
+    v = cfg.split_fm(dest.read_text(encoding="utf-8"))["vistas"][0]
+    assert v["fecha"] == "2020-01-01", "la fecha de la lectura no se re-escribe sin --force (#395)"
+    assert "eje-de-otra-epoca" in v["lente"]
+
+
+def test_567_lente_DECLARADA_distinta_sigue_siendo_choque(toy_vault, capsys):
+    """La `lente` que el JSON declara es lo que se preguntó (#395): ésa sí se compara."""
+    sembrar(toy_vault, extraccion(lente=["rv"]))
+    hv.harvest("test_star")
+    dest = cfg.PAPERS / f"{BIB}.md"
+    dest.write_text(dest.read_text(encoding="utf-8").replace("- rv\n", "- otro\n", 1),
+                    encoding="utf-8")
+    assert hv.harvest("test_star")["rechazadas"] == 1
+
+
+def test_567_primera_corrida_estampa_el_slug_del_sujeto_y_la_segunda_no_choca(toy_vault):
+    """El `.txt` vive bajo otro slug: se trae ANTES de resolver `txt`, así que la primera corrida
+    ya estampa el del sujeto. Antes estampaba `otro` y la re-corrida chocaba por `txt`."""
+    sembrar(toy_vault)
+    (cfg.FULLTEXT / "otro").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "otro" / f"{BIB}.txt").write_text("texto", encoding="utf-8")
+    hv.harvest("test_star", dry_run=True)
+    assert not (cfg.FULLTEXT / "test_star" / f"{BIB}.txt").exists()
+    hv.harvest("test_star")
+    dest = cfg.PAPERS / f"{BIB}.md"
+    assert cfg.split_fm(dest.read_text(encoding="utf-8"))["vistas"][0]["txt"] == "test_star"
+    r = hv.harvest("test_star")
+    assert r["rechazadas"] == 0 and r["sin_cambios"] == 1
+
+
+def test_567_txt_viejo_a_otro_slug_con_el_MISMO_texto_no_choca(tmp_path, toy_vault):
+    """Lo ya escrito (27 vistas medidas): `txt: otro` con el mismo `.txt` que el sujeto es la misma
+    lectura — sin backfill. Con texto distinto o sin archivo, sigue siendo choque."""
+    for s_, t in (("otro", "igual"), ("test_star", "igual"), ("tercero", "distinto")):
+        (cfg.FULLTEXT / s_).mkdir(parents=True, exist_ok=True)
+        (cfg.FULLTEXT / s_ / "p.txt").write_text(t, encoding="utf-8")
+    base = {"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-01-01"}
+    dest = _nota_con_vista(tmp_path, [{**base, "txt": "otro"}])
+    assert hv.upsert_view(dest, {**base, "txt": "test_star"}) is False
+    for viejo in ("tercero", "no-existe"):
+        dest = _nota_con_vista(tmp_path, [{**base, "txt": viejo}])
+        with pytest.raises(hv.ViewUpsertError, match="txt"):
+            hv.upsert_view(dest, {**base, "txt": "test_star"})
+
+
+def test_567_derived_sin_force_conserva_y_con_force_reemplaza(tmp_path):
+    dest = _nota_con_vista(tmp_path, [{"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-01-01"}])
+    nueva = {"sujeto": "tau Cet", "tipo": "star", "fecha": "2026-08-30"}
+    assert hv.upsert_view(dest, nueva, derived=("fecha",)) is False
+    assert hv.upsert_view(dest, nueva, force=True, derived=("fecha",)) is True
+    assert cfg.split_fm(dest.read_text(encoding="utf-8"))["vistas"][0]["fecha"] == "2026-08-30"

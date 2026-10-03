@@ -3100,3 +3100,28 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: usa
         motivo: "`_backfill_axes` estampa los ejes que agrega `--restamp-lente`."
+
+  - issue: 567
+    regla: >-
+      Re-cosechar la MISMA lectura es «sin cambios», no rechazo: `upsert_view` no compara lo que el
+      cosechador fabrica al correr (`fecha` = el día de la cosecha; `lente` recalculada cuando el
+      JSON no la declara) —los nombra `derived=` y sin `--force` gana lo escrito— ni un `txt` que
+      apunta a otro slug con el mismo `.txt` byte a byte. Y el `.txt` se trae al sujeto ANTES de
+      resolver `txt`, así la primera corrida ya estampa el slug del sujeto.
+    funcion: harvest_views.upsert_view
+    patron: 'vistas.{0,80}(fecha|txt)|(fecha|txt).{0,80}vistas'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: >-
+          `--restamp-lente` llama con `force=True` (reemplaza a propósito) y el backfill de la fecha
+          como str (#481) llama sin fecha ni lente: ninguno fabrica un valor que choque.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "LEE `vistas[].fecha` (`note_state`, `vista_fecha_str`); no escribe vistas."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "LEE `vistas[].fecha`/`txt` (chequeo de reclamos, #230); no escribe vistas."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "LEE `vistas[].fecha` para el estado del triage; no escribe vistas."

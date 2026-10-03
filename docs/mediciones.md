@@ -4229,3 +4229,17 @@ resto del reporte queda igual. Simulando `_backfill_axes` con los ejes de la ext
 medio del bullet `method`. Otra nota, `1984ApJ...279..763N`, tiene un valor con párrafos
 separados por blanco y sin sangría. No se puede leer entero sin confundirlo con el texto de después
 del bloque, así que queda como límite declarado: hoy no cambia el conteo.
+
+## #567 — el cosechador es idempotente sobre la misma lectura (v1.374.0)
+
+Worktree desechable de Almagesto-Tesis (`00d4a4b7`), `harvest_views.py <slug> --theme --dry-run`
+el 2026-10-03. RECHAZADAS antes → después: `ica-constrained` 11 → 0, `icasso` 32 → 0, `ica-ruido`
+39 → 0, `pca-alta-dimension` 4 → 0 (son más que los 2/32/37/1 del issue porque la fecha de hoy ya
+no coincide con ninguna cosecha). Población `txt` sobre toda la bóveda: 27 de 469 vistas con `txt`
+apuntan a otro slug que el que resolvería una re-corrida, y en las 27 los dos `.txt` son iguales
+byte a byte, así que no hace falta backfill. Lo que el rechazo tapaba sale en la corrida real: 8+5
+notas con merges add-only de `methods` y cambios de cuerpo que el rechazo no dejaba llegar (no auditados uno por uno). Corridas sucesivas: `ica-ruido`
+converge en la segunda (5 → 1 → 0); **`icasso` no converge** (8 → 9 → 9): `2004Himberg`, `2017Kairov`,
+`2019AJ....158..161D` y `2021Zhao` tienen dos lecturas (`<bib>.json` y `<bib>__orden.json`) cuyas
+ayudas de lectura (`stamp_reading_aids`) difieren, y cada una re-escribe la de la otra en cada
+corrida. Lo deja así el archivo; no es txt/fecha/lente y queda fuera de este issue.

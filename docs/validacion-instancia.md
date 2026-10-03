@@ -1669,3 +1669,19 @@ Re-cosechar esa vista lo deja sangrado.
 
 **Devolver si** otra nota cambia de ejes contestados, o si `--restamp-lente` agrega algo a una nota
 que antes no tocaba.
+
+## §#567 · v1.374.0 — re-cosechar la misma lectura es «sin cambios»
+
+```bash
+for s in ica-constrained icasso ica-ruido pca-alta-dimension; do
+  python scripts/harvest_views.py $s --theme --dry-run | grep "vistas:"
+done
+```
+
+**Esperado:** ninguna línea con `RECHAZADAS` (antes 11/32/39/4 el 2026-10-03, por `txt`, `fecha` y
+`lente`). Sin backfill: las 27 vistas cuyo `txt` apunta a otro slug tienen el mismo `.txt` byte a
+byte y quedan como están. Sin `--dry-run` `icasso` cuenta 8-9 «cosechadas» en cada corrida (ver
+mediciones: dos lentes que se disputan las ayudas de lectura, no es este issue).
+
+**Devolver si** queda algún rechazo por `fecha`, por `lente` sin `lente` declarada en el JSON, o por
+un `txt` cuyos dos `.txt` son iguales.
