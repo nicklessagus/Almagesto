@@ -4196,3 +4196,40 @@ def test_558_load_cola_tema_forma_dura():
                  [{"fecha": "f", "motivo": "m"}], ["rv"]):
         with pytest.raises(cfg.VistasError):
             cfg.load_cola_tema({"cola_tema": malo}, entry="x")
+
+
+# ── #565 · un eje con valor MULTILÍNEA no corta la lectura del bloque **Ejes:** ──────────────────
+
+def _vista_565(metodo: str) -> str:
+    return ("## Vista — X\n\n**Ejes:**\n\n- **rv:** a\n- **method:** " + metodo
+            + "\n- **ml:** c\n\n- **Aporte al tema:** no es eje\n")
+
+
+@pytest.mark.parametrize("metodo", [
+    "(a) uno\n(b) dos",            # continuación SIN sangrar: la nota ya escrita (caso real)
+    "(a) uno\n  (b) dos",          # continuación sangrada: lo que escribe `axis_bullet`
+    "(a) uno\n\n  (b) dos",        # párrafo siguiente del mismo ítem, tras un blanco
+])
+def test_565_view_axes_lee_los_ejes_despues_de_un_valor_multilinea(metodo):
+    assert cfg.view_axes(_vista_565(metodo)) == {("X", ""): {"rv", "method", "ml"}}
+
+
+def test_565_el_blanco_seguido_de_linea_sin_sangria_sigue_cortando():
+    """El corte en el blanco es lo que deja afuera `- **Aporte al tema:**` (no es un eje)."""
+    assert "Aporte al tema" not in cfg.view_axes(_vista_565("a"))[("X", "")]
+    texto = "**Ejes:**\n\n- **rv:** a\n\n(1) párrafo suelto\n- **ml:** c\n"
+    assert cfg._axes_of_chunk(texto) == {"rv"}
+
+
+def test_565_axes_block_end_es_el_final_del_ultimo_bullet():
+    trozo = "**Ejes:**\n\n- **rv:** a\n- **m:** x\ny\n\n| tabla |\n"
+    assert trozo[:cfg.axes_block_end(trozo)].endswith("y\n")
+    assert cfg.axes_block_end("sin bloque") is None
+    vacio = "**Ejes:**\n\n**Hueco:** nada\n"            # sin bullets: tras los blancos iniciales
+    assert vacio[cfg.axes_block_end(vacio):] == "**Hueco:** nada\n"
+    assert cfg.axes_block_end("**Ejes:**\n\n- **rv:** a") == len("**Ejes:**\n\n- **rv:** a")
+
+
+def test_565_axis_bullet_sangra_la_continuacion_y_no_los_blancos():
+    assert cfg.axis_bullet("m", " a\nb\n\nc ") == "- **m:** a\n  b\n\n  c"
+    assert cfg.axis_bullet("m", "a") == "- **m:** a"

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.372.0"
+ALMAGESTO_VERSION = "1.373.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1617,23 +1617,50 @@ def _lens_chunks(seccion: str) -> list:
     return out
 
 
-def _axes_of_chunk(trozo: str) -> set:
-    """The axis names of the `**Ejes:**` block of one chunk (`set()` if it has none).
+def axes_block_end(trozo: str):
+    """Offset in `trozo` where its `**Ejes:**` block ends (`None` if it has none) — the ONE
+    definition of that boundary, shared by the reader (`view_axes`) and the writer that inserts
+    there (`make_notes._backfill_axes`, #565).
 
-    El bloque son los bullets CONTIGUOS que siguen al encabezado: se saltean las líneas en blanco
-    iniciales (el escritor deja una) y se corta en la primera línea que no es un bullet, blanco
-    incluido. Sin cortar en el blanco, `- **Aporte al tema:**` —que vive más abajo y NO es un eje—
-    entraba al conjunto y tapaba el hueco que el detector busca."""
+    El bloque son los bullets que siguen al encabezado: se saltean las líneas en blanco iniciales
+    (el escritor deja una) y se corta en el primer blanco. Sin cortar en el blanco,
+    `- **Aporte al tema:**` —que vive más abajo y NO es un eje— entraba al conjunto y tapaba el
+    hueco que el detector busca. ⛔ Un valor MULTILÍNEA no corta (#565): una línea no vacía pegada
+    a un bullet es su continuación, sangrada (como la escribe `axis_bullet`) o no (las notas
+    escritas antes, que markdown lee igual como continuación «perezosa»); tras un blanco, sigue
+    sólo si la próxima línea no vacía está SANGRADA (el párrafo siguiente del mismo ítem)."""
     m_ejes = _EJES_HEAD.search(trozo)
     if not m_ejes:
-        return set()
-    bloque, arranco = [], False
-    for linea in trozo[m_ejes.end():].split("\n"):
-        if linea.strip().startswith("- "):
-            bloque.append(linea); arranco = True
-        elif arranco or linea.strip():
+        return None
+    lineas = trozo[m_ejes.end():].split("\n")
+    pos, arranco = m_ejes.end(), False
+    for i, linea in enumerate(lineas):
+        if not linea.strip():
+            sigue = next((x for x in lineas[i + 1:] if x.strip()), "")
+            if arranco and not sigue[:1].isspace():
+                break
+        elif not (arranco or linea.strip().startswith("- ")):
             break
-    return {m.group(1).strip() for m in _EJE_BULLET.finditer("\n".join(bloque))}
+        else:
+            arranco = True
+        pos += len(linea) + 1
+    return min(pos, len(trozo))
+
+
+def axis_bullet(eje: str, valor: str) -> str:
+    """`- **eje:** valor`, with the continuation lines of a multi-line value INDENTED (#565): the
+    bullet stays one markdown list item, and `axes_block_end` reads it as one."""
+    import textwrap
+    return f"- **{eje}:** " + textwrap.indent(str(valor).strip(), "  ").lstrip()
+
+
+def _axes_of_chunk(trozo: str) -> set:
+    """The axis names of the `**Ejes:**` block of one chunk (`set()` if it has none) — the bullets
+    up to `axes_block_end` (#565)."""
+    if (fin := axes_block_end(trozo)) is None:
+        return set()
+    bloque = trozo[_EJES_HEAD.search(trozo).end():fin]
+    return {m.group(1).strip() for m in _EJE_BULLET.finditer(bloque)}
 
 
 def solo_prosa(body: str) -> str:

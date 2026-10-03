@@ -4217,3 +4217,15 @@ en HEAD (`00d4a4b7`) la categoría queda igual, 1 hallazgo (`ica`), y el resto d
 (diff de encabezados vacío). Sobre `5f1c2250` pasa de 1 a 2: aparece `pca-clasico`, encabezado
 `3 · 2` → `3 · 3` y la fila de `2014arXiv1404.1100S`, como midió el issue. El detector cubre además
 las cuatro tablas de ficha que no tenían ninguno, y en las 7 fichas no agrega hallazgos.
+
+## Un valor multilínea no corta el bloque de ejes (v1.373.0, #565)
+
+Medido sobre Almagesto-Tesis en un worktree desechable (2026-10-03), parser viejo contra nuevo
+sobre las 477 vistas con `**Ejes:**`: cambia una sola nota, `2023A&A...678A...2C` (vista
+`pca-alta-dimension`), que pasa a contestar `detection`, `ml` y `simulation`. La frontera del bloque
+también cambia sólo ahí. El lint (rc 0 antes y después) baja la categoría #254/#270 de 9 a 8, y el
+resto del reporte queda igual. Simulando `_backfill_axes` con los ejes de la extracción
+(sin escribir), no se agrega nada y el texto queda idéntico; antes se agregaban los tres ejes en
+medio del bullet `method`. Otra nota, `1984ApJ...279..763N`, tiene un valor con párrafos
+separados por blanco y sin sangría. No se puede leer entero sin confundirlo con el texto de después
+del bloque, así que queda como límite declarado: hoy no cambia el conteo.

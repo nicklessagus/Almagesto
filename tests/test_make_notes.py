@@ -6481,3 +6481,14 @@ def test_558_cola_tema_es_estado_propio_y_la_estrella_re_estampa_sus_temas(toy_v
     assert "[[2026P]]" in (cfg.CONCEPTS / "methods" / "gls.md").read_text(encoding="utf-8")
     assert mn.stamp_touched_theme_rollups("s") == [], "idempotente"
     assert mn.stamp_touched_theme_rollups("no-existe") == []
+
+
+def test_565_backfill_axes_no_parte_un_bullet_multilinea():
+    """El caso de la instancia (2023A&A...678A...2C): la continuación sin sangrar de `method`
+    cortaba el bloque, `view_axes` no veía `ml` y el backfill lo re-insertaba en medio del bullet."""
+    texto = ("## Vista — X\n\n**Ejes:**\n\n- **rv:** a\n- **method:** (a) uno\n(b) dos\n"
+             "- **ml:** c\n\n| tabla |\n")
+    nuevo, add = mn._backfill_axes(texto, "X", "", {"rv": "a", "method": "m", "ml": "c",
+                                                     "sim": "x\ny"})
+    assert add == ["sim"]
+    assert nuevo == texto.replace("- **ml:** c\n", "- **ml:** c\n- **sim:** x\n  y\n")

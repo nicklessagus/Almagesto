@@ -456,22 +456,14 @@ def _backfill_axes(text: str, sujeto: str, enfasis: str, ejes: dict) -> tuple:
         if suj != sujeto or enf != (enfasis or ""):
             continue
         trozo = text[ini:fin]
-        m = re.search(r"^\*\*Ejes:\*\*\s*$", trozo, re.M)
-        if not m:
+        if (pos := cfg.axes_block_end(trozo)) is None:
             return text, []
         ya = cfg.view_axes(text).get((sujeto, enf), set())
         faltan = [k for k in ejes if k not in ya]
-        # El final del bloque son los bullets CONTIGUOS: se inserta ahí, no al final de la sección,
-        # que es donde viven `**Aporte:**` y la tabla de ground-truth.
-        pos, arranco = m.end(), False
-        for linea in trozo[m.end():].split("\n"):
-            if linea.strip().startswith("- "):
-                pos += len(linea) + 1; arranco = True
-            elif arranco or linea.strip():
-                break
-            else:
-                pos += len(linea) + 1
-        add = "".join(f"- **{k}:** {str(ejes[k]).strip() or SIN_DATOS}\n" for k in faltan)
+        # Se inserta al final del bloque —la MISMA frontera que lee `view_axes` (#565)—, no al
+        # final de la sección, que es donde viven `**Aporte:**` y la tabla de ground-truth.
+        add = "".join(cfg.axis_bullet(k, str(ejes[k]).strip() or SIN_DATOS) + "\n"
+                      for k in faltan)
         return text[:ini + pos] + add + text[ini + pos:], faltan
     return text, []
 

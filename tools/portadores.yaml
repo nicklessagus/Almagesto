@@ -3075,3 +3075,28 @@ portadores:
           `check_papers_table_stale` re-renderiza `## Papers`/roll-up (papers_table,
           concept_rollup_table) y las cuatro tablas de ficha (`star_rollup_sections`); el índice
           por `make_notes.index_section`; todo comparado por `lint.stamped_section_diff`.
+  - issue: 565
+    regla: >-
+      El fin del bloque `**Ejes:**` tiene UNA definición, compartida por quien lo lee
+      (`view_axes`) y quien inserta ahí (`--restamp-lente`): un valor multilínea es continuación
+      del bullet, no fin del bloque. Cada uno recorría el bloque por su cuenta y cortaba en la
+      primera línea que no empezaba con `- `.
+    funcion: lib_config.axes_block_end
+    patron: 'Ejes:\\\*\\\*'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`_backfill_axes` inserta los ejes faltantes en `axes_block_end`, ya no recorre el bloque."
+  - issue: 565
+    regla: >-
+      Un eje se estampa con UNA función, que sangra la continuación de un valor multilínea: sin
+      sangría el bullet deja de ser un ítem de lista y el lector corta el bloque.
+    funcion: lib_config.axis_bullet
+    patron: '"- \*\*\{k\}:\*\* '
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`render_view` estampa el bloque `**Ejes:**` de la vista."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`_backfill_axes` estampa los ejes que agrega `--restamp-lente`."

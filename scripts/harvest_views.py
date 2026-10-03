@@ -346,7 +346,8 @@ def render_view(sujeto: str, data: dict) -> str:
         # «se preguntó y no hay nada» era indistinguible de «nunca se preguntó», que es el mismo
         # falso limpio que #188 cierra un nivel más arriba — y sin esta línea el detector de ejes
         # faltantes nace con centenares de ítems permanentes.
-        out += ["**Ejes:**", ""] + [f"- **{k}:** {str(v).strip() or SIN_DATOS}"
+        # #565 — el valor multilínea sale con la continuación SANGRADA (`cfg.axis_bullet`).
+        out += ["**Ejes:**", ""] + [cfg.axis_bullet(k, str(v).strip() or SIN_DATOS)
                                     for k, v in ejes.items()] + [""]
     filas = [f for f in cfg.as_list(data.get("ground_truth")) if isinstance(f, dict)]
     if filas:

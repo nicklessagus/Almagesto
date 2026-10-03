@@ -2212,3 +2212,9 @@ def test_558_el_lector_propone_la_decision_del_par_paper_tema_y_no_la_escribe():
     ya = {"no_sintetizado": [{"sujeto": "gls", "motivo": "m"}],
           "cola_tema": [{"tema": "rv", "fecha": "f", "motivo": "m"}]}
     assert hv.theme_decision_proposals(ya, data, "2026-09-28") == [], "lo decidido no se re-propone"
+
+
+def test_565_render_view_sangra_el_valor_multilinea_y_view_axes_ve_los_ejes_siguientes():
+    md = hv.render_view("X", {"ejes": {"method": "(a) uno\n(b) dos", "ml": "c"}})
+    assert "- **method:** (a) uno\n  (b) dos\n- **ml:** c" in md
+    assert hv.cfg.view_axes(md) == {("X", ""): {"method", "ml"}}

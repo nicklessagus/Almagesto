@@ -595,6 +595,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   que la instancia agregó al objetivo *después* de esas lecturas—, así que este detector leía esa
   declaración como verdad y pedía re-leer 209 papers para nada. Backfill de lo ya escrito:
   `make_notes.py --restamp-lente`, por verdad de la extracción versionada.
+  ⛔ **Un valor multilínea no corta el bloque `**Ejes:**`** (#565): la línea pegada a un bullet es
+  su continuación (sangrada, como la estampa `cfg.axis_bullet`, o no, como quedaron las notas
+  previas); tras un blanco sigue sólo si lo próximo está sangrado. Esa frontera es **una función**
+  (`cfg.axes_block_end`), la misma que usa `--restamp-lente` para insertar: cortando en la
+  continuación, el detector daba por no contestados los ejes siguientes y el backfill los
+  re-insertaba en medio del bullet.
 - **`## Vista` que sigue publicando la PLANTILLA del stub** (#398, backlog): hasta 1.211.0 el stub
   estampaba las **instrucciones al extractor** en el cuerpo de toda nota de paper, como marcador de
   posición para que el chequeo `vistas[]` ↔ cuerpo cerrara. No las lee nadie —el agente que lee el

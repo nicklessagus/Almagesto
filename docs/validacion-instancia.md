@@ -1646,3 +1646,26 @@ tablas de ficha nuevas en el detector (`## Planetas`, `## Indicadores…`, `## M
 
 **Devolver si** una ficha recién estampada reporta alguna de sus tablas, o si un `Estado` que cambió
 no sale.
+
+## §#565 · v1.373.0 — un eje con valor multilínea no corta el bloque **Ejes:**
+
+Sin migración: el lector acepta la continuación **sin sangrar** de las notas ya escritas, así que no
+hace falta re-estampar nada.
+
+```bash
+python scripts/lint.py | grep -A12 "254/#270"
+```
+
+**Esperado:** la categoría baja de 9 a 8 y `2023A&A...678A...2C` ya no aparece (su `method` ocupa
+cinco líneas, `(a)`…`(e)`, y `detection`, `ml`, `simulation` están después). `--restamp-lente` no
+agrega nada a esa nota. Una vista cosechada desde ahora sale con la continuación sangrada dos
+espacios.
+
+**Límite declarado:** `1984ApJ...279..763N` (vista `rv-doppler`) tiene un eje cuyo valor trae
+párrafos separados por blanco y **sin** sangría; el lector lo da por terminado en el primer
+párrafo. Hoy no cambia nada (es el último eje del bloque y no falta ninguno); si algún día
+`--restamp-lente` tuviera que agregar un eje ahí, lo insertaría después del primer párrafo.
+Re-cosechar esa vista lo deja sangrado.
+
+**Devolver si** otra nota cambia de ejes contestados, o si `--restamp-lente` agrega algo a una nota
+que antes no tocaba.
