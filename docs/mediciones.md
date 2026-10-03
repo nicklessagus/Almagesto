@@ -4184,3 +4184,15 @@ decide desde el prefijo): **0** quedan abiertas, 0 quedan vacías y **2** —ext
 `*«`— no tienen corte seguro y vuelven enteros. Portador `make_notes._titulo_corto`: 0 de 435 cortes
 de título caen dentro de `$`/`«`, y 0 de 212 filas de roll-up estampadas con `…` tienen un span
 abierto; queda `fuera-de-alcance` con ese motivo.
+
+## #564 — la paginación de actas con guion (`p. V-61`) es un localizador (v1.370.0)
+
+Worktree de Almagesto-Tesis (`00d4a4b7`) con `scripts/` de 1.370.0. Los localizadores `p. V-NN` /
+`pp. V-NN–V-NN` de `vault/raw/extraccion/ica-ruido/1999scas....5...16H.json` pasan de **0 de 58**
+leídos por `page_locators` a **58 de 58**. El lint completo sale **idéntico** (diff vacío): la
+categoría «Evidencia sin localizador» ya estaba en 1 —no 7 como contó el issue— porque la instancia
+lo había rodeado agregando «= p. N del PDF» en el hermano, y la fila restante es de
+`2010ComonJutten`, ajena. La numeración impresa de esa fuente sigue **no derivable**
+(`printed_pages` → `[None]*6`): el OCR imprime `v-57`…`v-59` en minúscula —que el freno de #496
+lee como matemática— y `V-6 1` partido; sólo la p. 4 (`V-60`) queda como evidencia de borde. Eso no
+es la gramática: es el `.txt`.

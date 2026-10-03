@@ -670,7 +670,13 @@ def abstract_source(bibcode: str) -> list:
 #: FUERA DE ALCANCE del chequeo, que no es `mal` sino invisible, y del otro lado `printed_pages`
 #: devolvía `[None]*5`. La bóveda elegía entre escribir la verdad y perder el chequeo, o escribir
 #: un número que el paper no muestra y conservarlo — la segunda pasa en verde.
-_PAGE_NUM = r"[A-Z]?\d{1,4}(?!\d)"
+#: …y el prefijo puede llevar GUION pegado a la letra (#564): las actas imprimen `V-61` (volumen V
+#: de ISCAS'99). El guion va PEGADO a la letra, así que `p. 5-16` sigue siendo un rango y
+#: `pp. V-61–V-64` es un rango de dos etiquetas; `V-61` y `V61` son etiquetas distintas.
+#: ⛔ La ÚNICA gramática de una etiqueta: `repaginate` y los lectores del borde la reusan.
+#: El prefijo CON guion es mayúscula aun bajo `re.I` (`(?-i:…)`): `e-5` es un exponente, no una página.
+PAGE_LABEL = r"(?:(?-i:[A-Z]-)|[A-Z])?\d{1,4}"
+_PAGE_NUM = PAGE_LABEL + r"(?!\d)"
 _PAGE_BORDER = (r"(?=\s*(?:$|[)(\]»|;:\[–—-]|,(?!\d)|\.(?!\d)|\b(?:y|e|ni|o|and|or)\b|p{1,2}\."
                 r"|PDF\b))")
 
@@ -685,8 +691,8 @@ def _page_loc_re(first: str, bare: str) -> str:
 # ⛔ AUD-402 · con cuatro cifras en la primera página (`pp. 2056, 2061`, paginación por volumen) un
 # `20xx` tras la coma ES una página; con menos (`p. 4, 2012`) es el año de la referencia.
 PAGE_LOC_RE = re.compile(r"\bp{1,2}\.\s*(?:"
-                         + _page_loc_re(r"[A-Z]?\d{4}(?!\d)", _PAGE_NUM) + "|"
-                         + _page_loc_re(r"[A-Z]?\d{1,3}(?!\d)", r"(?!(?:19|20)\d\d(?!\d))" + _PAGE_NUM)
+                         + _page_loc_re(r"(?:(?-i:[A-Z]-)|[A-Z])?\d{4}(?!\d)", _PAGE_NUM) + "|"
+                         + _page_loc_re(r"(?:(?-i:[A-Z]-)|[A-Z])?\d{1,3}(?!\d)", r"(?!(?:19|20)\d\d(?!\d))" + _PAGE_NUM)
                          + ")", re.I)
 _PAGE_LOC_SEP = re.compile(r"\s*(?:,|\by\b|\band\b|\be\b)\s*", re.I)
 
@@ -698,13 +704,14 @@ _PAGE_LOC_SEP = re.compile(r"\s*(?:,|\by\b|\band\b|\be\b)\s*", re.I)
 #: es una variable de la matemática, no una página (`= E { s1 s2 }` en el pie de una fórmula), y
 #: leerlo con `re.I` costó —medido sobre una bóveda real de 255 fuentes— 34 páginas impresas
 #: perdidas por ambigüedad y 2 leídas como `S1`/`S2` en tres documentos largos.
-_PAGE_LABEL_RE = re.compile(r"^([A-Z]?)(\d{1,4})$")
-_PAGE_LABEL_IN = re.compile(r"(?i)[A-Z]?\d{1,4}")
+_PAGE_LABEL_RE = re.compile(r"^((?:[A-Z]-?)?)(\d{1,4})$")
+_PAGE_LABEL_IN = re.compile(r"(?i)" + PAGE_LABEL)
 _PAGE_LOC_PREFIX = re.compile(r"(?i)\bp{1,2}\.\s*")
 
 
 def page_parts(etiqueta) -> tuple | None:
-    """`(prefix, number)` of a page label — `("L", 45)` for `L45`, `("", 45)` for `45` (#496).
+    """`(prefix, number)` of a page label — `("L", 45)` for `L45`, `("V-", 61)` for `V-61` (#564),
+    `("", 45)` for `45` (#496).
 
     ⛔ The ONE place that decides what a page label is, so the prefix's case is decided ONCE: the
     harvesting regexes stay permissive and everything they find comes through here. An UPPERCASE
@@ -737,7 +744,7 @@ def page_span(desde, hasta) -> set:
 PAGE_EDGE_LINES = 2
 PAGE_OFFSET_MIN = 3
 
-_PAGE_EDGE_RE = re.compile(r"(?i)(?<!\S)([A-Z]?\d{1,4})(?!\S)")
+_PAGE_EDGE_RE = re.compile(r"(?i)(?<!\S)(" + PAGE_LABEL + r")(?!\S)")
 
 
 def page_locators(texto: str) -> list:
@@ -878,8 +885,8 @@ def page_number_candidates(paginas: list) -> list:
 #: localizador igual al total pasaba a «impresa»: 8 casos medidos) y la línea que es SÓLO un
 #: entero (`'10'`, el caso Naik). Un entero dentro de otra línea —una fecha del pie, un `4` suelto—
 #: sólo cuenta si forma secuencia con la vecina (`printed_pages`), y un año, nunca.
-_PAGE_OF_RE = re.compile(r"(?i)\b(?:page|p[áa]g(?:ina)?\.?|p\.)\s*([A-Z]?\d{1,4})\s*(?:of|de)\s*[A-Z]?\d{1,4}\b")
-_ONLY_INT_RE = re.compile(r"^\s*([A-Z]?\d{1,4})\s*$")
+_PAGE_OF_RE = re.compile(r"(?i)\b(?:page|p[áa]g(?:ina)?\.?|p\.)\s*(" + PAGE_LABEL + r")\s*(?:of|de)\s*" + PAGE_LABEL + r"\b")
+_ONLY_INT_RE = re.compile(r"^\s*(" + PAGE_LABEL + r")\s*$")
 
 
 def page_number_evidence(paginas: list) -> list:

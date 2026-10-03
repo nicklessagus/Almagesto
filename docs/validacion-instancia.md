@@ -1601,3 +1601,18 @@ PY
 `ica.verif.md` abren con `*«` y no tienen corte seguro: al re-escribirse vuelven **enteras**.
 
 **Devolver si** una fila re-escrita termina con `«` abierta o con un `»` que la fuente no cierra ahí.
+
+## §#564 · v1.370.0 — la paginación de actas con guion es un localizador
+
+Sin migración. Medir:
+
+```bash
+python -c "import sys,json,re;sys.path.insert(0,'scripts');import lib_config as c
+s=open('vault/raw/extraccion/ica-ruido/1999scas....5...16H.json',encoding='utf-8').read()
+l=re.findall(r'pp?\. V-\d+(?:[–-]V-\d+)?',s);print(len(l),sum(bool(c.page_locators(x)) for x in l))"
+```
+
+**Esperado:** `58 58`. El «= p. N del PDF» que se agregó a mano en `ica-ruido.verif.md` ya no hace
+falta (sacarlo es opcional: la fila sigue siendo legible con las dos numeraciones).
+
+**Devolver si** `p. 5-16` deja de leerse como rango `('5','16')`, o si `V-61` se pliega a `V61`.

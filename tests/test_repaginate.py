@@ -813,3 +813,13 @@ def test_535_un_cierre_de_ANTES_de_534_deja_la_deuda_de_sueltos_visible_y_releib
     rp.apply(BIB, _resultado(tmp_path, [{"id": "salvedades[0]@1", "pagina": "32",
                                          "evidencia": "Received 3 March 2013", "motivo": ""}]))
     assert json.loads(f.read_text(encoding="utf-8"))["_repaginado"]["alcance"] == "sueltos"
+
+
+def test_564_page_answer_acepta_la_etiqueta_de_actas_con_guion():
+    """#564 — `_LABEL_RE` reusa `cfg.PAGE_LABEL`: el relector que contesta `V-61` (lo que la hoja
+    imprime) daba forma inválida."""
+    assert rp.page_answer("V-61") == ["V-61"]
+    assert rp.page_answer("V-61–V-64") == ["V-61–V-64"]
+    assert rp.page_answer("5-16") == ["5-16"]
+    assert rp.page_answer("p. V-61") is None
+    assert [m.group(0) for m in rp._LABEL_RE.finditer("p. V-61, p. 12")] == ["V-61", "12"]

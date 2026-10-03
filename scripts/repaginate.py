@@ -212,7 +212,7 @@ def page_answer(pagina) -> list | None:
 #: #533 · one page LABEL inside a locator token: a number or a range, with its prefix (`L45`).
 #: `p. 299, p. 304` holds two, `p. 290-291` one. The apply rewrites labels only, so `p.`/`pp.`,
 #: separators and qualifiers stay as written.
-_LABEL_RE = re.compile(r"[A-Z]?\d{1,4}(?:\s*[-–—]\s*[A-Z]?\d{1,4})?")
+_LABEL_RE = re.compile(cfg.PAGE_LABEL + r"(?:\s*[-–—]\s*" + cfg.PAGE_LABEL + r")?")  # #564: one grammar
 
 
 def label_spans(texto: str, tokens: list) -> list:

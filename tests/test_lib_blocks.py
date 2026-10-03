@@ -1944,3 +1944,11 @@ def test_554_cambiar_el_objeto_el_autor_o_un_numero_manda_a_re_verificar():
                   verdict="soportada", evidence="e", anchor="zzzzzzzzzz",
                   source_hash="pdf:" + "b" * 10)
     assert lb.carry_needs_reverify(par, fila), "soportada, pero de otro objeto: no se lleva"
+
+
+def test_564_locator_kinds_lee_la_pagina_de_actas_con_guion():
+    """#564 — la celda `Evidencia` con `(p. V-61)` (actas ISCAS'99) contaba como SIN localizador."""
+    assert lb.locator_kinds("(p. V-61)") == {"pdf"}
+    assert lb.locator_kinds("(pp. V-61–V-64)") == {"pdf"}
+    assert lb.locator_kinds("p. 5-16") == {"pdf"}
+    assert lb.locator_kinds("sin nada") == set()

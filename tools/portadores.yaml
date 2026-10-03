@@ -3009,3 +3009,29 @@ portadores:
           filas estampadas con `…` tienen un span abierto. Hacerlo llevar `truncate_claim` movería
           los 435 cortes a borde de palabra y dejaría desactualizado todo roll-up estampado por un
           defecto no observado; vuelve si aparece un título con fórmula partida.
+  - issue: 564
+    regla: >-
+      Una etiqueta de página tiene UNA gramática (`lib_quotes.PAGE_LABEL`): número, o prefijo de
+      letra mayúscula —pegado (`L45`, #496) o con guion pegado a la letra (`V-61`, actas)— más
+      número. El guion pegado a la letra no es rango (`p. 5-16` sí lo es) y la forma se conserva
+      (`V-61` ≠ `V61`). Medido: los 58 localizadores `p. V-NN` de una fuente ISCAS'99 eran
+      invisibles para toda capa (0 leídos) porque las tres regex y el duplicado de `repaginate`
+      sólo aceptaban `[A-Z]?\d`.
+    funcion: lib_config.PAGE_LABEL
+    patron: 'PAGE_LABEL\b|PAGE_LOC_RE|page_locators\(|\[A-Z\]\?\\d'
+    consumidores:
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "`_LABEL_RE` (la forma que #533 exige a la `pagina` del relector) se arma con `cfg.PAGE_LABEL`; lee los tokens con `PAGE_LOC_RE`/`page_locators`."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Es donde vive la gramática: `_PAGE_NUM`, `PAGE_LOC_RE`, `_PAGE_LABEL_RE`, `_PAGE_LABEL_IN`, `_PAGE_EDGE_RE`, `_PAGE_OF_RE` y `_ONLY_INT_RE` se arman desde `PAGE_LABEL`."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "Cuenta localizadores con `cfg.page_locators`: hereda la gramática sin regex propia."
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "`locator_kinds` pregunta a `cfg.page_locators`: hereda la gramática sin regex propia."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "Expande páginas con `cfg.page_locators` + `page_span`: hereda la gramática sin regex propia."

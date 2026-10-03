@@ -1264,3 +1264,33 @@ def test_516_la_firma_cubre_LA_cita_y_LA_fuente(toy_vault):
                  [{"ref": "2013Voss", "cita": _LARGA_516, "pdf_sha": sha, "pagina": "4"}]):
         with pytest.raises(cfg.VistasError):
             lq.load_reviewed_quotes({"cita_revisada": mala})
+
+
+@pytest.mark.parametrize("texto, esperado", [
+    ("(p. V-61)", [("V-61", "V-61")]),                     # #564: prefijo con guion
+    ("pp. V-61–V-64", [("V-61", "V-64")]),                 # rango de dos etiquetas con guion
+    ("pp. V-61-V-64", [("V-61", "V-64")]),
+    ("p. V-61, V-63", [("V-61", "V-61"), ("V-63", "V-63")]),
+    ("p. V61", [("V61", "V61")]),                          # #496 intacto
+    ("p. 5-16", [("5", "16")]),                            # sin letra el guion sigue siendo rango
+    ("p. 5", [("5", "5")]),
+    ("p. e-5", []),                                        # minúscula + guion: exponente, no página
+])
+def test_564_page_locators_lee_la_paginacion_de_actas_con_guion(texto, esperado):
+    """⛔ #564 — las actas imprimen `V-61` (volumen V de ISCAS'99): 58 localizadores de una fuente
+    real caían fuera de alcance de toda capa. El guion va PEGADO a la letra, así que `p. 5-16` sigue
+    siendo un rango."""
+    assert cfg.page_locators(texto) == esperado
+
+
+def test_564_la_forma_con_guion_se_conserva_y_no_cruza_numeraciones():
+    """`V-61` ≠ `V61` (misma doctrina que el prefijo de #496): la etiqueta viaja con su guion y un
+    rango entre `V-61` y `V63` no es rango. El borde de la hoja la lee igual."""
+    assert cfg.page_parts("V-61") == ("V-", 61)
+    assert cfg.page_parts("V61") == ("V", 61)
+    assert cfg.page_parts("v-61") is None
+    assert cfg.page_label(cfg.page_parts("V-61")) == "V-61"
+    assert cfg.page_span("V-61", "V-63") == {"V-61", "V-62", "V-63"}
+    assert cfg.page_span("V-61", "V63") == {"V-61"}
+    assert cfg.page_number_candidates(["a\nb\nc\nProc. ISCAS'99 V-60"]) == [{"V-60"}]
+    assert cfg.page_number_evidence(["a\nb\nc\nV-60"]) == [{"V-60"}]
