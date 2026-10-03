@@ -2794,42 +2794,42 @@
   {
    "number": 561,
    "title": "entity.py rename/delete reescribe themes.yaml/stars.yaml con safe_dump y borra todos los comentarios de curación",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 562,
    "title": "entity.py rename de un tema con concept == slug deja wikilinks rotos y capas con el slug viejo, y sale con rc 0",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 563,
    "title": "lint: el detector de la tabla de papers estampada compara sólo los stems — un paper que cambia de Estado deja la tabla y el «N · M sintetizados» mintiendo con el lint en 0",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 564,
    "title": "La paginación de actas con guion («p. V-61») no es un localizador para ninguna capa: PAGE_LOC_RE, page_parts y repaginate sólo aceptan [A-Z]?\\d — 58 localizadores de una fuente fuera de alcance",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 565,
    "title": "Un eje con valor multilínea corta la lectura del bloque **Ejes:**: view_axes da por no contestados los ejes siguientes (falso positivo de #270) y --restamp-lente los re-insertaría partiendo el bullet",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 566,
    "title": "truncate_claim corta dentro de la cita textual «…»: _SPANS_ABIERTOS protege $, backtick y [[ ]] pero no las comillas — 543 de 2996 extractos de una instancia terminan con una « abierta",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 567,
    "title": "harvest_views no es idempotente: la re-corrida rechaza la MISMA lectura por txt (se resuelve antes de traer el .txt al sujeto), fecha (date.today) y lente — 72 RECHAZADAS en cuatro temas, rc 0",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 568,
    "title": "apply_fixes no puede borrar una fila de tabla (nuevo \"\" falla por conteo de bloques, nuevo [] se rechaza sobre una fila): vaciar un ## Inventario por eje se hace por fuera del escritor y sin la red de pares",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 569,

@@ -1724,3 +1724,17 @@ deja `git status` vacío.
 
 **Devolver si** un rename con rc 0 deja un bloqueante nuevo en `lint --cierre <nuevo>`, o si
 reescribe texto libre (`motivo`, prosa) por su cuenta.
+
+## §#569 · v1.377.0 — otra lectura no pisa las ayudas de lectura ya escritas
+
+Sin migración. Las notas que la re-cosecha de v1.374.0–v1.376.0 haya degradado (si se corrió sin
+`--dry-run` y se commiteó) se recuperan desde git: `git log -p -- vault/wiki/papers/<bib>.md`.
+
+```bash
+for s in ica ica-ruido pca-clasico deteccion-estadistica; do
+  python scripts/harvest_views.py $s --theme; done; git diff --stat -- vault/wiki/papers
+```
+
+**Esperado:** ninguna sección `## Conclusiones` / `## Traducción …` reemplazada (sólo merges add-only
+de `methods`); avisos `no se pisa (#569)` donde otra lectura trae otro texto; la segunda corrida da
+0 cosechadas. **Devolver si** una re-cosecha sin lecturas nuevas achica alguna ayuda de lectura.

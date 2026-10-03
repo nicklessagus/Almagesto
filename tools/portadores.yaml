@@ -3188,3 +3188,15 @@ portadores:
         motivo: >-
           `rename_paper` renombra un PAPER: su nombre no es la clave de ningún sujeto ni de
           `vistas[]`, y ya re-apunta nota, hermano, artefactos, extracción y wikilinks (#356/#374).
+  - issue: 569
+    regla: >-
+      Las ayudas de lectura (`## Traducción del abstract`, `## Conclusiones` y su traducción) son UNA
+      por nota y las lecturas varias (otro tema, otra lente): una sección ya escrita se completa,
+      no se pisa, salvo `--paper --force`. Reemplazar en cada cosecha hacía ganar al último JSON:
+      medido, 17 notas degradadas al re-cosechar cuatro temas sin lecturas nuevas.
+    funcion: harvest_views.stamp_reading_aids
+    patron: 'upsert_section\(|Traducción de las conclusiones'
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Sólo NOMBRA las secciones en `SECCIONES_ESTAMPADAS`; no las escribe."

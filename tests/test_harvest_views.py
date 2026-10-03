@@ -555,6 +555,38 @@ def test_las_ayudas_de_lectura_van_ANTES_de_la_vista(toy_vault):
     assert texto.index("## Conclusiones") < texto.index("## Vista — Estrella Test")
 
 
+def test_569_otra_lectura_no_pisa_las_ayudas_ya_escritas(toy_vault):
+    """⛔ #569 — las ayudas son UNA por nota y las lecturas varias (otro tema, otra lente): la
+    re-cosecha de una lectura distinta no pisa lo escrito —medido, 17 notas degradadas, unas
+    `## Conclusiones` de 45 líneas a 11—. Completa lo que falta, y converge: la segunda corrida da
+    0 cosechadas. Sólo `--paper --force` reemplaza."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(conclusiones="Larga y completa.",
+                                         conclusiones_es="Larga."))
+    hv.harvest("test_star")
+    json_p = cfg.EXTRACCION / "test_star" / f"{BIB}.json"
+    json_p.write_text(json.dumps(extraccion(conclusiones="Corta.", conclusiones_es="Corta.",
+                                            abstract_es="Traducción nueva.")), encoding="utf-8")
+    hv.harvest("test_star")
+    texto = dest.read_text(encoding="utf-8")
+    assert "## Conclusiones\nLarga y completa." in texto and "Corta." not in texto
+    assert "## Traducción del abstract\nTraducción nueva." in texto     # faltaba: se completa
+    assert hv.harvest("test_star")["cosechadas"] == 0
+    hv.harvest("test_star", paper=BIB, force=True)
+    assert "## Conclusiones\nCorta." in dest.read_text(encoding="utf-8")
+
+
+def test_569_el_abstract_placeholder_se_sigue_rellenando(toy_vault):
+    """El `## Abstract` con `_(no disponible)_` tiene su propia guarda (#124/#413): la regla de
+    #569 no lo vuelve permanente."""
+    _con_pdf(toy_vault)
+    dest = sembrar(toy_vault, extraccion(abstract="The real abstract."),
+                   body="## Abstract\n_(no disponible)_\n\n" + mn.vista_block("Estrella Test",
+                                                                              theme=False))
+    assert hv.stamp_reading_aids(dest, {"abstract": "The real abstract."})
+    assert "The real abstract." in dest.read_text(encoding="utf-8")
+
+
 def test_un_documento_largo_no_recibe_conclusiones(toy_vault):
     """Una fuente `unidad_cita: pagina` —un libro, un handbook— no tiene «conclusiones» como
     sección, y transcribir algo que no existe fabricaría contenido. Exclusión estructural, no un

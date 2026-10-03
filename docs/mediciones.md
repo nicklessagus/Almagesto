@@ -4268,3 +4268,13 @@ estado, 2 notas con verificación stale por la reescritura de wikilinks) y los d
 cierran `make_notes.py gj_581x` y `--restamp-pdf-links` (medido: 0 y 0). La lista final nombra 408
 líneas con el slug viejo (extracciones, rutas, `objective.yaml`). Ida y vuelta
 (`gj_581x → gj_581`): `git status` vacío.
+
+## Las ayudas de lectura no se pisan entre lecturas (v1.377.0, #569)
+
+Worktree desechable de Almagesto-Tesis (`76c30c50`, v1.376.0), `harvest_views.py <slug> --theme` sobre
+`ica`, `ica-ruido`, `pca-clasico` y `deteccion-estadistica`, sin lecturas nuevas. Con v1.376.0: 21
+archivos, +94/−187 (reproduce la medición del validador: `## Conclusiones` reemplazadas por versiones
+más cortas). Con el fix: 12 archivos, +28/−8, todos merges add-only de `methods` (una línea por nota)
+y el paso en `cadena` de los registros; 19 avisos «no se pisa»; segunda corrida 0 cosechadas en los
+cuatro. Regresión de #567 (v1.374.0): antes la vista rechazada hacía `continue` y nunca llegaba a
+`stamp_reading_aids`, así que el rechazo por fecha tapaba el pisado.

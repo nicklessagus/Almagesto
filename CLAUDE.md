@@ -539,9 +539,9 @@ al crear —`_(no disponible)_` si no hay copia— y el cosechador la completa s
 
 **Y la nota lleva tres ayudas de lectura (#124): `## Traducción del abstract`, `## Conclusiones` y
 `## Traducción de las conclusiones`** —las conclusiones son lo que el paper afirma **sin lente**, lo
-que abarata una segunda vista—. Las estampa el cosechador desde el JSON, van **antes** de la vista, y
-**la traducción va al lado del original, nunca en su lugar**. ⚠ Se llaman `## Traducción …` con el
-nombre COMPLETO, nunca `## Abstract (es)` (trampa de prefijo de `section_start`, #176).
+que abarata una segunda vista—. Las estampa el cosechador desde el JSON, **antes** de la vista; otra
+lectura **completa, no pisa** (`--paper --force`, #569), y **la traducción va al lado del original,
+nunca en su lugar**. ⚠ Nombre COMPLETO `## Traducción …`, nunca `## Abstract (es)` (prefijo, #176).
 
 ⚠ **Documento largo (`unidad_cita: pagina`): sin conclusiones** — igual que la fuente leída sólo del
 abstract (#207); la que no tiene esa sección se declara `sin_conclusiones: <motivo>` (#277).

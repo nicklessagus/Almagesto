@@ -1202,6 +1202,13 @@ lo que hace barata una **segunda vista** cuando otro sujeto reclama el mismo pap
 abrir el PDF es lo caro. Las estampa el cosechador desde el JSON de extracción, van **antes** de la
 vista, y **la traducción va al lado del original, nunca en su lugar**.
 
+⛔ **Una por nota, lecturas varias: la sección ya escrita no se pisa (#569).** El mismo paper se lee
+desde varios temas y lentes, y cada JSON trae su propia transcripción; reemplazar en cada cosecha
+hacía ganar al último JSON cosechado (medido: re-cosechar cuatro temas sin lecturas nuevas degradó 17
+notas, unas `## Conclusiones` de 45 líneas a 11). El cosechador **completa** la que falta, avisa la
+que difiere y sólo reemplaza con `--paper <bib> --force`. El `## Abstract` con placeholder sigue su
+propia guarda (#413).
+
 ⚠ **Las traducciones se llaman `## Traducción …`, con el nombre COMPLETO — no `## Abstract (es)`.**
 Ese nombre volvía a `## Abstract` un **prefijo** del suyo, y `section_start` tolera a propósito un
 sufijo que arranca con puntuación (lo necesita para `## Vista — X (2026-08-27)`): con sólo la

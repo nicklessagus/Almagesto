@@ -443,7 +443,7 @@ def transcribed_note(fm: dict) -> str:
     return TRANSCRITO_SIN_ABSTRACT if fm.get("sin_abstract") else TRANSCRITO
 
 
-def stamp_reading_aids(dest: Path, data: dict) -> bool:
+def stamp_reading_aids(dest: Path, data: dict, *, force: bool = False) -> bool:
     """`## Traducción del abstract`, `## Conclusiones` y su traducción — las ayudas de lectura (#124).
 
     ⚠ **Las traducciones NO se llaman `## Abstract (es)`.** Ese nombre hacía de `## Abstract` un
@@ -476,7 +476,8 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
     sección con contenido inventado. Es una exclusión estructural, no un umbral de largo (que sería
     un corte sin calibrar, y de eso este repo ya se quemó tres veces).
 
-    Idempotente y quirúrgico: cada sección se reemplaza sola y sin tocar el resto."""
+    Idempotente y quirúrgico: cada sección se escribe sola y sin tocar el resto. ⛔ **Completa, no
+    pisa (#569):** una sección ya escrita sólo se reemplaza con `force` (`--paper --force`)."""
     texto_nota = dest.read_text(encoding="utf-8")
     fm = cfg.split_fm(texto_nota)
     largo = str(fm.get("unidad_cita") or "").strip() not in ("", "linea")
@@ -516,6 +517,19 @@ def stamp_reading_aids(dest: Path, data: dict) -> bool:
         # llega ACÁ lo transcribió el modelo del PDF, no es el verbatim de catálogo; y escapar no
         # cambia lo que se ve. Idempotente: el `\$` ya escapado no se re-escapa.
         limpio = cfg.escape_dollars(limpio)
+        # ⛔ #569 — the aids are ONE per note, the readings are many (one per subject and lens, and
+        # the same paper read from several themes). Replacing on every harvest made the last JSON
+        # harvested win: measured, re-harvesting four unchanged themes rewrote 17 notes (+94/−188),
+        # a 45-line `## Conclusiones` down to 11. So a section already written is filled, never
+        # replaced, unless `--force` (which requires `--paper`, like the dated reading, #395).
+        if (not force and header != "## Abstract"   # its own guard above fills the placeholder
+                and (_sp := section_span(texto_nota, header)) is not None):
+            _ya = texto_nota[_sp[0]:_sp[1]].split("\n", 1)[1:]
+            if _ya and _ya[0].strip():
+                if _ya[0].strip() != limpio:
+                    cfg.print_seguro(f"  ⚠ {dest.stem}: `{header}` ya está escrita y esta lectura "
+                                     f"trae otra — no se pisa (#569); con --paper --force, sí")
+                continue
         if upsert_section(dest, header, f"{header}\n{limpio}\n"):
             toco = True
     return toco
@@ -1108,7 +1122,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
                                          for e in _refutados))
         elif write_view_section(dest, sujeto, _cuerpo, theme=theme, force=force, enfasis=_enf):
             toco = True
-        if stamp_reading_aids(dest, data):
+        if stamp_reading_aids(dest, data, force=force):
             toco = True
         if (_sc := conclusions_hatch_proposal(dest.read_text(encoding="utf-8"), data)):
             cfg.print_seguro(f"  → {bib}: la lectura volvió sin conclusiones; si la fuente no tiene "
