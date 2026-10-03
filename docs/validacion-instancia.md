@@ -1703,3 +1703,24 @@ en `stars.yaml`; la clave en `themes.yaml` para un tema). `delete` saca sólo el
 
 **Devolver si** cambia alguna línea fuera de la entrada, o si una entrada con forma rara (flow style,
 comentario en columna 0 adentro) se escribe en vez de rehusar sin tocar nada.
+
+## §#562 · v1.376.0 — `entity.py rename` deja la bóveda coherente o rehúsa
+
+Sin migración. Si algún `vault/config/registro/<slug>.yaml` tiene un `slug:` distinto del nombre
+del archivo (renombres viejos), corregilo a mano. En un worktree desechable de la instancia:
+
+```bash
+python scripts/entity.py rename <tema-con-concept-igual-al-slug> x --yes   # rc 1, no toca nada
+python scripts/entity.py rename <estrella> <slug-nuevo> --yes
+head -1 vault/config/registro/<slug-nuevo>.yaml
+python scripts/lint.py --cierre <slug-nuevo>
+python scripts/entity.py rename <slug-nuevo> <estrella> --yes && git status --short vault
+```
+
+**Esperado:** el tema rehúsa nombrando el caso y `git status` queda vacío; la estrella sale con
+`slug: <slug-nuevo>` en el registro, `lint --cierre` en 0 (la deuda que queda es backlog/WARN y la
+cierran los re-estampados que imprime), la lista de líneas con el slug viejo al final, y la vuelta
+deja `git status` vacío.
+
+**Devolver si** un rename con rc 0 deja un bloqueante nuevo en `lint --cierre <nuevo>`, o si
+reescribe texto libre (`motivo`, prosa) por su cuenta.

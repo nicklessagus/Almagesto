@@ -41,6 +41,7 @@ decidir por el usuario sobre trabajo de extracción ya pagado.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import sys
@@ -359,6 +360,24 @@ def _reescribir_wikilinks(viejo: str, nuevo: str) -> int:
     return n
 
 
+def _mentions(slug: str) -> list[str]:
+    """`file:line` of every text that still names `slug` after a rename (#562), NOT rewritten.
+
+    A slug is also a word (`pca`): a blind replace would rewrite a `motivo`, a salvedad or prose
+    that means something else. So it is LISTED, like the rest of what the rename does not do
+    alone. Scope: the notes and their siblings (minus `log.md`, which is history), the config and
+    the extractions — the places a slug lives as data. Bounded by a non-word, non-dash edge."""
+    rx = re.compile(rf"(?<![\w-]){re.escape(slug)}(?![\w-])")
+    files = [f for f in cfg.WIKI.rglob("*.md") if f.name != "log.md"]
+    files += list((cfg.VAULT / "config").rglob("*.yaml")) + list(cfg.EXTRACCION.rglob("*.json"))
+    out = []
+    for f in sorted(files):
+        for n, ln in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if rx.search(ln):
+                out.append(f"{f.relative_to(cfg.VAULT)}:{n}")
+    return out
+
+
 def plan(slug: str) -> int:
     """Imprime qué tocaría una operación sobre esta entidad. No escribe nada."""
     tipo, nombre, meta = resolver(slug)
@@ -433,6 +452,17 @@ def delete(slug: str, yes: bool) -> int:
 def rename(viejo: str, nuevo: str, yes: bool) -> int:
     """Renombra el slug en las ocho capas. Dry-run sin `--yes`.  @inv INV-19"""
     tipo, nombre, meta = resolver(viejo)
+    if tipo != "star" and str(meta.get("concept") or viejo) == viejo:
+        # ⛔ #562. With `concept == slug` the note is named like the slug, so `[[viejo]]` is a link
+        # to the NOTE: rewriting it while the note keeps its name (#169) left every link broken, and
+        # `concept:`, the note, its `.verif.md`, `vistas[]`, `## Vista — <slug>` and the
+        # extractions kept the old name — with rc 0. Those layers are not covered here: refuse.
+        sys.exit(f"el tema {viejo!r} tiene `concept: {viejo}` (su nota se llama como el slug) y este "
+                 f"rename no cubre ese caso (#562): dejaría los `[[{viejo}]]` apuntando a una nota "
+                 f"que no existe. No se tocó nada. A mano: mové la nota y su `.verif.md`, cambiá "
+                 f"`concept:`, y reescribí `vistas[].sujeto`/`.txt`, las secciones `## Vista — "
+                 f"{viejo}`, la `vista` de `raw/extraccion/{viejo}/*.json` y los `pdf:`/`fulltext:`; "
+                 f"cerrá con `lint.py --cierre <nuevo>`.")
     if not yes:
         plan(viejo)
         cfg.print_seguro(f"\n⛔ dry-run: no se renombró nada. Repetí con `--yes` para aplicar "
@@ -462,6 +492,26 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
             cfg.STARS_YAML, nombre, field=("slug", viejo, nuevo))
     else:
         yaml_path, yaml_nuevo = cfg.THEMES_YAML, _yaml_edited(cfg.THEMES_YAML, viejo, new_key=nuevo)
+    # #562 — the registro carries its own `slug:` and every `save_*` does `setdefault("slug", …)`,
+    # which KEEPS a stale one forever. Rewritten here, before moving: if it cannot be read,
+    # `save_registro` refuses and nothing moved yet.
+    if cfg.registro_path(viejo).exists():
+        reg = cfg.load_registro(viejo)
+        reg["slug"] = nuevo
+        cfg.save_registro(viejo, reg)
+    if tipo == "star":
+        # #562 — the ground-truth JSON and the ficha carry the slug inside too: the JSON's stale
+        # `slug` is a BLOCKING «renombre a medias» in the lint. One exact line each, by text.
+        for f, rx, rep in (
+                (cfg.GROUND_TRUTH / f"{viejo}.json", re.escape(f'"slug": {json.dumps(viejo)}'),
+                 f'"slug": {json.dumps(nuevo)}'),
+                (cfg.STARS / f"{viejo}.md", rf"(?m)^slug:[ \t]*{re.escape(viejo)}[ \t]*$",
+                 f"slug: {nuevo}")):
+            if f.exists():
+                t = f.read_text(encoding="utf-8")
+                n = re.sub(rx, lambda _m: rep, t, count=1)
+                if n != t:
+                    cfg.write_text_atomic(f, n)
     for capa, p in capas(viejo, tipo, meta):
         if capa in ("nota", "verif") and tipo != "star":
             # ⛔ #169. La nota de un TEMA se llama por `concept`, un campo APARTE del slug: renombrar
@@ -480,16 +530,31 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
     if yaml_nuevo is not None:
         cfg.write_text_atomic(yaml_path, yaml_nuevo)
     if tipo == "star":
-        cfg.print_seguro(f"  → stars.yaml: {nombre!r} ahora tiene slug {nuevo!r}")
-        cfg.print_seguro("\nnota: los `[[wikilink]]` y los `stars:` apuntan al NOMBRE de la "
-                         "estrella, que no cambió — no hace falta reescribirlos.")
+        # #562 — the `stars:` of the papers carry the NAME, which did not change; but the ficha is
+        # `stars/<slug>.md`, so a `[[<slug>]]` IS a link to it and moves with it (measured: 63
+        # broken wikilinks in a real vault when this branch skipped them).
+        n_wl = _reescribir_wikilinks(viejo, nuevo)
+        cfg.print_seguro(f"  → stars.yaml: {nombre!r} ahora tiene slug {nuevo!r} · "
+                         f"{n_wl} nota(s) con wikilinks reescritos (los `stars:` llevan el NOMBRE, "
+                         f"que no cambió)")
     else:
         n_fm = sum(_renombrar_en_frontmatter(f, "thesis_links", viejo, nuevo)
                    for f in cfg.note_paths(cfg.PAPERS))
         n_wl = _reescribir_wikilinks(viejo, nuevo)
         cfg.print_seguro(f"  → themes.yaml: {viejo!r} → {nuevo!r} · {n_fm} frontmatter(s) · "
                          f"{n_wl} nota(s) con wikilinks reescritos")
-    cfg.print_seguro("→ cerrá con `python scripts/lint.py --cierre` (tiene que dar 0)")
+    quedan = _mentions(viejo)
+    if quedan:
+        cfg.print_seguro(f"⚠ {len(quedan)} línea(s) todavía nombran {viejo!r} (texto libre, rutas, "
+                         f"`vistas[]`): NO se reescriben a ciegas — revisalas a mano:")
+        for m in quedan[:40]:
+            cfg.print_seguro(f"    · {m}")
+        if len(quedan) > 40:
+            cfg.print_seguro(f"    · … y {len(quedan) - 40} más")
+    cfg.print_seguro(f"→ re-estampá lo que apunta a las rutas viejas: `make_notes.py {nuevo}"
+                     f"{'' if tipo == 'star' else ' --theme'}`, `make_notes.py --restamp-pdf-links`, "
+                     f"`--restamp-index` y `--restamp-matrix`")
+    cfg.print_seguro(f"→ cerrá con `python scripts/lint.py --cierre {nuevo}` (tiene que dar 0)")
     return 0
 
 

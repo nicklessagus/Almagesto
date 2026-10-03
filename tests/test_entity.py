@@ -463,3 +463,76 @@ def test_561_yaml_edited_matriz(toy_vault):
     assert entity._yaml_edited(p, "a", drop=True) == "", "pero borrarla entera sí"
     p.write_text("a:\n- 1\n- 2\nb: 3\n", encoding="utf-8")
     assert entity._yaml_edited(p, "a", drop=True) == "b: 3\n", "secuencia compacta en col 0"
+
+
+# ── #562 — rc 0 means a coherent vault, or the rename refuses naming the case ────────────────────
+
+@pytest.mark.parametrize("meta", [{"concept": "pca"}, {}], ids=["concept==slug", "sin concept"])
+def test_562_rename_de_tema_con_concept_igual_al_slug_rehusa_sin_tocar_nada(toy_vault, meta):
+    """Con `concept == slug` el `[[pca]]` es un link a la NOTA: reescribirlo dejaba 6 wikilinks
+    rotos en la instancia (más `concept:`, `vistas[]` y las extracciones con el nombre viejo), con
+    rc 0. Sin `concept` la nota también se llama como el slug (`nota_de`)."""
+    write_yaml(cfg.THEMES_YAML, {"pca": {"title": "PCA", "area": "methods", **meta}})
+    cfg.save_busqueda("pca", {"fecha": "2026-01-01", "n_total": 1})
+    nota = cfg.CONCEPTS / "methods" / "pca.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\nname: PCA\n---\n# PCA\n", encoding="utf-8")
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2020P.md").write_text("---\nbibcode: 2020P\nthesis_links: [pca]\n---\nVer [[pca]].\n",
+                                         encoding="utf-8")
+    antes = {p: p.read_bytes() for p in cfg.VAULT.rglob("*") if p.is_file()}
+    for argv in (["rename", "pca", "pca-clasico"], ["rename", "pca", "pca-clasico", "--yes"]):
+        with pytest.raises(SystemExit, match="concept: pca"):
+            run(argv)
+    assert {p: p.read_bytes() for p in cfg.VAULT.rglob("*") if p.is_file()} == antes
+
+
+def test_562_rename_reescribe_el_slug_interno_del_registro(toy_vault):
+    """`registro/<nuevo>.yaml` quedaba con `slug: <viejo>` para siempre: los `save_*` hacen
+    `setdefault("slug", …)`, que conserva el valor viejo."""
+    slug, _ = poblar()
+    assert run(["rename", slug, "nuevo_slug", "--yes"]) == 0
+    assert cfg.load_registro("nuevo_slug")["slug"] == "nuevo_slug"
+    cfg.save_paso("nuevo_slug", "fetch_pdf")                  # un escritor posterior no lo revierte
+    assert cfg.load_registro("nuevo_slug")["slug"] == "nuevo_slug"
+
+
+def test_562_rename_lista_el_texto_libre_con_el_slug_viejo_sin_reescribirlo(toy_vault, capsys):
+    write_yaml(cfg.THEMES_YAML, {"gp_viejo": {"title": "GP", "area": "methods",
+                                              "concept": "procesos-gaussianos"}})
+    cfg.save_busqueda("gp_viejo", {"fecha": "2026-01-01", "n_total": 1})
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020G.md"
+    f.write_text("---\nbibcode: 2020G\nthesis_links: [gp_viejo]\nno_vista:\n"
+                 "- sujeto: x\n  motivo: ya está en la nota gp_viejo\n---\n"
+                 "Un gp_viejos no es el slug.\n", encoding="utf-8")
+    (cfg.WIKI / "log.md").write_text("## 2026 — ingest gp_viejo\n", encoding="utf-8")
+    assert run(["rename", "gp_viejo", "gp_nuevo", "--yes"]) == 0
+    out = capsys.readouterr().out
+    assert "1 línea(s) todavía nombran 'gp_viejo'" in out and "wiki/papers/2020G.md:6" in out
+    assert "ya está en la nota gp_viejo" in f.read_text(encoding="utf-8"), "no se reescribe"
+    assert "log.md" not in out, "el log es historia, no se lista"
+
+
+def test_562_mentions_matriz(toy_vault):
+    cfg.WIKI.mkdir(parents=True, exist_ok=True)
+    (cfg.WIKI / "a.md").write_text("pca\npca-x\nxpca\nraw/pdfs/pca/1.pdf\n", encoding="utf-8")
+    cfg.EXTRACCION.mkdir(parents=True, exist_ok=True)
+    (cfg.EXTRACCION / "b.json").write_text('{"sujeto": "pca"}\n', encoding="utf-8")
+    assert entity._mentions("pca") == ["raw/extraccion/b.json:1", "wiki/a.md:1", "wiki/a.md:4"]
+
+
+def test_562_rename_de_estrella_lleva_wikilinks_y_slug_del_ground_truth_y_la_ficha(toy_vault):
+    """La ficha es `stars/<slug>.md`: un `[[<slug>]]` es un link a ella y quedaba roto (63 en la
+    instancia), y el `slug` del JSON de ground-truth quedaba viejo — «renombre a medias»,
+    bloqueante en el lint. Los `stars:` llevan el NOMBRE y no se tocan."""
+    slug, nombre = poblar()
+    (cfg.GROUND_TRUTH / f"{slug}.json").write_text(
+        json.dumps({"star": nombre, "slug": slug, "planets": []}, indent=2), encoding="utf-8")
+    (cfg.PAPERS / "2020B.md").write_text(f"---\nbibcode: 2020B\nstars: [{nombre}]\n---\n"
+                                         f"Ver [[{slug}]] y [[{slug}_b]].\n", encoding="utf-8")
+    assert run(["rename", slug, "nuevo_slug", "--yes"]) == 0
+    assert json.loads((cfg.GROUND_TRUTH / "nuevo_slug.json").read_text())["slug"] == "nuevo_slug"
+    assert cfg.split_fm((cfg.STARS / "nuevo_slug.md").read_text())["slug"] == "nuevo_slug"
+    txt = (cfg.PAPERS / "2020B.md").read_text(encoding="utf-8")
+    assert "[[nuevo_slug]]" in txt and f"[[{slug}_b]]" in txt and f"stars: [{nombre}]" in txt

@@ -160,9 +160,9 @@ Y el lint tiene la red del otro lado: **capas colgadas** (registro / `raw/pdfs` 
 **Usá `python scripts/entity.py rename <viejo> <nuevo>`** (dry-run sin `--yes`): mueve las siete
 capas, preserva el registro —si queda atrás, el triage re-propone todo lo descartado **sin el
 motivo**, que es el bug que #51 cerró— y **rehúsa** renombrar encima de artefactos existentes, que
-fusionaría dos entidades en silencio. En un **tema** reescribe además `thesis_links` y los
-`[[wikilink]]`; en una **estrella** no hace falta: lo que se referencia es el NOMBRE, que el
-renombre de slug no toca.
+fusionaría dos entidades en silencio. Lleva el `slug:` del registro y los `[[<slug>]]` (en un
+**tema**, `thesis_links`). **Rehúsa un tema con `concept == slug`** (#562); al final **lista** lo que
+aún nombra el slug viejo.
 
 El procedimiento manual, por si hay que hacerlo a mano:
 1. Renombrar en orden: la clave en `stars.yaml`/`themes.yaml`, los directorios

@@ -4254,3 +4254,17 @@ Después: `rename pca-clasico pca-x` deja 334 → 334 comentarios y diff 1+/1−
 en columna 0, y nombra la cabecera de 4 líneas que queda (`themes.yaml:1142-1145`). Los otros
 portadores (`_citas.yaml`, `_red.yaml`, `save_registro`) son sólo-máquina: 0 comentarios en los
 registros de la instancia.
+
+## `entity.py rename` coherente o rehúsa (v1.376.0, #562)
+
+Almagesto-Tesis `00d4a4b7`, worktree desechable. Los 10 temas de la instancia tienen
+`concept == slug`, así que `rename pca-clasico pca-x` ahora rehúsa (rc 1, `git status` vacío): el
+caso del issue (6 wikilinks rotos, rc 0) no se puede producir. Al medir la estrella apareció el
+mismo defecto por otro lado: `rename gj_581 gj_581x` (v1.375.0) salía con rc 0 y `lint --cierre
+gj_581x` en 1, con 63 wikilinks `[[gj_581]]` rotos (la ficha se llama por el slug) y el `slug` del
+JSON de ground-truth viejo («renombre a medias», bloqueante). Con el fix: `lint --cierre gj_581x`
+rc 0, `slug: gj_581x` en el registro; quedan WARN/backlog (112 `pdf:` a la ruta vieja, cabecera de
+estado, 2 notas con verificación stale por la reescritura de wikilinks) y los dos primeros los
+cierran `make_notes.py gj_581x` y `--restamp-pdf-links` (medido: 0 y 0). La lista final nombra 408
+líneas con el slug viejo (extracciones, rutas, `objective.yaml`). Ida y vuelta
+(`gj_581x → gj_581`): `git status` vacío.

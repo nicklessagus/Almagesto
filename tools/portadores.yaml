@@ -335,6 +335,9 @@ portadores:
     funcion: fetch_bibtex.stamp_bibtex_gap
     patron: 'cfg\.stamp_fm_fields|save_registro|_red\.yaml'
     consumidores:
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: "#562 — `rename` llama a `save_registro` para reescribir el `slug:` interno; no persiste ningún veredicto de una consulta."
       - modulo: scripts/check_retractions.py
         estado: fuera-de-alcance
         motivo: "Ya la implementa por su cuenta y es el precedente del issue: «Crossref no contestó» va a `errors` y NUNCA a un veredicto por paper, así que no hay nada que persista una consulta caída."
@@ -1117,6 +1120,9 @@ portadores:
     funcion: harvest_views.restamp_salvedades
     patron: 'restamp|SALVEDAD_MARCAS'
     consumidores:
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: "#562 — `rename` sólo NOMBRA `--restamp-pdf-links` en su mensaje final; no re-estampa salvedades."
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: >-
@@ -2360,6 +2366,9 @@ portadores:
     funcion: lib_config.section_start
     patron: 'Vista — '
     consumidores:
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: "#562 — nombra `## Vista — <slug>` sólo en el mensaje con que `rename` rehúsa; no busca la sección."
       - modulo: scripts/harvest_views.py
         estado: usa
         motivo: "`write_view_section`, `restamp_view_locators` y `restamp_salvedades` cortan la vista con `section_span`; `_lens_span` dejó el `find` pelado y pasó a `section_start` (misma trampa con `### Lente — ruido` / `ruido-rosa`)."
@@ -3154,3 +3163,25 @@ portadores:
           mismo punto: un comentario nunca sobrevivió ahí (medido: 0 comentarios en los registros
           de Almagesto-Tesis, 2026-10-03). Se edita a mano por VALOR (`decisiones`), no por
           comentario.
+  - issue: 562
+    regla: >-
+      Un comando que renombra una identidad y sale con rc 0 deja la bóveda coherente, o rehúsa
+      nombrando el caso que no cubre. `entity.py rename` de un tema con `concept == slug` dejaba
+      los `[[slug]]` rotos con rc 0, y todo rename dejaba el `slug:` interno del registro viejo.
+    funcion: entity.rename
+    patron: 'setdefault\("slug"|def rename_paper'
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          Los diez `save_*` hacen `setdefault("slug", slug)`: correcto para un registro que nunca
+          se movió. El único que lo mueve es `entity.rename`, que ahora reescribe `slug:` antes de
+          moverlo.
+      - modulo: scripts/check_sources.py
+        estado: fuera-de-alcance
+        motivo: "Mismo `setdefault` de escritor del registro; el slug viejo sólo lo produce el rename, que lo corrige."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          `rename_paper` renombra un PAPER: su nombre no es la clave de ningún sujeto ni de
+          `vistas[]`, y ya re-apunta nota, hermano, artefactos, extracción y wikilinks (#356/#374).

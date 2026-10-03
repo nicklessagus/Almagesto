@@ -70,6 +70,7 @@ OTROS_ESCRITORES = {
     "fetch_arxiv.main": "build/ (faltantes del fetcher)",
     "replace_pdf.drop_from_residue": "build/ (saca del residuo `missing_pdf.json` lo instalado, #532)",
     "fetch_ground_truth.write_ground_truth": "raw/ground_truth/",
+    "entity.rename": "raw/ground_truth/<slug>.json (sólo la línea `\"slug\"`, #562; la extracción la LISTA, no la escribe)",
     "fetch_pdf.main": "build/ (faltantes del fetcher)",
     "harvest_views.restamp_view_locators": "la NOTA (lee la extracción)",
     "harvest_views.restamp_salvedades": "la NOTA (lee la extracción)",
