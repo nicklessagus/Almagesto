@@ -4196,3 +4196,13 @@ lo había rodeado agregando «= p. N del PDF» en el hermano, y la fila restante
 (`printed_pages` → `[None]*6`): el OCR imprime `v-57`…`v-59` en minúscula —que el freno de #496
 lee como matemática— y `V-6 1` partido; sólo la p. 4 (`V-60`) queda como evidencia de borde. Eso no
 es la gramática: es el `.txt`.
+
+## Borrar un bloque desde `apply_fixes`: `nuevo: null` (v1.371.0, #568)
+
+En un audit-note de Almagesto-Tesis (2026-10-01) se vaciaron los `## Inventario por eje` de tres
+conceptos con un script ad-hoc: 30 filas citadas salieron fuera del conteo de pares, porque el
+escritor no tenía forma de borrar una fila (`""` fallaba por conteo de bloques, `[]` se rehusaba
+sobre una fila y sobre prosa borraba sin documentar y con blanco doble). Reproducido el vaciado con
+`nuevo: null` sobre una copia en `5f1c2250`: `ica-constrained` 16 filas, pares 70 → 54;
+`pca-alta-dimension` 7, 51 → 44; `pca-clasico` 7, 33 → 26. Cero fallas, sin blanco doble, y la
+segunda corrida no resuelve ninguna fila (ya no están). `[]` pasa a rehusarse en las dos ramas.

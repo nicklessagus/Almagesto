@@ -376,6 +376,7 @@ python scripts/apply_fixes.py <nota> <dir-de-fixes> [--write]
                                     # #197: el aplicador SERIAL de las correcciones; sin --write es
                                     #   dry-run (el default). Avisa por bloque el material AGREGADO
                                     #   (#389: la primera opción al corregir es SACAR, no reescribir)
+                                    #   #568: `"nuevo": null` + `retira` (todos sus bibcodes) BORRA el bloque
 python scripts/reverify_subset.py <nota> [--json build/<slug>/reverif.json]
                                     # #257/#282: qué pares se re-anclan y cuáles se re-verifican
                                     #   tras una corrección; propone y NO escribe la nota

@@ -1616,3 +1616,16 @@ l=re.findall(r'pp?\. V-\d+(?:[–-]V-\d+)?',s);print(len(l),sum(bool(c.page_loca
 falta (sacarlo es opcional: la fila sigue siendo legible con las dos numeraciones).
 
 **Devolver si** `p. 5-16` deja de leerse como rango `('5','16')`, o si `V-61` se pliega a `V61`.
+
+## §#568 · v1.371.0 — borrar un bloque es `nuevo: null` + `retira`, dentro del escritor
+
+Sin migración. En un worktree desechable de la instancia en `5f1c2250` (antes del vaciado ad-hoc),
+armar un JSON de fixes con cada fila citada de `## Inventario por eje` de `ica-constrained` como
+`{"viejo": <fila>, "nuevo": null, "retira": [<sus bibcodes>]}` y correr
+`python scripts/apply_fixes.py <nota> <dir> --write`.
+
+**Esperado:** 16 fixes aplicados, `pares: 70 → 54`, sin línea en blanco doble; quedan encabezado y
+separador de la tabla. Con `"nuevo": ""` o `[]`, o con un `retira` que no es exactamente el
+conjunto de bibcodes de la fila, falla y no escribe.
+
+**Devolver si** un `null` sin `retira` escribe, o si los pares bajan más que `|retira|`.

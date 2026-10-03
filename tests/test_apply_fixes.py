@@ -563,3 +563,51 @@ def test_537_tabla_y_blockquote_de_una_lista_se_escriben_tal_cual(tmp_path):
     assert tabla in cuerpo and cita in cuerpo, cuerpo
     assert af.rewrap("```\na  b\n```", "") == ["```", "a  b", "```"]
     assert af.rewrap("$$\nx = 1\n$$", "") == ["$$", "x = 1", "$$"]
+
+
+_NOTA568 = ("# C\n\n## Inventario por eje\n\n| Eje | Paper | Dice |\n|---|---|---|\n"
+            "| a | [[2000A]] | uno |\n| b | [[2001B]] | dos |\n\n"
+            "Primer párrafo [[2002C]].\n\nSegundo párrafo [[2003D]].\n")
+
+
+@pytest.mark.parametrize("viejo, bib", [
+    ("| a | [[2000A]] | uno |", "2000A"),                # fila
+    ("Primer párrafo [[2002C]].", "2002C"),              # párrafo
+])
+@pytest.mark.parametrize("nuevo", ["", [], None])
+def test_568_borrar_un_bloque_es_nuevo_null_con_retira(tmp_path, viejo, bib, nuevo):
+    """#568 — los cuatro casos del issue (fila/párrafo × `""`/`[]`) más `null`. Sólo `null` con
+    `retira` = los bibcodes del bloque borra: pares 4 → 3, sin línea en blanco doble. `""` falla
+    por conteo de bloques, `[]` se rehúsa a favor de `null`, y `null` sin `retira` (o con uno
+    distinto) se rehúsa."""
+    def corre(retira):
+        nota = _note(tmp_path, _NOTA568)
+        fx = {"n": 1, "viejo": viejo, "nuevo": nuevo, "retira": retira}
+        return af.apply(nota, _fixes(tmp_path, (bib, [fx])), write=True), nota
+
+    res, nota = corre([bib])
+    if nuevo is not None:
+        assert res.applied == 0 and res.failed, res
+        assert nota.read_text(encoding="utf-8") == _NOTA568
+        return
+    assert not res.failed and (res.pairs_before, res.pairs_after) == (4, 3), res.failed
+    assert res.deleted == [(bib, 1)] and res.retired == [(bib, 1, [bib])]
+    cuerpo = nota.read_text(encoding="utf-8")
+    assert viejo not in cuerpo and "\n\n\n" not in cuerpo, cuerpo
+    assert cuerpo == _NOTA568.replace(viejo + "\n" + ("" if viejo.startswith("|") else "\n"), "")
+    for mal in ([], ["2003D"], [bib, "2003D"]):
+        res, nota = corre(mal)
+        assert res.applied == 0 and "retira" in res.failed[0][2], res.failed
+        assert nota.read_text(encoding="utf-8") == _NOTA568
+
+
+def test_568_vaciar_la_tabla_y_borrar_el_ultimo_parrafo(tmp_path):
+    """#568 — vaciar el inventario (dos filas, dos fixes) y borrar el párrafo final: pares 4 → 1,
+    sin blanco doble ni colgando al final."""
+    nota = _note(tmp_path, _NOTA568)
+    fx = [{"n": 1, "viejo": "| a | [[2000A]] | uno |", "nuevo": None, "retira": ["2000A"]},
+          {"n": 2, "viejo": "| b | [[2001B]] | dos |", "nuevo": None, "retira": ["2001B"]},
+          {"n": 3, "viejo": "Segundo párrafo [[2003D]].", "nuevo": None, "retira": ["2003D"]}]
+    res = af.apply(nota, _fixes(tmp_path, ("X", fx)), write=True)
+    assert not res.failed and (res.pairs_before, res.pairs_after) == (4, 1), res.failed
+    assert nota.read_text(encoding="utf-8").endswith("|---|---|\n\nPrimer párrafo [[2002C]].\n")

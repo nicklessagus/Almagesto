@@ -326,14 +326,14 @@ mitades se pagaron en la misma corrida:
   ***«¿`block_hits` lo resuelve?»***, o sea correr el aplicador en dry-run.
 - **Varios bloques.** `lib_blocks` parte una lista o una tabla en **un bloque por ítem/fila**, y un
   `viejo` que abarcaba dos ítems resolvía igual y los **fundía en uno**: los pares de la nota
-  cayeron de **96 a 89** —siete afirmaciones citadas dejaron de existir como par verificable—,
-  bullets de `## Huecos` quedaron pegados y filas de dos tablas se colapsaron entre sí. Era la
+  cayeron de **96 a 89** —siete afirmaciones citadas dejaron de existir como par verificable—. Era la
   corrupción que el aplicador existe para evitar, producida por el aplicador. **Hoy se rehúsa**, con
   el mensaje que lo explica: mandá **un fix por bloque**.
 
 **Red final, y es la decisiva:** el aplicador cuenta `pairs_of` **antes y después** y **no escribe**
 si bajó —salvo el retiro DECLARADO, `retira: [bibcode]`— y si lo re-emitido no tiene los bloques
 pedidos (dos párrafos van como lista, #408) (#527). Una corrección no hace desaparecer una cita.
+**Borrar un bloque es `"nuevo": null` + `retira` = todos sus bibcodes (#568)**; `""`/`[]` no borran.
 
 **Todo o nada**: si un solo `viejo` no resuelve —no aparece, aparece dos veces, o hay una colisión
 sin fusionar— no se escribe **ninguno**. Un reemplazo que adivina es peor que uno que falla, y una

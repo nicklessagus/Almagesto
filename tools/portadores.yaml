@@ -3035,3 +3035,29 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: "Expande páginas con `cfg.page_locators` + `page_span`: hereda la gramática sin regex propia."
+  - issue: 568
+    regla: >-
+      Toda corrección de prosa con `[[bibcode]]` —incluido BORRAR un bloque entero— pasa por el
+      único escritor con la red de pares (#222/#527): `nuevo: null` + `retira` = los bibcodes del
+      bloque. Vaciar un `## Inventario por eje` se hacía con un script ad-hoc, sin conteo.
+    funcion: apply_fixes.apply
+    patron: 'pairs_of\('
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "Cuenta pares para PROPONER filas y validar citas; no reescribe la prosa de una nota."
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "DEFINE `pairs_of`; es la fuente del conteo, no un escritor."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Lee pares para reportar; no escribe prosa."
+      - modulo: scripts/reverify_subset.py
+        estado: fuera-de-alcance
+        motivo: "Propone qué re-anclar/re-verificar y no escribe."
+      - modulo: scripts/verify_fanout.py
+        estado: fuera-de-alcance
+        motivo: "Enumera pares para el fan-out de jueces; no escribe la nota."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "Escribe el hermano `.verif.md`, no la prosa de la nota."

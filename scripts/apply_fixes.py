@@ -32,6 +32,10 @@ at column 100. `replace` finds 0 occurrences. Measured: 14 of 75 — every list 
 table rows, being one line, applied fine. So a block is located by its *normalised* form and
 rewritten re-wrapped, keeping the item's indentation.
 
+**Deleting a block (#568)** is `nuevo: null` with `retira` equal to ALL the block's bibcodes: the
+block leaves with its separating blank line and pairs drop by exactly `|retira|`. `""` and `[]` do
+not delete (the first fails the block count, the second is refused in favour of `null`).
+
 Nothing is written unless every fix resolves: a replacement that guesses is worse than one that
 fails. Application runs back-to-front so earlier line indices stay valid.
 """
@@ -72,6 +76,7 @@ class Result:
     grown: list = field(default_factory=list)      # #406 · (bib, n, +chars) — creció SIN citas nuevas
     split: list = field(default_factory=list)      # #408 · (bib, n, k) — un bloque partido en k
     retired: list = field(default_factory=list)    # #527 · (bib, n, [bibcodes retirados, declarados])
+    deleted: list = field(default_factory=list)    # #568 · (bib, n) — bloque borrado (`nuevo: null`)
 
 
 #: #406 · a partir de cuántos caracteres NETOS un fix «agrega material» aunque no gane citas.
@@ -253,17 +258,27 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # had touched stopped resolving. It happened whenever a table got one ROW fix (exact) and one
     # TABLE fix (block) — no collision was declared, it simply failed and aborted all of them.
     planned = []                      # (span, bib, n, new, kind, retira)
+    pares = lb.pairs_of(text)
     for bib, n, old, new, retira in pending:
+        if new == []:
+            # #568 — una lista vacía «partía» el bloque en cero: sobre prosa borraba (sin decirlo
+            # en ningún lado, con línea en blanco doble) y sobre una fila se rehusaba. Una forma.
+            res.failed.append((bib, n, "`nuevo: []` no es una forma: para BORRAR el bloque usá "
+                                       "`nuevo: null` con `retira` = sus bibcodes (#568)"))
+            continue
         # ⛔ #527 — un párrafo nuevo dentro de un `str` se FUNDÍA en silencio: `rewrap` colapsa el
         # blanco, y ni #222 (los pares no bajan) ni #389/#406 lo veían. Dos bloques se piden con
         # una lista (#408); acá se rehúsa en las dos ramas.
-        if any(PARA_BREAK_RE.search(str(b)) for b in (new if isinstance(new, list) else [new])):
+        if new is not None and any(PARA_BREAK_RE.search(str(b))
+                                   for b in (new if isinstance(new, list) else [new])):
             res.failed.append((bib, n, "`nuevo` trae una línea en blanco adentro: son DOS bloques "
                                        "y aplicarlo como texto los funde en uno. Usá una lista, "
                                        "un elemento por bloque (#408)"))
             continue
         idx = [k for k, l in enumerate(lines) if l == old]
-        if len(idx) == 1:
+        if len(idx) == 1 and new is None:
+            hits = [(idx[0], idx[0] + 1)]           # #568: una fila (o línea) que sale entera
+        elif len(idx) == 1:
             if isinstance(new, list):
                 # #408 — partir vale para PROSA. Una fila de tabla partida en dos deja de ser una
                 # fila; el corrector que quiere dos filas manda dos fixes con dos `viejo`. Un
@@ -277,7 +292,8 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                 continue
             planned.append(((idx[0], idx[0] + 1), bib, n, new, "exact", retira))
             continue
-        hits = block_hits(lines, old)
+        else:
+            hits = block_hits(lines, old)
         if len(hits) > 1:
             # #547 — dos bloques idénticos comparten ancla: no es un fragmento mal cortado, es que
             # el texto no alcanza para decir cuál. Adivinar sería peor que rehusar.
@@ -301,6 +317,22 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                                        f"{len(cubiertos) - 1} par(es) verificable(s). Mandá un "
                                        f"fix por bloque."))
             continue
+        if new is None:
+            # ⛔ #568 — BORRAR un bloque es la otra cara de `retira` (#527): lo que sale se declara
+            # entero. Sin esta forma, vaciar un `## Inventario por eje` se hacía por fuera del
+            # escritor y sin la red de pares (medido: 30 filas citadas en tres conceptos).
+            salen_bibs = {p.bibcode for p in pares if span[0] <= p.block.first_line - 1 < span[1]}
+            if set(retira) != salen_bibs:
+                res.failed.append((bib, n, f"`nuevo: null` borra el bloque: `retira` tiene que ser "
+                                           f"EXACTAMENTE sus bibcodes {sorted(salen_bibs)}, no "
+                                           f"{sorted(set(retira))} (#568)"))
+                continue
+            # La línea en blanco que separaba el bloque se va con él: sin esto quedan dos seguidas.
+            if (span[1] < len(lines) and not lines[span[1]].strip()
+                    and (span[0] == 0 or not lines[span[0] - 1].strip())):
+                span = (span[0], span[1] + 1)
+            planned.append((span, bib, n, new, "delete", retira))
+            continue
         planned.append((span, bib, n, new, "block", retira))
 
     # Dos fixes que tocan las mismas líneas no se pueden aplicar en cadena: el segundo anclaría en
@@ -320,6 +352,9 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # y el párrafo quedó con la fórmula sin cita y un `$` suelto — los pares, 212 → 212.
     reemplazos = {}
     for span, bib, n, new, kind, _ in planned:
+        if kind == "delete":
+            reemplazos[span] = []
+            continue
         repl = [new] if kind == "exact" else rewrap(new, lines[span[0]])
         # #537 — un elemento `verbatim` pide los bloques que él mismo es (una tabla, uno por fila).
         pedidos = (sum(len(lb.split_blocks(e)) if verbatim(e) else 1 for e in new)
@@ -343,13 +378,14 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     retirables = 0
     for span, bib, n, new, kind, retira in planned:
         viejo_txt = "\n".join(lines[span[0]:span[1]])
-        nuevo_txt = "\n".join(new) if isinstance(new, list) else new
+        nuevo_txt = "\n".join(new) if isinstance(new, list) else (new or "")
         antes = set(lb._bibcodes(viejo_txt))
         # ⛔ #527 — SACAR una cláusula citada es la primera opción que manda #389, y la red de #222
         # lo rehusaba («fundió bloques»): no distinguía una fusión de un retiro. La fusión la caza
         # ahora el conteo de bloques; el retiro se DECLARA (`retira: [bibcode]`) y tiene que ser
         # verdad: sólo lo declarado puede bajar pares.
-        falsos = sorted(set(retira) - (antes - set(lb._bibcodes(nuevo_txt))))
+        falsos = ([] if kind == "delete"              # #568: ya cotejado contra los pares
+                  else sorted(set(retira) - (antes - set(lb._bibcodes(nuevo_txt)))))
         if falsos:
             res.failed.append((bib, n, f"`retira` declara {falsos}, que no estaban en `viejo` o "
                                        f"siguen en `nuevo`"))
@@ -374,6 +410,8 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
         return res
     for span, bib, n, new, kind, _ in sorted(planned, key=lambda x: -x[0][0]):
         lines[span[0]:span[1]] = reemplazos[span]
+        if kind == "delete":
+            res.deleted.append((bib, n))
         if kind == "exact":
             res.exact += 1
         else:
@@ -437,6 +475,8 @@ def main(argv=None) -> int:
     for bib, n, bibs in res.retired:
         print(f"  ✂ {bib} par {n}: RETIRA {', '.join(f'[[{b}]]' for b in bibs)} del bloque "
               f"(declarado, #527) — esos pares salen; los que quedan en el bloque se re-verifican.")
+    for bib, n in res.deleted:
+        print(f"  ✂ {bib} par {n}: BORRA el bloque entero (`nuevo: null`, #568).")
     for bib, n, k in res.split:
         print(f"  ✂ {bib} par {n}: el bloque se PARTE en {k} (#408) — cada uno queda con su par; "
               f"los pares suben, nunca bajan.")
