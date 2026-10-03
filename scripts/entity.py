@@ -41,6 +41,7 @@ decidir por el usuario sobre trabajo de extracción ya pagado.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -175,28 +176,94 @@ def notas_del_slug(slug: str) -> set[str] | None:
     return stems
 
 
-def _yaml_sin(path: Path, clave: str) -> None:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
-    if isinstance(data, dict) and clave in data:
-        data.pop(clave)
-        cfg.write_text_atomic(path, yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
+def _entry_span(lines: list[str], key: str) -> tuple[int, int] | None:
+    """`[start, end)` of the top-level entry `key:` in `lines`: its own line plus everything up to
+    the next non-blank line at column 0 that is not a compact sequence item (`- …`). A column-0
+    comment ends the entry: it is the header of the NEXT one."""
+    start = None
+    for i, ln in enumerate(lines):
+        if not ln.strip() or ln[:1] in (" ", "\t", "-"):
+            continue
+        if start is not None:
+            return start, i
+        if ln.startswith("#") or ":" not in ln:
+            continue
+        try:
+            k = yaml.safe_load(ln.split(":", 1)[0])
+        except yaml.YAMLError:
+            continue
+        if str(k) == str(key):
+            start = i
+    return (start, len(lines)) if start is not None else None
 
 
-def _yaml_renombrar(path: Path, vieja: str, nueva: str, *, slug_nuevo: str | None = None) -> None:
-    """Renombra la clave preservando el ORDEN del archivo (un `pop`+`update` la manda al final, y
-    el YAML de config lo edita gente: reordenarlo ensucia el diff sin motivo)."""
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
-    if not isinstance(data, dict) or vieja not in data:
-        return
-    out = {}
+def _yaml_edited(path: Path, key: str, *, new_key: str | None = None,
+                 field: tuple[str, str, str] | None = None, drop: bool = False) -> str | None:
+    """The new text of a curated YAML (`themes.yaml`/`stars.yaml`) after editing ONE top-level
+    entry by TEXT SURGERY, or `None` if the key is not there (#561).
+
+    The file belongs to the person: its comments are the why of each curation decision and live
+    nowhere else. A `safe_load` + `safe_dump` round-trip dropped all of them (327 → 0 in a real
+    vault) and re-wrapped every long line. So only the affected lines change: the key line
+    (`new_key`), one `field: old` line inside the entry (`field = (name, old, new)`), or the whole
+    entry (`drop`). The result is re-parsed and must equal the semantic edit, key order included;
+    if the entry has a shape the surgery does not understand (flow style, a column-0 comment
+    inside it) this REFUSES — before anything is written — instead of falling back to a dump."""
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8")
+    data = yaml.safe_load(text) or {}
+    if not isinstance(data, dict) or key not in data:
+        return None
+    expected = {}
     for k, v in data.items():
-        if k == vieja:
-            if slug_nuevo and isinstance(v, dict):
-                v = {**v, "slug": slug_nuevo}
-            out[nueva] = v
+        if k != key:
+            expected[k] = v
+        elif not drop:
+            if field and isinstance(v, dict):
+                v = {**v, field[0]: field[2]}
+            expected[key if new_key is None else new_key] = v
+    lines = text.splitlines(keepends=True)
+    span = _entry_span(lines, key)
+    if span is not None:
+        i, j = span
+        if drop:
+            del lines[i:j]
         else:
-            out[k] = v
-    cfg.write_text_atomic(path, yaml.safe_dump(out, sort_keys=False, allow_unicode=True))
+            if new_key is not None and new_key != key:
+                lines[i] = new_key + lines[i][lines[i].index(":"):]
+            if field:
+                rx = re.compile(rf"^(\s+{re.escape(field[0])}:[ \t]*)([^#\s][^#\n]*?)([ \t]*(?:#.*)?)$")
+                for n in range(i + 1, j):
+                    m = rx.match(lines[n].rstrip("\r\n"))
+                    if m and str(yaml.safe_load(m.group(2))) == field[1]:
+                        eol = lines[n][len(lines[n].rstrip("\r\n")):]
+                        lines[n] = m.group(1) + field[2] + m.group(3) + eol
+                        break
+    new_text = "".join(lines)
+    try:
+        got = yaml.safe_load(new_text) or {}
+    except yaml.YAMLError:
+        got = None
+    if not (isinstance(got, dict) and got == expected and list(got) == list(expected)):
+        sys.exit(f"no pude editar la entrada {key!r} de {path.name} sin reescribir el archivo "
+                 f"entero (tiene una forma que la cirugía de texto no entiende: flow style, un "
+                 f"comentario en la columna 0 dentro de la entrada…). Reescribirlo con un dump "
+                 f"borraría los comentarios de curación (#561), así que NO se tocó nada: editá esa "
+                 f"entrada a mano y repetí.")
+    return new_text
+
+
+def _header_comments(path: Path, key: str) -> list[int]:
+    """1-based line numbers of the column-0 comment block glued right above `key:` — what a
+    `drop` leaves behind without its entry. Kept (it may also say something else) but NAMED."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    span = _entry_span([ln + "\n" for ln in lines], key)
+    out, i = [], (span[0] - 1 if span else -1)
+    while i >= 0 and lines[i].startswith("#"):
+        out.insert(0, i + 1)
+        i -= 1
+    return out
 
 
 def _quitar_del_frontmatter(f: Path, campo: str, valor: str) -> bool:
@@ -324,6 +391,10 @@ def delete(slug: str, yes: bool) -> int:
         cfg.print_seguro("\n⛔ dry-run: no se borró nada. Repetí con `--yes` para aplicar.\n"
                          "   (el registro NO es regenerable: guardá una copia si dudás)")
         return 0
+    yaml_path = cfg.STARS_YAML if tipo == "star" else cfg.THEMES_YAML
+    # #561 — computed BEFORE touching anything: if the surgery refuses, nothing was deleted.
+    yaml_nuevo = _yaml_edited(yaml_path, nombre, drop=True)
+    cabecera = _header_comments(yaml_path, nombre) if yaml_nuevo is not None else []
     campo = _campo_de(tipo)
     huerfanos = []
     for f in papers:
@@ -334,9 +405,13 @@ def delete(slug: str, yes: bool) -> int:
     for k, p in cs:
         shutil.rmtree(p) if p.is_dir() else p.unlink()
         cfg.print_seguro(f"  ✗ {k}: {p}")
-    _yaml_sin(cfg.STARS_YAML if tipo == "star" else cfg.THEMES_YAML, nombre)
-    cfg.print_seguro(f"  ✗ entrada {nombre!r} de "
-                     f"{'stars.yaml' if tipo == 'star' else 'themes.yaml'}")
+    if yaml_nuevo is not None:
+        cfg.write_text_atomic(yaml_path, yaml_nuevo)
+    cfg.print_seguro(f"  ✗ entrada {nombre!r} de {yaml_path.name}")
+    if cabecera:
+        cfg.print_seguro(f"  ⚠ quedó el comentario de cabecera de la entrada borrada "
+                         f"({yaml_path.name}:{cabecera[0]}-{cabecera[-1]}): no se borra porque "
+                         f"puede decir algo más — revisalo a mano.")
     cfg.print_seguro(f"\n{slug} borrado. {len(papers)} nota(s) de paper perdieron `{campo}: {nombre}`.")
     if wikis:
         # No se tocan los `[[wikilink]]`: apuntan a una nota que ya no existe y el lint los reporta
@@ -378,6 +453,15 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
         sys.exit(f"ya hay artefactos bajo el slug {nuevo!r} ({', '.join(ocupadas)}) — renombrar "
                  f"encima fusionaría dos entidades en silencio y PISARÍA esas capas. Elegí otro "
                  f"slug o borrá la que sobra primero (`entity.py delete {nuevo}`).")
+    # #561 — the curated YAML is edited by text surgery, computed BEFORE moving anything: if the
+    # entry has a shape the surgery does not understand it refuses, and nothing was moved.
+    if tipo == "star":
+        # In `stars.yaml` the key is the canonical NAME and the slug is a field: the field is renamed
+        # and the key stays (renaming the star is another operation).
+        yaml_path, yaml_nuevo = cfg.STARS_YAML, _yaml_edited(
+            cfg.STARS_YAML, nombre, field=("slug", viejo, nuevo))
+    else:
+        yaml_path, yaml_nuevo = cfg.THEMES_YAML, _yaml_edited(cfg.THEMES_YAML, viejo, new_key=nuevo)
     for capa, p in capas(viejo, tipo, meta):
         if capa in ("nota", "verif") and tipo != "star":
             # ⛔ #169. La nota de un TEMA se llama por `concept`, un campo APARTE del slug: renombrar
@@ -393,15 +477,13 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
             continue                       # nada que mover en esta capa
         p.rename(destino)
         cfg.print_seguro(f"  → {p.name} → {destino.name}")
+    if yaml_nuevo is not None:
+        cfg.write_text_atomic(yaml_path, yaml_nuevo)
     if tipo == "star":
-        # En `stars.yaml` la clave es el NOMBRE canónico y el slug es un campo: se renombra el campo
-        # y la clave se deja (renombrar la estrella es otra operación).
-        _yaml_renombrar(cfg.STARS_YAML, nombre, nombre, slug_nuevo=nuevo)
         cfg.print_seguro(f"  → stars.yaml: {nombre!r} ahora tiene slug {nuevo!r}")
         cfg.print_seguro("\nnota: los `[[wikilink]]` y los `stars:` apuntan al NOMBRE de la "
                          "estrella, que no cambió — no hace falta reescribirlos.")
     else:
-        _yaml_renombrar(cfg.THEMES_YAML, viejo, nuevo)
         n_fm = sum(_renombrar_en_frontmatter(f, "thesis_links", viejo, nuevo)
                    for f in cfg.note_paths(cfg.PAPERS))
         n_wl = _reescribir_wikilinks(viejo, nuevo)

@@ -4243,3 +4243,14 @@ converge en la segunda (5 → 1 → 0); **`icasso` no converge** (8 → 9 → 9)
 `2019AJ....158..161D` y `2021Zhao` tienen dos lecturas (`<bib>.json` y `<bib>__orden.json`) cuyas
 ayudas de lectura (`stamp_reading_aids`) difieren, y cada una re-escribe la de la otra en cada
 corrida. Lo deja así el archivo; no es txt/fecha/lente y queda fuera de este issue.
+
+## `entity.py` sin round-trip de `safe_dump` (v1.375.0, #561)
+
+Almagesto-Tesis `00d4a4b7`, worktree desechable. Antes (v1.368.1, medido en el issue):
+`rename pca pca-clasico` llevó `themes.yaml` de 327 líneas de comentario a 0, diff 1571+/1677−.
+Después: `rename pca-clasico pca-x` deja 334 → 334 comentarios y diff 1+/1− (la clave);
+`rename gj_581 gj_581x` deja `stars.yaml` 95 → 95, diff 1+/1− (`slug:`). `delete icasso` borra
+269 líneas, todas del bloque de la entrada (81 son comentarios indentados de esa entrada), ninguna
+en columna 0, y nombra la cabecera de 4 líneas que queda (`themes.yaml:1142-1145`). Los otros
+portadores (`_citas.yaml`, `_red.yaml`, `save_registro`) son sólo-máquina: 0 comentarios en los
+registros de la instancia.

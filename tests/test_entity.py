@@ -384,3 +384,82 @@ def test_AUD218_rename_reescribe_los_wikilinks_con_ancla(toy_vault):
     entity._reescribir_wikilinks("gp_viejo", "gp_nuevo")
     txt = f.read_text(encoding="utf-8")
     assert "[[gp_viejo" not in txt, txt
+
+
+# ── #561 — the curated YAML keeps its comments and its line wrapping ─────────────────────────────
+
+THEMES_COMENTADO = """\
+# Cabecera del archivo: el porqué de la bóveda.
+
+# ─── gp · el tema de procesos gaussianos ───
+gp_viejo:
+  title: GP   # título corto
+  area: methods
+  concept: procesos-gaussianos
+  # umbral medido el 2026-09-10, no tocar
+  query: (abs:"gaussian process" OR title:"gaussian process") AND year:2000-2026 AND property:refereed AND doctype:article
+  ejes:
+  - kernel
+  - hiperparametros
+
+# ─── ica ───
+ica:
+  title: ICA
+  area: methods
+  concept: ica-bss
+"""
+
+
+def test_561_rename_de_tema_conserva_comentarios_y_lineas(toy_vault):
+    """El round-trip `safe_load`+`safe_dump` borraba los 327 comentarios de `themes.yaml` de la
+    instancia y re-envolvía las líneas largas, con rc 0. La cirugía cambia UNA línea."""
+    cfg.THEMES_YAML.write_text(THEMES_COMENTADO, encoding="utf-8")
+    assert run(["rename", "gp_viejo", "gp_nuevo", "--yes"]) == 0
+    assert cfg.THEMES_YAML.read_text(encoding="utf-8") == THEMES_COMENTADO.replace(
+        "\ngp_viejo:", "\ngp_nuevo:")
+
+
+def test_561_delete_de_tema_saca_solo_su_entrada_y_nombra_la_cabecera(toy_vault, capsys):
+    cfg.THEMES_YAML.write_text(THEMES_COMENTADO, encoding="utf-8")
+    assert run(["delete", "gp_viejo", "--yes"]) == 0
+    txt = cfg.THEMES_YAML.read_text(encoding="utf-8")
+    assert txt == THEMES_COMENTADO[:THEMES_COMENTADO.index("gp_viejo:")] + \
+        THEMES_COMENTADO[THEMES_COMENTADO.index("# ─── ica"):]
+    assert "themes.yaml:3-3" in capsys.readouterr().out, "la cabecera huérfana se NOMBRA"
+
+
+def test_561_rename_de_estrella_cambia_solo_la_linea_del_slug(toy_vault):
+    slug, nombre = poblar()
+    original = (f"# estrellas curadas\n{nombre}:\n  slug: {slug}   # no cambiar a mano\n"
+                f"  aliases: [HD 1]  # el alias que resuelve SIMBAD\n")
+    cfg.STARS_YAML.write_text(original, encoding="utf-8")
+    assert run(["rename", slug, "nuevo_slug", "--yes"]) == 0
+    assert cfg.STARS_YAML.read_text(encoding="utf-8") == original.replace(
+        f"slug: {slug}", "slug: nuevo_slug")
+
+
+def test_561_forma_no_entendida_rehusa_antes_de_tocar_nada(toy_vault):
+    """Si la cirugía no reproduce la edición semántica, rehúsa — nunca cae a un dump."""
+    texto = "gp_viejo:\n  title: GP\n# comentario en columna 0\n  area: methods\n"
+    cfg.THEMES_YAML.write_text(texto, encoding="utf-8")
+    cfg.save_busqueda("gp_viejo", {"fecha": "2026-01-01", "n_total": 1})
+    with pytest.raises(SystemExit, match="cirugía de texto"):
+        run(["delete", "gp_viejo", "--yes"])
+    assert cfg.THEMES_YAML.read_text(encoding="utf-8") == texto
+    assert cfg.registro_path("gp_viejo").exists(), "nada se borró"
+
+
+def test_561_yaml_edited_matriz(toy_vault):
+    p = cfg.THEMES_YAML
+    p.write_text("a:\n  x: 1\nb:\n  x: 2\n", encoding="utf-8")
+    assert entity._yaml_edited(p, "zz", drop=True) is None, "clave ausente: no hay edición"
+    assert entity._yaml_edited(p, "b", drop=True) == "a:\n  x: 1\n", "última entrada"
+    assert entity._yaml_edited(p, "a", new_key="c") == "c:\n  x: 1\nb:\n  x: 2\n"
+    p.write_text("a:\n  x: p  # c\nb:\n  x: p\n", encoding="utf-8")
+    assert entity._yaml_edited(p, "a", field=("x", "p", "q")) == "a:\n  x: q  # c\nb:\n  x: p\n"
+    p.write_text("a: {x: p}\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="cirugía de texto"):
+        entity._yaml_edited(p, "a", field=("x", "p", "q"))          # flow style: no se entiende
+    assert entity._yaml_edited(p, "a", drop=True) == "", "pero borrarla entera sí"
+    p.write_text("a:\n- 1\n- 2\nb: 3\n", encoding="utf-8")
+    assert entity._yaml_edited(p, "a", drop=True) == "b: 3\n", "secuencia compacta en col 0"

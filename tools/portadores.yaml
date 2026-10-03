@@ -3125,3 +3125,32 @@ portadores:
       - modulo: scripts/triage.py
         estado: fuera-de-alcance
         motivo: "LEE `vistas[].fecha` para el estado del triage; no escribe vistas."
+  - issue: 561
+    regla: >-
+      Una herramienta que reescribe la config CURADA (`themes.yaml`, `stars.yaml`) no puede perder
+      lo que no entiende: toca sólo las líneas de la entrada afectada (cirugía de texto) o rehúsa.
+      El round-trip `safe_load`+`safe_dump` del archivo entero borraba todos los comentarios de
+      curación y re-envolvía las líneas largas, con rc 0.
+    funcion: entity._yaml_edited
+    patron: '(?m)(write_text_atomic\(.*|^\s*\w+, )yaml\.safe_dump\('
+    consumidores:
+      - modulo: scripts/entity.py
+        estado: usa
+        motivo: "`delete` y `rename` (estrella y tema) editan `stars.yaml`/`themes.yaml` por `_yaml_edited`."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: >-
+          `_citas.yaml` es sólo-máquina: una única clave (`ultima_pasada_citas`) que cada pasada
+          global reescribe entera; nadie lo cura a mano ni lleva comentarios.
+      - modulo: scripts/sweep_external.py
+        estado: fuera-de-alcance
+        motivo: >-
+          `_red.yaml` es sólo-máquina: una única clave (`ultima_pasada_red`) que cada pasada
+          reescribe entera; nadie lo cura a mano ni lleva comentarios.
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: >-
+          `save_registro` escribe el registro, que todos los `save_*` ya reescriben enteros por este
+          mismo punto: un comentario nunca sobrevivió ahí (medido: 0 comentarios en los registros
+          de Almagesto-Tesis, 2026-10-03). Se edita a mano por VALOR (`decisiones`), no por
+          comentario.

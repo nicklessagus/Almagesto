@@ -1685,3 +1685,21 @@ mediciones: dos lentes que se disputan las ayudas de lectura, no es este issue).
 
 **Devolver si** queda algún rechazo por `fecha`, por `lente` sin `lente` declarada en el JSON, o por
 un `txt` cuyos dos `.txt` son iguales.
+
+## §#561 · v1.375.0 — `entity.py` edita `themes.yaml`/`stars.yaml` sin perder comentarios
+
+Sin migración. En un worktree desechable de la instancia:
+
+```bash
+grep -c "^\s*#" vault/config/themes.yaml vault/config/stars.yaml
+python scripts/entity.py rename <estrella> <slug-nuevo> --yes
+git diff --stat -- vault/config/themes.yaml vault/config/stars.yaml
+grep -c "^\s*#" vault/config/themes.yaml vault/config/stars.yaml
+```
+
+**Esperado:** los mismos conteos de comentarios antes y después y un diff de **una** línea (`slug:`
+en `stars.yaml`; la clave en `themes.yaml` para un tema). `delete` saca sólo el bloque de la entrada
+(sus comentarios internos van con ella) y **nombra** el comentario de cabecera que queda arriba.
+
+**Devolver si** cambia alguna línea fuera de la entrada, o si una entrada con forma rara (flow style,
+comentario en columna 0 adentro) se escribe en vez de rehusar sin tocar nada.
