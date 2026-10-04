@@ -2844,7 +2844,7 @@
   {
    "number": 571,
    "title": "Los snippets en flow (- {k: v}) que se imprimen para pegar no parsean si el valor tiene comas o llaves (yaml_scalar es de bloque)",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
