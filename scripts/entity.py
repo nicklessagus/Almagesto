@@ -407,6 +407,26 @@ def _rename_in_flow_list(m: re.Match, viejo: str, nuevo: str) -> str:
     return m.group(1) + ", ".join(nuevo if x == viejo else x for x in items) + m.group(3)
 
 
+def _rename_refuta(head: str, viejo: str, nuevo: str) -> str:
+    """The items `<viejo>` of every `refuta:` list in a frontmatter (#212), block or flow style."""
+    out, dentro = [], None
+    for ln in head.split("\n"):
+        ind = len(ln) - len(ln.lstrip())
+        if dentro is not None and not (ln.lstrip().startswith("- ") and ind >= dentro):
+            dentro = None
+        if dentro is not None and ln.strip()[2:].strip() == viejo:
+            ln = ln[:ind] + "- " + nuevo
+        m = re.match(r"^(\s*)refuta:[ \t]*(.*)$", ln)
+        if m:
+            if m.group(2).startswith("["):
+                ln = re.sub(r"(refuta:[ \t]*\[)([^\]\n]*)(\])",
+                            lambda mm: _rename_in_flow_list(mm, viejo, nuevo), ln)
+            elif not m.group(2):
+                dentro = len(m.group(1))
+        out.append(ln)
+    return "\n".join(out)
+
+
 def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[list, int, list]:
     """The layers that carry the slug as DATA, rewritten exactly (#570) — `(notes, n_jsons, untouched)`.
     @inv INV-19 @inv INV-160
@@ -416,15 +436,17 @@ def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[lis
       · paper notes: the path segment `raw/pdfs|fulltext/<viejo>/` (frontmatter `pdf:`/`fulltext:`,
         the `[📄 PDF]` link, the off-ADS blockquote) and `txt: <viejo>` of `vistas[]` — the dirs
         just moved, so the pointers resolve; for a THEME also `sujeto: <viejo>` (`vistas[]`,
-        `no_vista`, `no_sintetizado`), the heading `## Vista — <viejo>` and its status line. A star's
-        `sujeto` is its NAME, which did not change.
+        `no_vista`, `no_sintetizado`), `tema: <viejo>` (`cola_tema`, #558), the `refuta` items of a
+        vista, the heading `## Vista — <viejo>` and its status line. A star's `sujeto`/`refuta`
+        carry its NAME, which did not change.
       · every note: `config/registro/<viejo>.yaml` (the Estado line) and the element `<viejo>` of an
         alcance `temas: […]` / `estrellas: […]` (D-34: the lint re-counts it against `raw/fulltext/`).
-      · extractions: `vista.txt` (and for a theme `vista.sujeto`, `thesis_links`), rewritten only
+      · extractions: `vista.txt` (and for a theme `vista.sujeto`, `thesis_links`, `refuta` and
+        `temas[].tema`, the #558 decision that `theme_decision_proposals` re-proposes), rewritten only
         when the file round-trips byte for byte through `json.dumps` — otherwise it is listed.
     A frontmatter that stops parsing is not written (#222)."""
     v = re.escape(viejo)
-    claves = "sujeto|txt" if theme else "txt"
+    claves = "sujeto|txt|tema" if theme else "txt"
     fm_rx = re.compile(rf"(?m)^(\s*(?:- )?(?:{claves}):[ \t]*)(['\"]?){v}\2([ \t]*)$")
     body_reps = [(re.compile(rf"(raw/(?:pdfs|fulltext)/){v}/"), rf"\g<1>{nuevo}/"),
                  (re.compile(rf"(config/registro/){v}(\.yaml)"), rf"\g<1>{nuevo}\g<2>")]
@@ -438,6 +460,8 @@ def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[lis
         head, body = (t[:lim[1]], t[lim[1]:]) if lim else ("", t)
         if lim:
             head = fm_rx.sub(lambda m: f"{m.group(1)}{m.group(2)}{nuevo}{m.group(2)}{m.group(3)}", head)
+            if theme:
+                head = _rename_refuta(head, viejo, nuevo)
             head = body_reps[0][0].sub(body_reps[0][1], head)
         for rx, rep in body_reps:
             body = rx.sub(rep, body)
@@ -467,18 +491,22 @@ def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[lis
         for k in (("sujeto", "txt") if theme else ("txt",)):
             if vista.get(k) == viejo:
                 vista[k], cambio = nuevo, True
-        if theme and isinstance(data.get("thesis_links"), list) and viejo in data["thesis_links"]:
-            data["thesis_links"] = [nuevo if x == viejo else x for x in data["thesis_links"]]
-            cambio = True
+        for lista in (("thesis_links", "refuta") if theme else ()):
+            if isinstance(data.get(lista), list) and viejo in data[lista]:
+                data[lista] = [nuevo if x == viejo else x for x in data[lista]]
+                cambio = True
+        for t_ in (data.get("temas") if theme and isinstance(data.get("temas"), list) else []):
+            if isinstance(t_, dict) and t_.get("tema") == viejo:       # #570: the #558 decision
+                t_["tema"], cambio = nuevo, True
         if not cambio:
             continue
         # By TEXT, like `_yaml_edited` (#561): the extractions come in several hand-made layouts
         # and a dump would reformat the whole file. The result must equal the semantic edit.
         q = json.dumps(viejo)
-        n = re.sub(rf'("(?:{"sujeto|txt" if theme else "txt"})"\s*:\s*){re.escape(q)}',
+        n = re.sub(rf'("(?:{"sujeto|txt|tema" if theme else "txt"})"\s*:\s*){re.escape(q)}',
                    lambda m: m.group(1) + json.dumps(nuevo), t)
         if theme:
-            n = re.sub(r'("thesis_links"\s*:\s*\[)([^\]]*)', lambda m: m.group(1) + re.sub(
+            n = re.sub(r'("(?:thesis_links|refuta)"\s*:\s*\[)([^\]]*)', lambda m: m.group(1) + re.sub(
                 rf"(?<=[\[,\s]){re.escape(q)}|^{re.escape(q)}", json.dumps(nuevo), m.group(2)), n)
         try:
             ok = json.loads(n) == data
@@ -694,7 +722,8 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
         for f in reanclar:
             cfg.print_seguro(f"    python scripts/write_verif_sidecar.py "
                              f"{f.relative_to(cfg.ROOT)} --reanclar")
-    cfg.print_seguro(f"→ cerrá con `python scripts/lint.py --cierre {nuevo}` (tiene que dar 0)")
+    cfg.print_seguro(f"→ anotá el renombre en `log.md` (el lint lo pide) y cerrá con "
+                     f"`python scripts/lint.py --cierre {nuevo}` (tiene que dar 0)")
     return 0
 
 

@@ -1755,5 +1755,9 @@ python scripts/lint.py --cierre <tema>-x
 **Esperado:** la nota y su `.verif.md` movidas, `concept:` nuevo en `themes.yaml` (comentarios
 intactos), `lint --cierre` en 0 y el reporte completo con los mismos conteos por categoría que antes
 del rename; la lista final sólo con texto libre, `methods` e historia del registro. Lo mismo con una
-estrella. **Devolver si** reescribe un `methods`, un `motivo` o prosa, o si un conteo del lint cambia.
+estrella. **Devolver si** reescribe un `methods`, un `motivo` o prosa, o si un conteo del lint cambia
+(salvo «Operación sin entrada en `log.md`» hasta anotar el rename).
+
+**v1.379.1:** además `temas[].tema` y `refuta` de las extracciones, `cola_tema[].tema` y `refuta` de
+la nota. `grep -rn '"tema": "<tema>"' vault/raw/extraccion` tras el rename: vacío.
 

@@ -4281,6 +4281,13 @@ Estrella `gj_674 → gj_674x`: mismo resultado (antes del fix: `estrellas: [gj_6
 puntero al `.verif.md` quedaban viejos). Primeras corridas: las extracciones vienen en formatos a mano
 (indent 1, compactas) y un dump las rechazaba → cirugía de texto con chequeo semántico.
 
+**v1.379.1 — devuelto por el validador.** `rename pca-alta-dimension …` dejaba `"tema":
+"pca-alta-dimension"` en `raw/extraccion/pca-clasico/2016RSPTA.37450202J.json` (la decisión #558,
+que `theme_decision_proposals` volvía a proponer bajo el slug muerto); por la misma regla faltaban
+`cola_tema[].tema` y `refuta` (nota y extracción). Con el fix, sobre `827df4bb`: 0 restos, `lint
+--cierre` rc 0, conteos iguales salvo «Operación sin entrada en `log.md`» 12→13 (el rename no se
+anotó: ahora el cierre lo pide). Lista final: 9 líneas, todas prosa, `methods` o comandos viejos.
+
 ## Las ayudas de lectura no se pisan entre lecturas (v1.377.0, #569)
 
 Worktree desechable de Almagesto-Tesis (`76c30c50`, v1.376.0), `harvest_views.py <slug> --theme` sobre

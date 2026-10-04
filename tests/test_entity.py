@@ -491,13 +491,15 @@ def test_570_rename_de_tema_con_concept_igual_al_slug_lleva_la_nota_y_las_capas_
     paper = cfg.PAPERS / "2020P.md"
     paper.write_text("---\nbibcode: 2020P\nthesis_links: [pca]\nmethods: [pca, ica]\n"
                      "pdf: ../../raw/pdfs/pca/2020P.pdf\nfulltext: ../../raw/fulltext/pca/2020P.txt\n"
-                     "vistas:\n- sujeto: pca\n  tipo: theme\n  txt: pca\n---\n"
+                     "vistas:\n- sujeto: pca\n  tipo: theme\n  txt: pca\n  refuta:\n  - pca\n"
+                     "cola_tema:\n- tema: pca\n  fecha: '2026-01-01'\n  motivo: m\n---\n"
                      "· [[pca]] · [📄 PDF](../../raw/pdfs/pca/2020P.pdf)\n\nUsa pca como herramienta.\n\n"
                      "## Vista — pca\n\n- dato\n", encoding="utf-8")
     cfg.EXTRACCION.joinpath("pca").mkdir(parents=True, exist_ok=True)
     ext = cfg.EXTRACCION / "pca" / "2020P.json"
     ext.write_text('{"bibcode":"2020P",\n "vista":{"sujeto":"pca","tipo":"theme","txt":"pca"},\n'
-                   ' "methods":["pca"],\n "thesis_links":["ica", "pca"]}\n', encoding="utf-8")
+                   ' "methods":["pca"],\n "thesis_links":["ica", "pca"],\n "refuta":["pca"],\n'
+                   ' "temas":[{"tema": "pca", "aporta": false, "motivo": "pca de pasada"}]}\n', encoding="utf-8")
     assert run(["rename", "pca", "pca-clasico", "--yes"]) == 0
     nueva = cfg.CONCEPTS / "methods" / "pca-clasico.md"
     assert nueva.exists() and not nota.exists() and cfg.verif_sidecar(nueva).exists()
@@ -515,12 +517,16 @@ def test_570_rename_de_tema_con_concept_igual_al_slug_lleva_la_nota_y_las_capas_
     fm = cfg.split_fm(p)
     assert fm["thesis_links"] == ["pca-clasico"] and fm["methods"] == ["pca", "ica"]
     assert fm["vistas"][0]["sujeto"] == fm["vistas"][0]["txt"] == "pca-clasico"
+    assert fm["vistas"][0]["refuta"] == ["pca-clasico"] and fm["cola_tema"][0]["tema"] == "pca-clasico"
     assert fm["pdf"] == "../../raw/pdfs/pca-clasico/2020P.pdf" and "/fulltext/pca-clasico/" in fm["fulltext"]
     assert "[[pca-clasico]]" in p and "(../../raw/pdfs/pca-clasico/2020P.pdf)" in p
     assert "## Vista — pca-clasico\n" in p and "Usa pca como herramienta." in p
     d = json.loads((cfg.EXTRACCION / "pca-clasico" / "2020P.json").read_text(encoding="utf-8"))
     assert d["vista"]["sujeto"] == d["vista"]["txt"] == "pca-clasico"
     assert d["thesis_links"] == ["ica", "pca-clasico"] and d["methods"] == ["pca"]
+    assert d["refuta"] == ["pca-clasico"], "#212: la retractación es del par (paper, sujeto)"
+    assert d["temas"] == [{"tema": "pca-clasico", "aporta": False, "motivo": "pca de pasada"}], \
+        "#570: la decisión #558 bajo el slug muerto se re-proponía"
     assert (cfg.EXTRACCION / "pca-clasico" / "2020P.json").read_text(encoding="utf-8").startswith(
         '{"bibcode":"2020P",\n "vista":'), "por texto: el formato a mano no se re-serializa"
     assert "write_verif_sidecar.py" in capsys.readouterr().out, "propone re-anclar lo verificado"
@@ -572,7 +578,7 @@ def test_562_rename_lista_el_texto_libre_con_el_slug_viejo_sin_reescribirlo(toy_
     out = capsys.readouterr().out
     assert "1 línea(s) todavía nombran 'gp_viejo'" in out and "wiki/papers/2020G.md:6" in out
     assert "ya está en la nota gp_viejo" in f.read_text(encoding="utf-8"), "no se reescribe"
-    assert "log.md" not in out, "el log es historia, no se lista"
+    assert "wiki/log.md" not in out, "el log es historia, no se lista"
 
 
 def test_562_mentions_matriz(toy_vault):
