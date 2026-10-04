@@ -2839,7 +2839,7 @@
   {
    "number": 570,
    "title": "entity.py rename rehúsa el caso normal (tema con concept == slug): hoy no se puede renombrar ningún tema de la Tesis",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
