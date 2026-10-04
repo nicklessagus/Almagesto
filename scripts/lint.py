@@ -6954,7 +6954,10 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     add("fm_broken", [(stem, motivo) for motivo in normalize_lists(fm)])  # ANTES de cualquier lector
     add("schema_incompleto", check_schema_completeness(stem, f, fm, sweep.refs_stems))
     sweep.kinds[stem] = fm.get("tags", []) or []
-    err = fm_error(text)
+    # `fm` is `split_fm(text)` over the same span: non-empty means the YAML parsed as a mapping, so
+    # `fm_error` has nothing to report. Only the empty case pays the second parse (the known double
+    # parse that `test_lint_una_pasada_de_yaml` was ratcheting, 2130 of 2132).
+    err = None if fm else fm_error(text)
     if err:
         add("fm_broken", [(stem, err)])
     # links salientes (las refs de diseño tienen links-ejemplo: no contar sus salientes)

@@ -170,7 +170,12 @@ def test_lint_una_pasada_de_yaml(boveda_poblada, monkeypatch):
     Este test NO exige arreglar el doble parseo (`scripts/` está fuera de alcance para esta capa):
     sólo FIJA que no empeore en silencio a un tercer parseo (o más) por nota. Sin cota inferior a
     propósito — si algún día se corrige el doble parseo, el conteo baja y el test debe seguir
-    pasando con MENOS llamadas, no romperse por mejorar."""
+    pasando con MENOS llamadas, no romperse por mejorar.
+
+    2026-10-03 (v1.378.0): el conteo había trepado a 2130 sobre un techo de 2132 (ratio 2.30) y
+    cualquier fix ajeno que sumara dos parseos lo rompía. `check_note` dejó de llamar a `fm_error`
+    cuando `split_fm` ya devolvió un mapa no vacío del mismo texto: 1203 llamadas (ratio 1.30). El
+    techo baja a 1.6x —un parseo extra por nota (~2.3x) sigue cayendo— y sólo puede bajar."""
     n_notas = (len(list(boveda_poblada.PAPERS.glob("*.md")))
                + len(list(boveda_poblada.STARS.glob("*.md")))
                + len(list(boveda_poblada.CONCEPTS.glob("*/*.md")))
@@ -190,10 +195,10 @@ def test_lint_una_pasada_de_yaml(boveda_poblada, monkeypatch):
     assert rc == 0
 
     ratio = calls["n"] / n_notas
-    assert calls["n"] <= 2.3 * n_notas, (
+    assert calls["n"] <= 1.6 * n_notas, (
         f"{calls['n']} llamadas a yaml.safe_load para {n_notas} notas con frontmatter "
-        f"(ratio {ratio:.3f}) — se esperaba ≤2.3x (hoy ≈2.0x, el doble parseo conocido de "
-        "split_fm+fm_error); un salto a 3x o más es una regresión NUEVA, no el hotspot conocido")
+        f"(ratio {ratio:.3f}) — se esperaba ≤1.6x (medido 1.30x en v1.378.0, un parseo por nota "
+        "+ los YAML de config); un salto a ~2.3x es un parseo NUEVO por nota")
 
 
 def test_lint_no_muta_la_boveda(boveda_poblada):
