@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -2244,6 +2245,18 @@ def test_558_el_lector_propone_la_decision_del_par_paper_tema_y_no_la_escribe():
     ya = {"no_sintetizado": [{"sujeto": "gls", "motivo": "m"}],
           "cola_tema": [{"tema": "rv", "fecha": "f", "motivo": "m"}]}
     assert hv.theme_decision_proposals(ya, data, "2026-09-28") == [], "lo decidido no se re-propone"
+
+
+@pytest.mark.parametrize("motivo", ["Calibración del $S_{HK}$ de Keck, con error", "a: b", "x #y",
+                                    "[1]", "{k}", "12", "null", "sólo lo usa"])
+def test_571_la_propuesta_pegada_parsea_con_el_valor_que_lleva(motivo):
+    """#571 — el snippet es flow (`- {…}`): `yaml_scalar` de bloque dejaba `,` y `{}` sueltos y la
+    línea pegada daba ParserError (1 de 80 propuestas medidas en tau Ceti, con `$S_{HK}$`)."""
+    data = {"temas": [{"tema": "rv", "aporta": True, "motivo": motivo},
+                      {"tema": "gls", "aporta": False, "motivo": motivo}]}
+    for linea in hv.theme_decision_proposals({}, data, "2026-10-04"):
+        clave, valor = linea.split(": ", 1)
+        assert yaml.safe_load(f"{clave}:\n{valor}")[clave][0]["motivo"] == motivo, linea
 
 
 def test_565_render_view_sangra_el_valor_multilinea_y_view_axes_ve_los_ejes_siguientes():

@@ -589,11 +589,11 @@ def theme_decision_proposals(fm: dict, data: dict, hoy: str) -> list:
         if not tema or not motivo or tema in decididos or not isinstance(t.get("aporta"), bool):
             continue
         if t["aporta"]:
-            out.append(f"cola_tema: - {{tema: {cfg.yaml_scalar(tema)}, fecha: \"{hoy}\", "
-                       f"motivo: {cfg.yaml_scalar(motivo)}}}")
+            out.append(f"cola_tema: - {{tema: {cfg.yaml_scalar(tema, flow=True)}, fecha: \"{hoy}\", "
+                       f"motivo: {cfg.yaml_scalar(motivo, flow=True)}}}")
         else:
-            out.append(f"no_sintetizado: - {{sujeto: {cfg.yaml_scalar(tema)}, "
-                       f"motivo: {cfg.yaml_scalar(motivo)}}}")
+            out.append(f"no_sintetizado: - {{sujeto: {cfg.yaml_scalar(tema, flow=True)}, "
+                       f"motivo: {cfg.yaml_scalar(motivo, flow=True)}}}")
     return out
 
 

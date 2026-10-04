@@ -2840,6 +2840,11 @@
    "number": 570,
    "title": "entity.py rename rehúsa el caso normal (tema con concept == slug): hoy no se puede renombrar ningún tema de la Tesis",
    "state": "CLOSED"
+  },
+  {
+   "number": 571,
+   "title": "Los snippets en flow (- {k: v}) que se imprimen para pegar no parsean si el valor tiene comas o llaves (yaml_scalar es de bloque)",
+   "state": "OPEN"
   }
  ]
 }

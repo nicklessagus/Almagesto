@@ -1344,7 +1344,8 @@ def check_second_hand_lifted(anchor_bodies: dict, segunda_mano: dict,
                      f"(«{lb.truncate_claim(_q, 80)}» → {_de[:120]}) → la ficha tiene que decir de quién es (#103): "
                      f"el número no es de esta fuente. Si es una coincidencia —el bloque no toma "
                      f"ese valor de nadie— firmalo: `segunda_mano_revisada: [{{ref: "
-                     f"{_par.bibcode}, que: {lb.truncate_claim(_q, 80)}, motivo: <por qué no es deuda>}}]` (#433)"))
+                     f"{_par.bibcode}, que: {cfg.yaml_scalar(lb.truncate_claim(_q, 80), flow=True)}, "
+                     f"motivo: <por qué no es deuda>}}]` (#433, #571)"))
         for _d in _revisadas:
             if not any(cfg.reviewed_second_hand([_d], _ref, _que) for _ref, _que in _usadas):
                 huerfanas.append(

@@ -3224,3 +3224,26 @@ portadores:
         motivo: >-
           `rename_paper` renombra un PAPER: su bibcode no es la clave de ningún sujeto ni de
           `vistas[]`; ya re-apunta nota, hermano, artefactos, extracción y wikilinks (#356/#374).
+  - issue: 571
+    regla: >-
+      Un valor que va DENTRO de un flow (`- {k: v}`, `[…]`) en un snippet para pegar se emite con
+      `yaml_scalar(v, flow=True)`: la forma de bloque deja `,` `{` `}` sueltos y la línea pegada da
+      ParserError. Medido: 1 de 80 propuestas de `theme_decision_proposals` en tau Ceti (`$S_{HK}$`).
+    funcion: lib_config.yaml_scalar
+    patron: '\{\{(?:sujeto|tema|ref|bibcode|campo): \{'
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`theme_decision_proposals`: `tema`/`sujeto` y `motivo` con `flow=True` (las dos ramas)."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "La firma `segunda_mano_revisada: [{ref, que, motivo}]` emite el `que` (cita truncada) con `flow=True`."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`no_vista` se emite en BLOQUE (`- sujeto: …` / `motivo: …`): la forma de bloque es la correcta."
+      - modulo: scripts/triage.py
+        estado: usa
+        motivo: "`_set_campo` y el snippet de `extra_core` escriben un escalar de BLOQUE (`clave: valor`)."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "La firma `cita_revisada: - {ref, cita, …}` emite la cita con `json.dumps`, que ya es YAML válido en flow."

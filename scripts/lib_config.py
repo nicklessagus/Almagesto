@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.379.2"
+ALMAGESTO_VERSION = "1.380.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3647,13 +3647,26 @@ def drop_fm_keys(path, *claves) -> bool:
     return True
 
 
-def yaml_scalar(v) -> str:
+def yaml_scalar(v, *, flow: bool = False) -> str:
     """One-line YAML scalar, quoted only when the value needs it (#463).
 
     Lives here because two rails print pasteable YAML —`triage._set_campo` and the
     `metadata_revisada` snippet— and `lib_config` cannot import `triage`. Writing the quoting by
-    hand is how a `motivo` with a colon silently becomes a broken block."""
-    return yaml.safe_dump(v, allow_unicode=True, width=10 ** 6).split("\n")[0]
+    hand is how a `motivo` with a colon silently becomes a broken block.
+
+    ⛔ `flow=True` for a value that goes INSIDE `{…}`/`[…]` (#571): the block form leaves `,` `{`
+    `}` bare, and in a flow mapping they cut it (`$S_{HK}$ de Keck, con error` → ParserError).
+    The plain form is kept only if it re-parses to the same value there; else JSON, which is
+    valid flow YAML."""
+    plano = yaml.safe_dump(v, allow_unicode=True, width=10 ** 6).split("\n")[0]
+    if not flow:
+        return plano
+    try:
+        if yaml.safe_load(f"{{k: {plano}}}") == {"k": v}:
+            return plano
+    except yaml.YAMLError:
+        pass
+    return json.dumps(v, ensure_ascii=False)
 
 
 def _metadata_val(v) -> str:

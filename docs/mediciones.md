@@ -4269,6 +4269,13 @@ cierran `make_notes.py gj_581x` y `--restamp-pdf-links` (medido: 0 y 0). La list
 líneas con el slug viejo (extracciones, rutas, `objective.yaml`). Ida y vuelta
 (`gj_581x → gj_581`): `git status` vacío.
 
+## Los snippets flow se pegan con cualquier valor (v1.380.0, #571)
+
+`theme_decision_proposals` sobre todas las extracciones de Almagesto-Tesis (`6e424d2f`, sólo
+lectura), re-parseando cada línea emitida: **127 propuestas, 23 no parseaban** con v1.379.2 (motivos
+con `$…{…}$` o comas), **0** con `yaml_scalar(v, flow=True)`. El validador había visto 1 de 80 sobre
+la cosecha de tau Ceti; el barrido completo da más porque cubre todos los slugs.
+
 ## `entity.py rename` renombra el caso normal (v1.379.0, #570)
 
 Worktree desechable de Almagesto-Tesis (`c89ada9e`, scripts del template copiados adentro). Baseline

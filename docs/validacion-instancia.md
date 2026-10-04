@@ -1764,3 +1764,9 @@ la nota. `grep -rn '"tema": "<tema>"' vault/raw/extraccion` tras el rename: vac�
 **v1.379.2:** también la forma flow (`- {tema: <tema>, …}`, `- {sujeto: <tema>, …}`): sembrada en
 un paper, tras el rename `split_fm` lee el slug nuevo.
 
+## §#571 · v1.380.0 — los snippets flow se pegan con cualquier valor
+
+Sin migración. Re-cosechar un tema con propuestas #558 pendientes (o `harvest_views.py <slug>
+--theme --dry-run`) y pegar cada línea `cola_tema: - {…}` / `no_sintetizado: - {…}` en un
+frontmatter de prueba: `split_fm` tiene que leer el `motivo` igual al de la extracción, incluido el de
+`2010ApJ...725..875I` (`$S_{HK}$`). **Devolver si** alguna línea emitida no parsea.
