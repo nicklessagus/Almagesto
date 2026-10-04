@@ -1761,3 +1761,6 @@ estrella. **Devolver si** reescribe un `methods`, un `motivo` o prosa, o si un c
 **v1.379.1:** además `temas[].tema` y `refuta` de las extracciones, `cola_tema[].tema` y `refuta` de
 la nota. `grep -rn '"tema": "<tema>"' vault/raw/extraccion` tras el rename: vacío.
 
+**v1.379.2:** también la forma flow (`- {tema: <tema>, …}`, `- {sujeto: <tema>, …}`): sembrada en
+un paper, tras el rename `split_fm` lee el slug nuevo.
+

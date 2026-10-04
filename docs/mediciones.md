@@ -4288,6 +4288,10 @@ que `theme_decision_proposals` volvía a proponer bajo el slug muerto); por la m
 --cierre` rc 0, conteos iguales salvo «Operación sin entrada en `log.md`» 12→13 (el rename no se
 anotó: ahora el cierre lo pide). Lista final: 9 líneas, todas prosa, `methods` o comandos viejos.
 
+**v1.379.2 — segunda devolución.** La forma FLOW `- {tema: <slug>, …}` —la que imprime
+`theme_decision_proposals` para pegar— y `- {sujeto: <slug>, …}` quedaban con el slug viejo: la
+regex sólo veía la forma block. Población en la Tesis: 0 (lo mostró la siembra del validador).
+
 ## Las ayudas de lectura no se pisan entre lecturas (v1.377.0, #569)
 
 Worktree desechable de Almagesto-Tesis (`76c30c50`, v1.376.0), `harvest_views.py <slug> --theme` sobre

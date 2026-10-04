@@ -448,6 +448,7 @@ def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[lis
     v = re.escape(viejo)
     claves = "sujeto|txt|tema" if theme else "txt"
     fm_rx = re.compile(rf"(?m)^(\s*(?:- )?(?:{claves}):[ \t]*)(['\"]?){v}\2([ \t]*)$")
+    flow_rx = re.compile(rf"([{{,][ \t]*(?:{claves}):[ \t]*)(['\"]?){v}\2(?=[ \t]*[,}}])")
     body_reps = [(re.compile(rf"(raw/(?:pdfs|fulltext)/){v}/"), rf"\g<1>{nuevo}/"),
                  (re.compile(rf"(config/registro/){v}(\.yaml)"), rf"\g<1>{nuevo}\g<2>")]
     if theme:
@@ -460,6 +461,8 @@ def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[lis
         head, body = (t[:lim[1]], t[lim[1]:]) if lim else ("", t)
         if lim:
             head = fm_rx.sub(lambda m: f"{m.group(1)}{m.group(2)}{nuevo}{m.group(2)}{m.group(3)}", head)
+            # the FLOW form `- {tema: <viejo>, …}` is what `theme_decision_proposals` prints to paste
+            head = flow_rx.sub(lambda m: f"{m.group(1)}{m.group(2)}{nuevo}{m.group(2)}", head)
             if theme:
                 head = _rename_refuta(head, viejo, nuevo)
             head = body_reps[0][0].sub(body_reps[0][1], head)

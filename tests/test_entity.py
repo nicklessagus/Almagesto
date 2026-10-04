@@ -532,6 +532,21 @@ def test_570_rename_de_tema_con_concept_igual_al_slug_lleva_la_nota_y_las_capas_
     assert "write_verif_sidecar.py" in capsys.readouterr().out, "propone re-anclar lo verificado"
 
 
+def test_570_la_forma_FLOW_que_se_pega_tambien_se_reescribe(toy_vault):
+    """`theme_decision_proposals` imprime `- {tema: <slug>, fecha: …, motivo: …}` para pegar: el
+    validador sembró esa forma y quedaba el slug viejo (la regex sólo veía la forma block)."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020F.md"
+    f.write_text('---\nbibcode: 2020F\ncola_tema:\n- {tema: pca, fecha: "2026-10-04", motivo: "pca x"}\n'
+                 "no_sintetizado:\n- {sujeto: 'pca', motivo: m}\nvistas: [{sujeto: pcax, txt: pca}]\n---\n",
+                 encoding="utf-8")
+    entity._rewrite_subject_layers("pca", "nuevo", theme=True)
+    fm = cfg.split_fm(f.read_text(encoding="utf-8"))
+    assert fm["cola_tema"] == [{"tema": "nuevo", "fecha": "2026-10-04", "motivo": "pca x"}]
+    assert fm["no_sintetizado"] == [{"sujeto": "nuevo", "motivo": "m"}]
+    assert fm["vistas"] == [{"sujeto": "pcax", "txt": "nuevo"}], "el slug como VALOR, no como prefijo"
+
+
 def test_570_rename_de_tema_rehusa_si_la_nota_destino_existe(toy_vault):
     write_yaml(cfg.THEMES_YAML, {"pca": {"title": "PCA", "area": "methods"}})
     cfg.save_busqueda("pca", {"fecha": "2026-01-01", "n_total": 1})
