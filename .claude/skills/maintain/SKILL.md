@@ -161,20 +161,15 @@ Y el lint tiene la red del otro lado: **capas colgadas** (registro / `raw/pdfs` 
 capas, preserva el registro —si queda atrás, el triage re-propone todo lo descartado **sin el
 motivo**, que es el bug que #51 cerró— y **rehúsa** renombrar encima de artefactos existentes, que
 fusionaría dos entidades en silencio. Lleva el `slug:` del registro y los `[[<slug>]]` (en un
-**tema**, `thesis_links`). **Rehúsa un tema con `concept == slug`** (#562); al final **lista** lo que
-aún nombra el slug viejo.
+**tema**, `thesis_links`). Con `concept == slug` **mueve la nota y su `.verif.md`** y reescribe
+`concept:` (#570); en los dos tipos reescribe **exacto** lo que lleva el slug como dato —`vistas[]`,
+`## Vista — <slug>`, `pdf:`/`fulltext:`, `temas:`/`estrellas:` de los alcances, la `vista` de las
+extracciones, las rutas de `sources:`—, nunca `methods` ni la prosa. Al final **lista** lo que aún
+nombra el slug viejo e imprime los re-estampados y, **después**, los `--reanclar` de las notas
+verificadas que tocó (cambio derivado, #480).
 
-El procedimiento manual, por si hay que hacerlo a mano:
-1. Renombrar en orden: la clave en `stars.yaml`/`themes.yaml`, los directorios
-   `vault/raw/{pdfs,fulltext}/<slug>/`, `ground_truth/<slug>.json`,
-   `vault/config/registro/<slug>.yaml` (si no, el juicio de triage queda huérfano y se re-propone
-   todo), la nota `stars/<slug>.md` (o el concepto), y **todos** los `[[wikilink]]` al nombre viejo:
-   ```bash
-   grep -rln "<slug-viejo>" vault/                            # dónde aparece
-   ```
-2. Ajustar `data_local` si cambió; matriz: `--restamp-matrix`. Los wikilinks internos son por **nombre de
-   nota** (sobreviven a mover carpeta pero **no** a renombrar el archivo) → actualizarlos todos.
-3. Cierre: `lint.py --cierre <slug>` en 0 (con el slug **nuevo**) → `log` → commit → preguntar push.
+Si algo quedó en la lista final: `grep -rln "<slug-viejo>" vault/`, y ajustar `data_local` si cambió.
+Cierre: `lint.py --cierre <slug>` en 0 (con el slug **nuevo**) → `log` → commit → preguntar push.
 
 ## D. Re-clasificar tras cambiar la regla de relevancia
 Cuando editaste `objective.yaml` (vía `setup`) y el corte core/no-core cambió — sea porque tocaste

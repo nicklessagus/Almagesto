@@ -1738,3 +1738,22 @@ for s in ica ica-ruido pca-clasico deteccion-estadistica; do
 **Esperado:** ninguna sección `## Conclusiones` / `## Traducción …` reemplazada (sólo merges add-only
 de `methods`); avisos `no se pisa (#569)` donde otra lectura trae otro texto; la segunda corrida da
 0 cosechadas. **Devolver si** una re-cosecha sin lecturas nuevas achica alguna ayuda de lectura.
+
+## §#570 · v1.379.0 — `entity.py rename` renombra el tema con `concept == slug`
+
+Sin migración. Reemplaza el rehúso de §#562 para ese caso. En un worktree desechable de la
+instancia (con `scripts/` del template copiado ADENTRO del worktree):
+
+```bash
+python scripts/entity.py rename <tema> <tema>-x --yes        # imprime re-estampados y re-anclajes
+python scripts/make_notes.py <tema>-x --theme && python scripts/make_notes.py --restamp-pdf-links
+python scripts/make_notes.py --restamp-matrix && python scripts/make_notes.py --restamp-index
+python scripts/write_verif_sidecar.py <nota> --reanclar        # cada una de las que imprimió, al final
+python scripts/lint.py --cierre <tema>-x
+```
+
+**Esperado:** la nota y su `.verif.md` movidas, `concept:` nuevo en `themes.yaml` (comentarios
+intactos), `lint --cierre` en 0 y el reporte completo con los mismos conteos por categoría que antes
+del rename; la lista final sólo con texto libre, `methods` e historia del registro. Lo mismo con una
+estrella. **Devolver si** reescribe un `methods`, un `motivo` o prosa, o si un conteo del lint cambia.
+

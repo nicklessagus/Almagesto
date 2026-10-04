@@ -4269,6 +4269,18 @@ cierran `make_notes.py gj_581x` y `--restamp-pdf-links` (medido: 0 y 0). La list
 líneas con el slug viejo (extracciones, rutas, `objective.yaml`). Ida y vuelta
 (`gj_581x → gj_581`): `git status` vacío.
 
+## `entity.py rename` renombra el caso normal (v1.379.0, #570)
+
+Worktree desechable de Almagesto-Tesis (`c89ada9e`, scripts del template copiados adentro). Baseline
+`lint --cierre icasso` rc 0. `rename icasso icasso-x`: movió nota + hermano, 17 notas con wikilinks,
+22 notas y 32 extracciones re-apuntadas; tras los re-estampados y 6 `--reanclar` que imprime,
+`lint --cierre icasso-x` rc 0 y **los conteos de las 163 categorías iguales al baseline**. Sin los
+`--reanclar`: 3 pares vencidos (hub `ica`) y 5 stale — la reescritura de `[[icasso]]` mueve anclas.
+La lista final bajó de 184 a 54 líneas, todas texto libre, `methods`, comandos viejos del registro.
+Estrella `gj_674 → gj_674x`: mismo resultado (antes del fix: `estrellas: [gj_674]` del alcance y el
+puntero al `.verif.md` quedaban viejos). Primeras corridas: las extracciones vienen en formatos a mano
+(indent 1, compactas) y un dump las rechazaba → cirugía de texto con chequeo semántico.
+
 ## Las ayudas de lectura no se pisan entre lecturas (v1.377.0, #569)
 
 Worktree desechable de Almagesto-Tesis (`76c30c50`, v1.376.0), `harvest_views.py <slug> --theme` sobre

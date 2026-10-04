@@ -467,24 +467,85 @@ def test_561_yaml_edited_matriz(toy_vault):
 
 # ── #562 — rc 0 means a coherent vault, or the rename refuses naming the case ────────────────────
 
-@pytest.mark.parametrize("meta", [{"concept": "pca"}, {}], ids=["concept==slug", "sin concept"])
-def test_562_rename_de_tema_con_concept_igual_al_slug_rehusa_sin_tocar_nada(toy_vault, meta):
-    """Con `concept == slug` el `[[pca]]` es un link a la NOTA: reescribirlo dejaba 6 wikilinks
-    rotos en la instancia (más `concept:`, `vistas[]` y las extracciones con el nombre viejo), con
-    rc 0. Sin `concept` la nota también se llama como el slug (`nota_de`)."""
-    write_yaml(cfg.THEMES_YAML, {"pca": {"title": "PCA", "area": "methods", **meta}})
+@pytest.mark.parametrize("concept", ["  concept: pca\n", ""], ids=["concept==slug", "sin concept"])
+def test_570_rename_de_tema_con_concept_igual_al_slug_lleva_la_nota_y_las_capas_del_slug(
+        toy_vault, concept, capsys):
+    """#562 rehusaba este caso, pero es el NORMAL (10 de 10 temas en la instancia): no había con
+    qué renombrar ningún tema. Ahora la nota y su hermano son capas del slug, y lo que lleva el slug
+    como DATO se reescribe exacto; `methods` y la prosa no (`pca` también es un método)."""
+    cfg.THEMES_YAML.write_text(f"# curación\npca:\n  title: PCA  # c\n  area: methods\n{concept}"
+                               f"  sources:\n  - key: 2020P\n    pdf: vault/raw/pdfs/pca/2020P.pdf\n",
+                               encoding="utf-8")
     cfg.save_busqueda("pca", {"fecha": "2026-01-01", "n_total": 1})
+    for base, ext in ((cfg.PDFS, "pdf"), (cfg.FULLTEXT, "txt")):
+        (base / "pca").mkdir(parents=True, exist_ok=True)
+        (base / "pca" / f"2020P.{ext}").write_text("x", encoding="utf-8")
     nota = cfg.CONCEPTS / "methods" / "pca.md"
     nota.parent.mkdir(parents=True, exist_ok=True)
-    nota.write_text("---\nname: PCA\n---\n# PCA\n", encoding="utf-8")
+    nota.write_text("---\nname: PCA\n---\n# PCA\n\n> Alcance 2026 · temas: [ica, pca] · 1 paper\n\n"
+                    "> registro en `config/registro/pca.yaml`.\n\n"
+                    "> ⬇ vive en el hermano [`pca.verif.md`](pca.verif.md) (#344).\n", encoding="utf-8")
+    cfg.verif_sidecar(nota).write_text("# Rastro de verificación — pca\n\n> _Hermano de auditoría de "
+                                       "`pca.md` (#344)._\n", encoding="utf-8")
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    (cfg.PAPERS / "2020P.md").write_text("---\nbibcode: 2020P\nthesis_links: [pca]\n---\nVer [[pca]].\n",
-                                         encoding="utf-8")
-    antes = {p: p.read_bytes() for p in cfg.VAULT.rglob("*") if p.is_file()}
-    for argv in (["rename", "pca", "pca-clasico"], ["rename", "pca", "pca-clasico", "--yes"]):
-        with pytest.raises(SystemExit, match="concept: pca"):
-            run(argv)
-    assert {p: p.read_bytes() for p in cfg.VAULT.rglob("*") if p.is_file()} == antes
+    paper = cfg.PAPERS / "2020P.md"
+    paper.write_text("---\nbibcode: 2020P\nthesis_links: [pca]\nmethods: [pca, ica]\n"
+                     "pdf: ../../raw/pdfs/pca/2020P.pdf\nfulltext: ../../raw/fulltext/pca/2020P.txt\n"
+                     "vistas:\n- sujeto: pca\n  tipo: theme\n  txt: pca\n---\n"
+                     "· [[pca]] · [📄 PDF](../../raw/pdfs/pca/2020P.pdf)\n\nUsa pca como herramienta.\n\n"
+                     "## Vista — pca\n\n- dato\n", encoding="utf-8")
+    cfg.EXTRACCION.joinpath("pca").mkdir(parents=True, exist_ok=True)
+    ext = cfg.EXTRACCION / "pca" / "2020P.json"
+    ext.write_text('{"bibcode":"2020P",\n "vista":{"sujeto":"pca","tipo":"theme","txt":"pca"},\n'
+                   ' "methods":["pca"],\n "thesis_links":["ica", "pca"]}\n', encoding="utf-8")
+    assert run(["rename", "pca", "pca-clasico", "--yes"]) == 0
+    nueva = cfg.CONCEPTS / "methods" / "pca-clasico.md"
+    assert nueva.exists() and not nota.exists() and cfg.verif_sidecar(nueva).exists()
+    _, meta = cfg.theme_by_slug("pca-clasico")
+    assert entity.nota_de("theme", "pca-clasico", meta) == nueva, "la config resuelve a la nota movida"
+    yml = cfg.THEMES_YAML.read_text(encoding="utf-8")
+    assert yml.startswith("# curación\npca-clasico:\n  title: PCA  # c\n"), "comentarios intactos (#561)"
+    assert "vault/raw/pdfs/pca-clasico/2020P.pdf" in yml
+    t = nueva.read_text(encoding="utf-8")
+    assert "temas: [ica, pca-clasico]" in t and "config/registro/pca-clasico.yaml" in t
+    assert "(pca-clasico.verif.md)" in t
+    side = cfg.verif_sidecar(nueva).read_text(encoding="utf-8")
+    assert "— pca-clasico\n" in side and "`pca-clasico.md`" in side
+    p = paper.read_text(encoding="utf-8")
+    fm = cfg.split_fm(p)
+    assert fm["thesis_links"] == ["pca-clasico"] and fm["methods"] == ["pca", "ica"]
+    assert fm["vistas"][0]["sujeto"] == fm["vistas"][0]["txt"] == "pca-clasico"
+    assert fm["pdf"] == "../../raw/pdfs/pca-clasico/2020P.pdf" and "/fulltext/pca-clasico/" in fm["fulltext"]
+    assert "[[pca-clasico]]" in p and "(../../raw/pdfs/pca-clasico/2020P.pdf)" in p
+    assert "## Vista — pca-clasico\n" in p and "Usa pca como herramienta." in p
+    d = json.loads((cfg.EXTRACCION / "pca-clasico" / "2020P.json").read_text(encoding="utf-8"))
+    assert d["vista"]["sujeto"] == d["vista"]["txt"] == "pca-clasico"
+    assert d["thesis_links"] == ["ica", "pca-clasico"] and d["methods"] == ["pca"]
+    assert (cfg.EXTRACCION / "pca-clasico" / "2020P.json").read_text(encoding="utf-8").startswith(
+        '{"bibcode":"2020P",\n "vista":'), "por texto: el formato a mano no se re-serializa"
+    assert "write_verif_sidecar.py" in capsys.readouterr().out, "propone re-anclar lo verificado"
+
+
+def test_570_rename_de_tema_rehusa_si_la_nota_destino_existe(toy_vault):
+    write_yaml(cfg.THEMES_YAML, {"pca": {"title": "PCA", "area": "methods"}})
+    cfg.save_busqueda("pca", {"fecha": "2026-01-01", "n_total": 1})
+    for stem in ("pca", "pca-clasico"):
+        f = cfg.CONCEPTS / "methods" / f"{stem}.md"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(f"---\nname: {stem}\n---\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="nota"):
+        run(["rename", "pca", "pca-clasico", "--yes"])
+    assert cfg.registro_path("pca").exists()
+
+
+def test_570_extraccion_que_la_cirugia_no_reproduce_se_lista_y_no_se_escribe(toy_vault):
+    cfg.EXTRACCION.joinpath("s").mkdir(parents=True, exist_ok=True)
+    f = cfg.EXTRACCION / "s" / "1.json"
+    texto = '{"vista": {"sujeto": "pca", "txt": "pca"}, "x": {"sujeto": "pca"}}'
+    f.write_text(texto, encoding="utf-8")
+    _, n, sin_tocar = entity._rewrite_subject_layers("pca", "nuevo", theme=True)
+    assert n == 0 and sin_tocar == [(f, "la cirugía de texto no reproduce la edición")]
+    assert f.read_text(encoding="utf-8") == texto
 
 
 def test_562_rename_reescribe_el_slug_interno_del_registro(toy_vault):

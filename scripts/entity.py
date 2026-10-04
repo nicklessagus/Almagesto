@@ -343,21 +343,21 @@ def _renombrar_en_frontmatter(f: Path, campo: str, viejo: str, nuevo: str) -> bo
     return True
 
 
-def _reescribir_wikilinks(viejo: str, nuevo: str) -> int:
+def _reescribir_wikilinks(viejo: str, nuevo: str) -> list[Path]:
     """`[[viejo]]` / `[[viejo|alias]]` → `[[nuevo…]]` en toda la bóveda. Deliberadamente **no**
     toca el nombre suelto en prosa: un texto que menciona la estrella no es un link a su nota, y un
     replace ciego lo reescribiría (mismo criterio que `make_notes._wikilink_re`)."""
     # AUD-218 — la MISMA regex que `make_notes` (anclas `#`/`^` incluidas) y el MISMO alcance:
     # `vault/`, no `wiki/` — `STATUS.md` también linkea entidades y quedaba colgado.
     rx = cfg.wikilink_re(viejo)
-    n = 0
+    tocadas = []
     for f in sorted(cfg.VAULT.rglob("*.md")):
         texto = f.read_text(encoding="utf-8")
         nuevo_texto = rx.sub(lambda m: f"[[{nuevo}{m.group(1)}", texto)
         if nuevo_texto != texto:
             cfg.write_text_atomic(f, nuevo_texto)
-            n += 1
-    return n
+            tocadas.append(f)
+    return tocadas
 
 
 def _mentions(slug: str) -> list[str]:
@@ -376,6 +376,120 @@ def _mentions(slug: str) -> list[str]:
             if rx.search(ln):
                 out.append(f"{f.relative_to(cfg.VAULT)}:{n}")
     return out
+
+
+def _rewrite_note_pointers(nota: Path, viejo: str, nuevo: str) -> None:
+    """The moved note and its sidecar name each other by FILE: the pointer `[<x>.verif.md](…)` of
+    the note and the title + `<x>.md` of the sidecar (#570). Exact strings, built like their writer
+    (`lib_blocks.render_verif_sidecar`)."""
+    pares = ((nota, ((f"{viejo}.verif.md", f"{nuevo}.verif.md"),)),
+             (cfg.verif_sidecar(nota), ((f"# Rastro de verificación — {viejo}\n",
+                                         f"# Rastro de verificación — {nuevo}\n"),
+                                        (f"`{viejo}.md`", f"`{nuevo}.md`"))))
+    for f, reps in pares:
+        if f.exists():
+            t = f.read_text(encoding="utf-8")
+            n = t
+            for a, b in reps:
+                n = n.replace(a, b)
+            if n != t:
+                cfg.write_text_atomic(f, n)
+
+
+_ALCANCE_RX = {campo: re.compile(rf"({campo}:[ \t]*\[)([^\]\n]*)(\])") for campo in ("temas", "estrellas")}
+
+
+def _rename_in_flow_list(m: re.Match, viejo: str, nuevo: str) -> str:
+    """`temas: [a, viejo, b]` → `[a, nuevo, b]`: the slug as an ELEMENT, never as a substring."""
+    items = [x.strip() for x in m.group(2).split(",")]
+    if viejo not in items:
+        return m.group(0)
+    return m.group(1) + ", ".join(nuevo if x == viejo else x for x in items) + m.group(3)
+
+
+def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[list, int, list]:
+    """The layers that carry the slug as DATA, rewritten exactly (#570) — `(notes, n_jsons, untouched)`.
+    @inv INV-19 @inv INV-160
+
+    Each rewrite matches the slug as a whole VALUE in a known place, never as a word: `pca` is also
+    a method and a word in prose (#562), and those keep going to `_mentions`.
+      · paper notes: the path segment `raw/pdfs|fulltext/<viejo>/` (frontmatter `pdf:`/`fulltext:`,
+        the `[📄 PDF]` link, the off-ADS blockquote) and `txt: <viejo>` of `vistas[]` — the dirs
+        just moved, so the pointers resolve; for a THEME also `sujeto: <viejo>` (`vistas[]`,
+        `no_vista`, `no_sintetizado`), the heading `## Vista — <viejo>` and its status line. A star's
+        `sujeto` is its NAME, which did not change.
+      · every note: `config/registro/<viejo>.yaml` (the Estado line) and the element `<viejo>` of an
+        alcance `temas: […]` / `estrellas: […]` (D-34: the lint re-counts it against `raw/fulltext/`).
+      · extractions: `vista.txt` (and for a theme `vista.sujeto`, `thesis_links`), rewritten only
+        when the file round-trips byte for byte through `json.dumps` — otherwise it is listed.
+    A frontmatter that stops parsing is not written (#222)."""
+    v = re.escape(viejo)
+    claves = "sujeto|txt" if theme else "txt"
+    fm_rx = re.compile(rf"(?m)^(\s*(?:- )?(?:{claves}):[ \t]*)(['\"]?){v}\2([ \t]*)$")
+    body_reps = [(re.compile(rf"(raw/(?:pdfs|fulltext)/){v}/"), rf"\g<1>{nuevo}/"),
+                 (re.compile(rf"(config/registro/){v}(\.yaml)"), rf"\g<1>{nuevo}\g<2>")]
+    if theme:
+        body_reps += [(re.compile(rf"(?m)^(## Vista — ){v}(?=[ \t(]|$)"), rf"\g<1>{nuevo}"),   # #506/#176
+                      (re.compile(rf"(_(?:No leído desde|Reclamado por) `){v}`"), rf"\g<1>{nuevo}`")]
+    notas, sin_tocar = [], []
+    for f in cfg.note_paths(cfg.WIKI, "**/*.md"):
+        t = f.read_text(encoding="utf-8")
+        lim = cfg.fm_bounds(t)
+        head, body = (t[:lim[1]], t[lim[1]:]) if lim else ("", t)
+        if lim:
+            head = fm_rx.sub(lambda m: f"{m.group(1)}{m.group(2)}{nuevo}{m.group(2)}{m.group(3)}", head)
+            head = body_reps[0][0].sub(body_reps[0][1], head)
+        for rx, rep in body_reps:
+            body = rx.sub(rep, body)
+        body = _ALCANCE_RX["temas" if theme else "estrellas"].sub(
+            lambda m: _rename_in_flow_list(m, viejo, nuevo), body)
+        n = head + body
+        if n == t:
+            continue
+        if lim and not isinstance(cfg.split_fm(n), dict):
+            sin_tocar.append((f, "el frontmatter dejaría de parsear"))
+            continue
+        cfg.write_text_atomic(f, n)
+        notas.append(f)
+    n_json = 0
+    for f in sorted(cfg.EXTRACCION.rglob("*.json")):
+        t = f.read_text(encoding="utf-8")
+        if f'"{viejo}"' not in t:
+            continue
+        try:
+            data = json.loads(t)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        vista = data.get("vista") if isinstance(data.get("vista"), dict) else {}
+        cambio = False
+        for k in (("sujeto", "txt") if theme else ("txt",)):
+            if vista.get(k) == viejo:
+                vista[k], cambio = nuevo, True
+        if theme and isinstance(data.get("thesis_links"), list) and viejo in data["thesis_links"]:
+            data["thesis_links"] = [nuevo if x == viejo else x for x in data["thesis_links"]]
+            cambio = True
+        if not cambio:
+            continue
+        # By TEXT, like `_yaml_edited` (#561): the extractions come in several hand-made layouts
+        # and a dump would reformat the whole file. The result must equal the semantic edit.
+        q = json.dumps(viejo)
+        n = re.sub(rf'("(?:{"sujeto|txt" if theme else "txt"})"\s*:\s*){re.escape(q)}',
+                   lambda m: m.group(1) + json.dumps(nuevo), t)
+        if theme:
+            n = re.sub(r'("thesis_links"\s*:\s*\[)([^\]]*)', lambda m: m.group(1) + re.sub(
+                rf"(?<=[\[,\s]){re.escape(q)}|^{re.escape(q)}", json.dumps(nuevo), m.group(2)), n)
+        try:
+            ok = json.loads(n) == data
+        except json.JSONDecodeError:
+            ok = False
+        if not ok:
+            sin_tocar.append((f, "la cirugía de texto no reproduce la edición"))
+            continue
+        cfg.write_text_atomic(f, n)
+        n_json += 1
+    return notas, n_json, sin_tocar
 
 
 def plan(slug: str) -> int:
@@ -452,17 +566,10 @@ def delete(slug: str, yes: bool) -> int:
 def rename(viejo: str, nuevo: str, yes: bool) -> int:
     """Renombra el slug en las ocho capas. Dry-run sin `--yes`.  @inv INV-19"""
     tipo, nombre, meta = resolver(viejo)
-    if tipo != "star" and str(meta.get("concept") or viejo) == viejo:
-        # ⛔ #562. With `concept == slug` the note is named like the slug, so `[[viejo]]` is a link
-        # to the NOTE: rewriting it while the note keeps its name (#169) left every link broken, and
-        # `concept:`, the note, its `.verif.md`, `vistas[]`, `## Vista — <slug>` and the
-        # extractions kept the old name — with rc 0. Those layers are not covered here: refuse.
-        sys.exit(f"el tema {viejo!r} tiene `concept: {viejo}` (su nota se llama como el slug) y este "
-                 f"rename no cubre ese caso (#562): dejaría los `[[{viejo}]]` apuntando a una nota "
-                 f"que no existe. No se tocó nada. A mano: mové la nota y su `.verif.md`, cambiá "
-                 f"`concept:`, y reescribí `vistas[].sujeto`/`.txt`, las secciones `## Vista — "
-                 f"{viejo}`, la `vista` de `raw/extraccion/{viejo}/*.json` y los `pdf:`/`fulltext:`; "
-                 f"cerrá con `lint.py --cierre <nuevo>`.")
+    # #570 — with `concept == slug` (or no `concept`) the note is named like the slug, so it is a
+    # layer of the slug and moves with it. #562 refused this case, but it is the NORMAL one (10 of
+    # 10 themes in a real vault): a refusal there left no tool to rename any theme.
+    mueve_nota = tipo != "star" and str(meta.get("concept") or viejo) == viejo
     if not yes:
         plan(viejo)
         cfg.print_seguro(f"\n⛔ dry-run: no se renombró nada. Repetí con `--yes` para aplicar "
@@ -477,8 +584,9 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
     # consistente. Es exactamente lo que el mensaje de abajo dice que no puede pasar.
     # La capa `nota` de un TEMA se excluye porque el rename no la toca (#169: se llama por
     # `concept`, no por slug), así que su existencia no es una colisión.
-    ocupadas = [k for k, _ in capas(nuevo, tipo, meta)
-                if not (k in ("nota", "verif") and tipo != "star")]
+    meta_nuevo = {**meta, "concept": nuevo} if mueve_nota else meta
+    ocupadas = [k for k, _ in capas(nuevo, tipo, meta_nuevo)
+                if not (k in ("nota", "verif") and tipo != "star" and not mueve_nota)]
     if ocupadas:
         sys.exit(f"ya hay artefactos bajo el slug {nuevo!r} ({', '.join(ocupadas)}) — renombrar "
                  f"encima fusionaría dos entidades en silencio y PISARÍA esas capas. Elegí otro "
@@ -491,7 +599,9 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
         yaml_path, yaml_nuevo = cfg.STARS_YAML, _yaml_edited(
             cfg.STARS_YAML, nombre, field=("slug", viejo, nuevo))
     else:
-        yaml_path, yaml_nuevo = cfg.THEMES_YAML, _yaml_edited(cfg.THEMES_YAML, viejo, new_key=nuevo)
+        concepto = ("concept", viejo, nuevo) if mueve_nota and meta.get("concept") else None
+        yaml_path, yaml_nuevo = cfg.THEMES_YAML, _yaml_edited(cfg.THEMES_YAML, viejo, new_key=nuevo,
+                                                              field=concepto)
     # #562 — the registro carries its own `slug:` and every `save_*` does `setdefault("slug", …)`,
     # which KEEPS a stale one forever. Rewritten here, before moving: if it cannot be read,
     # `save_registro` refuses and nothing moved yet.
@@ -513,6 +623,11 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
                 if n != t:
                     cfg.write_text_atomic(f, n)
     for capa, p in capas(viejo, tipo, meta):
+        if capa in ("nota", "verif") and tipo != "star" and mueve_nota:
+            destino = p.parent / (nuevo + p.name[len(viejo):])     # `<viejo>.md`, `<viejo>.verif.md`
+            p.rename(destino)
+            cfg.print_seguro(f"  → {p.name} → {destino.name}")
+            continue
         if capa in ("nota", "verif") and tipo != "star":
             # ⛔ #169. La nota de un TEMA se llama por `concept`, un campo APARTE del slug: renombrar
             # el slug no la toca. Acá había un `p.name.replace(viejo, nuevo, 1)` con un guard
@@ -528,25 +643,40 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
         p.rename(destino)
         cfg.print_seguro(f"  → {p.name} → {destino.name}")
     if yaml_nuevo is not None:
+        # #570 — a `sources:`/`extra_core` item may point at `raw/pdfs/<viejo>/…`, a dir that just
+        # moved: the path SEGMENT is rewritten (exact, the dir is the slug), nothing else.
+        yaml_nuevo = re.sub(rf"(raw/(?:pdfs|fulltext)/){re.escape(viejo)}/", rf"\g<1>{nuevo}/",
+                            yaml_nuevo)
         cfg.write_text_atomic(yaml_path, yaml_nuevo)
     if tipo == "star":
         # #562 — the `stars:` of the papers carry the NAME, which did not change; but the ficha is
         # `stars/<slug>.md`, so a `[[<slug>]]` IS a link to it and moves with it (measured: 63
         # broken wikilinks in a real vault when this branch skipped them).
-        n_wl = _reescribir_wikilinks(viejo, nuevo)
+        tocadas = _reescribir_wikilinks(viejo, nuevo)
+        _rewrite_note_pointers(cfg.STARS / f"{nuevo}.md", viejo, nuevo)      # #570: moved with its sidecar
+        tocadas.append(cfg.STARS / f"{nuevo}.md")
         cfg.print_seguro(f"  → stars.yaml: {nombre!r} ahora tiene slug {nuevo!r} · "
-                         f"{n_wl} nota(s) con wikilinks reescritos (los `stars:` llevan el NOMBRE, "
+                         f"{len(tocadas)} nota(s) con wikilinks reescritos (los `stars:` llevan el NOMBRE, "
                          f"que no cambió)")
     else:
         n_fm = sum(_renombrar_en_frontmatter(f, "thesis_links", viejo, nuevo)
                    for f in cfg.note_paths(cfg.PAPERS))
-        n_wl = _reescribir_wikilinks(viejo, nuevo)
+        tocadas = _reescribir_wikilinks(viejo, nuevo)
         cfg.print_seguro(f"  → themes.yaml: {viejo!r} → {nuevo!r} · {n_fm} frontmatter(s) · "
-                         f"{n_wl} nota(s) con wikilinks reescritos")
+                         f"{len(tocadas)} nota(s) con wikilinks reescritos")
+        if mueve_nota:
+            nota = nota_de(tipo, nuevo, meta_nuevo)
+            _rewrite_note_pointers(nota, viejo, nuevo)
+            tocadas.append(nota)
+    notas, n_json, sin_tocar = _rewrite_subject_layers(viejo, nuevo, theme=tipo != "star")
+    cfg.print_seguro(f"  → {len(notas)} nota(s) con `vistas[]`/`## Vista`/`pdf:`/`fulltext:`/alcances "
+                     f"re-apuntados · {n_json} extracción(es) con `vista`/`thesis_links` reescritos")
+    for f, motivo in sin_tocar:
+        cfg.print_seguro(f"  ⚠ {f.relative_to(cfg.VAULT)}: NO reescrito ({motivo}) — editalo a mano")
     quedan = _mentions(viejo)
     if quedan:
         cfg.print_seguro(f"⚠ {len(quedan)} línea(s) todavía nombran {viejo!r} (texto libre, rutas, "
-                         f"`vistas[]`): NO se reescriben a ciegas — revisalas a mano:")
+                         f"`methods`): NO se reescriben a ciegas — revisalas a mano:")
         for m in quedan[:40]:
             cfg.print_seguro(f"    · {m}")
         if len(quedan) > 40:
@@ -554,6 +684,16 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
     cfg.print_seguro(f"→ re-estampá lo que apunta a las rutas viejas: `make_notes.py {nuevo}"
                      f"{'' if tipo == 'star' else ' --theme'}`, `make_notes.py --restamp-pdf-links`, "
                      f"`--restamp-index` y `--restamp-matrix`")
+    # #570 — rewriting a slug inside a verified block moves its anchor (D-4) while nothing the
+    # claim says changed: a correction DERIVED from the operation, which is re-anchored (#282/#480),
+    # not re-verified. Proposed, not run: the writer of the sidecar is `write_verif_sidecar`.
+    reanclar = sorted({f for f in tocadas + notas if cfg.verif_sidecar(f).exists()})
+    if reanclar:
+        cfg.print_seguro(f"→ DESPUÉS de re-estampar, re-anclá ({len(reanclar)} nota(s) verificadas con "
+                         f"el slug reescrito dentro de un bloque; nada de lo que afirman cambió, #480):")
+        for f in reanclar:
+            cfg.print_seguro(f"    python scripts/write_verif_sidecar.py "
+                             f"{f.relative_to(cfg.ROOT)} --reanclar")
     cfg.print_seguro(f"→ cerrá con `python scripts/lint.py --cierre {nuevo}` (tiene que dar 0)")
     return 0
 

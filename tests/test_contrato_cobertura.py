@@ -63,6 +63,7 @@ EXTRACCION_ESCRITORES = {
     "make_notes._move_extraction": "`--rename-paper`: mueve y reescribe SÓLO `bibcode` (#228/#374)",
     "make_notes.migrate_all_extracciones": "migrador #311: MUEVE de `build/`, sin tocar contenido",
     "write_verif_sidecar.refute_extraction": "agrega `_refutado` (#526); no toca la lectura",
+    "entity._rewrite_subject_layers": "rename: SÓLO `vista.sujeto`/`vista.txt`/`thesis_links` == slug, por texto (#570)",
 }
 OTROS_ESCRITORES = {
     "bench_verify.cmd_seed": "build/ (examen y clave del benchmark)",
@@ -70,7 +71,7 @@ OTROS_ESCRITORES = {
     "fetch_arxiv.main": "build/ (faltantes del fetcher)",
     "replace_pdf.drop_from_residue": "build/ (saca del residuo `missing_pdf.json` lo instalado, #532)",
     "fetch_ground_truth.write_ground_truth": "raw/ground_truth/",
-    "entity.rename": "raw/ground_truth/<slug>.json (sólo la línea `\"slug\"`, #562; la extracción la LISTA, no la escribe)",
+    "entity.rename": "raw/ground_truth/<slug>.json (sólo la línea `\"slug\"`, #562)",
     "fetch_pdf.main": "build/ (faltantes del fetcher)",
     "harvest_views.restamp_view_locators": "la NOTA (lee la extracción)",
     "harvest_views.restamp_salvedades": "la NOTA (lee la extracción)",

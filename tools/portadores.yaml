@@ -37,6 +37,9 @@ portadores:
     funcion: make_notes._no_vista_declarada
     patron: 'no_vista'
     consumidores:
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: "#570 — `rename` reescribe el `sujeto:` de `no_vista` cuando ES el slug renombrado; no consulta la declaración ni decide estado."
       - modulo: scripts/make_notes.py
         estado: usa
         motivo: "`_estado_paper`, la única escalera de los dos roll-ups (D-10/#300): la declaración va antes de `methods`."
@@ -846,6 +849,9 @@ portadores:
     funcion: write_verif_sidecar.main
     patron: 'render_verif_sidecar'
     consumidores:
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: "#570 — `rename` sólo renombra el TÍTULO y el nombre de nota del hermano movido (las dos cadenas que `render_verif_sidecar` escribe); no escribe filas."
       - modulo: scripts/lib_blocks.py
         estado: fuera-de-alcance
         motivo: DEFINE la primitiva de render; no la consume.
@@ -2368,7 +2374,7 @@ portadores:
     consumidores:
       - modulo: scripts/entity.py
         estado: fuera-de-alcance
-        motivo: "#562 — nombra `## Vista — <slug>` sólo en el mensaje con que `rename` rehúsa; no busca la sección."
+        motivo: "#570 — `rename` reescribe el ENCABEZADO `## Vista — <slug>` con el slug exacto (borde `[ (]`/fin, la misma frontera); no busca ni corta la sección."
       - modulo: scripts/harvest_views.py
         estado: usa
         motivo: "`write_view_section`, `restamp_view_locators` y `restamp_salvedades` cortan la vista con `section_span`; `_lens_span` dejó el `find` pelado y pasó a `section_start` (misma trampa con `### Lente — ruido` / `ruido-rosa`)."
@@ -2897,6 +2903,9 @@ portadores:
     funcion: lib_blocks.carry_needs_reverify
     patron: 'match_rows_to_pairs|sin_fila|re_anclaje|reanclar'
     consumidores:
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: "#570 — `rename` sólo IMPRIME el `--reanclar` de las notas cuyo bloque llevaba el slug; el arrastre (y su `carry_needs_reverify`) lo hace `write_verif_sidecar`."
       - modulo: scripts/reverify_subset.py
         estado: usa
         motivo: "`classify` saca de `asignado` los pares cuya fila exigía acción y los suma a `sin_fila` (sigue emparejada: no es huérfana)."
@@ -3136,7 +3145,7 @@ portadores:
         motivo: "LEE `vistas[].fecha` para el estado del triage; no escribe vistas."
       - modulo: scripts/entity.py
         estado: fuera-de-alcance
-        motivo: "#562 — nombra `vistas[].sujeto`/`.txt` sólo en los mensajes de `rename` (rehúso y lista final); no escribe vistas."
+        motivo: "#570 — `rename` reescribe `vistas[].sujeto`/`.txt` sólo cuando el valor ES el slug renombrado; no fabrica fecha ni lente."
   - issue: 561
     regla: >-
       Una herramienta que reescribe la config CURADA (`themes.yaml`, `stars.yaml`) no puede perder
@@ -3200,3 +3209,18 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: "Sólo NOMBRA las secciones en `SECCIONES_ESTAMPADAS`; no las escribe."
+  - issue: 570
+    regla: >-
+      Renombrar un SUJETO reescribe, exacto, toda capa que lleva su slug como DATO —la nota y su
+      hermano cuando se llaman por el slug, `vistas[]`, `## Vista — <slug>`, `pdf:`/`fulltext:`,
+      los alcances, la `vista`/`thesis_links` de las extracciones, las rutas de `sources:`—, y nunca
+      el slug como PALABRA (`methods`, prosa). #562 rehusaba el tema con `concept == slug`, que es el
+      caso normal: medido, 10 de 10 temas de Almagesto-Tesis sin herramienta para renombrarse.
+    funcion: entity._rewrite_subject_layers
+    patron: '_reescribir_wikilinks\(|def rename_paper|\.rename\(destino\)'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: >-
+          `rename_paper` renombra un PAPER: su bibcode no es la clave de ningún sujeto ni de
+          `vistas[]`; ya re-apunta nota, hermano, artefactos, extracción y wikilinks (#356/#374).

@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-03",
+ "fetched": "2026-10-04",
  "issues": [
   {
    "number": 2,
@@ -2834,6 +2834,11 @@
   {
    "number": 569,
    "title": "harvest_views no converge con dos lecturas del mismo paper: stamp_reading_aids hace que <bib>.json y <bib>__<lente>.json se pisen las ayudas de lectura en cada corrida",
+   "state": "CLOSED"
+  },
+  {
+   "number": 570,
+   "title": "entity.py rename rehúsa el caso normal (tema con concept == slug): hoy no se puede renombrar ningún tema de la Tesis",
    "state": "OPEN"
   }
  ]
