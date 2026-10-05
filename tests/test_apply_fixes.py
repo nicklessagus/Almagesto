@@ -611,3 +611,24 @@ def test_568_vaciar_la_tabla_y_borrar_el_ultimo_parrafo(tmp_path):
     res = af.apply(nota, _fixes(tmp_path, ("X", fx)), write=True)
     assert not res.failed and (res.pairs_before, res.pairs_after) == (4, 1), res.failed
     assert nota.read_text(encoding="utf-8").endswith("|---|---|\n\nPrimer párrafo [[2002C]].\n")
+
+
+_NOTA572 = ("# C\n\nTabla de valores de [[2000A]]:\n\n| x | y |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n\n"
+            "Otro [[2003D]].\n")
+
+
+def test_572_borrar_el_caption_nombra_las_filas_que_heredan_su_cita(tmp_path):
+    """#572 — borrar el caption deja sin fuente a las filas que heredan su `[[bibcode]]`: se
+    rehúsa NOMBRANDO el caso (no el mensaje genérico de pares). Borrar caption y filas en el
+    mismo lote es la salida y pasa: pares 4 → 1."""
+    cap = "Tabla de valores de [[2000A]]:"
+    nota = _note(tmp_path, _NOTA572)
+    res = af.apply(nota, _fixes(tmp_path, ("2000A", [
+        {"n": 1, "viejo": cap, "nuevo": None, "retira": ["2000A"]}])), write=True)
+    assert res.applied == 0 and "heredan" in res.failed[0][2] and "L7" in res.failed[0][2], res.failed
+    assert nota.read_text(encoding="utf-8") == _NOTA572
+    fx = [{"n": 1, "viejo": cap, "nuevo": None, "retira": ["2000A"]},
+          {"n": 2, "viejo": "| 1 | 2 |", "nuevo": None, "retira": ["2000A"]},
+          {"n": 3, "viejo": "| 3 | 4 |", "nuevo": None, "retira": ["2000A"]}]
+    res = af.apply(nota, _fixes(tmp_path, ("2000A", fx)), write=True)
+    assert not res.failed and (res.pairs_before, res.pairs_after) == (4, 1), res.failed

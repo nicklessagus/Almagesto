@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-04",
+ "fetched": "2026-10-05",
  "issues": [
   {
    "number": 2,
@@ -2845,6 +2845,11 @@
    "number": 571,
    "title": "Los snippets en flow (- {k: v}) que se imprimen para pegar no parsean si el valor tiene comas o llaves (yaml_scalar es de bloque)",
    "state": "CLOSED"
+  },
+  {
+   "number": 572,
+   "title": "apply_fixes: borrar con `nuevo: null` el caption de una tabla deja sus filas sin la cita heredada y el rechazo no lo nombra",
+   "state": "OPEN"
   }
  ]
 }

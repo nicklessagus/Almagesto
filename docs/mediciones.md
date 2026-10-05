@@ -4269,6 +4269,14 @@ cierran `make_notes.py gj_581x` y `--restamp-pdf-links` (medido: 0 y 0). La list
 líneas con el slug viejo (extracciones, rutas, `objective.yaml`). Ida y vuelta
 (`gj_581x → gj_581`): `git status` vacío.
 
+## Borrar el caption nombra las filas que heredan su cita (v1.380.1, #572)
+
+Residuo declarado al cerrar #568. Reproducción mínima (caption `[[2000A]]` + 2 filas sin bibcode
+propio + un párrafo): `nuevo: null` + `retira: [2000A]` sobre el caption daba pares 4 → 1 y el
+rechazo genérico de #222/#527. Con el fix: rechazo **nombrado** («borra el ámbito de cita de 2
+bloque(s) … desde L7»), archivo intacto; caption + filas en el mismo lote pasa (4 → 1). Sólo cambia
+el mensaje de un rechazo que ya ocurría: nada nuevo se escribe ni se deja de escribir.
+
 ## Los snippets flow se pegan con cualquier valor (v1.380.0, #571)
 
 `theme_decision_proposals` sobre todas las extracciones de Almagesto-Tesis (`6e424d2f`, sólo

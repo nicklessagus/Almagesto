@@ -3247,3 +3247,29 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "La firma `cita_revisada: - {ref, cita, …}` emite la cita con `json.dumps`, que ya es YAML válido en flow."
+  - issue: 572
+    regla: >-
+      Borrar un bloque que es el ÁMBITO de cita de otros (el caption cuyas filas heredan su
+      `[[bibcode]]`) los deja sin fuente: el escritor lo rehúsa NOMBRANDO las filas, salvo que el
+      mismo lote las borre también. El rechazo genérico de pares (#222) no decía la causa.
+    funcion: apply_fixes.apply
+    patron: 'pairs_of\(|block\.intro'
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "Cuenta pares para PROPONER filas y validar citas; no reescribe la prosa de una nota."
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "DEFINE `pairs_of` y `Block.intro`; es la fuente del ámbito, no un escritor."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Lee pares para reportar; no escribe prosa."
+      - modulo: scripts/reverify_subset.py
+        estado: fuera-de-alcance
+        motivo: "Propone qué re-anclar/re-verificar y no escribe."
+      - modulo: scripts/verify_fanout.py
+        estado: fuera-de-alcance
+        motivo: "Enumera pares para el fan-out de jueces; no escribe la nota."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "Escribe el hermano `.verif.md`, no la prosa de la nota."

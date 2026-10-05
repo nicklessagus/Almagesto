@@ -1770,3 +1770,11 @@ Sin migración. Re-cosechar un tema con propuestas #558 pendientes (o `harvest_v
 --theme --dry-run`) y pegar cada línea `cola_tema: - {…}` / `no_sintetizado: - {…}` en un
 frontmatter de prueba: `split_fm` tiene que leer el `motivo` igual al de la extracción, incluido el de
 `2010ApJ...725..875I` (`$S_{HK}$`). **Devolver si** alguna línea emitida no parsea.
+
+## §#572 · v1.380.1 — borrar el caption nombra las filas que heredan su cita
+
+Sin migración. En un worktree desechable, sobre una nota con una tabla cuyas filas heredan la cita del
+caption: un fix `nuevo: null` + `retira: [<bib>]` sobre el caption tiene que fallar con «borra el
+ámbito de cita de N bloque(s)» (no el mensaje genérico de pares) y dejar el archivo byte a byte igual;
+el mismo fix más uno por fila (`nuevo: null`, `retira: [<bib>]`) tiene que aplicar. **Devolver si**
+el rechazo sigue siendo el genérico o si caption + filas en un lote se rehúsa.

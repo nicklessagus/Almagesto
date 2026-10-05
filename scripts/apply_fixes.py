@@ -259,6 +259,9 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # TABLE fix (block) — no collision was declared, it simply failed and aborted all of them.
     planned = []                      # (span, bib, n, new, kind, retira)
     pares = lb.pairs_of(text)
+    # #572 — rows deleted by this same batch do not count as orphaned by their caption's deletion.
+    borradas = {k + 1 for _, _, o, nw, _ in pending if nw is None
+                for k, l in enumerate(lines) if l == o}
     for bib, n, old, new, retira in pending:
         if new == []:
             # #568 — una lista vacía «partía» el bloque en cero: sobre prosa borraba (sin decirlo
@@ -326,6 +329,19 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                 res.failed.append((bib, n, f"`nuevo: null` borra el bloque: `retira` tiene que ser "
                                            f"EXACTAMENTE sus bibcodes {sorted(salen_bibs)}, no "
                                            f"{sorted(set(retira))} (#568)"))
+                continue
+            # #572 — a caption is the citation SCOPE of the rows below it: deleting it leaves them
+            # unsourced. The pair net (#222) already refuses, but its generic message hid the cause.
+            borrado = normalise("\n".join(lines[span[0]:span[1]]))
+            herederos = [p for p in pares if p.block.intro is not None
+                         and not span[0] <= p.block.first_line - 1 < span[1]
+                         and p.block.first_line not in borradas
+                         and normalise(p.block.intro) == borrado]
+            if herederos:
+                res.failed.append((bib, n, f"`nuevo: null` borra el ámbito de cita de "
+                                           f"{len(herederos)} bloque(s) que heredan su `[[bibcode]]` "
+                                           f"(desde L{herederos[0].block.first_line}): quedarían sin "
+                                           f"fuente. Borralos también o dales su cita (#572)"))
                 continue
             # La línea en blanco que separaba el bloque se va con él: sin esto quedan dos seguidas.
             if (span[1] < len(lines) and not lines[span[1]].strip()
