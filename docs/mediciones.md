@@ -4277,6 +4277,14 @@ rechazo genérico de #222/#527. Con el fix: rechazo **nombrado** («borra el ám
 bloque(s) … desde L7»), archivo intacto; caption + filas en el mismo lote pasa (4 → 1). Sólo cambia
 el mensaje de un rechazo que ya ocurría: nada nuevo se escribe ni se deja de escribir.
 
+**Corrección del validador (Almagesto-Tesis, `ica.md`, Tabla 12.1: caption de 3 líneas, 6 filas
+que heredan `[[2010ComonJutten]]`):** lo de arriba vale sólo cuando nada precede al caption. Con un
+párrafo citado antes, v1.380.0 **aplicaba** el borrado (pares 271 → 270): las 6 filas pasaban a
+heredar la cita de ese párrafo (p. 476) — **mala atribución silenciosa**, que la red de pares no ve
+porque el conteo no baja. v1.380.1 la rehúsa («6 bloque(s) … desde L399», archivo byte a byte
+igual); caption + filas en un lote aplica. Cosmético, sin issue: ese lote deja encabezado y
+separador de la tabla sin filas (igual que vaciar un inventario en #568).
+
 ## Los snippets flow se pegan con cualquier valor (v1.380.0, #571)
 
 `theme_decision_proposals` sobre todas las extracciones de Almagesto-Tesis (`6e424d2f`, sólo
