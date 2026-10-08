@@ -4269,6 +4269,17 @@ cierran `make_notes.py gj_581x` y `--restamp-pdf-links` (medido: 0 y 0). La list
 líneas con el slug viejo (extracciones, rutas, `objective.yaml`). Ida y vuelta
 (`gj_581x → gj_581`): `git status` vacío.
 
+## El re-anclaje mira el bloque entero, no la ventana del extracto (v1.380.2, #573)
+
+Reportado por la sesión de Almagesto-Tesis (`934f65f0`, sólo lectura). Repro: la fila `soportada`
+de 2025A&A...696A.141H en `rv-doppler` (`2c278ecf~1`) contra el bloque de `2c278ecf`, que agregó
+«1,51 y 0,92 m/s» al final: v1.380.1 da `carry_needs_reverify → False` (re-ancla); v1.380.2,
+`True`. Ruido, sobre los 3504 pares con ancla vigente de la instancia (cuántos irían a re-verificar
+si se editara su bloque): todos los tokens fuera de la ventana contra claim+evidencia+condición,
+1054; sin localizadores ni enteros/objetos/autores, sólo decimales, **168 (4,8 %)** — valores que la
+fila nunca citó. Segundo hallazgo de la misma sesión, descartado: 40 pares `soportada` con números
+sin evidencia (de 1114), 0 errores francos y 1 lectura de figura imprecisa.
+
 ## Borrar el caption nombra las filas que heredan su cita (v1.380.1, #572)
 
 Residuo declarado al cerrar #568. Reproducción mínima (caption `[[2000A]]` + 2 filas sin bibcode

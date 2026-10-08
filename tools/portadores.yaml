@@ -3273,3 +3273,17 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: "Escribe el hermano `.verif.md`, no la prosa de la nota."
+  - issue: 573
+    regla: >-
+      Re-anclar una fila es afirmar que el bloque nuevo no dice nada que la fila no vio: el chequeo
+      de objetos/números (#554) cubre el bloque ENTERO —no sólo la ventana del extracto truncado—
+      contra claim + evidencia + condición de la fila, sin localizadores.
+    funcion: lib_blocks.claim_objects_changed
+    patron: 'claim_objects_changed|match_rows_to_pairs|carry_needs_reverify'
+    consumidores:
+      - modulo: scripts/reverify_subset.py
+        estado: fuera-de-alcance
+        motivo: "Pasa por `carry_needs_reverify` (declarado `usa` en #539), que le pasa evidencia y condición: el fix vive en la función compartida."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "`build_rows`, `reanchor` y `--reanclar` pasan por `carry_needs_reverify` (#539); no llama a `claim_objects_changed` directo."

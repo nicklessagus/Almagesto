@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-05",
+ "fetched": "2026-10-08",
  "issues": [
   {
    "number": 2,
@@ -2849,6 +2849,11 @@
   {
    "number": 572,
    "title": "apply_fixes: borrar con `nuevo: null` el caption de una tabla deja sus filas sin la cita heredada y el rechazo no lo nombra",
+   "state": "CLOSED"
+  },
+  {
+   "number": 573,
+   "title": "Re-anclaje: claim_objects_changed no ve lo agregado después de la ventana del extracto (números nuevos heredan un «soportada»)",
    "state": "OPEN"
   }
  ]

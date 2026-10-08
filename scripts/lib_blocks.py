@@ -1890,7 +1890,19 @@ def _claim_tokens(text: str, hasta: int | None = None) -> set:
             if m.start() < fin}
 
 
-def claim_objects_changed(extract: str, block: str) -> bool:
+#: #573 — a number that only says WHERE in the source (page, section, figure, table, equation,
+#: theorem…, or a bare `(2.5)` equation reference) or a bare year: none is what a claim asserts, and
+#: together they were most of the noise measured on an instance.
+_LOCALIZADOR_RE = re.compile(
+    r"(?:\bpp?\.|§|\b(?i:secc?|sect|section|secci[óo]n|figs?|figure|figura|eqs?|equation|ecs?|"
+    r"ecuaci[óo]n|tab|table|tabla|app?|appendix|ap[ée]ndice|chapter|cap|cap[íi]tulo|theorem|teorema|"
+    r"lemma|lema|proposition|proposici[óo]n|corollary|corolario|remark|definition|definici[óo]n|"
+    r"example|ejemplo|algorithm|algoritmo)s?\.?)\s*\(?[A-Z]?\d+(?:[.,]\d+)*\)?"
+    r"(?:\s*[-–]\s*\d+(?:[.,]\d+)*)?"
+    r"|\(\d+\.\d+\)|\b(?:19|20)\d{2}\b")
+
+
+def claim_objects_changed(extract: str, block: str, seen: str = "") -> bool:
     """Did the correction change WHAT the claim is about — an object, an author, a number? (#554)
 
     `extract` is the row's (maybe truncated) claim, `block` the current text. Removed: a token of
@@ -1900,8 +1912,17 @@ def claim_objects_changed(extract: str, block: str) -> bool:
     ext = normalize_ws(extract)
     # an extract without the `…` of `truncate_claim` IS the whole claim: the window is the block
     ventana = len(ext) if ext.endswith("…") else None
-    return bool(_claim_tokens(extract, hasta=ventana) - _claim_tokens(block)
-                or _claim_tokens(block, hasta=ventana) - _claim_tokens(extract))
+    if (_claim_tokens(extract, hasta=ventana) - _claim_tokens(block)
+            or _claim_tokens(block, hasta=ventana) - _claim_tokens(extract)):
+        return True
+    # #573 — the window only sees the opening: a tail appended past it (new numbers, a new object)
+    # re-anchored a `soportada` nobody judged. Carrying a row asserts the block says nothing the row
+    # did not see, so the WHOLE block is checked against everything the row saw.
+    # ponytail: only decimal numbers past the window — integers, objects and authors there were mostly
+    # attribution and locators (measured); widen if an added integer or object slips through.
+    sin_loc = _LOCALIZADOR_RE.sub(lambda m: " " * len(m.group(0)), normalize_ws(block))
+    vistos = _claim_tokens(f"{extract} {seen}")
+    return any(re.fullmatch(r"\d+\.\d+", t) and t not in vistos for t in _claim_tokens(sin_loc))
 
 
 def carry_needs_reverify(pair, row) -> bool:
@@ -1922,7 +1943,8 @@ def carry_needs_reverify(pair, row) -> bool:
             # #554 — a correction that changes the object, the author or a number changes what the
             # claim says, whatever the coverage score: re-verify (measured: 0.938, and a blind
             # judge approved the wrong object).
-            or claim_objects_changed(row.claim or "", pair.block.text))
+            or claim_objects_changed(row.claim or "", pair.block.text,
+                                     f"{row.evidence or ''} {row.condition or ''}"))
 
 
 # ── #259 · el SCHEMA de la salida del fan-out de `verify-citations` ─────────────────────────────

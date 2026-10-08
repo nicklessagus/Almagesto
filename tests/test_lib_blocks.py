@@ -1946,6 +1946,18 @@ def test_554_cambiar_el_objeto_el_autor_o_un_numero_manda_a_re_verificar():
     assert lb.carry_needs_reverify(par, fila), "soportada, pero de otro objeto: no se lleva"
 
 
+def test_573_una_cola_agregada_despues_de_la_ventana_manda_a_re_verificar():
+    """#573 — la corrección agregó «las tablas llegan a 1,51 y 0,92 m/s» DESPUÉS de la ventana del
+    extracto truncado: la fila «soportada» se re-ancló sobre números que nadie verificó."""
+    extracto = "El límite no está cuantificado; lo más…"
+    bloque = ("El límite no está cuantificado; lo más cercano es el RMS de 1,04 m/s "
+              "(Table 3, p. 15, §4.1, ec. (2.5)); las tablas llegan a 1,51 m/s [[x]].")
+    evidencia = "Table 3, Test set: 1.04 ± 0.03 (p. 15)"
+    assert lb.claim_objects_changed(extracto, bloque, evidencia)
+    # lo que la fila vio (evidencia) y los localizadores no cuentan
+    assert not lb.claim_objects_changed(extracto, bloque.replace("1,51", "1,04"), evidencia)
+
+
 def test_564_locator_kinds_lee_la_pagina_de_actas_con_guion():
     """#564 — la celda `Evidencia` con `(p. V-61)` (actas ISCAS'99) contaba como SIN localizador."""
     assert lb.locator_kinds("(p. V-61)") == {"pdf"}

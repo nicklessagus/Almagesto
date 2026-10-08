@@ -1778,3 +1778,11 @@ caption: un fix `nuevo: null` + `retira: [<bib>]` sobre el caption tiene que fal
 ámbito de cita de N bloque(s)» (no el mensaje genérico de pares) y dejar el archivo byte a byte igual;
 el mismo fix más uno por fila (`nuevo: null`, `retira: [<bib>]`) tiene que aplicar. **Devolver si**
 el rechazo sigue siendo el genérico o si caption + filas en un lote se rehúsa.
+
+## §#573 · v1.380.2 — el re-anclaje mira el bloque entero, no la ventana del extracto
+
+Sin migración (no reescribe filas existentes: sólo cambia qué se re-ancla de acá en más). En un
+worktree desechable: el repro del issue (fila de 2025A&A...696A.141H, `2c278ecf~1` vs `2c278ecf`)
+tiene que dar `carry_needs_reverify → True`; `reverify_subset.py` sobre una nota cuyo bloque se
+editó sin tocar números tiene que seguir re-anclándolo. **Devolver si** el repro re-ancla, o si
+la proporción de pares que se manda a re-verificar tras una edición de forma (sin números) no es ~0.
