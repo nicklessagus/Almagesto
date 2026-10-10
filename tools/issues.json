@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-08",
+ "fetched": "2026-10-10",
  "issues": [
   {
    "number": 2,
@@ -2855,6 +2855,36 @@
    "number": 573,
    "title": "Re-anclaje: claim_objects_changed no ve lo agregado después de la ventana del extracto (números nuevos heredan un «soportada»)",
    "state": "CLOSED"
+  },
+  {
+   "number": 574,
+   "title": "`no_sintetizado[sujeto]` contradicho por la cita en la nota del sujeto: el roll-up dice «sintetizado» y ningún chequeo lo cruza (9 pares en la instancia)",
+   "state": "OPEN"
+  },
+  {
+   "number": 575,
+   "title": "La columna `Rol` de `## Régimen de validez` no se cruza contra el `role` del paper, y `contrast --preflight` le atribuye el rol al primer bibcode de la fila, no al de `Fuente`",
+   "state": "OPEN"
+  },
+  {
+   "number": 576,
+   "title": "El destino de `acota→resuelta: <dónde>` es texto libre y nada verifica que la condición haya llegado ahí (180 resoluciones en 15 notas)",
+   "state": "OPEN"
+  },
+  {
+   "number": 577,
+   "title": "Las sub-secciones del bloque de verificación pueden quedar con prosa truncada: #430 preserva la prosa libre pero no mira su forma",
+   "state": "OPEN"
+  },
+  {
+   "number": 578,
+   "title": "`apply_fixes` no puede agregar filas a una tabla: 16 filas de `## Régimen de validez` entraron a mano, fuera de la red de conteo de pares (#222)",
+   "state": "OPEN"
+  },
+  {
+   "number": 579,
+   "title": "El alcance de `## Huecos` no puede declarar un subconjunto de un slug (58 declarados contra 164 contados), y una lista partida en dos renglones lee «> kapteyn» como slug",
+   "state": "OPEN"
   }
  ]
 }
