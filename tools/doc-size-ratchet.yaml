@@ -62,7 +62,7 @@ medido_skills: 40
 
 skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de CLAUDE.md
   append-knowledge: 12200
-  audit-note: 18500
+  audit-note: 18610
   auditar: 18400
   find-contradictions: 21500
   ingest-star: 32000
@@ -71,7 +71,7 @@ skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de
   query-corpus: 6000
   setup: 15300
   test-hypothesis: 15700
-  verify-citations: 55700
+  verify-citations: 55971
 
 crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por suba
   - fecha: "2026-09-17"
@@ -133,6 +133,31 @@ crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por
       Nada: son tres líneas con el comando y la escotilla, en el párrafo de #384 donde ya se decide
       el corpus declarado; el porqué y la medición van a `docs/lint.md` y `docs/mediciones.md`.
     techo_bytes: 51918
+
+  - fecha: "2026-10-11"
+    skill: verify-citations
+    ancla: "#578"
+    motivo: >-
+      Los dos verbos nuevos de `apply_fixes` (insertar filas, mover un bloque) son forma del JSON
+      del corrector: si el skill que documenta las formas existentes no los nombra, el redactor
+      vuelve a escribir las filas a mano debajo de su ancla, fuera de la red de pares (medido: 16
+      filas de un `## Régimen de validez`).
+    sale: >-
+      Nada: son tres líneas pegadas a la de `nuevo: null` (#568), con la forma y la garantía en una
+      cláusula; la mecánica (punto de inserción, celdas, herencia) vive en el docstring.
+    techo_bytes: 55971
+
+  - fecha: "2026-10-11"
+    skill: audit-note
+    ancla: "#578"
+    motivo: >-
+      La corrección serial de una auditoría es donde se agregan filas de régimen y se mueven
+      bloques de sección (casos de rv-doppler y harps-drs); una línea que nombra los dos verbos
+      junto al comando del aplicador.
+    sale: >-
+      Nada: es una oración en el párrafo de `apply_fixes`; la forma completa está en
+      `verify-citations` y en el docstring.
+    techo_bytes: 18610
 
 crecimientos:
   - fecha: "2026-08-31"

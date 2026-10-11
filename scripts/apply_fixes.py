@@ -36,6 +36,19 @@ rewritten re-wrapped, keeping the item's indentation.
 block leaves with its separating blank line and pairs drop by exactly `|retira|`. `""` and `[]` do
 not delete (the first fails the block count, the second is refused in favour of `null`).
 
+**Inserting and moving (#578)** are the two verbs a replacement cannot express, so they used to
+happen by hand, outside the pair net. Both locate their anchor the way `viejo` is located (a whole
+`lib_blocks` block, a table row, or a heading line):
+
+- `{"n", "despues_de": <ancla>, "nuevo": [bloques]}` INSERTS after the anchor. After a table row
+  (or its header) every element must be ONE row with as many cells as the header, written verbatim;
+  after anything else they are blocks, separated by a blank line. Pairs must rise by AT LEAST the
+  pairs of the inserted blocks themselves, and what enters is reported (#389/#406).
+- `{"n", "mover": <bloque>, "despues_de": <ancla>}` MOVES a block byte for byte (a row goes after a
+  row of a table with the same column count). Pairs may not drop, and a block whose inherited
+  citation scope changed — a row under another caption, a list item under another paragraph — is
+  reported, as is any untouched block whose scope an insertion changed.
+
 Nothing is written unless every fix resolves: a replacement that guesses is worse than one that
 fails. Application runs back-to-front so earlier line indices stay valid.
 """
@@ -77,6 +90,9 @@ class Result:
     split: list = field(default_factory=list)      # #408 · (bib, n, k) — un bloque partido en k
     retired: list = field(default_factory=list)    # #527 · (bib, n, [bibcodes retirados, declarados])
     deleted: list = field(default_factory=list)    # #568 · (bib, n) — bloque borrado (`nuevo: null`)
+    inserted: list = field(default_factory=list)   # #578 · (bib, n, bloques, +pares, [bibcodes])
+    moved: list = field(default_factory=list)      # #578 · (bib, n, línea destino)
+    rescoped: list = field(default_factory=list)   # #578 · (extracto, [bibcodes que heredaba])
 
 
 #: #406 · a partir de cuántos caracteres NETOS un fix «agrega material» aunque no gane citas.
@@ -127,8 +143,113 @@ def load_fixes(fix_dir: Path) -> tuple[list, list]:
         for r in data.get("rechazados", []):
             rejected.append((bib, r.get("n"), r.get("motivo")))
         for fx in data.get("fixes", []):
-            fixes.append((bib, fx["n"], fx["viejo"], fx["nuevo"], fx.get("retira") or []))
+            # #578 — three verbs: replace (`viejo`), insert (`despues_de` alone), move (`mover`).
+            if "mover" in fx:
+                verb, old, new = "move", fx["mover"], fx.get("nuevo", MOVE)
+            elif "viejo" not in fx and "despues_de" in fx:
+                verb, old, new = "insert", None, fx["nuevo"]
+            else:
+                verb, old, new = "replace", fx["viejo"], fx["nuevo"]
+            fixes.append((bib, fx["n"], old, new, fx.get("retira") or [], fx.get("despues_de"),
+                          verb))
     return fixes, rejected
+
+
+MOVE = object()
+"""`nuevo` of a move fix: a move carries no new text, it re-emits the block's own lines."""
+
+
+def claim_key(old, after, verb) -> str:
+    """What a fix claims, for the collision check: the block it rewrites or moves, or the point
+    after which it inserts (#578: two insertions after one anchor go in ONE list)."""
+    return normalise(old) if verb != "insert" else "+ " + normalise(after)
+
+
+def locate(lines: list, blocks: list, text: str, field_name: str = "viejo"):
+    """`(span, exact, error)` for a whole block given as text: one identical line, else a
+    `block_hits` match covering exactly one `lib_blocks` block (#222/#547)."""
+    idx = [k for k, l in enumerate(lines) if l == text]
+    if len(idx) == 1:
+        return (idx[0], idx[0] + 1), True, None
+    hits = block_hits(lines, text)
+    if len(hits) > 1:
+        # #547 — dos bloques idénticos comparten ancla: no es un fragmento mal cortado, es que
+        # el texto no alcanza para decir cuál. Adivinar sería peor que rehusar.
+        donde = ", ".join(f"L{a + 1}" for a, _ in hits)
+        return None, False, (f"`{field_name}` aparece {len(hits)} veces idéntico ({donde}): "
+                             "bloques idénticos comparten ancla y no se sabe cuál "
+                             "corregir — hacelos distintos (la celda o frase que los "
+                             "diferencia) y re-verificá")
+    if not hits:
+        return None, False, (f"el bloque no se pudo localizar (0 candidatos) — `{field_name}` "
+                             "debe ser un bloque ENTERO tal como lo parte "
+                             "`lib_blocks.split_blocks`, no un fragmento sub-línea")
+    cubiertos = blocks_within(blocks, hits[0])
+    if len(cubiertos) > 1:
+        return None, False, (f"`{field_name}` abarca {len(cubiertos)} bloques de "
+                             f"`lib_blocks` (ítems de lista o filas de tabla): "
+                             f"aplicarlo los FUNDE en uno y se pierden "
+                             f"{len(cubiertos) - 1} par(es) verificable(s). Mandá un "
+                             f"fix por bloque.")
+    return hits[0], False, None
+
+
+def is_row(line: str) -> bool:
+    """Is `line` a table row (blockquote markers aside)? (#578)"""
+    return _bare(line).lstrip().startswith("|")
+
+
+def insertion_point(lines: list, span: tuple) -> tuple:
+    """`(line index to insert at, header cell count or None)` after the anchor `span` (#578).
+
+    After a table row the insertion stays inside the table, with no blank line; after the header
+    (or the separator) it goes below the separator, never between the two. After anything else it
+    goes right after the block."""
+    a, j = span
+    if not is_row(lines[a]):
+        return j, None
+    h = a
+    while h > 0 and is_row(lines[h - 1]):
+        h -= 1
+    return (max(j, h + 2) if a <= h + 1 else j), cfg._n_cells(_bare(lines[h]))
+
+
+def row_errors(rows: list, cells) -> str | None:
+    """Why `rows` cannot go into a table whose header has `cells` cells, or None (#578)."""
+    if cells is None:
+        if any(is_row(r) and "\n" not in str(r).strip() for r in rows):
+            return ("una fila suelta se inserta DESPUÉS de una fila (o del encabezado) de su "
+                    "tabla: fuera de una tabla es una tabla sin encabezado, que no renderiza")
+        return None
+    for r in rows:
+        r = str(r).strip()
+        if "\n" in r or not r.startswith("|") or lb._SEP_ROW_RE.match(r):
+            return f"dentro de una tabla cada elemento es UNA fila de datos: {r[:60]!r}"
+        if cfg._n_cells(r) != cells:
+            return (f"la fila tiene {cfg._n_cells(r)} celdas y el encabezado {cells}: un `|` sin "
+                    f"escapar (`\\|`, o `\\vert` dentro de `$…$`) parte la celda — {r[:60]!r}")
+    return None
+
+
+def with_separator(lines: list, span: tuple) -> tuple:
+    """`span` plus the blank line that separated the block, when the block leaves (#568/#578):
+    without it two blank lines are left in a row. A row inside its table has none to take."""
+    if (span[1] < len(lines) and not lines[span[1]].strip()
+            and (span[0] == 0 or not lines[span[0] - 1].strip())):
+        return span[0], span[1] + 1
+    return span
+
+
+def heir_scopes(text: str, skip: list) -> dict:
+    """`{(normalised block, inherited bibcodes): count}` for blocks that inherit their citation,
+    leaving out those that start inside a `skip` span (#578: blocks whose text a fix rewrites)."""
+    out: dict = {}
+    for b in lb.split_blocks(text):
+        if b.intro is None or any(i <= b.first_line - 1 < j for i, j in skip):
+            continue
+        k = (normalise(b.text), tuple(lb._bibcodes(b.intro)))
+        out[k] = out.get(k, 0) + 1
+    return out
 
 
 def block_hits(lines: list, old: str) -> list:
@@ -236,14 +357,16 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     pending, res.rejected = load_fixes(fix_dir)
 
     # A hand-merged fix wins over the originals it replaces — they targeted the same block.
-    merged = {normalise(v) for bib, _, v, *_ in pending if bib == MERGED}
-    res.skipped = [(b, n) for b, n, v, *_ in pending if b != MERGED and normalise(v) in merged]
-    pending = [x for x in pending if x[0] == MERGED or normalise(x[2]) not in merged]
+    def key(x):
+        return claim_key(x[2], x[5], x[6])
+    merged = {key(x) for x in pending if x[0] == MERGED}
+    res.skipped = [(x[0], x[1]) for x in pending if x[0] != MERGED and key(x) in merged]
+    pending = [x for x in pending if x[0] == MERGED or key(x) not in merged]
 
     claims: dict = {}
-    for bib, n, old, *_ in pending:
-        claims.setdefault(normalise(old), []).append((bib, n))
-    res.collisions = [(who, key) for key, who in claims.items() if len(who) > 1]
+    for x in pending:
+        claims.setdefault(key(x), []).append((x[0], x[1]))
+    res.collisions = [(who, k) for k, who in claims.items() if len(who) > 1]
     if res.collisions:
         return res
 
@@ -260,9 +383,55 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     planned = []                      # (span, bib, n, new, kind, retira)
     pares = lb.pairs_of(text)
     # #572 — rows deleted by this same batch do not count as orphaned by their caption's deletion.
-    borradas = {k + 1 for _, _, o, nw, _ in pending if nw is None
+    borradas = {k + 1 for _, _, o, nw, *_ in pending if nw is None
                 for k, l in enumerate(lines) if l == o}
-    for bib, n, old, new, retira in pending:
+    for bib, n, old, new, retira, after, verb in pending:
+        if verb == "replace" and after is not None:
+            res.failed.append((bib, n, "`viejo` y `despues_de` juntos: reemplazar es `viejo` + "
+                                       "`nuevo`; insertar, `despues_de` + `nuevo` (#578)"))
+            continue
+        if verb == "move" and (new is not MOVE or after is None or retira):
+            res.failed.append((bib, n, "mover es `mover` + `despues_de`, sin `nuevo` ni `retira`: "
+                                       "el bloque viaja byte a byte (#578)"))
+            continue
+        if verb != "replace":
+            # ⛔ #578 — insertar y mover: los dos verbos que un reemplazo no expresa, y que por eso
+            # se hacían a mano, fuera de la red de pares (#222) y del aviso de material (#389).
+            anc, _, err = locate(lines, blocks, after, "despues_de")
+            if err:
+                res.failed.append((bib, n, err))
+                continue
+            punto, celdas = insertion_point(lines, anc)
+            if verb == "move":
+                span, _, err = locate(lines, blocks, old, "mover")
+                if err:
+                    res.failed.append((bib, n, err))
+                    continue
+                mueve = lines[span[0]:span[1]]                # byte a byte, sin re-envolver
+                if is_row(mueve[0]) != (celdas is not None):
+                    res.failed.append((bib, n, "una fila se mueve después de una fila de tabla, y "
+                                               "un bloque de prosa fuera de una tabla (#578)"))
+                    continue
+                err = row_errors(mueve, celdas) if celdas is not None else None
+                if err:
+                    res.failed.append((bib, n, err))
+                    continue
+                planned.append((with_separator(lines, span), bib, n, None, "move_out", []))
+                planned.append(((punto, punto), bib, n,
+                                mueve if celdas is not None else [""] + mueve, "move_in", []))
+                continue
+            elementos = new if isinstance(new, list) else [new]
+            if not elementos or any(e is None for e in elementos) or retira:
+                res.failed.append((bib, n, "insertar es `despues_de` + `nuevo` (un bloque o una "
+                                           "lista), sin `retira`: no sale nada (#578)"))
+                continue
+            err = row_errors(elementos, celdas)
+            if err:
+                res.failed.append((bib, n, err))
+                continue
+            planned.append(((punto, punto), bib, n, elementos,
+                            "insert_row" if celdas is not None else "insert", []))
+            continue
         if new == []:
             # #568 — una lista vacía «partía» el bloque en cero: sobre prosa borraba (sin decirlo
             # en ningún lado, con línea en blanco doble) y sobre una fila se rehusaba. Una forma.
@@ -278,47 +447,23 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                                        "y aplicarlo como texto los funde en uno. Usá una lista, "
                                        "un elemento por bloque (#408)"))
             continue
-        idx = [k for k, l in enumerate(lines) if l == old]
-        if len(idx) == 1 and new is None:
-            hits = [(idx[0], idx[0] + 1)]           # #568: una fila (o línea) que sale entera
-        elif len(idx) == 1:
+        span, exact, err = locate(lines, blocks, old)
+        if err:
+            res.failed.append((bib, n, err))
+            continue
+        if exact and new is not None:
             if isinstance(new, list):
                 # #408 — partir vale para PROSA. Una fila de tabla partida en dos deja de ser una
                 # fila; el corrector que quiere dos filas manda dos fixes con dos `viejo`. Un
                 # párrafo de UNA línea sí se parte: va por la rama de bloque, que re-envuelve.
-                if _bare(lines[idx[0]]).lstrip().startswith("|"):
+                if is_row(lines[span[0]]):
                     res.failed.append((bib, n, "`nuevo` es una lista (partir el bloque) sobre una "
                                                "FILA de tabla: partir vale para prosa; una fila se "
                                                "reemplaza por una fila (o dos fixes, dos `viejo`)"))
                     continue
-                planned.append(((idx[0], idx[0] + 1), bib, n, new, "block", retira))
+                planned.append((span, bib, n, new, "block", retira))
                 continue
-            planned.append(((idx[0], idx[0] + 1), bib, n, new, "exact", retira))
-            continue
-        else:
-            hits = block_hits(lines, old)
-        if len(hits) > 1:
-            # #547 — dos bloques idénticos comparten ancla: no es un fragmento mal cortado, es que
-            # el texto no alcanza para decir cuál. Adivinar sería peor que rehusar.
-            donde = ", ".join(f"L{a + 1}" for a, _ in hits)
-            res.failed.append((bib, n, f"`viejo` aparece {len(hits)} veces idéntico ({donde}): "
-                                       "bloques idénticos comparten ancla y no se sabe cuál "
-                                       "corregir — hacelos distintos (la celda o frase que los "
-                                       "diferencia) y re-verificá"))
-            continue
-        if not hits:
-            res.failed.append((bib, n, "el bloque no se pudo localizar (0 candidatos) — "
-                                       "`viejo` debe ser un bloque ENTERO tal como lo parte "
-                                       "`lib_blocks.split_blocks`, no un fragmento sub-línea"))
-            continue
-        span = hits[0]
-        cubiertos = blocks_within(blocks, span)
-        if len(cubiertos) > 1:
-            res.failed.append((bib, n, f"`viejo` abarca {len(cubiertos)} bloques de "
-                                       f"`lib_blocks` (ítems de lista o filas de tabla): "
-                                       f"aplicarlo los FUNDE en uno y se pierden "
-                                       f"{len(cubiertos) - 1} par(es) verificable(s). Mandá un "
-                                       f"fix por bloque."))
+            planned.append((span, bib, n, new, "exact", retira))
             continue
         if new is None:
             # ⛔ #568 — BORRAR un bloque es la otra cara de `retira` (#527): lo que sale se declara
@@ -343,11 +488,7 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                                            f"(desde L{herederos[0].block.first_line}): quedarían sin "
                                            f"fuente. Borralos también o dales su cita (#572)"))
                 continue
-            # La línea en blanco que separaba el bloque se va con él: sin esto quedan dos seguidas.
-            if (span[1] < len(lines) and not lines[span[1]].strip()
-                    and (span[0] == 0 or not lines[span[0] - 1].strip())):
-                span = (span[0], span[1] + 1)
-            planned.append((span, bib, n, new, "delete", retira))
+            planned.append((with_separator(lines, span), bib, n, new, "delete", retira))
             continue
         planned.append((span, bib, n, new, "block", retira))
 
@@ -357,7 +498,8 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     for a in range(len(planned)):
         for b in range(a + 1, len(planned)):
             (i1, j1), (i2, j2) = planned[a][0], planned[b][0]
-            if i1 < j2 and i2 < j1:
+            # #578 — two insertions at the same point have no order: one list, one fix.
+            if (i1 < j2 and i2 < j1) or i1 == j1 == i2 == j2:
                 res.failed.append((planned[b][1], planned[b][2],
                                    f"se solapa en las líneas {max(i1, i2) + 1}–{min(j1, j2)} con el "
                                    f"fix {planned[a][1]} par {planned[a][2]}"))
@@ -368,10 +510,14 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # y el párrafo quedó con la fórmula sin cita y un `$` suelto — los pares, 212 → 212.
     reemplazos = {}
     for span, bib, n, new, kind, _ in planned:
-        if kind == "delete":
-            reemplazos[span] = []
+        if kind in ("delete", "move_out", "move_in", "insert_row"):
+            # #578 — una fila insertada se escribe tal cual (ya validada contra el encabezado) y lo
+            # movido viaja byte a byte: no hay re-emisión que pueda partir o fundir bloques.
+            reemplazos[span] = {"delete": [], "move_out": [], "move_in": new,
+                                "insert_row": [str(e).strip() for e in new or []]}[kind]
             continue
-        repl = [new] if kind == "exact" else rewrap(new, lines[span[0]])
+        repl = ([new] if kind == "exact" else [""] + rewrap(new, "") if kind == "insert"
+                else rewrap(new, lines[span[0]]))
         # #537 — un elemento `verbatim` pide los bloques que él mismo es (una tabla, uno por fila).
         pedidos = (sum(len(lb.split_blocks(e)) if verbatim(e) else 1 for e in new)
                    if isinstance(new, list)
@@ -393,6 +539,8 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # No bloquea: a veces agregar una cita ES el arreglo (una `inferencia` que pasa a hecho citado).
     retirables = 0
     for span, bib, n, new, kind, retira in planned:
+        if kind in ("move_out", "move_in", "insert", "insert_row"):
+            continue                       # #578: se reportan con sus pares, después de aplicar
         viejo_txt = "\n".join(lines[span[0]:span[1]])
         nuevo_txt = "\n".join(new) if isinstance(new, list) else (new or "")
         antes = set(lb._bibcodes(viejo_txt))
@@ -424,13 +572,14 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
             res.split.append((bib, n, len(new)))
     if res.failed:
         return res
-    for span, bib, n, new, kind, _ in sorted(planned, key=lambda x: -x[0][0]):
+    # #578 — at one start line the block that leaves goes before the insertion that arrives there.
+    for span, bib, n, new, kind, _ in sorted(planned, key=lambda x: (-x[0][0], x[0][0] == x[0][1])):
         lines[span[0]:span[1]] = reemplazos[span]
         if kind == "delete":
             res.deleted.append((bib, n))
         if kind == "exact":
             res.exact += 1
-        else:
+        elif kind != "move_out":                    # un movimiento cuenta una vez
             res.by_block += 1
     res.applied = res.exact + res.by_block
 
@@ -438,10 +587,34 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # Es el mismo principio que el ancla —lo que la nota afirma tiene que seguir siendo contable—
     # y es lo único que habría cazado los siete pares perdidos sin que nadie los contara a mano.
     nuevo_texto = "\n".join(lines)
-    res.pairs_after = len(lb.pairs_of(nuevo_texto))
-    if res.pairs_after < res.pairs_before - retirables:
+    pares_despues = lb.pairs_of(nuevo_texto)
+    res.pairs_after = len(pares_despues)
+    # ⛔ #578 — una inserción declarada SUBE los pares de los bloques que agrega (una fila sin cita
+    # propia, los que hereda de su caption): ésos se suman al piso, así que la inserción no puede
+    # tapar un par perdido en otro lado. Su posición final se corre por lo que cambió antes.
+    insertados = 0
+    for span, bib, n, new, kind, _ in planned:
+        if kind not in ("insert", "insert_row", "move_in"):
+            continue
+        ini = span[0] + sum(len(reemplazos[o]) - (o[1] - o[0]) for o, *_ in planned
+                            if o[1] <= span[0] and o != span)
+        fin = ini + len(reemplazos[span])
+        if kind == "move_in":
+            res.moved.append((bib, n, ini + 1 + (reemplazos[span][0] == "")))
+            continue
+        dentro = [p for p in pares_despues if ini <= p.block.first_line - 1 < fin]
+        insertados += len(dentro)
+        res.inserted.append((bib, n, len(blocks_within(lb.split_blocks(nuevo_texto), (ini, fin))),
+                             len(dentro), sorted({p.bibcode for p in dentro})))
+    # #578 — un bloque intacto (o movido) que hereda su cita y cambió de ámbito: avisa, no bloquea.
+    tocados = [sp for sp, *_, kind, _ in planned if kind in ("exact", "block", "delete")]
+    antes_h, despues_h = heir_scopes(text, tocados), heir_scopes(nuevo_texto, [])
+    res.rescoped = [(k[0][:80], list(k[1])) for k, c in antes_h.items()
+                    if despues_h.get(k, 0) < c]
+    if res.pairs_after < res.pairs_before - retirables + insertados:
         res.failed.append(("_pares", 0, f"la aplicación deja {res.pairs_after} pares donde había "
-                                        f"{res.pairs_before} ({retirables} retirado(s) declarado(s)): "
+                                        f"{res.pairs_before} ({retirables} retirado(s) declarado(s), "
+                                        f"{insertados} insertado(s)): "
                                         f"alguna corrección fundió bloques o sacó una cita sin "
                                         f"declararla en `retira` (#527). NO se escribe."))
         res.applied = 0
@@ -493,6 +666,17 @@ def main(argv=None) -> int:
               f"(declarado, #527) — esos pares salen; los que quedan en el bloque se re-verifican.")
     for bib, n in res.deleted:
         print(f"  ✂ {bib} par {n}: BORRA el bloque entero (`nuevo: null`, #568).")
+    for bib, n, k, sube, bibs in res.inserted:
+        print(f"  ✚ {bib} par {n}: INSERTA {k} bloque(s), +{sube} par(es)"
+              + (f" ({', '.join(f'[[{b}]]' for b in bibs)})" if bibs else " SIN cita")
+              + " (#578) — todo es material agregado (#389): ¿es portante? Los pares nuevos se "
+                "verifican.")
+    for bib, n, linea in res.moved:
+        print(f"  ↪ {bib} par {n}: MUEVE el bloque, byte a byte, a la L{linea} (#578).")
+    for extracto, bibs in res.rescoped:
+        print(f"  ⚠ el bloque «{extracto}…» heredaba "
+              + (", ".join(f"[[{b}]]" for b in bibs) or "un ámbito sin cita")
+              + " y quedó bajo otro ámbito (#578): su par cambió de fuente — re-verificalo.")
     for bib, n, k in res.split:
         print(f"  ✂ {bib} par {n}: el bloque se PARTE en {k} (#408) — cada uno queda con su par; "
               f"los pares suben, nunca bajan.")

@@ -334,6 +334,9 @@ mitades se pagaron en la misma corrida:
 si bajó —salvo el retiro DECLARADO, `retira: [bibcode]`— y si lo re-emitido no tiene los bloques
 pedidos (dos párrafos van como lista, #408) (#527). Una corrección no hace desaparecer una cita.
 **Borrar un bloque es `"nuevo": null` + `retira` = todos sus bibcodes (#568)**; `""`/`[]` no borran.
+**Insertar es `"despues_de": <ancla>` + `"nuevo": [bloques]`** (tras una fila: filas con las celdas
+del encabezado) **y mover, `"mover": <bloque>` + `"despues_de"`** (byte a byte): el piso de pares
+suma lo insertado y se avisa el bloque que cambia de ámbito de cita (#578).
 
 **Todo o nada**: si un solo `viejo` no resuelve —no aparece, aparece dos veces, o hay una colisión
 sin fusionar— no se escribe **ninguno**. Un reemplazo que adivina es peor que uno que falla, y una

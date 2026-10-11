@@ -236,7 +236,8 @@ Orden, y es el del daño:
 
 A escala, las correcciones **no se aplican a mano**: `python scripts/apply_fixes.py <nota.md>
 <dir-de-fixes> [--write]`. ⚠ El `viejo` de cada fix tiene que ser **un bloque entero** tal como
-`lib_blocks` lo parte, y el aplicador es **todo o nada**.
+`lib_blocks` lo parte, y el aplicador es **todo o nada**. Agregar filas y mover un bloque de
+sección también pasan por ahí (`despues_de`, `mover`; #578), nunca a mano.
 
 ### 4. Re-verificar lo tocado
 

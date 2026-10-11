@@ -632,3 +632,182 @@ def test_572_borrar_el_caption_nombra_las_filas_que_heredan_su_cita(tmp_path):
           {"n": 3, "viejo": "| 3 | 4 |", "nuevo": None, "retira": ["2000A"]}]
     res = af.apply(nota, _fixes(tmp_path, ("2000A", fx)), write=True)
     assert not res.failed and (res.pairs_before, res.pairs_after) == (4, 1), res.failed
+
+
+_NOTA578 = ("# C\n\n## Régimen de validez\n\nRégimen según [[2000A]]:\n\n"
+            "| Afirmación | Condición | Fuente |\n|---|---|---|\n"
+            "| uno | c1 | [[2001B]] |\n| dos | c2 | [[2002C]] |\n\n"
+            "## Pipelines\n\nUn bloque sobre stitching [[2003D]].\n\nOtro párrafo [[2004E]].\n\n"
+            "## Stitching\n\nIntro del stitching [[2005F]].\n")
+
+
+def _corre(tmp_path, fixes, body=_NOTA578):
+    nota = _note(tmp_path, body)
+    return af.apply(nota, _fixes(tmp_path, ("X", fixes)), write=True), nota
+
+
+@pytest.mark.parametrize("ancla, despues", [
+    ("| uno | c1 | [[2001B]] |", "| uno | c1 | [[2001B]] |"),          # tras una fila de datos
+    ("| Afirmación | Condición | Fuente |", "|---|---|---|"),          # tras el encabezado
+])
+def test_578_insertar_filas_suben_los_pares_que_agregan(tmp_path, ancla, despues):
+    """#578 — insertar filas: `despues_de` + `nuevo: [filas]`. Las filas entran tal cual, debajo
+    del ancla (tras el encabezado: debajo del separador, nunca entre los dos), y los pares suben
+    EXACTAMENTE lo que agregan: una con cita propia, una que hereda del caption."""
+    filas = ["| tres | c3 | [[2006G]] |", "| cuatro | c4 | — |"]
+    res, nota = _corre(tmp_path, [{"n": 1, "despues_de": ancla, "nuevo": filas}])
+    assert not res.failed, res.failed
+    assert (res.pairs_before, res.pairs_after) == (6, 8)
+    assert res.inserted == [("X", 1, 2, 2, ["2000A", "2006G"])] and res.applied == 1
+    assert not res.added and not res.grown          # lo insertado se reporta en su propia línea
+    cuerpo = nota.read_text(encoding="utf-8")
+    assert cuerpo == _NOTA578.replace(despues + "\n", despues + "\n" + "\n".join(filas) + "\n")
+
+
+@pytest.mark.parametrize("filas, motivo", [
+    (["| tres | c3 |"], "2 celdas y el encabezado 3"),                  # falta una celda
+    (["| a | b | x | y |"], "4 celdas"),                              # un `|` sin escapar de más
+    (["| tres | c3 | [[2006G]] |\n| x | y | z |"], "UNA fila"),        # dos filas en un elemento
+    (["Prosa suelta [[2006G]]."], "UNA fila"),                         # prosa dentro de la tabla
+    (["|---|---|---|"], "UNA fila"),                                   # un separador no es fila
+])
+def test_578_la_fila_insertada_tiene_la_forma_de_su_tabla(tmp_path, filas, motivo):
+    res, nota = _corre(tmp_path, [{"n": 1, "despues_de": "| dos | c2 | [[2002C]] |", "nuevo": filas}])
+    assert res.applied == 0 and motivo in res.failed[0][2], res.failed
+    assert nota.read_text(encoding="utf-8") == _NOTA578
+
+
+def test_578_el_pipe_escapado_no_cuenta_como_celda(tmp_path):
+    fila = "| a \\| b | c3 | [[2006G]] |"
+    res, nota = _corre(tmp_path, [{"n": 1, "despues_de": "| dos | c2 | [[2002C]] |", "nuevo": [fila]}])
+    assert not res.failed and fila in nota.read_text(encoding="utf-8"), res.failed
+
+
+def test_578_insertar_prosa_tras_un_parrafo_o_un_encabezado(tmp_path):
+    """Después de prosa (o de un encabezado) lo insertado son bloques con su línea en blanco; una
+    fila suelta ahí sería una tabla sin encabezado y se rehúsa."""
+    res, nota = _corre(tmp_path, [{"n": 1, "despues_de": "## Stitching",
+                                   "nuevo": ["Nuevo párrafo [[2006G]]."]}])
+    assert not res.failed and (res.pairs_before, res.pairs_after) == (6, 7), res.failed
+    assert "## Stitching\n\nNuevo párrafo [[2006G]].\n\nIntro" in nota.read_text(encoding="utf-8")
+    res, nota = _corre(tmp_path, [{"n": 1, "despues_de": "Otro párrafo [[2004E]].",
+                                   "nuevo": ["| x | y | z |"]}])
+    assert res.applied == 0 and "tabla sin encabezado" in res.failed[0][2], res.failed
+
+
+def test_578_dos_inserciones_tras_la_misma_ancla_son_una_colision(tmp_path):
+    ancla = "| dos | c2 | [[2002C]] |"
+    res, nota = _corre(tmp_path, [{"n": 1, "despues_de": ancla, "nuevo": ["| a | b | [[2006G]] |"]},
+                                  {"n": 2, "despues_de": ancla, "nuevo": ["| c | d | [[2007H]] |"]}])
+    assert res.collisions and res.applied == 0
+    assert nota.read_text(encoding="utf-8") == _NOTA578
+
+
+def test_578_la_insercion_no_tapa_un_par_perdido(tmp_path):
+    """El piso de #222 suma los pares insertados: una inserción que sube 1 no compensa una cita
+    que otro fix sacó sin declararla."""
+    res, nota = _corre(tmp_path, [
+        {"n": 1, "despues_de": "| dos | c2 | [[2002C]] |", "nuevo": ["| a | b | [[2006G]] |"]},
+        {"n": 2, "viejo": "Otro párrafo [[2004E]].", "nuevo": "Otro párrafo sin cita."}])
+    assert res.applied == 0 and res.failed[0][0] == "_pares", res.failed
+    assert "1 insertado" in res.failed[0][2]
+    assert nota.read_text(encoding="utf-8") == _NOTA578
+
+
+def test_578_mover_un_bloque_byte_a_byte_y_volver(tmp_path):
+    """#578 (F2-08) — mover un párrafo a otra sección: el texto viaja byte a byte, los pares no
+    cambian, y moverlo de vuelta reproduce la nota original."""
+    bloque = "Un bloque sobre stitching [[2003D]]."
+    res, nota = _corre(tmp_path, [{"n": 1, "mover": bloque,
+                                   "despues_de": "Intro del stitching [[2005F]]."}])
+    assert not res.failed and (res.pairs_before, res.pairs_after) == (6, 6), res.failed
+    assert res.applied == 1 and not res.rescoped
+    ida = nota.read_text(encoding="utf-8")
+    assert ida == _NOTA578.replace(bloque + "\n\n", "") + "\n" + bloque + "\n"
+    assert res.moved == [("X", 1, ida.split("\n").index(bloque) + 1)]
+    res = af.apply(nota, _fixes(tmp_path, ("X", [{"n": 1, "mover": bloque,
+                                                  "despues_de": "## Pipelines"}])), write=True)
+    assert not res.failed and nota.read_text(encoding="utf-8") == _NOTA578, res.failed
+
+
+def test_578_mover_una_fila_que_cambia_de_ambito_avisa_y_la_que_lo_pierde_falla(tmp_path):
+    """Una fila sin cita propia hereda del caption: movida bajo otro caption sigue contando un par
+    pero de OTRA fuente (se avisa); a una tabla sin caption citado lo pierde (falla la red)."""
+    body = ("# C\n\nTabla de [[2000A]]:\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n"
+            "Tabla de [[2009Z]]:\n\n| a | b |\n|---|---|\n| 3 | 4 |\n\n"
+            "## Otra\n\n| a | b |\n|---|---|\n| 5 | 6 |\n")
+    res, nota = _corre(tmp_path, [{"n": 1, "mover": "| 1 | 2 |", "despues_de": "| 3 | 4 |"}], body)
+    assert not res.failed and (res.pairs_before, res.pairs_after) == (4, 4), res.failed
+    assert res.rescoped == [("| 1 | 2 |", ["2000A"])]
+    res, nota = _corre(tmp_path, [{"n": 1, "mover": "| 1 | 2 |", "despues_de": "| 5 | 6 |"}], body)
+    assert res.applied == 0 and res.failed[0][0] == "_pares", res.failed
+    assert nota.read_text(encoding="utf-8") == body
+
+
+@pytest.mark.parametrize("fx, motivo", [
+    ({"mover": "| uno | c1 | [[2001B]] |", "despues_de": "## Stitching"}, "fila se mueve"),
+    ({"mover": "Otro párrafo [[2004E]].", "despues_de": "| uno | c1 | [[2001B]] |"}, "fila se mueve"),
+    ({"mover": "Otro párrafo [[2004E]].", "despues_de": "## Stitching", "nuevo": "x"}, "byte a byte"),
+    ({"mover": "Otro párrafo [[2004E]]."}, "byte a byte"),
+    ({"viejo": "Otro párrafo [[2004E]].", "nuevo": "x [[2004E]].", "despues_de": "## Stitching"},
+     "juntos"),
+    ({"despues_de": "## Stitching", "nuevo": ["P [[2006G]]."], "retira": ["2004E"]}, "sin `retira`"),
+    ({"despues_de": "## No existe", "nuevo": ["P [[2006G]]."]}, "`despues_de`"),
+    ({"mover": "No existe.", "despues_de": "## Stitching"}, "`mover`"),
+    ({"despues_de": "## Stitching", "nuevo": []}, "un bloque o una lista"),
+    ({"despues_de": "## Stitching", "nuevo": None}, "un bloque o una lista"),
+])
+def test_578_formas_mal_declaradas_se_rehusan(tmp_path, fx, motivo):
+    res, nota = _corre(tmp_path, [dict(fx, n=1)])
+    assert res.applied == 0 and motivo in res.failed[0][2], res.failed
+    assert nota.read_text(encoding="utf-8") == _NOTA578
+
+
+def test_578_cli_reporta_insercion_y_movimiento(tmp_path, capsys):
+    nota = _note(tmp_path, _NOTA578)
+    d = _fixes(tmp_path, ("X", [
+        {"n": 1, "despues_de": "| dos | c2 | [[2002C]] |", "nuevo": ["| a | b | [[2006G]] |"]},
+        {"n": 2, "mover": "Un bloque sobre stitching [[2003D]].", "despues_de": "## Stitching"}]))
+    assert af.main([str(nota), str(d)]) == 0
+    out = capsys.readouterr().out
+    assert "INSERTA 1 bloque(s), +1 par(es) ([[2006G]])" in out and "MUEVE el bloque" in out
+    assert "pares: 6 → 7" in out
+
+
+def test_578_mover_filas_del_medio_y_del_final_no_se_lleva_vecinos(tmp_path):
+    """La línea en blanco que se va con un bloque movido es sólo la que lo separaba: una fila del
+    medio o del final de su tabla sale sola, sin arrastrar la vecina ni pegar la tabla a lo que sigue."""
+    body = ("# C\n\n| a | b |\n|---|---|\n| 1 | [[2000A]] |\n| 2 | [[2001B]] |\n| 3 | [[2002C]] |\n\n"
+            "Texto [[2003D]].\n\n| a | b |\n|---|---|\n| 9 | [[2009Z]] |\n")
+    for fila in ("| 2 | [[2001B]] |", "| 3 | [[2002C]] |"):
+        res, nota = _corre(tmp_path, [{"n": 1, "mover": fila, "despues_de": "| 9 | [[2009Z]] |"}], body)
+        assert not res.failed and (res.pairs_before, res.pairs_after) == (5, 5), res.failed
+        assert nota.read_text(encoding="utf-8") == body.replace(fila + "\n", "").replace(
+            "| 9 | [[2009Z]] |\n", "| 9 | [[2009Z]] |\n" + fila + "\n")
+
+
+def test_578_dos_inserciones_en_el_mismo_PUNTO_por_anclas_distintas_se_rehusan(tmp_path):
+    """Tras el encabezado y tras el separador es el mismo punto: sin orden entre las dos."""
+    res, nota = _corre(tmp_path, [
+        {"n": 1, "despues_de": "| Afirmación | Condición | Fuente |", "nuevo": ["| a | b | [[2006G]] |"]},
+        {"n": 2, "despues_de": "|---|---|---|", "nuevo": ["| c | d | [[2007H]] |"]}])
+    assert res.applied == 0 and "se solapa" in res.failed[0][2], res.failed
+    assert nota.read_text(encoding="utf-8") == _NOTA578
+
+
+def test_578_reemplazar_una_fila_heredera_no_es_un_cambio_de_ambito(tmp_path):
+    body = "# C\n\nTabla de [[2000A]]:\n\n| a | b |\n|---|---|\n| 1 | 2 |\n"
+    res, _ = _corre(tmp_path, [{"n": 1, "viejo": "| 1 | 2 |", "nuevo": "| 1 | 3 |"}], body)
+    assert not res.failed and res.rescoped == [], res
+
+
+def test_578_un_fix_sin_viejo_ni_despues_de_no_es_una_insercion(tmp_path):
+    with pytest.raises(KeyError):
+        _corre(tmp_path, [{"n": 1, "nuevo": "x"}])
+
+
+def test_578_mover_una_fila_a_una_tabla_de_otro_ancho_se_rehusa(tmp_path):
+    body = "# C\n\n| a | b | c |\n|---|---|---|\n| 1 | 2 | [[2000A]] |\n\n| a | b |\n|---|---|\n| 3 | [[2001B]] |\n"
+    res, nota = _corre(tmp_path, [{"n": 1, "mover": "| 1 | 2 | [[2000A]] |", "despues_de": "| 3 | [[2001B]] |"}], body)
+    assert res.applied == 0 and "3 celdas y el encabezado 2" in res.failed[0][2], res.failed
+    assert nota.read_text(encoding="utf-8") == body

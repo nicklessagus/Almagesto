@@ -377,6 +377,8 @@ python scripts/apply_fixes.py <nota> <dir-de-fixes> [--write]
                                     #   dry-run (el default). Avisa por bloque el material AGREGADO
                                     #   (#389: la primera opción al corregir es SACAR, no reescribir)
                                     #   #568: `"nuevo": null` + `retira` (todos sus bibcodes) BORRA el bloque
+                                    #   #578: `"despues_de"` + `"nuevo": [filas|bloques]` INSERTA;
+                                    #   `"mover"` + `"despues_de"` MUEVE el bloque byte a byte
 python scripts/reverify_subset.py <nota> [--json build/<slug>/reverif.json]
                                     # #257/#282: qué pares se re-anclan y cuáles se re-verifican
                                     #   tras una corrección; propone y NO escribe la nota

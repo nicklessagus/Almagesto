@@ -1786,3 +1786,13 @@ worktree desechable: el repro del issue (fila de 2025A&A...696A.141H, `2c278ecf~
 tiene que dar `carry_needs_reverify → True`; `reverify_subset.py` sobre una nota cuyo bloque se
 editó sin tocar números tiene que seguir re-anclándolo. **Devolver si** el repro re-ancla, o si
 la proporción de pares que se manda a re-verificar tras una edición de forma (sin números) no es ~0.
+
+## §#578 · v1.384.0 — `apply_fixes` inserta filas y mueve bloques
+
+Sin migración. En un worktree desechable: convertir las `inserciones` a mano de un audit
+(`{insertar_despues_de, filas}`) a fixes `{"n", "despues_de": <fila>, "nuevo": [filas]}` y correr
+`apply_fixes.py <copia> <dir> --write`: los pares tienen que subir exactamente lo que agregan las
+filas, y borrarlas de nuevo (`nuevo: null` + `retira`) tiene que devolver el archivo byte a byte. Un
+`{"n", "mover": <bloque>, "despues_de": <ancla>}` (caso F2-08 de harps-drs) tiene que dejar los pares
+iguales y volver byte a byte al moverlo de regreso. **Devolver si** una fila con celdas de más entra,
+si los pares de una inserción no suman al piso, o si una ida y vuelta no reproduce el archivo.

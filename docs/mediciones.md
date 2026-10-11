@@ -4400,3 +4400,25 @@ forma). Falsos positivos en HEAD (`e5fa8e60`): 0 sobre 25 notas de entidad (75 s
 HEAD da distinto de N y de 0 en 12 de 30 notas; el caso que lo motivó (`…]],`) lo agarra el cierre.
 Escritor sobre HEAD: `--restamp-section --todo` toca 1 nota (sólo el salto de línea final, previo) y
 la segunda corrida 0.
+
+## #578 — `apply_fixes` inserta filas y mueve bloques (v1.384.0)
+
+Worktree desechable de Almagesto-Tesis en `37abd671` con los `scripts/` de esta rama; las notas de
+partida son las de ANTES de cada audit (`37abd671^:rv-doppler.md` y `harps-drs.ANTES.md`), con los
+fixes del audit aplicados primero por el mismo escritor, y después las filas que en el audit
+entraron a mano (`secE-filas-nuevas.json`, `fixes-filas-nuevas/sec{D,G}.json`, formato
+`{insertar_despues_de, filas}` que inventaron los redactores) convertidas a `despues_de` + `nuevo`.
+
+| nota | fixes del audit | inserción (filas / fixes) | pares | vuelta (`nuevo: null`) |
+|---|---|---|---|---|
+| rv-doppler | 122, pares 315 → 362 | 16 / 11, 0 fallas | 362 → 378 (+16, una por fila) | 378 → 362, byte a byte |
+| harps-drs | 134, pares 308 → 311 | 15 / 10, 0 fallas | 311 → 328 (+17: una fila cita 3) | 328 → 311, byte a byte |
+
+Mover F2-08 (harps-drs, el párrafo de τ Cet sobre las líneas del stitching, 7 líneas, de `## Los
+pipelines alternativos` a la cola de `## El sistemático que hay que sacar: el *stitching*`): pares
+311 → 311, sin cambio de ámbito; moverlo de regreso (tras el bloque que lo precedía) reproduce el
+archivo byte a byte. Regresión: el escritor viejo (v1.380.2) y el nuevo sobre los tres juegos de
+fixes reales (`rv-doppler/fixes`, `harps-drs/fixes`, `harps-drs/fixes-r1`) dan los mismos conteos
+y el mismo texto (122/0/315→362, 134/0/308→311, 0/8 fallas idénticas). Falsos positivos: el aviso
+nuevo de cambio de ámbito no salió en ninguna de las seis corridas (n = 27 inserciones + 2
+movimientos); sólo dispara con `despues_de`/`mover` o con un caption reescrito.

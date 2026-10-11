@@ -3334,3 +3334,32 @@ portadores:
         estado: usa
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
+
+  - issue: 578
+    regla: >-
+      Agregar filas a una tabla y mover un bloque de sección son correcciones de prosa con
+      `[[bibcode]]`: pasan por el único escritor con la red de pares (#222) y el aviso de material
+      agregado (#389/#406) — `despues_de` + `nuevo` inserta (filas con las celdas del encabezado) y
+      sube el piso por los pares que agrega; `mover` + `despues_de` mueve byte a byte, sin bajar
+      pares, y avisa el bloque que cambia de ámbito de cita.
+    funcion: apply_fixes.apply
+    patron: 'startswith\("\|"\)'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "Parte el cuerpo en bloques y filas para LEER pares; no escribe la nota."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Lee tablas para reportar; no escribe prosa."
+      - modulo: scripts/bench_verify.py
+        estado: fuera-de-alcance
+        motivo: "Parte una nota sintética en claims atómicos para el benchmark; no escribe la bóveda."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Detectores de forma de tabla (filas huérfanas, celdas de más, encabezado pegado): leen, no insertan filas."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Toca filas del hermano `.verif.md` (celda de hash, migración del bloque) y de tablas estampadas; no inserta ni mueve prosa citada de la nota."
+      - modulo: scripts/proposals.py
+        estado: fuera-de-alcance
+        motivo: "Lee celdas vacías del inventario para PROPONER; no escribe."
