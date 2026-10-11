@@ -4272,3 +4272,11 @@ def test_582_registro_universe_es_la_union_de_los_cuatro_carriles(toy_vault):
     cfg.save_registro("drs", {"slug": "drs", "busquedas": [{"fecha": "x", "n_total": 5},
                                                           {"fecha": "y", "bibcodes": ["2021B"]}]})
     assert cfg.registro_universe("drs", meta) == ({"2020A", "2019Loc", "2021B"}, False)
+
+
+def test_alcance_scope_item_matriz():
+    """`cfg.scope_item`: el slug pelado es el directorio entero; `slug(N)`, N papers de él (#579)."""
+    assert cfg.scope_item(" tau_ceti ") == ("tau_ceti", None)
+    assert cfg.scope_item("tau_ceti(15)") == ("tau_ceti", 15)
+    assert cfg.scope_item("tau_ceti ( 15 ) ") == ("tau_ceti", 15)
+    assert cfg.scope_item("") == ("", None)

@@ -222,9 +222,9 @@ puente al concepto que explica cada uno, resuelto por alias y sin la glosa entre
 y el apéndice **`## Excluidos por el filtro`** (los no-core, top por citas con link a ADS).
 
 **Un `## Huecos` —de ficha o de concepto— declara su alcance, igual que una hipótesis (D-34,
-#342):** `> Alcance <fecha> · temas: […] + estrellas: […] · N papers`, **dentro de la sección**. Un
-hueco es una afirmación **negativa** sin `[[bibcode]]`, así que no la mira ninguna capa de
-verificación; el alcance la vuelve *acotada verdadera*, y el lint lo cruza contra el disco.
+#342):** `> Alcance <fecha> · temas: […] + estrellas: […] · N papers` (`slug(N)`: N papers de ese
+slug, no todos, #579), **dentro de la sección**. Un hueco es una afirmación **negativa** sin
+`[[bibcode]]`: no la mira ninguna capa; el alcance la vuelve *acotada verdadera* y el lint la re-cuenta.
 
 **Estándar: autosuficiente.** La ficha debe alcanzar por sí sola — un agente que la lee queda
 servido **sin abrir ningún paper**: parámetros estelares, inventario de señales RV con $P/K/e/m\sin

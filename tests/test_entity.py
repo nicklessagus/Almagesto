@@ -618,3 +618,16 @@ def test_562_rename_de_estrella_lleva_wikilinks_y_slug_del_ground_truth_y_la_fic
     assert cfg.split_fm((cfg.STARS / "nuevo_slug.md").read_text())["slug"] == "nuevo_slug"
     txt = (cfg.PAPERS / "2020B.md").read_text(encoding="utf-8")
     assert "[[nuevo_slug]]" in txt and f"[[{slug}_b]]" in txt and f"stars: [{nombre}]" in txt
+
+
+def test_renombrar_slug_en_alcance_con_subconjunto_y_dos_renglones():
+    """#579 — el alcance admite `slug(N)` y una lista partida en dos renglones del blockquote; el
+    renombre compara el ELEMENTO por `cfg.scope_item` (el mismo parser que el lint), conserva el
+    `(N)` y el `>` del renglón, y no toca un slug que sólo contiene al viejo como substring."""
+    t = ("> Alcance 2026-10-06 · estrellas: [tau_ceti(15), tau_ceti_b,\n"
+         "> kapteyn] · 58 papers")
+    rx = entity._ALCANCE_RX["estrellas"]
+    assert rx.sub(lambda m: entity._rename_scope_list(m, "tau_ceti", "tc"), t) == (
+        "> Alcance 2026-10-06 · estrellas: [tc(15), tau_ceti_b,\n> kapteyn] · 58 papers")
+    assert rx.sub(lambda m: entity._rename_scope_list(m, "kapteyn", "gj191"), t) == (
+        "> Alcance 2026-10-06 · estrellas: [tau_ceti(15), tau_ceti_b,\n> gj191] · 58 papers")

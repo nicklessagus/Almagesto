@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.388.0"
+ALMAGESTO_VERSION = "1.389.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1315,6 +1315,23 @@ def raw_notation(texto: str) -> str | None:
     ini = visible.rfind(" ", 0, m.start()) + 1
     fin = visible.find(" ", m.end())
     return visible[ini:fin if fin >= 0 else None]
+
+
+#: An item of a scope list (D-34, #342): `slug` or `slug(N)` — the second one declares that only N
+#: papers of that slug entered the scope, not every `.txt` under it (#579).
+_SCOPE_ITEM_RE = re.compile(r"^(.*?)\s*\(\s*(\d+)\s*\)$")
+
+
+def scope_item(raw: str) -> tuple[str, int | None]:
+    """`(slug, N)` for one item of a `temas: […]` / `estrellas: […]` scope list (#579).
+
+    `N` is `None` for a bare slug (the whole directory) and an int for `slug(N)`, the declared
+    SUBSET. ⛔ One parser for the two that read the list: the lint, which re-counts it, and
+    `entity.py rename`, which rewrites the slug as an element — a rename that missed `tau_ceti(15)`
+    would leave a phantom slug behind."""
+    s = str(raw or "").strip()
+    m = _SCOPE_ITEM_RE.match(s)
+    return (m.group(1).strip(), int(m.group(2))) if m else (s, None)
 
 
 def method_key(nombre) -> str:

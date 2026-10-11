@@ -1009,7 +1009,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   ⛔ La red es la misma forma que D-34: el `## Huecos` con bullets declara
   `> Alcance <fecha> · temas: [...] / estrellas: [...] · N papers` **dentro de la sección**, y el
   lint lo cruza contra el disco (sin declarar · sin slugs · sin `· N papers` · slug fantasma ·
-  quedó corto). El blockquote de **nivel de nota** de una hipótesis no cuenta: declara el alcance
+  `slug(N)` imposible · quedó corto). ⛔ **Un slug puede entrar en parte (#579): `slug(N)`** =
+  «N papers de este slug, no todos sus `.txt`» —el concepto que cita papers con el texto bajo otros
+  slugs—. Ese item aporta su N al re-conteo (no puede hacer «quedar corto» al alcance) y es
+  `slug(N)` **imposible** si el directorio tiene menos de N `.txt`; los slugs sin `(N)` se siguen
+  re-contando enteros. El bloque se lee **sin el `>` de cada renglón** (regla de método 4): una
+  lista partida en dos renglones ya no produce el slug fantasma `> kapteyn`. El blockquote de **nivel de nota** de una hipótesis no cuenta: declara el alcance
   del *veredicto*, que es otra afirmación. La escalera es una sola implementación
   (`lint.scope_state`) para los dos consumidores. Población: las notas de `stars/` y `concepts/`
   con `## Huecos` **escrito** — la sección con la glosa del stub y sin un solo bullet no afirma

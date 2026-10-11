@@ -299,23 +299,45 @@ ALCANCE_SLUGS_RE = re.compile(r"(?:temas|estrellas|entidades)\s*:\s*\[([^\]]*)\]
 ALCANCE_N_RE = re.compile(r"·\s*(\d+)\s+papers?\b", re.I)
 
 
-def alcance_declarado(text: str) -> dict | None:
-    """`{fecha, slugs, n_papers}` del blockquote de alcance, o `None` si la nota no lo trae.
+def _scope_block(text: str) -> tuple[str, str] | None:
+    """`(fecha, bloque)` of the scope blockquote, with the `>` of every line stripped (#579).
 
-    `None` ≠ alcance vacío: una hipótesis SIN alcance declarado es el hallazgo de D-34 —un veredicto
-    negativo sin alcance se lee como universal ("no existe evidencia" en vez de "no hay evidencia en
-    estos 190 papers")—, y es distinto de una cuyo alcance quedó corto."""
-    # @inv INV-92
+    Rule of method 4: a list split over two lines of the blockquote (`[tau_ceti, toliman,` /
+    `> kapteyn]`) used to be read with the `>` of the second line glued to the slug, which then
+    fell into `slug_fantasma` as `> kapteyn`. ONE cut for everything that reads this block."""
     m = ALCANCE_RE.search(text)
     if not m:
         return None
-    linea_fin = text.find("\n\n", m.start())
-    bloque = text[m.start():linea_fin if linea_fin > 0 else len(text)]
-    slugs = []
+    fin = text.find("\n\n", m.start())
+    bloque = text[m.start():fin if fin > 0 else len(text)]
+    return m.group(1), "\n".join(re.sub(r"^[ \t]*>[ \t]?", "", ln) for ln in bloque.split("\n"))
+
+
+def alcance_declarado(text: str) -> dict | None:
+    """`{fecha, slugs, parciales, n_papers}` del blockquote de alcance, o `None` si no lo trae.
+
+    `None` ≠ alcance vacío: una hipótesis SIN alcance declarado es el hallazgo de D-34 —un veredicto
+    negativo sin alcance se lee como universal ("no existe evidencia" en vez de "no hay evidencia en
+    estos 190 papers")—, y es distinto de una cuyo alcance quedó corto.
+
+    `parciales` (#579): `{slug: N}` de los items `slug(N)` — sólo N papers de ese slug entraron al
+    alcance, no todos sus `.txt`. `slugs` lleva el nombre pelado de todos."""
+    # @inv INV-92
+    sb = _scope_block(text)
+    if sb is None:
+        return None
+    fecha, bloque = sb
+    slugs, parciales = [], {}
     for grupo in ALCANCE_SLUGS_RE.findall(bloque):
-        slugs += [x.strip() for x in grupo.split(",") if x.strip()]
+        for x in grupo.split(","):
+            slug, n_decl = cfg.scope_item(x)
+            if not slug:
+                continue
+            slugs.append(slug)
+            if n_decl is not None:
+                parciales[slug] = n_decl
     n = ALCANCE_N_RE.search(bloque)
-    return {"fecha": m.group(1), "slugs": slugs,
+    return {"fecha": fecha, "slugs": slugs, "parciales": parciales,
             "n_papers": int(n.group(1)) if n else None}
 
 
@@ -328,26 +350,31 @@ def scope_wikilinks(text: str) -> list[str]:
     3 links → 3 pairs → 2 blocking `no-soportada` and two full PDF reads to find out the question
     made no sense. The rule is «do not put a link there», not «do not look there»: exempting the
     whole blockquote would let a real claim in that nobody checks."""
-    m = ALCANCE_RE.search(text)
-    if not m:
-        return []
-    fin = text.find("\n\n", m.start())
-    bloque = text[m.start():fin if fin > 0 else len(text)]
-    return re.findall(r"\[\[([^\]|#]+)", bloque)
+    sb = _scope_block(text)
+    return re.findall(r"\[\[([^\]|#]+)", sb[1]) if sb else []
 
 
-def corpus_vigente(slugs: list) -> tuple[int, list]:
-    """(papers con fulltext hoy en esos slugs, slugs cuyo directorio no existe). El universo de una
-    hipótesis son directorios de `raw/fulltext/` porque es exactamente sobre lo que corre el grep."""
+def corpus_vigente(slugs: list, parciales: dict | None = None) -> tuple[int, list, list]:
+    """(papers del alcance hoy, slugs cuyo directorio no existe, `slug(N)` imposibles). El universo
+    de una hipótesis son directorios de `raw/fulltext/` porque es exactamente sobre lo que corre el
+    grep. Un `slug(N)` (#579) aporta sus N declarados, no todos sus `.txt`: ese slug no puede hacer
+    que el alcance «quede corto»; sí es imposible si el directorio tiene menos de N."""
     # @inv INV-92
-    total, faltan = 0, []
+    parciales = parciales or {}
+    total, faltan, imposibles = 0, [], []
     for sl in slugs:
         d = cfg.FULLTEXT / sl
         if not d.is_dir():
             faltan.append(sl)
             continue
-        total += len(list(d.glob("*.txt")))
-    return total, faltan
+        n_txt = len(list(d.glob("*.txt")))
+        if sl in parciales:
+            if n_txt < parciales[sl]:
+                imposibles.append(f"{sl}({parciales[sl]}) con {n_txt} `.txt`")
+            total += parciales[sl]
+        else:
+            total += n_txt
+    return total, faltan, imposibles
 
 
 #: El estado «el alcance está y cuadra con el disco» (`scope_state`).
@@ -366,7 +393,8 @@ def scope_state(text: str) -> tuple:
     `estado` is one of `sin_declarar` (no blockquote at all) · `sin_slugs` (there is one and it
     names none, so the universe cannot be re-counted) · `sin_n` (no `· N papers`: nothing to
     compare today's count against) · `slug_fantasma` (names slugs with no fulltext on disk) ·
-    `quedo_corto` (there are more today than it declared) · `ok`.
+    `parcial_imposible` (a `slug(N)` whose directory holds fewer than N `.txt`, #579; `faltan`
+    then carries those items) · `quedo_corto` (there are more today than it declared) · `ok`.
 
     ⛔ ONE implementation for the two consumers: a hypothesis's blockquote (D-34) and a
     `## Huecos` one (#342). Both hold NEGATIVE claims —*«no evidence»*, *«this is missing»*— that
@@ -378,11 +406,13 @@ def scope_state(text: str) -> tuple:
         return "sin_declarar", None, 0, []
     if not alc["slugs"]:
         return "sin_slugs", alc, 0, []
-    vigente, faltan = corpus_vigente(alc["slugs"])
+    vigente, faltan, imposibles = corpus_vigente(alc["slugs"], alc["parciales"])
     if alc["n_papers"] is None:
         return "sin_n", alc, vigente, faltan
     if faltan:
         return "slug_fantasma", alc, vigente, faltan
+    if imposibles:
+        return "parcial_imposible", alc, vigente, imposibles
     if vigente > alc["n_papers"]:
         return "quedo_corto", alc, vigente, faltan
     return SCOPE_OK, alc, vigente, faltan
@@ -4292,6 +4322,12 @@ def check_hypothesis_note(stem: str, f, fm: dict, text: str, err) -> tuple:
             alcance_corto.append(
                 (stem, f"el alcance nombra slug(s) sin fulltext en disco "
                        f"({', '.join(faltan)}) → ¿typo, o entidad borrada/renombrada?"))
+        elif _est == "parcial_imposible":
+            # #579 — `slug(N)` declara N papers de ese slug; con menos `.txt` que N en disco el
+            # alcance afirma haber mirado papers que no están.
+            alcance_corto.append(
+                (stem, f"el alcance declara más papers de un slug que los que hay en disco "
+                       f"({'; '.join(faltan)}) → corregí el `(N)` o re-contá el slug"))
         elif _est == "quedo_corto":
             alcance_corto.append(
                 (stem, f"alcance del {alc['fecha']} declarado sobre {alc['n_papers']} "
@@ -4418,6 +4454,11 @@ def check_gaps_scope(stem: str, f, text: str, n_huecos: list) -> tuple:
                 huecos_sin_alcance.append(
                     (stem, f"el alcance de `## Huecos` nombra slug(s) sin fulltext en disco "
                            f"({', '.join(_falt_h)}) → ¿typo, o entidad borrada/renombrada?"))
+            elif _est_h == "parcial_imposible":
+                huecos_sin_alcance.append(
+                    (stem, f"el alcance de `## Huecos` declara más papers de un slug que los "
+                           f"que hay en disco ({'; '.join(_falt_h)}) → corregí el `(N)` o "
+                           f"re-contá el slug (#579)"))
             elif _est_h == "quedo_corto":
                 huecos_sin_alcance.append(
                     (stem, f"los {len(_bul_h)} hueco(s) se declararon sobre "

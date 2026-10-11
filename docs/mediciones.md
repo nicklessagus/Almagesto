@@ -4523,3 +4523,22 @@ pide el issue no las ve. Exploratorio, no implementado: un cruce por cita («…
 presente en la nota) marca 24 de 41 `regimen` de rv-doppler en `0e952fa3` —incluye #54, #110, #111,
 #117, #224, #299— pero también 42 de 86 en HEAD, donde la mayoría son paráfrasis en castellano: no
 es preciso sin adjudicar.
+
+## Alcance en dos renglones y `slug(N)` (v1.389.0, #579)
+
+Dos worktrees desechables de Almagesto-Tesis (`37abd671`, de donde partió el audit de rv-doppler, y
+HEAD `454997d8`), bóveda entera. **Sin regresiones:** el lint completo con los scripts del template
+en `e661033` y con los de este fix da **diff vacío** en los dos commits (18 notas con `## Huecos`; *Alcance de
+hipótesis* sigue en 0 y *Hueco sin ALCANCE* en 4, rv-doppler incluida, porque su
+nota todavía no usa la forma nueva). **Recall sobre los dos defectos** (`scope_state` sobre el
+alcance de rv-doppler re-escrito en el worktree, iguales en los dos commits):
+
+| alcance | antes | después |
+|---|---|---|
+| `[rv-doppler] + estrellas: [tau_ceti, toliman,` / `> kapteyn] · 58` | `slug_fantasma` (`> kapteyn`) | `quedo_corto` 127 (cuenta los 4 slugs enteros, correcto) |
+| `[rv-doppler, indicadores-actividad(5)] + [tau_ceti(4), toliman(4),` / `> kapteyn(2)] · 58` | `slug_fantasma` (4 items) | `ok`, 43 + 15 = 58 |
+| `[rv-doppler] + [kapteyn(20)] · 63` (kapteyn tiene 14) | `slug_fantasma` | `parcial_imposible` |
+
+El reparto 5/4/4/2 de los 15 es ilustrativo (el usuario declara su N); lo medido es que con
+`slug(N)` el «quedó corto» falso (164 contra 58) desaparece y que el `(N)` mayor que el disco se
+acusa.

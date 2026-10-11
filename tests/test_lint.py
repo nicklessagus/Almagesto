@@ -3374,6 +3374,53 @@ def test_alcance_con_slug_inexistente_lo_nombra(toy_vault, capsys):
     assert "tets_star" in sec and "typo" in sec, sec
 
 
+# ── #579 · lista partida en dos renglones y subconjunto de un slug (`slug(N)`) ──
+def test_alcance_lista_en_dos_renglones_no_pega_el_mayor_al_slug():
+    r"""#579, defecto 2 (caso medido en rv-doppler): `[^\]]*` cruzaba el salto de línea y el `>` del
+    renglón siguiente quedaba pegado al slug — `> kapteyn` caía en `slug_fantasma`. Regla de método
+    4: el bloque se normaliza antes de mirarlo, y vale también para `scope_wikilinks` (#368)."""
+    t = ("> Alcance 2026-10-06 · temas: [rv-doppler]\n> + estrellas: [tau_ceti, toliman,\n"
+         "> kapteyn] · 58 papers\n> [[2020X]]\n")
+    alc = lint.alcance_declarado(t)
+    assert alc["slugs"] == ["rv-doppler", "tau_ceti", "toliman", "kapteyn"], alc
+    assert alc["n_papers"] == 58 and alc["parciales"] == {}
+    assert lint.scope_wikilinks(t) == ["2020X"]
+
+
+@pytest.mark.parametrize("decl, n_total, estado", [
+    ("[rv-doppler] + estrellas: [tau_ceti(15)]", 58, lint.SCOPE_OK),       # 43 + 15 declarados
+    ("[rv-doppler, tau_ceti]", 58, "quedo_corto"),                         # sin (N): cuenta los 34
+    ("[rv-doppler] + estrellas: [tau_ceti(40)]", 83, "parcial_imposible"),  # hay 34 < 40
+    ("[rv-doppler] + estrellas: [tau_ceti(15)]", 50, "quedo_corto"),       # el slug ENTERO creció
+])
+def test_alcance_subconjunto_de_un_slug(toy_vault, decl, n_total, estado):
+    """#579, defecto 1 (caso medido): rv-doppler declaró 58 papers —43 propios + 15 citados con el
+    texto bajo otros slugs— y `corpus_vigente` contaba TODOS los `.txt` de esos slugs (164): un
+    «quedó corto» falso. `slug(N)` aporta sus N declarados; el resto se sigue re-contando entero,
+    así que el slug sin `(N)` todavía puede quedar corto, y un `(N)` mayor que el disco es
+    imposible."""
+    _fulltexts("rv-doppler", 43)
+    _fulltexts("tau_ceti", 34)
+    est, alc, vigente, faltan = lint.scope_state(
+        f"> Alcance 2026-10-06 · temas: {decl} · {n_total} papers\n")
+    assert est == estado, (est, vigente, faltan)
+    if estado == "parcial_imposible":
+        assert faltan == ["tau_ceti(40) con 34 `.txt`"]
+
+
+def test_alcance_parcial_imposible_se_reporta_en_los_dos_consumidores(toy_vault, capsys):
+    """El estado nuevo tiene su frase en la hipótesis (D-34) y en `## Huecos` (#342)."""
+    _fulltexts("test_star", 3)
+    _hipotesis("hip_parcial", "# hip\n\n> Alcance 2026-01-01 · estrellas: [test_star(5)] · 5 papers"
+                              "\n\nSostiene [[2020X]].\n")
+    link_from_log(toy_vault, "hip_parcial")
+    _concepto_con_huecos(toy_vault, "ica", "## Huecos\n\n> Alcance 2026-01-01 · estrellas: "
+                                          "[test_star(5)] · 5 papers\n\n- falta algo.\n")
+    _rc, rep = run_lint_reporte(capsys)
+    assert "test_star(5) con 3" in _seccion(rep, "Alcance de hipótesis")
+    assert "test_star(5) con 3" in _seccion(rep, "Hueco sin ALCANCE declarado")
+
+
 # ── #342 · el `## Huecos` declara su alcance (la red barata contra la negativa falsa) ──
 HUECOS = "## Huecos\n\n- nadie da un criterio para elegir $n$.\n- ICASSO no aparece en ninguna fuente.\n"
 

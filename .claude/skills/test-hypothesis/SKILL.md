@@ -48,6 +48,8 @@ padre-hijo de un hub/radio.
    ls vault/raw/fulltext/<slug>/*.txt | wc -l        # papers del slug (repetir por slug del alcance)
    ```
 
+   De un slug mirado en parte: `slug(N)` (`tau_ceti(4)`); el lint suma N, no todo el slug (#579).
+
    **Y el alcance CRECE.** Sumar un tema deja el veredicto testeado contra un universo que ya no es
    el vigente — misma familia de staleness que los pares de verificación. El lint compara el alcance
    declarado contra el corpus de esos directorios y marca la hipótesis si quedó corta; cerrarlo es

@@ -396,15 +396,22 @@ def _rewrite_note_pointers(nota: Path, viejo: str, nuevo: str) -> None:
                 cfg.write_text_atomic(f, n)
 
 
-_ALCANCE_RX = {campo: re.compile(rf"({campo}:[ \t]*\[)([^\]\n]*)(\])") for campo in ("temas", "estrellas")}
+#: The list may span two lines of the blockquote (#579): `[^\]]` crosses the newline, and
+#: `_rename_scope_list` compares each item without its `>` and its `(N)`.
+_ALCANCE_RX = {campo: re.compile(rf"({campo}:[ \t]*\[)([^\]]*)(\])") for campo in ("temas", "estrellas")}
 
 
-def _rename_in_flow_list(m: re.Match, viejo: str, nuevo: str) -> str:
-    """`temas: [a, viejo, b]` → `[a, nuevo, b]`: the slug as an ELEMENT, never as a substring."""
-    items = [x.strip() for x in m.group(2).split(",")]
-    if viejo not in items:
-        return m.group(0)
-    return m.group(1) + ", ".join(nuevo if x == viejo else x for x in items) + m.group(3)
+def _rename_scope_list(m: re.Match, viejo: str, nuevo: str) -> str:
+    """`[a, viejo(15),\n> b]` → `[a, nuevo(15),\n> b]`: the slug as an ELEMENT (`cfg.scope_item`,
+    #579), never as a substring, keeping the `(N)` of a declared subset and the layout of the list
+    untouched. Also renames the flow-style `refuta: [...]` items (#212)."""
+    items = m.group(2).split(",")
+    out = []
+    for raw in items:
+        if cfg.scope_item(re.sub(r"(?m)^[ \t]*>[ \t]?", "", raw))[0] == viejo:
+            raw = re.sub(rf"(?<![\w-]){re.escape(viejo)}(?![\w-])", nuevo, raw, count=1)
+        out.append(raw)
+    return m.group(1) + ",".join(out) + m.group(3)
 
 
 def _rename_refuta(head: str, viejo: str, nuevo: str) -> str:
@@ -420,7 +427,7 @@ def _rename_refuta(head: str, viejo: str, nuevo: str) -> str:
         if m:
             if m.group(2).startswith("["):
                 ln = re.sub(r"(refuta:[ \t]*\[)([^\]\n]*)(\])",
-                            lambda mm: _rename_in_flow_list(mm, viejo, nuevo), ln)
+                            lambda mm: _rename_scope_list(mm, viejo, nuevo), ln)
             elif not m.group(2):
                 dentro = len(m.group(1))
         out.append(ln)
@@ -469,7 +476,7 @@ def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[lis
         for rx, rep in body_reps:
             body = rx.sub(rep, body)
         body = _ALCANCE_RX["temas" if theme else "estrellas"].sub(
-            lambda m: _rename_in_flow_list(m, viejo, nuevo), body)
+            lambda m: _rename_scope_list(m, viejo, nuevo), body)
         n = head + body
         if n == t:
             continue

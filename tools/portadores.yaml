@@ -3462,3 +3462,19 @@ portadores:
         estado: usa
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
+
+  # ── #579 ──
+  - issue: 579
+    regla: >-
+      El alcance de una afirmación negativa (D-34, #342) se lee sin el `>` de cada renglón del
+      blockquote, y cada item de su lista es `slug` (el directorio entero) o `slug(N)` (N papers de
+      ese slug); quien lee o reescribe la lista compara el item por el mismo parser.
+    funcion: lib_config.scope_item
+    patron: 'ALCANCE_SLUGS_RE|_ALCANCE_RX|ALCANCE_RE\b'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`alcance_declarado` y `scope_wikilinks` recortan el bloque con `_scope_block` (sin `>`); `corpus_vigente`/`scope_state` suman el N de `slug(N)`."
+      - modulo: scripts/entity.py
+        estado: usa
+        motivo: "`_rename_scope_list` renombra el slug como elemento de la lista, conservando `(N)` y el `>` de una lista en dos renglones."
