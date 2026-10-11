@@ -4479,3 +4479,17 @@ Worktrees desechables de Almagesto-Tesis: HEAD (`976e38f6`, post-audit de harps-
   de la nota apuntan a una vista fechada. El `633A..76C` del issue no es caso de (2): su motivo no
   invoca ninguna lectura. Techo declarado: un sujeto escrito por su slug (`hd_41248` por
   `HD 41248`) o un motivo redactado de otra forma no se ve.
+
+## Paper leído fuera del registro del sujeto (v1.387.0, #582)
+
+Dos worktrees desechables de Almagesto-Tesis con los scripts del template: `976e38f6` (padre de
+`b1b5ec93`, la curación a mano de harps-drs) y HEAD `e5fa8e60`; bóveda entera, 18 sujetos.
+**Recall 3/3**: en `976e38f6` `harps-drs` lista `2021A&A...653A..43C`, `2023A&A...678A...2C` y
+`2023arXiv231206586B` entre sus 9; en HEAD los tres ya no salen (6 restantes). **Población en HEAD:**
+41 pares (paper, sujeto) en 8 temas, 0 estrellas, 0 no evaluados; los 41 tienen vista fechada del
+sujeto y faltan en su registro, o sea que cumplen la regla (0 FP contra la definición). Los 41 tienen
+decisión de curación en **otro** sujeto (casi todos `sources:`/`extra_core` del hub `ica` leídos
+desde un radio, o papers de las estrellas leídos desde `rv-doppler`/`harps-drs`): la regla es por
+sujeto (#111), y que valga la del vecino lo decide el usuario. La cabecera `> _Estado — …_` cambia en
+esos 8 temas («N leídos fuera del registro»), así que `estado_desfasado` sale 8 hasta re-estampar.
+Lint completo sobre HEAD: rc 0, ~2 min. En el corpus sembrado del golden: 0.

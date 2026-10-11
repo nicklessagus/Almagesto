@@ -237,3 +237,34 @@ import re  # noqa: E402  (kept down here so the lines the invariant map cites do
 PROMPT_ARCHAEOLOGY_RE = re.compile(
     r"[Mm]edido (?:el \d{4}-\d{2}-\d{2}|sobre \d+)|[Mm]edido: \d+|precisión \*{0,2}\d+/\d+"
     r"|\ben \d+\.\d+\.\d+\b")
+
+
+def seed_outside_registry() -> dict:
+    """#582 — a theme `drs` and a star `s` whose registro covers every curation rail (search
+    `bibcodes`, `extra_core`, `sources:`, `decisiones`, a preprint alias in `versions[]`), plus the
+    papers that test each rail. Returns the `{stem: fm}` index; the two papers READ for a subject
+    and covered by no rail are `2023C` (theme, by `thesis_links`) and `2026S` (star, by `stars`)."""
+    def vista(s, tipo="theme", fecha="2026-10-01"):
+        return [{"sujeto": s, "tipo": tipo, **({"fecha": fecha} if fecha else {})}]
+    write_yaml(cfg.STARS_YAML, {"Estrella S": {"slug": "s"}})
+    write_yaml(cfg.THEMES_YAML, {"drs": {
+        "title": "DRS", "concept": "drs", "area": "methods",
+        "extra_core": [{"bibcode": "2020A", "via": "usuario", "motivo": "m"}],
+        "sources": [{"key": "2019Loc", "via": "usuario", "motivo": "m"}]}})
+    cfg.save_registro("drs", {"slug": "drs", "busquedas": [
+        {"fecha": "2026-10-01", "n_total": 2, "n_core": 2, "bibcodes": ["2020A", "2021B"]}],
+        "decisiones": {"2018D": {"decision": "descartado", "motivo": "m", "origen": "sujeto"}}})
+    mk_note(cfg.CONCEPTS / "methods", "drs", {"tags": ["methods"]}, "# drs\n")
+    base = {"tags": ["paper"], "thesis_links": ["drs"], "methods": ["x"]}
+    return {
+        "2020A": {**base, "vistas": vista("drs")},                         # extra_core
+        "2021B": {**base, "vistas": vista("drs")},                         # search
+        "2019Loc": {**base, "vistas": vista("drs")},                       # sources
+        "2018D": {**base, "vistas": vista("drs")},                         # decision
+        "2022P": {**base, "versions": ["2021B"], "vistas": vista("drs")},  # preprint alias
+        "2023C": {**base, "vistas": vista("drs")},                         # retro-link: THE case
+        "2024E": {**base, "vistas": vista("drs", fecha=None)},             # claimed, not read
+        "2025F": {**base, "vistas": vista("otro")},                        # read for another one
+        "2026S": {"tags": ["paper"], "stars": ["Estrella S"], "methods": ["x"],
+                  "vistas": vista("Estrella S", tipo="star")},
+    }

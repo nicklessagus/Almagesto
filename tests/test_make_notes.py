@@ -6557,3 +6557,25 @@ def test_574_el_rollup_de_TEMA_reconoce_la_vista_por_el_nombre_del_concepto(toy_
                                   "vistas": [{"sujeto": "ica", "tipo": "theme",
                                               "fecha": "2026-01-01"}]}, "")
     assert [r["estado"] for r in mn.papers_universe("ica-x", "theme")] == [mn.ESTADO_SINTETIZADO]
+
+
+def test_582_outside_registry_y_la_cabecera_cuentan_lo_leido_que_ningun_registro_cubre(toy_vault):
+    """#582 — un paper con vista FECHADA del sujeto que no está en búsquedas ∪ `extra_core` ∪
+    `sources:` ∪ `decisiones` (ni por su alias de `versions[]`) entró por retro-link sin decisión de
+    curación; la cabecera lo cuenta al lado de «N acumulados». Mismo código para estrella y tema."""
+    from conftest import seed_outside_registry
+    fms = seed_outside_registry()
+    assert mn.outside_registry("drs", "theme", fms) == ["2023C"]
+    assert mn.outside_registry("s", "star", fms) == ["2026S"]
+    dest = mn.subject_note("drs", "theme")
+    assert "1 leídos fuera del registro" in mn.estado_line("drs", dest, fms)
+    sin = {k: v for k, v in fms.items() if k != "2023C"}
+    assert mn.outside_registry("drs", "theme", sin) == []
+    assert "fuera del registro" not in mn.estado_line("drs", dest, sin)
+    roto = {**fms, "2023C": {**fms["2023C"], "vistas": ["drs"]}}   # forma inválida: la reporta otro
+    assert mn.outside_registry("drs", "theme", roto) == []
+    cfg.save_registro("drs", {"slug": "drs", "busquedas": [{"fecha": "2026-10-01", "n_total": 5}]})
+    assert mn.outside_registry("drs", "theme", fms) is None
+    assert "fuera del registro" not in mn.estado_line("drs", dest, fms)
+    # sin candidatos no hay nada que decidir: el registro viejo no se vuelve «no evaluado»
+    assert mn.outside_registry("drs", "theme", {"2020A": fms["2020A"]}) == []

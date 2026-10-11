@@ -3364,6 +3364,31 @@ def check_theme_pairs(paper_fms: dict, sujetos=None) -> tuple:
     return sin_decidir, cola, no_evaluados
 
 
+def check_outside_registry(paper_fms: dict, sujetos=None) -> tuple:
+    """`(filas, no_evaluados)` — a paper READ for a subject (dated view) that no curation record
+    of that subject covers (#582, #111/INV-24). One row per subject, naming the bibcodes, with the
+    `extra_core` snippet `triage.py` prints (`cfg.extra_core_snippet`): the `motivo` is the user's."""
+    filas: list = []
+    no_evaluados: list = []
+    for kind, slug, _nombre, _meta in (cfg.all_subjects() if sujetos is None else sujetos):
+        try:
+            fuera = mn.outside_registry(slug, kind, paper_fms)
+        except (Exception, SystemExit) as _exc:     # noqa: BLE001 — D-43: declared, not a zero
+            no_evaluados.append((f"papers leídos fuera del registro de `{slug}` (#582)",
+                                 f"{_exc.__class__.__name__}: {_exc}"))
+            continue
+        if fuera is None:
+            no_evaluados.append((f"papers leídos fuera del registro de `{slug}` (#582)",
+                                 "una búsqueda del registro no guardó sus `bibcodes`"))
+        elif fuera:
+            snippet = cfg.extra_core_snippet([{"bibcode": b} for b in fuera], via="usuario")
+            filas.append((slug, f"{len(fuera)} paper(s) con vista de `{slug}` que entraron por "
+                                f"retro-link y no tienen decisión de curación: {', '.join(fuera)} → "
+                                f"pegá en su entrada de la config, con el motivo (o "
+                                f"`triage.py {slug} --drop-core … --reason`):\n{snippet}"))
+    return filas, no_evaluados
+
+
 def check_dangling_thesis(thesis_refs: dict, dangling) -> list:
     """`dangling_thesis` — a `thesis_links` naming no note (BLOQUEANTE).
 
@@ -4789,7 +4814,7 @@ def check_note_disputes(stem: str, fm: dict, sources_for) -> tuple:
     return bad_disputes, dispute_refs, cita_no_verbatim, cita_opaca
 
 
-def check_state_header(stem: str, f, text: str, slug_ent) -> list:
+def check_state_header(stem: str, f, text: str, slug_ent, fms: dict | None = None) -> list:
     """`estado_desfasado` — the `> _Estado — …_` header against the truth on disk (D-12/INV-82).
 
     Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
@@ -4799,7 +4824,7 @@ def check_state_header(stem: str, f, text: str, slug_ent) -> list:
     estado_desfasado: list = []
     if slug_ent and GENERATOR_LINE in text:
         try:
-            _quiere = mn.estado_line(slug_ent, Path(f))
+            _quiere = mn.estado_line(slug_ent, Path(f), fms)
         except Exception:                             # noqa: BLE001 — un registro roto ya se reporta
             _quiere = ""
         _hay = next((l for l in text.split("\n") if l.startswith(ESTADO_PREFIJO)), "")
@@ -7130,8 +7155,6 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
                           split_reviewed_warn(stem, fm, body_full, _offset,
                                               warn_hits(stem, body_full, _offset, _il, f))):
         add(key, items)
-    # #233 — la cabecera `> _Estado — …_` que la nota PUBLICA contra la que el estampador daría hoy.
-    add("estado_desfasado", check_state_header(stem, f, text, _entity_slug(f)))
     # #69 — ficha/concepto sin la línea del generador: los estampadores de cabecera no-opean.
     add("headerless", check_headerless(stem, f, text))
     add("old_disputes", check_legacy_disputes(stem, fm))
@@ -7347,6 +7370,12 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         for key, items in check_note(stem, f, text, fm, sweep).items():
             found[key] += items
 
+    # #233 — la cabecera `> _Estado — …_` que la nota PUBLICA contra la que el estampador daría hoy.
+    # Después del loop (#582): la línea cuenta los papers leídos fuera del registro, y eso pide el
+    # índice de `papers/` entero, que recién acá está completo.
+    for f_, t_ in anchor_bodies.items():
+        found["estado_desfasado"] += check_state_header(basename(f_)[:-3], f_, t_,
+                                                        _entity_slug(f_), paper_fms)
     stale, _st_no_eval, stale_evaluable = check_stale_verification(sweep.verif_blocks)
     found["not_evaluated"] += _st_no_eval
     found["stale_verif"] += stale
@@ -7400,6 +7429,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["par_tema_sin_decidir"], found["cola_tema"], _tp_no_eval = check_theme_pairs(paper_fms,
                                                                                         _sujetos)
     found["not_evaluated"] += _tp_no_eval
+    found["fuera_del_registro"], _fr_no_eval = check_outside_registry(paper_fms, _sujetos)   # #582
+    found["not_evaluated"] += _fr_no_eval
     _us, _us_no_eval = check_unsynthesized_by_subject(
         paper_fms, {stem for stem, _m in found["unsynthesized"]}, _sujetos)
     found["unsynthesized"] += _us
@@ -7567,6 +7598,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('cita_inventada', '❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318, BLOQUEA con `--cierre`)', SEV_CIERRE, tuple(found['cita_inventada']), poblacion='citas'),
         Categoria('par_tema_sin_decidir', '🧭 Par (paper, tema) que llegó por `methods` desde otro sujeto y nadie decidió: `no_sintetizado` o `cola_tema` (#558' + (', BLOQUEA: modo --cierre)' if cierre else ', backlog; con `--cierre` bloquea)'), SEV_CIERRE, tuple(found['par_tema_sin_decidir']), poblacion='papers'),
         Categoria('no_sintetizado_citado', '🔀 `no_sintetizado[X]` declarado y la nota de X cita el paper: la escotilla contradice la prosa (#574, backlog)', SEV_BACKLOG, tuple(found['no_sintetizado_citado']), poblacion='papers'),
+        Categoria('fuera_del_registro', '📥 Paper con vista del sujeto fuera del universo de su registro (entró por retro-link, sin decisión de curación): `extra_core` con motivo o `--drop-core` (#582, backlog)', SEV_BACKLOG, tuple(found['fuera_del_registro']), poblacion='registros'),
         Categoria('cola_tema', '⏳ Par (paper, tema) EN COLA del tema, declarado y fechado — deuda con dueño (#558, backlog)', SEV_BACKLOG, tuple(found['cola_tema']), poblacion='papers'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(found['cita_no_verbatim']), poblacion='citas'),
         Categoria('cita_txt_degradado', '❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog)', SEV_BACKLOG, tuple(found['cita_txt_degradado']), poblacion='citas'),

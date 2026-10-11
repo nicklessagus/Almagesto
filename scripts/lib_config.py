@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.386.0"
+ALMAGESTO_VERSION = "1.387.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -5066,6 +5066,28 @@ def universo_acumulado(slug: str) -> int:
             vistos.update(bibs)
         tope = max(tope, int(b.get("n_total") or 0))
     return max(len(vistos), tope)
+
+
+def registro_universe(slug: str, meta: dict) -> tuple[set, bool]:
+    """Every key a curation record of this subject covers (#582): the bibcodes of all its searches
+    (D-28) ∪ `extra_core` ∪ the `sources:` keys (raw and as note stem) ∪ the keys of `decisiones`.
+
+    A paper outside this set entered the subject's roll-up by retro-link (`stars`/`thesis_links`
+    add-only) and has no decision on record — #111/INV-24 promise one. `(keys, complete)`:
+    `complete` is False when a search with papers did not store its `bibcodes`, so a paper outside
+    `keys` may still be covered — the caller declares that case not evaluated (D-43), never a hit."""
+    out: set = set()
+    completo = True
+    for b in load_busquedas(slug):
+        bibs = as_list(b.get("bibcodes"))
+        completo = completo and bool(bibs or not int(b.get("n_total") or 0))
+        out.update(str(x) for x in bibs)
+    out.update(str(x["bibcode"]) for x in load_extra_core(as_map(meta), entry=slug))
+    for s in as_list(as_map(meta).get("sources")):
+        if k := str(as_map(s).get("key") or "").strip():
+            out.update({k, note_stem(k)})
+    out.update(str(k) for k in as_map(load_registro(slug).get("decisiones")))
+    return out, completo
 
 
 def save_barrido(slug: str, barrido: dict) -> None:

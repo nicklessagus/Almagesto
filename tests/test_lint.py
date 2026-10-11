@@ -11810,3 +11810,19 @@ def test_581_no_vista_con_vista_fechada_del_mismo_sujeto_bloquea(toy_vault, caps
     r = lint.collect()
     assert any("FECHADA" in d for _s, d in r.por_clave("fm_broken").items)
     assert "fm_broken" in [c.clave for c in r.bloquean()]
+
+
+
+def test_582_lint_reporta_el_paper_leido_fuera_del_registro_con_el_snippet_de_triage(toy_vault):
+    """#582 — backlog por sujeto, nombrando los bibcodes, con el `extra_core` de `triage.py`
+    (`cfg.extra_core_snippet`); el registro que no deja enumerar su universo sale no evaluado."""
+    from conftest import seed_outside_registry
+    fms = seed_outside_registry()
+    filas, ne = lint.check_outside_registry(fms)
+    assert ne == [] and sorted(s for s, _m in filas) == ["drs", "s"], filas
+    assert "extra_core:\n  - bibcode: 2023C\n    via: usuario" in dict(filas)["drs"]
+    assert "2026S" in dict(filas)["s"]
+    cfg.save_registro("drs", {"slug": "drs", "busquedas": [{"fecha": "2026-10-01", "n_total": 5}]})
+    filas, ne = lint.check_outside_registry(fms)
+    assert "drs" not in dict(filas) and ne and "`drs`" in ne[0][0]
+    assert lint.collect().por_clave("fuera_del_registro").severidad == lint.SEV_BACKLOG

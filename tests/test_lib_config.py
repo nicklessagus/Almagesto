@@ -4258,3 +4258,17 @@ def test_581_no_vista_y_vista_FECHADA_del_mismo_sujeto_es_error_de_forma(toy_vau
         {"sujeto": "ica", "tipo": "theme"},
         {"sujeto": "indicadores-actividad", "tipo": "theme", "fecha": "2026-10-01"}]},
         entry="X") == nv
+
+
+def test_582_registro_universe_es_la_union_de_los_cuatro_carriles(toy_vault):
+    """#582 — búsquedas ∪ `extra_core` ∪ `sources:` (clave y stem) ∪ `decisiones`; si una
+    búsqueda con papers no guardó sus `bibcodes` el universo sale incompleto (D-43: no se adivina)."""
+    from conftest import seed_outside_registry
+    seed_outside_registry()
+    meta = cfg.theme_by_slug("drs")[1]
+    assert cfg.registro_universe("drs", meta) == ({"2020A", "2021B", "2019Loc", "2018D"}, True)
+    cfg.save_registro("drs", {"slug": "drs", "busquedas": [{"fecha": "x", "n_total": 0}]})
+    assert cfg.registro_universe("drs", meta) == ({"2020A", "2019Loc"}, True)
+    cfg.save_registro("drs", {"slug": "drs", "busquedas": [{"fecha": "x", "n_total": 5},
+                                                          {"fecha": "y", "bibcodes": ["2021B"]}]})
+    assert cfg.registro_universe("drs", meta) == ({"2020A", "2019Loc", "2021B"}, False)

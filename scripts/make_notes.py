@@ -3062,6 +3062,34 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
     return sorted(filas, key=lambda r: r["stem"])
 
 
+def outside_registry(slug: str, kind: str, fms: dict | None = None) -> list | None:
+    """Stems READ for this subject (a dated view of it) that no curation record covers (#582).
+
+    The retro-link (`stars`/`thesis_links` add-only, the retro-tag of `ingest-theme`) brings a
+    paper into the roll-up without the query, `extra_core` or `sources:`, so the registro and the
+    header's «N acumulados» publish a universe that does not hold it — and #111/INV-24 promise a
+    decision for every paper the subject keeps. A preprint alias in `versions[]` counts as the
+    paper. Same code for stars and themes. `None` = not evaluable: some paper is a candidate and a
+    search of the registro did not keep its `bibcodes` (`cfg.registro_universe`)."""
+    meta = cfg.star_by_slug(slug)[1] if kind == "star" else cfg.theme_by_slug(slug)[1]
+    universo, completo = cfg.registro_universe(slug, meta)
+    nombre = cfg.star_by_slug(slug)[0] if kind == "star" else slug
+    sujetos = {slug, str(nombre), str(cfg.as_map(meta).get("concept") or slug)}
+    out = []
+    for stem, fm in _papers_del_sujeto(slug, kind, fms):
+        if stem in universo or {str(v) for v in cfg.as_list(fm.get("versions"))} & universo:
+            continue
+        try:
+            vistas = cfg.load_vistas(fm, entry=stem)
+        except cfg.VistasError:                    # the lint reports the malformed field itself
+            continue
+        if any(v.get("fecha") and v["sujeto"] in sujetos for v in vistas):
+            out.append(stem)
+    # Candidates against an incomplete universe may be covered by the search that lost its list:
+    # not evaluable. With no candidate there is nothing to decide, and old registros stay quiet.
+    return None if out and not completo else sorted(out)
+
+
 def _concept_dest(slug: str):
     """La nota del concepto de un tema, por su `area`/`concept` de themes.yaml."""
     try:
@@ -4211,13 +4239,14 @@ def stamp_ground_truth_line(slug: str, dest) -> bool:
 ESTADO_LINE_RE = re.compile(r"^> _Estado.*\n", re.M)
 
 
-def estado_line(slug: str, dest) -> str:
+def estado_line(slug: str, dest, fms: dict | None = None) -> str:
     """La línea de estado de la cabecera: **búsqueda · síntesis · verificación** (INV-82). `""` si
     no hay ninguna.  @inv INV-82
 
     Las tres avanzan por separado y pueden divergir sin que ninguna mienta: refrescar el corpus
     mueve la de búsqueda y **no** la de síntesis, que es exactamente lo que hace legible que la
-    prosa sea más vieja que el universo que la ficha declara."""
+    prosa sea más vieja que el universo que la ficha declara. `fms` = the paper index, when the
+    caller already parsed it (the lint: `test_escala`)."""
     bs = cfg.load_busquedas(slug)
     b = bs[-1] if bs else {}
     partes = []
@@ -4252,6 +4281,15 @@ def estado_line(slug: str, dest) -> str:
             partes.append("⚠ truncada")
         if b.get("escotillas"):
             partes.append(f"escotillas {' '.join(b['escotillas'])}")
+    # #582 — the papers READ for this subject that entered by retro-link: without the count, «N
+    # acumulados» reads as the corpus behind the note, and those papers are not in it.
+    try:
+        fuera = outside_registry(slug, "star" if Path(dest).parent.name == cfg.STARS.name
+                                 else "theme", fms)
+    except (KeyError, SystemExit):              # undeclared subject / broken config: reported apart
+        fuera = None
+    if fuera:
+        partes.append(f"{len(fuera)} leídos fuera del registro")
     sint = cfg.as_map(cfg.load_registro(slug).get("sintesis"))
     if sint.get("fecha"):
         # La declara el agente al cerrar la síntesis (`triage.py --sintesis`): no se puede derivar

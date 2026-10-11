@@ -296,6 +296,9 @@
 ## 🔀 `no_sintetizado[X]` declarado y la nota de X cita el paper: la escotilla contradice la prosa (#574, backlog) (0)
 > sobre 60 notas de `papers/`
 
+## 📥 Paper con vista del sujeto fuera del universo de su registro (entró por retro-link, sin decisión de curación): `extra_core` con motivo o `--drop-core` (#582, backlog) (0)
+> sobre 3 registros de sujeto
+
 ## ⏳ Par (paper, tema) EN COLA del tema, declarado y fechado — deuda con dueño (#558, backlog) (0)
 > sobre 60 notas de `papers/`
 

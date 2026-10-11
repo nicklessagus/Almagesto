@@ -3430,3 +3430,19 @@ portadores:
       - modulo: scripts/triage.py
         estado: fuera-de-alcance
         motivo: "Lo preserva como clave curada al re-crear una nota (`CURATED_KEYS`); no escribe vistas."
+
+  # ── #582 ──
+  - issue: 582
+    regla: >-
+      El universo de curación de un sujeto es la unión de sus búsquedas, `extra_core`, `sources:`
+      y `decisiones` (#111/INV-24); un paper con vista fechada del sujeto fuera de ese universo
+      entró por retro-link sin decisión, y la cabecera y el lint lo cuentan con la misma función.
+    funcion: lib_config.registro_universe
+    patron: 'registro_universe|outside_registry'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`outside_registry`, el único predicado: lo usan `estado_line` (cabecera) y el lint."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "`check_outside_registry` y `check_state_header` pasan por `make_notes.outside_registry`/`estado_line`; no arma el universo."

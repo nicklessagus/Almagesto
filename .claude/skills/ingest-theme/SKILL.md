@@ -223,8 +223,8 @@ Progreso del ingest del tema <tema>:
    **El retro-tag no escribe vistas, y es a propósito (#188).** Tagear es declarar un
    **reclamo**: nadie leyó ese paper desde este tema todavía. El lint lo reporta como *reclamado sin
    vista* (backlog) — hacé la vista (`extraction_prompt.py <slug> <bibcode> --theme` + cosecha) o
-   declarala con `no_vista: [{sujeto, motivo}]` si el paper sólo aporta al roll-up. Es justo la
-   población medida: **141 de 908** notas retro-linkeadas sin una segunda lectura.
+   declarala con `no_vista: [{sujeto, motivo}]` si el paper sólo aporta al roll-up. Leerlo
+   no lo mete al registro: va a `extra_core` con motivo (`fuera_del_registro`, #582).
    **Alias sueltos y cortos, nunca frases** (#44, convención canónica en `verify-citations`): el
    `.txt` entrelaza dos columnas en la misma línea física (73% del corpus) → un alias multi-palabra
    (`"gaussian process regression"`) puede no matchear aunque el paper lo use. Probar la raíz corta
