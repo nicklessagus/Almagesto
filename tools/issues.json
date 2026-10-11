@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-10",
+ "fetched": "2026-10-11",
  "issues": [
   {
    "number": 2,
@@ -2884,6 +2884,21 @@
   {
    "number": 579,
    "title": "El alcance de `## Huecos` no puede declarar un subconjunto de un slug (58 declarados contra 164 contados), y una lista partida en dos renglones lee «> kapteyn» como slug",
+   "state": "OPEN"
+  },
+  {
+   "number": 580,
+   "title": "La clase de la condición (`acota`/`contextualiza`) no tiene red: una `acota` mal clasificada queda enterrada en el hermano (6 de 116 en la instancia)",
+   "state": "OPEN"
+  },
+  {
+   "number": 581,
+   "title": "Vista y `no_vista` del mismo sujeto conviven en una nota, y un `no_vista` puede justificarse con una lectura que no existe",
+   "state": "OPEN"
+  },
+  {
+   "number": 582,
+   "title": "Los papers que entran a un tema por retro-link no dejan decisión de curación: el registro y la cabecera publican un universo que no los incluye",
    "state": "OPEN"
   }
  ]
