@@ -821,6 +821,39 @@ preprint …»*). Si la equivocada es el **campo** —prosa que dice «versión 
 `pdf_source: eprint`— el arreglo es `replace_pdf.py <bib> --backfill --source publisher --reason
 "…"` (o `extract_fulltext.py <slug> --bibcode <bib>` si el testigo ya está firmado, #446).
 
+## 2aa · v1.381.0 → v1.389.0 (#574–#582) — escotillas, `Rol`, destino de la resolución, alcance
+
+En orden. Los pasos que **escriben** son 1, 2, 4 y 6; los demás son backlog del lint, y se
+resuelven con juicio:
+
+1. **Roll-ups (#574).** Re-estampá cada sujeto (`python scripts/make_notes.py <slug>` y, para un
+   tema, `--theme`). Aparece el estado `sintetizado sin vista del sujeto`, y una vista fechada
+   cuenta como lectura aunque `methods` esté vacío. El lint suma `no_sintetizado_citado`: hay que
+   sacar la escotilla o la cita.
+2. **Cabecera de temas (#582).** El mismo re-estampado publica «N leídos fuera del registro». El
+   lint suma `fuera_del_registro`: para cada paper, `extra_core` con motivo o `triage.py --drop-core`.
+   La cobertura es **por sujeto**: la decisión registrada bajo otro sujeto no cuenta.
+3. **`Rol` de Régimen (#575).** El lint suma `rol_regimen`: la fila o el `role` del paper está mal.
+   La tilde no cuenta como discrepancia.
+4. **Destino de la `acota` resuelta (#576).** Corré `python scripts/write_verif_sidecar.py
+   --migrate-condition-destination --todo` (primero con `--dry-run`, que no escribe). Lo que no
+   mapea queda listado: re-declaralo con `--resolver <ancla>:<bibcode>=bloque|regimen`,
+   que conserva el texto viejo como detalle. El lint suma `cond_destino`.
+5. **Sub-secciones de verificación (#577).** `verif_estructura` ahora reporta la prosa que no cierra
+   como frase. Reescribí esa sub-sección entera desde la tabla del hermano.
+6. **Alcance (#579).** Un alcance cuyo corpus real es parte de un slug se declara `slug(N)`; sin
+   eso, el lint acusa un falso «quedó corto». La lista partida en dos renglones ya no fabrica
+   slugs.
+7. **`vista` fechada + `no_vista` del mismo sujeto (#581)** bloquea (`fm_broken`): sacá el
+   `no_vista`, porque la lectura existe. El lint suma `no_vista_lectura_ausente`, para el motivo
+   que invoca una lectura que no está.
+8. **Clase de la condición (#580)**, opcional: `verify_fanout.py <nota> --segunda-clase` propone
+   `acota`. ⛔ Cada propuesta se adjudica **contra el PDF** antes de firmar `--reclasificar`
+   (medido: 20 de 31 correctas).
+
+`apply_fixes` (#578) inserta filas (`despues_de` + `nuevo`) y mueve bloques (`mover`). No hay nada
+que migrar.
+
 ## 3 · Cierre
 
 ```bash
