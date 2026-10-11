@@ -674,6 +674,45 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
     return {"resueltas": len(cambios), **_rewrite_rows(note, cambios, fecha, dry_run)}
 
 
+def reclassify_conditions(note: Path, specs: list, fecha: str | None = None,
+                          dry_run: bool = False) -> dict:
+    """Turn the `contextualiza` in force at each address into an `acota` (#580). Returns counts.
+
+    The write half of the class's second opinion: `verify_fanout.py --segunda-clase` asks a judge
+    that never saw the class, and its `acota` answers are PROPOSALS — the operator signs the ones
+    that hold and they land here. The new class is CHAINED (`contextualiza: X ⟂ acota: X`, #451),
+    never overwritten: the first judge's call stays as a trace. Re-running is a no-op (the link in
+    force is already `acota`); an address with no `contextualiza` and no `acota` is refused naming
+    what it found, because there is nothing to reclassify. Writes through `_rewrite_rows`, so the
+    block keeps its date (D-4): nothing was re-verified."""
+    filas = lb.verif_rows(note) or []
+    cambios: dict = {}
+    for spec in specs:
+        ancla, bib = _split_address(spec)
+        candidatas = lb.rows_addressed(filas, ancla, bib)
+        if not candidatas:
+            raise SidecarError(f"la dirección {spec} no está en la tabla de {note.name} — "
+                               f"re-anclá primero (`python scripts/reverify_subset.py {note}`)")
+        ctx = [f for f in candidatas if lb.condition_kind(f.condition) == "contextualiza"]
+        if len(ctx) > 1:
+            raise SidecarError(f"el ancla {ancla} tiene {len(ctx)} filas `contextualiza`: "
+                               f"desambiguá con `{ancla}:<bibcode>` — "
+                               + ", ".join(f.bibcode for f in ctx))
+        if not ctx:
+            if any(lb.condition_kind(f.condition) == "acota" for f in candidatas):
+                continue                          # ya es `acota`: no-op (idempotente)
+            raise SidecarError(f"ninguna fila de {spec} tiene condición `contextualiza` ni "
+                               f"`acota`: no hay clase que cambiar")
+        fila = ctx[0]
+        # sin chequeo del lector a la salida, a propósito: `condition_text` ya viene del eslabón
+        # vigente, sin `⟂` adentro, así que el último eslabón es siempre este `acota:` (#319).
+        cambios[lb.row_key(fila)] = (f"{fila.condition}{lb.COND_CHAIN_SEP}"
+                                     f"acota: {lb.condition_text(fila.condition)}")
+    if not cambios:
+        return {"reclasificadas": 0, "filas": len(filas)}
+    return {"reclasificadas": len(cambios), **_rewrite_rows(note, cambios, fecha, dry_run)}
+
+
 def _json_strings(v, path: str = ""):
     """`(path, string)` for every string inside an extraction JSON (#526: where the text lives)."""
     if isinstance(v, str):
@@ -917,7 +956,8 @@ def _parse_resoluciones(args) -> dict:
 
 
 def _main_condiciones(args) -> int:
-    """`--resolver` / `--resoluciones` / `--migrate-condition-prefix`: the `Condición` cell (#427).
+    """`--resolver` / `--resoluciones` / `--migrate-condition-prefix` / `--reclasificar` (#580):
+    the `Condición` cell (#427).
 
     The two write through `_rewrite_rows`, so they get the round-trip guard, the generated header
     and the triage guard for free; neither moves the block's date."""
@@ -939,6 +979,13 @@ def _main_condiciones(args) -> int:
             r = resolve_conditions(nota, resoluciones, fecha=args.fecha, dry_run=args.dry_run)
             cfg.print_seguro(f"{r['resueltas']} condición(es) `acota` marcada(s) resuelta(s) sobre "
                              f"{r.get('filas', 0)} fila(s)"
+                             + (" (dry-run: no se escribió)" if args.dry_run else ""))
+        if args.reclasificar:
+            r = reclassify_conditions(nota, args.reclasificar, fecha=args.fecha,
+                                      dry_run=args.dry_run)
+            cfg.print_seguro(f"{r['reclasificadas']} condición(es) `contextualiza` → `acota` "
+                             f"(#580) sobre {r.get('filas', 0)} fila(s) — ahora se resuelven "
+                             f"con `--resolver`"
                              + (" (dry-run: no se escribió)" if args.dry_run else ""))
     except SidecarError as exc:
         cfg.print_seguro(f"⛔ {exc}")
@@ -1043,6 +1090,10 @@ def main(argv=None) -> int:
                          "(`acota→resuelta: <dónde>`); repetible")
     ap.add_argument("--resoluciones", metavar="JSON", default=None,
                     help="#427: archivo JSON `{ancla: dónde}` — el mismo trabajo en lote")
+    ap.add_argument("--reclasificar", action="append", metavar="ANCLA[:BIBCODE]", default=None,
+                    help="#580: la `contextualiza` vigente de ese par pasa a `acota` (encadenada, "
+                         "no pisada) — la firma de una propuesta de `verify_fanout.py "
+                         "--segunda-clase`; repetible")
     ap.add_argument("--migrate-condition-prefix", action="store_true", dest="migrate_cond",
                     help="#427: colapsa la clase escrita DOS veces en la celda `Condición`")
     ap.add_argument("--restamp-section", action="store_true", dest="restamp",
@@ -1091,13 +1142,13 @@ def main(argv=None) -> int:
         return _main_migrate_chain(args)
     if args.reanclar:
         return _main_reanclar(args)
-    if args.resolver or args.resoluciones or args.migrate_cond:
+    if args.resolver or args.resoluciones or args.migrate_cond or args.reclasificar:
         return _main_condiciones(args)
     if not args.nota or not args.fanout:
         # AUD-534 — el mensaje nombra TODOS los modos, no los dos que había cuando se escribió
         cfg.print_seguro("⛔ hace falta la nota y `--from <dir>`, o uno de los otros modos: "
                          "`--restamp-section`, `--reanclar`, `--resolver`/`--resoluciones`, "
-                         "`--migrate-condition-prefix`, `--migrate-verdict-chain`, "
+                         "`--migrate-condition-prefix`, `--reclasificar`, `--migrate-verdict-chain`, "
                          "`--refutar-extraccion` (`--help` los describe)")
         return 2
     nota, fanouts = Path(args.nota), [Path(x) for x in args.fanout]

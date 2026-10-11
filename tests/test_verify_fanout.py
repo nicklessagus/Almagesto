@@ -145,3 +145,61 @@ def test_la_regex_de_arqueologia_caza_lo_que_declara():
                   "precisión **12/15", "cambió en 1.39.0"):
         assert R.search(forma), forma
     assert not R.search("p. 3 de 12"), "un «N de M» pelado es un localizador"
+
+
+# ── #580 · segunda opinión sobre la clase de la condición ───────────────────────────────────────
+
+def _con_hermano(tmp_path, condiciones):
+    """La nota de arriba con su hermano: una fila por par, con la condición dada (en orden)."""
+    nota = _nota(tmp_path)
+    filas = [lb.Row(n=str(i), claim="x", bibcode=p.bibcode, verdict="soportada", anchor=p.anchor,
+                    source_hash="pdf:0123456789", condition=c, source_kind="pdf",
+                    evidence='"SECRETO-EVIDENCIA" (p. 4)')
+             for i, (p, c) in enumerate(zip(lb.pairs_of(NOTA), condiciones), 1)]
+    from lib_config import verif_sidecar
+    verif_sidecar(nota).write_text(lb.render_verif_sidecar(nota, lb.render_verif_table(filas)),
+                                   encoding="utf-8")
+    return nota
+
+
+def test_580_la_segunda_clase_muestra_SOLO_contextualiza_sin_veredicto_ni_clase(tmp_path):
+    """#580 — la clase la ponía el mismo juez que el veredicto y nadie la contrastaba. El segundo
+    juez ve afirmación + condición y NADA del primero: ni veredicto, ni evidencia, ni la clase."""
+    nota = _con_hermano(tmp_path, ["contextualiza: sólo para las F", "acota: SNR > 50", "—"])
+    out = tmp_path / "c1"
+    c = vf.write_class_round(nota, out)
+    assert c == {"items": 1, "contextualiza": 1, "sin_bloque": 0}
+    texto = (out / vf.CLASS_PROMPT).read_text(encoding="utf-8")
+    p0 = lb.pairs_of(NOTA)[0]
+    assert f"{p0.anchor}:{p0.bibcode}" in texto and "sólo para las F" in texto
+    assert "SNR > 50" not in texto, "sólo las `contextualiza`"
+    assert "contextualiza: sólo" not in texto and "SECRETO-EVIDENCIA" not in texto
+    assert "soportada" not in texto, "el veredicto no se muestra"
+    assert (out / vf.CLASS_OUT).as_posix() in texto
+
+
+def test_580_la_fila_sin_bloque_se_CUENTA_y_la_muestra_es_reproducible(tmp_path):
+    nota = _con_hermano(tmp_path, ["contextualiza: a", "contextualiza: b", "contextualiza: c"])
+    nota.write_text(NOTA.replace("34 días", "35 días"), encoding="utf-8")   # vence un bloque
+    c = vf.write_class_round(nota, tmp_path / "c1")
+    assert c["sin_bloque"] == 2 and c["items"] == 1, c
+    nota.write_text(NOTA, encoding="utf-8")
+    a = vf.write_class_round(nota, tmp_path / "a", muestra=2)
+    b = vf.write_class_round(nota, tmp_path / "b", muestra=2)
+    assert a["items"] == 2 and a["contextualiza"] == 3
+    leer = lambda d: (d / vf.CLASS_PROMPT).read_text(encoding="utf-8").replace(str(d), "")
+    assert leer(tmp_path / "a") == leer(tmp_path / "b")
+
+
+def test_580_la_CLI_de_segunda_clase(tmp_path):
+    from conftest import PROMPT_ARCHAEOLOGY_RE
+    nota = _con_hermano(tmp_path, ["contextualiza: sólo F", "—", "—"])
+    assert vf.main([str(nota), "--out", str(tmp_path / "c"), "--segunda-clase"]) == 0
+    assert not PROMPT_ARCHAEOLOGY_RE.findall((tmp_path / "c" / vf.CLASS_PROMPT).read_text())
+    (tmp_path / "v").mkdir()
+    vacia = _con_hermano(tmp_path / "v", ["—", "—", "—"])
+    assert vf.main([str(vacia), "--out", str(tmp_path / "v0"), "--segunda-clase"]) == 1
+    for malo in (["--muestra", "2"], ["--segunda-clase", "--muestra", "0"],
+                 ["--segunda-clase", "--fuentes", "2020A"]):
+        with pytest.raises(SystemExit):
+            vf.main([str(nota), "--out", str(tmp_path / "x"), *malo])

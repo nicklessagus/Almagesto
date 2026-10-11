@@ -1462,3 +1462,49 @@ def test_577_el_triage_con_HARD_WRAP_se_conserva_entero_y_converge(toy_vault):
     assert envuelto in t1, "el párrafo entero, con su wrap"
     ws.restamp_section(nota)
     assert nota.read_text(encoding="utf-8") == t1, "converge"
+
+
+# ── #580 · la clase de la condición tiene segunda opinión, y su firma la escribe este script ─────
+
+def test_580_reclasificar_ENCADENA_contextualiza_a_acota_sin_mover_la_fecha(toy_vault):
+    """#580 — una `acota` clasificada `contextualiza` salía del circuito de resolución. La firma de
+    la segunda opinión la vuelve `acota` ENCADENADA (#451: anota, no pisa), así que `--resolver` la
+    alcanza después; re-correrla es no-op, y la fecha del bloque no se mueve (D-4)."""
+    nota = _escena(toy_vault, _UN_BLOQUE_DOS_FUENTES)
+    d = _fanout_condiciones(toy_vault, nota, {"2020Pdf": ("sólo en las estrellas F", "contextualiza"),
+                                              "2019Txt": ("la muestra es de 12", "contextualiza")})
+    ws.write(nota, d, fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    with pytest.raises(ws.SidecarError, match="desambiguá"):
+        ws.reclassify_conditions(nota, [ancla])
+    assert ws.reclassify_conditions(nota, [f"{ancla}:2020Pdf"])["reclasificadas"] == 1
+    por_bib = {f.bibcode: f for f in lb.verif_rows(nota)}
+    celda = por_bib["2020Pdf"].condition
+    assert lb.condition_kind(celda) == "acota", celda
+    assert celda.startswith("contextualiza: sólo en las estrellas F"), "la clase vieja queda de rastro"
+    assert lb.condition_kind(por_bib["2019Txt"].condition) == "contextualiza", "el otro par no se toca"
+    assert "## Verificación de citas (2026-03-01)" in nota.read_text(encoding="utf-8")
+    assert ws.reclassify_conditions(nota, [f"{ancla}:2020Pdf"]) == {"reclasificadas": 0, "filas": 2}
+    assert ws.resolve_conditions(nota, {f"{ancla}:2020Pdf": "fila del régimen"})["resueltas"] == 1
+
+
+def test_580_reclasificar_REHUSA_la_direccion_ausente_y_la_fila_sin_clase(toy_vault):
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}), fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    with pytest.raises(ws.SidecarError, match="no está"):
+        ws.reclassify_conditions(nota, ["0" * 10])
+    with pytest.raises(ws.SidecarError, match="no hay clase que cambiar"):
+        ws.reclassify_conditions(nota, [ancla])
+
+
+def test_580_reclasificar_por_la_CLI_con_dry_run_no_escribe(toy_vault):
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}, condicion="sólo F", cond_tipo="contextualiza"),
+             fecha="2026-03-01")
+    ancla = lb.verif_rows(nota)[0].anchor
+    antes = cfg.verif_sidecar(nota).read_text(encoding="utf-8")
+    assert ws.main([str(nota), "--reclasificar", ancla, "--dry-run"]) == 0
+    assert cfg.verif_sidecar(nota).read_text(encoding="utf-8") == antes
+    assert ws.main([str(nota), "--reclasificar", ancla]) == 0
+    assert lb.condition_kind(lb.verif_rows(nota)[0].condition) == "acota"

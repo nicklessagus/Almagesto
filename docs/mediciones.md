@@ -4422,3 +4422,38 @@ fixes reales (`rv-doppler/fixes`, `harps-drs/fixes`, `harps-drs/fixes-r1`) dan l
 y el mismo texto (122/0/315→362, 134/0/308→311, 0/8 fallas idénticas). Falsos positivos: el aviso
 nuevo de cambio de ámbito no salió en ninguna de las seis corridas (n = 27 inserciones + 2
 movimientos); sólo dispara con `despues_de`/`mover` o con un caption reescrito.
+
+## La clase de la condición tiene segunda opinión (v1.385.0, #580)
+
+**Señal determinista: descartada.** Sobre las 1611 `contextualiza` de los 30 hermanos `.verif.md`
+de Almagesto-Tesis (HEAD, sólo lectura) y los 6 casos del issue (`harps-drs.verif.ANTES.md`, filas
+#17, #57, #99, #111, #140, #202): negación (`no|not|sin|ni…`) 5/6 de recall marcando 722/1611;
+vocabulario restrictivo (`sólo|only|únicamente`) 3/6 con 254/1611; negación y restrictivo juntos
+3/6 con 155; hedge 2/6 con 88; contraste 1/6 con 88; «la nota / la afirmación» 1/6 con 46; un
+número de la condición que no está en el extracto, 5/6 con 1215. Con una tasa base de ~5 % (6 de
+116 en la nota auditada), ninguna sirve para publicar una categoría del lint.
+
+**Red de proceso: `verify_fanout.py --segunda-clase`.** Prompt generado sobre la ficha y el
+hermano ANTES de la auditoría (116 `contextualiza`, 0 sin bloque), dos jueces independientes por
+redacción del prompt:
+
+- Primera redacción («ante la duda, `acota`»): 48 y 58 propuestas de 116; recall 6/6 en los dos.
+- Redacción publicada (`contextualiza` si la afirmación ya lleva la condición; precisar no es
+  acotar): **26 y 26 propuestas de 116, recall 6/6 en los dos**; acuerdo entre jueces 104/116, 20
+  propuestas en común. Además marca F5-04 (#240) y F5-05 (#22) en los dos jueces, y F5-05 (#205)
+  en uno: casos que la auditoría levantó como `acota` sin contarlos entre los 6.
+
+Lo que esto NO mide: la precisión. De las 26 propuestas, 6 + 2-3 coinciden con la auditoría; las
+otras ~17 nadie las juzgó (la auditoría no las marcó, que no las vuelve falsas). La redacción se
+ajustó una vez sobre esta misma nota, así que el 6/6 tiene sesgo de ajuste: hace falta una segunda
+nota auditada para medirlo limpio. Por eso el juez propone y la firma es del operador
+(`write_verif_sidecar.py --reclasificar`).
+
+**Movido del skill** (relatos que el `SKILL.md` de `verify-citations` llevaba y que pagan esta
+suba): antes de que existiera `write_verif_sidecar` (#403), el armador del hermano escrito a mano se
+equivocó 2 de 4 veces —matcheó `bibcode` en el nivel equivocado (55 falsos «sin veredicto») y
+hasheó un PDF como texto (117 «vencidos por fuente»)—; los conteos de las sub-secciones escritos a
+mano decían «las 20 marcadas `acota`» sobre una tabla con 3 y «cinco inferencias» sobre seis
+marcas (#280); sin el encadenado de #232, una ronda de re-verificación dejó 3 `contradice` de la
+ronda 1 en 0 en el bloque final; y antes de #434, las filas `acota` que compartían ancla con una
+`contextualiza` no se podían marcar resueltas por ningún medio.

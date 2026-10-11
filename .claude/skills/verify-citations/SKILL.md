@@ -343,15 +343,13 @@ sin fusionar— no se escribe **ninguno**. Un reemplazo que adivina es peor que 
 nota a medio corregir es indistinguible de una corregida.
 
 **La segunda ronda pisa el veredicto y arrastra la resolución (#232).** Sin esa regla, la ronda
-de re-verificación **blanquea** la primera: medido, 3 `contradice` de la ronda 1 y **0** en el bloque
-final —las tres arregladas en la prosa, y nadie que abra la nota puede saber que hasta ayer tres de
-sus afirmaciones decían lo contrario de su fuente—. La celda se escribe `contradice→corregida`, que
+de re-verificación **blanquea** la primera: nadie que abra la nota puede saber que una afirmación decía lo
+contrario de su fuente. La celda se escribe `contradice→corregida`, que
 es la notación que la plantilla de acá ya publica y la que `lib_blocks.resueltos()` sabe leer.
 Y la cabecera se **genera**, no se escribe: `lib_blocks.verif_summary(filas)` da la línea con los
 cuatro conteos (INV-81 — el encabezado y sus filas salen del mismo código). **Y los conteos de
-las tres sub-secciones también** (#280): `lib_blocks.verif_subsection_lines(filas, prosa)`. A mano
-derivan — medido, «las 20 marcadas `acota`» sobre una tabla que tenía **3**, y «cinco inferencias»
-sobre **seis** marcas del cuerpo. *Omisiones en transcripciones* **no lleva número generado**: la
+las tres sub-secciones también** (#280): `lib_blocks.verif_subsection_lines(filas, prosa)`; a mano
+derivan. *Omisiones en transcripciones* **no lleva número generado**: la
 completitud es la mitad de juicio del fan-out y no está en la tabla, así que un número ahí sería
 inventado. Y la condición `acota` ya resuelta se anota en su celda: `acota→resuelta: <dónde>`,
 misma notación que el veredicto de al lado (#232: la segunda ronda anota, no pisa).
@@ -368,8 +366,7 @@ python scripts/write_verif_sidecar.py <nota.md> --refutar-extraccion <ancla>:<bi
 **La dirección es el par, no el ancla (#434).** Un ancla hashea el **bloque**, así que un bloque
 que cita N fuentes tiene N filas con la misma: `<ancla>=` resuelve la única `acota` del bloque
 aunque una `contextualiza` comparta el ancla, y si hay **dos `acota`** rehúsa nombrando los bibcodes
-para que desambigües con `<ancla>:<bibcode>=`. Antes esas filas **no se podían marcar resueltas por
-ningún medio** y el conteo mentía para siempre.
+para que desambigües con `<ancla>:<bibcode>=`.
 
 Valida con el lector antes de escribir, conserva la condición original detrás de un `·` —sigue
 diciendo bajo qué régimen vale la afirmación—, **no mueve la fecha del bloque** (resolver no es
@@ -383,6 +380,14 @@ toma el token que sigue al primer separador y ahí encuentra la clase, no la res
 resuelve, la celda lo dice, y el conteo la sigue contando como pendiente para siempre. El escritor
 ya no la duplica y el lint la levanta; para el corpus heredado:
 `python scripts/write_verif_sidecar.py <nota.md> --migrate-condition-prefix`.
+
+**La clase tiene segunda opinión (#580):** la pone el juez del respaldo, y una `acota`
+llamada `contextualiza` sale del circuito de resolución. Con el hermano escrito,
+`python scripts/verify_fanout.py <nota.md> --out build/<slug>/verif/clase --segunda-clase [--muestra N]`
+arma UN prompt con cada `contextualiza` —sólo afirmación y condición, sin veredicto ni clase— para
+UN subagente que aplica la prueba de #221. Cada `acota` que devuelve es una **propuesta**: la que
+firmás va con `write_verif_sidecar.py <nota.md> --reclasificar <ancla>:<bibcode>` (encadena, no
+pisa) y se resuelve con `--resolver`.
 
 **Corregir es escribir, y lo escrito se verifica: la operación cierra en corregir → re-verificar
 lo tocado (#203).** No cierra en *corregir*. Después de aplicar, los pares que tocaste están **sin
@@ -476,9 +481,7 @@ recalcula; `txt:` con `source_hash`; y nada para `no verificable por extracción
 par cuya *Evidencia* cita OTRA página que el cuerpo (#492: abrí el PDF y corregí la que esté mal); antepone
 `acota:`/`contextualiza:` desde `cond_tipo`; en una segunda ronda **encadena** el veredicto en vez
 de pisarlo (`no-soportada→corregida`, #232); y escribe la cabecera con `verif_summary` y el
-fragmento de conteo de cada sub-sección (#280). Medido antes de que existiera: el armador escrito a
-mano se equivocó **2 de 4 veces** —matcheó `bibcode` en el nivel equivocado (55 falsos «sin
-veredicto») y hasheó un PDF como texto (117 «vencidos por fuente» sobre PDFs que nadie tocó)—.
+fragmento de conteo de cada sub-sección (#280).
 Lo que **no** escribe es el texto libre de las tres sub-secciones: ése es el triage de la corrida y
 queda marcado `⚠ triage de la corrida pendiente` hasta que lo completes. Correrlo dos veces sobre el
 mismo fan-out no cambia un byte.

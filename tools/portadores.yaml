@@ -633,6 +633,9 @@ portadores:
     funcion: lib_blocks.row_key
     patron: 'condition_resolved|acota→resuelta|--resolver'
     consumidores:
+      - modulo: scripts/verify_fanout.py
+        estado: usa
+        motivo: "`--segunda-clase` (#580) direcciona cada ítem por `row_key` —el par—, la misma dirección que `--reclasificar` lee."
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: >-
@@ -1218,6 +1221,9 @@ portadores:
     funcion: lib_blocks.current_condition
     patron: 'condition_resolved\(|condition_split\(|condition_kind\(|COND_CHAIN_SEP'
     consumidores:
+      - modulo: scripts/verify_fanout.py
+        estado: fuera-de-alcance
+        motivo: "`--segunda-clase` (#580) lee la clase y el texto vigentes vía `condition_kind`/`condition_text`, que ya pasan por `current_condition`; no escribe la celda."
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: >-
@@ -1697,6 +1703,9 @@ portadores:
     funcion: lib_blocks.condition_split
     patron: 'cond_tipo|CONDITION_KINDS|condition_kind|condition_resolved'
     consumidores:
+      - modulo: scripts/verify_fanout.py
+        estado: fuera-de-alcance
+        motivo: "`--segunda-clase` (#580) lee la celda vía `condition_kind`/`condition_text`, que pasan por `condition_split`; no escribe la celda."
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: >-
@@ -3363,3 +3372,26 @@ portadores:
       - modulo: scripts/proposals.py
         estado: fuera-de-alcance
         motivo: "Lee celdas vacías del inventario para PROPONER; no escribe."
+
+  - issue: 580
+    regla: >-
+      La clase de la condición (#221) la pone el mismo juez que el respaldo; toda `contextualiza`
+      del hermano puede pasar por una segunda opinión que ve SÓLO afirmación + condición (sin
+      veredicto, evidencia ni clase) y propone `acota`. La firma la escribe
+      `write_verif_sidecar.reclassify_conditions`, encadenada. No hay señal determinista: medido,
+      la mejor regex marca 254-722 de 1611 `contextualiza` de la bóveda.
+    funcion: verify_fanout.write_class_round
+    patron: 'contextualiza'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "DEFINE el vocabulario y el lector de la celda (`condition_kind`, `condition_text`); no clasifica."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Sólo nombra `contextualiza` en un docstring sobre el adorno markdown (#283)."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Reporta la celda SIN clase (`cond_sin_clasificar`); no juzga si la clase declarada es la correcta, que es juicio de LLM."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "Escribe la firma (`--reclasificar`) de lo que la segunda opinión propone; no genera la segunda opinión."

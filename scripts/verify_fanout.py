@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -127,6 +128,89 @@ def write_round(nota: Path, out_dir: Path, fuentes: list | None = None,
     return manifest
 
 
+CLASS_PROMPT = "_clase.md"
+CLASS_OUT = "_clase.json"
+
+
+def class_items(nota: Path, text: str) -> tuple[list, int]:
+    """`([(address, claim block, condition prose)], n_without_block)` for every `contextualiza` in
+    force in the note's sidecar (#580).
+
+    Only the claim and the condition travel: no verdict, no evidence and no class, because the
+    second opinion exists to apply the #221 test WITHOUT the first judge's call in view. A row whose
+    pair is no longer in the body cannot be shown its claim; it is counted, not dropped in silence
+    (D-43) — the lint already reports it as stale."""
+    bloques = {(p.bibcode, p.anchor): p.block.text.strip() for p in lb.pairs_of(text)}
+    items, sin_bloque = [], 0
+    for r in lb.verif_rows(nota) or []:
+        if lb.condition_kind(r.condition) != "contextualiza":
+            continue
+        bloque = bloques.get((r.bibcode, r.anchor))
+        if bloque is None:
+            sin_bloque += 1
+            continue
+        items.append((":".join(lb.row_key(r)), bloque, lb.condition_text(r.condition)))
+    return items, sin_bloque
+
+
+def class_prompt(nota: Path, items: list, out_dir: Path) -> str:
+    """The prompt of the class's second opinion (#580): the #221 test, the items, the output."""
+    partes = [f"# Segunda opinión sobre la clase de la condición — nota `{nota.name}`", "",
+              "Cada ítem trae una AFIRMACIÓN de la nota y una CONDICIÓN bajo la que su fuente la "
+              "afirma. No leas ninguna fuente: juzgás la relación entre las dos.", "",
+              "La prueba (#221): ¿la afirmación, tal como está escrita, queda FALSA o afirma DE MÁS "
+              "si se saca la condición? Sí → `acota` (otro sujeto, otro régimen, otra atribución, "
+              "un hedge que la afirmación pierde, un paso que describe mal). No → `contextualiza` "
+              "(procedencia, instrumento, definición que no cambia lo afirmado). Leé el bloque "
+              "entero: si la afirmación ya lleva la condición —o lo que la vuelve verdadera—, es "
+              "`contextualiza`, porque no le falta nada. Que la condición sea útil, precise o "
+              "agregue detalle no la vuelve `acota`: lo es sólo si sin ella lo escrito es falso.",
+              "",
+              f"Ítems: {len(items)}. Cada uno vuelve con su `direccion` tal cual.", ""]
+    for i, (direccion, bloque, cond) in enumerate(items, 1):
+        partes += [f"### Ítem {i} · `{direccion}`", "", "**Afirmación:**", "", bloque, "",
+                   f"**Condición:** {cond}", ""]
+    partes += ["## Salida", "", f"Escribí `{(out_dir / CLASS_OUT).as_posix()}` con esta forma:",
+               "", "```json",
+               '{"clases": [{"direccion": "<ancla>:<bibcode>", "clase": "acota | contextualiza", '
+               '"motivo": "<una línea: qué parte de la afirmación cae sin la condición>"}]}',
+               "```", ""]
+    return "\n".join(partes)
+
+
+def write_class_round(nota: Path, out_dir: Path, muestra: int | None = None) -> dict:
+    """Write the class's second-opinion prompt (#580). Returns `{items, contextualiza, sin_bloque}`.
+
+    `muestra` caps the items with a sample seeded by the note's name, so the same call reproduces
+    the same sample. It proposes: the judge's `acota` answers are signed by the operator and written
+    by `write_verif_sidecar.py --reclasificar`, never applied by this."""
+    items, sin_bloque = class_items(nota, nota.read_text(encoding="utf-8"))
+    total = len(items)
+    if muestra is not None and muestra < total:
+        elegidos = set(random.Random(nota.stem).sample(range(total), muestra))
+        items = [it for i, it in enumerate(items) if i in elegidos]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / CLASS_PROMPT).write_text(class_prompt(nota, items, out_dir), encoding="utf-8")
+    return {"items": len(items), "contextualiza": total, "sin_bloque": sin_bloque}
+
+
+def _main_class(nota: Path, out: Path, muestra: int | None) -> int:
+    """`--segunda-clase` (#580): rc 0 with the prompt written, 1 when there is nothing to show."""
+    c = write_class_round(nota, out, muestra=muestra)
+    if c["sin_bloque"]:
+        cfg.print_seguro(f"⚠ {c['sin_bloque']} `contextualiza` sin su bloque en la nota (ancla "
+                         f"vencida): quedan FUERA — re-anclá primero")
+    if not c["items"]:
+        cfg.print_seguro(f"⚠ {nota.name}: 0 `contextualiza` que mostrar — nada que contrastar, y "
+                         f"no es un cierre en verde (D-43)")
+        return 1
+    cfg.print_seguro(f"{c['items']} de {c['contextualiza']} `contextualiza` → {out}/{CLASS_PROMPT}. "
+                     f"Lanzá UN subagente con ese prompt; cada `acota` que devuelva es una "
+                     f"PROPUESTA: si la firmás, `python scripts/write_verif_sidecar.py {nota} "
+                     f"--reclasificar <ancla>:<bibcode>`, y después se resuelve (`--resolver`)")
+    return 0
+
+
 def main(argv=None) -> int:
     """CLI. rc 0 with the plan written, 1 for a note with no pairs (not a green close, D-43), 2 if
     the note does not exist. Launches nothing: the fan-out is the operator's."""
@@ -143,11 +227,22 @@ def main(argv=None) -> int:
     alcance.add_argument("--solo-nuevos", action="store_true",
                          help="ronda acotada a los pares SIN fila que llevar (la partición de #282, "
                               "vía `reverify_subset`); el resto se re-ancla")
+    ap.add_argument("--segunda-clase", action="store_true", dest="clase",
+                    help="#580: en vez de la ronda, el prompt de la segunda opinión sobre la clase "
+                         "de cada `contextualiza` del hermano (sin veredicto ni clase a la vista)")
+    ap.add_argument("--muestra", type=int, default=None, metavar="N",
+                    help="con --segunda-clase: sólo N ítems, muestra reproducible por nota")
     args = ap.parse_args(argv)
     nota = Path(args.nota)
     if not nota.is_file():
         cfg.print_seguro(f"⛔ no existe: {nota}")
         return 2
+    if args.muestra is not None and (not args.clase or args.muestra < 1):
+        ap.error("`--muestra N` va con `--segunda-clase` y N ≥ 1")
+    if args.clase:
+        if args.fuentes or args.solo_nuevos:
+            ap.error("`--segunda-clase` no toma alcance de ronda (`--fuentes`/`--solo-nuevos`)")
+        return _main_class(nota, Path(args.out), args.muestra)
     try:
         m = write_round(nota, Path(args.out),
                         fuentes=[x.strip() for x in args.fuentes.split(",") if x.strip()]
