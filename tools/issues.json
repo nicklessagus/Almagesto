@@ -2859,12 +2859,12 @@
   {
    "number": 574,
    "title": "`no_sintetizado[sujeto]` contradicho por la cita en la nota del sujeto: el roll-up dice «sintetizado» y ningún chequeo lo cruza (9 pares en la instancia)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 575,
    "title": "La columna `Rol` de `## Régimen de validez` no se cruza contra el `role` del paper, y `contrast --preflight` le atribuye el rol al primer bibcode de la fila, no al de `Fuente`",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 576,
@@ -2874,12 +2874,12 @@
   {
    "number": 577,
    "title": "Las sub-secciones del bloque de verificación pueden quedar con prosa truncada: #430 preserva la prosa libre pero no mira su forma",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 578,
    "title": "`apply_fixes` no puede agregar filas a una tabla: 16 filas de `## Régimen de validez` entraron a mano, fuera de la red de conteo de pares (#222)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 579,
@@ -2889,17 +2889,17 @@
   {
    "number": 580,
    "title": "La clase de la condición (`acota`/`contextualiza`) no tiene red: una `acota` mal clasificada queda enterrada en el hermano (6 de 116 en la instancia)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 581,
    "title": "Vista y `no_vista` del mismo sujeto conviven en una nota, y un `no_vista` puede justificarse con una lectura que no existe",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 582,
    "title": "Los papers que entran a un tema por retro-link no dejan decisión de curación: el registro y la cabecera publican un universo que no los incluye",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
