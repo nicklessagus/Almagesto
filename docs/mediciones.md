@@ -4335,3 +4335,28 @@ más cortas). Con el fix: 12 archivos, +28/−8, todos merges add-only de `metho
 y el paso en `cadena` de los registros; 19 avisos «no se pisa»; segunda corrida 0 cosechadas en los
 cuatro. Regresión de #567 (v1.374.0): antes la vista rechazada hacía `continue` y nunca llegaba a
 `stamp_reading_aids`, así que el rechazo por fecha tapaba el pisado.
+
+## #574 — la escotilla por par contra la prosa, y el estado verdadero del roll-up (v1.381.0)
+
+Medido sobre la instancia Almagesto-Tesis en worktrees desechables (bóveda entera, 392 notas de
+paper, 21 sujetos), con los `scripts/` de este commit copiados encima.
+
+- **Categoría `no_sintetizado_citado`** — recall en `37abd671` (post-audit de rv-doppler, el
+  estado sobre el que se midieron los 9 pares del issue): **9/9**, exactamente los pares de la
+  tabla. En HEAD `e5fa8e60`: **6**, los 6 de la tabla que la instancia todavía no corrigió
+  (rv-doppler ×2, harps-drs ×3, pca-alta-dimension ×1); falsos positivos: **0** (el chequeo es
+  determinista: escotilla declarada para X + `[[bibcode]]` en `cfg.solo_prosa` de la nota de X).
+- **(a) `no_vista` + cita**: en `37abd671`, 15 filas pasan de `sin vista (declarado)` a
+  `sintetizado sin vista del sujeto` (deteccion-estadistica 4, indicadores-actividad 4,
+  rv-doppler 4, ica 2, harps-drs 1) — los 15 pares de la variante hermana del issue.
+- **(b) `methods: []` con vista fechada**: `1978PASP...90..267V` y `1997A&A...326..741S` pasan de
+  `sin extraer` a `sintetizado` en indicadores-actividad (2/2 del comentario); en el lint,
+  «Campos incompletos» 7→5 y «Recorte de lectura sin declarar» 1→0 en HEAD.
+- **(c) harps-drs**: 13 filas `sintetizado` → `sintetizado sin vista del sujeto` en `37abd671`
+  (+1 por (a)) = las 13+1 de las 14 fuentes sin `vistas[].sujeto == harps-drs` del comentario.
+  Fuera de harps-drs: deteccion-estadistica 15, indicadores-actividad 12, rv-doppler 11. Ninguna
+  ficha de estrella cambia.
+- **Re-estampado**: `make_notes.py <slug>` (`--theme` para temas) sobre los 21 sujetos, dos veces:
+  la primera toca sólo las 5 notas de concepto con estados cambiados; la segunda no cambia nada
+  (hash de `vault/**/*.md` idéntico, IDEMPOTENTE). Antes del re-estampado el lint reporta esas 5
+  tablas como desactualizadas (0→5), que es el backlog esperado.

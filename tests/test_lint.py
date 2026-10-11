@@ -11697,3 +11697,39 @@ def test_558_par_tema_por_methods_pide_decision_y_la_cola_se_lista_con_fecha(toy
     assert "forma inválida" in lint.check_theme_pairs({"2026P": roto})[1][0][1]
     # el ítem es el PAPER: `--cierre <estrella>` frena en los pares que crearon sus papers
     assert lint.collect().por_clave("par_tema_sin_decidir").severidad == lint.SEV_CIERRE
+
+
+def test_check_no_sintetizado_citado_cruza_la_escotilla_contra_la_prosa(toy_vault):
+    """#574 — `no_sintetizado[X]` afirma «la nota de X no sintetiza este paper»; si la nota lo cita
+    en prosa, la escotilla miente y el roll-up lo resolvía a favor de la cita en silencio (medido:
+    9 pares en una instancia). `no_vista[X]` + cita no es contradicción y no se reporta."""
+    write_yaml(cfg.STARS_YAML, {"Estrella A": {"slug": "a"}, "Estrella B": {"slug": "b"}})
+    write_yaml(cfg.THEMES_YAML, {"gls-x": {"title": "GLS", "concept": "gls", "area": "methods"}})
+    mk_note(cfg.STARS, "a", {"tags": ["star"], "name": "Estrella A"}, "lo sintetiza [[2020P]]\n")
+    mk_note(cfg.STARS, "b", {"tags": ["star"], "name": "Estrella B"},
+            "no lo cita\n\n## Papers\n\n| [[2020P]] |\n")
+    mk_note(cfg.CONCEPTS / "methods", "gls", {"tags": ["methods"]}, "ver [[2020P]]\n")
+
+    def run(ns, **extra):
+        return lint.check_no_sintetizado_citado({"2020P": {"no_sintetizado": ns, **extra}})
+    filas = run([{"sujeto": "Estrella A", "motivo": "no aporta"}])
+    assert [s for s, _m in filas] == ["2020P"] and "`Estrella A`" in filas[0][1], filas
+    assert run([{"sujeto": "Estrella B", "motivo": "m"}]) == [], "la tabla estampada no es prosa"
+    assert len(run([{"sujeto": "gls", "motivo": "m"}])) == 1, "el tema, por su `concept`"
+    assert run("escalar viejo") == [], "la forma rota la reporta `old_no_sintetizado`"
+    assert run(None, no_vista=[{"sujeto": "Estrella A", "motivo": "m"}]) == [], "no_vista no es esto"
+    assert lint.check_no_sintetizado_citado({}) == []
+    write_yaml(cfg.STARS_YAML, {"Estrella A": {"slug": "a"}, "Estrella C": {"slug": "c"}})
+    assert run([{"sujeto": "Estrella C", "motivo": "m"}]) == [], "sujeto sin nota: nada que citar"
+
+
+def test_574_core_con_vista_fechada_y_methods_vacio_no_es_sin_extraer(toy_vault):
+    """#574 (b) — «sin extraer» es `cfg.note_has_reading`, la regla del roll-up: la vista fechada
+    es lectura aunque `methods` esté vacío; el lint repetía el falso «sin extraer»."""
+    fm = {"methods": [], "vistas": [{"sujeto": "x", "tipo": "star", "fecha": "2026-01-01"}]}
+    extracted: list = []
+    inc, *_x = lint.check_paper_coverage("2020X", fm, "high", {}, {"2020X": "x"}, {}, extracted)
+    assert inc == [] and [s for s, _m in extracted] == ["2020X"], (inc, extracted)
+    inc, *_x = lint.check_paper_coverage("2020X", {"vistas": [{"sujeto": "x", "tipo": "star"}]},
+                                         "high", {}, {"2020X": "x"}, {}, [])
+    assert len(inc) == 1 and "sin extraer" in inc[0][1], "el stub sin fecha no es lectura"

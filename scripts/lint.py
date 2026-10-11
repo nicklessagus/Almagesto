@@ -1675,14 +1675,15 @@ def check_sintesis_no_declarada(paper_fms: dict) -> tuple:
     no_evaluados: list = []
     for kind, slug, _nombre, _meta in cfg.all_subjects():
         # Cheap YAML-free gate first (the lint's parse budget is ratcheted by `test_escala`): no
-        # extracted paper cited in the note's prose means no `sintetizado`, by `_estado_paper`.
+        # paper note cited in the note's prose means no `sintetizado`, by `_estado_paper` (#574:
+        # the citation decides before any reading test).
         dest = mn.subject_note(slug, kind)
         prosa = cfg.solo_prosa(dest.read_text(encoding="utf-8")) if dest and dest.exists() else ""
-        if not any((paper_fms.get(stem) or {}).get("methods") for stem in LINK_RE.findall(prosa)):
+        if not any(stem in paper_fms for stem in LINK_RE.findall(prosa)):
             continue
         try:
             n_sint = sum(1 for r in mn.papers_universe(slug, kind, paper_fms)
-                         if r["estado"] == mn.ESTADO_SINTETIZADO)
+                         if r["estado"] in mn.ESTADOS_SINTETIZADOS)
             declarada = cfg.as_map(cfg.load_registro(slug).get("sintesis")).get("fecha")
         except Exception as _exc:                   # noqa: BLE001 — D-43: declared, not a zero
             no_evaluados.append((f"síntesis declarada de `{slug}` (#523)",
@@ -3221,7 +3222,7 @@ def check_unsynthesized(extracted, cited_in_entity) -> list:
                                                 "poné POR QUÉ no se inlinea, por sujeto (#553)"))
             continue
         # @inv INV-45
-        unsynthesized.append((stem, "extraído (`methods` poblado) pero su bibcode no está citado en "
+        unsynthesized.append((stem, "extraído (leído) pero su bibcode no está citado en "
                                     "ninguna ficha ni concepto → sintetizarlo donde corresponda, o "
                                     "declarar `no_sintetizado: [{sujeto, motivo}]` en la nota "
                                     "del paper (#553)"))
@@ -3252,7 +3253,7 @@ def check_unsynthesized_by_subject(paper_fms: dict, ya: set, sujetos=None) -> tu
         # `--guardas` reports as a survivor: the loop below decides the same, only slower.
         nombres = {slug, str(nombre), concept}
         citados = set(LINK_RE.findall(cfg.solo_prosa(dest.read_text(encoding="utf-8"))))
-        if not any(fm.get("methods") and stem not in citados and stem not in ya
+        if not any(cfg.note_has_reading(fm) and stem not in citados and stem not in ya
                    and nombres & {str(x) for k in ("stars", "thesis_links")
                                   for x in cfg.as_list(fm.get(k))}
                    and not (nombres & {str(cfg.as_map(d).get("sujeto")) for d in
@@ -3274,6 +3275,39 @@ def check_unsynthesized_by_subject(paper_fms: dict, ya: set, sujetos=None) -> tu
                                      f"→ sintetizalo ahí o declará `no_sintetizado: [{{sujeto: "
                                      f"{nombre}, motivo: …}}]` en la nota del paper (#559)"))
     return filas, no_evaluados
+
+
+def check_no_sintetizado_citado(paper_fms: dict, sujetos=None) -> list:
+    """`no_sintetizado_citado` — `no_sintetizado[X]` declared and the note of X cites the paper (#574).
+
+    A pair hatch is a claim about the subject's note («this note does not synthesise this paper»);
+    if the note cites it in prose (`cfg.solo_prosa`), the hatch lies. The roll-up resolves the
+    contradiction in favour of the citation (`make_notes._estado_paper`), so without this category
+    it was settled in silence (measured on an instance: 9 pairs). Which half is wrong —the hatch or
+    the citation— is a reader's call: backlog. `no_vista[X]` + citation is NOT a contradiction (the
+    note may cite a paper it never read through X's lens); the roll-up publishes that pair as
+    `sintetizado sin vista del sujeto`."""
+    decl: dict = {}
+    for stem, fm in sorted(paper_fms.items()):
+        try:
+            decl[stem] = {d["sujeto"] for d in cfg.load_no_sintetizado(fm, entry=stem)}
+        except cfg.VistasError:
+            pass                                 # the shape is `old_no_sintetizado`'s finding
+    filas: list = []
+    for kind, slug, nombre, meta in (cfg.all_subjects() if sujetos is None else sujetos):
+        nombres = {slug, str(nombre), str(cfg.as_map(meta).get("concept") or slug)}
+        suyos = [stem for stem, d in decl.items() if d & nombres]
+        dest = mn.subject_note(slug, kind)
+        # ⚠ `not suyos` is an atajo `--guardas` reports as a survivor: the loop decides the same.
+        if not suyos or not dest.exists():
+            continue
+        citados = set(LINK_RE.findall(cfg.solo_prosa(dest.read_text(encoding="utf-8"))))
+        for stem in suyos:
+            if stem in citados:
+                filas.append((stem, f"declara `no_sintetizado` para `{nombre}` y la nota de "
+                                    f"`{nombre}` lo cita en prosa → sacá la escotilla para ese "
+                                    f"sujeto, o la cita de la nota (#574)"))
+    return filas
 
 
 def check_theme_pairs(paper_fms: dict, sujetos=None) -> tuple:
@@ -5400,7 +5434,9 @@ def check_paper_coverage(stem: str, fm: dict, relevancia: str, pdf_on_disk: dict
         # que es el que la reporta como `fm_broken`. Tragarla acá dejaría la nota evadiendo
         # el chequeo de su propio campo, que es el bug que ese bloqueante existe para cerrar.
         no_vista, nv_error = {}, _e
-    if relevancia == "high" and not fm.get("methods") and not no_vista:
+    # #574 — «sin extraer» is `cfg.note_has_reading`, the roll-up's rule: a dated view with
+    # `methods: []` is a reading, and the category repeated the roll-up's false «sin extraer».
+    if relevancia == "high" and not cfg.note_has_reading(fm) and not no_vista:
         # #90: dos situaciones OPUESTAS salían con el mismo mensaje — «bajado y nadie lo
         # leyó» (trabajo del agente) y «nunca se pudo bajar» (trabajo del usuario: conseguir
         # la fuente). Son colas distintas con dueños distintos, así que mezclarlas hace
@@ -5447,7 +5483,7 @@ def check_paper_coverage(stem: str, fm: dict, relevancia: str, pdf_on_disk: dict
     # que alguien gastó en él el paso más caro de la cadena; si su contenido nunca llegó a
     # una ficha ni a un concepto, la extracción se perdió. Se recolecta acá y se resuelve
     # después del barrido, cuando ya se sabe qué citó cada nota de entidad.
-    if fm.get("methods") and relevancia != "low":
+    if cfg.note_has_reading(fm) and relevancia != "low":
         # centinela: `no_sintetizado: ""` / `null` / `false` / `0` son marca PRESENTE pero
         # sin motivo — con `.get(campo)` a secas colapsaban con "no hay marca" y el lint
         # respondía "poné `no_sintetizado`" sobre una nota que ya lo tenía puesto.
@@ -7301,6 +7337,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         paper_fms, {stem for stem, _m in found["unsynthesized"]}, _sujetos)
     found["unsynthesized"] += _us
     found["not_evaluated"] += _us_no_eval
+    found["no_sintetizado_citado"] = check_no_sintetizado_citado(paper_fms, _sujetos)   # #574
     # ⛔ UNA regla para las dos categorías dangling (#243/#348): «¿este nombre tiene nota
     # destino?» por CLAVE NORMALIZADA, la del roll-up. Difieren en SEVERIDAD, nunca en qué cuenta
     # como destino, y dos copias de esa regla ya divergieron una vez.
@@ -7459,6 +7496,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('cita_log', '❝ Cita de `log.md` que su fuente no dice: la bitácora es append-only, se MARCA (#238, backlog)', SEV_BACKLOG, tuple(found['cita_log']), poblacion='notas'),
         Categoria('cita_inventada', '❝ Cita textual que NO está ni en el `.txt` ni en la EXTRACCIÓN: la fabricó el sintetizador (#318, BLOQUEA con `--cierre`)', SEV_CIERRE, tuple(found['cita_inventada']), poblacion='citas'),
         Categoria('par_tema_sin_decidir', '🧭 Par (paper, tema) que llegó por `methods` desde otro sujeto y nadie decidió: `no_sintetizado` o `cola_tema` (#558' + (', BLOQUEA: modo --cierre)' if cierre else ', backlog; con `--cierre` bloquea)'), SEV_CIERRE, tuple(found['par_tema_sin_decidir']), poblacion='papers'),
+        Categoria('no_sintetizado_citado', '🔀 `no_sintetizado[X]` declarado y la nota de X cita el paper: la escotilla contradice la prosa (#574, backlog)', SEV_BACKLOG, tuple(found['no_sintetizado_citado']), poblacion='papers'),
         Categoria('cola_tema', '⏳ Par (paper, tema) EN COLA del tema, declarado y fechado — deuda con dueño (#558, backlog)', SEV_BACKLOG, tuple(found['cola_tema']), poblacion='papers'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(found['cita_no_verbatim']), poblacion='citas'),
         Categoria('cita_txt_degradado', '❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog)', SEV_BACKLOG, tuple(found['cita_txt_degradado']), poblacion='citas'),

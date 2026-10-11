@@ -1035,7 +1035,8 @@ Backfill: `make_notes.py --restamp-vista-stub`.
 a `vistas[]` como **lecturas**. Un reclamo sin vista es backlog y se cierra de dos maneras: haciendo
 la vista, o declarándola `no_vista: [{sujeto, motivo}]` cuando ese sujeto sólo aporta al roll-up —
 vale en **las cuatro** redes que cuentan la nota (#268), con estado propio: `sin vista (declarado)`,
-que no es `sin extraer`. **Motivo obligatorio y por sujeto**: un paper que tres sujetos reclaman se
+que no es `sin extraer`. **La cita le gana a la escotilla (#574):** si la nota del sujeto cita el
+paper, el roll-up dice `sintetizado sin vista del sujeto` (o `sintetizado`, con la vista fechada). **Motivo obligatorio y por sujeto**: un paper que tres sujetos reclaman se
 saltea por motivos distintos en cada uno. Qué cuenta como reclamo: `stars` y `thesis_links` siempre;
 `methods` **sólo si ese nombre es un tema declarado** —lo puebla la extracción, así que es producto
 de la lectura—.

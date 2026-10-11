@@ -2274,10 +2274,15 @@ def test_corte_publicando_no_deja_la_nota_a_medias(toy_vault, monkeypatch):
 # de la query, no sus resultados, y el plugin ni siquiera está versionado. El contrato dice que la
 # ficha sirve a una audiencia-modelo; una promesa que depende de un plugin no la cumple (D-11).
 
-def _paper(stem, *, stars=("Estrella Test",), methods=None, relevance="high", year="2020"):
+def _paper(stem, *, stars=("Estrella Test",), methods=None, relevance="high", year="2020",
+           vistas=None):
     mk_note(cfg.PAPERS, stem, {"tags": ["paper"], "bibcode": stem, "year": year,
                                "stars": list(stars), "relevance": relevance,
-                               **({"methods": methods} if methods else {})}, "")
+                               **({"methods": methods} if methods else {}),
+                               **({"vistas": vistas} if vistas else {})}, "")
+
+
+_VISTA_TEST = [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-01-01"}]
 
 
 def test_tabla_refleja_los_cuatro_estados(toy_vault):
@@ -2285,16 +2290,19 @@ def test_tabla_refleja_los_cuatro_estados(toy_vault):
     mismos papers (la lección de #70)."""
     _paper("2020sinA...1..1A")                                   # sin extraer
     _paper("2020extB...1..1B", methods=["gp"])                   # extraído, no sintetizado
-    _paper("2020sinC...1..1C", methods=["gp"])                   # extraído y sintetizado
+    _paper("2020sinC...1..1C", methods=["gp"], vistas=_VISTA_TEST)  # leído y sintetizado
+    _paper("2020citE...1..1E", methods=["gp"])                   # citado sin vista del sujeto (#574)
     _paper("2020lowD...1..1D", relevance="low")                  # fuera del filtro
     mn.write_star_note("test_star", force=True)
     dest = cfg.STARS / "test_star.md"
     dest.write_text(dest.read_text(encoding="utf-8").replace(
-        "## Huecos", "Síntesis que cita [[2020sinC...1..1C]].\n\n## Huecos"), encoding="utf-8")
+        "## Huecos", "Síntesis que cita [[2020sinC...1..1C]] y [[2020citE...1..1E]].\n\n## Huecos"),
+        encoding="utf-8")
     filas = {r["stem"]: r["estado"] for r in mn.papers_universe("test_star", "star")}
     assert filas == {"2020sinA...1..1A": "sin extraer",
                      "2020extB...1..1B": "extraído, no sintetizado",
                      "2020sinC...1..1C": "sintetizado",
+                     "2020citE...1..1E": "sintetizado sin vista del sujeto",
                      "2020lowD...1..1D": "fuera del filtro"}
 
 
@@ -4847,7 +4855,8 @@ def test_el_rollup_de_concepto_publica_los_dos_numeros_y_el_estado(toy_vault):
     (cfg.CONCEPTS / "methods" / "ica.md").write_text(
         "---\ntags: [concept]\n---\n\n# ICA\n\nLo sintetizado sale de [[2000Hyv]].\n",
         encoding="utf-8")
-    for stem, extra in (("2000Hyv", {"methods": ["ICA"], "thesis_links": ["ica"]}),
+    for stem, extra in (("2000Hyv", {"methods": ["ICA"], "thesis_links": ["ica"], "vistas":
+                                     [{"sujeto": "ica", "tipo": "theme", "fecha": "2026-01-01"}]}),
                         ("2002Cardoso", {"thesis_links": ["ica"]}),
                         ("2004Davies", {"methods": ["ica"]})):
         campos = "\n".join(f"{k}: {v}" for k, v in extra.items())
@@ -6365,11 +6374,11 @@ def test_AUD509_estado_paper_no_toma_una_cita_que_EXTIENDE_el_stem():
     """AUD-509 — `[[2011Naika]]` no cita a `2011Naik`: por prefijo el roll-up marcaba `sintetizado`
     un paper que la ficha no nombra, mientras `check_sintesis_no_declarada` (LINK_RE exacto) decía
     lo contrario sobre el mismo par."""
-    fm = {"methods": ["ica"]}
-    assert mn._estado_paper("2011Naik", fm, "cita [[2011Naika]] sola", set(), set()) \
+    fm = {"methods": ["ica"], "vistas": [{"sujeto": "ica", "tipo": "theme", "fecha": "2026-01-01"}]}
+    assert mn._estado_paper("2011Naik", fm, "cita [[2011Naika]] sola", set(), {"ica"}) \
         == mn.ESTADO_EXTRAIDO
     for forma in ("[[2011Naik]]", "[[2011Naik|N11]]", "[[2011Naik#Abstract]]"):
-        assert mn._estado_paper("2011Naik", fm, f"cita {forma}", set(), set()) \
+        assert mn._estado_paper("2011Naik", fm, f"cita {forma}", set(), {"ica"}) \
             == mn.ESTADO_SINTETIZADO, forma
 
 
@@ -6416,7 +6425,8 @@ def test_553_no_sintetizado_es_por_SUJETO_en_el_rollup(toy_vault):
     """#553 — la escotilla vale por par (paper, sujeto): el roll-up la muestra como declarada sólo
     para el sujeto que la declaró; para otro sigue siendo deuda. Y la cita gana: si la ficha lo
     sintetiza, está sintetizado aunque otro sujeto lo haya declarado."""
-    fm = {"methods": ["gls"], "no_sintetizado": [{"sujeto": "HD 40307", "motivo": "una fila"}]}
+    fm = {"methods": ["gls"], "no_sintetizado": [{"sujeto": "HD 40307", "motivo": "una fila"}],
+          "vistas": [{"sujeto": "HD 40307", "tipo": "star", "fecha": "2026-01-01"}]}
     assert mn._estado_paper("2011P", fm, "", set(), {"HD 40307"}) == mn.ESTADO_NO_SINTETIZADO
     assert mn._estado_paper("2011P", fm, "", set(), {"toliman"}) == mn.ESTADO_EXTRAIDO
     assert mn._estado_paper("2011P", fm, "ver [[2011P]]", set(), {"HD 40307"}) == mn.ESTADO_SINTETIZADO
@@ -6492,3 +6502,58 @@ def test_565_backfill_axes_no_parte_un_bullet_multilinea():
                                                      "sim": "x\ny"})
     assert add == ["sim"]
     assert nuevo == texto.replace("- **ml:** c\n", "- **ml:** c\n- **sim:** x\n  y\n")
+
+
+def test_574_la_cita_decide_antes_que_la_escotilla_y_la_lectura_es_el_segundo_eje():
+    """#574 — una escotilla por par es una afirmación sobre la nota del sujeto; la cita es el hecho.
+    (a) `no_vista[X]` + cita publicaba «sin vista (declarado)» y el encabezado subcontaba; (b)
+    `methods: []` con vista fechada daba «sin extraer»; (c) la ficha que cita un paper nunca leído
+    con la lente del sujeto lo publicaba «sintetizado», sin testigo en la cadena."""
+    X = {"Estrella X"}
+    leida = [{"sujeto": "Estrella X", "tipo": "star", "fecha": "2026-01-01"}]
+    otra = [{"sujeto": "Otra", "tipo": "star", "fecha": "2026-01-01"}]
+    stub = [{"sujeto": "Estrella X", "tipo": "star"}]
+    nv = [{"sujeto": "Estrella X", "motivo": "no se leyó con la lente"}]
+    ns = [{"sujeto": "Estrella X", "motivo": "no aporta"}]
+    cita = "ver [[2011P]]"
+
+    def e(fm, cuerpo=cita, drop=frozenset()):
+        return mn._estado_paper("2011P", fm, cuerpo, set(drop), X)
+    # citado: leído con la lente del sujeto, o no
+    assert e({"methods": ["gls"], "vistas": leida}) == mn.ESTADO_SINTETIZADO
+    assert e({"methods": ["gls"], "vistas": stub}) == mn.ESTADO_SINTETIZADO_SIN_VISTA, "sin fecha"
+    assert e({"methods": ["gls"], "vistas": otra}) == mn.ESTADO_SINTETIZADO_SIN_VISTA, "otro sujeto"
+    assert e({"methods": ["gls"]}) == mn.ESTADO_SINTETIZADO_SIN_VISTA
+    assert e({"methods": ["gls"], "vistas": "roto"}) == mn.ESTADO_SINTETIZADO_SIN_VISTA, "forma rota"
+    # (a) la cita le gana a `no_vista`; (contradicción con `no_sintetizado`: la reporta el lint)
+    assert e({"methods": ["gls"], "no_vista": nv}) == mn.ESTADO_SINTETIZADO_SIN_VISTA
+    assert e({"methods": [], "vistas": leida, "no_sintetizado": ns}) == mn.ESTADO_SINTETIZADO
+    # (b) sin cita: la vista fechada es lectura aunque `methods` esté vacío
+    assert e({"methods": [], "vistas": otra}, "") == mn.ESTADO_EXTRAIDO
+    assert e({"methods": [], "vistas": stub}, "") == mn.ESTADO_SIN_EXTRAER
+    assert e({"methods": [], "no_vista": nv}, "") == mn.ESTADO_SIN_VISTA
+    # curación y lente siguen antes que la cita
+    assert e({"methods": ["gls"], "vistas": leida}, drop={"2011P"}) == mn.ESTADO_DROPEADO
+    assert e({"methods": ["gls"], "vistas": leida, "relevance": "low"}) == mn.ESTADO_FUERA
+    # el encabezado cuenta los dos estados citados
+    filas = [{"stem": s, "title": "", "year": "", "relevance": "", "origen": "lente", "via": "",
+              "estado": est} for s, est in (("A", mn.ESTADO_SINTETIZADO),
+                                            ("B", mn.ESTADO_SINTETIZADO_SIN_VISTA),
+                                            ("C", mn.ESTADO_EXTRAIDO))]
+    assert "(3 · 2 sintetizados en esta ficha)" in mn.papers_table(filas)
+    assert "(3 · 2 sintetizados en este concepto)" in mn.concept_rollup_table(
+        [dict(f, entro_por="methods") for f in filas])
+
+
+def test_574_el_rollup_de_TEMA_reconoce_la_vista_por_el_nombre_del_concepto(toy_vault):
+    """#574 — en `papers_universe` de un tema, los nombres del sujeto eran `{slug, slug}`: una vista
+    (o un `no_vista`) escrita con el `concept` distinto del slug no se reconocía."""
+    write_yaml(cfg.THEMES_YAML, {"ica-x": {"title": "ICA", "concept": "ica", "area": "methods"}})
+    (cfg.CONCEPTS / "methods").mkdir(parents=True, exist_ok=True)
+    (cfg.CONCEPTS / "methods" / "ica.md").write_text("---\ntags: [concept]\n---\n\nver [[2000H]]\n",
+                                                     encoding="utf-8")
+    mk_note(cfg.PAPERS, "2000H", {"tags": ["paper"], "bibcode": "2000H", "relevance": "high",
+                                  "thesis_links": ["ica"], "methods": ["ica"],
+                                  "vistas": [{"sujeto": "ica", "tipo": "theme",
+                                              "fecha": "2026-01-01"}]}, "")
+    assert [r["estado"] for r in mn.papers_universe("ica-x", "theme")] == [mn.ESTADO_SINTETIZADO]

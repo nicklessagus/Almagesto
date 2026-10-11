@@ -2900,6 +2900,12 @@ CONCEPT_ROLLUP_HEADER = "## Papers que tocan este tema (auto)"
 # Los cuatro estados posibles de un paper del universo de un sujeto. El orden es el del embudo:
 # cada uno es un paso menos recorrido que el anterior.
 ESTADO_SINTETIZADO = "sintetizado"
+#: #574 · cited in the subject's prose but never READ through its lens (no dated
+#: `vistas[].sujeto` for it): the claims those blocks carry have no witness in the chain for this
+#: subject. It counts as synthesised in the header — the prose does cite it — but the row says so.
+ESTADO_SINTETIZADO_SIN_VISTA = "sintetizado sin vista del sujeto"
+#: The states the header counts as «sintetizados» — cited in the subject's prose.
+ESTADOS_SINTETIZADOS = (ESTADO_SINTETIZADO, ESTADO_SINTETIZADO_SIN_VISTA)
 ESTADO_EXTRAIDO = "extraído, no sintetizado"
 ESTADO_SIN_EXTRAER = "sin extraer"
 #: #268 · el paper cuyo dueño DECLARÓ que no lo va a leer para este sujeto (`no_vista` + motivo).
@@ -2993,17 +2999,25 @@ def _estado_paper(stem: str, fm: dict, cuerpo: str, dropeados: set, sujetos: set
         return ESTADO_DROPEADO
     if (fm.get("relevance") or "").lower() == "low":
         return ESTADO_FUERA
-    # #472 — la declaración es por PAR (paper, sujeto) y va ANTES de mirar `methods`: ese campo lo
-    # puebla la lectura bajo CUALQUIER sujeto, así que un paper leído para el hub y declarado
+    # #574 — the CITATION goes first: a pair hatch (`no_vista`, `no_sintetizado`) is a claim about
+    # this subject's note, and the note citing the paper is the fact. With the hatch first a ficha
+    # synthesising a paper in whole blocks published it as «sin vista (declarado)» and the header
+    # under-counted; the contradiction itself is the lint's (`no_sintetizado_citado`), not this
+    # column's to settle in silence. Whether the subject READ it is the second axis.
+    # AUD-509 — the whole wikilink, not a prefix: `[[2011Naika]]` does not cite `2011Naik`.
+    if cfg.wikilink_re(stem).search(cuerpo):
+        return (ESTADO_SINTETIZADO if cfg.note_read_for(fm, sujetos, entry=stem)
+                else ESTADO_SINTETIZADO_SIN_VISTA)
+    # #472 — la declaración es por PAR (paper, sujeto) y va ANTES de mirar si hubo lectura: ésta
+    # puede haber ocurrido bajo CUALQUIER sujeto, así que un paper leído para el hub y declarado
     # `no_vista` para el radio caía a «extraído, no sintetizado» — dos deudas que el usuario ya
     # cerró con motivo, y el lint (#268) diciendo lo contrario sobre el mismo par.
     if _no_vista_declarada(fm, stem, sujetos):
         return ESTADO_SIN_VISTA
-    if not (fm.get("methods") or []):
+    # #574 — «extracted» is `cfg.note_has_reading` (a dated view counts), not `methods` alone:
+    # `methods: []` with a dated view and citations was published as «sin extraer».
+    if not cfg.note_has_reading(fm):
         return ESTADO_SIN_EXTRAER
-    # AUD-509 — the whole wikilink, not a prefix: `[[2011Naika]]` does not cite `2011Naik`.
-    if cfg.wikilink_re(stem).search(cuerpo):
-        return ESTADO_SINTETIZADO
     if _no_sintetizado_declarado(fm, stem, sujetos):
         return ESTADO_NO_SINTETIZADO
     return ESTADO_COLA if _cola_declarada(fm, stem, sujetos) else ESTADO_EXTRAIDO
@@ -3031,7 +3045,7 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
     # nombre que `stars`/`thesis_links`, que es el canónico del YAML, no el slug.
     try:
         _sujetos = {slug, (cfg.star_by_slug(slug)[0] if kind == "star"
-                           else cfg.theme_by_slug(slug)[0])}
+                           else str(cfg.as_map(meta).get("concept") or slug))}
     except (KeyError, IndexError, TypeError):
         _sujetos = {slug}
     filas = []
@@ -3072,7 +3086,7 @@ def papers_table(rows: list) -> str:
     """La sección `## Papers` estampada: encabezado con los DOS números (universo y sintetizados) y
     una fila por paper. El encabezado no puede prometer un número que la tabla no sostenga — ése
     era el defecto medido."""
-    n_sint = sum(1 for r in rows if r["estado"] == ESTADO_SINTETIZADO)
+    n_sint = sum(1 for r in rows if r["estado"] in ESTADOS_SINTETIZADOS)
     out = [f"{PAPERS_HEADER} ({len(rows)} · {n_sint} sintetizados en esta ficha)", ""]
     if not rows:
         out += ["_(ninguna nota de paper declara este sujeto todavía.)_", ""]
@@ -3135,7 +3149,7 @@ def concept_rollup_table(rows: list) -> str:
     unread. Those 57 are not all alike (`ESTADO_SIN_EXTRAER` vs `ESTADO_EXTRAIDO` vs
     `ESTADO_SIN_VISTA`, #268) — exactly what a spoke needs to know about the hub whose corpus it
     inherits, and what previously required a script parsing every note."""
-    n_sint = sum(1 for r in rows if r.get("estado") == ESTADO_SINTETIZADO)
+    n_sint = sum(1 for r in rows if r.get("estado") in ESTADOS_SINTETIZADOS)
     out = [f"{CONCEPT_ROLLUP_HEADER} ({len(rows)} · {n_sint} sintetizados en este concepto)", ""]
     if not rows:
         out += ["_(ninguna nota de paper declara este tema todavía.)_", ""]

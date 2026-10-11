@@ -656,6 +656,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   sintetizado»* sobre el paper leído para el hub y declarado `no_vista` para el radio — dos deudas
   que el usuario ya cerró con motivo, y esta categoría diciendo lo contrario sobre el mismo par
   (medido: 2 de 40 en `ica-ruido`). La declaración es por par y no depende de quién más leyó la nota.
+  ⛔ **Pero la CITA va antes que cualquier escotilla (#574):** si la nota del sujeto cita el paper en
+  prosa, el estado es `sintetizado` —con la vista fechada de ese sujeto— o **`sintetizado sin vista
+  del sujeto`** —sin ella: la ficha lo usa y nadie lo leyó con su lente, así que esos bloques no
+  tienen testigo en la cadena—. Los dos cuentan en el encabezado. «Extraído» es
+  `cfg.note_has_reading` (una vista fechada alcanza aunque `methods` esté vacío), en el roll-up y
+  en *sin extraer* de este catálogo.
 - **La prosa afirma sobre la autoridad algo que su ground-truth desmiente** (#278, backlog): el
   espejo #70 vigila el **frontmatter** campo por campo y nunca el cuerpo. Medido: una ficha publica
   *«NEA publica las dos como `confirmed`»* sobre un planeta que NEA no lista — falso contra cuatro
@@ -864,6 +870,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   <estrella>` re-estampa el roll-up de los temas que tocan sus papers, y el extractor propone
   `temas: [{tema, aporta, motivo}]`, que el cosechador imprime listo para pegar. Medido en una
   bóveda real: 91 pares. La **cola** se lista aparte, con fecha (`cola_tema`, backlog).
+- **`no_sintetizado[X]` y la nota de X cita el paper** (#574, `no_sintetizado_citado`, backlog): la
+  escotilla por par afirma que la nota de X no sintetiza ese paper, y la prosa (`cfg.solo_prosa`)
+  dice lo contrario. El roll-up publica la cita; cuál de las dos mitades está mal lo decide quien
+  lee: sacar la escotilla para ese sujeto, o la cita. `no_vista[X]` con cita **no** es este
+  hallazgo (una nota puede citar lo que no leyó con la lente de X): el roll-up lo publica
+  `sintetizado sin vista del sujeto`. Medido en una instancia: 9 pares.
 - **Vista fechada sin fuente en disco** (#217): la lectura ocurrió y ya no hay contra qué
   re-verificarla (los artefactos los borró `--drop-core`). Ninguna otra red lo ve: el ancla de
   fuente no se entera de un archivo que **desapareció**.

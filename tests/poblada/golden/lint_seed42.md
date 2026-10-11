@@ -290,6 +290,9 @@
 ## 🧭 Par (paper, tema) que llegó por `methods` desde otro sujeto y nadie decidió: `no_sintetizado` o `cola_tema` (#558, backlog; con `--cierre` bloquea) (0)
 > sobre 60 notas de `papers/`
 
+## 🔀 `no_sintetizado[X]` declarado y la nota de X cita el paper: la escotilla contradice la prosa (#574, backlog) (0)
+> sobre 60 notas de `papers/`
+
 ## ⏳ Par (paper, tema) EN COLA del tema, declarado y fechado — deuda con dueño (#558, backlog) (0)
 > sobre 60 notas de `papers/`
 
@@ -416,8 +419,8 @@
 
 ## Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (2)
 > sobre 60 notas de `papers/`
-- 1996Alm00057A → extraído (`methods` poblado) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o declarar `no_sintetizado: [{sujeto, motivo}]` en la nota del paper (#553)
-- 2019Alm00056A → extraído (`methods` poblado) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o declarar `no_sintetizado: [{sujeto, motivo}]` en la nota del paper (#553)
+- 1996Alm00057A → extraído (leído) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o declarar `no_sintetizado: [{sujeto, motivo}]` en la nota del paper (#553)
+- 2019Alm00056A → extraído (leído) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o declarar `no_sintetizado: [{sujeto, motivo}]` en la nota del paper (#553)
 
 ## Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog) (2)
 > sobre 29 notas de entidad (fichas, conceptos, queries)

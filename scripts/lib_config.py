@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.380.2"
+ALMAGESTO_VERSION = "1.381.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2159,12 +2159,21 @@ def note_state(bibcode: str, subject: str | None = None) -> str:
     fm = split_fm(dest.read_text(encoding="utf-8"))
     if subject is None:
         return NOTE_READ if note_has_reading(fm) else NOTE_STUB
+    return NOTE_READ if note_read_for(fm, {subject}, entry=bibcode) else NOTE_STUB
+
+
+def note_read_for(fm: dict, subjects, *, entry: str = "?") -> bool:
+    """Was this paper READ for one of `subjects` — a view of that subject with a `fecha`? (#574)
+
+    The per-subject half of `note_has_reading`, ONE rule for `note_state` and the roll-up's
+    `make_notes._estado_paper`: a ficha that cites a paper never read through its lens publishes
+    `sintetizado` with no witness in the chain for those claims. A malformed `vistas[]` is the
+    lint's finding, not this one's: it degrades to «not read» (the reading is not on record)."""
     try:
-        vistas = load_vistas(fm, entry=bibcode)
+        vistas = load_vistas(fm, entry=entry)
     except VistasError:
-        return NOTE_STUB
-    leida = any(v["sujeto"] == subject and str(v.get("fecha") or "").strip() for v in vistas)
-    return NOTE_READ if leida else NOTE_STUB
+        return False
+    return any(v["sujeto"] in subjects and str(v.get("fecha") or "").strip() for v in vistas)
 
 
 def wikilink_re(stem: str):

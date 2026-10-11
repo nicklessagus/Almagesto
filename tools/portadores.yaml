@@ -42,7 +42,7 @@ portadores:
         motivo: "#570 — `rename` reescribe el `sujeto:` de `no_vista` cuando ES el slug renombrado; no consulta la declaración ni decide estado."
       - modulo: scripts/make_notes.py
         estado: usa
-        motivo: "`_estado_paper`, la única escalera de los dos roll-ups (D-10/#300): la declaración va antes de `methods`."
+        motivo: "`_estado_paper`, la única escalera de los dos roll-ups (D-10/#300): la declaración va antes de la señal de lectura (y después de la cita, #574)."
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "Parsea `no_vista` con `cfg.load_no_vista` por su cuenta (#268) y decide por sujeto en sus cuatro redes; la única que mira `methods` (`sin extraer`, #90) lo hace para el caso opuesto —`methods` vacío Y sin declaración— y no puede producir la deuda falsa de este issue."
@@ -3287,3 +3287,26 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: "`build_rows`, `reanchor` y `--reanclar` pasan por `carry_needs_reverify` (#539); no llama a `claim_objects_changed` directo."
+  - issue: 574
+    regla: >-
+      Una escotilla por par (`no_sintetizado[X]`, `no_vista[X]`) es una afirmación sobre la nota de
+      X, y el roll-up publica un estado verdadero: la CITA en la prosa de X decide antes que la
+      escotilla, «leído para X» es una vista de X con `fecha` (`sintetizado` vs `sintetizado sin
+      vista del sujeto`), y «extraído» es `note_has_reading`, no `methods` a secas. La contradicción
+      `no_sintetizado[X]` + cita la reporta el lint (`no_sintetizado_citado`), no se resuelve en
+      silencio.
+    funcion: lib_config.note_read_for
+    patron: 'note_read_for|note_has_reading'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`_estado_paper`, la escalera de los dos roll-ups: la cita va primero y se parte por `note_read_for`; «sin extraer» es `note_has_reading`."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Lee el estado de `_estado_paper` (`ESTADOS_SINTETIZADOS`) y usa `note_has_reading` para «sin extraer»/«extraído»; `check_no_sintetizado_citado` cruza la escotilla contra la prosa. No decide «leído para X»."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "`note_has_reading` para no borrar una nota leída (AUD-223); no decide un estado por sujeto."
+      - modulo: scripts/query_ads.py
+        estado: fuera-de-alcance
+        motivo: "Nombra `note_has_reading` en un comentario (semántica de «extraída», AUD-286) y delega en `note_state`; no publica un estado de roll-up."

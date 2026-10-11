@@ -4233,3 +4233,14 @@ def test_565_axes_block_end_es_el_final_del_ultimo_bullet():
 def test_565_axis_bullet_sangra_la_continuacion_y_no_los_blancos():
     assert cfg.axis_bullet("m", " a\nb\n\nc ") == "- **m:** a\n  b\n\n  c"
     assert cfg.axis_bullet("m", "a") == "- **m:** a"
+
+
+def test_574_note_read_for_es_la_vista_FECHADA_de_ese_sujeto():
+    """#574 — la mitad por sujeto de `note_has_reading`: una vista de ESE sujeto con `fecha`."""
+    def v(**k):
+        return {"vistas": [{"sujeto": "S", "tipo": "star", **k}]}
+    assert cfg.note_read_for(v(fecha="2026-01-01"), {"S", "s"}) is True
+    assert cfg.note_read_for(v(fecha="2026-01-01"), {"T"}) is False
+    assert cfg.note_read_for(v(), {"S"}) is False and cfg.note_read_for(v(fecha="  "), {"S"}) is False
+    assert cfg.note_read_for({"vistas": "roto"}, {"S"}) is False, "forma rota: del lint"
+    assert cfg.note_read_for({}, {"S"}) is False
