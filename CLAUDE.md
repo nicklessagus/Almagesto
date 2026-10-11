@@ -247,8 +247,8 @@ por MÉTODO** (clave normalizada, variantes al lado) y colapsa la cola en un `<d
 **declara cuántos quedan adentro** (#273). `## Papers` —`Bibcode | Año | Relevancia | Origen |
 Estado`— lleva en el encabezado **los dos números** (universo · sintetizados acá), y el **estado**
 dice cuán lejos llegó cada paper (`fuera del filtro` → `sin extraer` → `extraído, no sintetizado` →
-`sintetizado`). En un concepto el roll-up es la **unión** de `methods` y `thesis_links`, con la
-columna *Entró por* (D-24), y **las mismas dos garantías** (#300).
+`sintetizado`, o `sintetizado sin vista del sujeto` si no hay vista fechada, #574). En un concepto
+es la **unión** de `methods` y `thesis_links`, con *Entró por* (D-24), y **las mismas dos garantías** (#300).
 
 **El cuarto es la matriz método × estrella** (`--restamp-matrix`, #429): fila = método por clave
 normalizada, columna = ficha, celda = los `[[bibcode]]` de los papers **de esa estrella** que lo

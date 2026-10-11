@@ -203,3 +203,26 @@ def test_580_la_CLI_de_segunda_clase(tmp_path):
                  ["--segunda-clase", "--fuentes", "2020A"]):
         with pytest.raises(SystemExit):
             vf.main([str(nota), "--out", str(tmp_path / "x"), *malo])
+
+
+def test_580_una_muestra_MAYOR_que_el_total_no_recorta_ni_rompe(tmp_path):
+    """#580 — `--muestra N` con N ≥ las `contextualiza` muestra todas: `sample` con N > total
+    levantaría `ValueError`, y con N == total reordenaría sin necesidad."""
+    nota = _con_hermano(tmp_path, ["contextualiza: a", "contextualiza: b", "contextualiza: c"])
+    entera = vf.write_class_round(nota, tmp_path / "e")
+    for n in (3, 5):
+        c = vf.write_class_round(nota, tmp_path / f"m{n}", muestra=n)
+        assert c == {"items": 3, "contextualiza": 3, "sin_bloque": 0}, (n, c)
+        assert (tmp_path / f"m{n}" / vf.CLASS_PROMPT).read_text(encoding="utf-8").replace(
+            str(tmp_path / f"m{n}"), "") == (tmp_path / "e" / vf.CLASS_PROMPT).read_text(
+            encoding="utf-8").replace(str(tmp_path / "e"), ""), entera
+
+
+def test_580_la_CLI_AVISA_las_filas_sin_bloque_y_calla_si_no_hay(tmp_path, capsys):
+    """#580 — la fila cuyo bloque venció queda fuera del prompt: la CLI lo dice (D-43)."""
+    nota = _con_hermano(tmp_path, ["contextualiza: a", "contextualiza: b", "contextualiza: c"])
+    assert vf.main([str(nota), "--out", str(tmp_path / "ok"), "--segunda-clase"]) == 0
+    assert "sin su bloque" not in capsys.readouterr().out
+    nota.write_text(NOTA.replace("34 días", "35 días"), encoding="utf-8")
+    assert vf.main([str(nota), "--out", str(tmp_path / "v"), "--segunda-clase"]) == 0
+    assert "2 `contextualiza` sin su bloque" in capsys.readouterr().out
