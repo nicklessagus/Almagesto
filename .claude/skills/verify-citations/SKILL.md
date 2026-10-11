@@ -385,7 +385,7 @@ ya no la duplica y el lint la levanta; para el corpus heredado:
 llamada `contextualiza` sale del circuito de resolución. Con el hermano escrito,
 `python scripts/verify_fanout.py <nota.md> --out build/<slug>/verif/clase --segunda-clase [--muestra N]`
 arma UN prompt con cada `contextualiza` —sólo afirmación y condición, sin veredicto ni clase— para
-UN subagente que aplica la prueba de #221. Cada `acota` que devuelve es una **propuesta**: la que
+UN subagente que aplica la prueba de #221. Cada `acota` devuelta es una **propuesta**: la que
 firmás va con `write_verif_sidecar.py <nota.md> --reclasificar <ancla>:<bibcode>` (encadena, no
 pisa) y se resuelve con `--resolver`.
 

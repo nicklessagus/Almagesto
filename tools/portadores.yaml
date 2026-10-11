@@ -3378,6 +3378,9 @@ portadores:
       - modulo: scripts/proposals.py
         estado: fuera-de-alcance
         motivo: "Lee celdas vacías del inventario para PROPONER; no escribe."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "`role_mismatches` (#575) recorre las tablas de la nota para cruzar `Rol` contra `role`; lee, no inserta ni mueve filas."
 
   - issue: 580
     regla: >-
