@@ -2869,7 +2869,7 @@
   {
    "number": 576,
    "title": "El destino de `acota→resuelta: <dónde>` es texto libre y nada verifica que la condición haya llegado ahí (180 resoluciones en 15 notas)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 577,
@@ -2884,7 +2884,7 @@
   {
    "number": 579,
    "title": "El alcance de `## Huecos` no puede declarar un subconjunto de un slug (58 declarados contra 164 contados), y una lista partida en dos renglones lee «> kapteyn» como slug",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 580,
