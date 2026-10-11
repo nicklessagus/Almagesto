@@ -206,7 +206,8 @@ def _main_class(nota: Path, out: Path, muestra: int | None) -> int:
         return 1
     cfg.print_seguro(f"{c['items']} de {c['contextualiza']} `contextualiza` → {out}/{CLASS_PROMPT}. "
                      f"Lanzá UN subagente con ese prompt; cada `acota` que devuelva es una "
-                     f"PROPUESTA: si la firmás, `python scripts/write_verif_sidecar.py {nota} "
+                     f"PROPUESTA: ADJUDICALA CONTRA EL PDF antes de firmar (medido: 20 de 31 "
+                     f"correctas) y, si la firmás, `python scripts/write_verif_sidecar.py {nota} "
                      f"--reclasificar <ancla>:<bibcode>`, y después se resuelve (`--resolver`)")
     return 0
 

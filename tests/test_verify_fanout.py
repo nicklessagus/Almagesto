@@ -222,7 +222,9 @@ def test_580_la_CLI_AVISA_las_filas_sin_bloque_y_calla_si_no_hay(tmp_path, capsy
     """#580 — la fila cuyo bloque venció queda fuera del prompt: la CLI lo dice (D-43)."""
     nota = _con_hermano(tmp_path, ["contextualiza: a", "contextualiza: b", "contextualiza: c"])
     assert vf.main([str(nota), "--out", str(tmp_path / "ok"), "--segunda-clase"]) == 0
-    assert "sin su bloque" not in capsys.readouterr().out
+    salida = capsys.readouterr().out
+    assert "sin su bloque" not in salida
+    assert "ADJUDICALA CONTRA EL PDF" in salida, "la propuesta se adjudica antes de firmar"
     nota.write_text(NOTA.replace("34 días", "35 días"), encoding="utf-8")
     assert vf.main([str(nota), "--out", str(tmp_path / "v"), "--segunda-clase"]) == 0
     assert "2 `contextualiza` sin su bloque" in capsys.readouterr().out

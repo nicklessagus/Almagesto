@@ -4493,3 +4493,10 @@ desde un radio, o papers de las estrellas leídos desde `rv-doppler`/`harps-drs`
 sujeto (#111), y que valga la del vecino lo decide el usuario. La cabecera `> _Estado — …_` cambia en
 esos 8 temas («N leídos fuera del registro»), así que `estado_desfasado` sale 8 hasta re-estampar.
 Lint completo sobre HEAD: rc 0, ~2 min. En el corpus sembrado del golden: 0.
+
+### #580 — precisión de la segunda opinión, medida por el validador (v1.387.2)
+
+Sobre `rv-doppler` en la instancia (2026-10-11), los dos jueces de `--segunda-clase` coincidieron en
+31 propuestas de `acota`; adjudicadas contra el PDF, **20 eran correctas (65 %)**. Una de cada tres
+propuestas firmada sin mirar la fuente metería un error: el skill y la salida de la CLI piden
+adjudicar contra el PDF antes de `--reclasificar`.

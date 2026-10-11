@@ -381,13 +381,13 @@ resuelve, la celda lo dice, y el conteo la sigue contando como pendiente para si
 ya no la duplica y el lint la levanta; para el corpus heredado:
 `python scripts/write_verif_sidecar.py <nota.md> --migrate-condition-prefix`.
 
-**La clase tiene segunda opinión (#580):** la pone el juez del respaldo, y una `acota`
-llamada `contextualiza` sale del circuito de resolución. Con el hermano escrito,
-`python scripts/verify_fanout.py <nota.md> --out build/<slug>/verif/clase --segunda-clase [--muestra N]`
-arma UN prompt con cada `contextualiza` —sólo afirmación y condición, sin veredicto ni clase— para
-UN subagente que aplica la prueba de #221. Cada `acota` devuelta es una **propuesta**: la que
-firmás va con `write_verif_sidecar.py <nota.md> --reclasificar <ancla>:<bibcode>` (encadena, no
-pisa) y se resuelve con `--resolver`.
+**La clase tiene segunda opinión (#580):** una `acota` llamada `contextualiza` sale del circuito
+de resolución. `python scripts/verify_fanout.py <nota.md> --out build/<slug>/verif/clase
+--segunda-clase [--muestra N]` arma UN prompt con cada `contextualiza` —sólo afirmación y
+condición— para UN subagente que aplica la prueba de #221. Cada `acota` devuelta es una
+**propuesta**: ⛔ **adjudicala contra el PDF antes de firmar** (medido: 20 de 31 correctas); la
+firmada va con `write_verif_sidecar.py <nota.md> --reclasificar <ancla>:<bibcode>` (encadena) y
+se resuelve con `--resolver`.
 
 **Corregir es escribir, y lo escrito se verifica: la operación cierra en corregir → re-verificar
 lo tocado (#203).** No cierra en *corregir*. Después de aplicar, los pares que tocaste están **sin
