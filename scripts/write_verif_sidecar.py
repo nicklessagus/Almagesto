@@ -80,7 +80,7 @@ import lib_config as cfg          # noqa: E402
 import lib_blocks as lb           # noqa: E402
 import check_verify_fanout        # noqa: E402
 
-PENDIENTE = "⚠ triage de la corrida pendiente"
+PENDIENTE = lb.SUBSECTION_PENDING
 INTRO = "Chequeo afirmación↔fuente (skill `verify-citations`)."
 
 
@@ -459,12 +459,11 @@ def free_text_of(seccion: str, sub: str) -> str:
     splitting on the FIRST `:` re-captures half the fragment and the line grows on every run.
     #430 — and the line is read NORMALISED (`lb.subsection_split`), which is what makes an adorned
     or parenthesised sub-section name still be recognised as its own; comparing the raw line
-    returned `""` and the caller wrote the placeholder on top of the round's triage."""
-    for ln in seccion.split("\n"):
-        es_esta, prosa = lb.subsection_split(ln.strip(), sub)
-        if es_esta:
-            return prosa
-    return ""
+    returned `""` and the caller wrote the placeholder on top of the round's triage.
+    #577 — and it is the whole PARAGRAPH (`lb.subsection_free_text`): read line by line, the
+    writer kept the first line of a hard-wrapped triage and dropped the rest (1.239.0–1.249.x), and
+    since #430 it refused it as «prose that would be lost» — prose that was in its sub-section."""
+    return lb.subsection_free_text(seccion, sub) or ""
 
 
 def _residual_prose(seccion: str, sub: str) -> str:

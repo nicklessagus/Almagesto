@@ -1072,6 +1072,60 @@ def _subsection_prose_start(line: str, sub: str) -> int | None:
     return orig
 
 
+#: El placeholder que el escritor estampa cuando nadie escribió el triage (`write_verif_sidecar`).
+#: Vive acá porque lo leen dos: el escritor, que lo pone, y el chequeo de forma (#577), que no lo
+#: lee como prosa cortada — un pendiente visible no es una frase a medias.
+SUBSECTION_PENDING = "⚠ triage de la corrida pendiente"
+
+
+def subsection_free_text(section: str, sub: str) -> str | None:
+    """The free text of one sub-section's PARAGRAPH, or `None` when the sub-section is absent (#577).
+
+    ⛔ The paragraph, not the line. The triage is hard-wrapped prose like any other paragraph of a
+    note, and reading only the line that carries the name kept its first line and dropped the rest:
+    measured in a real vault (writer 1.239.0–1.249.x), «Inferencias declaradas — 7 marcas en el
+    cuerpo: la comparación» and three more sub-sections published cut mid-sentence for a month.
+    Continuation lines run up to the blank line, a heading, or the next sub-section; they come back
+    joined by `\\n`, so the writer re-emits the wrap as it was."""
+    lineas = section.split("\n")
+    for i, ln in enumerate(lineas):
+        es_esta, prosa = subsection_split(ln.strip(), sub)
+        if not es_esta:
+            continue
+        partes = [prosa] if prosa else []
+        for sig in lineas[i + 1:]:
+            s = sig.strip()
+            if not s or s.startswith("#") or any(subsection_split(s, x)[0]
+                                                  for x in VERIF_SUBSECCIONES):
+                break
+            partes.append(s)
+        return "\n".join(partes)
+    return None
+
+
+#: Con qué puede terminar una frase entera (#577): puntuación final, el cierre de un paréntesis,
+#: cita, énfasis, código, link o matemática. Lo demás —una coma, un `:`, una palabra pelada— es la
+#: forma de un párrafo cortado.
+_CIERRE_DE_FRASE = tuple(".!?…)»\"'*_`]$")
+
+
+def subsection_cut(free: str) -> str:
+    """`""` when a sub-section's free text closes like a sentence; else its last words (#577).
+
+    The shape net #430 lacked: it guarantees the triage is not LOST between runs, never that what
+    is left is WHOLE. A cut paragraph ends in `,` `;` `:` or in a bare word (measured: a bibcode
+    list ending in a comma, and two sentences ending mid-phrase). Exempt: the empty text (a missing
+    sub-section is #232's finding), the pending placeholder, and a ONE-word answer, which the
+    skill's own template allows.
+
+    ⚠ It reads the END only. A paragraph spliced in the middle and closed by a later sentence has a
+    well-formed end and passes (measured: one of the five cases); that needs a reader, not a shape."""
+    s = free.strip()
+    if not s or s == SUBSECTION_PENDING or len(s.split()) == 1:
+        return ""
+    return "" if s.endswith(_CIERRE_DE_FRASE) else s[-60:]
+
+
 def fragment_stated(line: str, frag: str) -> bool:
     """Does this sub-section line publish `frag` as its count fragment? (#280/#430)
 

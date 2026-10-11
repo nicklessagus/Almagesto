@@ -11749,3 +11749,33 @@ def test_574_core_con_vista_fechada_y_methods_vacio_no_es_sin_extraer(toy_vault)
     inc, *_x = lint.check_paper_coverage("2020X", {"vistas": [{"sujeto": "x", "tipo": "star"}]},
                                          "high", {}, {"2020X": "x"}, {}, [])
     assert len(inc) == 1 and "sin extraer" in inc[0][1], "el stub sin fecha no es lectura"
+
+
+def test_577_la_prosa_de_la_subseccion_que_NO_CIERRA_se_reporta(toy_vault):
+    """#577 — #430 garantiza que el triage no se pierda, no que esté entero. Los cuatro cierres
+    medidos en la instancia (dos de `rv-doppler`, uno de `harps-drs`, uno de `ica-ruido`) se
+    reportan; la sub-sección bien cerrada, el «ninguna» pelado y el pendiente, no."""
+    filas = [lb.Row(n="1", claim="c", bibcode="2020A", verdict="soportada",
+                     anchor="a" * 10, source_hash="b" * 10, condition="—", source_kind="pdf")]
+    frags = lb.verif_subsection_lines(filas, "")
+
+    def _bloque(inf, omi, cond):
+        return ("## Verificación de citas (2026-03-01)\n\n"
+                f"Inferencias declaradas {frags['Inferencias declaradas']}: {inf}\n\n"
+                f"Omisiones en transcripciones: {omi}\n\n"
+                f"Condiciones perdidas {frags['Condiciones perdidas']}: {cond}\n")
+
+    def _cortadas(texto):
+        est, _cab = lint.check_verif_structure("n", texto, Path("n.md"), filas)
+        return [m.split("»")[0].split("«")[-1] for _s, m in est if "no cierra como frase" in m]
+
+    assert _cortadas(_bloque("[[1996A&AS..119..373B]], [[2010ApJ...722..937D]],",
+                             "la tercera (p. 5), no. Los verificadores reportaron omisiones",
+                             "Las `acota`, una por una:")) == list(lb.VERIF_SUBSECCIONES)
+    assert _cortadas(_bloque("la comparación", "ninguna", lb.SUBSECTION_PENDING)) \
+        == ["Inferencias declaradas"]
+    assert _cortadas(_bloque("cada una nombra sus premisas.", "ninguna.",
+                             "resuelta en su fila ([[2020A]], p. 4)")) == []
+    # el párrafo cortado en DOS líneas se lee entero: lo que cierra es la segunda
+    assert _cortadas(_bloque("la comparación\nHARPS-TERRA↔MVALD que ninguna hace.", "ninguna.",
+                             "ninguna.")) == []

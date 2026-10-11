@@ -4380,3 +4380,23 @@ Worktrees desechables de Almagesto-Tesis, scripts del template copiados adentro,
   (2019AJ....158..161D escrito `fundacional`, declara `aplicacion`). 0 falsos positivos. Antes de
   excluir el `role` vacío salían 2 más (2023spi..conf...22M sin `role`): eso es la categoría del
   paper sin `role`, no una discrepancia.
+
+## La prosa de las sub-secciones de verificación, entera (v1.383.0, #577)
+
+**Causa.** `d3a4aeea` de Almagesto-Tesis (2026-09-06, framework 1.246.1) re-escribió la sección con
+`write_verif_sidecar` (1.239.0–1.249.x): `free_text_of` leía **la línea** del nombre, así que el
+triage con hard-wrap quedó en su primera línea (`harps-drs`: «— 7 marcas en el cuerpo: la
+comparación»). Mismo mecanismo en `rv-doppler` (envuelto en `e8a5dc57`, cortado después). Desde
+1.250.0 (#430) `_lost_prose` ya no corta: **rehúsa** el párrafo como «prosa que se perdería». El fix
+lee el párrafo (`lb.subsection_free_text`) y lo re-emite con su wrap. `ica-ruido` en HEAD no está
+cortado (reescrito a mano); en `d3a4aeea` traía el fragmento de «Condiciones perdidas» triplicado
+(#430) y «Las `acota`, una por una:» sin la lista.
+
+**Red** (`lb.subsection_cut`, en `verif_estructura`, backlog). Recall sobre los cinco casos
+conocidos: en `37abd671^` 3/3 hallazgos (rv-doppler 2, harps-drs 1, sin falsos positivos); con
+`harps-drs.ANTES.md` + hermano, 1 de 2 (el empalme de «Omisiones» cierra con punto: invisible a la
+forma). Falsos positivos en HEAD (`e5fa8e60`): 0 sobre 25 notas de entidad (75 sub-secciones).
+**Descartado** el chequeo «N marcas ⇒ N bibcodes o ninguno»: una marca nombra varias premisas, y en
+HEAD da distinto de N y de 0 en 12 de 30 notas; el caso que lo motivó (`…]],`) lo agarra el cierre.
+Escritor sobre HEAD: `--restamp-section --todo` toca 1 nota (sólo el salto de línea final, previo) y
+la segunda corrida 0.

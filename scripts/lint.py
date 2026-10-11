@@ -3708,6 +3708,17 @@ def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
             verif_estructura.append(
                 (stem, f"la sub-sección «{_sub}» no publica el conteo que su propia tabla da → "
                        f"línea canónica: «{_sub} {_frag}: …»"))
+    # #577 — #430 garantiza que el triage no se PIERDA entre corridas, no que lo que queda esté
+    # ENTERO. Medido: cuatro sub-secciones publicadas cortadas a mitad de frase durante un mes
+    # (el escritor leía sólo la primera línea del párrafo), con lint y `--cierre` en 0. Se lee el
+    # párrafo con el mismo lector que el escritor (`subsection_free_text`) y se mira su cierre.
+    _sec = lb.verif_section(texto)
+    for _sub in lb.VERIF_SUBSECCIONES:
+        if (_corte := lb.subsection_cut(lb.subsection_free_text(_sec, _sub) or "")):
+            verif_estructura.append(
+                (stem, f"la prosa de «{_sub}» no cierra como frase —termina en «…{_corte}»—: es la "
+                       f"única constancia del triage y parece cortada → completala desde la ronda "
+                       f"(log, hermano) o cerrala (#577)"))
     return verif_estructura, verif_cabecera
 
 

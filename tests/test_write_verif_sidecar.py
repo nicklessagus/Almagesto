@@ -1443,3 +1443,22 @@ def test_550_el_verify_re_estampa_la_linea_de_estado_con_su_fecha(toy_vault):
     ws.write(nota, d, fecha="2026-03-01")
     estado = [l for l in nota.read_text(encoding="utf-8").split("\n") if l.startswith("> _Estado")]
     assert len(estado) == 1 and "verificación 2026-03-01" in estado[0], estado
+
+
+def test_577_el_triage_con_HARD_WRAP_se_conserva_entero_y_converge(toy_vault):
+    """#577 — el escritor leía sólo la primera línea de la sub-sección: entre 1.239.0 y 1.249.x
+    publicó el triage cortado («— 7 marcas en el cuerpo: la comparación»), y desde #430 rehusaba
+    el párrafo como «prosa que se perdería» aunque estaba en su sub-sección. Ahora lo lleva entero,
+    con su wrap, y la segunda corrida no cambia nada."""
+    nota = _escena(toy_vault)
+    d = _fanout(toy_vault, nota, {})
+    ws.write(nota, d, fecha="2026-03-01")
+    envuelto = ("Inferencias declaradas — 0 marcas en el cuerpo: la comparación\n"
+                "HARPS-TERRA↔MVALD que ninguna de las dos fuentes hace; y la cota\n"
+                "sobre el salto de los indicadores.")
+    _con_triage(nota, "Inferencias declaradas — 0 marcas en el cuerpo: " + ws.PENDIENTE, envuelto)
+    ws.write(nota, d, fecha="2026-03-01")
+    t1 = nota.read_text(encoding="utf-8")
+    assert envuelto in t1, "el párrafo entero, con su wrap"
+    ws.restamp_section(nota)
+    assert nota.read_text(encoding="utf-8") == t1, "converge"

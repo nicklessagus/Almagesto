@@ -3322,3 +3322,15 @@ portadores:
     consumidores:
       - modulo: scripts/lint.py
         estado: usa
+
+  - issue: 577
+    regla: >-
+      La prosa libre de una sub-sección del bloque de verificación es un PÁRRAFO (con hard-wrap), y
+      quien la lee para reescribirla o juzgarla lee el párrafo entero, no la línea del nombre.
+    funcion: lib_blocks.subsection_free_text
+    patron: 'subsection_split|VERIF_SUBSECCIONES'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa

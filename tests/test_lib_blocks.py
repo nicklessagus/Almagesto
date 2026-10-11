@@ -1964,3 +1964,36 @@ def test_564_locator_kinds_lee_la_pagina_de_actas_con_guion():
     assert lb.locator_kinds("(pp. V-61–V-64)") == {"pdf"}
     assert lb.locator_kinds("p. 5-16") == {"pdf"}
     assert lb.locator_kinds("sin nada") == set()
+
+
+@pytest.mark.parametrize("libre, corte", [
+    ("", ""),                                              # ausente: lo reporta #232
+    ("ninguna", ""),                                       # una palabra: el skill la permite
+    ("⚠ triage de la corrida pendiente", ""),              # pendiente visible, no frase a medias
+    ("cada una nombra sus premisas.", ""),
+    ("resuelta ([[2020A]], p. 4)", ""),
+    ("ver `--resolver`", ""),
+    ("[[1996A&AS..119..373B]], [[2010ApJ...722..937D]],", "[[1996A&AS..119..373B]], [[2010ApJ...722..937D]],"),
+    ("Las `acota`, una por una:", "Las `acota`, una por una:"),
+    ("la comparación", "la comparación"),
+    ("no. Los verificadores reportaron omisiones", "no. Los verificadores reportaron omisiones"),
+])
+def test_577_subsection_cut_mira_el_CIERRE_de_la_prosa(libre, corte):
+    """#577 — la forma de un párrafo cortado: termina en `,` `;` `:` o en una palabra pelada."""
+    assert lb.subsection_cut(libre) == corte
+
+
+def test_577_subsection_free_text_lee_el_PARRAFO_no_la_linea():
+    """#577 — el triage es prosa con hard-wrap; leído por línea quedaba la primera y nada más."""
+    sec = ("## Verificación de citas (2026-03-01)\n\n"
+           "Inferencias declaradas — 2 marcas en el cuerpo: la comparación\n"
+           "HARPS-TERRA↔MVALD; y la\nlectura final.\n\n"
+           "Omisiones en transcripciones:\nninguna.\n"
+           "Condiciones perdidas — 0 con condición: 0 `acota` (0 resueltas) / 0 `contextualiza` / "
+           "0 sin clasificar: ninguna.\n")
+    assert lb.subsection_free_text(sec, "Inferencias declaradas") == \
+        "la comparación\nHARPS-TERRA↔MVALD; y la\nlectura final."
+    # el texto que arranca en la línea siguiente, y el corte en la sub-sección siguiente sin blanco
+    assert lb.subsection_free_text(sec, "Omisiones en transcripciones") == "ninguna."
+    assert lb.subsection_free_text(sec, "Condiciones perdidas") == "ninguna."
+    assert lb.subsection_free_text("## Verificación de citas\n", "Condiciones perdidas") is None

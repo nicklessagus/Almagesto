@@ -392,6 +392,13 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   línea, `lb.fragment_stated` compara, #430): cruda, la sub-sección cuyo fragmento un fan-out puso
   en negrita se reportaba desincronizada y **ninguna edición la cerraba** —el conteo ES el
   correcto—. Regla de método nº 4, quinta vez (#168, #276, #283, #309).
+- **Prosa de una sub-sección que no cierra como frase** (#577, misma categoría, backlog): #430
+  garantiza que el triage no se **pierda**, no que esté **entero**. Se lee el **párrafo** (con su
+  hard-wrap, `lb.subsection_free_text`, el mismo lector del escritor) y se reporta el que termina
+  en `,` `;` `:` o en una palabra pelada (`lb.subsection_cut`); exentos el «ninguna» de una
+  palabra y el pendiente. Medido: el escritor de 1.239.0–1.249.x leía sólo la primera línea y
+  dejó cuatro sub-secciones cortadas un mes con lint y `--cierre` en 0. ⚠ Mira el **final**: el
+  párrafo empalmado por la mitad y cerrado después pasa.
 - **Veredicto que exigió acción y una ronda posterior limpió PELADO** (#522, misma categoría,
   backlog): `contradice→soportada` se cuenta como soportada y sale de «N contradicen» —medido: 47
   filas en 9 notas, siete publicando «0 contradicen»—. El escritor lo producía hasta 1.331.0; desde
