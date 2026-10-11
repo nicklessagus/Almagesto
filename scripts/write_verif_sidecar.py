@@ -633,8 +633,8 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
             raise SidecarError(
                 f"`{spec}={donde}`: el destino tiene que empezar por "
                 f"{' o '.join(f'`{d}`' for d in lb.CONDITION_DESTINATIONS)} (`bloque` = el bloque "
-                f"del propio par; `regimen` = una fila de `## Régimen de validez` con su "
-                f"`[[bibcode]]`), con detalle opcional detrás de `{lb.DESTINATION_DETAIL_SEP.strip()}` (#576)")
+                f"del propio par; `siguiente` = el que le sigue; `regimen`/`inventario` = una fila "
+                f"de esa tabla con su `[[bibcode]]`; `huecos` = `## Huecos`), con detalle opcional detrás de `{lb.DESTINATION_DETAIL_SEP.strip()}` (#576)")
         candidatas = lb.rows_addressed(filas, ancla, bib)
         if not candidatas:
             raise SidecarError(
@@ -709,13 +709,22 @@ def _with_destination(enlace: str, resolucion: str, destino: str) -> str:
 
 
 #: #576 · the KNOWN legacy spellings of `<dónde>`, measured on an instance (244 resolutions, 115
-#: distinct texts). Anchored at the start and conservative: what does not match is listed for the
-#: user, never guessed (`el bloque siguiente`, `en la prosa`, `mismo ítem`, `en la celda` stay out).
+#: distinct texts; then the 45 the first two destinations left out). Anchored at the start,
+#: conservative and FIRST MATCH WINS, so the specific sections go before `bloque`: what does not
+#: match is listed for the user, never guessed (`en la prosa`, `ya estaba en la prosa` and the item
+#: of a paper's view stay out — they do not say which block).
 _LEGACY_DESTINATIONS = (
+    ("regimen", re.compile(r"(?:en )?(?:la |las )?(?:propia )?filas? (?:«[^»]*» )?de `?(?:## )?"
+                           r"régimen(?: de validez)?`?|`?(?:## )?régimen de validez`?", re.I)),
+    ("inventario", re.compile(r"(?:en )?(?:la )?fila del inventario\b", re.I)),
+    ("huecos", re.compile(r"`?## Huecos`?|(?:en )?el (?:propio )?(?:hueco\b|ítem de Huecos)", re.I)),
+    ("siguiente", re.compile(r"(?:el )?(?:bloque|párrafo) siguiente\b", re.I)),
     ("bloque", re.compile(r"(?:la condición quedó escrita en |ya estaba en |en )?(?:su |el |la )?"
                           r"(?:propi[oa] |mism[oa] )?bloque\b(?! siguiente)", re.I)),
-    ("regimen", re.compile(r"(?:en )?(?:la |las )?(?:propia )?filas? de `?(?:## )?régimen"
-                           r"(?: de validez)?`?|`?(?:## )?régimen de validez`?", re.I)),
+    ("bloque", re.compile(r"(?:en )?(?:el |la )?(?:propi[oa] |mism[oa] )?(?:ítem|fila|celda)\b"
+                          r"(?!.*\bde la vista\b)", re.I)),
+    ("bloque", re.compile(r"(?:la condición se agregó a )?la (?:propia )?afirmación\b|la frase\b"
+                          r"|prosa (?:corregida|acotada)\b", re.I)),
 )
 _BARE_RESOLUTION_TAIL = re.compile(r"[\s.]*")
 
@@ -738,7 +747,7 @@ def _bare_destination_phrase(resolucion: str) -> bool:
 
 
 def migrate_condition_destination(note: Path, dry_run: bool = False) -> dict:
-    """Declare `bloque`/`regimen` in front of every free-text `acota→resuelta: <dónde>` (#576).
+    """Declare its destination (`lb.CONDITION_DESTINATIONS`) in front of every free-text `acota→resuelta: <dónde>` (#576).
 
     One-use migrator, over EVERY link of the chain (#451): an older link's resolution is still a
     claim about the note, and the lint crosses its `regimen`. A text `legacy_destination` does not
@@ -1177,7 +1186,7 @@ def _main_migrate_destination(args) -> int:
     cfg.print_seguro(f"{total} resolución(es) con destino declarado sobre {len(notas)} nota(s)"
                      + (" (dry-run: no se escribió)" if args.dry_run else "")
                      + f" · {len(sin_mapear)} sin mapear (decidilas: `--resolver "
-                       f"<ancla>:<bibcode>=<bloque|regimen>`)")
+                       f"<ancla>:<bibcode>=<{'|'.join(lb.CONDITION_DESTINATIONS)}>`)")
     for n, ancla, bib, res, vigente in sin_mapear:
         cfg.print_seguro(f"  {n.name} · {ancla}:{bib}{'' if vigente else ' (eslabón anterior)'} "
                          f"· «{res}»")
@@ -1226,7 +1235,7 @@ def main(argv=None) -> int:
     ap.add_argument("--migrate-condition-prefix", action="store_true", dest="migrate_cond",
                     help="#427: colapsa la clase escrita DOS veces en la celda `Condición`")
     ap.add_argument("--migrate-condition-destination", action="store_true", dest="migrate_dest",
-                    help="#576: antepone `bloque`/`regimen` al `<dónde>` en texto libre de "
+                    help="#576: antepone el destino (`bloque`, `regimen`…) al `<dónde>` en texto libre de "
                          "`acota→resuelta: <dónde>` (variantes conocidas); lista lo que no mapea")
     ap.add_argument("--restamp-section", action="store_true", dest="restamp",
                     help="#430: re-estampa la SECCIÓN de la nota desde su hermano (sin fan-out); "

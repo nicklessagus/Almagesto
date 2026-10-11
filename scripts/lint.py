@@ -4005,9 +4005,14 @@ def check_verification_pairs(anchor_notes, evidencia_hash_de) -> tuple:
             verif_sin_localizador, verif_truncada, cond_sin_clasificar)
 
 
-def regimen_rows_citing(texto: str, bibcode: str) -> bool:
-    """Does the note's `## Régimen de validez` table have a row linking `[[bibcode]]`? (#576)"""
-    i = cfg.section_start(texto, "## Régimen de validez")
+#: #576 · the destinations that are a TABLE of the note, crossed by a row linking the pair's bibcode
+DESTINATION_TABLES = {"regimen": "## Régimen de validez", "inventario": "## Inventario por eje"}
+
+
+def regimen_rows_citing(texto: str, bibcode: str, seccion: str = "## Régimen de validez") -> bool:
+    """Does the note's `seccion` table (default `## Régimen de validez`) have a row linking
+    `[[bibcode]]`? (#576)"""
+    i = cfg.section_start(texto, seccion)
     seccion = texto[i:] if i >= 0 else ""
     if (corte := seccion.find("\n## ", 1)) > 0:
         seccion = seccion[:corte]
@@ -4020,10 +4025,11 @@ def check_condition_destinations(anchor_notes) -> list:
 
     Two findings, one rule: the resolution is a claim ABOUT THE NOTE, so it is crossed against it.
     Outside the closed vocabulary (`lb.CONDITION_DESTINATIONS`) nothing can cross it — read on the
-    link in force only (#451), because that is the one `--resolver` can re-declare; `regimen` with
-    no `## Régimen de validez` row linking the pair's `[[bibcode]]` is a resolution that never
-    landed — read on EVERY link, because an older link still claims it. `bloque` is only validated:
-    its condition lives in prose, and no cheap cross is precise there. Backlog, like its sibling on
+    link in force only (#451), because that is the one `--resolver` can re-declare; a TABLE
+    destination (`regimen`, `inventario`: `DESTINATION_TABLES`) with no row linking the pair's
+    `[[bibcode]]` is a resolution that never landed — read on EVERY link, because an older link
+    still claims it. `bloque`, `siguiente` and `huecos` are only validated: their condition lives in
+    prose, and no cheap cross is precise there. Backlog, like its sibling on
     the same cell (`cond_sin_clasificar`, #221)."""
     out: list = []
     for stem, texto, ruta in sorted(anchor_notes):
@@ -4035,13 +4041,14 @@ def check_condition_destinations(anchor_notes) -> list:
                 destino, _detalle = lb.resolution_split(res)
                 if destino is None and i == len(enlaces) - 1:
                     out.append((stem, f"[[{fila.bibcode}]] par {fila.n}: `acota→resuelta: "
-                                      f"«{res[:60]}»` no dice `bloque` ni `regimen`, así que nada "
+                                      f"«{res[:60]}»` no nombra un destino del vocabulario, así que nada "
                                       f"lo cruza contra la nota → `python scripts/write_verif_sidecar"
                                       f".py --todo --migrate-condition-destination`, o `--resolver "
-                                      f"{fila.anchor}:{fila.bibcode}=<bloque|regimen>` (#576)"))
-                elif destino == "regimen" and not regimen_rows_citing(texto, fila.bibcode):
-                    out.append((stem, f"[[{fila.bibcode}]] par {fila.n}: resuelta en `regimen` y "
-                                      f"ninguna fila de `## Régimen de validez` linkea ese bibcode "
+                                      f"{fila.anchor}:{fila.bibcode}=<{'|'.join(lb.CONDITION_DESTINATIONS)}>` (#576)"))
+                elif ((tabla := DESTINATION_TABLES.get(destino))
+                      and not regimen_rows_citing(texto, fila.bibcode, tabla)):
+                    out.append((stem, f"[[{fila.bibcode}]] par {fila.n}: resuelta en `{destino}` y "
+                                      f"ninguna fila de `{tabla}` linkea ese bibcode "
                                       f"→ escribí la fila, o la condición no llegó a la tabla (#576)"))
     return out
 
@@ -7667,7 +7674,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('costura_unidad', '⚠ Costura de unidad: una unidad separada de su número, la firma de un empalme mal hecho (#406, WARN)', SEV_WARN, tuple(found['costura_unidad']), poblacion='notas'),
         Categoria('agregacion_sin_inferencia', '⚠ Agregación de fuentes sin la marca `inferencia` en la prosa de la síntesis («el corpus», «las N fuentes», «casi todos») (#556, WARN)', SEV_WARN, tuple(found['agregacion_sin_inferencia']), poblacion='entidades'),
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(found['cond_sin_clasificar']), poblacion='entidades'),
-        Categoria('cond_destino', '⚖ Condición `acota` resuelta en un destino que no se sostiene: fuera de `bloque`/`regimen`, o `regimen` sin fila con su bibcode (#576, backlog)', SEV_BACKLOG, tuple(found['cond_destino']), poblacion='entidades'),
+        Categoria('cond_destino', '⚖ Condición `acota` resuelta en un destino que no se sostiene: fuera de vocabulario, o `regimen`/`inventario` sin fila con su bibcode (#576, backlog)', SEV_BACKLOG, tuple(found['cond_destino']), poblacion='entidades'),
         Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog)', SEV_BACKLOG, tuple(found['verif_estructura']), poblacion='entidades'),
         Categoria('verif_inline', '⛔ Tabla de verificación DENTRO de la nota (schema pre-1.165.0) → `make_notes.py --migrate-verif-sidecar` (#344)', SEV_BLOQUEANTE, tuple(found['verif_inline']), poblacion='entidades'),
         Categoria('verif_sin_hermano', '⛔ Nota con cabecera de verificación y SIN su hermano `<nota>.verif.md` (#344): afirma pares que no se pueden evaluar', SEV_BLOQUEANTE, tuple(found['verif_sin_hermano']), poblacion='entidades'),

@@ -325,9 +325,12 @@ def condition_resolution(condicion: str) -> str | None:
 
 
 #: #576 · el vocabulario CERRADO de `<dónde>` en `acota→resuelta: <dónde>`: `bloque` = la condición
-#: vive en el bloque del propio par (el del ancla); `regimen` = hay una fila de `## Régimen de
-#: validez` con el `[[bibcode]]` del par. Con texto libre nada podía cruzar el destino contra la nota.
-CONDITION_DESTINATIONS = ("bloque", "regimen")
+#: vive en el bloque del propio par (el del ancla: su ítem, fila o celda); `siguiente` = en el bloque
+#: que le sigue; `regimen` / `inventario` = hay una fila de `## Régimen de validez` / `## Inventario
+#: por eje` con el `[[bibcode]]` del par; `huecos` = en `## Huecos`. Con texto libre nada podía cruzar
+#: el destino contra la nota. Los tres últimos destinos los midió la instancia sobre los 45 que no
+#: entraban en los dos primeros.
+CONDITION_DESTINATIONS = ("bloque", "siguiente", "regimen", "inventario", "huecos")
 
 #: #576 · lo que separa el destino de su detalle libre: `regimen — fila «X»`. El detalle es opcional
 #: y es donde el migrador conserva el texto firmado que había antes del vocabulario.

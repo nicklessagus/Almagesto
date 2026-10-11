@@ -383,16 +383,18 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
 - **Condición `acota` resuelta en un destino que no se sostiene** (#576, `cond_destino`, backlog):
   `acota→resuelta: <dónde>` afirma algo **sobre la nota**, y con texto libre nada lo cruzaba.
   `<dónde>` es vocabulario cerrado (`lb.CONDITION_DESTINATIONS`): **`bloque`** (la condición vive
-  en el bloque del propio par) o **`regimen`** (una fila de `## Régimen de validez` con el
-  `[[bibcode]]` del par), con detalle libre opcional detrás de ` — ` (`lb.resolution_split`). Dos
-  hallazgos: el destino **fuera de vocabulario** (sólo en el eslabón vigente, el que `--resolver`
-  puede re-declarar) y **`regimen` sin ninguna fila de la tabla que linkee el bibcode** (en
-  **todo** eslabón: el viejo también lo afirma). `bloque` sólo se valida: la condición vive en
-  prosa y no hay cruce barato y preciso. Backlog como su hermana de la misma celda
+  en el bloque del propio par: su ítem, fila o celda), **`siguiente`** (el bloque que le sigue),
+  **`huecos`** (`## Huecos`), **`regimen`** o **`inventario`** (una fila de `## Régimen de
+  validez` / `## Inventario por eje` con el `[[bibcode]]` del par), con detalle libre opcional
+  detrás de ` — ` (`lb.resolution_split`). Dos hallazgos: el destino **fuera de vocabulario**
+  (sólo en el eslabón vigente, el que `--resolver` puede re-declarar) y **un destino-tabla sin
+  ninguna fila que linkee el bibcode** (en **todo** eslabón: el viejo también lo afirma).
+  `bloque`, `siguiente` y `huecos` sólo se validan: la condición vive en prosa y no hay cruce
+  barato y preciso. Backlog como su hermana de la misma celda
   (`cond_sin_clasificar`, #221). Se cierra con el migrador de un solo uso
   `write_verif_sidecar.py --todo --migrate-condition-destination` (antepone el destino a las
   grafías conocidas, conserva el texto firmado como detalle, **lista** lo que no mapea) y, para lo
-  listado, `--resolver <ancla>:<bibcode>=<bloque|regimen>`, que antepone el destino al texto libre
+  listado, `--resolver <ancla>:<bibcode>=<destino>`, que antepone el destino al texto libre
   sin pisarlo. ⚠ El cruce es **por bibcode**: no ve la condición que no llegó a una fila existente
   de esa fuente (medido en #576: 0 de los 6 casos de rv-doppler). La prosa de *Condiciones
   perdidas* queda fuera de alcance.

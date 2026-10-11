@@ -11100,6 +11100,8 @@ def test_576_cond_destino_cruza_regimen_contra_la_tabla_y_el_vocabulario_contra_
         "e": ("2021B", "acota→resuelta: en la prosa · S ⟂ acota: T"),        # libre, eslabón viejo
         "f": ("2021B", "acota→resuelta: regimen · S ⟂ acota: T"),            # regimen viejo sin fila
         "g": ("2021B", "acota: SNR"),                                        # pendiente: no es esto
+        "h": ("2021B", "acota→resuelta: inventario · SNR"),                  # sin la sección
+        "i": ("2021B", "acota→resuelta: huecos · SNR"),                      # huecos: sólo vocab
     }
     rows = [lb.Row(n=n, claim="c", bibcode=b, verdict="soportada", anchor="a" * 10,
                    source_hash="b" * 10, condition=c, source_kind="pdf", evidence="«x» (p. 1)")
@@ -11107,9 +11109,13 @@ def test_576_cond_destino_cruza_regimen_contra_la_tabla_y_el_vocabulario_contra_
     monkeypatch.setattr(lint.lb, "verif_rows", lambda _ruta: rows)
     out = lint.check_condition_destinations([("n", texto, Path("n.md"))])
     por_par = {m.split("par ")[1].split(":")[0]: m for _s, m in out}
-    assert sorted(por_par) == ["b", "d", "f"], out
+    assert sorted(por_par) == ["b", "d", "f", "h"], out
     assert "ninguna fila" in por_par["b"] and "ninguna fila" in por_par["f"]
-    assert "no dice `bloque` ni `regimen`" in por_par["d"]
+    assert "## Inventario por eje" in por_par["h"]
+    assert "no nombra un destino" in por_par["d"]
+    con_inv = texto + "\n## Inventario por eje\n\n| Eje | Paper |\n|---|---|\n| e | [[2021B]] |\n"
+    assert lint.check_condition_destinations([("n", con_inv, Path("n.md"))]) == \
+        [x for x in out if "par h" not in x[1]], "con la fila del inventario, `inventario` se sostiene"
     assert not lint.regimen_rows_citing(texto.replace("## Régimen", "## Otra") + "| [[2020A]] |",
                                         "2020A"), "sin la sección no hay fila"
     monkeypatch.undo()

@@ -4524,6 +4524,17 @@ presente en la nota) marca 24 de 41 `regimen` de rv-doppler en `0e952fa3` —inc
 #117, #224, #299— pero también 42 de 86 en HEAD, donde la mayoría son paráfrasis en castellano: no
 es preciso sin adjudicar.
 
+**v1.390.0 — los destinos que faltaban.** El validador desglosó las 45 vigentes por destino real
+(comentario en #576): 24 en el propio ítem/fila/celda, 7 «en la prosa» sin decir qué bloque, 5 en
+`## Huecos`, 4 en el bloque siguiente, 2 en una fila del inventario, 1 fila de Régimen nombrada que
+el migrador no vio, 1 doble (prosa + Régimen) y 1 en la vista de una nota de paper. El vocabulario
+suma `siguiente`, `huecos` e `inventario` (éste cruzado como `regimen`, contra `## Inventario por
+eje`) y el migrador, esas grafías. Mismo worktree de HEAD `454997d8`: mapea **221**, lista **23**
+(10 vigentes, 13 de eslabones anteriores); de las 45, 35 reciben destino y coinciden con el
+desglose del validador caso por caso. **`cond_destino` 45 → 10**, las 10 fuera de vocabulario
+(«en la prosa», «ya estaba en la prosa», «Síntesis §2, mismo ítem», el ítem de la vista, la doble):
+no dicen qué bloque y quedan para `--resolver`. Destino-tabla sin fila: **0** (`inventario` 0/2).
+
 ## Alcance en dos renglones y `slug(N)` (v1.389.0, #579)
 
 Dos worktrees desechables de Almagesto-Tesis (`37abd671`, de donde partió el audit de rv-doppler, y

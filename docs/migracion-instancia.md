@@ -821,7 +821,7 @@ preprint …»*). Si la equivocada es el **campo** —prosa que dice «versión 
 `pdf_source: eprint`— el arreglo es `replace_pdf.py <bib> --backfill --source publisher --reason
 "…"` (o `extract_fulltext.py <slug> --bibcode <bib>` si el testigo ya está firmado, #446).
 
-## 2aa · v1.381.0 → v1.389.0 (#574–#582) — escotillas, `Rol`, destino de la resolución, alcance
+## 2aa · v1.381.0 → v1.390.0 (#574–#582) — escotillas, `Rol`, destino de la resolución, alcance
 
 En orden. Los pasos que **escriben** son 1, 2, 4 y 6; los demás son backlog del lint, y se
 resuelven con juicio:
@@ -837,8 +837,10 @@ resuelven con juicio:
    La tilde no cuenta como discrepancia.
 4. **Destino de la `acota` resuelta (#576).** Corré `python scripts/write_verif_sidecar.py
    --migrate-condition-destination --todo` (primero con `--dry-run`, que no escribe). Lo que no
-   mapea queda listado: re-declaralo con `--resolver <ancla>:<bibcode>=bloque|regimen`,
-   que conserva el texto viejo como detalle. El lint suma `cond_destino`.
+   mapea queda listado: re-declaralo con `--resolver <ancla>:<bibcode>=<destino>`
+   (`bloque|siguiente|regimen|inventario|huecos`, v1.390.0), que conserva el texto viejo como
+   detalle. El lint suma `cond_destino`. Lo listado es lo que no dice **qué** bloque («en la
+   prosa»): elegir el destino es juicio.
 5. **Sub-secciones de verificación (#577).** `verif_estructura` ahora reporta la prosa que no cierra
    como frase. Reescribí esa sub-sección entera desde la tabla del hermano.
 6. **Alcance (#579).** Un alcance cuyo corpus real es parte de un slug se declara `slug(N)`; sin

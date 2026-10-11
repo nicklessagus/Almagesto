@@ -352,8 +352,8 @@ las tres sub-secciones también** (#280): `lib_blocks.verif_subsection_lines(fil
 derivan. *Omisiones en transcripciones* **no lleva número generado**: la
 completitud es la mitad de juicio del fan-out y no está en la tabla, así que un número ahí sería
 inventado. Y la condición `acota` ya resuelta se anota en su celda: `acota→resuelta: <dónde>`
-(#232: anota, no pisa). **`<dónde>` es `bloque` (el del par) o `regimen` (una fila de
-`## Régimen de validez` con su `[[bibcode]]`, que el lint cruza), detalle tras ` — ` (#576).**
+(#232: anota, no pisa). **`<dónde>`: `bloque` (el del par), `siguiente`, `huecos`,
+`regimen`/`inventario` (fila con su `[[bibcode]]`, que el lint cruza); detalle tras ` — ` (#576).**
 
 **Esa celda no se edita a mano: la escribe el mismo módulo que arma la tabla (#427).**
 

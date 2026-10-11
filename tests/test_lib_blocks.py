@@ -1732,6 +1732,8 @@ def test_576_resolution_split_lee_el_destino_del_vocabulario_cerrado():
     assert lb.resolution_split("regimen") == ("regimen", "")
     assert lb.resolution_split("**Bloque** — en la prosa") == ("bloque", "en la prosa")
     assert lb.resolution_split("regimen — fila «X» — y más") == ("regimen", "fila «X» — y más")
+    for destino in ("siguiente", "inventario", "huecos"):
+        assert lb.resolution_split(f"{destino} — x") == (destino, "x")
     assert lb.resolution_split("bloques") == (None, "bloques")
     assert lb.resolution_split("ronda 6: la fila — x") == (None, "ronda 6: la fila — x")
     assert lb.resolution_split("") == (None, "")

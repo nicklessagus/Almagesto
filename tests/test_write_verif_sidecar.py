@@ -1526,7 +1526,7 @@ def _legacy(toy_vault, *celdas):
 
 
 def test_576_resolver_REHUSA_el_destino_fuera_de_vocabulario(toy_vault):
-    """`--resolver` acepta `bloque`/`regimen` (con detalle opcional tras ` — `) y nada más: con
+    """`--resolver` acepta el vocabulario (con detalle opcional tras ` — `) y nada más: con
     texto libre el lint no puede cruzar el destino contra la nota."""
     nota = _escena(toy_vault)
     ws.write(nota, _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota"),
@@ -1569,9 +1569,20 @@ def test_576_legacy_destination_mapea_SOLO_las_variantes_conocidas():
              "## Régimen de validez": "regimen", "fila de `## Régimen de validez`": "regimen",
              "en la fila de régimen": "regimen", "Régimen de validez, misma fila: x": "regimen",
              "fila de Régimen «El factor Q»": "regimen", "en las filas de régimen sobre X": "regimen",
-             "el bloque siguiente («Y vale sólo»)": None, "en la prosa: «x»": None,
-             "en la fila": None, "mismo ítem: (p. 2)": None, "en la celda": None,
-             "`## Huecos`, hueco 1": None, "en la fila del inventario": None}
+             # los 45 que los dos primeros destinos dejaban afuera (desglose de la instancia)
+             "el bloque siguiente («Y vale sólo»)": "siguiente",
+             "párrafo siguiente de la nota, que declara x": "siguiente",
+             "bloque siguiente de §7, «El universo»": "siguiente",
+             "en la fila": "bloque", "mismo ítem: (p. 2)": "bloque", "la celda ya dice x": "bloque",
+             "en la propia fila: «x»": "bloque", "la fila declara que x": "bloque",
+             "la afirmación se acotó a x": "bloque", "prosa corregida a «x»": "bloque",
+             "`## Huecos`, hueco 1": "huecos", "el propio hueco declara x": "huecos",
+             "en el propio ítem de Huecos: x": "huecos",
+             "en la fila del inventario": "inventario",
+             "la fila «A es identificable» de `## Régimen de validez` declara x": "regimen",
+             # lo que no dice QUÉ bloque, o vive en otra nota, no se adivina
+             "en la prosa: «x»": None, "ya estaba en la prosa — x": None,
+             "en el ítem rv de la vista: x": None, "Síntesis §2, mismo ítem: x": None}
     for texto, esperado in casos.items():
         assert ws.legacy_destination(texto) == esperado, texto
     assert ws._bare_destination_phrase("## Régimen de validez")
