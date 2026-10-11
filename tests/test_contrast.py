@@ -1079,7 +1079,8 @@ def test_490_el_rol_AGREGADO_que_el_paper_no_declara_se_reporta(toy_vault, monke
     pf = cfg.PAPERS / "2013Voss.md"
     pf.write_text(pf.read_text(encoding="utf-8").replace(
         "---\n", "---\nrole: [aplicacion]\n", 1), encoding="utf-8")
-    f = _nota_323("ica", "| [[2013Voss]] | fundacional | lo introduce |\n")
+    f = _nota_323("ica", "| Afirmación | Fuente | Rol |\n|---|---|---|\n"
+                         "| lo introduce | [[2013Voss]] | fundacional |\n")
     agregadas = {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
     monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: agregadas})
     monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
@@ -1091,17 +1092,18 @@ def test_490_el_rol_AGREGADO_que_el_paper_no_declara_se_reporta(toy_vault, monke
     assert "fundacional" in out and "2013Voss" in out and "aplicacion" in out
 
 
-def test_AUD465_el_rol_se_compara_NORMALIZADO_y_sólo_contra_el_PRIMER_link(toy_vault, monkeypatch,
-                                                                          capsys):
-    """AUD-465: `Fundacional` en la celda y `fundacional` en el frontmatter son el mismo rol
-    (`method_key`); y el rol de la fila es del paper de la fila —el primer link—, no del que la
-    glosa menciona al pasar."""
+def test_AUD465_el_rol_se_compara_NORMALIZADO_y_contra_la_celda_FUENTE(toy_vault, monkeypatch,
+                                                                     capsys):
+    """AUD-465 + #575: `Fundacional` en la celda y `fundacional` en el frontmatter son el mismo rol
+    (`method_key`); y el rol de la fila es del paper de la celda `Fuente`, no del que la condición
+    menciona al pasar — aunque ése salga PRIMERO en la fila (el `bibs[:1]` de #490)."""
     for bib, rol in (("2013Voss", "fundacional"), ("2020Otro", "aplicacion")):
         _nota_paper(bib, "prosa")
         pf = cfg.PAPERS / f"{bib}.md"
         pf.write_text(pf.read_text(encoding="utf-8").replace("---\n", f"---\nrole: [{rol}]\n", 1),
                       encoding="utf-8")
-    f = _nota_323("ica", "| [[2013Voss]] | **Fundacional** | como lo retoma [[2020Otro]] |\n")
+    f = _nota_323("ica", "| Afirmación | Vale bajo | Fuente | Rol |\n|---|---|---|---|\n"
+                         "| x | como lo retoma [[2020Otro]] | [[2013Voss]] | **Fundacional** |\n")
     agregadas = {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
     monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: agregadas})
     monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
@@ -1110,6 +1112,62 @@ def test_AUD465_el_rol_se_compara_NORMALIZADO_y_sólo_contra_el_PRIMER_link(toy_
     assert ct.preflight() == 0
     out = capsys.readouterr().out
     assert "2013Voss" not in out and "2020Otro" not in out, out
+
+
+def _roles(**por_bib):
+    for bib, rol in por_bib.items():
+        _nota_paper(bib, "prosa")
+        if rol is not None:
+            pf = cfg.PAPERS / f"{bib}.md"
+            pf.write_text(pf.read_text(encoding="utf-8").replace("---\n", f"---\nrole: {rol}\n", 1),
+                          encoding="utf-8")
+
+
+_TABLA = "## Régimen de validez\n\n| Afirmación | Vale bajo | Fuente | Rol |\n|---|---|---|---|\n"
+
+
+def test_575_role_mismatches_lee_por_ENCABEZADO_matriz_de_ramas(toy_vault):
+    """#575 — la celda `Fuente` dice de quién es el rol, la celda `Rol` cuál; las columnas se leen
+    por encabezado (otra tabla puede ordenarlas distinto) y la grafía se compara por clave."""
+    _roles(A1="[fundacional]", B2="[aplicacion]", C3="[arbitro, aplicacion]", D4="[]",
+           E5=None)
+    filas = [
+        ("| x | dice [[B2]] | [[A1]] | aplicación |", [("A1", "aplicacion")]),   # Fuente, no 1ro
+        ("| x | — | [[C3]] | árbitro |", []),                                   # tilde = misma clave
+        ("| x | — | [[A1]] | fundacional / árbitro |", [("A1", "arbitro")]),     # dos roles
+        ("| x | — | [[A1]] · [[B2]] | aplicacion |", []),                         # alguno lo declara
+        ("| x | — | [[A1]] · [[B2]] | arbitro |", [("A1 B2", "arbitro")]),       # ninguno
+        ("| x | — | [[D4]] | fundacional |", []),                                # role vacío: no evaluable
+        ("| x | — | [[E5]] | fundacional |", []),                                # sin role
+        ("| x | — | [[Z9]] | fundacional |", []),                                # sin nota
+        ("| x | — | [[A1]] | segunda mano: lo dice [48] |", []),                 # no es rol
+        ("| x | — | Fuente | Rol |", []),                                       # sub-encabezado
+    ]
+    for fila, esperado in filas:
+        got = [(" ".join(b), r) for _i, _s, b, r, _d in ct.role_mismatches(_TABLA + fila + "\n")]
+        assert got == esperado, (fila, got)
+    # Sin encabezado `Fuente`/`Rol` no hay a quién atribuir: nada.
+    assert ct.role_mismatches("| [[A1]] | aplicacion |\n") == []
+    assert ct.role_mismatches("| a | b |\n|---|---|\n| [[A1]] | aplicacion |\n") == []
+    assert ct.role_mismatches("| a | Rol |\n|---|---|\n| [[A1]] | aplicacion |\n") == []
+    assert ct.role_mismatches("| Fuente | b |\n|---|---|\n| [[A1]] | aplicacion |\n") == []
+    # El encabezado vale para SU tabla: prosa en el medio la cierra.
+    assert ct.role_mismatches(_TABLA + "\nprosa\n| x | — | [[A1]] | aplicacion |\n") == []
+    # La sección se informa: el lint filtra por ella.
+    assert ct.role_mismatches(_TABLA + "| x | — | [[A1]] | aplicacion |\n")[0][1] == \
+        "Régimen de validez"
+    # Las columnas en otro orden se leen igual.
+    hit = ct.role_mismatches("| Rol | Fuente |\n|---|---|\n| aplicacion | [[A1]] |\n")
+    assert [(h[0], h[2], h[3], h[4]) for h in hit] == [(3, ("A1",), "aplicacion", "fundacional")]
+
+
+def test_575_regresion_rv_doppler_la_condicion_que_nombra_OTRO_paper(toy_vault):
+    """#575, caso medido: la fila de `2015A&A...583A.118M` cuya condición dice
+    `⚠ [[2020A&A...642A.157M]] usa …` le atribuía el rol al de la condición (2 falsos positivos)."""
+    _roles(**{"2015A&A...583A.118M": "[fundacional]", "2020A&A...642A.157M": "[aplicacion]"})
+    fila = ("| CCF | ⚠ [[2020A&A...642A.157M]] usa otra máscara | [[2015A&A...583A.118M]] "
+            "| fundacional |\n")
+    assert ct.role_mismatches(_TABLA + fila) == []
 
 
 def test_490_la_cita_alterada_AGREGADA_bloquea_y_la_vieja_no(toy_vault, monkeypatch, capsys):

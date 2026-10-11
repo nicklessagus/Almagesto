@@ -44,6 +44,9 @@
 ## Notación sin renderizar: fila del inventario por eje con matemática fuera de `$…$` (#525, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
+## Rol de `## Régimen de validez` que el paper de la celda `Fuente` no declara en su `role` (#575, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
 ## Identificadores que SIMBAD conoce y `stars.yaml` no declara: un alias que falta es un paper que nunca aparece, en silencio (backlog — la elección es curación) (0)
 > sobre 3 ground-truth de `raw/ground_truth/`
 

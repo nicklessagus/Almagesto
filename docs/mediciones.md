@@ -4360,3 +4360,23 @@ paper, 21 sujetos), con los `scripts/` de este commit copiados encima.
   la primera toca sólo las 5 notas de concepto con estados cambiados; la segunda no cambia nada
   (hash de `vault/**/*.md` idéntico, IDEMPOTENTE). Antes del re-estampado el lint reporta esas 5
   tablas como desactualizadas (0→5), que es el backlog esperado.
+
+## El `Rol` de `## Régimen de validez` se cruza entero y por encabezado (v1.382.0, #575)
+
+Worktrees desechables de Almagesto-Tesis, scripts del template copiados adentro, sólo lectura.
+`contrast.role_mismatches` filtrado a `## Régimen de validez`:
+
+- **rv-doppler pre-audit** (`37abd671^` = `0e952fa3`): **5/5** filas del issue
+  (2001A&A...379..279Q, 2026ARA&A..64..449B, 2013A&A...557A..93F ×3), y 0 en las filas de
+  2015A&A...583A.118M cuya condición nombra a 2020A&A...642A.157M (los 2 falsos positivos de
+  `bibs[:1]`).
+- **harps-drs pre-audit** (`outputs/audit-harps-drs-2026-10-11/harps-drs.ANTES.md`, papers de
+  HEAD): **2/2** discrepancias reales de rol (2015ApJ...808..171D y 2015Msngr.162....9L, F7-03).
+  Las otras 7 de las «9 filas» del issue son grafía (`aplicación` ×5, `árbitro` ×2, F3-08): misma
+  clave por `cfg.method_key`, **no** son hallazgo por diseño (se normaliza al comparar, #243).
+- **HEAD** (`e5fa8e60`), `lint.py` sobre la bóveda entera: `rol_regimen` = **4** sobre 25 notas de
+  entidad (465 filas de Régimen), las 4 verdaderas: deteccion-estadistica L1166-1167
+  (2013ApJ...770..133H escrito `aplicacion`, declara `arbitro`) e ica L783/L806
+  (2019AJ....158..161D escrito `fundacional`, declara `aplicacion`). 0 falsos positivos. Antes de
+  excluir el `role` vacío salían 2 más (2023spi..conf...22M sin `role`): eso es la categoría del
+  paper sin `role`, no una discrepancia.

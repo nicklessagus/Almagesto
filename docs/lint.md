@@ -788,6 +788,14 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   extracción tal cual (#322/#330); se cierra re-tipeando **sólo la notación** a `$…$`. Las tablas
   de `## Vista` quedan afuera a propósito: son copia de una extracción inmutable (#311), y desde
   #525 el prompt del extractor pide `$…$`. Medido en Almagesto-Tesis: 5 filas, las 5 verdaderas.
+- **Rol de `## Régimen de validez` que el paper no declara** (#575, `rol_regimen`, backlog): la
+  celda `Rol` afirma el `role` del paper de la celda `Fuente` (#73), y el cruce contra el
+  frontmatter recorre la tabla **entera** (el pre-flight de #490 sólo ve filas agregadas). Mismo
+  lector que el pre-flight, `contrast.role_mismatches`: celdas **por encabezado**, nunca el primer
+  `[[bibcode]]` de la fila; grafía por `cfg.method_key` (`aplicación` = `aplicacion`, no es
+  hallazgo); con varios papers en `Fuente`, hallazgo sólo si **ninguno** declara el rol; sin
+  `role` declarado, no evaluable. Se cierra corrigiendo la celda o, si el que está mal es el
+  frontmatter, el `role` del paper.
 - **`status: sostenida` contra su propia tabla de evidencia** (D-37/#177, `status_vs_evidencia`,
   backlog): una hipótesis `sostenida` con filas `desafía` en la tabla. El `status` se **deriva**
   de la tabla; con evidencia repartida es `disputada`. Es lo único que impide que `status` sea un

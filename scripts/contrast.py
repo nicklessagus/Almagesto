@@ -626,13 +626,61 @@ def added_lines(ref: str = "HEAD") -> dict:
     return out
 
 
-def _row_role_claims(fila: str) -> list:
-    """`[(bibcode, rol escrito)]` for an added table row that assigns a `role` to a paper (#490)."""
-    bibs = lb.BIBCODE_LINK_RE.findall(fila) if hasattr(lb, "BIBCODE_LINK_RE") else \
-        re.findall(r"\[\[([^\]]+)\]\]", fila)
-    celdas = [c.strip(" *_`") for c in fila.split("|")]
-    roles = [c for c in celdas if cfg.method_key(c) in cfg.ROLES]
-    return [(b, r) for b in bibs[:1] for r in roles]
+def _row_role_claims(fila: str, header: list | None) -> list:
+    """`[(bibcodes of the Fuente cell, written role)]` for a table row with `Fuente` and `Rol` (#575).
+
+    ⛔ The cells are read BY HEADER, never by position or by «the first `[[bibcode]]` of the row»:
+    the role belongs to the paper of the `Fuente` cell (#73), and a condition cell naming another
+    paper put that one first — it took the role, and the row's own paper was never checked (#490
+    did `bibs[:1]`). Without a header naming both columns there is nothing to attribute: `[]`.
+
+    The `Rol` cell is compared on `cfg.method_key` (#243): `aplicación`/`árbitro` and
+    `aplicacion`/`arbitro` are the same key, and `fundacional / árbitro` claims two roles. A token
+    outside `cfg.ROLES` is not a role claim (prose in the cell is not a discrepancy of role)."""
+    if not header:
+        return []
+    celdas = {cfg.method_key(h): c for h, c in zip(header, lb.split_row(fila))}
+    if "fuente" not in celdas or "rol" not in celdas:
+        return []
+    bibs = tuple(dict.fromkeys(re.findall(r"\[\[([^\]|#]+)", celdas["fuente"])))
+    roles = [t for t in cfg.method_key(celdas["rol"]).split("-") if t in cfg.ROLES]
+    return [(bibs, r) for r in dict.fromkeys(roles)] if bibs else []
+
+
+def role_mismatches(texto: str) -> list:
+    """`[(line, section, bibcodes, written role, declared roles)]` over EVERY table of a note (#575).
+
+    One reader for the diff (`preflight`, #490) and for the whole table (`lint`'s `rol_regimen`):
+    a row claims a `role` its `Fuente` paper(s) do not declare in their frontmatter. With several
+    papers in `Fuente` the cell does not say which one carries which role, so the claim is a
+    mismatch only if NONE of them declares it. A `Fuente` whose papers declare no `role` (no note,
+    or `role` empty) is not evaluable and is skipped: the dangling link and the paper without
+    `role` are other categories."""
+    out: list = []
+    seccion, header, previa = "", None, ""
+    declarados: dict = {}
+    for i, linea in enumerate(texto.split("\n"), 1):
+        if linea.startswith("## "):
+            seccion = linea[3:].strip()
+        s = linea.strip()
+        if not s.startswith("|"):
+            header, previa = None, ""
+            continue
+        if cfg.SEP_ROW_RE.match(s):
+            header = lb.split_row(previa)
+            continue
+        previa = s
+        for bibs, rol in _row_role_claims(s, header):
+            for b in bibs:
+                if b not in declarados:
+                    f = cfg.PAPERS / f"{cfg.note_stem(b)}.md"
+                    r = (cfg.split_fm(f.read_text(encoding="utf-8")) or {}).get("role") \
+                        if f.exists() else None
+                    declarados[b] = r if isinstance(r, list) else [r] if r else []
+            dec = sorted({str(x) for b in bibs for x in declarados[b]})
+            if dec and rol not in {cfg.method_key(x) for x in dec}:
+                out.append((i, seccion, bibs, rol, ", ".join(dec)))
+    return out
 
 
 def preflight(ref: str = "HEAD") -> int:
@@ -695,7 +743,10 @@ def preflight(ref: str = "HEAD") -> int:
     bloqueantes = 0
     for nota, agregadas in sorted(diff.items()):
         seccion = ""
-        for i, linea in enumerate(nota.read_text(encoding="utf-8").split("\n"), 1):
+        texto = nota.read_text(encoding="utf-8")
+        roles += [(nota, i, " · ".join(bibs), rol, dec)
+                  for i, _sec, bibs, rol, dec in role_mismatches(texto) if i in agregadas]
+        for i, linea in enumerate(texto.split("\n"), 1):
             if linea.startswith("## "):
                 seccion = linea[3:].strip()
             if i not in agregadas:
@@ -704,13 +755,6 @@ def preflight(ref: str = "HEAD") -> int:
             if (m := NEGATIVA_RE.search(txt)) and not seccion.startswith("Huecos") \
                     and not txt.lstrip().startswith(">"):
                 negativas.append((nota, i, m.group(0), txt.strip()[:90]))
-            for bib, rol in _row_role_claims(txt):
-                f = cfg.PAPERS / f"{cfg.note_stem(bib)}.md"
-                if not f.exists():
-                    continue
-                declarado = (cfg.split_fm(f.read_text(encoding="utf-8")) or {}).get("role") or []
-                if cfg.method_key(rol) not in {cfg.method_key(x) for x in declarado}:
-                    roles.append((nota, i, bib, rol, ", ".join(declarado) or "(vacío)"))
         r = validar(nota, mostrar=False)
         for ln, motivo in r["alteradas"]:
             if ln in agregadas:

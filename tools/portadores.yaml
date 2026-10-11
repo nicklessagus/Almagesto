@@ -3310,3 +3310,15 @@ portadores:
       - modulo: scripts/query_ads.py
         estado: fuera-de-alcance
         motivo: "Nombra `note_has_reading` en un comentario (semántica de «extraída», AUD-286) y delega en `note_state`; no publica un estado de roll-up."
+
+  - issue: 575
+    regla: >-
+      El `Rol` de una fila es el `role` del paper de la celda `Fuente` (#73): las celdas se leen por
+      ENCABEZADO, nunca por posición ni por el primer `[[bibcode]]` de la fila (una condición que
+      nombra otro paper se llevaba el rol), y la grafía se compara por `cfg.method_key` (la tilde no
+      es discrepancia). Un solo lector para el diff (pre-flight de #490) y la tabla entera (lint).
+    funcion: contrast.role_mismatches
+    patron: 'role_mismatches|_row_role_claims|bibs\[:1\]'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa

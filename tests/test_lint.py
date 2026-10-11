@@ -9320,6 +9320,22 @@ def test_notacion_cruda_en_el_inventario_se_reporta_y_la_cita_no(toy_vault):
     assert len(filas) == 1 and filas[0][0] == "test_star" and "10^−" in filas[0][1], filas
 
 
+def test_575_rol_regimen_cruza_la_tabla_ENTERA_y_sólo_Régimen(toy_vault):
+    """#575 — `contrast --preflight` (#490) sólo ve filas AGREGADAS; esto cruza toda la tabla de
+    `## Régimen de validez` con el mismo lector (`contrast.role_mismatches`). Otras tablas con
+    `Fuente`/`Rol` no son esta categoría, y la tilde no es discrepancia."""
+    mk_note(cfg.PAPERS, "2013Voss", {"tags": ["paper"], "role": ["fundacional"]}, "\n")
+    tabla = "| Afirmación | Fuente | Rol |\n|---|---|---|\n"
+    mk_note(cfg.CONCEPTS / "methods", "ica", {"tags": ["concept"]},
+            "\n## Régimen de validez\n\n" + tabla + "| x | [[2013Voss]] | aplicacion |\n"
+            "| y | [[2013Voss]] | Fundacional |\n\n## Otra\n\n" + tabla
+            + "| z | [[2013Voss]] | arbitro |\n")
+    filas = lint.check_regimen_roles()
+    assert len(filas) == 1 and filas[0][0] == "ica", filas
+    assert "`aplicacion` a [[2013Voss]]" in filas[0][1] and "role: [fundacional]" in filas[0][1]
+    assert lint.collect().por_clave("rol_regimen").severidad == lint.SEV_BACKLOG
+
+
 def test_las_dos_categorias_dangling_comparten_la_regla_y_difieren_en_SEVERIDAD(toy_vault):
     """#396/#243/#348 — `check_dangling_thesis` bloquea y `check_dangling_methods` es backlog, y la
     asimetría es real: un `thesis_links` nombra un concepto que `ingest-theme` CREA en la misma

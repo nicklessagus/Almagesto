@@ -3440,6 +3440,33 @@ def check_inventory_notation() -> list:
     return out
 
 
+def check_regimen_roles() -> list:
+    """`rol_regimen` — a `## Régimen de validez` row whose `Rol` its `Fuente` paper does not declare
+    (#575, backlog).
+
+    The `Rol` column states the paper's `role` (#73), and that changes how the row reads:
+    foundational↔application is instantiation, not contrast. The pre-flight of `contrast`
+    (#490) only sees the rows a corrector ADDED; this crosses the WHOLE table, with the same reader
+    (`contrast.role_mismatches`: cells by header, key-normalised spelling)."""
+    import contrast
+    out: list = []
+    for f in (sorted(glob.glob(str(cfg.STARS / "*.md")))
+              + sorted(glob.glob(str(cfg.CONCEPTS / "*" / "*.md")))
+              + sorted(glob.glob(str(cfg.QUERIES / "*.md")))):
+        # The `.verif.md` sibling falls in the glob and is harmless: it has no `## Régimen`.
+        try:
+            texto = Path(f).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for i, seccion, bibs, rol, dec in contrast.role_mismatches(texto):
+            if seccion == "Régimen de validez":
+                out.append((basename(f)[:-3], f"L{i}: la fila de `## Régimen de validez` le pone "
+                            f"`{rol}` a {' · '.join(f'[[{b}]]' for b in bibs)}, que declara "
+                            f"`role: [{dec}]` → corregí la celda `Rol` o, si el frontmatter está "
+                            f"mal, el `role` del paper (#73/#575)"))
+    return out
+
+
 def check_dangling_methods(method_refs: dict, dangling) -> list:
     """`dangling_methods` — a `methods` naming no note, by stem or by `aliases` (backlog).
 
@@ -7348,6 +7375,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["dangling_thesis"] = check_dangling_thesis(sweep.thesis_refs, _dangling)
     found["contrast_missing"] = check_contraste_pendiente(sweep.extracted)
     found["notacion_cruda"] = check_inventory_notation()
+    found["rol_regimen"] = check_regimen_roles()
     found["dangling_methods"] = check_dangling_methods(sweep.method_refs, _dangling)
     found["alias_colision"] = check_alias_collisions()
     found["methods_colision"] = check_methods_spelling_collisions(sweep.method_refs)
@@ -7417,6 +7445,8 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   SEV_BACKLOG, tuple(found['contrast_missing']), poblacion='entidades'),
         Categoria('notacion_cruda', 'Notación sin renderizar: fila del inventario por eje con matemática fuera de `$…$` (#525, backlog)',
                   SEV_BACKLOG, tuple(found['notacion_cruda']), poblacion='entidades'),
+        Categoria('rol_regimen', 'Rol de `## Régimen de validez` que el paper de la celda `Fuente` no declara en su `role` (#575, backlog)',
+                  SEV_BACKLOG, tuple(found['rol_regimen']), poblacion='entidades'),
         Categoria('alias_faltante', 'Identificadores que SIMBAD conoce y `stars.yaml` no declara: '
                   'un alias que falta es un paper que nunca aparece, en silencio (backlog — la '
                   'elección es curación)', SEV_BACKLOG, tuple(found['alias_faltante']), poblacion='ground_truth'),
