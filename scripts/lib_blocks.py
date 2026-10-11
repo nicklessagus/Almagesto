@@ -324,6 +324,30 @@ def condition_resolution(condicion: str) -> str | None:
     return texto.split(COND_RESOLUTION_SEP)[0].strip()
 
 
+#: #576 · el vocabulario CERRADO de `<dónde>` en `acota→resuelta: <dónde>`: `bloque` = la condición
+#: vive en el bloque del propio par (el del ancla); `regimen` = hay una fila de `## Régimen de
+#: validez` con el `[[bibcode]]` del par. Con texto libre nada podía cruzar el destino contra la nota.
+CONDITION_DESTINATIONS = ("bloque", "regimen")
+
+#: #576 · lo que separa el destino de su detalle libre: `regimen — fila «X»`. El detalle es opcional
+#: y es donde el migrador conserva el texto firmado que había antes del vocabulario.
+DESTINATION_DETAIL_SEP = " — "
+
+
+def resolution_split(resolucion: str) -> tuple:
+    """`(destination | None, detail)` of a resolution text (`condition_resolution`'s output, #576).
+
+    `None` is «not in `CONDITION_DESTINATIONS`» — the legacy free text, whole, comes back as the
+    detail so the caller can keep it. Read normalised (case, outer spaces) like the class next to it,
+    and whole-token: `bloques` is not `bloque` (the lesson of #276)."""
+    texto = str(resolucion or "").strip()
+    cabeza, _sep, detalle = texto.partition(DESTINATION_DETAIL_SEP.strip())
+    token = cabeza.strip().strip(_ADORNO).strip().lower()
+    if token in CONDITION_DESTINATIONS:
+        return token, detalle.strip()
+    return None, texto
+
+
 def condition_text(condicion: str) -> str:
     """The condition's own prose in the link in force, with class and resolution stripped (#451).
 

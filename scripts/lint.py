@@ -3975,6 +3975,47 @@ def check_verification_pairs(anchor_notes, evidencia_hash_de) -> tuple:
             verif_sin_localizador, verif_truncada, cond_sin_clasificar)
 
 
+def regimen_rows_citing(texto: str, bibcode: str) -> bool:
+    """Does the note's `## Régimen de validez` table have a row linking `[[bibcode]]`? (#576)"""
+    i = cfg.section_start(texto, "## Régimen de validez")
+    seccion = texto[i:] if i >= 0 else ""
+    if (corte := seccion.find("\n## ", 1)) > 0:
+        seccion = seccion[:corte]
+    link = re.compile(r"\[\[" + re.escape(bibcode) + r"(?:\\?[|#]|\])")   # `\|` inside a table
+    return any(ln.strip().startswith("|") and link.search(ln) for ln in seccion.split("\n"))
+
+
+def check_condition_destinations(anchor_notes) -> list:
+    """`cond_destino` — `acota→resuelta: <dónde>` whose destination does not hold (#576, backlog).
+
+    Two findings, one rule: the resolution is a claim ABOUT THE NOTE, so it is crossed against it.
+    Outside the closed vocabulary (`lb.CONDITION_DESTINATIONS`) nothing can cross it — read on the
+    link in force only (#451), because that is the one `--resolver` can re-declare; `regimen` with
+    no `## Régimen de validez` row linking the pair's `[[bibcode]]` is a resolution that never
+    landed — read on EVERY link, because an older link still claims it. `bloque` is only validated:
+    its condition lives in prose, and no cheap cross is precise there. Backlog, like its sibling on
+    the same cell (`cond_sin_clasificar`, #221)."""
+    out: list = []
+    for stem, texto, ruta in sorted(anchor_notes):
+        for fila in lb.verif_rows(ruta) or []:
+            enlaces = lb.condition_links(fila.condition)
+            for i, enlace in enumerate(enlaces):
+                if (res := lb.condition_resolution(enlace)) is None:
+                    continue
+                destino, _detalle = lb.resolution_split(res)
+                if destino is None and i == len(enlaces) - 1:
+                    out.append((stem, f"[[{fila.bibcode}]] par {fila.n}: `acota→resuelta: "
+                                      f"«{res[:60]}»` no dice `bloque` ni `regimen`, así que nada "
+                                      f"lo cruza contra la nota → `python scripts/write_verif_sidecar"
+                                      f".py --todo --migrate-condition-destination`, o `--resolver "
+                                      f"{fila.anchor}:{fila.bibcode}=<bloque|regimen>` (#576)"))
+                elif destino == "regimen" and not regimen_rows_citing(texto, fila.bibcode):
+                    out.append((stem, f"[[{fila.bibcode}]] par {fila.n}: resuelta en `regimen` y "
+                                      f"ninguna fila de `## Régimen de validez` linkea ese bibcode "
+                                      f"→ escribí la fila, o la condición no llegó a la tabla (#576)"))
+    return out
+
+
 def check_extraccion_no_declarada(sin_extraer_por_sujeto: dict) -> list:
     """`extraccion_no_declarada` — the ingest read a SUBSET of the core and did not say so (D-15).
 
@@ -7393,6 +7434,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
      found["verif_inline"], found["verif_sin_hermano"], found["verif_cabecera"],
      found["verif_sin_localizador"], found["verif_truncada"],
      found["cond_sin_clasificar"]) = check_verification_pairs(sweep.anchor_notes, evidencia_hash_de)
+    found["cond_destino"] = check_condition_destinations(sweep.anchor_notes)
     found["extraccion_despaginada"], _dep_poblacion = check_depaginated_extractions()
     # #279/#350 · la prosa que levanta un valor de SEGUNDA MANO sin decirlo.
     _sm_hallazgos, _n_pares_sm, _sm_revisados, _sm_huerfanas = check_second_hand_lifted(
@@ -7584,6 +7626,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('costura_unidad', '⚠ Costura de unidad: una unidad separada de su número, la firma de un empalme mal hecho (#406, WARN)', SEV_WARN, tuple(found['costura_unidad']), poblacion='notas'),
         Categoria('agregacion_sin_inferencia', '⚠ Agregación de fuentes sin la marca `inferencia` en la prosa de la síntesis («el corpus», «las N fuentes», «casi todos») (#556, WARN)', SEV_WARN, tuple(found['agregacion_sin_inferencia']), poblacion='entidades'),
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(found['cond_sin_clasificar']), poblacion='entidades'),
+        Categoria('cond_destino', '⚖ Condición `acota` resuelta en un destino que no se sostiene: fuera de `bloque`/`regimen`, o `regimen` sin fila con su bibcode (#576, backlog)', SEV_BACKLOG, tuple(found['cond_destino']), poblacion='entidades'),
         Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog)', SEV_BACKLOG, tuple(found['verif_estructura']), poblacion='entidades'),
         Categoria('verif_inline', '⛔ Tabla de verificación DENTRO de la nota (schema pre-1.165.0) → `make_notes.py --migrate-verif-sidecar` (#344)', SEV_BLOQUEANTE, tuple(found['verif_inline']), poblacion='entidades'),
         Categoria('verif_sin_hermano', '⛔ Nota con cabecera de verificación y SIN su hermano `<nota>.verif.md` (#344): afirma pares que no se pueden evaluar', SEV_BLOQUEANTE, tuple(found['verif_sin_hermano']), poblacion='entidades'),

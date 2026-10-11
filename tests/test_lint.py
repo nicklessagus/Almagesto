@@ -11034,6 +11034,39 @@ def test_check_verif_row_pairs_reporta_la_clase_DUPLICADA_de_la_condicion():
         assert [m for _s, m in _r[6] if espera in m], f"{cond}: {_r[6]}"
     for cond in ("acota: SNR > 50", "acota→resuelta: fila", "acota: contextualiza: x", "—"):
         assert lint.check_verif_row_pairs("n", texto, [_fila(cond)], lambda *_a: None)[6] == [], cond
+
+
+def test_576_cond_destino_cruza_regimen_contra_la_tabla_y_el_vocabulario_contra_el_vigente(
+        toy_vault, monkeypatch):
+    """#576 — `acota→resuelta: <dónde>` afirma algo sobre la nota. `regimen` exige una fila de
+    `## Régimen de validez` que linkee el bibcode del par (en TODO eslabón: el viejo también lo
+    afirma); fuera de vocabulario sólo se reporta en el eslabón vigente (el que `--resolver`
+    re-declara); `bloque` sólo se valida."""
+    texto = ("cuerpo [[2020A]]\n\n## Régimen de validez\n\n| Afirmación | Vale bajo | Fuente | Rol |\n"
+             "|---|---|---|---|\n| x | SNR | [[2020A\\|A]] | aplicacion |\n\n## Huecos\n\n"
+             "| h | [[2021B]] |\n|---|---|\n| i | [[2021B]] |\n")
+    filas_por_caso = {
+        "a": ("2020A", "acota→resuelta: regimen · SNR"),                     # fila con el bib: ok
+        "b": ("2021B", "acota→resuelta: regimen — fila Z · SNR"),            # sólo fuera de Régimen
+        "c": ("2021B", "acota→resuelta: bloque · SNR"),                      # bloque: sólo vocab
+        "d": ("2021B", "acota→resuelta: en la prosa · SNR"),                 # libre, vigente
+        "e": ("2021B", "acota→resuelta: en la prosa · S ⟂ acota: T"),        # libre, eslabón viejo
+        "f": ("2021B", "acota→resuelta: regimen · S ⟂ acota: T"),            # regimen viejo sin fila
+        "g": ("2021B", "acota: SNR"),                                        # pendiente: no es esto
+    }
+    rows = [lb.Row(n=n, claim="c", bibcode=b, verdict="soportada", anchor="a" * 10,
+                   source_hash="b" * 10, condition=c, source_kind="pdf", evidence="«x» (p. 1)")
+            for n, (b, c) in filas_por_caso.items()]
+    monkeypatch.setattr(lint.lb, "verif_rows", lambda _ruta: rows)
+    out = lint.check_condition_destinations([("n", texto, Path("n.md"))])
+    por_par = {m.split("par ")[1].split(":")[0]: m for _s, m in out}
+    assert sorted(por_par) == ["b", "d", "f"], out
+    assert "ninguna fila" in por_par["b"] and "ninguna fila" in por_par["f"]
+    assert "no dice `bloque` ni `regimen`" in por_par["d"]
+    assert not lint.regimen_rows_citing(texto.replace("## Régimen", "## Otra") + "| [[2020A]] |",
+                                        "2020A"), "sin la sección no hay fila"
+    monkeypatch.undo()
+    assert lint.collect().por_clave("cond_destino").severidad == lint.SEV_BACKLOG
 # ── #429 · la matriz método × estrella desactualizada ────────────────────────────────────────────
 
 def _matriz_y_dos_papers(toy_vault):

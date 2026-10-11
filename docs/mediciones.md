@@ -4500,3 +4500,26 @@ Sobre `rv-doppler` en la instancia (2026-10-11), los dos jueces de `--segunda-cl
 31 propuestas de `acota`; adjudicadas contra el PDF, **20 eran correctas (65 %)**. Una de cada tres
 propuestas firmada sin mirar la fuente metería un error: el skill y la salida de la CLI piden
 adjudicar contra el PDF antes de `--reclasificar`.
+
+## Destino de `acota→resuelta: <dónde>` con vocabulario cerrado (v1.388.0, #576)
+
+Dos worktrees desechables de Almagesto-Tesis con los scripts del template: HEAD `454997d8` y
+`0e952fa3` (`37abd671^`, rv-doppler antes del audit); bóveda entera, 30 notas con hermano.
+**Población en HEAD:** 244 resoluciones (163 en el eslabón vigente, 81 en eslabones anteriores) con
+115 textos distintos. **Migrador** (`--todo --migrate-condition-destination`): mapea **180** (≈94
+`bloque`, ≈86 `regimen`; las que no son la frase pelada conservan el texto como detalle tras ` — `)
+y **lista 64 sin mapear** (45 vigentes, 19 de eslabones anteriores): «en la prosa…», «el bloque
+siguiente», «mismo ítem», «en la fila», «en la fila del inventario», «`## Huecos`, hueco 1», «la celda
+ya dice…». Varias nombran lugares que el vocabulario no tiene (otro bloque, `## Huecos`, el
+inventario): las decide el usuario con `--resolver <par>=<bloque|regimen>`, que antepone el destino
+al texto libre sin pisarlo (probado sobre una de gj_581: escribe y la re-corrida es no-op).
+Dry-run sin escritura, ida y vuelta idempotente (hash de `vault/**/*.md`), en los dos commits.
+**Lint `cond_destino`:** HEAD 163 antes de migrar (todas fuera de vocabulario) → **45** después (las
+45 vigentes sin mapear); `regimen` sin fila con el bibcode: **0 sobre 85** → 0 FP. **Recall en
+`0e952fa3`: 0/4** (#54, #117, #136, #299 de rv-doppler) **y 0/2** (las de F5-04 con la fila sin la
+condición): las 6 son `regimen` y su bibcode SÍ tiene alguna fila de Régimen (2026ARA&A..64..449B,
+2025A&A...696A.141H, 2011A&A...528A...4B, 2013A&A...557A..93F), así que el cruce por bibcode que
+pide el issue no las ve. Exploratorio, no implementado: un cruce por cita («…» de la condición
+presente en la nota) marca 24 de 41 `regimen` de rv-doppler en `0e952fa3` —incluye #54, #110, #111,
+#117, #224, #299— pero también 42 de 86 en HEAD, donde la mayoría son paráfrasis en castellano: no
+es preciso sin adjudicar.

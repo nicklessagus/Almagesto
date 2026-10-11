@@ -1725,6 +1725,20 @@ def test_condition_resolution_lee_la_notacion_QUE_condition_resolved_DEFINE():
     assert lb.condition_resolution("acota: acota→resuelta: x") is None, "duplicada: no es resuelta"
 
 
+def test_576_resolution_split_lee_el_destino_del_vocabulario_cerrado():
+    """#576 — `<dónde>` es `bloque` | `regimen`, con detalle opcional tras ` — `; lo demás (el
+    texto libre heredado) vuelve entero como detalle con destino `None`, para que el llamador lo
+    conserve. Token entero (#276) y normalizado (#283)."""
+    assert lb.resolution_split("regimen") == ("regimen", "")
+    assert lb.resolution_split("**Bloque** — en la prosa") == ("bloque", "en la prosa")
+    assert lb.resolution_split("regimen — fila «X» — y más") == ("regimen", "fila «X» — y más")
+    assert lb.resolution_split("bloques") == (None, "bloques")
+    assert lb.resolution_split("ronda 6: la fila — x") == (None, "ronda 6: la fila — x")
+    assert lb.resolution_split("") == (None, "")
+    assert lb.resolution_split(lb.condition_resolution("acota→resuelta: regimen — f · SNR")) == \
+        ("regimen", "f"), "se compone con el lector de la celda"
+
+
 # ── #432 · la sección estampada termina en el próximo `## `, no en cualquier `#` ─────────────────
 
 NOTA_SUB = """---

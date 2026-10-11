@@ -254,6 +254,9 @@
 ## ⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
+## ⚖ Condición `acota` resuelta en un destino que no se sostiene: fuera de `bloque`/`regimen`, o `regimen` sin fila con su bibcode (#576, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
 ## 🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 

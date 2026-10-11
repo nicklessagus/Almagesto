@@ -3449,3 +3449,16 @@ portadores:
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "`check_outside_registry` y `check_state_header` pasan por `make_notes.outside_registry`/`estado_line`; no arma el universo."
+
+  - issue: 576
+    regla: >-
+      El `<dónde>` de `acota→resuelta: <dónde>` es vocabulario cerrado (`bloque` | `regimen`, con
+      detalle opcional tras ` — `) y lo lee UNA función: el escritor rehúsa el destino fuera de
+      vocabulario y el lint cruza `regimen` contra la tabla `## Régimen de validez` de la nota.
+    funcion: lib_blocks.resolution_split
+    patron: 'resolution_split|CONDITION_DESTINATIONS'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa

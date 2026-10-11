@@ -351,15 +351,17 @@ cuatro conteos (INV-81 — el encabezado y sus filas salen del mismo código). *
 las tres sub-secciones también** (#280): `lib_blocks.verif_subsection_lines(filas, prosa)`; a mano
 derivan. *Omisiones en transcripciones* **no lleva número generado**: la
 completitud es la mitad de juicio del fan-out y no está en la tabla, así que un número ahí sería
-inventado. Y la condición `acota` ya resuelta se anota en su celda: `acota→resuelta: <dónde>`,
-misma notación que el veredicto de al lado (#232: la segunda ronda anota, no pisa).
+inventado. Y la condición `acota` ya resuelta se anota en su celda: `acota→resuelta: <dónde>`
+(#232: anota, no pisa). **`<dónde>` es `bloque` (el del par) o `regimen` (una fila de
+`## Régimen de validez` con su `[[bibcode]]`, que el lint cruza), detalle tras ` — ` (#576).**
 
 **Esa celda no se edita a mano: la escribe el mismo módulo que arma la tabla (#427).**
 
 ```bash
-python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde se resolvió>   # repetible
-python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>:<bibcode>=<dónde>     # #434
-python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json                  # `{ancla[:bibcode]: dónde}`
+python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde>            # repetible
+python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>:<bibcode>=<dónde>  # #434
+python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json               # {par: dónde}
+python scripts/write_verif_sidecar.py --todo --migrate-condition-destination        # #576
 python scripts/write_verif_sidecar.py <nota.md> --refutar-extraccion <ancla>:<bib> --texto "<frag>" --reason "…"  # #526
 ```
 
@@ -368,16 +370,15 @@ que cita N fuentes tiene N filas con la misma: `<ancla>=` resuelve la única `ac
 aunque una `contextualiza` comparta el ancla, y si hay **dos `acota`** rehúsa nombrando los bibcodes
 para que desambigües con `<ancla>:<bibcode>=`.
 
-Valida con el lector antes de escribir, conserva la condición original detrás de un `·` —sigue
-diciendo bajo qué régimen vale la afirmación—, **no mueve la fecha del bloque** (resolver no es
-re-verificar) y re-correrlo con el mismo texto es un no-op. Rehúsa el ancla que no está en la tabla,
-la fila que no es `acota` (una `contextualiza` va al reporte, no a `## Régimen de validez`) y el
-texto **distinto** sobre una fila ya resuelta: se anota, no se pisa.
+Valida con el lector antes de escribir, conserva la condición original detrás de un `·`, **no
+mueve la fecha del bloque** (resolver no es re-verificar) y re-correrlo con el mismo texto es un
+no-op. Rehúsa el ancla que no está en la tabla, la fila que no es `acota` (una `contextualiza` va
+al reporte, no a `## Régimen de validez`) y el texto **distinto** sobre una fila ya resuelta: se
+anota, no se pisa.
 
 ⚠ Y la clase va **una sola vez**: el fan-out la declara en `cond_tipo` y **no** la repite dentro de
-`condicion`. Escrita dos veces (`acota: acota→resuelta: …`) la fila queda **irresoluble** —el lector
-toma el token que sigue al primer separador y ahí encuentra la clase, no la resolución— así que se
-resuelve, la celda lo dice, y el conteo la sigue contando como pendiente para siempre. El escritor
+`condicion`. Escrita dos veces (`acota: acota→resuelta: …`) la fila queda **irresoluble**: el lector
+encuentra la clase donde espera la resolución y el conteo la da pendiente para siempre. El escritor
 ya no la duplica y el lint la levanta; para el corpus heredado:
 `python scripts/write_verif_sidecar.py <nota.md> --migrate-condition-prefix`.
 

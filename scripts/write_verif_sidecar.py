@@ -626,6 +626,15 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
     cambios: dict = {}
     for spec, donde in resoluciones.items():
         ancla, bib = _split_address(spec)
+        donde = str(donde).strip()
+        # #576 — the destination is a closed vocabulary, so the lint can cross it against the note
+        destino, detalle = lb.resolution_split(donde)
+        if destino is None:
+            raise SidecarError(
+                f"`{spec}={donde}`: el destino tiene que empezar por "
+                f"{' o '.join(f'`{d}`' for d in lb.CONDITION_DESTINATIONS)} (`bloque` = el bloque "
+                f"del propio par; `regimen` = una fila de `## Régimen de validez` con su "
+                f"`[[bibcode]]`), con detalle opcional detrás de `{lb.DESTINATION_DETAIL_SEP.strip()}` (#576)")
         candidatas = lb.rows_addressed(filas, ancla, bib)
         if not candidatas:
             raise SidecarError(
@@ -652,8 +661,20 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
         _clase, resto = lb.condition_split(fila.condition)
         if lb.condition_resolved(fila.condition):
             ya = lb.condition_resolution(fila.condition)
-            if ya == str(donde).strip():
+            ya_destino, ya_detalle = lb.resolution_split(ya)
+            if ya_destino == destino and detalle in ("", ya_detalle):
                 continue                          # misma resolución: no-op (idempotente)
+            if ya_destino is None:
+                # #576 — the legacy free text gets its destination DECLARED in front and stays as
+                # the detail: annotated, not overwritten (#232). Only a bare destination does this.
+                if detalle:
+                    raise SidecarError(f"el par {ancla}:{fila.bibcode} tiene una resolución en "
+                                       f"texto libre («{ya}»): declarale sólo el destino "
+                                       f"(`={destino}`) — el texto firmado queda como detalle (#576)")
+                cambios[lb.row_key(fila)] = lb.replace_current_condition(
+                    fila.condition, _with_destination(lb.current_condition(fila.condition),
+                                                      ya, destino))
+                continue
             # AUD-546 — la celda no se edita a mano (#427), y ningún modo reemplaza una resolución
             # firmada: el mensaje no puede mandar a hacer lo que el skill prohíbe.
             raise SidecarError(f"el par {ancla}:{fila.bibcode} ya declara una resolución («{ya}») — "
@@ -664,7 +685,7 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
         # resolución de una ronda anterior, que es una decisión firmada y no se pisa (#427).
         celda = lb.replace_current_condition(
             fila.condition,
-            f"acota→resuelta: {str(donde).strip()}"
+            f"acota→resuelta: {donde}"
             + (f"{lb.COND_RESOLUTION_SEP}{resto}" if resto else ""))
         if not lb.condition_resolved(celda):      # el lector, antes de escribir
             raise SidecarError(f"la celda que se iba a escribir no se lee como resuelta: «{celda}»")
@@ -672,6 +693,79 @@ def resolve_conditions(note: Path, resoluciones: dict, fecha: str | None = None,
     if not cambios:
         return {"resueltas": 0, "filas": len(filas)}
     return {"resueltas": len(cambios), **_rewrite_rows(note, cambios, fecha, dry_run)}
+
+
+def _with_destination(enlace: str, resolucion: str, destino: str) -> str:
+    """The link with its free-text resolution prefixed by `destino` (#576): `<destino> — <texto>`.
+
+    The text is kept whole as the detail — it is a signed decision (#427) — except when the text IS
+    the destination's bare phrase (`fullmatch` of the mapping), where the detail would only repeat
+    it. Replaces the resolution right after the `resuelta` token, never an earlier occurrence."""
+    corte = enlace.lower().index("resuelta")
+    i = enlace.index(resolucion, corte)
+    nuevo = destino + (lb.DESTINATION_DETAIL_SEP + resolucion
+                       if not _bare_destination_phrase(resolucion) else "")
+    return enlace[:i] + nuevo + enlace[i + len(resolucion):]
+
+
+#: #576 · the KNOWN legacy spellings of `<dónde>`, measured on an instance (244 resolutions, 115
+#: distinct texts). Anchored at the start and conservative: what does not match is listed for the
+#: user, never guessed (`el bloque siguiente`, `en la prosa`, `mismo ítem`, `en la celda` stay out).
+_LEGACY_DESTINATIONS = (
+    ("bloque", re.compile(r"(?:la condición quedó escrita en |ya estaba en |en )?(?:su |el |la )?"
+                          r"(?:propi[oa] |mism[oa] )?bloque\b(?! siguiente)", re.I)),
+    ("regimen", re.compile(r"(?:en )?(?:la |las )?(?:propia )?filas? de `?(?:## )?régimen"
+                           r"(?: de validez)?`?|`?(?:## )?régimen de validez`?", re.I)),
+)
+_BARE_RESOLUTION_TAIL = re.compile(r"[\s.]*")
+
+
+def legacy_destination(resolucion: str) -> str | None:
+    """The destination a legacy free-text resolution names, or `None` if it is not a known spelling."""
+    for destino, rx in _LEGACY_DESTINATIONS:
+        if rx.match(str(resolucion or "").strip()):
+            return destino
+    return None
+
+
+def _bare_destination_phrase(resolucion: str) -> bool:
+    """Is the legacy text ONLY a destination phrase (`## Régimen de validez`, `en el bloque`)?"""
+    t = str(resolucion or "").strip()
+    for _destino, rx in _LEGACY_DESTINATIONS:
+        if (m := rx.match(t)) and _BARE_RESOLUTION_TAIL.fullmatch(t[m.end():]):
+            return True
+    return False
+
+
+def migrate_condition_destination(note: Path, dry_run: bool = False) -> dict:
+    """Declare `bloque`/`regimen` in front of every free-text `acota→resuelta: <dónde>` (#576).
+
+    One-use migrator, over EVERY link of the chain (#451): an older link's resolution is still a
+    claim about the note, and the lint crosses its `regimen`. A text `legacy_destination` does not
+    recognise goes to `sin_mapear` as `(anchor, bibcode, text, in_force)` and is never guessed; the
+    link in force closes with `--resolver <par>=<destino>`. Keeps the block's date (D-4)."""
+    text = note.read_text(encoding="utf-8")
+    filas = lb.verif_rows(note) or []
+    cambios, sin_mapear, n = {}, [], 0
+    for f in filas:
+        enlaces = lb.condition_links(f.condition)
+        nuevos = list(enlaces)
+        for i, enlace in enumerate(enlaces):
+            res = lb.condition_resolution(enlace)
+            if res is None or lb.resolution_split(res)[0] is not None:
+                continue
+            if (destino := legacy_destination(res)) is None:
+                sin_mapear.append((f.anchor, f.bibcode, res, i == len(enlaces) - 1))
+                continue
+            nuevos[i] = _with_destination(enlace, res, destino)
+            n += 1
+        if nuevos != enlaces:
+            cambios[lb.row_key(f)] = lb.COND_CHAIN_SEP.join(nuevos)
+    if cambios:
+        if not (d := cfg.verification_date(text)[1]):
+            raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado")
+        _rewrite_rows(note, cambios, d, dry_run)
+    return {"migradas": n, "filas": len(filas), "sin_mapear": sin_mapear}
 
 
 def reclassify_conditions(note: Path, specs: list, fecha: str | None = None,
@@ -1057,6 +1151,41 @@ def _main_migrate_chain(args) -> int:
     return 1 if fallas else 0
 
 
+def _main_migrate_destination(args) -> int:
+    """`--migrate-condition-destination` for one note or the whole vault (#576). Declares its
+    population, and lists what it could not map — that is the user's, never guessed."""
+    if args.todo:
+        notas = sorted(s.with_name(s.name[:-len(cfg.VERIF_SUFFIX)] + ".md")
+                       for s in cfg.WIKI.rglob("*" + cfg.VERIF_SUFFIX)) if cfg.WIKI.exists() else []
+    elif args.nota:
+        notas = [Path(args.nota)]
+    else:
+        cfg.print_seguro("⛔ `--migrate-condition-destination` necesita una nota o `--todo`")
+        return 2
+    total, sin_mapear, fallas = 0, [], []
+    for n in notas:
+        if not n.exists() or cfg.is_verif_sidecar(n):
+            fallas.append((n.name, "no es una nota"))
+            continue
+        try:
+            r = migrate_condition_destination(n, dry_run=args.dry_run)
+        except SidecarError as exc:
+            fallas.append((n.name, str(exc)))
+            continue
+        total += r["migradas"]
+        sin_mapear += [(n, *x) for x in r["sin_mapear"]]
+    cfg.print_seguro(f"{total} resolución(es) con destino declarado sobre {len(notas)} nota(s)"
+                     + (" (dry-run: no se escribió)" if args.dry_run else "")
+                     + f" · {len(sin_mapear)} sin mapear (decidilas: `--resolver "
+                       f"<ancla>:<bibcode>=<bloque|regimen>`)")
+    for n, ancla, bib, res, vigente in sin_mapear:
+        cfg.print_seguro(f"  {n.name} · {ancla}:{bib}{'' if vigente else ' (eslabón anterior)'} "
+                         f"· «{res}»")
+    for nombre, motivo in fallas:
+        cfg.print_seguro(f"⛔ {nombre}: {motivo}")
+    return 1 if fallas else 0
+
+
 def _main_refutar(args) -> int:
     """`--refutar-extraccion`: the `_refutado` mark on the extraction (#526)."""
     nota = Path(args.nota or "")
@@ -1096,6 +1225,9 @@ def main(argv=None) -> int:
                          "--segunda-clase`; repetible")
     ap.add_argument("--migrate-condition-prefix", action="store_true", dest="migrate_cond",
                     help="#427: colapsa la clase escrita DOS veces en la celda `Condición`")
+    ap.add_argument("--migrate-condition-destination", action="store_true", dest="migrate_dest",
+                    help="#576: antepone `bloque`/`regimen` al `<dónde>` en texto libre de "
+                         "`acota→resuelta: <dónde>` (variantes conocidas); lista lo que no mapea")
     ap.add_argument("--restamp-section", action="store_true", dest="restamp",
                     help="#430: re-estampa la SECCIÓN de la nota desde su hermano (sin fan-out); "
                          "conserva la fecha del bloque y no toca la tabla")
@@ -1104,8 +1236,8 @@ def main(argv=None) -> int:
                          "pelada (`contradice→soportada` → `contradice→corregida`); conserva la "
                          "fecha del bloque")
     ap.add_argument("--todo", action="store_true",
-                    help="con --restamp-section o --migrate-verdict-chain: barre toda la bóveda "
-                         "(notas con hermano)")
+                    help="con --restamp-section, --migrate-verdict-chain o "
+                         "--migrate-condition-destination: barre toda la bóveda (notas con hermano)")
     ap.add_argument("--reanclar", action="store_true",
                     help="#480: sin ronda — lleva todas las filas con el ancla recalculada, "
                          "conserva la fecha del bloque y REHÚSA si algún par hay que re-verificar. "
@@ -1128,11 +1260,12 @@ def main(argv=None) -> int:
                          "`--refutar-extraccion` o `--migrate-verdict-chain` rehúsa (AUD-535)")
     ap.add_argument("--dry-run", action="store_true", help="no escribe: dice qué haría")
     args = ap.parse_args(argv)
-    if args.fecha and (args.refutar or args.migrate_chain):
+    if args.fecha and (args.refutar or args.migrate_chain or args.migrate_dest):
         # AUD-535 — the chain keeps the block's date (D-4) and `_refutado` dates the annotation:
         # neither honours `--fecha`, so it is refused instead of ignored in silence (as #507).
         # @inv INV-169
-        ap.error("`--fecha` no aplica a `--refutar-extraccion` ni a `--migrate-verdict-chain`: "
+        ap.error("`--fecha` no aplica a `--refutar-extraccion`, `--migrate-verdict-chain` ni "
+                 "`--migrate-condition-destination`: "
                  "rehúso en vez de ignorarla (AUD-535)")
     if args.refutar:
         return _main_refutar(args)
@@ -1140,6 +1273,8 @@ def main(argv=None) -> int:
         return _main_restamp(args)
     if args.migrate_chain:
         return _main_migrate_chain(args)
+    if args.migrate_dest:
+        return _main_migrate_destination(args)
     if args.reanclar:
         return _main_reanclar(args)
     if args.resolver or args.resoluciones or args.migrate_cond or args.reclasificar:
@@ -1149,7 +1284,8 @@ def main(argv=None) -> int:
         cfg.print_seguro("⛔ hace falta la nota y `--from <dir>`, o uno de los otros modos: "
                          "`--restamp-section`, `--reanclar`, `--resolver`/`--resoluciones`, "
                          "`--migrate-condition-prefix`, `--reclasificar`, `--migrate-verdict-chain`, "
-                         "`--refutar-extraccion` (`--help` los describe)")
+                         "`--migrate-condition-destination`, `--refutar-extraccion` (`--help` los "
+                         "describe)")
         return 2
     nota, fanouts = Path(args.nota), [Path(x) for x in args.fanout]
     if not nota.exists() or cfg.is_verif_sidecar(nota):
