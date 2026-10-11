@@ -2330,3 +2330,32 @@ def test_567_derived_sin_force_conserva_y_con_force_reemplaza(tmp_path):
     assert hv.upsert_view(dest, nueva, derived=("fecha",)) is False
     assert hv.upsert_view(dest, nueva, force=True, derived=("fecha",)) is True
     assert cfg.split_fm(dest.read_text(encoding="utf-8"))["vistas"][0]["fecha"] == "2026-08-30"
+
+
+def test_581_la_lectura_cierra_el_no_vista_de_su_sujeto_y_pisa_su_linea_de_estado(toy_vault, capsys):
+    """#581 — quien escribe la lectura saca el `no_vista` del mismo sujeto (si no, la incoherencia
+    que `load_no_vista` rechaza se re-crea sola), deja el de los otros, y la línea «_No leído
+    desde…_» es un stub que la sección nueva reemplaza."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020nv.....1N.md"
+    f.write_text("---\nbibcode: 2020nv.....1N\nvistas:\n- sujeto: ica\n  tipo: theme\nno_vista:\n"
+                 "- sujeto: ica\n  motivo: por título\n- sujeto: pca\n  motivo: roll-up\ngenerator: g\n---\n\n"
+                 + mn.vista_block("ica", True, motivo="por título"), encoding="utf-8")
+    # la lectura de un sujeto SIN escotilla no reescribe el bloque `no_vista` (ni lo mueve)
+    hv.upsert_view(f, {"sujeto": "otro", "tipo": "theme", "fecha": "2026-10-11"})
+    assert "roll-up\ngenerator: g\n---" in f.read_text(encoding="utf-8")
+    assert hv.upsert_view(f, {"sujeto": "ica", "tipo": "theme", "fecha": "2026-10-11"})
+    fm = read_fm(f)
+    assert fm["no_vista"] == [{"sujeto": "pca", "motivo": "roll-up"}]
+    assert cfg.load_no_vista(fm, entry="x"), "y la nota vuelve a ser legible"
+    assert "por título" in capsys.readouterr().out, "el motivo que se saca se dice"
+    assert hv.write_view_section(f, "ica", "## Vista — ica\n\nlectura\n", theme=True)
+    assert "No leído desde" not in f.read_text(encoding="utf-8")
+    assert not hv.write_view_section(f, "ica", "## Vista — ica\n\notra\n", theme=True), \
+        "la prosa redactada sigue sin pisarse"
+    # sin fecha (p. ej. `--restamp-lente`) no es una lectura: no toca la escotilla
+    hv.upsert_view(f, {"sujeto": "pca", "tipo": "theme", "lente": ["x"]})
+    assert read_fm(f)["no_vista"] == [{"sujeto": "pca", "motivo": "roll-up"}]
+    # el último sale con la clave entera
+    hv.upsert_view(f, {"sujeto": "pca", "tipo": "theme", "fecha": "2026-10-11"})
+    assert "no_vista" not in read_fm(f)

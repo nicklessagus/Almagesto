@@ -266,6 +266,9 @@ portadores:
       - modulo: scripts/fetch_bibtex.py
         estado: fuera-de-alcance
         motivo: "Llega por `drop_fm_keys`, que es el envoltorio con la guarda de #244: no computa el span ni puede tener una definición propia de él."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "`_drop_no_vista` (#581) llega por `drop_fm_keys`, el envoltorio con la guarda de #244: no computa el span."
   - issue: 475
     regla: >-
       Un borrado que NO ocurrió no produce un hueco persistido, y el campo lleno y su hueco
@@ -285,6 +288,9 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: "Llama a `drop_fm_keys_from_block` (el nivel de texto, sin escritura): no hay retorno que decida nada porque no persiste."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`_drop_no_vista` (#581) anuncia que sacó el `no_vista` sólo si `drop_fm_keys` lo sacó; si rehúsa, no dice nada más y el lint bloquea el par vista fechada + `no_vista`."
   - issue: 473
     regla: >-
       La clave de cita de una entrada BibTeX se saca con UNA función. En un `.bib` la clave ES el
@@ -3395,3 +3401,32 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: "Escribe la firma (`--reclasificar`) de lo que la segunda opinión propone; no genera la segunda opinión."
+
+  - issue: 581
+    regla: >-
+      Para un mismo sujeto, la vista FECHADA (la lectura ocurrió) y `no_vista` (no se leyó) son
+      excluyentes: juntas son un error de forma que `load_no_vista` rehúsa (el lint lo publica
+      como frontmatter inválido). El stub SIN fecha es el compañero de diseño de la escotilla
+      (#256) y no choca. Quien estampa la lectura saca el `no_vista` del sujeto, o la
+      incoherencia se re-crea sola.
+    funcion: lib_config.load_no_vista
+    patron: 'no_vista'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_paper_coverage` lo parsea y `check_paper_views` re-levanta su error como `fm_broken` (bloqueante)."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`_no_vista_declarada` y el re-estampado de la línea de estado lo leen; ante el error caen al fallback que no tumba la cadena."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Es el ESCRITOR de la lectura: `upsert_view` con `fecha` llama `_drop_no_vista`, que saca la escotilla del sujeto; no lee el campo para decidir."
+      - modulo: scripts/entity.py
+        estado: fuera-de-alcance
+        motivo: "Renombra el sujeto dentro de `no_vista` al renombrar una entidad; no escribe lecturas ni decide sobre el par."
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: "Sólo lo nombra en un docstring como precedente de hueco declarado."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "Lo preserva como clave curada al re-crear una nota (`CURATED_KEYS`); no escribe vistas."

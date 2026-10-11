@@ -535,6 +535,9 @@
 ## Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda) (0)
 > sobre 60 notas de `papers/`
 
+## `no_vista` cuyo motivo invoca la lectura de otro sujeto que la nota no tiene fechada (#581, heurística) (0)
+> sobre 60 notas de `papers/`
+
 ## 🎯 La vista no contesta los ejes de su propia lente: el silencio se lee como «se miró y no hay nada» (#254/#270, backlog) (0)
 > sobre 60 notas de `papers/`
 

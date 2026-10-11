@@ -10199,7 +10199,7 @@ def test_check_paper_views_no_pide_lo_que_no_se_puede_evaluar(toy_vault):
     def _v(fm, text="", nv=None, ti=None, tps=None):
         return lint.check_paper_views("2020X", fm, text, nv or {}, None, ti or {}, tps or {})
 
-    assert _v({}) == ([],) * 15, "una nota sin `vistas[]` ni reclamos no dispara nada"
+    assert _v({}) == ([],) * 16, "una nota sin `vistas[]` ni reclamos no dispara nada"
 
     # (a) ejes: sin lente o sin fecha no se compara; con el tema sin `ejes:` es NO EVALUABLE
     sin_fecha = {"vistas": [{"sujeto": "ica", "tipo": "theme", "lente": ["rv"]}],
@@ -11779,3 +11779,34 @@ def test_577_la_prosa_de_la_subseccion_que_NO_CIERRA_se_reporta(toy_vault):
     # el párrafo cortado en DOS líneas se lee entero: lo que cierra es la segunda
     assert _cortadas(_bloque("la comparación\nHARPS-TERRA↔MVALD que ninguna hace.", "ninguna.",
                              "ninguna.")) == []
+
+
+def test_581_no_vista_que_invoca_una_lectura_sin_fecha_es_backlog(toy_vault, capsys):
+    """#581 — el caso medido (`2021MNRAS.505.1699C`): el `no_vista` de `harps-drs` dice «su vista
+    bajo `ica` lo cubre», y la vista de `ica` es un stub sin `fecha` declarado él mismo `no_vista`.
+    Contra-casos: `ica-ruido` no es `ica`, y con la lectura nombrada fechada el motivo es cierto."""
+    nv = [{"sujeto": "harps-drs", "motivo": "su vista bajo `ica` lo cubre"},
+          {"sujeto": "ica", "motivo": "clasificado por título, no por lectura"}]
+    vistas = [{"sujeto": "Estrella Test", "tipo": "star", "fecha": "2026-10-01", "fuente": "pdf"},
+              {"sujeto": "ica", "tipo": "theme"}]
+    paper_con_vista(toy_vault, vistas=vistas, no_vista=nv)
+    r = lint.collect()
+    cat = r.por_clave("no_vista_lectura_ausente")
+    assert len(cat) == 1 and "**harps-drs**" in cat.items[0][1] and "**ica**" in cat.items[0][1]
+    assert "no_vista_lectura_ausente" not in [c.clave for c in r.bloquean()], "backlog"
+    nv[0]["motivo"] = "su vista bajo `ica-ruido` lo cubre"
+    paper_con_vista(toy_vault, vistas=vistas + [{"sujeto": "ica-ruido", "tipo": "theme",
+                                                "fecha": "2026-10-01", "fuente": "pdf"}],
+                    no_vista=nv)
+    assert lint.collect().por_clave("no_vista_lectura_ausente").items == ()
+
+
+def test_581_no_vista_con_vista_fechada_del_mismo_sujeto_bloquea(toy_vault, capsys):
+    """#581 — la lectura fechada y la escotilla del mismo sujeto: `load_no_vista` rehúsa y el lint
+    lo publica como frontmatter inválido (bloqueante)."""
+    paper_con_vista(toy_vault, vistas=[{"sujeto": "Estrella Test", "tipo": "star",
+                                        "fecha": "2026-10-01", "fuente": "pdf"}],
+                    no_vista=[{"sujeto": "Estrella Test", "motivo": "tangencial"}])
+    r = lint.collect()
+    assert any("FECHADA" in d for _s, d in r.por_clave("fm_broken").items)
+    assert "fm_broken" in [c.clave for c in r.bloquean()]

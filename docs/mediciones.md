@@ -4457,3 +4457,25 @@ mano decían «las 20 marcadas `acota`» sobre una tabla con 3 y «cinco inferen
 marcas (#280); sin el encadenado de #232, una ronda de re-verificación dejó 3 `contradice` de la
 ronda 1 en 0 en el bloque final; y antes de #434, las filas `acota` que compartían ancla con una
 `contextualiza` no se podían marcar resueltas por ningún medio.
+
+## #581 — vista fechada y `no_vista` del mismo sujeto; `no_vista` que invoca una lectura que no existe (v1.386.0)
+
+Worktrees desechables de Almagesto-Tesis: HEAD (`976e38f6`, post-audit de harps-drs) y `9e72664b`
+(el commit previo a la corrección), con `scripts/` de v1.386.0 encima.
+
+- **(1) vista ∩ `no_vista`.** 183 entradas `no_vista` en HEAD; 48 conviven con una entrada de
+  `vistas[]` del mismo sujeto y **las 48 son el stub SIN `fecha`** —incluidos los dos casos del
+  issue sobre `ica` (`2021MNRAS.505.1699C`, `2020A&A...633A..76C`)—, que es el compañero de diseño
+  de la escotilla (#256: `no_vista` no borra la entrada). Con `fecha` (lectura ocurrida): **0** en
+  HEAD y 0 en `9e72664b`. El rechazo en `load_no_vista` se acotó a la vista FECHADA: bloquear el
+  stub habría puesto en rojo 48 escotillas correctas. Lint de las dos bóvedas: rc 0, sin
+  `fm_broken` nuevos (0 falsos positivos). Escritor: cosecha de los 18 sujetos (10 temas, 8
+  estrellas) ida y vuelta — ningún cambio toca `no_vista` ni una línea de estado (las 13 notas que
+  cambian son drift de cosecha previo); la segunda corrida da 0 cosechadas en los 18.
+- **(2) motivo que invoca otra lectura** (`no_vista_lectura_ausente`, backlog). En `9e72664b`: **1**
+  hallazgo, el caso del issue (`2021MNRAS.505.1699C` / `harps-drs` → «su vista bajo `ica`»):
+  recall 1/1. En HEAD: **0** (falsos positivos 0). Población: 51 motivos con una frase
+  «vista/leído/lectura bajo|desde|de …» (52 referencias); a mano, todas las que nombran un sujeto
+  de la nota apuntan a una vista fechada. El `633A..76C` del issue no es caso de (2): su motivo no
+  invoca ninguna lectura. Techo declarado: un sujeto escrito por su slug (`hd_41248` por
+  `HD 41248`) o un motivo redactado de otra forma no se ve.

@@ -845,7 +845,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   comparación con la que escribe el cosechador la deja afuera (medido: 1 de 336) —
   `make_notes.py --restamp-lente` la re-serializa. ⛔ La escotilla decide sobre la vista **sin fecha** (#256), que
   es donde vive el reclamo pendiente; `no_vista` **no borra** la entrada de `vistas[]` — declara por
-  qué no se leyó.
+  qué no se leyó. ⛔ **La vista FECHADA y el `no_vista` del mismo sujeto son un error de forma**
+  (#581): `load_no_vista` rehúsa y cae en *frontmatter inválido* (bloqueante). El cosechador saca
+  el `no_vista` del sujeto al estampar su lectura —y pisa su línea *«No leído desde…»*—, así que
+  sólo lo produce una edición a mano.
+- **`no_vista` que invoca una lectura que no existe** (#581, `no_vista_lectura_ausente`, backlog,
+  heurística): el motivo de `no_vista[X]` nombra la vista de otro sujeto Y que la nota conoce
+  (*«su vista bajo `ica` lo cubre»*, tras *vista/leído/lectura bajo|desde|de*) y Y no tiene vista
+  **fechada** —stub, declarado `no_vista` él mismo, o ausente—. Se cierra haciendo esa lectura o
+  reescribiendo el motivo; un motivo redactado de otra forma no se ve.
 - **Vista sin `fuente`, y vista construida SÓLO del abstract** (#207, `vista_sin_fuente` /
   `vista_solo_abstract`, backlog las dos): `fuente: pdf|abstract` dice **de qué** se construyó la
   lectura. Ausente = *no consta* (una vista escrita desde ocho líneas de abstract se lee igual que

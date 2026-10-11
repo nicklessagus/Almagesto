@@ -701,7 +701,10 @@ def write_view_section(dest: Path, sujeto: str, cuerpo: str, *, theme: bool,
     else:
         ini, fin = span
         actual = text[ini:fin]
-        if not force and _norm(actual) != _norm(mn.vista_block(sujeto, theme)):
+        # #581 — the status line is overwritable in both forms, including the `no_vista` one
+        # («_No leído desde…_»), which the reading being written now makes false. The LEGACY
+        # template is not: it goes through its migrator (#398, `--restamp-vista-stub`).
+        if not force and mn.view_stub_kind(text, sujeto, theme) != "estado":
             # AUD-200: esto se contaba como «sin cambios». Es una NEGATIVA —la sección ya tiene
             # prosa redactada, cuyas anclas cuelgan del texto exacto— y el operador tiene que
             # saber que la vista nueva NO quedó escrita; si no, la cosecha se lee como completa.
@@ -840,7 +843,30 @@ def upsert_view(dest: Path, vista: dict, *, force: bool = False, derived: tuple 
     # parsear ENTERA — o sea que desaparece de todos los chequeos por tipo, en silencio. Medido: 24
     # de 202 notas de una bóveda real, con el cosechador informando «65 cosechadas».
     cfg.write_text_atomic(dest, "---\n" + nuevo_head.rstrip("\n") + text[end:])
+    if str(vista.get("fecha") or "").strip():
+        _drop_no_vista(dest, vista["sujeto"], data.get("no_vista"))
     return True
+
+
+def _drop_no_vista(dest: Path, sujeto: str, no_vista) -> None:
+    """The reading just stamped closes the `no_vista` hatch of its subject (#581).
+
+    `no_vista` says «not read from here» and the dated view says the opposite; leaving both re-creates
+    the form error `load_no_vista` rejects. The writer of the reading is the one that knows, so it
+    drops the hatch and prints the motive it carried — the decision was about a reading that now
+    exists."""
+    entradas = [x for x in cfg.as_list(no_vista) if isinstance(x, dict)]
+    resto = [x for x in entradas if str(x.get("sujeto") or "").strip() != sujeto]
+    if len(resto) == len(entradas):
+        return
+    if resto:
+        mn._set_lista_de_mapas(dest, "no_vista", resto)
+    elif not cfg.drop_fm_keys(dest, "no_vista"):
+        return          # #475: refused (it says why); the lint then blocks the pair (#581)
+    for x in entradas:
+        if x not in resto:
+            cfg.print_seguro(f"  → {dest.name}: la lectura de «{sujeto}» cierra su `no_vista` "
+                             f"(«{str(x.get('motivo') or '').strip()}») — se saca (#581)")
 
 
 def bring_fulltext(slug: str, bibcode: str, *, dry_run: bool = False) -> bool:

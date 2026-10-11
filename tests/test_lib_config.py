@@ -4244,3 +4244,17 @@ def test_574_note_read_for_es_la_vista_FECHADA_de_ese_sujeto():
     assert cfg.note_read_for(v(), {"S"}) is False and cfg.note_read_for(v(fecha="  "), {"S"}) is False
     assert cfg.note_read_for({"vistas": "roto"}, {"S"}) is False, "forma rota: del lint"
     assert cfg.note_read_for({}, {"S"}) is False
+
+
+def test_581_no_vista_y_vista_FECHADA_del_mismo_sujeto_es_error_de_forma(toy_vault):
+    """#581 — `no_vista` dice «no se leyó desde X» y una vista FECHADA de X dice que sí: juntas son
+    un error de forma. La entrada SIN fecha es el stub que la escotilla acompaña por diseño (#256)
+    y no choca; tampoco choca la lectura fechada de OTRO sujeto."""
+    nv = [{"sujeto": "ica", "motivo": "clasificado por título, no por lectura"}]
+    with pytest.raises(cfg.VistasError, match="ica"):
+        cfg.load_no_vista({"no_vista": nv, "vistas": [
+            {"sujeto": "ica", "tipo": "theme", "fecha": "2026-10-01"}]}, entry="X")
+    assert cfg.load_no_vista({"no_vista": nv, "vistas": [
+        {"sujeto": "ica", "tipo": "theme"},
+        {"sujeto": "indicadores-actividad", "tipo": "theme", "fecha": "2026-10-01"}]},
+        entry="X") == nv

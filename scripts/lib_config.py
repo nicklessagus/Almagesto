@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.385.0"
+ALMAGESTO_VERSION = "1.386.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4365,6 +4365,17 @@ def load_no_vista(meta: dict, *, entry: str = "?") -> list:
             raise VistasError(_no_vista_error(
                 entry, f"a una entrada de `no_vista` le falta {', '.join(faltan)}"))
         out.append(dict(x, sujeto=sujeto, motivo=motivo))
+    # #581 — `no_vista` says the subject was NOT read; a DATED view of the same subject says it was.
+    # The two together are a form error, not two facts: the dateless stub entry is the designed
+    # companion of the hatch (#256), the dated one contradicts it. The harvester drops the hatch
+    # when it stamps the reading (`harvest_views.upsert_view`), so this only catches a hand edit.
+    leidos = {str(x.get("sujeto") or "").strip() for x in as_list(meta.get("vistas"))
+              if isinstance(x, dict) and str(x.get("fecha") or "").strip()}
+    if (ambos := sorted(leidos & {x["sujeto"] for x in out})):
+        raise VistasError(_no_vista_error(
+            entry, f"`no_vista` declara sin leer a {', '.join(ambos)} y `vistas[]` tiene una "
+                   f"lectura FECHADA del mismo sujeto: si se leyó, sacá la entrada de `no_vista`; "
+                   f"si no, la `fecha` afirma una lectura que no ocurrió"))
     return out
 
 

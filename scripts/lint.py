@@ -5529,6 +5529,29 @@ def check_paper_coverage(stem: str, fm: dict, relevancia: str, pdf_on_disk: dict
     return incomplete, no_vista, nv_error
 
 
+def no_vista_missing_readings(fm: dict, vistas: list, no_vista: dict) -> list:
+    """`(sujeto, otro)` pairs where the `no_vista` motive of `sujeto` invokes a reading under `otro`
+    that this note does not have (#581).
+
+    The motive is free prose, so this is a narrow heuristic: `otro` must be a subject THIS note
+    knows (a view, a hatch, or a claim) and the motive must name it right after «vista/leído/lectura
+    bajo|desde|de». A hit means `otro` has no DATED view — a stub, declared `no_vista` itself, or not
+    there at all —, so the justification points at a reading that never happened.
+    ponytail: phrase regex; a motive worded otherwise («cubierto por la ficha de X») is not seen.
+    """
+    fechados = {v["sujeto"] for v in vistas if str(v.get("fecha") or "").strip()}
+    conocidos = ({v["sujeto"] for v in vistas} | set(no_vista)
+                 | {str(x).strip() for c in ("stars", "thesis_links")
+                    for x in cfg.as_list(fm.get(c)) if str(x).strip()})
+    out = []
+    for sujeto, motivo in no_vista.items():
+        for otro in sorted(conocidos - fechados - {sujeto}):
+            if re.search(r"(?:vista|le[ií]d[oa]s?|lectura)\s+(?:bajo|desde|de)\s+[`«\"']?"
+                         + re.escape(otro) + r"(?![\w-])", str(motivo), re.IGNORECASE):
+                out.append((sujeto, otro))
+    return out
+
+
 def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, theme_index: dict, temas_por_sujeto: dict) -> tuple:
     """The twelve verdicts about `vistas[]` — WHICH READING was made of this paper (#188).
 
@@ -5553,6 +5576,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
     vista_ejes_faltantes: list = []
     reclamo_sin_vista: list = []
     reclamo_sin_vista_declarado: list = []
+    no_vista_lectura_ausente: list = []
     reclamo_refutado: list = []
     reclamo_refutado_firmado: list = []
     doc_en_disco: list = []
@@ -5594,6 +5618,11 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # 257 huecos sobre 79 vistas con lente declarada. Backlog: una vista puede
         # legítimamente no tener nada que decir sobre un eje — lo que no puede es callarlo.
         _ejes_por_sujeto = cfg.view_axes(text)
+        for _suj, _otro in no_vista_missing_readings(fm, vistas, no_vista):
+            no_vista_lectura_ausente.append(
+                (stem, f"el `no_vista` de **{_suj}** se justifica con la lectura bajo **{_otro}**, "
+                       f"y esta nota no tiene una vista FECHADA de {_otro} (#581) → hacer esa "
+                       f"lectura, o reescribir el motivo sin invocarla"))
         for _v in vistas:
             _lente = [str(x).strip() for x in (_v.get("lente") or []) if str(x).strip()]
             if not _lente or not _v.get("fecha"):
@@ -5817,7 +5846,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                     reclamo_sin_vista.append(
                         (stem, f"lo reclama **{sujeto}** y nadie lo leyó desde ahí → hacer "
                                f"la vista, o declararla con `no_vista` y su motivo"))
-    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado, reclamo_refutado_firmado, doc_en_disco, vista_fecha_no_str
+    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado, reclamo_refutado_firmado, doc_en_disco, vista_fecha_no_str, no_vista_lectura_ausente
 
 
 def check_impl_leaks(stem: str, body_full: str, offset: int, leak_patterns, scan: bool) -> list:
@@ -7003,7 +7032,7 @@ def check_paper_note(stem: str, f: str, fm: dict, text: str, body_full: str, swe
                            "vista_solo_abstract", "vista_con_plantilla", "vista_ejes_faltantes",
                            "reclamo_sin_vista", "reclamo_sin_vista_declarado", "reclamo_refutado",
                            "reclamo_refutado_firmado",
-                           "doc_en_disco", "vista_fecha_no_str"),
+                           "doc_en_disco", "vista_fecha_no_str", "no_vista_lectura_ausente"),
                           check_paper_views(stem, fm, text, _no_vista, _nv_error,
                                             sweep.theme_index, sweep.themes_by_subject)):
         add(key, items)
@@ -7618,6 +7647,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('reclamo_refutado', '↩ La vista REFUTA un reclamo que sigue en el frontmatter (backlog)', SEV_BACKLOG, tuple(found['reclamo_refutado']), poblacion='papers'),
         Categoria('reclamo_refutado_firmado', 'Reclamo refutado y ya FIRMADO con `--drop-core` (#543: visible, no es deuda)', SEV_BACKLOG, tuple(found['reclamo_refutado_firmado']), poblacion='papers'),
         Categoria('reclamo_sin_vista_declarado', 'Reclamo sin vista DECLARADO con `no_vista` + motivo (visible, no es deuda)', SEV_BACKLOG, tuple(found['reclamo_sin_vista_declarado']), poblacion='papers'),
+        Categoria('no_vista_lectura_ausente', '`no_vista` cuyo motivo invoca la lectura de otro sujeto que la nota no tiene fechada (#581, heurística)', SEV_BACKLOG, tuple(found['no_vista_lectura_ausente']), poblacion='papers'),
         Categoria('vista_ejes_faltantes', '🎯 La vista no contesta los ejes de su propia lente: el silencio se lee como «se miró y no hay nada» (#254/#270, backlog)', SEV_BACKLOG, tuple(found['vista_ejes_faltantes']), poblacion='papers'),
         Categoria('gt_prosa', '🪞 La prosa afirma sobre la autoridad algo que su ground-truth desmiente (#278, backlog)', SEV_BACKLOG, tuple(found['gt_prosa']), poblacion='ground_truth'),
         Categoria('segunda_mano', '🔁 Valor de SEGUNDA MANO levantado sin la marca: la atribución se pierde en la síntesis (#103/#279, backlog)', SEV_BACKLOG, tuple(found['segunda_mano']), poblacion='pares_segunda_mano'),
