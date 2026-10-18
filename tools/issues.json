@@ -2920,6 +2920,11 @@
    "number": 586,
    "title": "Las citas «…» de menos de 40 caracteres (QUOTE_MIN) no las mira ningún gate textual: en una ficha recién sintetizada 2 de 26 estaban alteradas y una pasó verify-citations dos veces",
    "state": "CLOSED"
+  },
+  {
+   "number": 587,
+   "title": "La firma cita_revisada de una cita corta (#586) el lint la reporta siempre como huérfana: el carril corto vive en un solo portador",
+   "state": "OPEN"
   }
  ]
 }

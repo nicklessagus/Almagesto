@@ -159,6 +159,26 @@ def short_quote_verdict(quote: str, readings: list) -> str:
     return "ausente"
 
 
+def short_quote_verdicts(stem: str, own: str, text: str, bibs) -> list:
+    """`[(quote, candidates, verdict)]` for the SHORT quotes of one block — the lane of #586 (#587).
+
+    ⛔ ONE function for both carriers, `contrast.validar` and the lint, or they diverge (#324): with
+    the lane in `contrast` alone, the `cita_revisada` that silenced a mark there came back as an
+    orphan signature in the lint (measured: 34 of 34). Only an ENTITY note enters —a paper note
+    (`own`) carries what the machine copied from the extraction, and the `log` does not affirm
+    quotes (#391)—; the owner is `lib_blocks.quote_owner` (#316), and the witness is the `.txt`."""
+    if own or stem == "log":
+        return []
+    import lib_blocks as lb   # at call time: `lib_blocks` imports `lib_config`, which imports this
+    out = []
+    for cita in short_quotes_in(text):
+        duenio = lb.quote_owner(text, cita, bibs)
+        candidatos = [duenio] if duenio else list(bibs)
+        out.append((cita, candidatos, short_quote_verdict(
+            cita, [t for x in candidatos for t in fulltext_readings(x)])))
+    return out
+
+
 @functools.lru_cache(maxsize=64)
 def _source_vocabulary(readings: tuple) -> frozenset:
     """The words (letters only, ≥ 2) of a source's `.txt` readings, memoised: one sweep asks per quote."""

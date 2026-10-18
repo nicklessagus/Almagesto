@@ -4815,6 +4815,17 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                     cita_opaca.append(
                         (stem, f"L{_ln}: «{_corte}» no se puede chequear — "
                                + "; ".join(f"{b}: {m}" for b, m in _opacas)))
+            # #587 — el carril corto de #586, por la MISMA función que `contrast`: acá no reporta
+            # (la marca la emite `contrast`, y no mueve severidad), sólo deja usada la firma que
+            # cubre una cita corta que el `.txt` no trae. Sin esto, cada `cita_revisada` que la
+            # marca pide salía huérfana (medido: 34 de 34).
+            for _c, _bibs_c, _ver in cfg.short_quote_verdicts(stem, _propio, _btxt, _bibs):
+                _firma = cfg.reviewed_quote(_firmas, _bibs_c, _c) if _ver == "ausente" else None
+                if _firma:
+                    _usadas.add(_clave_firma(_firma))
+                    cita_revisada.append(
+                        (stem, f"L{_ln}: «{_c}» [cita corta, #586] — confirmada en el PDF de "
+                               f"{_firma['ref']}, p. {_firma['pagina']}: {_firma['motivo']}"))
     for _f in _firmas:
         if _clave_firma(_f) not in _usadas:
             _sha = cfg.quote_pdf_sha(_f["ref"])

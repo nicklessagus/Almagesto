@@ -1745,7 +1745,8 @@ re-extraer el `.txt`.
    contra el `.txt` de su fuente y **sin la extracción como testigo** —los dos defectos del caso
    nacieron ahí—. Si sus palabras no son las del `.txt` es **glosa** de la nota y calla; si lo son y
    la frase no está, sale la **marca** `⚠verificar en el PDF`. **No mueve el rc** y la firma
-   `cita_revisada` (#516) la calla.
+   `cita_revisada` (#516) la calla — en los dos portadores: el lint corre la misma función
+   (`short_quote_verdicts`) para no nombrar huérfana esa firma (#587).
    ⛔ **Y alcanza `## Vista` sumando el bibcode de la NOTA a los adyacentes (#373):** ahí el bibcode es
 la nota y no un link, así que 3838 transcripciones del PDF no las miraba nadie. ⛔ **El LINT usa esa
 regla y esa función (#394), y el bibcode propio SUMA, nunca reemplaza** (`cfg.with_own_bibcode`):

@@ -4598,3 +4598,12 @@ eso quedan afuera. Los tres defectos del issue, en su estado previo a la correcc
 instancia): los tres `ausente`; la cita correcta del PDF («the most inactive star is Gl 699»),
 `en_su_txt`. Con la extracción como testigo, dos de los tres pasaban (nacieron ahí). `rc` de
 `--validar-todo` sin cambio (0).
+
+## La firma de la cita corta, en los dos portadores (v1.396.0, #587)
+
+Sobre Almagesto-Tesis en `b046d94b` (34 firmas cortas nuevas; sólo lectura): `cita_revisada_huerfana`
+89 → **56** con el lint de v1.396.0; 35 firmas cortas pasan a la lista aparte de `cita_revisada`.
+De las 56, dos son firmas cortas que siguen huérfanas por una buena razón: su cita
+(«several lamps of the same manufacturer», «To be concluded in October issue») hoy está en su `.txt`
+(`en_su_txt`), así que no hay hallazgo que cubrir. `contrast` dice lo mismo. Las otras 54 no son de
+este issue: son de antes.

@@ -2613,6 +2613,9 @@ portadores:
       - modulo: scripts/contrast.py
         estado: usa
         motivo: "`validar` elige los candidatos por `quote_owner` (#324: una sola regla con el lint)."
+      - modulo: scripts/lib_quotes.py
+        estado: usa
+        motivo: "#587 — `short_quote_verdicts` elige el dueño de cada cita corta por `quote_owner`, para sus dos portadores (`contrast` y el lint)."
 
   - issue: 517
     regla: >-
@@ -3494,15 +3497,15 @@ portadores:
       fuente, también la de menos de `QUOTE_MIN` caracteres: la corta va por su propio carril
       (palabra entera, la glosa reconocida por el vocabulario de la fuente, la extracción NO es
       testigo) y lo que el `.txt` no trae sale con la marca `⚠verificar en el PDF`, sin mover el rc.
-    funcion: lib_quotes.short_quote_verdict
-    patron: 'QUOTE_MIN|quotes_in\('
+    funcion: lib_quotes.short_quote_verdicts
+    patron: 'QUOTE_MIN|quotes_in\(|short_quote'
     consumidores:
       - modulo: scripts/contrast.py
         estado: usa
         motivo: "`validar` corre el carril corto sobre las notas sin bibcode propio y fuera del `log`; la pasada `--validar-todo` y el pre-flight del diff lo heredan."
       - modulo: scripts/lint.py
-        estado: fuera-de-alcance
-        motivo: "Su #220/#333 frena `--cierre`; la cita corta nunca bloquea (no prueba alteración), así que su salida es la marca que emite `contrast`, el paso de cierre de #323."
+        estado: usa
+        motivo: "#587 — corre el carril para dejar usada la `cita_revisada` que cubre una cita corta ausente del `.txt` (si no, salía huérfana); no reporta el hallazgo: la marca la emite `contrast` y no mueve severidad."
       - modulo: scripts/harvest_views.py
         estado: fuera-de-alcance
         motivo: "Cruza la cita del JSON contra el `.txt` al cosechar (#359): escribe la nota de PAPER, que el carril corto excluye — ahí la cita es copia de la extracción."

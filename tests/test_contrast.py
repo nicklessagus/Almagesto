@@ -1558,3 +1558,31 @@ def test_586_la_cita_corta_de_una_nota_de_PAPER_no_entra(toy_vault):
                     encoding="utf-8")
     r = ct.validar(nota, mostrar=False)
     assert r["cortas"] == [] and r["cortas_n"] == 0
+
+
+def test_587_la_firma_de_una_cita_CORTA_calla_en_los_DOS_portadores_y_no_es_huerfana(toy_vault):
+    """#587 — el carril corto de #586 vivía sólo en `contrast`: la `cita_revisada` que su marca pide
+    callaba ahí y el lint la nombraba huérfana (34 de 34 en la instancia). Ahora los dos portadores
+    pasan por `cfg.short_quote_verdicts`; la firmada se lista aparte y reemplazar el PDF la devuelve."""
+    import lint as lt
+    bib = "2012A&A...541A...9G"
+    _txt("barnard", bib, "the most inactive star is gl 699, the most active in the sample is gj 3")
+    pdf = cfg.PDFS / "barnard" / f"{bib}.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"%PDF-1.4 uno")
+    nota = cfg.STARS / "barnard.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    cuerpo = f"# Barnard\n\nEs «the most inactive star in the sample» [[{bib}]].\n"
+    firma = {"ref": bib, "cita": "the most inactive star in the sample",
+             "pdf_sha": cfg.quote_pdf_sha(bib), "pagina": 4, "motivo": "verbatim en la hoja"}
+    nota.write_text("---\ntags: [star]\ncita_revisada:\n  - " + json.dumps(firma) + "\n---\n\n"
+                    + cuerpo, encoding="utf-8")
+    r = ct.validar(nota, mostrar=False)
+    assert not r["cortas"] and len(r["resueltas"]) == 1, r
+    rep = lt.collect()
+    assert not rep.por_clave("cita_revisada_huerfana").items
+    assert any("cita corta" in m for _s, m in rep.por_clave("cita_revisada").items)
+    pdf.write_bytes(b"%PDF-1.4 dos, otro documento")
+    assert ct.validar(nota, mostrar=False)["cortas"]
+    [(_s, hue)] = lt.collect().por_clave("cita_revisada_huerfana").items
+    assert "cambió" in hue

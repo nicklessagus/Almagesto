@@ -517,15 +517,10 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                                    f"dicen, y ninguna es evidencia positiva: la transcripción es "
                                    f"SELECTIVA y el `.txt` un índice degradado (#321/#205). "
                                    f"Confirmala en el PDF{firmala}"))
-        # #586 — sólo en la nota de ENTIDAD: ahí el sintetizador re-tipea. La de paper lleva lo que
-        # la máquina copió de la extracción y el `log` no afirma citas (#391); medido sobre una
-        # bóveda real, con ellas eran 605 marcas en vez de 43.
-        for cita in ([] if propio or nota.stem == "log" else cfg.short_quotes_in(b.text)):
+        # #586 — el carril de la cita CORTA; #587 — la MISMA función que el lint, o la firma que
+        # calla la marca acá vuelve allá como huérfana.
+        for cita, candidatos, ver in cfg.short_quote_verdicts(nota.stem, propio, b.text, bibs):
             out["cortas_n"] += 1
-            duenio = lb.quote_owner(b.text, cita, bibs)
-            candidatos = [duenio] if duenio else bibs
-            ver = cfg.short_quote_verdict(
-                cita, [t for x in candidatos for t in cfg.fulltext_readings(x)])
             if ver == "glosa":
                 out["cortas_glosa"] += 1
             elif ver == "no_evaluable":
