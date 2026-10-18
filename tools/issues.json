@@ -2924,7 +2924,7 @@
   {
    "number": 587,
    "title": "La firma cita_revisada de una cita corta (#586) el lint la reporta siempre como huérfana: el carril corto vive en un solo portador",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
