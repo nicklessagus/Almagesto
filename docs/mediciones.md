@@ -4561,3 +4561,10 @@ Contra NEA real (2026-10-17): `fetch_pscomppars('GJ 699')` antes → `ORA-00933`
 dando 1 fila (`Kapteyn c`). Los tres portadores (`main`, `fetch_host`, `nea_diff`) pasan por
 `fetch_pscomppars`, así que el escape vive ahí. La asimetría `nea_diff` (clave de `stars.yaml`) vs
 `main` (`simbad:`) queda como estaba: con el escape, las dos consultas resuelven.
+
+## `pdf_leido` tras repaginar (v1.392.0, #584)
+
+`_leido_detalle` recibe la extracción de la vista (por archivo, no por bibcode) y, con `_repaginado`
+sin `PAGINATION_OPEN_MARKS`, dice que los localizadores «se repaginaron releyendo el PDF el
+<fecha>». Con `_paginacion` o `_repaginado_parcial` sigue diciendo «documento viejo». Medido sólo
+en la suite; la medición sobre las 14 salvedades de la instancia queda para el validador.

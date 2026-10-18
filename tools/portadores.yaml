@@ -2088,6 +2088,9 @@ portadores:
       - modulo: scripts/contrast.py
         estado: usa
         motivo: "Nombra la causa del localizador MAL sólo mientras la deuda esté abierta: con `_repaginado` decir «el localizador es del documento anterior» sería falso."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "`_leido_detalle` (#584) lleva la regla por la constante y no por el predicado: la salvedad es por VISTA, o sea por archivo de extracción, y el predicado responde por bibcode (con dos slugs y uno solo repaginado diría «viejo» de la vista ya releída)."
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "Lleva la misma regla pero por la constante (`PAGINATION_OPEN_MARKS`) y no por el predicado, porque su pregunta es por ARCHIVO de extracción y no por bibcode: necesita saber CUÁL marca está puesta para nombrar cuántos localizadores dejó pendientes la ronda parcial, que es lo que el predicado —booleano y por bibcode— no puede decir."
@@ -2350,6 +2353,9 @@ portadores:
       - modulo: scripts/lint.py
         estado: usa
         motivo: "`check_depaginated_extractions` lista la deuda de sueltos en la misma categoría (vía `_loose_debt`)."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`_leido_detalle` (#584) no dice «se repaginaron» de una extracción con sueltos sin releer."
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "`extraction_pagination_open` decide si el gate de citas juzga localizadores ADYACENTES a una cita; los sueltos no los evalúa (los declara FUERA DE ALCANCE)."

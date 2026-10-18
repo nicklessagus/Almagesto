@@ -48,6 +48,7 @@ import extraction_prompt as ep
 import lib_blocks as lb
 import lib_config as cfg
 import make_notes as mn
+import repaginate as rp
 
 
 # Un `[[…]]` en markdown es un WIKILINK. Una extracción trae matrices escritas igual
@@ -103,7 +104,7 @@ _DOC_DE_FUENTE = {"eprint": "preprint", "ads": "publicado", "publisher": "public
 _SIN_TESTIGO = ("web",)
 
 
-def _leido_detalle(leido: str, doc: str, fm: dict) -> str:
+def _leido_detalle(leido: str, doc: str, fm: dict, data: dict | None = None) -> str:
     """What the caveat's SECOND axis adds to the detail: which document the VIEW was built from (#456).
 
     ⛔ The two axes are not the same question, and in a REPLACED PDF they do not coincide — that is
@@ -115,13 +116,24 @@ def _leido_detalle(leido: str, doc: str, fm: dict) -> str:
     from the preprint» was not expressible in the type at all.
 
     The useful thing it lets the check say is the one `_paginacion` (#436) already marks on the
-    extraction side: **the view predates the replacement, so its locators are of the old document.**"""
+    extraction side: **the view predates the replacement, so its locators are of the old document.**
+
+    #584: that holds while the debt is OPEN. `data` is the extraction of THIS view (per file, not
+    per bibcode: with two slugs only one may be repaginated); once `repaginate` closed it
+    (`_repaginado`, no `PAGINATION_OPEN_MARKS`, no loose debt #535) the locators were re-read against the new PDF."""
     if not leido:
         return ""
     if leido == doc:
         return f"; y la vista se leyó de ese mismo documento (`{leido}`)"
     firmas = [x for x in cfg.as_list((fm or {}).get("pdf_reemplazo")) if isinstance(x, dict)]
     cuando = f" del {firmas[-1].get('fecha')}" if firmas and firmas[-1].get("fecha") else ""
+    data = data or {}
+    repag = cfg.as_map(data.get("_repaginado"))
+    if (firmas and repag and not any(cfg.as_map(data.get(m)) for m in cfg.PAGINATION_OPEN_MARKS)
+            and not rp.loose_debt(data)):          # #535: sueltos sin releer = deuda abierta
+        el = f" el {repag.get('fecha')}" if repag.get("fecha") else ""
+        return (f"; la vista se leyó del **{leido}**, o sea ANTES del reemplazo{cuando}: sus "
+                f"localizadores eran del documento viejo y se repaginaron releyendo el PDF{el} (#494)")
     if firmas:
         return (f"; la vista se leyó del **{leido}**, o sea ANTES del reemplazo{cuando}: sus "
                 f"localizadores son del documento viejo (#456)")
@@ -129,7 +141,7 @@ def _leido_detalle(leido: str, doc: str, fm: dict) -> str:
             f"declara `pdf_reemplazo` — no consta cuándo cambió (#441)")
 
 
-def _check_pdf_leido(stem: str, item: dict) -> tuple[bool | None, str]:
+def _check_pdf_leido(stem: str, item: dict, data: dict | None = None) -> tuple[bool | None, str]:
     """Check the caveat that says WHICH DOCUMENT was read, against the disk (#452).
 
     ⛔ The three witnesses are `cfg.doc_on_disk`'s, in its declared precedence (the arXiv mark in
@@ -160,7 +172,7 @@ def _check_pdf_leido(stem: str, item: dict) -> tuple[bool | None, str]:
         return None, f"ningún testigo dice qué documento hay en disco para `{de}`: {porque}"
     de_otro = f" (el PDF de `{de}`)" if de != stem else ""
     detalle = (f"en disco está el **{disco}**{de_otro} ({porque}); la salvedad declara `{doc}`"
-               + _leido_detalle(leido, doc, fm))
+               + _leido_detalle(leido, doc, fm, data))
     return dicho == disco, detalle
 
 
@@ -208,7 +220,7 @@ def _check_note_state(bibcode: str, item: dict) -> tuple[bool | None, str]:
     return False, f"{dice} — la salvedad dice que {'sí' if dicho else 'no'}: es FALSA"
 
 
-def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
+def check_salvedad(bibcode: str, item: dict, data: dict | None = None) -> tuple[bool | None, str]:
     """Check one STRUCTURED caveat against the file it talks about (#213).
 
     Returns `(veredicto, detalle)`: `True` it holds, `False` it is FALSE, `None` it could not be
@@ -229,7 +241,7 @@ def check_salvedad(bibcode: str, item: dict) -> tuple[bool | None, str]:
         return None, f"`tipo: {tipo}` fuera del vocabulario ({' | '.join(cfg.SALVEDAD_TIPOS)})"
     stem = mn.safe_name(bibcode)
     if tipo == "pdf_leido":
-        return _check_pdf_leido(stem, item)
+        return _check_pdf_leido(stem, item, data)
     if tipo == "nota_estado":
         return _check_note_state(bibcode, item)
     if tipo == "txt_pierde":
@@ -270,7 +282,7 @@ def split_salvedades(bibcode: str, data: dict) -> tuple[list, list, list]:
     verificadas, prosa, falsas = [], [], []
     for item in cfg.as_list(data.get("salvedades")):
         if isinstance(item, dict):
-            ok, detalle = check_salvedad(bibcode, item)
+            ok, detalle = check_salvedad(bibcode, item, data)
             # ⛔ #453 — `evidencia` es lo que el lector VIO («marca de agua en el margen de la
             # p. 1») y el chequeo no la re-deriva: re-deriva el veredicto. Estructurar una salvedad
             # sin campo donde ponerla obligaba a tirar esa prosa, sobre un artefacto versionado y

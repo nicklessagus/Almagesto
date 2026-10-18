@@ -1959,6 +1959,26 @@ def test_456_los_DOS_EJES_de_pdf_leido_en_un_PDF_reemplazado(toy_vault):
     assert "vista" not in sin_eje
 
 
+def test_584_tras_repaginar_los_localizadores_ya_no_son_del_documento_viejo(toy_vault):
+    """#584 — «sus localizadores son del documento viejo» depende de la deuda de paginación de ESTA
+    extracción (`PAGINATION_OPEN_MARKS`, #494), no sólo de la firma: cerrada con `_repaginado`, ya
+    no es verdad. Con la deuda abierta (o parcial) sigue diciéndolo."""
+    _con_pdf(toy_vault)
+    firma = [{"fecha": "2026-09-12", "source": "publisher", "sha": "a", "sha_anterior": "b"}]
+    sembrar(toy_vault, extraccion(), fm_extra={"pdf_source": "publisher", "pdf_reemplazo": firma})
+    item = {"tipo": "pdf_leido", "documento": "publisher", "leido": "eprint"}
+    cerrada = {"_repaginado": {"fecha": "2026-10-14", "n": 3}}
+    _ok, det = hv.check_salvedad(BIB, item, cerrada)
+    assert "se repaginaron releyendo el PDF el 2026-10-14" in det
+    assert "son del documento viejo" not in det
+    for abierta in ({"_paginacion": {"fecha": "2026-09-12"}},
+                    {"_repaginado": {"fecha": "2026-10-14"}, "_repaginado_parcial": {"n": 1}}):
+        assert "son del documento viejo" in hv.check_salvedad(BIB, item, abierta)[1]
+    # #535: un cierre pre-#534 sin `alcance` que dejó localizadores sueltos sin releer
+    sueltos = {"_repaginado": {"fecha": "2026-09-01"}, "conclusiones": "dice algo (p. 4)"}
+    assert "son del documento viejo" in hv.check_salvedad(BIB, item, sueltos)[1]
+
+
 def test_456_la_propuesta_emite_LOS_DOS_EJES_cuando_no_coinciden(toy_vault):
     """#456 — antes esta población salía como «la salvedad quedó VIEJA» y sin entrada para pegar,
     porque no había forma de escribirla; ahora se propone entera. ⚠ Sólo con `pdf_reemplazo`: sin la
