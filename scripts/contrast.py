@@ -384,7 +384,10 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
            # #492 — y la población que este chequeo NO alcanza por construcción: el localizador sin
            # cita textual adyacente (el caso de `Almagesto-Tesis#8` mismo). Sin cita no hay qué buscar
            # en el `.txt`; se cuenta para que un «0 MAL» no se lea como «todo mirado» (INV-40).
-           "pag_consumidos": 0, "pag_sin_cita": 0}
+           "pag_consumidos": 0, "pag_sin_cita": 0,
+           # #586 — las citas CORTAS (< `QUOTE_MIN`), que `quotes_in` deja afuera: población propia,
+           # la marca para las que el `.txt` no trae, y nada que mueva el rc.
+           "cortas": [], "cortas_n": 0, "cortas_glosa": 0, "cortas_no_eval": 0}
     bibs_nota = set(lb._bibcodes(texto))
     # #373/#394 — en una nota de PAPER el bibcode es la nota, no un link, y desde #394 la regla
     # (y su medición) vive en `cfg.note_own_bibcode`/`cfg.with_own_bibcode`, compartida con el lint:
@@ -514,13 +517,39 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                                    f"dicen, y ninguna es evidencia positiva: la transcripción es "
                                    f"SELECTIVA y el `.txt` un índice degradado (#321/#205). "
                                    f"Confirmala en el PDF{firmala}"))
+        # #586 — sólo en la nota de ENTIDAD: ahí el sintetizador re-tipea. La de paper lleva lo que
+        # la máquina copió de la extracción y el `log` no afirma citas (#391); medido sobre una
+        # bóveda real, con ellas eran 605 marcas en vez de 43.
+        for cita in ([] if propio or nota.stem == "log" else cfg.short_quotes_in(b.text)):
+            out["cortas_n"] += 1
+            duenio = lb.quote_owner(b.text, cita, bibs)
+            candidatos = [duenio] if duenio else bibs
+            ver = cfg.short_quote_verdict(
+                cita, [t for x in candidatos for t in cfg.fulltext_readings(x)])
+            if ver == "glosa":
+                out["cortas_glosa"] += 1
+            elif ver == "no_evaluable":
+                out["cortas_no_eval"] += 1
+            elif ver == "ausente":
+                firma = cfg.reviewed_quote(firmas, candidatos, cita)
+                if firma:
+                    out["resueltas"].append(
+                        (b.first_line, f"`cita_revisada`: confirmada en el PDF de {firma['ref']}, "
+                                       f"p. {firma['pagina']} — {firma['motivo']} (#516)"))
+                    continue
+                out["cortas"].append(
+                    (b.first_line, f"«{cita}» — cita corta con las palabras de "
+                                   f"{', '.join(candidatos) or 'sin fuente adyacente'}, y su `.txt` "
+                                   f"no la trae como frase: confirmala en el PDF (#586)"
+                                   f"{cfg.reviewed_quote_entry(candidatos, cita)}",
+                     cfg.verificar_pdf_mark("cita corta que el `.txt` de su fuente no trae")))
         out["pag_sin_cita"] += max(0, len(cfg.page_locators(b.text))
                                    - (out["pag_consumidos"] - antes))
     if mostrar:
         for ln, motivo in out["alteradas"]:
             cfg.print_seguro(f"  ⛔ L{ln}: {motivo}. Copiala del JSON con `contrast.py <slug> "
                              f"--grep …` — NO la re-tipees (#322)")
-        for ln, motivo, marca in out["discrepan"]:
+        for ln, motivo, marca in out["discrepan"] + out["cortas"]:
             cfg.print_seguro(f"  ⚠ L{ln}: {motivo}\n     → si no podés abrirlo ahora, pegá al final "
                              f"de la afirmación:  {marca}")
         for ln, motivo in out["pag_mal"]:
@@ -760,7 +789,7 @@ def preflight(ref: str = "HEAD") -> int:
             if ln in agregadas:
                 citas.append((nota, ln, "⛔ " + motivo))
                 bloqueantes += 1
-        for ln, motivo, marca in r["discrepan"]:
+        for ln, motivo, marca in r["discrepan"] + r["cortas"]:
             if ln in agregadas:
                 citas.append((nota, ln, f"⚠ {motivo}\n     → {marca}"))
 
@@ -810,6 +839,8 @@ def validar_todo(slug: str | None = None) -> int:
     pag = {"pag_total": 0, "pag_ok": 0, "pag_no_eval": 0, "pag_sin_cita": 0}
     pag_mal: list = []
     discrepan: list = []
+    cortas: list = []
+    cortas_pob = {"cortas_n": 0, "cortas_glosa": 0, "cortas_no_eval": 0}
     for f in notas:
         r = validar(f, mostrar=False)
         for k in pag:
@@ -820,12 +851,15 @@ def validar_todo(slug: str | None = None) -> int:
         solo_ext += r["solo_extraccion"]
         resueltas += len(r["resueltas"])
         discrepan += [(f, ln, m, k) for ln, m, k in r["discrepan"]]
+        cortas += [(f, ln, m, k) for ln, m, k in r["cortas"]]
+        for k in cortas_pob:
+            cortas_pob[k] += r[k]
         if r["alteradas"]:
             cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}")
             for ln, motivo in r["alteradas"]:
                 cfg.print_seguro(f"  ⛔ L{ln}: {motivo}")
             alteradas += len(r["alteradas"])
-    for f, ln, motivo, marca in discrepan:
+    for f, ln, motivo, marca in discrepan + cortas:
         cfg.print_seguro(f"\n{f.relative_to(cfg.ROOT)}\n  ⚠ L{ln}: {motivo}"
                          f"\n     → si no podés abrirlo ahora, pegá al final de la afirmación:"
                          f"  {marca}")
@@ -839,6 +873,12 @@ def validar_todo(slug: str | None = None) -> int:
                      + (f" · {resueltas} declarada(s) y resuelta(s): en el `log` (#386/#387) o "
                         f"firmada(s) `cita_revisada` (#516)"
                         if resueltas else ""))
+    cfg.print_seguro(f"  > citas cortas (< {cfg.QUOTE_MIN} caracteres, #586): "
+                     f"{cortas_pob['cortas_n']} · {cortas_pob['cortas_glosa']} glosa(s) de la nota "
+                     f"(sus palabras no son las del `.txt` de la fuente) · "
+                     f"{cortas_pob['cortas_no_eval']} no evaluable(s) (sin `.txt`) · {len(cortas)} "
+                     f"que el `.txt` no trae, con su marca arriba. No mueve el rc: el `.txt` es "
+                     f"índice degradado (#205) y la extracción no es testigo de éstas")
     if not citas:
         cfg.print_seguro("  ⚠ NO EVALUADO: ninguna cita mirada. Si la bóveda es anterior a #311, "
                          "corré `python scripts/make_notes.py --migrate-extracciones` — un cero sin "
@@ -865,7 +905,9 @@ def validar_todo(slug: str | None = None) -> int:
                                   "resueltas": resueltas, "localizadores": pag["pag_total"],
                                   "pagina_ok": pag["pag_ok"], "pagina_mal": len(pag_mal),
                                   "pagina_no_evaluables": pag["pag_no_eval"],
-                                  "pagina_sin_cita": pag["pag_sin_cita"]}, alteradas)
+                                  "pagina_sin_cita": pag["pag_sin_cita"],
+                                  "cortas": cortas_pob["cortas_n"], "cortas_marcadas": len(cortas)},
+                                 alteradas)
     if solo_ext:
         cfg.print_seguro(f"  ⚠ de las aprobadas, {solo_ext} se apoyan en UN SOLO TESTIGO: la "
                          f"extracción de su fuente las dice y el `.txt` de esa misma fuente no. Es "
@@ -976,6 +1018,7 @@ def main(argv=()) -> int:
                          f"· {len(r['no_evaluables'])} no evaluable(s) · "
                          f"{r['solo_extraccion']} sólo respaldada(s) por la extracción "
                          f"({len(r['discrepan'])} con el `.txt` en contra) · "
+                         f"{len(r['cortas'])} corta(s) a confirmar en el PDF (#586) · "
                          f"{r['citas']} mirada(s)"
                          + (" ✅" if not r["alteradas"] else " ⛔"))
         return 1 if r["alteradas"] else 0

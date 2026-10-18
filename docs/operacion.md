@@ -1740,6 +1740,12 @@ re-extraer el `.txt`.
    ⛔ **Y la extracción de un PDF REEMPLAZADO no acusa sola (#437):** «cambiada» se mide contra el
    PDF en disco — verbatim en el `.txt` nuevo pasa, arranque igual y cola distinta en el `.txt`
    nuevo bloquea, silencio marca `⚠verificar en el PDF`.
+   ⛔ **Y la cita CORTA (< `QUOTE_MIN`) también se mira, por su propio carril (#586):** sólo en la
+   nota de entidad (la de paper copia la extracción; el `log` no afirma), por **palabra entera**
+   contra el `.txt` de su fuente y **sin la extracción como testigo** —los dos defectos del caso
+   nacieron ahí—. Si sus palabras no son las del `.txt` es **glosa** de la nota y calla; si lo son y
+   la frase no está, sale la **marca** `⚠verificar en el PDF`. **No mueve el rc** y la firma
+   `cita_revisada` (#516) la calla.
    ⛔ **Y alcanza `## Vista` sumando el bibcode de la NOTA a los adyacentes (#373):** ahí el bibcode es
 la nota y no un link, así que 3838 transcripciones del PDF no las miraba nadie. ⛔ **El LINT usa esa
 regla y esa función (#394), y el bibcode propio SUMA, nunca reemplaza** (`cfg.with_own_bibcode`):

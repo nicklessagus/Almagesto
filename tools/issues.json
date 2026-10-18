@@ -2915,6 +2915,11 @@
    "number": 585,
    "title": "fetch_ground_truth: un hostname de NEA con apóstrofo (Barnard's star) rompe la consulta pscomppars (ORA-00933, no transitorio)",
    "state": "CLOSED"
+  },
+  {
+   "number": 586,
+   "title": "Las citas «…» de menos de 40 caracteres (QUOTE_MIN) no las mira ningún gate textual: en una ficha recién sintetizada 2 de 26 estaban alteradas y una pasó verify-citations dos veces",
+   "state": "OPEN"
   }
  ]
 }

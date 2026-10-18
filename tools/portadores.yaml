@@ -3487,3 +3487,28 @@ portadores:
       - modulo: scripts/entity.py
         estado: usa
         motivo: "`_rename_scope_list` renombra el slug como elemento de la lista, conservando `(N)` y el `>` de una lista en dos renglones."
+  # ── #586 ──
+  - issue: 586
+    regla: >-
+      Toda cita «…» que una nota de ENTIDAD presenta como textual se chequea contra el `.txt` de su
+      fuente, también la de menos de `QUOTE_MIN` caracteres: la corta va por su propio carril
+      (palabra entera, la glosa reconocida por el vocabulario de la fuente, la extracción NO es
+      testigo) y lo que el `.txt` no trae sale con la marca `⚠verificar en el PDF`, sin mover el rc.
+    funcion: lib_quotes.short_quote_verdict
+    patron: 'QUOTE_MIN|quotes_in\('
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "`validar` corre el carril corto sobre las notas sin bibcode propio y fuera del `log`; la pasada `--validar-todo` y el pre-flight del diff lo heredan."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Su #220/#333 frena `--cierre`; la cita corta nunca bloquea (no prueba alteración), así que su salida es la marca que emite `contrast`, el paso de cierre de #323."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Cruza la cita del JSON contra el `.txt` al cosechar (#359): escribe la nota de PAPER, que el carril corto excluye — ahí la cita es copia de la extracción."
+      - modulo: scripts/repaginate.py
+        estado: fuera-de-alcance
+        motivo: "Usa `quotes_in` para ubicar la página de una cita al re-paginar (#494): con una cadena corta la página que encuentra es al azar."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Re-exporta `QUOTE_MIN`/`quotes_in` y los símbolos nuevos de `lib_quotes`; no decide nada."

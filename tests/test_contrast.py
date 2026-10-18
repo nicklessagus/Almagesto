@@ -1057,7 +1057,7 @@ def test_490_la_negativa_AGREGADA_se_reporta_y_Huecos_y_blockquote_no(toy_vault,
     agregadas = {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
     monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: agregadas})
     monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
-        "alteradas": [], "discrepan": [], "no_evaluables": [], "resueltas": [],
+        "alteradas": [], "discrepan": [], "cortas": [], "no_evaluables": [], "resueltas": [],
         "citas": 0, "solo_extraccion": 0})
 
     assert ct.preflight() == 0, "las tres categorías son backlog: el pre-flight no bloquea"
@@ -1084,7 +1084,7 @@ def test_490_el_rol_AGREGADO_que_el_paper_no_declara_se_reporta(toy_vault, monke
     agregadas = {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
     monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: agregadas})
     monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
-        "alteradas": [], "discrepan": [], "no_evaluables": [], "resueltas": [],
+        "alteradas": [], "discrepan": [], "cortas": [], "no_evaluables": [], "resueltas": [],
         "citas": 0, "solo_extraccion": 0})
 
     assert ct.preflight() == 0
@@ -1107,7 +1107,7 @@ def test_AUD465_el_rol_se_compara_NORMALIZADO_y_contra_la_celda_FUENTE(toy_vault
     agregadas = {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
     monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: agregadas})
     monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
-        "alteradas": [], "discrepan": [], "no_evaluables": [], "resueltas": [],
+        "alteradas": [], "discrepan": [], "cortas": [], "no_evaluables": [], "resueltas": [],
         "citas": 0, "solo_extraccion": 0})
     assert ct.preflight() == 0
     out = capsys.readouterr().out
@@ -1178,7 +1178,7 @@ def test_490_la_cita_alterada_AGREGADA_bloquea_y_la_vieja_no(toy_vault, monkeypa
     monkeypatch.setattr(ct, "added_lines", lambda ref="HEAD": {f: {7: "linea dos"}})
     monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
         "alteradas": [(7, "cita cambiada"), (99, "otra vieja")],
-        "discrepan": [(7, "el `.txt` dice otra cosa", "⚠verificar en el PDF")],
+        "discrepan": [(7, "el `.txt` dice otra cosa", "⚠verificar en el PDF")], "cortas": [],
         "no_evaluables": [], "resueltas": [], "citas": 2, "solo_extraccion": 0})
 
     assert ct.preflight() == 1, "una sola: la de la línea agregada"
@@ -1253,7 +1253,7 @@ def test_490_el_hermano_de_verificacion_y_el_log_NO_son_prosa_del_corrector(toy_
         f: {i: ln for i, ln in enumerate(f.read_text(encoding="utf-8").split("\n"), 1)}
         for f in (nota, hermano, cfg.LOG)})
     monkeypatch.setattr(ct, "validar", lambda n, mostrar=True: {
-        "alteradas": [], "discrepan": [], "no_evaluables": [], "resueltas": [],
+        "alteradas": [], "discrepan": [], "cortas": [], "no_evaluables": [], "resueltas": [],
         "citas": 0, "solo_extraccion": 0})
 
     assert ct.preflight() == 0
@@ -1522,3 +1522,39 @@ def test_555_parafrasis_pone_la_afirmacion_de_la_ficha_al_lado_de_la_vista(toy_v
     out = capsys.readouterr().out
     assert "2 fuente(s) · 1 sin vista" in out
     assert ct.main(["--parafrasis", str(nota) + "x"]) == 2
+
+
+def test_586_la_cita_CORTA_que_el_txt_no_trae_sale_MARCADA_y_no_mueve_el_rc(toy_vault, capsys):
+    """#586 — las «…» de menos de `QUOTE_MIN` no las miraba ningún gate textual. El caso: «the most
+    inactive star in the sample», nacida en la extracción y aprobada por el juez dos veces; el
+    PDF dice «the most inactive star is Gl 699». La extracción NO es testigo (ahí nació el error):
+    sólo el `.txt`. La glosa en castellano («no daña») no es cita de la fuente y calla; la cita
+    que el `.txt` trae pasa; ninguna mueve el rc."""
+    _txt("barnard", "2012A&A...541A...9G",
+         "the most active star in the sample is gj 3 and the most inactive star is gl 699")
+    _extraccion("barnard", "2012A&A...541A...9G", ejes={"actividad": "the most inactive star in the sample"})
+    nota = cfg.STARS / "barnard.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [star]\n---\n\n# Barnard\n\n"
+                    "Es «the most inactive star in the sample» [[2012A&A...541A...9G]].\n\n"
+                    "Dice «the most inactive star is Gl 699» [[2012A&A...541A...9G]].\n\n"
+                    "La corrección «no daña» [[2012A&A...541A...9G]].\n", encoding="utf-8")
+    assert ct.main(["--validar", str(nota)]) == 0
+    out = capsys.readouterr().out
+    assert "«the most inactive star in the sample» — cita corta" in out
+    assert cfg.VERIFICAR_PDF_MARK in out
+    assert "Gl 699» — cita corta" not in out and "no daña» — cita corta" not in out
+    assert "1 corta" in out and "a confirmar en el PDF (#586)" in out
+
+
+def test_586_la_cita_corta_de_una_nota_de_PAPER_no_entra(toy_vault):
+    """#586 — la nota de paper lleva lo que la máquina copió de la extracción: el carril es de la
+    nota de ENTIDAD, donde se re-tipea (con las de paper eran 605 marcas en vez de 43)."""
+    bib = "2012A&A...541A...9G"
+    _txt("barnard", bib, "the most inactive star is gl 699")
+    nota = cfg.PAPERS / f"{bib}.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text(f"---\nbibcode: {bib}\n---\n\nEs «the most inactive star in the sample».\n",
+                    encoding="utf-8")
+    r = ct.validar(nota, mostrar=False)
+    assert r["cortas"] == [] and r["cortas_n"] == 0

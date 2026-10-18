@@ -4585,3 +4585,16 @@ Validación de v1.393.0: `1999HyvarinenSurvey` (19 caracteres) pasaba por bibcod
 además que el último carácter sea mayúscula o `.`. Sobre las 503 notas de Almagesto-Tesis (sólo
 lectura): 442 bibcodes siguen siéndolo y la única clave que cambia de clase es ésa. Portadores
 (`triage`, `lint`, `fetch_bibtex`) pasan todos por `cfg.is_ads_bibcode`.
+
+## La cita corta, por su propio carril (v1.395.0, #586)
+
+Sobre Almagesto-Tesis (sólo lectura, copia del tooling con `vault/` enlazada; 2026-10-18), notas de
+entidad: **857** citas cortas. Con `quote_verdict` sin tocar, 0 pasan por el `.txt` (`QUOTE_FRAG_MIN`
+= 25 descarta toda pieza corta), así que el carril es propio: palabra entera contra el `.txt`.
+Resultado: 686 en su `.txt`, 91 glosas, 36 sin `.txt`, **44 marcas** (2 glosas coladas: «con PDF y
+sin leer», «color de RV»). Umbral de vocabulario: 1.0 → 37 marcas, 2/3 → 43, 1/2 → 63 con 20 glosas;
+se tomó 2/3. Con las notas de paper y el `log` en la población eran 605 marcas (de 8097 cortas), por
+eso quedan afuera. Los tres defectos del issue, en su estado previo a la corrección (HEAD de la
+instancia): los tres `ausente`; la cita correcta del PDF («the most inactive star is Gl 699»),
+`en_su_txt`. Con la extracción como testigo, dos de los tres pasaban (nacieron ahí). `rc` de
+`--validar-todo` sin cambio (0).

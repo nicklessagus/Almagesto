@@ -546,6 +546,11 @@ da otra vista, y por eso el producto lleva de quién es. Va a la sección `## Vi
   una fila, `aporte` y un eje), que nombren **el mismo objeto**. Si es ambigua sobre a qué se refiere
   (un planeta, un candidato, el trabajo que lo propuso), **citala textual** entre «…» en vez de
   resolverla: dos glosas distintas del mismo pasaje dejan a la síntesis elegir la equivocada.
+- **Un nombre que la fuente no usa no va entre comillas ni entre paréntesis (#586).** Si para
+  identificar un objeto le ponés una etiqueta propia («planeta b», «Barnard's star b»), escribila
+  como prosa tuya, sin «…» ni `(…)` pegado al nombre: la síntesis lee eso como el nombre que usa
+  el paper y lo cita textual. Y una cita «…» termina donde termina la frase de la fuente: no le
+  pegues la cláusula de la oración vecina.
 - Mirá si el PDF es un **preprint** de arXiv (marca de agua al margen): si lo es, decilo en
   `salvedades` **estructurada** —`{{"tipo":"pdf_leido","documento":"eprint"}}` (#452), ver abajo—,
   porque un valor que discrepa del publicado es candidato a diferencia de versión.

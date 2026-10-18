@@ -115,6 +115,56 @@ def quotes_in(text: str) -> list[str]:
     return [q.strip() for q in _QUOTE_RE.findall(text) if len(q.strip()) >= QUOTE_MIN]
 
 
+#: #586 · el piso de la cita CORTA: por debajo de 4 caracteres («no», «sí») no hay qué buscar.
+QUOTE_SHORT_MIN = 4
+
+#: #586 · qué fracción de las palabras de una cita corta tiene que estar en el VOCABULARIO del `.txt`
+#: de su fuente para leerla como texto de la fuente y no como glosa de la nota («no daña», «rotas»).
+#: Medido sobre una bóveda real (2026-10-18, 856 citas cortas, 170 que el `.txt` no trae como frase):
+#: con 1.0, 37 marcas y ninguna glosa; con 2/3, 43 y una glosa; con 1/2, 63 y 20 glosas. Se toma 2/3:
+#: la marca no mueve el rc, y las seis de más eran inglés con una palabra perdida por el `.txt`.
+SHORT_QUOTE_VOCAB = 2 / 3
+
+_WORD_RE = re.compile(r"[^\W\d_]{2,}")
+
+
+def short_quotes_in(text: str) -> list[str]:
+    """The «…» quotes of a block BELOW `QUOTE_MIN` that `quotes_in` leaves out (#586)."""
+    return [q.strip() for q in _QUOTE_RE.findall(text)
+            if QUOTE_SHORT_MIN <= len(q.strip()) < QUOTE_MIN]
+
+
+def short_quote_verdict(quote: str, readings: list) -> str:
+    """`en_su_txt` | `glosa` | `ausente` | `no_evaluable` for a SHORT quote against its `.txt` (#586).
+
+    ⛔ Its own rail, not `quote_verdict`: a short string matches by chance (so it looks up whole
+    words, never a substring) and never proves an alteration (so nothing here blocks). And the only
+    witness is the `.txt`: the extraction is where both defects of the case that opened #586 were
+    born —a label the extractor put in parentheses, a clause glued from the neighbouring sentence—,
+    so with it as a witness they passed. What the `.txt` does not hold is either a GLOSS of the
+    note (its words are not the source's: «» around a castellano term) or a quote to check on the
+    page — the mark, as in #341. The language test is the source's own vocabulary, which needs no
+    word list and holds for a source in any language."""
+    if not readings:
+        return "no_evaluable"
+    for variante in quote_variants(quote):
+        frags = [f.strip() for f in _QUOTE_ELLIPSIS_RE.split(variante) if len(f.strip()) >= 3]
+        if frags and all(any(re.search(r"(?<!\w)" + re.escape(f) + r"(?!\w)", t) for t in readings)
+                         for f in frags):
+            return "en_su_txt"
+    palabras = _WORD_RE.findall(normalize_quote(quote))
+    vocab = _source_vocabulary(tuple(readings))
+    if not palabras or sum(p in vocab for p in palabras) / len(palabras) < SHORT_QUOTE_VOCAB:
+        return "glosa"
+    return "ausente"
+
+
+@functools.lru_cache(maxsize=64)
+def _source_vocabulary(readings: tuple) -> frozenset:
+    """The words (letters only, ≥ 2) of a source's `.txt` readings, memoised: one sweep asks per quote."""
+    return frozenset(w for t in readings for w in _WORD_RE.findall(t))
+
+
 #: #46/#275 · la canaleta: el hueco de espacios que separa dos columnas en un `.txt` de
 #: `pdftotext -layout`. Se DEFINE una vez acá; `measure_layout` la **detecta** (con `\S…\S`, que
 #: exige contenido a los lados) y `deinterleave_columns` **parte** por ella. Lo que no puede pasar

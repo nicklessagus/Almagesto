@@ -1294,3 +1294,16 @@ def test_564_la_forma_con_guion_se_conserva_y_no_cruza_numeraciones():
     assert cfg.page_span("V-61", "V63") == {"V-61"}
     assert cfg.page_number_candidates(["a\nb\nc\nProc. ISCAS'99 V-60"]) == [{"V-60"}]
     assert cfg.page_number_evidence(["a\nb\nc\nV-60"]) == [{"V-60"}]
+
+
+def test_586_short_quote_verdict_por_PALABRA_entera_y_por_vocabulario_de_la_fuente():
+    """#586 — la cita corta se busca por palabra entera (una subcadena corta matchea al azar) y la
+    glosa se reconoce porque sus palabras no son las del `.txt` de su fuente: no hace falta lista
+    de idioma, y vale para una fuente en cualquiera."""
+    src = [lq.normalize_source_text("We report Barnard's star as a planet host; stars b and c.")]
+    assert lq.short_quote_verdict("Barnard's star", src) == "en_su_txt"
+    assert lq.short_quote_verdict("Barnard's star b", src) == "ausente"
+    assert lq.short_quote_verdict("star a", src) == "ausente", "«star as» no es «star a»"
+    assert lq.short_quote_verdict("no daña", src) == "glosa"
+    assert lq.short_quote_verdict("no daña", []) == "no_evaluable"
+    assert lq.short_quotes_in("«no» «star b» «" + "x" * 40 + "»") == ["star b"]
