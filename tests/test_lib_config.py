@@ -2900,6 +2900,9 @@ def test_is_ads_bibcode_no_confunde_una_clave_sintetica():
     assert not cfg.is_ads_bibcode("2011Naik") and not cfg.is_ads_bibcode("1998HyvarinenICANN")
     assert not cfg.is_ads_bibcode("") and not cfg.is_ads_bibcode(None)
     assert not cfg.is_ads_bibcode("x" * 19), "la forma también: 19 caracteres cualesquiera no basta"
+    # #583: sintética de 19 caracteres justos; el bibcode termina en inicial mayúscula o `.`
+    assert not cfg.is_ads_bibcode("1999HyvarinenSurvey")
+    assert cfg.is_ads_bibcode("2016arXiv160605535.") and cfg.is_ads_bibcode("2023ApJ...900..123X")
 
 
 def test_catalog_compare_key_pliega_los_DOS_marcados():

@@ -4577,3 +4577,11 @@ descartes filtran `decision == "descartado"`, así que la entrada no se lee como
 bibcode ADS, clave sin nota y pisar un descarte (D-52). El lint elige carril por
 `is_ads_bibcode`. `--drop-core` ya aceptaba claves sintéticas (no consulta ADS). Medido sólo en la
 suite; los 14 pares de la instancia, para el validador.
+
+## `is_ads_bibcode` y la sintética de 19 caracteres (v1.394.0, #583)
+
+Validación de v1.393.0: `1999HyvarinenSurvey` (19 caracteres) pasaba por bibcode ADS, así que
+`--accept-key` la rehusaba y el lint le ofrecía `extra_core` (`fuera_del_registro` 14 → 1). Se exige
+además que el último carácter sea mayúscula o `.`. Sobre las 503 notas de Almagesto-Tesis (sólo
+lectura): 442 bibcodes siguen siéndolo y la única clave que cambia de clase es ésa. Portadores
+(`triage`, `lint`, `fetch_bibtex`) pasan todos por `cfg.is_ads_bibcode`.

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.393.0"
+ALMAGESTO_VERSION = "1.394.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2412,9 +2412,14 @@ def is_ads_bibcode(clave) -> bool:
     Un bibcode de ADS son **19 caracteres exactos**; una clave sintética `AAAA+Autor` —la que el
     framework le da a una fuente off-ADS— pasa la heurística laxa de `BIBCODE_LIKE_RE` pero no esto.
     Medido: mandar las 19 sintéticas al export de ADS devuelve 404 para el lote entero, y la corrida
-    lo anunciaba como caída de red sobre papers que sí se habían evaluado bien."""
+    lo anunciaba como caída de red sobre papers que sí se habían evaluado bien.
+
+    #583: el largo tampoco alcanza — `1999HyvarinenSurvey` tiene 19. El último carácter de un
+    bibcode es la inicial del primer autor en mayúscula, o `.` (medido: 442/442 bibcodes reales de
+    una bóveda; esa sintética, la única que no)."""
     clave = str(clave or "").strip()
-    return len(clave) == ADS_BIBCODE_LEN and bool(BIBCODE_LIKE_RE.match(clave))
+    return (len(clave) == ADS_BIBCODE_LEN and bool(BIBCODE_LIKE_RE.match(clave))
+            and (clave[-1].isupper() or clave[-1] == "."))
 
 
 BIBTEX_SOURCES = ("ads", "crossref", "datacite", "doi", "arxiv", "venue", "institucional")
