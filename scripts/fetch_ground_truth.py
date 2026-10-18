@@ -156,9 +156,20 @@ def fetch_pscomppars(host: str):
     """Tabla `pscomppars` de NEA para el host — se consulta UNA vez por corrida y la comparten
     `fetch_host` y `fetch_planets` (#31: antes cada uno repetía la misma query → dos round-trips
     idénticos por estrella; el parámetro muerto `tab_row` era la huella del reuso nunca cableado).
-    Import lazy: astroquery se carga sólo cuando hay red que consultar."""
+    Import lazy: astroquery se carga sólo cuando hay red que consultar.
+
+    #585: `query_object` regulariza el nombre contra el servicio de alias de NEA y lo pega SIN
+    escapar en `hostname='…'` — `Barnard's star` daba ORA-00933 siempre. Se regulariza acá (misma
+    regla que astroquery: el primer alias, o el nombre tal cual) y se duplica el `'` antes de
+    consultar con `regularize=False`. Todos los portadores (`main`, `fetch_host`, `nea_diff`)
+    pasan por esta función."""
     from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
-    return NasaExoplanetArchive.query_object(host, table="pscomppars")
+    try:
+        aliases = NasaExoplanetArchive.query_aliases(host)
+    except KeyError:
+        aliases = []
+    name = (aliases[0] if aliases else host).replace("'", "''")
+    return NasaExoplanetArchive.query_object(name, table="pscomppars", regularize=False)
 
 
 def fetch_planets(tab, mstar_msun=None) -> list[dict]:

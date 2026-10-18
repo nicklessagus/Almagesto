@@ -4553,3 +4553,11 @@ alcance de rv-doppler re-escrito en el worktree, iguales en los dos commits):
 El reparto 5/4/4/2 de los 15 es ilustrativo (el usuario declara su N); lo medido es que con
 `slug(N)` el «quedó corto» falso (164 contra 58) desaparece y que el `(N)` mayor que el disco se
 acusa.
+
+## Hostname de NEA con apóstrofo (v1.391.0, #585)
+
+Contra NEA real (2026-10-17): `fetch_pscomppars('GJ 699')` antes → `ORA-00933` (payload
+`hostname='Barnard's star'`); después → 4 filas (`Barnard b/c/d/e`). Control: `HD 33793` sigue
+dando 1 fila (`Kapteyn c`). Los tres portadores (`main`, `fetch_host`, `nea_diff`) pasan por
+`fetch_pscomppars`, así que el escape vive ahí. La asimetría `nea_diff` (clave de `stars.yaml`) vs
+`main` (`simbad:`) queda como estaba: con el escape, las dos consultas resuelven.

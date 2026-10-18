@@ -111,12 +111,17 @@ def simbad_caido(monkeypatch):
 def fake_nea(monkeypatch):
     """Inyecta astroquery falso en sys.modules; setear .rows antes de llamar. `.calls` cuenta
     las consultas query_object (regresión #31: main debe consultar UNA sola vez)."""
-    holder = types.SimpleNamespace(rows=[], calls=0)
+    holder = types.SimpleNamespace(rows=[], calls=0, aliases=[], names=[])
 
     class FakeNEA:
         @staticmethod
-        def query_object(host, table=None):
+        def query_aliases(host):
+            return list(holder.aliases)
+
+        @staticmethod
+        def query_object(host, table=None, regularize=True):
             holder.calls += 1
+            holder.names.append(host)
             return list(holder.rows)
 
     leaf = types.ModuleType("astroquery.ipac.nexsci.nasa_exoplanet_archive")
@@ -624,3 +629,18 @@ def test_un_slug_de_ESTRELLA_no_se_rehusa(toy_vault, monkeypatch, capsys):
     (cfg.GROUND_TRUTH / "test_star.json").write_text("{}", encoding="utf-8")
     assert _run_main(monkeypatch, ["test_star"]) == 0
     assert "⛔" not in capsys.readouterr().out
+
+
+def test_hostname_con_apostrofo_viaja_escapado(fake_nea):
+    """#585: NEA regulariza `GJ 699` a `Barnard's star`; pegado sin escapar en `hostname='…'`
+    daba ORA-00933 siempre. El nombre regularizado tiene que llegar con el `'` duplicado y sin
+    que astroquery lo vuelva a regularizar."""
+    fake_nea.aliases = ["Barnard's star", "GJ 699"]
+    gt.fetch_pscomppars("GJ 699")
+    assert fake_nea.names == ["Barnard''s star"]
+
+
+def test_sin_alias_consulta_el_nombre_tal_cual(fake_nea):
+    """Misma regla que `_regularize_object_name` de astroquery: sin alias, el nombre dado."""
+    gt.fetch_pscomppars("HD 33793")
+    assert fake_nea.names == ["HD 33793"]
