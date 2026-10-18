@@ -11906,7 +11906,12 @@ def test_582_lint_reporta_el_paper_leido_fuera_del_registro_con_el_snippet_de_tr
     fms = seed_outside_registry()
     filas, ne = lint.check_outside_registry(fms)
     assert ne == [] and sorted(s for s, _m in filas) == ["drs", "s"], filas
-    assert "extra_core:\n  - bibcode: 2023C\n    via: usuario" in dict(filas)["drs"]
+    # #583: la clave sintética va al carril off-ADS; el bibcode ADS, a `extra_core`
+    assert "--accept-key 2023C" in dict(filas)["drs"] and "extra_core:" not in dict(filas)["drs"]
+    ads = "2023ApJ...900..123X"
+    filas, _ne = lint.check_outside_registry({**fms, ads: fms["2023C"]})
+    assert f"extra_core:\n  - bibcode: {ads}\n    via: usuario" in dict(filas)["drs"]
+    assert f"--accept-key 2023C --reason" in dict(filas)["drs"]
     assert "2026S" in dict(filas)["s"]
     cfg.save_registro("drs", {"slug": "drs", "busquedas": [{"fecha": "2026-10-01", "n_total": 5}]})
     filas, ne = lint.check_outside_registry(fms)

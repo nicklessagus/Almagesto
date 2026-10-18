@@ -3411,11 +3411,21 @@ def check_outside_registry(paper_fms: dict, sujetos=None) -> tuple:
             no_evaluados.append((f"papers leídos fuera del registro de `{slug}` (#582)",
                                  "una búsqueda del registro no guardó sus `bibcodes`"))
         elif fuera:
-            snippet = cfg.extra_core_snippet([{"bibcode": b} for b in fuera], via="usuario")
+            # #583: the lane follows the key class — `extra_core` fetches from ADS, where a
+            # synthetic off-ADS key falls into `missing`.
+            ads = [b for b in fuera if cfg.is_ads_bibcode(b)]
+            off = [b for b in fuera if not cfg.is_ads_bibcode(b)]
+            salida = []
+            if ads:
+                snippet = cfg.extra_core_snippet([{"bibcode": b} for b in ads], via="usuario")
+                salida.append(f"pegá en su entrada de la config, con el motivo:\n{snippet}")
+            if off:
+                salida.append(f"claves off-ADS: `python scripts/triage.py {slug} --accept-key "
+                              f"{' '.join(off)} --reason \"<motivo>\"`")
             filas.append((slug, f"{len(fuera)} paper(s) con vista de `{slug}` que entraron por "
                                 f"retro-link y no tienen decisión de curación: {', '.join(fuera)} → "
-                                f"pegá en su entrada de la config, con el motivo (o "
-                                f"`triage.py {slug} --drop-core … --reason`):\n{snippet}"))
+                                f"(o `triage.py {slug} --drop-core … --reason`) "
+                                + " · ".join(salida)))
     return filas, no_evaluados
 
 

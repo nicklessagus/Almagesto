@@ -922,9 +922,12 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   un paper con vista **fechada** de una estrella o un tema que no está en la unión de
   `busquedas[].bibcodes`, `extra_core`, `sources:` y `decisiones` de ese sujeto (ni por su alias de
   `versions[]`). Entró por retro-link (`stars`/`thesis_links` add-only, retro-tag, o `methods`) y
-  no dejó decisión de curación (#111/INV-24). Una fila por sujeto con los bibcodes y el snippet de
-  `extra_core` de `triage.py` (`cfg.extra_core_snippet`, `via: usuario`; el `motivo` lo escribe el
-  usuario), o `triage.py <slug> --drop-core … --reason`. La cabecera `> _Estado — …_` publica el
+  no dejó decisión de curación (#111/INV-24). Una fila por sujeto con los bibcodes y el carril
+  según la clase de clave (#583): para un bibcode ADS, el snippet de `extra_core` de `triage.py`
+  (`cfg.extra_core_snippet`, `via: usuario`; el `motivo` lo escribe el usuario); para una clave
+  sintética off-ADS, `triage.py <slug> --accept-key <clave> --reason` (decisión `aceptado`, carril
+  `sujeto`, sin re-declarar el item de `sources:` del tema dueño). O `triage.py <slug> --drop-core
+  … --reason`. La cabecera `> _Estado — …_` publica el
   mismo conteo («N leídos fuera del registro», `make_notes.outside_registry`) para que «N
   acumulados» no se lea como el corpus de la nota. El registro con una búsqueda que no guardó sus
   `bibcodes` sale **no evaluado** sólo si hay un candidato que esa búsqueda podría cubrir.

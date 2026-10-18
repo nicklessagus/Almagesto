@@ -4568,3 +4568,12 @@ dando 1 fila (`Kapteyn c`). Los tres portadores (`main`, `fetch_host`, `nea_diff
 sin `PAGINATION_OPEN_MARKS`, dice que los localizadores «se repaginaron releyendo el PDF el
 <fecha>». Con `_paginacion` o `_repaginado_parcial` sigue diciendo «documento viejo». Medido sólo
 en la suite; la medición sobre las 14 salvedades de la instancia queda para el validador.
+
+## Carril off-ADS para `fuera_del_registro` (v1.393.0, #583)
+
+`triage.py <slug> --accept-key <clave> --reason` escribe `{decision: aceptado, origen: sujeto}` en
+`decisiones`; `registro_universe` ya las leía (ahora también por `note_stem`). Los lectores de
+descartes filtran `decision == "descartado"`, así que la entrada no se lee como drop. Rehúsa
+bibcode ADS, clave sin nota y pisar un descarte (D-52). El lint elige carril por
+`is_ads_bibcode`. `--drop-core` ya aceptaba claves sintéticas (no consulta ADS). Medido sólo en la
+suite; los 14 pares de la instancia, para el validador.

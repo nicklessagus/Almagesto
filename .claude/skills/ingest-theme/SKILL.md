@@ -224,7 +224,7 @@ Progreso del ingest del tema <tema>:
    **reclamo**: nadie leyó ese paper desde este tema todavía. El lint lo reporta como *reclamado sin
    vista* (backlog) — hacé la vista (`extraction_prompt.py <slug> <bibcode> --theme` + cosecha) o
    declarala con `no_vista: [{sujeto, motivo}]` si el paper sólo aporta al roll-up. Leerlo
-   no lo mete al registro: va a `extra_core` con motivo (`fuera_del_registro`, #582).
+   no lo mete al registro: `extra_core`, u off-ADS `--accept-key`, con motivo (#582/#583).
    **Alias sueltos y cortos, nunca frases** (#44, convención canónica en `verify-citations`): el
    `.txt` entrelaza dos columnas en la misma línea física (73% del corpus) → un alias multi-palabra
    (`"gaussian process regression"`) puede no matchear aunque el paper lo use. Probar la raíz corta

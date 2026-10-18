@@ -832,7 +832,9 @@ resuelven con juicio:
    sacar la escotilla o la cita.
 2. **Cabecera de temas (#582).** El mismo re-estampado publica «N leídos fuera del registro». El
    lint suma `fuera_del_registro`: para cada paper, `extra_core` con motivo o `triage.py --drop-core`.
-   La cobertura es **por sujeto**: la decisión registrada bajo otro sujeto no cuenta.
+   La cobertura es **por sujeto**: la decisión registrada bajo otro sujeto no cuenta. Desde
+   v1.393.0 (#583), una clave sintética off-ADS se cierra con `triage.py <slug> --accept-key
+   <clave> --reason "<motivo>"` (el lint imprime el comando); `extra_core` queda para bibcodes ADS.
 3. **`Rol` de Régimen (#575).** El lint suma `rol_regimen`: la fila o el `role` del paper está mal.
    La tilde no cuenta como discrepancia.
 4. **Destino de la `acota` resuelta (#576).** Corré `python scripts/write_verif_sidecar.py

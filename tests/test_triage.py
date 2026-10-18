@@ -1279,3 +1279,27 @@ def test_512_acepta_preprint_imprime_el_bloque_y_no_escribe(toy_vault, capsys):
 def test_512_acepta_preprint_exige_motivo(toy_vault):
     with pytest.raises(SystemExit):
         triage.acepta_preprint("test_star", ["2014MNRAS.437.3540F"], "")
+
+
+def test_583_accept_key_acepta_la_clave_off_ADS_y_cierra_fuera_del_registro(toy_vault, monkeypatch):
+    """#583 — la clave sintética leída para el sujeto fuera de su registro no tenía carril:
+    `extra_core` la manda a ADS (`missing`) y `sources:` re-declara el item del tema dueño. La
+    decisión `aceptado` (carril `sujeto`) la cubre en el universo, y ningún lector de descartes la
+    toma por uno."""
+    from conftest import seed_outside_registry
+    import make_notes as mn
+    fms = seed_outside_registry()
+    (cfg.PAPERS / "2023C.md").write_text("---\ntags: [paper]\n---\n", encoding="utf-8")
+    assert mn.outside_registry("drs", "theme", fms) == ["2023C"]
+    with pytest.raises(SystemExit):                               # sin motivo
+        run_main(monkeypatch, ["drs", "--accept-key", "2023C"])
+    assert run_main(monkeypatch, ["drs", "--accept-key", "2023C", "--reason", "leído para drs"]) == 0
+    d = cfg.load_decisiones("drs")["2023C"]
+    assert (d["decision"], d["origen"], d["motivo"]) == ("aceptado", "sujeto", "leído para drs")
+    assert mn.outside_registry("drs", "theme", fms) == []
+    # rehúsa sin escribir nada: bibcode ADS, nota inexistente, o pisar un descarte (D-52)
+    for clave in ("2023ApJ...900..123X", "2099Nadie", "2018D"):
+        (cfg.PAPERS / "2018D.md").write_text("---\ntags: [paper]\n---\n", encoding="utf-8")
+        with pytest.raises(SystemExit):
+            run_main(monkeypatch, ["drs", "--accept-key", clave, "--reason", "m"])
+    assert cfg.load_decisiones("drs")["2018D"]["decision"] == "descartado"

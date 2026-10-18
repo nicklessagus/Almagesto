@@ -201,6 +201,47 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
     return 0
 
 
+def accept_key(slug: str, claves: list[str], reason: str) -> int:
+    """Persist the ACCEPTANCE of an off-ADS key read for this subject outside its registro (#583).
+
+    #582 asks for a curation decision on every paper read for a subject, and the lint offered only
+    `extra_core` — the ADS lane, where a synthetic key (`1998Cichocki`) falls into `missing`. The
+    other lane, `sources:`, re-declares an item that already lives in its owning theme (D-18). The
+    decision lands where `--drop-core` puts its symmetric one: `decisiones`, carril `sujeto`,
+    which `cfg.registro_universe` already reads and every drop reader skips (`decision ==
+    "descartado"`). An ADS bibcode is refused: it has a lane that also fetches it."""
+    try:
+        cfg.theme_by_slug(slug)
+    except KeyError:
+        try:
+            cfg.star_by_slug(slug)
+        except KeyError:
+            sys.exit(f"slug desconocido: '{slug}' — no está en themes.yaml ni en stars.yaml.")
+    reason = reason.strip()
+    if not reason:
+        sys.exit("--accept-key necesita un --reason con contenido: el motivo es la decisión.")
+    decisiones = load_decisions(slug)
+    malas = []
+    for k in dict.fromkeys(c.strip() for c in claves if c and c.strip()):
+        if cfg.is_ads_bibcode(k):
+            malas.append(f"{k}: es un bibcode de ADS → `extra_core` (el carril que además lo trae)")
+        elif not (cfg.PAPERS / f"{cfg.note_stem(k)}.md").exists():
+            malas.append(f"{k}: no hay nota `papers/{cfg.note_stem(k)}.md` (¿typo?)")
+        elif (previa := decisiones.get(k)) and previa.get("decision") == "descartado":
+            malas.append(f"{k}: tiene un descarte ({previa.get('origen') or 'chaining'}, "
+                         f"{previa.get('fecha', 's/f')}: {previa.get('motivo') or 's/m'}) — "
+                         f"revertirlo es anularlo (D-52), no pisarlo")
+        else:
+            decisiones[k] = {"decision": "aceptado", "origen": "sujeto", "motivo": reason,
+                             "fecha": dt.date.today().isoformat()}
+    if malas:
+        sys.exit("--accept-key rehúsa (no se escribió nada):\n  " + "\n  ".join(malas))
+    save_decisions(slug, decisiones)
+    cfg.print_seguro(f"  {len(claves)} clave(s) aceptada(s) en `{slug}` (carril `sujeto`) — "
+                     f"motivo: {reason}")
+    return 0
+
+
 def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) -> int:
     """Persiste el rechazo de una fuente DECLARADA de un tema off-ADS (#81).
 
@@ -775,7 +816,7 @@ def main() -> int:
     ap.add_argument("--reason", default="",
                     # AUD-210: el help nombraba dos de las CINCO operaciones que lo exigen.
                     help="el motivo, y queda en el registro versionado. OBLIGATORIO con --drop, "
-                         "--drop-source, --drop-core, --accept-source, --acepta-preprint y "
+                         "--drop-source, --drop-core, --accept-source, --accept-key, --acepta-preprint y "
                          "--extraccion subconjunto "
                          "(ahí es el criterio del recorte). Con --sintesis es opcional, como nota")
     ap.add_argument("--extraccion", choices=("todos", "subconjunto"),
@@ -796,6 +837,11 @@ def main() -> int:
                          "citaban (se listan) (#112/#132). Es el simétrico de `extra_core`. Exige "
                          "--reason. La exclusión es del par paper-sujeto: el mismo paper puede ser "
                          "core de otro.")
+    ap.add_argument("--accept-key", nargs="+", metavar="CLAVE", dest="accept_key",
+                    help="#583: aceptar en ESTE sujeto una clave off-ADS (sintética) ya leída para "
+                         "él y declarada en otro tema: escribe `aceptado` en `decisiones` (carril "
+                         "`sujeto`) sin re-declarar el item de `sources:`. Un bibcode ADS va a "
+                         "`extra_core`. Exige --reason.")
     ap.add_argument("--accept-source", nargs="+", metavar="DOI", dest="accept_source",
                     help="candidato OFF-ADS aceptado → arma la entrada de `sources:` (metadata "
                          "real + archivo resuelto + procedencia) lista para pegar. Es la salida "
@@ -844,6 +890,8 @@ def main() -> int:
 
     if args.drop_core:
         return close(drop_core(args.slug, args.drop_core, args.reason), "triage")
+    if args.accept_key:
+        return close(accept_key(args.slug, args.accept_key, args.reason), "triage")
     if args.accept_source:
         return close(accept_source(args.slug, args.accept_source, args.via, args.reason), "triage")
     if args.acepta_preprint:

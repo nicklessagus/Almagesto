@@ -3455,6 +3455,9 @@ portadores:
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "`check_outside_registry` y `check_state_header` pasan por `make_notes.outside_registry`/`estado_line`; no arma el universo."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "`accept_key` (#583) ESCRIBE la decisión `aceptado` que `registro_universe` lee; no arma el universo."
 
   - issue: 576
     regla: >-
