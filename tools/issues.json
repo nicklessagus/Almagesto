@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-17",
+ "fetched": "2026-10-18",
  "issues": [
   {
    "number": 2,
@@ -2904,17 +2904,17 @@
   {
    "number": 583,
    "title": "#582: la decisión de curación de una clave off-ADS leída fuera de su tema no tiene carril (el snippet propone extra_core; 14 pares en la instancia)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 584,
    "title": "La salvedad pdf_leido sigue diciendo «localizadores del documento viejo» después de repaginar: _leido_detalle no consulta PAGINATION_OPEN_MARKS",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 585,
    "title": "fetch_ground_truth: un hostname de NEA con apóstrofo (Barnard's star) rompe la consulta pscomppars (ORA-00933, no transitorio)",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
