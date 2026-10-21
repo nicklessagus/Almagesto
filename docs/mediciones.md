@@ -4621,3 +4621,13 @@ falsos nuevos en 9 notas, todos `$x$<dígito>`: el cierre rechazado por el dígi
 emparejaba con el `$` siguiente de la línea (`C III($\lambda$1176 Å)/C III($\lambda$977 Å)`). Con
 v1.397.0, 91 de las 92 salvedades ya coincidían con la nota; la restante y otras 5 de
 2017ApJ...846...59D son de otro origen (nota corregida a mano, JSON viejo).
+
+**Segunda regresión, cerrada en v1.399.0.** v1.398.0 calculaba el «cierre rechazado» sobre todos los
+`$` de la línea: el cierre de un span válido más el dígito del span siguiente le prohibían abrir a
+ése (`($a$–$0.89$)`; el validador midió 10 aperturas escapadas en 7 notas). Ahora se decide en la
+misma pasada izquierda→derecha, desde el último span conservado. Sobre `vault/wiki/` de
+Almagesto-Tesis (sólo lectura, 14 411 líneas con `$` sin backticks, sin `.verif.md`): spans con ≥3
+palabras de prosa adentro v1.396 256 · v1.397 94 · v1.398 76 · **v1.399 68**, y **0** que v1.397 no
+tuviera; de los 87 spans que v1.397 dejaba como matemática y v1.399 escapa, los 87 son falsos (83
+del tipo `$1176 Å)/C III($`, 4 con prosa). Heurística de prosa: ≥3 palabras de 3+ letras fuera de
+comandos LaTeX; los 68 restantes no se revisaron uno por uno.

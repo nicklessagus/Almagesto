@@ -3595,6 +3595,21 @@ def test_588_el_cierre_rechazado_por_el_digito_NO_reabre(toy_vault):
         r"FWHM \$\approx\$1 m/s («about 1 m s$^{-1}$ year$^{-1}$»)"
 
 
+def test_588_el_cierre_de_un_span_valido_NO_cuenta_como_apertura_rechazada(toy_vault):
+    """#588 (regresión de v1.398.0) — el «cierre rechazado» se calculaba sobre todos los `$` de la
+    línea: el cierre del span 1 más el dígito del span 2 le prohibían abrir al span 2. Casos de
+    Almagesto-Tesis."""
+    import lib_config as cfg
+    for s in ["($a$–$0.89$)", "($4.73$) y ($13.56$) x",
+              r"(pendiente $-0.008 \pm 0.011$) frente a la solar ($0.246 \pm 0.009$), sin CCF$_T$",
+              "SCALPELS+GLOM ($0.496$) y SCALPELS ($0.458$)",
+              "<tex-math>$1.2$</tex-math> y <tex-math>$43.65^{+16.9}_{-14.7}$</tex-math>"]:
+        assert cfg.escape_dollars(s) == s, s
+    # el cierre rechazado (`$5`) no es apertura del par siguiente
+    assert cfg.escape_dollars(r"ciclo de $\sim$5 yr ($1811 \pm 82$ d)") == \
+        r"ciclo de \$\sim\$5 yr ($1811 \pm 82$ d)"
+
+
 def test_459_el_titulo_en_DOS_CODIFICACIONES_deja_de_ser_desacuerdo(toy_vault):
     """⛔ #459 — el detector de #397 comparaba un título BibTeX (con escapes LaTeX) contra el texto
     plano del catálogo, así que toda diferencia de CODIFICACIÓN salía como si las dos fuentes

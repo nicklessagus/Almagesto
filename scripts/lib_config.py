@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.398.0"
+ALMAGESTO_VERSION = "1.399.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1281,11 +1281,9 @@ def escape_dollars(texto: str) -> str:
     # ⚠ Sin un `if "$" not in texto` adelante, a propósito: sin ningún `$` el bucle no itera y
     # `_escape_dollar_run` devuelve el trozo intacto, así que ese atajo no decidía nada (#319 — su
     # mutación sobrevivía). A diferencia de `escape_cell`, devuelve SIEMPRE `str`.
-    texto, out, i = str(texto or ""), [], 0
-    rechazados = {m.end() - 1 for m in _DOLLAR_REJECTED_RE.finditer(texto)}
-    pos = 0
+    texto, out, i, pos = str(texto or ""), [], 0, 0
     while (m := _DOLLAR_MATH_RE.search(texto, pos)):
-        if m.start() in rechazados:  # #588: a rejected closer is not an opener
+        if _is_rejected_closer(texto, i, m.start()):  # #588: a rejected closer is not an opener
             pos = m.start() + 1
             continue
         out.append(_escape_dollar_run(texto[i:m.start()]))
@@ -1293,6 +1291,22 @@ def escape_dollars(texto: str) -> str:
         i = pos = m.end()
     out.append(_escape_dollar_run(texto[i:]))
     return "".join(out)
+
+
+def _is_rejected_closer(texto: str, desde: int, k: int) -> bool:
+    """#588 · whether the `$` at `k` closes a `$…$` rejected by the digit after it, walking every `$`
+    from `desde` (the end of the last span kept) left to right: a `$` already consumed as a closer —
+    of a kept span or of a rejected one — never counts as that pair's opener."""
+    previo = None
+    for d in re.finditer(r"(?<!\\)\$", texto[:k + 1]):
+        if d.start() < desde:
+            continue
+        r = _DOLLAR_REJECTED_RE.match(texto, previo) if previo is not None else None
+        rechazado = bool(r) and r.end() - 1 == d.start()
+        if d.start() == k:
+            return rechazado
+        previo = None if rechazado else d.start()
+    return False
 
 
 def _escape_dollar_run(trozo: str) -> str:
