@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.396.0"
+ALMAGESTO_VERSION = "1.397.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1255,12 +1255,13 @@ def escape_cell(texto: str) -> str:
     return re.sub(r"\\vert\s+", r"\\vert ", "".join(out))
 
 
-#: AUD-476 · what `escape_dollars` leaves as math: `$$…$$`, or a `$…$` whose opener is not glued to a
-#: word on its left (`US$20`, `04$20.00` are currency) and is followed by a non-space, and whose
-#: closer — the NEXT `$`, never a later one — is preceded by a non-space and not followed by a digit
-#: (pandoc's rule). With the bare `$[^$]*$`, `US$20 y $x$` paired the currency with the opener of
-#: `$x$` and escaped the formula's closer instead.
-_DOLLAR_MATH_RE = re.compile(r"\$\$[^$]+\$\$|(?<![\\\w$])\$(?=[^\s$])[^$\n]*(?<=[^\s\\])\$(?![\d$])")
+#: AUD-476 · what `escape_dollars` leaves as math: `$$…$$`, or a `$…$` whose opener is followed by a
+#: non-space, and whose closer — the NEXT `$`, never a later one — is preceded by a non-space and not
+#: followed by a digit (pandoc's rule). With the bare `$[^$]*$`, `US$20 y $x$` paired the currency
+#: with the opener of `$x$` and escaped the formula's closer instead.
+#: ⛔ #588 · the opener MAY be glued to a word: units write `m s$^{-1}$`, and escaping it rewrote
+#: caveats nobody touched. Currency (`US$20`, `04$20.00`) never closes: a digit follows its `$`.
+_DOLLAR_MATH_RE = re.compile(r"\$\$[^$]+\$\$|(?<![\\$])\$(?=[^\s$])[^$\n]*(?<=[^\s\\])\$(?![\d$])")
 
 
 def escape_dollars(texto: str) -> str:

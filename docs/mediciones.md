@@ -4607,3 +4607,11 @@ De las 56, dos son firmas cortas que siguen huérfanas por una buena razón: su 
 («several lamps of the same manufacturer», «To be concluded in October issue») hoy está en su `.txt`
 (`en_su_txt`), así que no hay hallazgo que cubrir. `contrast` dice lo mismo. Las otras 54 no son de
 este issue: son de antes.
+
+## La matemática pegada a una palabra no se escapa (v1.397.0, #588)
+
+Medido por el validador sobre Almagesto-Tesis (antes del fix): 92 salvedades en prosa, en 71
+extracciones, cambiaban al pasar por `escape_dollars` por el patrón `palabra$…$` (`m s$^{-1}$`), y
+`--restamp-salvedades --paper 2017ApJ...846...59D` las rehusaba como «reescritas» (6). En el
+template, los casos de moneda de AUD-476 (`US$20 y $x$`, `04$20.00`, `de $5 a $10`) siguen
+escapados con el lookbehind sin `\w`: los descarta el cierre (`(?![\d$])`, `(?<=[^\s\\])`).

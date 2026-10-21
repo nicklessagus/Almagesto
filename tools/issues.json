@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-18",
+ "fetched": "2026-10-21",
  "issues": [
   {
    "number": 2,
@@ -2925,6 +2925,11 @@
    "number": 587,
    "title": "La firma cita_revisada de una cita corta (#586) el lint la reporta siempre como huérfana: el carril corto vive en un solo portador",
    "state": "CLOSED"
+  },
+  {
+   "number": 588,
+   "title": "escape_dollars escapa la matemática pegada a una palabra (`m s$^{-1}$`): --restamp-salvedades toma por reescritas salvedades que nadie tocó",
+   "state": "OPEN"
   }
  ]
 }

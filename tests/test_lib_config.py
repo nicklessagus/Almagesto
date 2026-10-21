@@ -3576,6 +3576,15 @@ def test_aud476_escape_dollars_la_MONEDA_no_se_empareja_con_la_matematica_siguie
     assert cfg.escape_dollars("display $$a+b$$ fin") == "display $$a+b$$ fin"
 
 
+def test_588_escape_dollars_NO_toca_la_matematica_pegada_a_una_palabra(toy_vault):
+    """#588 — la notación de unidades pega el `$` a la palabra (`m s$^{-1}$`): escaparla reescribía
+    salvedades que nadie tocó. La moneda pegada sigue escapada (la cubre el cierre)."""
+    import lib_config as cfg
+    assert cfg.escape_dollars("HD 41248, ~150 m s$^{-1}$") == "HD 41248, ~150 m s$^{-1}$"
+    assert cfg.escape_dollars(r"H$\alpha$ y $20") == r"H$\alpha$ y \$20"
+    assert cfg.escape_dollars("US$20 and US$30") == r"US\$20 and US\$30"
+
+
 def test_459_el_titulo_en_DOS_CODIFICACIONES_deja_de_ser_desacuerdo(toy_vault):
     """⛔ #459 — el detector de #397 comparaba un título BibTeX (con escapes LaTeX) contra el texto
     plano del catálogo, así que toda diferencia de CODIFICACIÓN salía como si las dos fuentes

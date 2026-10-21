@@ -3515,3 +3515,17 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: "Re-exporta `QUOTE_MIN`/`quotes_in` y los símbolos nuevos de `lib_quotes`; no decide nada."
+
+  - issue: 588
+    regla: >-
+      Un span `$…$` bien formado no se toca al escapar `$` sueltos, aunque su `$` de apertura vaya
+      pegado a una palabra (`m s$^{-1}$`): la moneda la descarta el cierre, no un borde de palabra.
+    funcion: lib_config.escape_dollars
+    patron: 'escape_dollars|_DOLLAR_MATH_RE'
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "Escapa la prosa de las filas que propone con `escape_dollars`."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "El cosechador escribe salvedades y celdas con `escape_dollars`; `--restamp-salvedades` compara contra eso (#453)."
