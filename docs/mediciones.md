@@ -4615,3 +4615,9 @@ extracciones, cambiaban al pasar por `escape_dollars` por el patrón `palabra$�
 `--restamp-salvedades --paper 2017ApJ...846...59D` las rehusaba como «reescritas» (6). En el
 template, los casos de moneda de AUD-476 (`US$20 y $x$`, `04$20.00`, `de $5 a $10`) siguen
 escapados con el lookbehind sin `\w`: los descarta el cierre (`(?![\d$])`, `(?<=[^\s\\])`).
+
+**Regresión de v1.397.0, cerrada en v1.398.0.** El validador midió sobre Almagesto-Tesis 11 spans
+falsos nuevos en 9 notas, todos `$x$<dígito>`: el cierre rechazado por el dígito reabría y se
+emparejaba con el `$` siguiente de la línea (`C III($\lambda$1176 Å)/C III($\lambda$977 Å)`). Con
+v1.397.0, 91 de las 92 salvedades ya coincidían con la nota; la restante y otras 5 de
+2017ApJ...846...59D son de otro origen (nota corregida a mano, JSON viejo).

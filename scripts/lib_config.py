@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.397.0"
+ALMAGESTO_VERSION = "1.398.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1262,6 +1262,9 @@ def escape_cell(texto: str) -> str:
 #: ⛔ #588 · the opener MAY be glued to a word: units write `m s$^{-1}$`, and escaping it rewrote
 #: caveats nobody touched. Currency (`US$20`, `04$20.00`) never closes: a digit follows its `$`.
 _DOLLAR_MATH_RE = re.compile(r"\$\$[^$]+\$\$|(?<![\\$])\$(?=[^\s$])[^$\n]*(?<=[^\s\\])\$(?![\d$])")
+#: #588 · the same pair with its closer REJECTED by the digit (`$\lambda$1176`): that closer may not
+#: reopen, or `C III($\lambda$1176 Å)/C III($\lambda$977 Å)` paired `$1176 Å)/C III($` as math.
+_DOLLAR_REJECTED_RE = re.compile(r"(?<![\\$])\$(?=[^\s$])[^$\n]*(?<=[^\s\\])\$(?=\d)")
 
 
 def escape_dollars(texto: str) -> str:
@@ -1279,10 +1282,15 @@ def escape_dollars(texto: str) -> str:
     # `_escape_dollar_run` devuelve el trozo intacto, así que ese atajo no decidía nada (#319 — su
     # mutación sobrevivía). A diferencia de `escape_cell`, devuelve SIEMPRE `str`.
     texto, out, i = str(texto or ""), [], 0
-    for m in _DOLLAR_MATH_RE.finditer(texto):
+    rechazados = {m.end() - 1 for m in _DOLLAR_REJECTED_RE.finditer(texto)}
+    pos = 0
+    while (m := _DOLLAR_MATH_RE.search(texto, pos)):
+        if m.start() in rechazados:  # #588: a rejected closer is not an opener
+            pos = m.start() + 1
+            continue
         out.append(_escape_dollar_run(texto[i:m.start()]))
         out.append(m.group(0))
-        i = m.end()
+        i = pos = m.end()
     out.append(_escape_dollar_run(texto[i:]))
     return "".join(out)
 

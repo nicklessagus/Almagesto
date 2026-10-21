@@ -3585,6 +3585,16 @@ def test_588_escape_dollars_NO_toca_la_matematica_pegada_a_una_palabra(toy_vault
     assert cfg.escape_dollars("US$20 and US$30") == r"US\$20 and US\$30"
 
 
+def test_588_el_cierre_rechazado_por_el_digito_NO_reabre(toy_vault):
+    """#588 (regresión de v1.397.0) — sin el borde de palabra, el `$` de `$\lambda$1176` (cierre
+    rechazado por el dígito) abría y se emparejaba con el `$` siguiente. Casos de Almagesto-Tesis."""
+    import lib_config as cfg
+    assert cfg.escape_dollars(r"C III($\lambda$1176 Å)/C III($\lambda$977 Å), lo que") == \
+        r"C III(\$\lambda\$1176 Å)/C III(\$\lambda\$977 Å), lo que"
+    assert cfg.escape_dollars(r"FWHM $\approx$1 m/s («about 1 m s$^{-1}$ year$^{-1}$»)") == \
+        r"FWHM \$\approx\$1 m/s («about 1 m s$^{-1}$ year$^{-1}$»)"
+
+
 def test_459_el_titulo_en_DOS_CODIFICACIONES_deja_de_ser_desacuerdo(toy_vault):
     """⛔ #459 — el detector de #397 comparaba un título BibTeX (con escapes LaTeX) contra el texto
     plano del catálogo, así que toda diferencia de CODIFICACIÓN salía como si las dos fuentes
