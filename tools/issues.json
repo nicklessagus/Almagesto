@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-21",
+ "fetched": "2026-10-25",
  "issues": [
   {
    "number": 2,
@@ -2929,6 +2929,11 @@
   {
    "number": 588,
    "title": "escape_dollars escapa la matemática pegada a una palabra (`m s$^{-1}$`): --restamp-salvedades toma por reescritas salvedades que nadie tocó",
+   "state": "CLOSED"
+  },
+  {
+   "number": 589,
+   "title": "query_ads: una estrella con cero papers en título/abstract no se puede ingestar — el cero de #27 no tiene salida declarada para estrellas",
    "state": "OPEN"
   }
  ]

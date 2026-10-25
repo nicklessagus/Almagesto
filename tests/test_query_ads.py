@@ -827,6 +827,45 @@ def test_main_extra_core_persistente(toy_vault, toy_classifier, no_sleep, monkey
     assert curados[0]["via"] == "usuario"
 
 
+def _cero(*a, **k):
+    raise qa.EmptyResultError("0")
+
+
+def test_main_cero_verdadero_declarado_sigue_con_extra_core(toy_vault, toy_classifier, no_sleep,
+                                                            monkeypatch):
+    """#589: una estrella que ningún paper nombra en título/abstract no tenía salida. Con
+    `cero_verdadero: <motivo>` + `extra_core`, el 0 persistente no aborta: el corpus entra por la
+    curación y el registro guarda `n_found: 0` con el motivo."""
+    stars = {"Estrella Test": {"slug": "test_star", "simbad": "s", "ads_object": "Test Star",
+                               "aliases": [], "cero_verdadero": "sólo en muestras",
+                               "extra_core": [{"bibcode": "1988old.....1O", "via": "usuario", "motivo": "test"}]}}
+    write_yaml(cfg.STARS_YAML, stars)
+    monkeypatch.setattr(qa, "query_ads", _cero)
+    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
+    monkeypatch.setattr(qa, "fetch_bibcodes",
+                        lambda bibs, via_de=None: [dict(rec("1988old.....1O", relevant=True),
+                                                          via="usuario", puertas=["manual"])])
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    data = json.loads((toy_vault.ROOT / "build" / "test_star" / "ads.json").read_text())
+    assert [r["bibcode"] for r in data["records"]] == ["1988old.....1O"]
+    b = cfg.as_list(cfg.load_registro("test_star")["busquedas"])[-1]
+    assert b["n_found"] == 0 and b["cero_verdadero"] == "sólo en muestras"
+
+
+def test_main_cero_verdadero_sin_declarar_o_sin_extra_core_aborta(toy_vault, toy_classifier,
+                                                                  no_sleep, monkeypatch):
+    """#589: sin la declaración rige #27 (EmptyResultError); declarada sin `extra_core` no hay
+    corpus y aborta nombrando el campo."""
+    monkeypatch.setattr(qa, "query_ads", _cero)
+    with pytest.raises(qa.EmptyResultError):
+        run_main(monkeypatch, ["test_star"])
+    write_yaml(cfg.STARS_YAML, {"Estrella Test": {"slug": "test_star", "simbad": "s",
+                                                  "ads_object": "Test Star", "aliases": [],
+                                                  "cero_verdadero": "x"}})
+    with pytest.raises(SystemExit, match="extra_core"):
+        run_main(monkeypatch, ["test_star"])
+
+
 def test_main_extra_core_rescata_del_corte(toy_vault, toy_classifier, no_sleep, monkeypatch, capsys):
     """#39: el paper que la query SÍ trajo pero la lente descartó se rescata en el lugar
     (relevant/why_excluded/via) — antes `extra_core` sólo agregaba los ausentes y declararlo no

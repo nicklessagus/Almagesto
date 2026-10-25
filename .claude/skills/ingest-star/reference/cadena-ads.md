@@ -153,6 +153,12 @@ en el YAML **se commitea y viaja**, sobrevive al re-run y a otra máquina — qu
 la que el descarte (`triage.py --drop … --reason`) vive en `vault/config/registro/<slug>.yaml`. Los
 dos carriles de la curación dejan registro versionado; ninguno cura en silencio.
 
+**Estrella con cero verdadero (#589).** Si la query directa de una estrella aborta en 0
+(`EmptyResultError`, #27) y el `--probe` con `full:` sí ve papers, la estrella sólo vive dentro de
+muestras: aprobá el corpus en `extra_core` y declará `cero_verdadero: <motivo>` en su entrada de
+`stars.yaml`. La query corre igual (los reintentos de #27 siguen filtrando el espurio), el 0 queda en
+`busquedas` con el motivo y la cadena sigue. Declarado sin `extra_core`, aborta.
+
 ## Idempotencia
 
 La cadena **no pisa**: re-correrla es seguro y baja sólo lo nuevo. La única excepción es add-only (el

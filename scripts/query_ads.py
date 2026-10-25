@@ -95,7 +95,9 @@ del `truncated` de la query directa) y el lint lo surface como rescate incomplet
 intermitentemente `numFound: 0` con HTTP 200; se reintenta con el mismo backoff y, si persiste, la
 corrida **falla** (`EmptyResultError`, exit ≠ 0) en vez de persistir un `ads.json` vacío con exit 0
 (que además pisaría el bueno de un re-ingest). Los ceros legítimos —chaining, `--sweep`, `--probe`,
-`--extra-only`— no se tocan.
+`--extra-only`— no se tocan. **El cero VERDADERO de una estrella se declara (#589):**
+`cero_verdadero: <motivo>` en `stars.yaml` (con `extra_core`): si el 0 sobrevive a los reintentos la
+corrida sigue con la curación y el registro guarda `n_found: 0` + el motivo.
 """
 from __future__ import annotations
 
@@ -1785,7 +1787,23 @@ def main() -> int:
     else:
         # expect_hits: la query directa de un sujeto NO puede volver vacía — un 0 es el cero
         # espurio de ADS (#27) o un nombre mal escrito; en ambos casos abortar > persistir vacío.
-        recs = query_ads(q, rows=args.rows, meta=qmeta, expect_hits=True, fq=fq_run)
+        try:
+            recs = query_ads(q, rows=args.rows, meta=qmeta, expect_hits=True, fq=fq_run)
+        except EmptyResultError:
+            # #589 — el cero VERDADERO de una estrella (ningún paper la nombra en título/abstract;
+            # vive sólo en muestras) no tenía salida: se DECLARA en stars.yaml con su motivo, la
+            # query corre igual (los reintentos de #27 siguen filtrando el espurio) y el 0 queda
+            # registrado. Sin la declaración, #27 intacto.
+            cero = head.get("kind") == "star" and meta.get("cero_verdadero")
+            if not (isinstance(cero, str) and cero.strip()):
+                raise
+            if not cfg.load_extra_core(meta, entry=args.slug):
+                sys.exit(f"`cero_verdadero` declarado para '{args.slug}' pero sin `extra_core`: "
+                         "con la query directa en 0 no hay corpus — listá los bibcodes en stars.yaml.")
+            cfg.print_seguro(f"  query directa: 0 (cero verdadero declarado, #589: {cero.strip()}) "
+                             f"— el corpus entra por `extra_core`")
+            qmeta.update(num_found=0, cero_verdadero=cero.strip())
+            recs = []
         for r in recs:
             r["via"] = "query"
         # D-26: para un tema de método la lente global es la equivocada (mata al fundacional y deja
@@ -2066,6 +2084,7 @@ def main() -> int:
         # anterior a este campo (no «trajo cero»).
         "traidos": qmeta.get("traidos"),
         "n_found": qmeta.get("num_found"),            # lo que ADS dice que hay (None sin query directa)
+        **({"cero_verdadero": qmeta["cero_verdadero"]} if qmeta.get("cero_verdadero") else {}),  # #589
         "n_total": len(recs),                         # lo que se trajo (query + extra_core + chaining)
         # D-28: los bibcodes de ESTA corrida. Es lo que permite que el universo del sujeto sea una
         # UNIÓN y no una suma (dos refrescos solapados no cuentan dos veces lo que ya estaba), y lo
