@@ -1820,3 +1820,9 @@ Abrir el PDF de B para ~10 filas y clasificarlas: B dice el número (falso aviso
 OTRO número (hallazgo real en la vista de A) · B no es el dueño (mala resolución). **Devolver si**
 los falsos avisos son la gran mayoría sin una causa común arreglable, o si una fila con el número
 literal en el `.txt` de B aparece en la lista.
+
+## §#590 · v1.402.1 — el número de B se busca sin el filtro de la celda, con truncado y a cualquier precisión
+
+Sin migración. `python scripts/proposals.py`, categoría 🔎: 1643 / 801 / **93** filas (eran 110).
+Plavchan 8.46321, Léger 0.853585 y Jenkins 2.97 ya no tienen que aparecer. **Devolver si** queda
+alguna fila con el número literal (o su redondeo o truncado) en el `.txt` de B.

@@ -357,3 +357,20 @@ def test_la_cola_de_valores_sin_confirmar_se_DECLARA(toy_vault, monkeypatch):
     test_el_valor_que_el_texto_del_dueno_no_muestra_se_propone_REDONDEO_tolerado(toy_vault)
     monkeypatch.setattr(pr, "MISSING_OWNERS_TOP", 0)
     assert pr.unconfirmed_second_hand()[0] == [("… y 1 valor(es) más", "", "", "")]
+
+
+def test_el_numero_de_B_se_encuentra_con_5_decimales_TRUNCADO_y_entre_corchetes(toy_vault):
+    """#590 (devuelto por la instancia) — tres falsos avisos con el número literal en B: el redondeo
+    topeaba en 4 decimales (`8.46321`), `quantities` aplicado a B borraba `[0.67, 2.97]` como
+    referencia y el `5.366` de `P [days] 5.366`, y A puede TRUNCAR (5.36 por 5.366)."""
+    _nota_con_segunda_mano("2020P", "Plavchan, P.", 2020, [])
+    _txt("2020P", "P [days] 5.366 and P = 8.46321 d; the interval is [0.67, 2.97].")
+    cfg.PAPERS.joinpath("2021A.md").write_text(
+        "---\nbibcode: 2021A\nfirst_author: Martioli, E.\nyear: 2021\nstars: [GJ 1]\n---\n\n"
+        "## Vista — GJ 1\n\n| Qué | Valor | Localizador | Régimen | Segunda mano |\n|---|---|---|---|---|\n"
+        "| P | 8.46321 d | L1 | — | Plavchan et al. 2020 |\n| P2 | 5.36 d | L2 | — | Plavchan et al. 2020 |\n"
+        "| e | 2.97 | L3 | — | Plavchan et al. 2020 |\n| K | 5.38 m/s | L4 | — | Plavchan et al. 2020 |\n",
+        encoding="utf-8")
+    filas, poblacion, _f, _n = pr.unconfirmed_second_hand()
+    assert poblacion == 4 and [v for _b, _a, v, _q in filas] == ["5.38 m/s"], \
+        "5.38 no es redondeo ni truncado de 5.366: ése sí se propone"

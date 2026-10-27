@@ -28,6 +28,7 @@ exists to surface. Exit is always 0: it is a surface, not a gate.
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import re
 import sys
@@ -329,13 +330,35 @@ def _decimales(token: str) -> int:
     return len(token.split(".")[1]) if "." in token else 0
 
 
+def _numbers_of(text: str) -> list:
+    """EVERY number of B's text, sorted — no filter (#590, devuelto por la instancia).
+
+    ⛔ `lb.quantities` is the filter for A's CELL (it drops references, locators and short integers
+    so a cell does not cross by accident), and applied to B it erased what had to be found: the
+    `[0.67, 2.97]` of an interval read as a reference bracket, the `5.366` after `P [days]`. B's
+    side is a haystack, so it keeps everything; only the TeX decimal (`4{,}31`) is undone."""
+    plano = lb._TEX_ESPACIO_RE.sub("", lb._TEX_DECIMAL_RE.sub(r"\1", text))
+    return sorted(float(m.group(0).replace(",", ".")) for m in lb._NUM_RE.finditer(plano))
+
+
+def _quoted_from(token: str, numeros: list) -> bool:
+    """Does B carry a number that A's `token` is a rounding OR a truncation of? (#590)
+
+    The window is `[x − ½·10⁻ᵈ, x + 10⁻ᵈ)` at the `d` decimals A quotes: it holds B's `3.2357` for
+    A's `3.24` (rounded) and B's `5.366` for A's `5.36` (truncated), at any number of decimals — a
+    fixed set of roundings topped at four and lost every value quoted with five (`8.46321`)."""
+    x, paso = float(token), 10.0 ** -_decimales(token)
+    i = bisect.bisect_left(numeros, x - paso / 2 - 1e-12)
+    return i < len(numeros) and numeros[i] < x + paso - 1e-12
+
+
 def unconfirmed_second_hand(slug: str | None = None) -> tuple:
     """Second-hand values whose owner B IS in the vault but whose number is not in B's text (#590).
 
     The second half of #590: the value was verified against A, the paper that repeated it, and B
     sat on disk unread. Each value's specific quantities (`lb.quantities`) are looked for in B's
-    `.txt`, **rounded to the precision A quotes** — A citing `3.24 d` for B's `3.2357 d` is the
-    normal case, not a finding (measured on Almagesto-Tesis: rounding turns 159 misses into 109).
+    `.txt` as a rounding or a truncation at the precision A quotes (`_quoted_from`) — A citing
+    `3.24 d` for B's `3.2357 d` is the normal case, not a finding.
 
     ⛔ The silence does NOT accuse (#318): the `.txt` loses tables-as-image and equations without
     warning (#205), and a surname + year can resolve to the wrong paper. So this is a PROPOSAL
@@ -345,21 +368,19 @@ def unconfirmed_second_hand(slug: str | None = None) -> tuple:
     txts: dict = {}
     for t in cfg.FULLTEXT.glob("**/*.txt") if cfg.FULLTEXT.exists() else []:
         txts.setdefault(t.stem, t)
-    redondeos: dict = {}       # B → sus cantidades redondeadas a 0..4 decimales
+    numeros: dict = {}         # B → todos los números de su texto, ordenados
     filas, poblacion, no_eval = [], 0, 0
     for a, q, v, _de, duenos, _claves in _second_hand_owners(slug):
         if not duenos or duenos == {a}:
             continue
         poblacion += 1
         cantidades = lb.quantities(v)
-        for b in duenos - redondeos.keys():
+        for b in duenos - numeros.keys():
             t = txts.get(cfg.note_stem(b))
-            redondeos[b] = {f"{float(x):.{d}f}" for x in lb.quantities(
-                t.read_text(encoding="utf-8", errors="replace")) for d in range(5)} if t else set()
-        en_b = set().union(*(redondeos[b] for b in duenos))
-        if not cantidades or not en_b:
+            numeros[b] = _numbers_of(t.read_text(encoding="utf-8", errors="replace")) if t else []
+        if not cantidades or not any(numeros[b] for b in duenos):
             no_eval += 1
-        elif not any(f"{float(x):.{_decimales(x)}f}" in en_b for x in cantidades):
+        elif not any(_quoted_from(x, numeros[b]) for x in cantidades for b in duenos):
             filas.append((", ".join(sorted(duenos)), a, lb.truncate_claim(v.strip(), 80),
                           lb.truncate_claim(q.strip(), 60)))
     filas.sort()
