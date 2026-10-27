@@ -703,6 +703,9 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Sólo la NOMBRA el docstring de `load_reviewed_quotes` (#516), la escotilla hermana para citas."
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: "`unconfirmed_second_hand` casa la firma `segunda_mano_verificada` (#591) con la misma función: el `que` se pega truncado, como en #433."
   - issue: 431
     regla: >-
       Una garantía fechada sobre una nota se compara contra la PROSA fuera de

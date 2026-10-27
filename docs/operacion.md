@@ -2235,8 +2235,10 @@ cantidades específicas del valor de A contra **todos** los números del `.txt` 
 fuera una referencia (devuelto por la instancia; 159 → 93 filas en Almagesto-Tesis). Lo que no aparece
 es una propuesta —*abrí el PDF de B*—, agrupada por B, y **nunca acusa** (#318): el `.txt` pierde
 tablas-imagen (#205), una calibración citada (Noyes 1984 para un $\log R'_{HK}$) no contiene el
-valor que A calculó con ella, y apellido + año puede resolver al paper equivocado. Firma *no
-cruzable*: todavía no hay dónde declararla.
+valor que A calculó con ella, y apellido + año puede resolver al paper equivocado. **Lo verificado en
+el PDF de B se firma en la nota de A (#591):** `segunda_mano_verificada: [{ref, que, localizador,
+motivo}]` (forma dura, D-58: sin `localizador` el lint bloquea) — la fila sale de lo pendiente y se
+lista aparte (AUD-207), y la firma que no exime ninguna fila se propone sacar (#256).
 
 #### A · Lint (chequeo de salud)
 

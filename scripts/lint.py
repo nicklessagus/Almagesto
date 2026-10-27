@@ -807,7 +807,8 @@ LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "facets": False,
                "planets": True, "disputes": True, "corrections": True,
                "versions": True, "vistas": True, "no_vista": True,
                "segunda_mano_revisada": True, "pdf_reemplazo": True,
-               "warn_revisada": True, "cita_revisada": True}
+               "warn_revisada": True, "cita_revisada": True,
+               "segunda_mano_verificada": True}
 
 
 def normalize_lists(fm: dict) -> list:
@@ -7191,6 +7192,10 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     out: dict = {}
     add = _adder(out)
     add("fm_broken", [(stem, motivo) for motivo in normalize_lists(fm)])  # ANTES de cualquier lector
+    try:                                   # #591 · la firma de 🔎 es de forma dura (D-58)
+        cfg.load_verified_second_hand(fm, entry=stem)
+    except cfg.VistasError as e:
+        add("fm_broken", [(stem, str(e).replace("\n", " "))])
     add("schema_incompleto", check_schema_completeness(stem, f, fm, sweep.refs_stems))
     sweep.kinds[stem] = fm.get("tags", []) or []
     # `fm` is `split_fm(text)` over the same span: non-empty means the YAML parsed as a mapping, so

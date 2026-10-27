@@ -352,6 +352,15 @@ def _quoted_from(token: str, numeros: list) -> bool:
     return i < len(numeros) and numeros[i] < x + paso - 1e-12
 
 
+def _verified_of(a: str) -> list:
+    """The `segunda_mano_verificada` of paper A, or `[]` — an invalid form is the lint's (`fm_broken`)."""
+    try:
+        return cfg.load_verified_second_hand(cfg.split_fm(
+            (cfg.PAPERS / f"{a}.md").read_text(encoding="utf-8")) or {}, entry=a)
+    except cfg.VistasError:
+        return []
+
+
 def unconfirmed_second_hand(slug: str | None = None) -> tuple:
     """Second-hand values whose owner B IS in the vault but whose number is not in B's text (#590).
 
@@ -370,7 +379,10 @@ def unconfirmed_second_hand(slug: str | None = None) -> tuple:
         txts.setdefault(t.stem, t)
     numeros: dict = {}         # B → todos los números de su texto, ordenados
     filas, poblacion, no_eval = [], 0, 0
+    firmadas, firmas, usadas = [], {}, set()   # #591: A → sus `segunda_mano_verificada`
+    vistos: set = set()                        # las A en alcance: dónde puede haber una huérfana
     for a, q, v, _de, duenos, _claves in _second_hand_owners(slug):
+        vistos.add(a)
         if not duenos or duenos == {a}:
             continue
         poblacion += 1
@@ -381,13 +393,32 @@ def unconfirmed_second_hand(slug: str | None = None) -> tuple:
         if not cantidades or not any(numeros[b] for b in duenos):
             no_eval += 1
         elif not any(_quoted_from(x, numeros[b]) for x in cantidades for b in duenos):
-            filas.append((", ".join(sorted(duenos)), a, lb.truncate_claim(v.strip(), 80),
-                          lb.truncate_claim(q.strip(), 60)))
+            if a not in firmas:
+                firmas[a] = _verified_of(a)
+            firma = next(((b, d) for b in sorted(duenos) for d in firmas[a]
+                          if cfg.reviewed_second_hand([d], b, q) is not None), None)
+            if firma:
+                usadas.add((a, id(firma[1])))
+                firmadas.append((firma[0], a, f"verificado en {firma[1]['localizador']}: "
+                                              f"{firma[1]['motivo']}", ""))
+            else:
+                filas.append((", ".join(sorted(duenos)), a, lb.truncate_claim(v.strip(), 80),
+                              lb.truncate_claim(q.strip(), 60)))
+    # #256 — la firma que no exime ninguna fila es una afirmación falsa sobre la bóveda: se propone
+    # sacarla (el número ya aparece, o el `ref`/`que` no es el que esta superficie imprime)
+    for a in (vistos if slug else {f.stem for f in cfg.note_paths(cfg.PAPERS)}) - firmas.keys():
+        firmas[a] = _verified_of(a)
+    for a, decl in firmas.items():
+        for d in decl:
+            if (a, id(d)) not in usadas:
+                filas.append((d["ref"], a, f"`segunda_mano_verificada` huérfana: ninguna fila "
+                                           f"corresponde a «{lb.truncate_claim(d['que'], 60)}» → sacala",
+                              ""))
     filas.sort()
     if len(filas) > MISSING_OWNERS_TOP:
         filas = filas[:MISSING_OWNERS_TOP] + [(f"… y {len(filas) - MISSING_OWNERS_TOP} valor(es) más",
                                                "", "", "")]
-    return filas, poblacion, [], no_eval
+    return filas, poblacion, sorted(firmadas), no_eval
 
 
 #: #435 · DÓNDE aterriza la firma de cada categoría, y si el barrido puede cruzarla. Los tres
@@ -426,10 +457,11 @@ def report(slug: str | None = None) -> int:
          (FIRMA_SE_CIERRA_SOLA, "el dueño desaparece de la lista cuando su nota existe")),
         ("🔎 Valor de segunda mano que el texto de su dueño B no muestra — verificalo en el PDF (#590)",
          tuple(sin_confirmar), f"valores con dueño en la bóveda ({no_eval_b} no evaluables)",
-         "abrí el PDF de B: si lo dice, nada que hacer; si dice otro número, corregí la vista de A",
-         (FIRMA_NO_CRUZABLE, "no hay dónde firmarlo todavía: el `.txt` pierde tablas-imagen sin "
-                             "avisar (#205), así que el silencio NO acusa (#318) y la fila trae "
-                             "B · A · valor · qué para ir directo al PDF")),
+         "abrí el PDF de B: si lo dice, firmalo en la nota de A (`segunda_mano_verificada`); si dice "
+         "otro número, corregí la vista de A",
+         (FIRMA_CRUZADA, "`segunda_mano_verificada: [{ref, que, localizador, motivo}]` en la nota "
+                         "de A (#591); el silencio del `.txt` NO acusa (#318), así que la fila trae "
+                         "B · A · valor · qué para ir directo al PDF")),
     ):
         estado, porque = firma
         cfg.print_seguro(f"## {titulo} — {len(filas)}")

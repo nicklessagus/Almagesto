@@ -4317,3 +4317,18 @@ def test_alcance_scope_item_matriz():
     assert cfg.scope_item("tau_ceti(15)") == ("tau_ceti", 15)
     assert cfg.scope_item("tau_ceti ( 15 ) ") == ("tau_ceti", 15)
     assert cfg.scope_item("") == ("", None)
+
+
+def test_la_firma_de_segunda_mano_verificada_es_de_FORMA_DURA():
+    """#591 — D-58: sin `localizador` la firma afirma que B lo dice sin decir dónde (#205)."""
+    with pytest.raises(cfg.VistasError, match="localizador"):
+        cfg.load_verified_second_hand({"segunda_mano_verificada": [{"ref": "B", "que": "K",
+                                                                     "motivo": "m"}]})
+    with pytest.raises(cfg.VistasError, match="motivo suelto"):
+        cfg.load_verified_second_hand({"segunda_mano_verificada": ["lo vi"]})
+    with pytest.raises(cfg.VistasError, match="motivo suelto"):
+        cfg.load_verified_second_hand({"segunda_mano_verificada": 5})
+    assert cfg.load_verified_second_hand({}) == []
+    ok = {"ref": " B ", "que": "K", "localizador": "p. 4", "motivo": "m", "extra": 1}
+    assert cfg.load_verified_second_hand({"segunda_mano_verificada": [ok]}) == [
+        dict(ok, ref="B")], "normaliza los campos y conserva el resto"

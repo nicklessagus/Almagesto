@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.402.1"
+ALMAGESTO_VERSION = "1.403.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4515,6 +4515,41 @@ def load_reviewed_second_hand(meta: dict, *, entry: str = "?") -> list:
         if faltan:
             raise VistasError(_reviewed_second_hand_error(
                 entry, f"a una entrada de `segunda_mano_revisada` le falta {', '.join(faltan)}"))
+        out.append(dict(x, **campos))
+    return out
+
+
+def load_verified_second_hand(meta: dict, *, entry: str = "?") -> list:
+    """`segunda_mano_verificada: [{ref, que, localizador, motivo}]` — a second-hand value CONFIRMED in
+    the PDF of its owner B (#591).
+
+    `proposals.unconfirmed_second_hand` (#590) proposes *open B's PDF* for every value whose number
+    B's `.txt` does not show, and the silence does not accuse: the `.txt` loses tables-as-image, B
+    may give the value in another unit (3846 d for A's 10.5 yr), the owner may be a calibration.
+    Without a place to sign the check, the row came back on every run — the shape of #435, where 60
+    of 62 proposals were permanent and the category stopped being read. Measured in the validation
+    of #590: 7 of 10 rows checked by hand were false alarms, and none of them could leave the list.
+
+    Sibling of `segunda_mano_revisada` (#433): identity `(ref, que)` matched by
+    `reviewed_second_hand`, scoped to the note of A, HARD FORM (D-58). `localizador` is required
+    because the signature claims B says it: it has to say WHERE (#205: the page seen)."""
+    v = meta.get("segunda_mano_verificada")
+    if v is None:
+        return []
+    forma = (f"'{entry}': {{}}. Forma canónica:\n\nsegunda_mano_verificada:\n"
+             f"  - ref: <el bibcode de B, el dueño del valor>\n"
+             f"    que: <el `qué` de la fila, como lo imprime proposals.py>\n"
+             f"    localizador: <dónde lo dice B: p. 14, Tabla 2>\n"
+             f"    motivo: <qué se vio: «3846 d = 10.53 yr»>\n")
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        raise VistasError(forma.format("`segunda_mano_verificada` no acepta un motivo suelto ni una "
+                                       "lista de strings: sin `ref` y `que` no dice QUÉ se verificó"))
+    out = []
+    for x in v:
+        campos = {k: str(x.get(k) or "").strip() for k in ("ref", "que", "localizador", "motivo")}
+        if (faltan := [k for k, val in campos.items() if not val]):
+            raise VistasError(forma.format(f"a una entrada de `segunda_mano_verificada` le falta "
+                                           f"{', '.join(faltan)}"))
         out.append(dict(x, **campos))
     return out
 

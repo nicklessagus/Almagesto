@@ -11917,3 +11917,12 @@ def test_582_lint_reporta_el_paper_leido_fuera_del_registro_con_el_snippet_de_tr
     filas, ne = lint.check_outside_registry(fms)
     assert "drs" not in dict(filas) and ne and "`drs`" in ne[0][0]
     assert lint.collect().por_clave("fuera_del_registro").severidad == lint.SEV_BACKLOG
+
+
+def test_591_segunda_mano_verificada_sin_localizador_BLOQUEA(toy_vault, capsys):
+    """#591 — la firma afirma que B dice el número: sin `localizador` no dice dónde (#205). Forma
+    dura (D-58): cae en `fm_broken`, el bloqueante."""
+    paper_con_vista(toy_vault, segunda_mano_verificada=[{"ref": "2012D", "que": "K", "motivo": "m"}])
+    cat = lint.collect().por_clave("fm_broken")
+    assert any("segunda_mano_verificada" in m and "localizador" in m for _s, m in cat.items), cat.items
+    assert run_lint(capsys)[0] == 1

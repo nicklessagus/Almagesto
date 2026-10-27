@@ -2940,6 +2940,11 @@
    "number": 590,
    "title": "Un valor de segunda mano no se rastrea hasta su dueño: 1455 de 3388 apuntan a un paper ausente del corpus, y ninguno se cruza contra B",
    "state": "CLOSED"
+  },
+  {
+   "number": 591,
+   "title": "La verificación en el PDF de B no se puede firmar: las filas de 🔎 (#590) son propuestas permanentes, la forma de #435",
+   "state": "OPEN"
   }
  ]
 }

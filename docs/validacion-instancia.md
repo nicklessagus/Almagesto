@@ -1826,3 +1826,13 @@ literal en el `.txt` de B aparece en la lista.
 Sin migración. `python scripts/proposals.py`, categoría 🔎: 1643 / 801 / **93** filas (eran 110).
 Plavchan 8.46321, Léger 0.853585 y Jenkins 2.97 ya no tienen que aparecer. **Devolver si** queda
 alguna fila con el número literal (o su redondeo o truncado) en el `.txt` de B.
+
+## §#591 · v1.403.0 — lo verificado en el PDF de B se firma
+
+Sin migración. Tomar 2–3 filas de 🔎 ya verificadas a mano en #590 (p. ej. Toledo-Padrón 2019, 3846 d
+= 10.53 yr, pp. 11/14) y firmarlas en la nota de A:
+`segunda_mano_verificada: [{ref: <B>, que: <qué como lo imprime proposals>, localizador: p. 14, motivo: …}]`.
+`python scripts/proposals.py`: esas filas salen de lo pendiente y aparecen en «✓ ya FIRMADA(s)»; una
+firma con un `que` que no corresponde sale como huérfana; sin `localizador`, `lint.py` bloquea
+(`fm_broken`). **Devolver si** pegar el `qué` tal como lo imprime proposals no casa, o si una firma
+válida sigue dejando la fila pendiente.

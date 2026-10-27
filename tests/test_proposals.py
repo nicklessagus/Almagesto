@@ -374,3 +374,25 @@ def test_el_numero_de_B_se_encuentra_con_5_decimales_TRUNCADO_y_entre_corchetes(
     filas, poblacion, _f, _n = pr.unconfirmed_second_hand()
     assert poblacion == 4 and [v for _b, _a, v, _q in filas] == ["5.38 m/s"], \
         "5.38 no es redondeo ni truncado de 5.366: ése sí se propone"
+
+
+def test_la_verificacion_en_el_PDF_de_B_se_FIRMA_y_la_huerfana_se_propone_sacar(toy_vault):
+    """#591 — sin dónde firmar «lo vi en el PDF de B», la fila de 🔎 volvía en cada corrida (la
+    forma de #435). Firmada en la nota de A sale de lo pendiente y se lista aparte (AUD-207); la
+    firma que no exime ninguna fila es una afirmación falsa (#256) y se propone sacarla."""
+    test_el_valor_que_el_texto_del_dueno_no_muestra_se_propone_REDONDEO_tolerado(toy_vault)
+    nota = cfg.PAPERS / "2015P.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "stars: [GJ 1]", "stars: [GJ 1]\nsegunda_mano_verificada:\n"
+        "  - {ref: 2012D, que: K, localizador: Tabla 2 p. 4, motivo: imagen de tabla}\n"
+        "  - {ref: 2012D, que: Teff, localizador: p. 1, motivo: ya no hace falta}"), encoding="utf-8")
+    filas, _p, firmadas, _n = pr.unconfirmed_second_hand()
+    assert firmadas == [("2012D", "2015P", "verificado en Tabla 2 p. 4: imagen de tabla", "")]
+    assert [(b, a) for b, a, *_ in filas] == [("2012D", "2015P")] and "huérfana" in filas[0][2]
+    # la nota cuyas filas YA se confirman todas también se mira: su firma es huérfana igual
+    _nota_con_segunda_mano("2016Q", "Quirrenbach, A.", 2016, [])
+    (cfg.PAPERS / "2016Q.md").write_text((cfg.PAPERS / "2016Q.md").read_text(encoding="utf-8").replace(
+        "stars: [GJ 1]", "stars: [GJ 1]\nsegunda_mano_verificada: [{ref: X, que: P, localizador: p. 2, "
+        "motivo: m}]"), encoding="utf-8")
+    assert ("X", "2016Q") in [(b, a) for b, a, *_ in pr.unconfirmed_second_hand()[0]]
+
