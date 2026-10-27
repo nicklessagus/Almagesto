@@ -1805,3 +1805,9 @@ no evaluables, top van Leeuwen 2007 con 35). Revisar a mano los ~10 primeros due
 estar **ausente** del corpus de verdad. **Devolver si** alguno está presente (falso ausente por la
 clave apellido + año que no sea el caso preprint declarado), o si un dueño presente en una celda con
 `[[bibcode]]` aparece en la lista.
+
+## §#590 · v1.401.1 — el preprint citado casa con el publicado si la celda lo marca
+
+Sin migración. `python scripts/proposals.py`: «Bonfils et al. (2011, submitted)» ya no figura (es
+2013A&A...549A.109B); «Mayor et al. (2008)» y «Bonfils et al. (2012)» sin marca siguen (límite
+declarado). **Devolver si** un dueño REALMENTE ausente desaparece de la lista por el corrimiento de año.

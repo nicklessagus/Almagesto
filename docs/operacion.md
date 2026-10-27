@@ -2224,8 +2224,10 @@ valor sólo se verificaba contra A. `missing_owners` resuelve el dueño por `[[b
 por apellido + año contra `first_author`/`year`, y lista los ausentes **rankeados por cuántos valores
 dependen de cada uno** (medido: 1455 de 3388 en una bóveda real). Se cierra sola cuando la nota de B
 existe; traerla es curación (`extra_core` / `append-knowledge`), nunca automático. La celda que no
-nombra a nadie así es **no evaluable** y se cuenta aparte (D-43). ⚠ Clave heurística: el año de un
-preprint citado (`2011, submitted`) no casa con el del publicado y sale como ausente.
+nombra a nadie así es **no evaluable** y se cuenta aparte (D-43). El preprint citado casa con el
+publicado si la celda lo **marca** (`submitted`, `in press`, `arXiv`…: año +1/+2) o por el año de un
+alias de `versions[]`. ⚠ Sin marca no: «Mayor et al. (2008)» por 2009A&A...493..639M sale ausente
+(validado: 3 de 26 en Almagesto-Tesis, 1 cerrado por la marca).
 
 #### A · Lint (chequeo de salud)
 

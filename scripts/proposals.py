@@ -236,6 +236,12 @@ _OWNER_RE = re.compile(
 #: Cuántos dueños ausentes se listan; el resto se DECLARA en una fila final, nunca se calla.
 #: ponytail: tope fijo, flag `--todos` si alguien necesita la cola entera.
 MISSING_OWNERS_TOP = 25
+#: La celda que cita un trabajo NO publicado todavía: su año es el del preprint, y el publicado sale
+#: uno o dos años después (medido en Almagesto-Tesis: «Bonfils et al. (2011, submitted)» es
+#: 2013A&A...549A.109B). Sólo con esta marca se acepta el corrimiento: sin ella, `Bonfils 2008` se
+#: confundiría con un `Bonfils 2007` real y la propuesta se perdería.
+_PREPRINT_RE = re.compile(r"submitted|in press|accepted|en prensa|enviado|aceptado|arxiv|preprint",
+                          re.I)
 
 
 def _owner_key(surname: str, year) -> tuple:
@@ -264,8 +270,10 @@ def missing_owners(slug: str | None = None) -> tuple:
     closes on its own when the owner's note appears."""
     notas = cfg.note_paths(cfg.PAPERS)
     fms = {f.stem: cfg.split_fm(f.read_text(encoding="utf-8")) or {} for f in notas}
-    presentes = {_owner_key(str(fm.get("first_author") or "").split(",")[0], fm.get("year"))
-                 for fm in fms.values() if fm.get("first_author")}
+    # el año de cada alias de `versions[]` (D-19) también identifica la nota: es el del preprint
+    presentes = {_owner_key(str(fm["first_author"]).split(",")[0], y)
+                 for fm in fms.values() if fm.get("first_author")
+                 for y in [fm.get("year")] + [str(v)[:4] for v in cfg.as_list(fm.get("versions"))]}
     faltan: dict = {}          # clave → [celda tal cual, n valores, {papers}]
     poblacion = no_eval = 0
     for f in notas:
@@ -285,7 +293,11 @@ def missing_owners(slug: str | None = None) -> tuple:
                 if not claves:
                     no_eval += 1
                     continue
-                if any(k in presentes for k in claves):
+                if _PREPRINT_RE.search(de):
+                    claves_pub = [(a, str(int(y) + d)) for a, y in claves if y.isdigit() for d in (1, 2)]
+                else:
+                    claves_pub = []
+                if any(k in presentes for k in claves + claves_pub):
                     continue
             # la celda va TAL CUAL (la primera que nombró a este dueño): es lo que se busca
             e = faltan.setdefault(claves[0], [lb.truncate_claim(de.strip(), 80), 0, set()])

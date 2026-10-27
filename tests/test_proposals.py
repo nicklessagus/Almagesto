@@ -308,3 +308,18 @@ def test_el_dueno_por_BIBCODE_el_slug_y_la_cola_DECLARADA(toy_vault, monkeypatch
     monkeypatch.setattr(pr, "MISSING_OWNERS_TOP", 1)
     filas = pr.missing_owners()[0]
     assert len(filas) == 2 and filas[-1][:2] == ("… y 2 dueño(s) más", "2 valor(es)")
+
+
+def test_el_preprint_citado_casa_con_el_publicado_SOLO_si_la_celda_lo_marca(toy_vault):
+    """#590 — «Bonfils et al. (2011, submitted)» es 2013A&A...549A.109B: con la marca de preprint
+    se acepta el año +1/+2, y el año de un alias de `versions[]` identifica la nota. Sin marca no:
+    `Bonfils 2012` pelado sigue ausente (límite declarado), no se esconde detrás del 2013."""
+    _nota_con_segunda_mano("2013B", "Bonfils, X.", 2013, [])
+    _nota_con_segunda_mano("2009M", "Mayor, M.", 2009, [])
+    (cfg.PAPERS / "2009M.md").write_text((cfg.PAPERS / "2009M.md").read_text(encoding="utf-8")
+                                         .replace("stars:", "versions: [2008arXiv0810.2045M]\nstars:"),
+                                         encoding="utf-8")
+    _nota_con_segunda_mano("2014T", "Tuomi, M.", 2014,
+                           ["Bonfils et al. (2011, submitted)", "Bonfils et al. (2012)",
+                            "Mayor et al. (2008)"])
+    assert [a for a, *_ in pr.missing_owners()[0]] == ["Bonfils et al. (2012)"]
