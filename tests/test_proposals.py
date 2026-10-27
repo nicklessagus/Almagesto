@@ -396,3 +396,15 @@ def test_la_verificacion_en_el_PDF_de_B_se_FIRMA_y_la_huerfana_se_propone_sacar(
         "motivo: m}]"), encoding="utf-8")
     assert ("X", "2016Q") in [(b, a) for b, a, *_ in pr.unconfirmed_second_hand()[0]]
 
+
+
+def test_la_huerfana_no_se_esconde_en_el_tope(toy_vault, monkeypatch):
+    """#591 (devuelto por la instancia) — ordenada entre las pendientes, la huérfana caía en el
+    «… y N más» y la firma falsa no se veía. Va arriba y fuera del tope."""
+    test_la_verificacion_en_el_PDF_de_B_se_FIRMA_y_la_huerfana_se_propone_sacar(toy_vault)
+    nota = cfg.PAPERS / "2015P.md"
+    nota.write_text(nota.read_text(encoding="utf-8") + "| masa | 0.99 m/s | L7 | — | Dumusque et al. 2012 |\n",
+                    encoding="utf-8")
+    monkeypatch.setattr(pr, "MISSING_OWNERS_TOP", 0)
+    filas = pr.unconfirmed_second_hand()[0]
+    assert sum("huérfana" in f[2] for f in filas) == 2 and filas[-1][0].startswith("…"), filas

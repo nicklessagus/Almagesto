@@ -408,17 +408,16 @@ def unconfirmed_second_hand(slug: str | None = None) -> tuple:
     # sacarla (el número ya aparece, o el `ref`/`que` no es el que esta superficie imprime)
     for a in (vistos if slug else {f.stem for f in cfg.note_paths(cfg.PAPERS)}) - firmas.keys():
         firmas[a] = _verified_of(a)
-    for a, decl in firmas.items():
-        for d in decl:
-            if (a, id(d)) not in usadas:
-                filas.append((d["ref"], a, f"`segunda_mano_verificada` huérfana: ninguna fila "
-                                           f"corresponde a «{lb.truncate_claim(d['que'], 60)}» → sacala",
-                              ""))
+    # ⛔ las huérfanas van ARRIBA y fuera del tope (devuelto por la instancia): ordenadas entre las
+    # pendientes caían en el «… y N más» y la firma falsa no se veía nunca
+    huerfanas = sorted((d["ref"], a, f"`segunda_mano_verificada` huérfana: ninguna fila corresponde "
+                                     f"a «{lb.truncate_claim(d['que'], 60)}» → sacala", "")
+                       for a, decl in firmas.items() for d in decl if (a, id(d)) not in usadas)
     filas.sort()
     if len(filas) > MISSING_OWNERS_TOP:
         filas = filas[:MISSING_OWNERS_TOP] + [(f"… y {len(filas) - MISSING_OWNERS_TOP} valor(es) más",
                                                "", "", "")]
-    return filas, poblacion, sorted(firmadas), no_eval
+    return huerfanas + filas, poblacion, sorted(firmadas), no_eval
 
 
 #: #435 · DÓNDE aterriza la firma de cada categoría, y si el barrido puede cruzarla. Los tres

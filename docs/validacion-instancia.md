@@ -1836,3 +1836,9 @@ Sin migración. Tomar 2–3 filas de 🔎 ya verificadas a mano en #590 (p. ej. 
 firma con un `que` que no corresponde sale como huérfana; sin `localizador`, `lint.py` bloquea
 (`fm_broken`). **Devolver si** pegar el `qué` tal como lo imprime proposals no casa, o si una firma
 válida sigue dejando la fila pendiente.
+
+## §#591 · v1.403.1 — la firma huérfana no se esconde en el tope
+
+Sin migración. Con una `segunda_mano_verificada` de `que` ajeno, `python scripts/proposals.py` la
+muestra **primera** en 🔎, aunque la categoría pase el tope de 25. **Devolver si** queda dentro del
+«… y N más».
