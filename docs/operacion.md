@@ -2228,6 +2228,13 @@ nombra a nadie así es **no evaluable** y se cuenta aparte (D-43). El preprint c
 publicado si la celda lo **marca** (`submitted`, `in press`, `arXiv`…: año +1/+2) o por el año de un
 alias de `versions[]`. ⚠ Sin marca no: «Mayor et al. (2008)» por 2009A&A...493..639M sale ausente
 (validado: 3 de 26 en Almagesto-Tesis, 1 cerrado por la marca).
+**Y cuando B SÍ está, el número se busca en su texto (`unconfirmed_second_hand`, #590):** las
+cantidades específicas del valor de A contra las del `.txt` de B, **redondeadas a la precisión con
+que A cita** (3.24 por 3.2357 no es hallazgo; medido: el redondeo baja 159 a 109). Lo que no aparece
+es una propuesta —*abrí el PDF de B*—, agrupada por B, y **nunca acusa** (#318): el `.txt` pierde
+tablas-imagen (#205), una calibración citada (Noyes 1984 para un $\log R'_{HK}$) no contiene el
+valor que A calculó con ella, y apellido + año puede resolver al paper equivocado. Firma *no
+cruzable*: todavía no hay dónde declararla.
 
 #### A · Lint (chequeo de salud)
 

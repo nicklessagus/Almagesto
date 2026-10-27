@@ -250,6 +250,41 @@ def _owner_key(surname: str, year) -> tuple:
     return (toks[-1] if toks else "", str(year or "").strip()[:4])
 
 
+def _second_hand_owners(slug: str | None = None):
+    """Every second-hand row of the vault with its owner RESOLVED (#590), one shared definition.
+
+    Yields `(A, qué, valor, celda, dueños, claves)`: `dueños` is the set of note stems the cell
+    resolves to —empty when the owner is ABSENT, `None` when the cell names nobody resolvable (not
+    evaluable, D-43)— and `claves` the join keys that were tried. By `[[bibcode]]` in the cell, else
+    by surname + year against `first_author`/`year` and the years of `versions[]` (D-19), with the
+    preprint shift only when the cell marks it (`_PREPRINT_RE`)."""
+    notas = cfg.note_paths(cfg.PAPERS)
+    fms = {f.stem: cfg.split_fm(f.read_text(encoding="utf-8")) or {} for f in notas}
+    indice: dict = {}
+    for stem, fm in fms.items():
+        if fm.get("first_author"):
+            for y in [fm.get("year")] + [str(v)[:4] for v in cfg.as_list(fm.get("versions"))]:
+                indice.setdefault(_owner_key(str(fm["first_author"]).split(",")[0], y), set()).add(stem)
+    for f in notas:
+        fm = fms[f.stem]
+        if slug and slug not in {cfg.subject_slug(str(s)) for s in
+                                 cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))}:
+            continue
+        for q, v, de in lb.second_hand_rows(f.read_text(encoding="utf-8")):
+            if (bibs := lb._bibcodes(de)):
+                claves = list(bibs)
+                duenos = {cfg.note_stem(b) for b in bibs} & fms.keys()
+            else:
+                claves = [_owner_key(m.group(1), m.group(2)) for m in _OWNER_RE.finditer(de)]
+                if not claves:
+                    yield f.stem, q, v, de, None, []
+                    continue
+                corridas = [(a, str(int(y) + d)) for a, y in claves if y.isdigit()
+                            for d in (1, 2)] if _PREPRINT_RE.search(de) else []
+                duenos = set().union(*(indice.get(k, set()) for k in claves + corridas))
+            yield f.stem, q, v, de, duenos, claves
+
+
 def missing_owners(slug: str | None = None) -> tuple:
     """The OWNERS of second-hand values that the vault does not have, ranked by how many values
     depend on each one (#590).
@@ -268,41 +303,17 @@ def missing_owners(slug: str | None = None) -> tuple:
 
     Returns `(rows, population, signed, no_evaluables)`; `signed` is empty because the proposal
     closes on its own when the owner's note appears."""
-    notas = cfg.note_paths(cfg.PAPERS)
-    fms = {f.stem: cfg.split_fm(f.read_text(encoding="utf-8")) or {} for f in notas}
-    # el año de cada alias de `versions[]` (D-19) también identifica la nota: es el del preprint
-    presentes = {_owner_key(str(fm["first_author"]).split(",")[0], y)
-                 for fm in fms.values() if fm.get("first_author")
-                 for y in [fm.get("year")] + [str(v)[:4] for v in cfg.as_list(fm.get("versions"))]}
     faltan: dict = {}          # clave → [celda tal cual, n valores, {papers}]
     poblacion = no_eval = 0
-    for f in notas:
-        fm = fms[f.stem]
-        if slug and slug not in {cfg.subject_slug(str(s)) for s in
-                                 cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))}:
-            continue
-        for _q, _v, de in lb.second_hand_rows(f.read_text(encoding="utf-8")):
-            poblacion += 1
-            bibs = lb._bibcodes(de)
-            if bibs:
-                if any(cfg.note_stem(b) in fms for b in bibs):
-                    continue
-                claves = list(bibs)
-            else:
-                claves = [_owner_key(m.group(1), m.group(2)) for m in _OWNER_RE.finditer(de)]
-                if not claves:
-                    no_eval += 1
-                    continue
-                if _PREPRINT_RE.search(de):
-                    claves_pub = [(a, str(int(y) + d)) for a, y in claves if y.isdigit() for d in (1, 2)]
-                else:
-                    claves_pub = []
-                if any(k in presentes for k in claves + claves_pub):
-                    continue
+    for a, _q, _v, de, duenos, claves in _second_hand_owners(slug):
+        poblacion += 1
+        if duenos is None:
+            no_eval += 1
+        elif not duenos:
             # la celda va TAL CUAL (la primera que nombró a este dueño): es lo que se busca
             e = faltan.setdefault(claves[0], [lb.truncate_claim(de.strip(), 80), 0, set()])
             e[1] += 1
-            e[2].add(f.stem)
+            e[2].add(a)
     orden = sorted(faltan.values(), key=lambda e: (-e[1], e[0]))
     filas = [(cita, f"{n} valor(es) en {len(ps)} paper(s)", "",
               "lo citan: " + ", ".join(sorted(ps)[:3]) + (f" (+{len(ps) - 3})" if len(ps) > 3 else ""))
@@ -310,6 +321,51 @@ def missing_owners(slug: str | None = None) -> tuple:
     if (resto := orden[MISSING_OWNERS_TOP:]):
         filas.append((f"… y {len(resto)} dueño(s) más", f"{sum(e[1] for e in resto)} valor(es)",
                       "", ""))
+    return filas, poblacion, [], no_eval
+
+
+def _decimales(token: str) -> int:
+    """How many decimals a quantity token carries — the precision A quotes it with (#590)."""
+    return len(token.split(".")[1]) if "." in token else 0
+
+
+def unconfirmed_second_hand(slug: str | None = None) -> tuple:
+    """Second-hand values whose owner B IS in the vault but whose number is not in B's text (#590).
+
+    The second half of #590: the value was verified against A, the paper that repeated it, and B
+    sat on disk unread. Each value's specific quantities (`lb.quantities`) are looked for in B's
+    `.txt`, **rounded to the precision A quotes** — A citing `3.24 d` for B's `3.2357 d` is the
+    normal case, not a finding (measured on Almagesto-Tesis: rounding turns 159 misses into 109).
+
+    ⛔ The silence does NOT accuse (#318): the `.txt` loses tables-as-image and equations without
+    warning (#205), and a surname + year can resolve to the wrong paper. So this is a PROPOSAL
+    —*open B's PDF*— never a lint finding. Not evaluable, counted apart: a value with no specific
+    quantity, B without `.txt`, or B being A itself. Rows are grouped by B, so one PDF opened
+    settles all of its rows. Returns `(rows, population, signed, no_evaluables)`."""
+    txts: dict = {}
+    for t in cfg.FULLTEXT.glob("**/*.txt") if cfg.FULLTEXT.exists() else []:
+        txts.setdefault(t.stem, t)
+    redondeos: dict = {}       # B → sus cantidades redondeadas a 0..4 decimales
+    filas, poblacion, no_eval = [], 0, 0
+    for a, q, v, _de, duenos, _claves in _second_hand_owners(slug):
+        if not duenos or duenos == {a}:
+            continue
+        poblacion += 1
+        cantidades = lb.quantities(v)
+        for b in duenos - redondeos.keys():
+            t = txts.get(cfg.note_stem(b))
+            redondeos[b] = {f"{float(x):.{d}f}" for x in lb.quantities(
+                t.read_text(encoding="utf-8", errors="replace")) for d in range(5)} if t else set()
+        en_b = set().union(*(redondeos[b] for b in duenos))
+        if not cantidades or not en_b:
+            no_eval += 1
+        elif not any(f"{float(x):.{_decimales(x)}f}" in en_b for x in cantidades):
+            filas.append((", ".join(sorted(duenos)), a, lb.truncate_claim(v.strip(), 80),
+                          lb.truncate_claim(q.strip(), 60)))
+    filas.sort()
+    if len(filas) > MISSING_OWNERS_TOP:
+        filas = filas[:MISSING_OWNERS_TOP] + [(f"… y {len(filas) - MISSING_OWNERS_TOP} valor(es) más",
+                                               "", "", "")]
     return filas, poblacion, [], no_eval
 
 
@@ -329,6 +385,7 @@ def report(slug: str | None = None) -> int:
     cfg.print_seguro(f"# Propuestas pendientes — {ambito}\n")
     total = 0
     *duenos, no_eval = missing_owners(slug)
+    *sin_confirmar, no_eval_b = unconfirmed_second_hand(slug)
     for titulo, (filas, poblacion, firmadas), unidad, como, firma in (
         ("📐 Ampliar el `alcance` de una fuente larga (#241)", scope_requests(slug), "extracciones",
          "editá `sources[].alcance` en `themes.yaml` y corré `make_notes.py --restamp-alcance`",
@@ -346,6 +403,12 @@ def report(slug: str | None = None) -> int:
          tuple(duenos), f"valores de segunda mano ({no_eval} sin dueño identificable: no evaluables)",
          "si querés confirmarlos en su fuente: `extra_core` + cadena, o `append-knowledge`",
          (FIRMA_SE_CIERRA_SOLA, "el dueño desaparece de la lista cuando su nota existe")),
+        ("🔎 Valor de segunda mano que el texto de su dueño B no muestra — verificalo en el PDF (#590)",
+         tuple(sin_confirmar), f"valores con dueño en la bóveda ({no_eval_b} no evaluables)",
+         "abrí el PDF de B: si lo dice, nada que hacer; si dice otro número, corregí la vista de A",
+         (FIRMA_NO_CRUZABLE, "no hay dónde firmarlo todavía: el `.txt` pierde tablas-imagen sin "
+                             "avisar (#205), así que el silencio NO acusa (#318) y la fila trae "
+                             "B · A · valor · qué para ir directo al PDF")),
     ):
         estado, porque = firma
         cfg.print_seguro(f"## {titulo} — {len(filas)}")

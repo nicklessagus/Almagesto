@@ -1811,3 +1811,12 @@ clave apellido + año que no sea el caso preprint declarado), o si un dueño pre
 Sin migración. `python scripts/proposals.py`: «Bonfils et al. (2011, submitted)» ya no figura (es
 2013A&A...549A.109B); «Mayor et al. (2008)» y «Bonfils et al. (2012)» sin marca siguen (límite
 declarado). **Devolver si** un dueño REALMENTE ausente desaparece de la lista por el corrimiento de año.
+
+## §#590 · v1.402.0 — el valor de segunda mano se busca en el texto de su dueño
+
+Sin migración (sólo lee). `python scripts/proposals.py`: categoría *🔎 Valor de segunda mano que el
+texto de su dueño B no muestra* (medido en una copia: 1643 con dueño, 801 no evaluables, 110 filas).
+Abrir el PDF de B para ~10 filas y clasificarlas: B dice el número (falso aviso del `.txt`) · B dice
+OTRO número (hallazgo real en la vista de A) · B no es el dueño (mala resolución). **Devolver si**
+los falsos avisos son la gran mayoría sin una causa común arreglable, o si una fila con el número
+literal en el `.txt` de B aparece en la lista.

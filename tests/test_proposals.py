@@ -323,3 +323,37 @@ def test_el_preprint_citado_casa_con_el_publicado_SOLO_si_la_celda_lo_marca(toy_
                            ["Bonfils et al. (2011, submitted)", "Bonfils et al. (2012)",
                             "Mayor et al. (2008)"])
     assert [a for a, *_ in pr.missing_owners()[0]] == ["Bonfils et al. (2012)"]
+
+
+def _txt(bib: str, texto: str) -> None:
+    (cfg.FULLTEXT / "gj_1").mkdir(parents=True, exist_ok=True)
+    (cfg.FULLTEXT / "gj_1" / f"{bib}.txt").write_text(texto, encoding="utf-8")
+
+
+def test_el_valor_que_el_texto_del_dueno_no_muestra_se_propone_REDONDEO_tolerado(toy_vault):
+    """#590 mitad 2 — el dueño B está en la bóveda: el número de A se busca en el `.txt` de B,
+    redondeado a la precisión con que A lo cita (3.24 por 3.2357 no es hallazgo). Lo que no aparece
+    se PROPONE —abrí el PDF—, nunca se acusa (#318). Sin cantidad específica, sin `.txt` de B o con
+    B == A: no evaluable."""
+    _nota_con_segunda_mano("2012D", "Dumusque, X.", 2012, [])
+    _nota_con_segunda_mano("2007U", "Udry, S.", 2007, [])
+    _txt("2012D", "We find P = 3.2357 d and a semi-amplitude of 0.51 m/s.")
+    cfg.PAPERS.joinpath("2015P.md").write_text(
+        "---\nbibcode: 2015P\nfirst_author: Pepe, F.\nyear: 2015\nstars: [GJ 1]\n---\n\n## Vista — GJ 1\n\n"
+        "| Qué | Valor | Localizador | Régimen | Segunda mano |\n|---|---|---|---|---|\n"
+        "| P | 3.24 d | L1 | — | Dumusque et al. 2012 |\n"
+        "| K | 0.77 m/s | L2 | — | Dumusque et al. 2012 |\n"
+        "| edad | vieja | L3 | — | Dumusque et al. 2012 |\n"
+        "| e | 0.19 | L4 | — | Udry et al. (2007) |\n"
+        "| Teff | 5172.5 K | L5 | — | Pepe et al. (2015) |\n"
+        "| M | 0.83 Msun | L6 | — | Mayor et al. 2009 |\n", encoding="utf-8")
+    filas, poblacion, firmadas, no_eval = pr.unconfirmed_second_hand()
+    assert (poblacion, no_eval, firmadas) == (4, 2, []), "el dueño AUSENTE es de la otra categoría"
+    assert [(b, a, v) for b, a, v, _q in filas] == [("2012D", "2015P", "0.77 m/s")]
+
+
+def test_la_cola_de_valores_sin_confirmar_se_DECLARA(toy_vault, monkeypatch):
+    """#590 — pasado el tope, lo que queda afuera se cuenta en una fila final, nunca se calla."""
+    test_el_valor_que_el_texto_del_dueno_no_muestra_se_propone_REDONDEO_tolerado(toy_vault)
+    monkeypatch.setattr(pr, "MISSING_OWNERS_TOP", 0)
+    assert pr.unconfirmed_second_hand()[0] == [("… y 1 valor(es) más", "", "", "")]
