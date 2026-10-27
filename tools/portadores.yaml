@@ -1771,6 +1771,9 @@ portadores:
       - modulo: scripts/hal.py
         estado: fuera-de-alcance
         motivo: "Usa `method_key` sólo para normalizar título y apellido al comparar (#505); no toca `methods` ni la matriz."
+      - modulo: scripts/proposals.py
+        estado: fuera-de-alcance
+        motivo: "`_owner_key` (#590) reusa `method_key` como normalizador de un APELLIDO (casefold + NFKD), no compara métodos: no toca el join de `methods` ni la matriz."
 
   - issue: 432
     regla: >-
@@ -3051,6 +3054,9 @@ portadores:
           filas estampadas con `…` tienen un span abierto. Hacerlo llevar `truncate_claim` movería
           los 435 cortes a borde de palabra y dejaría desactualizado todo roll-up estampado por un
           defecto no observado; vuelve si aparece un título con fórmula partida.
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: "`missing_owners` (#590) trunca la celda *Segunda mano* que muestra con `truncate_claim`."
   - issue: 564
     regla: >-
       Una etiqueta de página tiene UNA gramática (`lib_quotes.PAGE_LABEL`): número, o prefijo de

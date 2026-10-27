@@ -227,6 +227,80 @@ def empty_axis_cells(slug: str | None = None) -> tuple:
     return out, poblacion, []
 
 
+#: #590 · el dueño de un valor de segunda mano en posición de cita: apellido (con su «et al.», «and
+#: X» o «& X» opcional) seguido de un año. Sólo se usa el ÚLTIMO token del apellido como clave, que
+#: es lo que empareja «van Leeuwen (2007)» con `first_author: van Leeuwen, F.`.
+_OWNER_RE = re.compile(
+    r"([A-ZÁÉÍÓÚÑÜ][\wÁÉÍÓÚÑÜáéíóúñü'\-]+)(?:\s+et\s+al\.?|\s+(?:and|&|y)\s+[A-ZÁÉÍÓÚÑÜ][\w'\-]+)?"
+    r",?\s*\(?((?:19|20)\d\d)")
+#: Cuántos dueños ausentes se listan; el resto se DECLARA en una fila final, nunca se calla.
+#: ponytail: tope fijo, flag `--todos` si alguien necesita la cola entera.
+MISSING_OWNERS_TOP = 25
+
+
+def _owner_key(surname: str, year) -> tuple:
+    """`(last surname token, year)` — the join key between a *Segunda mano* cell and a note (#590)."""
+    toks = cfg.method_key(surname).split("-")
+    return (toks[-1] if toks else "", str(year or "").strip()[:4])
+
+
+def missing_owners(slug: str | None = None) -> tuple:
+    """The OWNERS of second-hand values that the vault does not have, ranked by how many values
+    depend on each one (#590).
+
+    #103 marks «this number is B's» and #279/#433 make the star note say so, but the value is only
+    ever verified against A, the paper that repeated it. Measured on a real vault: 1455 of 3388
+    second-hand values point to a paper with no note. Each row is one owner, with how many values
+    and which papers lean on it: the list of primary sources worth fetching, decided by curation
+    (`extra_core` / `append-knowledge`) — never ingested on its own, since many are catalogues or
+    calibrations outside the lens.
+
+    The owner is resolved by a `[[bibcode]]` in the cell (present iff its note exists) or by
+    surname + year against `first_author`/`year` of every paper note. A cell naming no one that way
+    («Tabla 1 compila de la literatura») is NOT EVALUABLE and is counted apart (D-43): it is not a
+    missing owner, and it is not a present one either.
+
+    Returns `(rows, population, signed, no_evaluables)`; `signed` is empty because the proposal
+    closes on its own when the owner's note appears."""
+    notas = cfg.note_paths(cfg.PAPERS)
+    fms = {f.stem: cfg.split_fm(f.read_text(encoding="utf-8")) or {} for f in notas}
+    presentes = {_owner_key(str(fm.get("first_author") or "").split(",")[0], fm.get("year"))
+                 for fm in fms.values() if fm.get("first_author")}
+    faltan: dict = {}          # clave → [celda tal cual, n valores, {papers}]
+    poblacion = no_eval = 0
+    for f in notas:
+        fm = fms[f.stem]
+        if slug and slug not in {cfg.subject_slug(str(s)) for s in
+                                 cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))}:
+            continue
+        for _q, _v, de in lb.second_hand_rows(f.read_text(encoding="utf-8")):
+            poblacion += 1
+            bibs = lb._bibcodes(de)
+            if bibs:
+                if any(cfg.note_stem(b) in fms for b in bibs):
+                    continue
+                claves = list(bibs)
+            else:
+                claves = [_owner_key(m.group(1), m.group(2)) for m in _OWNER_RE.finditer(de)]
+                if not claves:
+                    no_eval += 1
+                    continue
+                if any(k in presentes for k in claves):
+                    continue
+            # la celda va TAL CUAL (la primera que nombró a este dueño): es lo que se busca
+            e = faltan.setdefault(claves[0], [lb.truncate_claim(de.strip(), 80), 0, set()])
+            e[1] += 1
+            e[2].add(f.stem)
+    orden = sorted(faltan.values(), key=lambda e: (-e[1], e[0]))
+    filas = [(cita, f"{n} valor(es) en {len(ps)} paper(s)", "",
+              "lo citan: " + ", ".join(sorted(ps)[:3]) + (f" (+{len(ps) - 3})" if len(ps) > 3 else ""))
+             for cita, n, ps in orden[:MISSING_OWNERS_TOP]]
+    if (resto := orden[MISSING_OWNERS_TOP:]):
+        filas.append((f"… y {len(resto)} dueño(s) más", f"{sum(e[1] for e in resto)} valor(es)",
+                      "", ""))
+    return filas, poblacion, [], no_eval
+
+
 #: #435 · DÓNDE aterriza la firma de cada categoría, y si el barrido puede cruzarla. Los tres
 #: estados de D-43, porque las dos formas de no poder cerrarse piden cosas opuestas: una se arregla
 #: cruzando (y se cruzó), la otra sólo se puede DECLARAR — y mostrarlas iguales es lo que dejó 60 de
@@ -242,6 +316,7 @@ def report(slug: str | None = None) -> int:
     ambito = f"`{slug}`" if slug else "toda la bóveda"
     cfg.print_seguro(f"# Propuestas pendientes — {ambito}\n")
     total = 0
+    *duenos, no_eval = missing_owners(slug)
     for titulo, (filas, poblacion, firmadas), unidad, como, firma in (
         ("📐 Ampliar el `alcance` de una fuente larga (#241)", scope_requests(slug), "extracciones",
          "editá `sources[].alcance` en `themes.yaml` y corré `make_notes.py --restamp-alcance`",
@@ -255,6 +330,10 @@ def report(slug: str | None = None) -> int:
          empty_axis_cells(slug), "notas con inventario",
          "buscá ese eje en esa fuente, o declaralo hueco",
          (FIRMA_SE_CIERRA_SOLA, "lee la NOTA: la celda llena desaparece de la tabla")),
+        ("📎 Fuente ORIGINAL de un valor de segunda mano que la bóveda no tiene (#590)",
+         tuple(duenos), f"valores de segunda mano ({no_eval} sin dueño identificable: no evaluables)",
+         "si querés confirmarlos en su fuente: `extra_core` + cadena, o `append-knowledge`",
+         (FIRMA_SE_CIERRA_SOLA, "el dueño desaparece de la lista cuando su nota existe")),
     ):
         estado, porque = firma
         cfg.print_seguro(f"## {titulo} — {len(filas)}")

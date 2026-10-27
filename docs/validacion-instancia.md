@@ -1796,3 +1796,12 @@ filas, y borrarlas de nuevo (`nuevo: null` + `retira`) tiene que devolver el arc
 `{"n", "mover": <bloque>, "despues_de": <ancla>}` (caso F2-08 de harps-drs) tiene que dejar los pares
 iguales y volver byte a byte al moverlo de regreso. **Devolver si** una fila con celdas de más entra,
 si los pares de una inserción no suman al piso, o si una ida y vuelta no reproduce el archivo.
+
+## §#590 · v1.401.0 — la fuente original de un valor de segunda mano se propone
+
+Sin migración (sólo lee). `python scripts/proposals.py` tiene que mostrar la categoría *📎 Fuente
+ORIGINAL…* con población = valores de segunda mano de la bóveda (medido en Almagesto-Tesis: 3388, 396
+no evaluables, top van Leeuwen 2007 con 35). Revisar a mano los ~10 primeros dueños: cada uno tiene que
+estar **ausente** del corpus de verdad. **Devolver si** alguno está presente (falso ausente por la
+clave apellido + año que no sea el caso preprint declarado), o si un dueño presente en una celda con
+`[[bibcode]]` aparece en la lista.

@@ -2218,6 +2218,14 @@ motivo textual** —no una categoría: en seis meses sirve el motivo—, declara
 propuesta ya firmada seguía en pantalla con el mismo `→` que alguien ya corrió —**60 de 62 eran
 permanentes**— porque el productor leía un artefacto versionado y **no regenerable** (#311) mientras
 la firma aterrizaba en otro lado. Lo firmado se lista **aparte** (AUD-207), nunca silenciado.
+**Y la fuente ORIGINAL de un valor de segunda mano que la bóveda no tiene es una propuesta (#590):**
+la vista marca «el número es de B» (#103) y el lint obliga a la ficha a decirlo (#279/#433), pero el
+valor sólo se verificaba contra A. `missing_owners` resuelve el dueño por `[[bibcode]]` en la celda o
+por apellido + año contra `first_author`/`year`, y lista los ausentes **rankeados por cuántos valores
+dependen de cada uno** (medido: 1455 de 3388 en una bóveda real). Se cierra sola cuando la nota de B
+existe; traerla es curación (`extra_core` / `append-knowledge`), nunca automático. La celda que no
+nombra a nadie así es **no evaluable** y se cuenta aparte (D-43). ⚠ Clave heurística: el año de un
+preprint citado (`2011, submitted`) no casa con el del publicado y sale como ausente.
 
 #### A · Lint (chequeo de salud)
 

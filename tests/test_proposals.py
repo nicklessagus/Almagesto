@@ -260,3 +260,51 @@ def test_el_reporte_declara_lo_que_NO_puede_barrer(toy_vault, capsys):
     salida = capsys.readouterr().out
     assert "NO BARRIBLE" in salida and "ejes descubiertos" in salida
     assert "NO es la deuda del lint" in salida, "propuesta y deuda son dos colas distintas"
+
+
+def _nota_con_segunda_mano(bib: str, autor: str, anio: int, duenos: list,
+                           stars: str = "[GJ 1]") -> None:
+    """Una nota de paper cuya vista marca valores de SEGUNDA MANO, uno por dueño (#590)."""
+    filas = "\n".join(f"| P_rot | 4{i}.3 d | L{i} | — | {d} |" for i, d in enumerate(duenos))
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / f"{bib}.md").write_text(
+        f"---\nbibcode: {bib}\nfirst_author: {autor}\nyear: {anio}\nstars: {stars}\n---\n\n## Abstract\n\nx\n\n"
+        f"## Vista — GJ 1\n\n| Qué | Valor | Localizador | Régimen | Segunda mano |\n"
+        f"|---|---|---|---|---|\n{filas}\n", encoding="utf-8")
+
+
+def test_el_dueno_ausente_de_un_valor_de_segunda_mano_se_propone_rankeado(toy_vault):
+    """#590 — la vista dice «el número es de B» y nadie mira si B está en la bóveda. El dueño
+    ausente se propone, rankeado por cuántos valores dependen de él; el presente no; la celda que
+    no nombra a nadie es NO EVALUABLE (D-43), no un dueño faltante."""
+    _nota_con_segunda_mano("2020A", "Díaz, R. F.", 2020,
+                           ["van Leeuwen (2007)", "van Leeuwen (2007)", "Lovis et al. 2011",
+                            "Tabla 1 compila de la literatura", "—"])
+    _nota_con_segunda_mano("2011L", "Lovis, C.", 2011, ["Sousa et al. (2008)"])
+    # «van Leeuwen» con nota: la clave es el ÚLTIMO token del apellido, de los dos lados
+    filas, poblacion, firmadas, no_eval = pr.missing_owners()
+    assert poblacion == 5 and no_eval == 1 and firmadas == []
+    assert [(a, b) for a, b, _m, _c in filas] == [
+        ("van Leeuwen (2007)", "2 valor(es) en 1 paper(s)"),
+        ("Sousa et al. (2008)", "1 valor(es) en 1 paper(s)")], "Lovis 2011 está: no se propone"
+    _nota_con_segunda_mano("2007VL", "van Leeuwen, F.", 2007, [])
+    assert [a for a, *_ in pr.missing_owners()[0]] == ["Sousa et al. (2008)"], \
+        "se cierra sola cuando la nota del dueño existe"
+
+
+def test_el_dueno_por_BIBCODE_el_slug_y_la_cola_DECLARADA(toy_vault, monkeypatch):
+    """#590 — la celda que linkea `[[bibcode]]` se resuelve por la NOTA (no por apellido); `<slug>`
+    acota a los papers que reclaman el sujeto; y lo que queda fuera del tope se DECLARA en una fila
+    final, nunca se calla."""
+    (cfg.CONFIG / "stars.yaml").write_text("GJ 1:\n  slug: gj_1\nGJ 2:\n  slug: gj_2\n",
+                                           encoding="utf-8")
+    _nota_con_segunda_mano("2020A", "Díaz, R. F.", 2020,
+                           ["[[2011A&A...999A...1X]]", "[[2020A]] (la propia)", "Udry et al. 2007"])
+    _nota_con_segunda_mano("2021B", "Pepe, F.", 2021, ["Mayor et al. 2009"], stars="[GJ 2]")
+    filas = pr.missing_owners()[0]
+    assert {a for a, *_ in filas} == {"[[2011A&A...999A...1X]]", "Udry et al. 2007",
+                                      "Mayor et al. 2009"}, "el bibcode con nota no se propone"
+    assert {a for a, *_ in pr.missing_owners("gj_2")[0]} == {"Mayor et al. 2009"}
+    monkeypatch.setattr(pr, "MISSING_OWNERS_TOP", 1)
+    filas = pr.missing_owners()[0]
+    assert len(filas) == 2 and filas[-1][:2] == ("… y 2 dueño(s) más", "2 valor(es)")

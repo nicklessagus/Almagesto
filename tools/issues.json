@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-25",
+ "fetched": "2026-10-27",
  "issues": [
   {
    "number": 2,
@@ -2934,6 +2934,11 @@
   {
    "number": 589,
    "title": "query_ads: una estrella con cero papers en título/abstract no se puede ingestar — el cero de #27 no tiene salida declarada para estrellas",
+   "state": "CLOSED"
+  },
+  {
+   "number": 590,
+   "title": "Un valor de segunda mano no se rastrea hasta su dueño: 1455 de 3388 apuntan a un paper ausente del corpus, y ninguno se cruza contra B",
    "state": "OPEN"
   }
  ]
