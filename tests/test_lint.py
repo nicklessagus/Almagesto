@@ -11926,3 +11926,9 @@ def test_591_segunda_mano_verificada_sin_localizador_BLOQUEA(toy_vault, capsys):
     cat = lint.collect().por_clave("fm_broken")
     assert any("segunda_mano_verificada" in m and "localizador" in m for _s, m in cat.items), cat.items
     assert run_lint(capsys)[0] == 1
+
+
+def test_592_data_availability_localizador_lista_es_incompleto(toy_vault):
+    ok = {"doi": "10.1/x", "que": "RVs", "localizador": "p. 4"}
+    assert lint.check_data_availability("b", {"data_availability": [ok]}) == []
+    assert lint.check_data_availability("b", {"data_availability": [dict(ok, localizador=[4])]})

@@ -1842,3 +1842,12 @@ válida sigue dejando la fila pendiente.
 Sin migración. Con una `segunda_mano_verificada` de `que` ajeno, `python scripts/proposals.py` la
 muestra **primera** en 🔎, aunque la categoría pase el tope de 25. **Devolver si** queda dentro del
 «… y N más».
+
+## §#592 · v1.404.0 — un campo de firma es texto, no «lo que quede tras `str()`»
+
+Sin migración (medido en Tesis: 0 firmas mal formadas). Repetir las cinco filas de la medición del
+issue: `localizador: [7]`, `que: ['q']`, `ancla: [1]`, `pagina: [7]` y el `<…>` sin completar tienen
+que dar frontmatter inválido (bloqueante). Lo mismo para `motivo: [m]` en `acepta_preprint`
+(aborta) y en `metadata_revisada` (`rota`), y `data_availability` con `localizador: [4]` vuelve a
+backlog. **Devolver si** alguna pasa, o si una firma legítima de Tesis (número de página, fecha
+YAML, autores como lista en `metadata_revisada`) empieza a bloquear.

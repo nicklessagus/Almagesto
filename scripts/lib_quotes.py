@@ -1483,9 +1483,8 @@ def load_reviewed_quotes(meta: dict, *, entry: str = "?") -> list:
                                            "de strings: sin `ref` y `cita` no dice QUÉ cita se leyó"))
     out = []
     for x in v:
-        campos = {k: ("" if x.get(k) is None else str(x.get(k))).strip() for k in REVIEWED_QUOTE_KEYS}
-        faltan = [k for k, val in campos.items()
-                  if not val or (val.startswith("<") and val.endswith(">"))]
+        campos = {k: cfg.signature_text(x, k) for k in REVIEWED_QUOTE_KEYS}
+        faltan = [k for k, val in campos.items() if not val]
         if faltan:
             raise cfg.VistasError(forma.format(f"a una entrada de `cita_revisada` le falta "
                                                f"{', '.join(faltan)} (o quedó el `<…>` de la plantilla)"))

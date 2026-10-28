@@ -3538,3 +3538,24 @@ portadores:
       - modulo: scripts/harvest_views.py
         estado: usa
         motivo: "El cosechador escribe salvedades y celdas con `escape_dollars`; `--restamp-salvedades` compara contra eso (#453)."
+
+  - issue: 592
+    regla: >-
+      Un campo obligatorio de una firma (o de un puntero que la nota afirma) tiene que ser TEXTO, no
+      «algo que tras `str()` no queda vacío»: `[7]` o `{a: 1}` pasaban como `"[7]"`, y el `<…>` de la
+      forma canónica se pegaba sin completar. Texto, número o fecha YAML; lo demás, falta.
+    funcion: lib_config.signature_text
+    patron: 'get\(k\) or'
+    consumidores:
+      - modulo: scripts/lib_quotes.py
+        estado: usa
+        motivo: "`load_reviewed_quotes` (`cita_revisada`, #516) juzga sus cinco claves con la misma función."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_data_availability` (#424) pide `que`/`localizador`/`doi|url` como texto."
+      - modulo: scripts/citation_index.py
+        estado: fuera-de-alcance
+        motivo: "El `get(k) or` es un lookup en el índice, no un campo de firma."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "El `get(k) or` arma la celda de una vista; no valida una firma."

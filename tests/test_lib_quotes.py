@@ -1307,3 +1307,11 @@ def test_586_short_quote_verdict_por_PALABRA_entera_y_por_vocabulario_de_la_fuen
     assert lq.short_quote_verdict("no daña", src) == "glosa"
     assert lq.short_quote_verdict("no daña", []) == "no_evaluable"
     assert lq.short_quotes_in("«no» «star b» «" + "x" * 40 + "»") == ["star b"]
+
+
+@pytest.mark.parametrize("malo", [[7], {"a": 1}])
+def test_592_cita_revisada_pagina_que_no_es_texto_BLOQUEA(toy_vault, malo):
+    base = {"ref": "B", "cita": "c", "pdf_sha": "abc", "pagina": 7, "motivo": "m"}
+    assert lq.load_reviewed_quotes({"cita_revisada": [base]})
+    with pytest.raises(cfg.VistasError):
+        lq.load_reviewed_quotes({"cita_revisada": [dict(base, pagina=malo)]})

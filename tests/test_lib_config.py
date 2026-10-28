@@ -4332,3 +4332,41 @@ def test_la_firma_de_segunda_mano_verificada_es_de_FORMA_DURA():
     ok = {"ref": " B ", "que": "K", "localizador": "p. 4", "motivo": "m", "extra": 1}
     assert cfg.load_verified_second_hand({"segunda_mano_verificada": [ok]}) == [
         dict(ok, ref="B")], "normaliza los campos y conserva el resto"
+
+
+@pytest.mark.parametrize("loader,base,campo", [
+    ("load_reviewed_second_hand", {"ref": "B", "que": "K", "motivo": "m"}, "motivo"),
+    ("load_verified_second_hand", {"ref": "B", "que": "K", "localizador": "p. 3", "motivo": "m"},
+     "localizador"),
+    ("load_reviewed_warn", {"categoria": "impl_leaks", "ancla": "a1", "motivo": "m"}, "ancla"),
+])
+@pytest.mark.parametrize("malo", [[7], {"a": 1}, "<dónde lo dice B>", True])
+def test_592_campo_de_firma_que_no_es_texto_BLOQUEA(toy_vault, loader, base, campo, malo):
+    import lib_config as cfg
+    clave = {"load_reviewed_second_hand": "segunda_mano_revisada",
+             "load_verified_second_hand": "segunda_mano_verificada",
+             "load_reviewed_warn": "warn_revisada"}[loader]
+    assert getattr(cfg, loader)({clave: [base]}, entry="n")
+    with pytest.raises(cfg.VistasError):
+        getattr(cfg, loader)({clave: [dict(base, **{campo: malo})]}, entry="n")
+
+
+def test_592_signature_text_acepta_numero_y_fecha_no_lista(toy_vault):
+    import datetime
+    import lib_config as cfg
+    assert cfg.signature_text({"p": 7}, "p") == "7"
+    assert cfg.signature_text({"f": datetime.date(2026, 10, 27)}, "f") == "2026-10-27"
+    assert cfg.signature_text({"p": [7]}, "p") == ""
+    assert cfg.signature_text({"p": "<p>"}, "p") == ""
+
+
+def test_592_acepta_preprint_y_metadata_revisada_rechazan_lista(toy_vault):
+    import lib_config as cfg
+    with pytest.raises(SystemExit):
+        cfg.load_acepta_preprint({"acepta_preprint": [{"bibcode": "B", "motivo": ["m"],
+                                                       "fecha": "2026-10-27"}]}, entry="s")
+    firma = {"campo": "author", "declarado": ["A", "B"], "catalogo": ["A"], "motivo": "m",
+             "fecha": "2026-10-27"}
+    assert cfg.metadata_review({"metadata_revisada": [firma]}, "author", ["A", "B"], ["A"])[0] == "firmada"
+    assert cfg.metadata_review({"metadata_revisada": [dict(firma, motivo={"a": 1})]},
+                               "author", ["A", "B"], ["A"])[0] == "rota"

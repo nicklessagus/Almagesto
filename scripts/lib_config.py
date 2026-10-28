@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.403.1"
+ALMAGESTO_VERSION = "1.404.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3776,7 +3776,10 @@ def metadata_review(item, campo: str, declarado, catalogo, quien: str = "`source
         if _c not in METADATA_CAMPOS:
             return "rota", (f"`campo: {_c or '(vacío)'}` fuera del vocabulario "
                             f"({', '.join(METADATA_CAMPOS)})")
-        faltan = [k for k in METADATA_REVISADA_CLAVES if not _metadata_val(e.get(k)).strip()
+        # #592 — `declarado`/`catalogo` pueden ser listas (autores): sólo el respaldo exige texto.
+        faltan = [k for k in METADATA_REVISADA_CLAVES
+                  if not (signature_text(e, k) if k in ("motivo", "fecha")
+                          else _metadata_val(e.get(k)).strip())
                   and not (k == "catalogo" and "catalogo" in e)]
         if faltan:
             return "rota", f"la firma de `{_c}` no declara {faltan}"
@@ -3950,6 +3953,20 @@ def has_published_version(bibcode) -> bool:
     return not str(bibcode or "")[4:].lower().startswith(PREPRINT_ONLY_PREFIXES)
 
 
+def signature_text(x: dict, k: str) -> str:
+    """The value of a required signature field as text, or `""` when it is not one (#592).
+
+    `str(x.get(k) or "")` let a list or a map through (`[7]` → `"[7]"`): a signature «verified at
+    `[7]`» says nowhere, and an identity field converted that way matched nothing and came out as an
+    orphan with the wrong diagnosis. Text, a number (`pagina: 7`) or a YAML date pass; anything
+    else, and the unfilled `<…>` of the canonical form, read as missing."""
+    v = x.get(k)
+    if isinstance(v, bool) or not isinstance(v, (str, int, float, _dt.date)):
+        return ""
+    t = str(v).strip()
+    return "" if t.startswith("<") and t.endswith(">") else t
+
+
 def load_acepta_preprint(meta: dict, *, entry: str = "?") -> list:
     """`acepta_preprint: [{bibcode, motivo, fecha}]` — the user's explicit decision to read the
     PREPRINT of a paper that has a published version (#512). Same HARD FORM as `extra_core` (D-58):
@@ -3960,7 +3977,7 @@ def load_acepta_preprint(meta: dict, *, entry: str = "?") -> list:
     if v is None:
         return []
     ok = isinstance(v, list) and all(
-        isinstance(x, dict) and all(str(x.get(k) or "").strip() for k in ("bibcode", "motivo", "fecha"))
+        isinstance(x, dict) and all(signature_text(x, k) for k in ("bibcode", "motivo", "fecha"))
         for x in v)
     if not ok:
         bibs = ([v] if isinstance(v, str) else
@@ -4510,7 +4527,7 @@ def load_reviewed_second_hand(meta: dict, *, entry: str = "?") -> list:
                    "la nota"))
     out = []
     for x in v:
-        campos = {k: str(x.get(k) or "").strip() for k in ("ref", "que", "motivo")}
+        campos = {k: signature_text(x, k) for k in ("ref", "que", "motivo")}
         faltan = [k for k, val in campos.items() if not val]
         if faltan:
             raise VistasError(_reviewed_second_hand_error(
@@ -4546,7 +4563,7 @@ def load_verified_second_hand(meta: dict, *, entry: str = "?") -> list:
                                        "lista de strings: sin `ref` y `que` no dice QUÉ se verificó"))
     out = []
     for x in v:
-        campos = {k: str(x.get(k) or "").strip() for k in ("ref", "que", "localizador", "motivo")}
+        campos = {k: signature_text(x, k) for k in ("ref", "que", "localizador", "motivo")}
         if (faltan := [k for k, val in campos.items() if not val]):
             raise VistasError(forma.format(f"a una entrada de `segunda_mano_verificada` le falta "
                                            f"{', '.join(faltan)}"))
@@ -4584,7 +4601,7 @@ def load_reviewed_warn(meta: dict, *, entry: str = "?") -> list:
                                        "strings: sin `categoria` y `ancla` no dice QUÉ hit se revisó"))
     out = []
     for x in v:
-        campos = {k: str(x.get(k) or "").strip() for k in ("categoria", "ancla", "motivo")}
+        campos = {k: signature_text(x, k) for k in ("categoria", "ancla", "motivo")}
         faltan = [k for k, val in campos.items() if not val]
         if faltan:
             raise VistasError(forma.format(f"a una entrada de `warn_revisada` le falta "

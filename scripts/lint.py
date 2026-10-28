@@ -5402,8 +5402,8 @@ def check_data_availability(stem: str, fm: dict) -> list:
             filas.append((stem, f"`data_availability[{i}]` no es un mapa: se espera "
                                 f"`{{doi|url, que, localizador}}` (#424)"))
             continue
-        faltan = [k for k in ("que", "localizador") if not str(d.get(k) or "").strip()]
-        if not str(d.get("doi") or "").strip() and not str(d.get("url") or "").strip():
+        faltan = [k for k in ("que", "localizador") if not cfg.signature_text(d, k)]
+        if not cfg.signature_text(d, "doi") and not cfg.signature_text(d, "url"):
             faltan.insert(0, "doi|url")
         if faltan:
             filas.append((stem, f"`data_availability[{i}]` sin {', '.join(f'`{k}`' for k in faltan)}"

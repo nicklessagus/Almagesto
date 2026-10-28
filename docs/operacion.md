@@ -2238,7 +2238,9 @@ tablas-imagen (#205), una calibración citada (Noyes 1984 para un $\log R'_{HK}$
 valor que A calculó con ella, y apellido + año puede resolver al paper equivocado. **Lo verificado en
 el PDF de B se firma en la nota de A (#591):** `segunda_mano_verificada: [{ref, que, localizador,
 motivo}]` (forma dura, D-58: sin `localizador` el lint bloquea) — la fila sale de lo pendiente y se
-lista aparte (AUD-207), y la firma que no exime ninguna fila se propone sacar (#256).
+lista aparte (AUD-207), y la firma que no exime ninguna fila se propone sacar (#256). **Sus campos
+son texto (#592):** una lista, un mapa o el `<…>` de la plantilla cuentan como faltantes, igual en
+las firmas hermanas (`lib_config.signature_text`).
 
 #### A · Lint (chequeo de salud)
 
