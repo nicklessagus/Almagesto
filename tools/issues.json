@@ -2945,6 +2945,11 @@
    "number": 591,
    "title": "La verificación en el PDF de B no se puede firmar: las filas de 🔎 (#590) son propuestas permanentes, la forma de #435",
    "state": "CLOSED"
+  },
+  {
+   "number": 592,
+   "title": "Las firmas aceptan una lista o un mapa como campo obligatorio: str() lo vuelve no-vacío (localizador: [7] pasa)",
+   "state": "OPEN"
   }
  ]
 }
