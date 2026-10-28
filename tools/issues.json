@@ -2949,7 +2949,7 @@
   {
    "number": 592,
    "title": "Las firmas aceptan una lista o un mapa como campo obligatorio: str() lo vuelve no-vacío (localizador: [7] pasa)",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
