@@ -5320,7 +5320,7 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
         _fuente = _sa.get("fuente") or "la segunda autoridad"
         if _estado == "firmada":
             bibtex_drift_firmado.append(
-                (stem, f"`pages`: revisado contra el PDF, firmado el {_firma.get('fecha')} — "
+                (stem, f"`pages`: firmado el {_firma.get('fecha')} — "
                        f"{_firma.get('motivo')}"))
         else:
             bibtex_drift.append(

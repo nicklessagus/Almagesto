@@ -549,8 +549,8 @@ def firmar(stem: str, campo: str, motivo: str) -> int:
         cfg.print_seguro(f"⚠ hay una firma que NO cubre el hallazgo de hoy: {detalle}\n"
                          f"  → reemplazá esa entrada por la de abajo (no agregues una segunda)\n")
     cfg.print_seguro(f"Drift de `pages`: la exportación (`{fm.get('bibtex_source')}`) dice "
-                     f"«{declarado}», Crossref dice «{catalogo}» — el motivo dice cuál imprime el "
-                     f"PDF\n" if campo == "pages" else
+                     f"«{declarado}», Crossref dice «{catalogo}» — el motivo dice cuál rige y con "
+                     f"qué evidencia (el PDF, si lo hay)\n" if campo == "pages" else
                      f"Drift de `{campo}`: la nota dice «{declarado}», la exportación oficial "
                      f"(`{fm.get('bibtex_source')}`) dice «{catalogo}»\n")
     cfg.print_seguro(cfg.metadata_revisada_snippet(stem, campo, declarado, catalogo, motivo,
