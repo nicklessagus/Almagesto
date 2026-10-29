@@ -1851,3 +1851,15 @@ que dar frontmatter inválido (bloqueante). Lo mismo para `motivo: [m]` en `acep
 (aborta) y en `metadata_revisada` (`rota`), y `data_availability` con `localizador: [4]` vuelve a
 backlog. **Devolver si** alguna pasa, o si una firma legítima de Tesis (número de página, fecha
 YAML, autores como lista en `metadata_revisada`) empieza a bloquear.
+
+## §#593 · v1.405.0 — `pages` del `bibtex` contra una segunda autoridad
+
+Sin migración; el backfill es de red. `python scripts/fetch_bibtex.py` (toda la bóveda: estampa
+`bibtex_segunda_autoridad` en las ~500 notas con `doi` y bloque no-Crossref, una consulta a Crossref
+por nota). Después `python scripts/lint.py | grep -A12 "exportación oficial dicen cosas distintas"`:
+tienen que salir las 8 del issue (o las que Crossref resuelva hoy), ninguna con la misma primera
+página. Firmar 2 con `fetch_bibtex.py --paper 2017isbi.conf...31K --firmar --campo pages --motivo
+"el PDF imprime pp. 81–84"` y `--paper 2010OLEB...40..591P` (el caso en que Crossref no gana) →
+pasan a `bibtex_drift_firmado`. **Devolver si** aparece un falso positivo por formato (`L12`,
+`e1234`, rango con otro guion), si alguna corrida estampa sobre una caída de Crossref, o si
+re-correr re-consulta las ya estampadas sin `--force`.

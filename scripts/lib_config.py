@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.404.0"
+ALMAGESTO_VERSION = "1.405.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3646,7 +3646,17 @@ def dropped_from_subject(slug: str) -> dict:
 #: Fields of a `sources:` item that `check_sources` compares against a catalogue (#353), and the
 #: closed vocabulary of `metadata_revisada[].campo` (#463): the signature can only cover a field
 #: some check actually judges. A typo would leave the signature mute for its only consumer.
-METADATA_CAMPOS = ("author", "year", "title")
+#: ⛔ #593 — `pages` is judged too: the `bibtex` export against a SECOND authority
+#: (`bibtex_segunda_autoridad`, stamped by `fetch_bibtex`), because the frontmatter drift compares
+#: ADS against ADS and a catalogue error is coherent with itself.
+METADATA_CAMPOS = ("author", "year", "title", "pages")
+
+
+def first_page(pages) -> str:
+    """First page of a `pages` value (`81--84`, `81-84`, `81–84` → `81`), casefolded (#593): the
+    unit the second-authority cross compares. Crossref may give a whole volume's range where ADS
+    gives the paper's, so only the start locates the work."""
+    return re.split(r"[-–—]+", str(pages or "").strip(), maxsplit=1)[0].strip().casefold()
 
 #: Keys of one `metadata_revisada` entry. `motivo` is mandatory for the same reason as the triage
 #: `--reason`: in six months the reason is what helps, not the category.

@@ -313,7 +313,7 @@ bibtex, bibtex_source(ads|crossref|datacite|doi|arxiv|venue|institucional), bibt
 sin exportación deja el campo **VACÍO** — un hueco es correcto, una cita inventada no. **`venue` es
 la exportación del sitio del venue (JMLR, NeurIPS, PMLR) (#484): la pega una persona, así que exige
 `bibtex_url`** y no se re-baja. El lint **bloquea** el `bibtex` sin `bibtex_source` y reporta el
-drift frontmatter ↔ exportación.
+drift frontmatter ↔ exportación, y `pages` contra Crossref (#593).
 **Y el hueco se declara: `sin_bibtex: <motivo>` + `bibtex_accessed` del intento (#467)**; lo estampa
 `fetch_bibtex` y **lo borra** al cerrarse. ⚠ Antes de declararlo pregunta si el DOI existe, en **dos
 etapas** (#466), y a **HAL**, que propone el bloque y no lo escribe (#505).

@@ -659,6 +659,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   discrepancia, y un falso positivo acá manda a revisar a mano una cita correcta. ⚠ Un campo que
   una de las dos partes no dice **no se reporta**: eso es un hueco de schema (INV-63), no un
   desacuerdo.
+  ⛔ **Y `pages` se cruza contra una SEGUNDA autoridad (#593):** el frontmatter del carril ADS sale
+  del mismo registro que el bloque, así que un error del catálogo pasaba limpio (medido en una
+  instancia: 8 de 463 con primera página distinta de Crossref, 6 de ellos actas de IEEE).
+  `fetch_bibtex` estampa `bibtex_segunda_autoridad: {fuente: crossref, pages, fecha}` en la nota con
+  `doi` cuyo bloque no es de Crossref (una vez; `--force` re-pregunta; la caída no estampa, #468), y
+  el lint compara la **primera página** (`cfg.first_page`: Crossref puede dar el rango de un volumen
+  entero). Cuál gana es juicio —lo dice el PDF—: se firma con `metadata_revisada` `campo: pages`
+  (`fetch_bibtex.py --paper <bib> --firmar --campo pages --motivo`), y el bloque **no** se
+  post-procesa (#471).
   ⛔ **Se pliega el MARKUP de los dos mundos antes de comparar** (#400): el frontmatter trae el HTML
   del catálogo ADS (`H<SUB>2</SUB>O`, `&amp;`) y la exportación el TeX (`H$_2$O`, `\&`) — el mismo
   título en dos marcados. Medido sobre los 7 primeros hallazgos de la categoría: **3** eran esto, o

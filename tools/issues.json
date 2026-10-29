@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-27",
+ "fetched": "2026-10-29",
  "issues": [
   {
    "number": 2,
@@ -2950,6 +2950,11 @@
    "number": 592,
    "title": "Las firmas aceptan una lista o un mapa como campo obligatorio: str() lo vuelve no-vacío (localizador: [7] pasa)",
    "state": "CLOSED"
+  },
+  {
+   "number": 593,
+   "title": "El bibtex de ADS puede traer páginas falsas y ningún chequeo lo cruza contra una segunda autoridad (8/463 en una instancia)",
+   "state": "OPEN"
   }
  ]
 }

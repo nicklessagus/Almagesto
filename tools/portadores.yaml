@@ -183,6 +183,12 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: usa
         motivo: "Estampa el frontmatter y la línea `> _Ground-truth — …_` de la cabecera, que publica qué autoridad respondió cada campo y cuáles volvieron vacíos."
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: "`bibtex_segunda_autoridad` (#593) es la página de Crossref para el BibTeX, no un campo del espejo de ground-truth."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Matchea por `bibtex_segunda_autoridad` (#593), que no es el espejo de ground-truth."
   - issue: 476
     regla: >-
       El gate de #409 pregunta «¿este módulo LLEVA la regla?», y una regla se lleva de DOS maneras:
@@ -3559,3 +3565,21 @@ portadores:
       - modulo: scripts/harvest_views.py
         estado: fuera-de-alcance
         motivo: "El `get(k) or` arma la celda de una vista; no valida una firma."
+
+  - issue: 593
+    regla: >-
+      Un campo del `bibtex` que ubica el trabajo se cruza contra una SEGUNDA autoridad, no contra el
+      frontmatter que sale del mismo registro: ADS contra ADS es coherente consigo mismo. Se compara
+      la primera página (`first_page`) y la discrepancia se firma con `metadata_revisada`.
+    funcion: lib_config.first_page
+    patron: 'bibtex_fields\('
+    consumidores:
+      - modulo: scripts/fetch_bibtex.py
+        estado: usa
+        motivo: "Estampa `bibtex_segunda_autoridad` (Crossref) y `--firmar --campo pages` compara con `first_page`."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_bibtex` compara la primera página del `bibtex` contra la segunda autoridad."
+      - modulo: scripts/check_sources.py
+        estado: fuera-de-alcance
+        motivo: "`bib_meta` lee el `.bib` del USUARIO, que ya es otra autoridad que Crossref (#353); no cruza la exportación de la nota."

@@ -5307,6 +5307,30 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                        + (f"; si el equivocado es el CATÁLOGO, firmalo: `python scripts/"
                           f"fetch_bibtex.py --paper {stem} --firmar --campo {_c} --motivo "
                           f"\"<por qué>\"` (#483)" if _c in cfg.METADATA_CAMPOS else "")))
+    # ⛔ #593 — el frontmatter sale del MISMO registro que el bloque `ads`, así que el cruce de
+    # arriba no ve un error del catálogo. La segunda autoridad la estampa `fetch_bibtex`; acá se
+    # compara la PRIMERA página (Crossref puede dar el rango de un volumen entero) y cuál gana es
+    # juicio: se firma con la misma regla (`metadata_review`), nunca se corrige el bloque (#471).
+    _sa = cfg.as_map(fm.get("bibtex_segunda_autoridad"))
+    _pb = str(cfg.bibtex_fields(_btx).get("pages") or "").strip() if _btx else ""
+    _ps = str(_sa.get("pages") or "").strip()
+    if _pb and _ps and cfg.first_page(_pb) != cfg.first_page(_ps):
+        _consultados.add("pages")
+        _estado, _firma = cfg.metadata_review(fm, "pages", _pb, _ps, quien="el `bibtex`")
+        _fuente = _sa.get("fuente") or "la segunda autoridad"
+        if _estado == "firmada":
+            bibtex_drift_firmado.append(
+                (stem, f"`pages`: revisado contra el PDF, firmado el {_firma.get('fecha')} — "
+                       f"{_firma.get('motivo')}"))
+        else:
+            bibtex_drift.append(
+                (stem, f"`pages`: el `bibtex` ({fm.get('bibtex_source')}) dice «{_pb}» y "
+                       f"{_fuente} «{_ps}» — una autoridad sola no se contradice (#593); cuál "
+                       f"imprime el PDF es juicio"
+                       + (f" y la firma `metadata_revisada` NO cubre este hallazgo ({_firma})"
+                          if _estado in ("vencida", "rota") else "")
+                       + f" → `python scripts/fetch_bibtex.py --paper {stem} --firmar --campo "
+                         f"pages --motivo \"<qué dice el PDF>\"`"))
     # AUD-472 — la firma de la nota se lee aunque ningún drift la consulte (sin `bibtex`, o los
     # campos coinciden): la rota o la que no cubre nada sale nombrada, no ignorada.
     bibtex_drift.extend((stem, m) for m in cfg.metadata_review_unused(fm, _consultados))

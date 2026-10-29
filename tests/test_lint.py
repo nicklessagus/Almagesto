@@ -8265,6 +8265,28 @@ def test_483_el_drift_FIRMADO_baja_a_declarado_y_la_firma_vieja_vuelve(toy_vault
     assert "fetch_bibtex.py --paper 2020aaa...1..1A --firmar --campo year" in msg
 
 
+def test_593_pages_contra_la_SEGUNDA_autoridad_y_su_firma(toy_vault):
+    """#593 — ADS `pages = 31`, Crossref `81-84`: el drift de #397 no lo ve (frontmatter y bloque
+    salen del mismo registro). Se compara la PRIMERA página (`591-592` vs `591-607` no es hallazgo:
+    Crossref puede dar el rango del volumen), y la firma en `pages` lo baja a declarado."""
+    btx = _BTX_OK.replace("year = 2020,", "year = 2020,\n        pages = {31},")
+    sa = {"fuente": "crossref", "pages": "81-84", "fecha": "2026-10-29"}
+    _paper_con_bibtex(toy_vault, {"bibtex": btx, "bibtex_source": "ads",
+                                  "bibtex_segunda_autoridad": sa})
+    [(_s, msg)] = lint.collect().por_clave("bibtex_drift").items
+    assert "«31»" in msg and "«81-84»" in msg and "--firmar --campo pages" in msg, msg
+    _paper_con_bibtex(toy_vault, {"bibtex": btx, "bibtex_source": "ads",
+                                  "bibtex_segunda_autoridad": {**sa, "pages": "31--40"}})
+    assert lint.collect().por_clave("bibtex_drift").items == ()
+    firma = {"campo": "pages", "declarado": "31", "catalogo": "81-84",
+             "motivo": "el PDF imprime pp. 81-84", "fecha": "2026-10-29"}
+    _paper_con_bibtex(toy_vault, {"bibtex": btx, "bibtex_source": "ads",
+                                  "bibtex_segunda_autoridad": sa, "metadata_revisada": [firma]})
+    r = lint.collect()
+    assert r.por_clave("bibtex_drift").items == ()
+    assert "81-84" in r.por_clave("bibtex_drift_firmado").items[0][1]
+
+
 def test_el_campo_que_una_de_las_dos_no_dice_no_es_una_discrepancia(toy_vault, capsys):
     """Sin `year` en el frontmatter no hay dos afirmaciones que comparar: reportarlo sería inventar
     el hallazgo, y el hueco ya lo levanta el chequeo de schema por tipo (INV-63)."""

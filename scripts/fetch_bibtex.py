@@ -6,6 +6,7 @@ Uso:
     python scripts/fetch_bibtex.py --paper <bibcode>  # uno solo
     python scripts/fetch_bibtex.py --force            # re-bajar también los que ya lo tienen
     python scripts/fetch_bibtex.py --paper <bibcode> --firmar --campo year --motivo "<por qué>"  # #483
+    python scripts/fetch_bibtex.py --paper <bibcode> --firmar --campo pages --motivo "<por qué>" # #593
 
 #397 — la ficha guardaba campos sueltos (`title`, `first_author`, `year`, `doi`, `bibstem`) y no la
 REFERENCIA. Quien escribe un informe tenía que rearmar la entrada BibTeX, y el material del que la
@@ -38,6 +39,14 @@ como macro de AASTeX (`journal = {\\aap}`), que sin `aas_macros.sty` compila VAC
 instancia, 126 de 219 bloques `ads`. La salida NO es una tabla macro → nombre en el repo —eso es
 redactar un campo de la cita, lo que #397 prohíbe—: se pide `journalformat: 3` (nombre completo) y
 un bloque con macro cuenta como **pendiente**, así que re-correr la cadena lo re-baja sin `--force`.
+
+⛔ **Y una sola autoridad no se cruza contra sí misma (#593).** El drift de #397 compara la
+exportación contra el frontmatter, que en el carril ADS sale del MISMO registro: medido en una
+instancia, 8 de 463 bloques `ads` con la primera página distinta de la de Crossref (6 de 8, actas
+de IEEE). Cada corrida estampa `bibtex_segunda_autoridad: {fuente: crossref, pages, fecha}` en las
+notas con `doi` cuyo bloque no vino de Crossref; el lint compara offline y la discrepancia se firma
+con `metadata_revisada` (`--campo pages`). Qué autoridad gana NO se decide acá (Crossref puede dar
+el rango de un volumen entero): el bloque no se post-procesa (#471).
 """
 from __future__ import annotations
 
@@ -453,6 +462,34 @@ def bibtex_closed(fm: dict) -> bool:
                 if cfg.BIBTEX_NO_PEGABLE.get(c) != "residuo"]
 
 
+def cross_second_authority(notas: list, force: bool, hoy: str) -> tuple:
+    """`(n estampadas, [no evaluadas])` — stamp Crossref's `page` next to a `bibtex` that came from
+    another authority (#593), so the lint can cross the two offline.
+
+    Only notes with `bibtex` + `doi` whose block is not Crossref's own (crossing it against itself
+    is the defect this exists for), and only once unless `force`. A 404 IS an answer (`pages: null`,
+    not asked again); a network error stamps nothing and is declared (#468)."""
+    import check_retractions as cr
+    n, no_evaluadas = 0, []
+    for f in notas:
+        text = f.read_text(encoding="utf-8")
+        fm = cfg.split_fm(text) or {}
+        doi = str(fm.get("doi") or "").strip()
+        if (not doi or not str(fm.get("bibtex") or "").strip()
+                or str(fm.get("bibtex_source") or "").strip() == "crossref"
+                or (fm.get("bibtex_segunda_autoridad") and not force)):
+            continue
+        msg, estado = cr.crossref_message(doi, cr._ua())
+        if estado == "error":
+            no_evaluadas.append(f"{f.stem}: Crossref no contestó para `{doi}` — sin segunda "
+                                f"autoridad estampada (#593)")
+            continue
+        cfg.stamp_fm_fields(f, fm, text.split("\n---\n", 1)[-1], {"bibtex_segunda_autoridad": {
+            "fuente": "crossref", "pages": (msg or {}).get("page"), "fecha": hoy}})
+        n += 1
+    return n, no_evaluadas
+
+
 def notes_to_check(args) -> list:
     """Las notas de paper que esta corrida mira: una (`--paper`), las de un ingest (`--slug`, el
     mismo enumerador que `check_retractions`) o todas."""
@@ -485,11 +522,20 @@ def firmar(stem: str, campo: str, motivo: str) -> int:
     fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
     declarado = str(fm.get(campo) or "").strip()
     catalogo = str(cfg.bibtex_fields(str(fm.get("bibtex") or "")).get(campo) or "").strip()
+    if campo == "pages":
+        # #593 — acá el `bibtex` es el DECLARADO y la segunda autoridad el catálogo: lo que el lint
+        # compara, en el mismo orden.
+        declarado = catalogo
+        catalogo = str(cfg.as_map(fm.get("bibtex_segunda_autoridad")).get("pages") or "").strip()
     if not declarado or not catalogo:
         cfg.print_seguro(f"⛔ `{stem}`: no hay drift de `{campo}` que firmar — la nota "
-                         f"{'no declara el campo' if not declarado else 'no tiene `bibtex` con ese campo'}")
+                         f"{'no declara el campo' if not declarado else 'no tiene `bibtex` con ese campo'}"
+                         if campo != "pages" else
+                         f"⛔ `{stem}`: no hay drift de `pages` que firmar — falta el `pages` del "
+                         f"`bibtex` o el de `bibtex_segunda_autoridad` (corré fetch_bibtex)")
         return 2
-    if cfg.catalog_compare_key(declarado) == cfg.catalog_compare_key(catalogo):
+    if (cfg.first_page(declarado) == cfg.first_page(catalogo) if campo == "pages"
+            else cfg.catalog_compare_key(declarado) == cfg.catalog_compare_key(catalogo)):
         cfg.print_seguro(f"⛔ `{stem}`: `{campo}` coincide normalizado («{declarado}» ≡ «{catalogo}»): "
                          f"no hay nada que firmar")
         return 2
@@ -502,7 +548,10 @@ def firmar(stem: str, campo: str, motivo: str) -> int:
     if estado in ("vencida", "rota"):
         cfg.print_seguro(f"⚠ hay una firma que NO cubre el hallazgo de hoy: {detalle}\n"
                          f"  → reemplazá esa entrada por la de abajo (no agregues una segunda)\n")
-    cfg.print_seguro(f"Drift de `{campo}`: la nota dice «{declarado}», la exportación oficial "
+    cfg.print_seguro(f"Drift de `pages`: la exportación (`{fm.get('bibtex_source')}`) dice "
+                     f"«{declarado}», Crossref dice «{catalogo}» — el motivo dice cuál imprime el "
+                     f"PDF\n" if campo == "pages" else
+                     f"Drift de `{campo}`: la nota dice «{declarado}», la exportación oficial "
                      f"(`{fm.get('bibtex_source')}`) dice «{catalogo}»\n")
     cfg.print_seguro(cfg.metadata_revisada_snippet(stem, campo, declarado, catalogo, motivo,
                                                    _dt.date.today().isoformat(),
@@ -511,6 +560,14 @@ def firmar(stem: str, campo: str, motivo: str) -> int:
                      "backlog declarado (`bibtex_drift_firmado`); si el `bibtex` se re-baja y "
                      "cambia, la firma vence y vuelve a reportar.")
     return 0
+
+
+def _print_cruce(n: int, no_evaluadas: list) -> None:
+    """Report the second-authority pass (#593): how many were stamped, and what was NOT evaluated."""
+    if n:
+        cfg.print_seguro(f"  segunda autoridad (#593): Crossref estampado en {n} nota(s)")
+    for ne in no_evaluadas:
+        cfg.print_seguro(f"  ⛔ NO EVALUADA: {ne}")
 
 
 def main() -> int:
@@ -570,6 +627,10 @@ def main() -> int:
                                      for s, n in sorted(n_venue.items()))
                            + " (pegado a mano: NO se re-baja ni con --force, #484/#503)")
         cfg.print_seguro(f"bibtex: {len(notas)} nota(s) miradas, {'; '.join(_partes)}")
+        n_cruce, no_cruce = cross_second_authority(notas, args.force, _dt.date.today().isoformat())
+        _print_cruce(n_cruce, no_cruce)
+        if no_cruce:
+            return 2
         # ⛔ #423 — un paso que corrió y no tenía trabajo IGUAL corrió. Es el caso OPUESTO al que
         # protege la guarda del final (el paso que no pudo mirar todo no deja traza): acá se
         # miraron las N notas y no había nada que hacer. Sin estampar, el sujeto cuyo BibTeX ya
@@ -718,6 +779,9 @@ def main() -> int:
                          f"(#468): {ne}")
     for e in errores:
         cfg.print_seguro(f"  ⛔ {e}")
+    n_cruce, no_cruce = cross_second_authority(notas, args.force, hoy)
+    _print_cruce(n_cruce, no_cruce)
+    no_evaluadas += no_cruce
     # D-57/R-6 — el paso se estampa a sí mismo, y sólo al salir 0: un paso que no pudo mirar todo
     # no puede dejar traza de haber corrido, o el lint reporta la cadena completa sobre un hueco.
     if args.slug and not errores and not no_evaluadas:

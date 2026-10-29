@@ -62,6 +62,13 @@ def _sin_hal(monkeypatch):
         monkeypatch.setattr(fb.hal, "find", lambda *a, **k: (None, "HAL: sin registro (doble)", ""))
 
 
+@pytest.fixture(autouse=True)
+def _sin_crossref(monkeypatch):
+    """#593 — la segunda autoridad es red: por default Crossref contesta «sin registro»."""
+    import check_retractions as cr
+    monkeypatch.setattr(cr, "crossref_message", lambda *a, **k: (None, "sin-registro"))
+
+
 def fake_net(monkeypatch, *, get=None, post=None):
     monkeypatch.setattr(fb, "requests", SimpleNamespace(
         get=get or (lambda *a, **k: Resp(404)),
@@ -1179,3 +1186,34 @@ def test_AUD536_HAL_encuentra_y_el_export_FALLA_no_sale_como_bloque_a_pegar(tmp_
     out = capsys.readouterr().out
     assert "tal cual" not in out and "NO EVALUADA" in out and "hal-00460653" in out, out
     assert not (cfg.split_fm(nota.read_text(encoding="utf-8")) or {}).get("sin_bibtex")
+
+
+def test_593_la_segunda_autoridad_se_estampa_y_se_firma_en_pages(tmp_path, monkeypatch, capsys):
+    """#593 — el bloque `ads` se cruza contra Crossref (no contra el frontmatter, que sale del mismo
+    registro): se estampa una vez, nunca sobre un bloque de Crossref, la caída no estampa nada
+    (#468), y `--firmar --campo pages` propone con los dos valores que el lint compara."""
+    import check_retractions as cr
+    monkeypatch.setattr(cfg, "PAPERS", tmp_path)
+    btx = "@inproceedings{2017isbi.conf...31K,\n  pages = {31},\n}\n"
+    f = _nota(tmp_path, {"bibcode": "2017isbi.conf...31K", "tags": ["paper"], "doi": "10.1/k",
+                         "bibtex": btx, "bibtex_source": "ads"})
+    g = _nota(tmp_path, {"bibcode": "2016X", "tags": ["paper"], "doi": "10.1/x",
+                         "bibtex": btx, "bibtex_source": "crossref"})
+    llamadas = []
+    monkeypatch.setattr(cr, "crossref_message",
+                        lambda doi, h: (llamadas.append(doi), ({"page": "81-84"}, "ok"))[1])
+    assert fb.cross_second_authority([f, g], False, "2026-10-29") == (1, [])
+    sa = cfg.split_fm(f.read_text(encoding="utf-8"))["bibtex_segunda_autoridad"]
+    assert sa == {"fuente": "crossref", "pages": "81-84", "fecha": "2026-10-29"}
+    assert "bibtex_segunda_autoridad" not in cfg.split_fm(g.read_text(encoding="utf-8")), \
+        "Crossref contra Crossref no es una segunda autoridad"
+    assert fb.cross_second_authority([f], False, "2026-10-30") == (0, []) and llamadas == ["10.1/k"]
+    monkeypatch.setattr(cr, "crossref_message", lambda doi, h: (None, "error"))
+    n, ne = fb.cross_second_authority([f], True, "2026-10-30")
+    assert n == 0 and "no contestó" in ne[0]
+    assert cfg.split_fm(f.read_text(encoding="utf-8"))["bibtex_segunda_autoridad"]["fecha"] == "2026-10-29"
+    antes = f.read_text(encoding="utf-8")
+    assert fb.firmar("2017isbi.conf...31K", "pages", "el PDF imprime pp. 81-84") == 0
+    out = capsys.readouterr().out
+    assert "campo: pages" in out and "declarado: '31'" in out and "catalogo: 81-84" in out, out
+    assert f.read_text(encoding="utf-8") == antes, "propone, no escribe"
