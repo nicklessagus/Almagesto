@@ -307,6 +307,14 @@ Deben quedar en **0**:
   oración que sólo introduce («…:») y las líneas `_plantilla_`. Medido en una bóveda real (28 notas
   de entidad): el patrón ancho del issue («ningún», «todas», rangos) daba 136 hits; éste, 27,
   ~2/3 agregaciones reales.
+- **Autor ajeno** (#594, firmable como las anteriores): un «Apellido et al.» **sin año** en una
+  línea de ficha, concepto o query cuyos `[[bibcode]]` no son de ese primer autor (`first_author`
+  del paper). Ninguna capa miraba el autor que la prosa le pega a una cita: el juez de verify juzga
+  el contenido, y «Al Moulla et al.» sobre un paper de Artigau pasó verify y `--cierre`. Con año
+  es casi siempre segunda mano legítima y queda afuera; la línea cuyos bibcodes no tienen
+  `first_author` no se evalúa. Por **línea**, como se midió: sobre una bóveda real (635 papers),
+  30 hits sobre 139 menciones sin año, todos segunda mano salvo el caso real. Corre después del
+  barrido (necesita el `first_author` de todos los papers).
 - **`.obsidian/` en la raíz del repo**: la bóveda se abrió mal (el grafo indexa el andamiaje);
   abrir `vault/` como vault y borrar ese directorio.
 - **Alias de más** (declarado en `stars.yaml` y que resuelve a otro objeto).
@@ -747,15 +755,15 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   **normalizado y por prefijo**, porque la forma canónica de firmar es pegar lo que el reporte dice
   y el reporte lo trunca (`_q[:80]`).
 - **Hit de fuga/bloque/costura REVISADO y firmado con motivo** (#502, backlog): la escotilla de las
-  tres WARN que decide una persona leyendo (fuga de implementación, bloque con más de un hecho,
-  costura de unidad) — `warn_revisada: [{categoria, ancla, motivo}]` en el frontmatter de la nota.
+  WARN que decide una persona leyendo (`cfg.WARN_REVISABLE`: fuga de implementación, bloque con más
+  de un hecho, costura de unidad, agregación sin `inferencia` #556, autor ajeno #594) — `warn_revisada: [{categoria, ancla, motivo}]` en el frontmatter de la nota.
   El lint imprime el `ancla` al final de cada hit; firmar es pegarla. ⛔ El ancla hashea el BLOQUE
   **de `split_blocks`** (#528: párrafo, ítem de lista, blockquote o fila — el mismo que producen
   los pares; con el párrafo, una firma sobre un ítem eximía a la lista entera): si la prosa cambia,
   la firma deja de cubrir y el hit vuelve — lo juzgado ES la prosa. Migrador de las firmas
   pre-v1.339.0: `make_notes.py --migrate-warn-anchor` (re-firma **cada firma** que cae en UN bloque,
   aunque comparta el ancla vieja con otra categoría, AUD-540; la que cubría varios la **declara** y no
-  la reparte). Forma dura (D-58): sin `motivo` o con una categoría fuera de las tres,
+  la reparte). Forma dura (D-58): sin `motivo` o con una categoría fuera de `WARN_REVISABLE`,
   no exime nada. Las WARN de higiene no se firman: se cierran arreglando.
 - **`warn_revisada` que no corresponde a ningún hit** (#502/#256, backlog): el bloque cambió
   (re-revisalo y firmá el ancla nueva) o el hit ya no dispara (sacá la entrada).

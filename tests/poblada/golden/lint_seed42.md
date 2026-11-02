@@ -251,6 +251,9 @@
 ## ⚠ Agregación de fuentes sin la marca `inferencia` en la prosa de la síntesis («el corpus», «las N fuentes», «casi todos») (#556, WARN) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
+## ⚠ «Apellido et al.» sin año sobre una línea cuyos `[[bibcode]]` no son de ese primer autor (#594, WARN) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
 ## ⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 

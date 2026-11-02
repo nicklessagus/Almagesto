@@ -76,6 +76,7 @@ import glob
 import json
 import re
 import subprocess
+import unicodedata
 import sys
 from pathlib import Path
 
@@ -6743,7 +6744,8 @@ _ANTES_DE_UNIDAD_OK = re.compile(
     r"at|per|to|from|by|for|over|and|or|y|o|u|e)" + _CIERRE + r"$", re.I)
 
 
-def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: dict) -> tuple:
+def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: dict,
+                        cats: tuple = cfg.WARN_REVISABLE) -> tuple:
     # @inv INV-167
     """`(*one list per cfg.WARN_REVISABLE, revisadas, huerfanas)` (#502; #556 added the fourth).
 
@@ -6752,7 +6754,9 @@ def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: 
     —*«revisado y descartado: visible, no es deuda»* (AUD-207)—; an unsigned one gets its anchor
     appended, so signing it is pasting what the report says; and a signature that covers no hit is
     reported, because a hatch that exempts nothing is a false claim about the vault (#256). The
-    anchor hashes the block (`lib_blocks.warn_anchor`): edit the prose and the hit comes back."""
+    anchor hashes the block (`lib_blocks.warn_anchor`): edit the prose and the hit comes back.
+    `cats` narrows it to the categories one call sees (#594: `autor_ajeno` runs after the sweep, so
+    the per-note call must not report its signatures as orphans)."""
     try:
         firmas = cfg.load_reviewed_warn(fm or {}, entry=stem)
     except cfg.VistasError as e:
@@ -6760,8 +6764,9 @@ def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: 
     else:
         huerfanas = []
     lineas = body_full.split("\n")
-    usadas, revisadas, quedan = set(), [], {c: [] for c in cfg.WARN_REVISABLE}
-    for cat in cfg.WARN_REVISABLE:
+    firmas = [f for f in firmas if f["categoria"] in cats]
+    usadas, revisadas, quedan = set(), [], {c: [] for c in cats}
+    for cat in cats:
         for st, msg in hits.get(cat, []):
             m = re.match(r"L(\d+)", msg)
             i = int(m.group(1)) - 1 - offset if m else -1
@@ -6781,7 +6786,7 @@ def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: 
                                     f"`{f['ancla']}` y ningún hit corresponde → o el bloque cambió "
                                     f"(re-revisalo y firmá el ancla nueva) o ya no dispara (sacá "
                                     f"la entrada) (#502/#256)"))
-    return (*(quedan[c] for c in cfg.WARN_REVISABLE), revisadas, huerfanas)
+    return (*(quedan[c] for c in cats), revisadas, huerfanas)
 
 
 def warn_hits(stem: str, body_full: str, offset: int, impl_leaks: list, f=None) -> dict:
@@ -6794,6 +6799,62 @@ def warn_hits(stem: str, body_full: str, offset: int, impl_leaks: list, f=None) 
             "costura_unidad": check_unit_seams(stem, body_full, offset),
             "agregacion_sin_inferencia": (check_unmarked_aggregation(stem, body_full, offset)
                                           if entidad else [])}
+
+
+#: #594 — the signable WARN the per-note sweep sees; `autor_ajeno` needs every paper's
+#: `first_author`, which is complete only after the sweep.
+WARN_EN_NOTA = tuple(c for c in cfg.WARN_REVISABLE if c != "autor_ajeno")
+
+#: #594 — «Surname et al.» WITHOUT a year right after it. With a year it is almost always legitimate
+#: second hand («the source takes it from X et al. 2012»): measured on a real vault, the year filter
+#: is what takes the category from 351 hits to 31 over 659 mentions.
+_ET_AL_RE = re.compile(r"((?:(?:de|del|van|von|der|den|da|dos|di|du|le|la|al)\s+)*"
+                       r"[A-ZÁÉÍÓÚÑÄÖÜÅØ][\w'’\-]+(?:\s+[A-ZÁÉÍÓÚÑÄÖÜÅØ][\w'’\-]+)?)\s+et\s+al\b"
+                       r"(?!\.?,?\s*\(?\s*(?:1[6-9]|20)\d\d)\.?")
+
+
+#: letters NFKD does not decompose, which an ASCII catalogue spells plain («Adalı» / «Adali»)
+_SIN_DESCOMPONER = str.maketrans({"ı": "i", "ø": "o", "Ø": "O", "ł": "l", "Ł": "L", "đ": "d",
+                                  "æ": "ae", "Æ": "AE", "ß": "ss"})
+
+
+def _surname_key(s: str) -> str:
+    """A surname compared as the catalogue spells it: no accents, casefolded, hyphen = space."""
+    return " ".join(unicodedata.normalize("NFKD", s.translate(_SIN_DESCOMPONER))
+                    .encode("ascii", "ignore").decode()
+                    .casefold().replace("-", " ").split())
+
+
+def check_foreign_author(stem: str, body_full: str, offset: int, paper_fms: dict) -> list:
+    """`autor_ajeno` — a «Surname et al.» on a line whose `[[bibcode]]`s are none of them by that
+    first author (#594, WARN, signable).
+
+    No layer checked the author the prose pins on a citation: «Al Moulla et al.» over a paper by
+    Artigau passed verify (the judge looks at CONTENT) and `lint --cierre`. Per LINE, as measured:
+    on the note before the fix it flags exactly that mention; on a whole vault, 31 of 659 mentions,
+    all legitimate second hand → WARN, signed with `warn_revisada`. A line whose bibcodes carry no
+    `first_author` is not evaluable and stays out. Stamped sections never reach here."""
+    out: list = []
+    lineas = body_full.split("\n")
+    vistas: set = set()
+    for b in lb.split_blocks(body_full):
+        for i in range(b.first_line - 1, max(b.last_line, b.first_line)):
+            if i in vistas or i >= len(lineas):
+                continue
+            vistas.add(i)
+            ln = lineas[i]
+            autores = [_surname_key(a.split(",")[0]) for bib in lb._bibcodes(ln)
+                       if (a := str((paper_fms.get(bib) or {}).get("first_author") or "").strip())]
+            if not autores:
+                continue
+            for m in _ET_AL_RE.finditer(ln):
+                dicho = _surname_key(m.group(1))
+                if not any(dicho == a or dicho.endswith(" " + a) for a in autores):
+                    out.append((stem, f"L{i + 1 + offset}: «{m.group(0)}» y ningún `[[bibcode]]` de "
+                                      f"la línea es de ese primer autor ({', '.join(sorted(set(autores)))})"
+                                      f" → corregí el nombre o la cita; si es segunda mano, decilo "
+                                      f"con su año, o firmá el hit (#594)"))
+    return out
 
 
 #: #556 — a sentence that quantifies over the CORPUS or over several SOURCES aggregates them, and an
@@ -7290,9 +7351,10 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     add("forma_sospechosa", _f2)
     # «Un bloque, un hecho» (#408) y la costura de unidad (#406): los dos WARN que miran la
     # PROSA entre las citas. #502 — y las tres se FIRMAN: el hit revisado sale aparte, con motivo.
-    for key, items in zip((*cfg.WARN_REVISABLE, "warn_revisada", "warn_revisada_huerfana"),
+    for key, items in zip((*WARN_EN_NOTA, "warn_revisada", "warn_revisada_huerfana"),
                           split_reviewed_warn(stem, fm, body_full, _offset,
-                                              warn_hits(stem, body_full, _offset, _il, f))):
+                                              warn_hits(stem, body_full, _offset, _il, f),
+                                              WARN_EN_NOTA)):
         add(key, items)
     # #69 — ficha/concepto sin la línea del generador: los estampadores de cabecera no-opean.
     add("headerless", check_headerless(stem, f, text))
@@ -7540,6 +7602,20 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["segunda_mano"] += _sm_hallazgos
     found["segunda_mano_revisada"] += _sm_revisados
     found["segunda_mano_huerfana"] += _sm_huerfanas
+    # #594 · el autor que la prosa le pega a un [[bibcode]]: necesita `paper_fms` completo.
+    for f_, t_ in anchor_bodies.items():
+        if not (in_dir(f_, "stars") or in_dir(f_, "concepts") or in_dir(f_, "queries")):
+            continue
+        _st = basename(f_)[:-3]
+        _pt = cfg.frontmatter_span(t_)
+        _body = _pt[1] if _pt else t_
+        _off = len(t_[:len(t_) - len(_body)].split("\n")) - 1 if _pt else 0
+        _aj, _rev, _hu = split_reviewed_warn(
+            _st, todos_fm.get(_st) or {}, _body, _off,
+            {"autor_ajeno": check_foreign_author(_st, _body, _off, paper_fms)}, ("autor_ajeno",))
+        found["autor_ajeno"] += _aj
+        found["warn_revisada"] += _rev
+        found["warn_revisada_huerfana"] += _hu
     found["prosa_retractada"], found["prosa_retractada_marcada"] = check_prosa_retractada(
         anchor_bodies, paper_fms)                                          # D-47
     found["gt_cambiado"], found["gt_cambiado_marcado"], _gt_marca = check_ground_truth_movido()
@@ -7723,6 +7799,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('bloque_con_varios_hechos', '⚠ Bloque con más de un hecho: arriba del p90 en largo o en hechos citados — partilo (#408, WARN)', SEV_WARN, tuple(found['bloque_con_varios_hechos']), poblacion='notas'),
         Categoria('costura_unidad', '⚠ Costura de unidad: una unidad separada de su número, la firma de un empalme mal hecho (#406, WARN)', SEV_WARN, tuple(found['costura_unidad']), poblacion='notas'),
         Categoria('agregacion_sin_inferencia', '⚠ Agregación de fuentes sin la marca `inferencia` en la prosa de la síntesis («el corpus», «las N fuentes», «casi todos») (#556, WARN)', SEV_WARN, tuple(found['agregacion_sin_inferencia']), poblacion='entidades'),
+        Categoria('autor_ajeno', '⚠ «Apellido et al.» sin año sobre una línea cuyos `[[bibcode]]` no son de ese primer autor (#594, WARN)', SEV_WARN, tuple(found['autor_ajeno']), poblacion='entidades'),
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(found['cond_sin_clasificar']), poblacion='entidades'),
         Categoria('cond_destino', '⚖ Condición `acota` resuelta en un destino que no se sostiene: fuera de vocabulario, o `regimen`/`inventario` sin fila con su bibcode (#576, backlog)', SEV_BACKLOG, tuple(found['cond_destino']), poblacion='entidades'),
         Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog)', SEV_BACKLOG, tuple(found['verif_estructura']), poblacion='entidades'),

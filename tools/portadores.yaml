@@ -3583,3 +3583,27 @@ portadores:
       - modulo: scripts/check_sources.py
         estado: fuera-de-alcance
         motivo: "`bib_meta` lee el `.bib` del USUARIO, que ya es otra autoridad que Crossref (#353); no cruza la exportación de la nota."
+
+  - issue: 594
+    regla: >-
+      El autor que la prosa le pega a un `[[bibcode]]` («Apellido et al.» sin año) tiene que ser el
+      `first_author` de algún bibcode de esa línea: el juez de verify mira el contenido, no la
+      atribución. Con año es segunda mano y queda afuera. WARN, firmable con `warn_revisada`.
+    funcion: lint.check_foreign_author
+    patron: '\bet\s+al\b'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "`citation_surnames` (#590) busca el apellido de un TERCERO en posición de cita (segunda mano); no cruza el apellido contra el `first_author` del bibcode citado."
+      - modulo: scripts/proposals.py
+        estado: fuera-de-alcance
+        motivo: "El patrón de #590 propone el dueño de un valor de segunda mano; no juzga la atribución a la fuente citada."
+      - modulo: scripts/check_sources.py
+        estado: fuera-de-alcance
+        motivo: "`_SPLIT_AUTHORS` parte el autor DECLARADO en `sources:` para cruzarlo contra Crossref (#353); no lee prosa de una nota."
+      - modulo: scripts/extraction_prompt.py
+        estado: fuera-de-alcance
+        motivo: "El «(X et al.)» del prompt le enseña al extractor a marcar segunda mano; no atribuye la fuente citada."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Repite la instrucción de segunda mano del prompt y estampa la lista de autores del catálogo en la cabecera del stub."

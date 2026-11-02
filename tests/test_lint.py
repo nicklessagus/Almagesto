@@ -11954,3 +11954,38 @@ def test_592_data_availability_localizador_lista_es_incompleto(toy_vault):
     ok = {"doi": "10.1/x", "que": "RVs", "localizador": "p. 4"}
     assert lint.check_data_availability("b", {"data_availability": [ok]}) == []
     assert lint.check_data_availability("b", {"data_availability": [dict(ok, localizador=[4])]})
+
+
+# ── #594 · el autor que la prosa le pega a un [[bibcode]] ────────────────────────────────────
+
+def test_594_el_autor_sin_anio_que_no_es_el_primer_autor_de_ningun_bibcode_de_la_linea_es_WARN():
+    """#594 — «Al Moulla et al.» sobre un paper de Artigau pasó verify y `lint --cierre`: ninguna
+    capa miraba el autor. Con año es segunda mano legítima; sin `first_author`, no evaluable."""
+    b, o = "2024AJ....168..252A", "2022A&A...664A..34A"
+    fms = {b: {"first_author": "Artigau, Étienne"}, o: {"first_author": "Al Moulla, Khaled"},
+           "2020A&A...600A..10A": {"first_author": "Adali, E."}}
+
+    def hits(linea):
+        return lint.check_foreign_author("n", linea + "\n", 0, fms)
+    h = hits(f"Al Moulla et al. atribuyen su valor a 53,0° (Sec. 4.3, p. 8) [[{b}]].")
+    assert len(h) == 1 and "Al Moulla et al." in h[0][1] and "artigau" in h[0][1], h
+    for exento in (f"Al Moulla et al. lo miden [[{o}]].",                  # el autor correcto
+                   f"Según Artigau et al. es alto [[{b}]].",               # prefijo en la captura
+                   f"Haywood et al. 2016 lo midió [[{b}]].",               # con año: segunda mano
+                   f"Haywood et al. (2016) lo midió [[{b}]].",
+                   f"Haywood et al., 2016, lo midió [[{b}]].",
+                   "Según Adalı et al. [[2020A&A...600A..10A]].",          # ı ↔ i del catálogo
+                   "Fischer et al. [[2099Zzz...999..999Z]].",              # sin first_author
+                   f"Al Moulla et al. lo dicen [[{o}]] y [[{b}]] lo usa."):  # alguno coincide
+        assert hits(exento) == [], exento
+    assert lint.check_foreign_author("n", f"## Papers\n\nAl Moulla et al. [[{b}]]\n", 0, fms) == []
+
+
+def test_594_la_firma_de_autor_ajeno_no_es_huerfana_en_el_barrido_por_nota():
+    """#594 — `autor_ajeno` corre después del barrido: el `split_reviewed_warn` por nota no ve sus
+    hits y no tiene que reportar su firma como huérfana."""
+    fm = {"warn_revisada": [{"categoria": "autor_ajeno", "ancla": "abc", "motivo": "segunda mano"}]}
+    *_, huerfanas = lint.split_reviewed_warn("n", fm, "x\n", 0, {}, lint.WARN_EN_NOTA)
+    assert huerfanas == []
+    *_, huerfanas = lint.split_reviewed_warn("n", fm, "x\n", 0, {}, ("autor_ajeno",))
+    assert len(huerfanas) == 1

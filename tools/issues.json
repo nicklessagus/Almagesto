@@ -1,5 +1,5 @@
 {
- "fetched": "2026-10-29",
+ "fetched": "2026-11-01",
  "issues": [
   {
    "number": 2,
@@ -2954,6 +2954,11 @@
   {
    "number": 593,
    "title": "El bibtex de ADS puede traer páginas falsas y ningún chequeo lo cruza contra una segunda autoridad (8/463 en una instancia)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 594,
+   "title": "El autor y el localizador que la prosa le pega a un [[bibcode]] no los chequea nadie: «Al Moulla et al.» sobre un paper de Artigau pasó verify y lint",
    "state": "OPEN"
   }
  ]
