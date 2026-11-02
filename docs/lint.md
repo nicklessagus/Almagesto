@@ -318,6 +318,12 @@ Deben quedar en **0**:
   de 29 en la instancia, «según Donati et al.⏎(1997)»); los autores siguen siendo los de la línea,
   así que la mención y su `[[bibcode]]` en renglones distintos no se ven. Corre después del
   barrido (necesita el `first_author` de todos los papers).
+- **Localizador sólo-página** (#598, backlog): la prosa le pega a un `[[bibcode]]` sólo «(p. N)» y
+  la extracción de esa fuente ubica algo en esa página por sección, figura, tabla o ecuación
+  (`lib_quotes.structural_index`, un segmento del `linea` = un lugar). Propone ése; si el hecho es
+  otro de la misma página, no es deuda. Sin estructural para esa página (resúmenes, libros sin
+  numeración) no se reporta. `contrast --cita` avisa lo mismo al emitir el fragmento, sin sustituir.
+  Medido en una bóveda real: 337 de 822 paréntesis sólo-página pegados a un `[[bibcode]]`.
 - **Localizador ajeno** (#594, backlog): un par `soportada` cuya columna `Localizador` del hermano
   dice `otro_lugar` o `sin_localizador`: el contenido está en la fuente, pero no donde la nota dice.
   No bloquea (el dato es verdadero); se cierra corrigiendo el localizador en la nota, lo que vence

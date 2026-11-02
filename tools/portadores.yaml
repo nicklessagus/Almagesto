@@ -1983,6 +1983,9 @@ portadores:
     funcion: lib_config.page_locators
     patron: 'p\{1,2\}\\\.|_LOC_PAGINA|PAGE_LOC_RE|page_locator'
     consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "#598: `check_page_only_locator` lee las páginas del paréntesis con `lq.page_locators`."
       - modulo: scripts/lib_blocks.py
         estado: usa
         motivo: "`locator_kinds` decide si la celda `Evidencia` cita una PÁGINA o una línea (#122): es la misma pregunta sobre el mismo texto."
@@ -3089,6 +3092,9 @@ portadores:
     funcion: lib_config.PAGE_LABEL
     patron: 'PAGE_LABEL\b|PAGE_LOC_RE|page_locators\(|\[A-Z\]\?\\d'
     consumidores:
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "#598: no define etiquetas de página; las lee con `lq.page_locators`, que usa `PAGE_LABEL`."
       - modulo: scripts/repaginate.py
         estado: usa
         motivo: "`_LABEL_RE` (la forma que #533 exige a la `pagina` del relector) se arma con `cfg.PAGE_LABEL`; lee los tokens con `PAGE_LOC_RE`/`page_locators`."

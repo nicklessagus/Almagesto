@@ -1315,3 +1315,12 @@ def test_592_cita_revisada_pagina_que_no_es_texto_BLOQUEA(toy_vault, malo):
     assert lq.load_reviewed_quotes({"cita_revisada": [base]})
     with pytest.raises(cfg.VistasError):
         lq.load_reviewed_quotes({"cita_revisada": [dict(base, pagina=malo)]})
+
+
+def test_598_structural_index_un_segmento_un_lugar():
+    """#598 — «p. 945 (texto); Fig. 3b, p. 940» no le da a p. 945 la figura de p. 940, y la página
+    del PDF («[PDF p. 3]») no es la página."""
+    idx = lq.structural_index([{"bibcode": "B", "x": [
+        {"linea": "p. 945 (texto); Fig. 3b, p. 940"}, {"linea": "Tabla 1, p. 209 [PDF p. 3]"},
+        {"linea": "§3.2, pp. 4-5"}]}])
+    assert idx == {"B": {"940": {"Fig. 3b, p. 940"}, "209": {"Tabla 1, p. 209"}}}, idx

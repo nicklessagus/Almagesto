@@ -1599,3 +1599,17 @@ def test_594_la_vista_de_lectura_trae_el_autor_de_la_nota_del_paper(toy_vault):
     assert ct.autor("2024AJ....168..252A") == "Artigau et al. 2024"
     assert ct.autor("2020A&A...600A..10A") == "Solo 2020"
     assert ct.autor("2099Zzz...999..999Z") == "autor ?"
+
+
+def test_598_cita_avisa_el_localizador_estructural_de_esa_pagina_sin_sustituirlo(toy_vault, capsys):
+    """#598 — un `linea` sólo-página cuando la extracción ubica esa página por sección: el
+    fragmento lo AVISA y no lo sustituye (sería pegarle a un hecho el localizador de otro)."""
+    _extraccion("ica_ruido", "2013Voss", ground_truth=[
+        {"que": "a", "valor": "K = 2.5 m/s", "linea": "p. 4"},
+        {"que": "b", "valor": "P = 34 d", "linea": "§3.2, p. 4"},
+        {"que": "c", "valor": "e = 0.1", "linea": "p. 9"}])
+    ct.main(["ica_ruido", "--cita"])
+    out = capsys.readouterr().out
+    assert "K = 2.5 m/s (p. 4) [[2013Voss]] · ⚠ sólo página; en esa página la extracción ubica: §3.2, p. 4" in out
+    assert "P = 34 d (§3.2, p. 4) [[2013Voss]]\n" in out
+    assert "e = 0.1 (p. 9) [[2013Voss]]\n" in out

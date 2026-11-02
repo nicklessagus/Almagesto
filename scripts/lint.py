@@ -84,6 +84,7 @@ import yaml
 
 import lib_config as cfg
 import lib_blocks as lb
+import lib_quotes as lq                     # #598: el índice página → localizador estructural
 import make_notes as mn
 import entity                                # alcance por slug de `--cierre` (#121)
 from extract_fulltext import is_legible      # umbral determinista de legibilidad (mismo que extract)
@@ -6845,6 +6846,36 @@ def _surname_key(s: str) -> str:
                     .casefold().replace("-", " ").split())
 
 
+#: #598 — a page-only parenthesis glued to its `[[bibcode]]`: «… (p. 4) [[bib]]» or «([[bib]], p. 4)».
+_PAGE_ONLY_RE = re.compile(r"\((pp?\.\s*[^()\[\]]{1,30})\)\s*\[\[([^\]|#]+)\]\]"
+                           r"|\(\[\[([^\]|#]+)\]\],\s*(pp?\.\s*[^()\[\]]{1,30})\)")
+
+
+def check_page_only_locator(stem: str, body_full: str, offset: int, index: dict) -> list:
+    """`localizador_solo_pagina` (#598, backlog) — the prose gives only «p. N» for a `[[bibcode]]`
+    whose extraction places a fact on that page by section, figure, table or equation. Proposes
+    that locator. Without a structural locator for the page in the extraction it is NOT debt
+    (abstracts, RNAAS, unnumbered books). Stamped sections stay out."""
+    out: list = []
+    estampada = False
+    for i, ln in enumerate(body_full.split("\n")):
+        if ln.startswith("## "):
+            estampada = cfg.is_stamped_section(ln)
+        if estampada:
+            continue
+        for m in _PAGE_ONLY_RE.finditer(ln):
+            loc, bib = (m.group(1), m.group(2)) if m.group(1) else (m.group(4), m.group(3))
+            if lq.STRUCTURAL_RE.search(loc):
+                continue
+            propuestas = sorted({x for lo, hi in lq.page_locators(loc) if lo == hi
+                                 for x in (index.get(bib.strip()) or {}).get(lo, ())})
+            if propuestas:
+                out.append((stem, f"L{i + 1 + offset}: «({loc.strip()})» sobre [[{bib.strip()}]] — la "
+                                  f"extracción ubica esa página como {' · '.join(propuestas)} → si el "
+                                  f"hecho es ése, copiá el localizador (#103/#500, #598)"))
+    return out
+
+
 def check_foreign_author(stem: str, body_full: str, offset: int, paper_fms: dict) -> list:
     """`autor_ajeno` — a «Surname et al.» on a line whose `[[bibcode]]`s are none of them by that
     first author (#594, WARN, signable).
@@ -7642,6 +7673,15 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         found["autor_ajeno"] += _aj
         found["warn_revisada"] += _rev
         found["warn_revisada_huerfana"] += _hu
+    # #598 · el localizador sólo-página que la extracción ubica por sección/figura/tabla/ecuación
+    _idx598 = lq.structural_by_page()
+    found["localizador_solo_pagina"] = []
+    for f_, t_ in anchor_bodies.items():
+        if in_dir(f_, "stars") or in_dir(f_, "concepts") or in_dir(f_, "queries"):
+            _pt = cfg.frontmatter_span(t_)
+            _body = _pt[1] if _pt else t_
+            _off = len(t_[:len(t_) - len(_body)].split("\n")) - 1 if _pt else 0
+            found["localizador_solo_pagina"] += check_page_only_locator(basename(f_)[:-3], _body, _off, _idx598)
     found["prosa_retractada"], found["prosa_retractada_marcada"] = check_prosa_retractada(
         anchor_bodies, paper_fms)                                          # D-47
     found["gt_cambiado"], found["gt_cambiado_marcado"], _gt_marca = check_ground_truth_movido()
@@ -7826,6 +7866,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('costura_unidad', '⚠ Costura de unidad: una unidad separada de su número, la firma de un empalme mal hecho (#406, WARN)', SEV_WARN, tuple(found['costura_unidad']), poblacion='notas'),
         Categoria('agregacion_sin_inferencia', '⚠ Agregación de fuentes sin la marca `inferencia` en la prosa de la síntesis («el corpus», «las N fuentes», «casi todos») (#556, WARN)', SEV_WARN, tuple(found['agregacion_sin_inferencia']), poblacion='entidades'),
         Categoria('autor_ajeno', '⚠ «Apellido et al.» sin año sobre una línea cuyos `[[bibcode]]` no son de ese primer autor (#594, WARN)', SEV_WARN, tuple(found['autor_ajeno']), poblacion='entidades'),
+        Categoria('localizador_solo_pagina', '📍 Localizador sólo-página que la extracción ubica por sección, figura, tabla o ecuación (#598, backlog)', SEV_BACKLOG, tuple(found['localizador_solo_pagina']), poblacion='entidades'),
         Categoria('localizador_ajeno', '📍 Par soportado con el localizador en otro lugar o sin localizador propio, según el juez (#594, backlog)', SEV_BACKLOG, tuple(found['localizador_ajeno']), poblacion='entidades'),
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(found['cond_sin_clasificar']), poblacion='entidades'),
         Categoria('cond_destino', '⚖ Condición `acota` resuelta en un destino que no se sostiene: fuera de vocabulario, o `regimen`/`inventario` sin fila con su bibcode (#576, backlog)', SEV_BACKLOG, tuple(found['cond_destino']), poblacion='entidades'),

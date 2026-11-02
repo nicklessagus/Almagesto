@@ -61,6 +61,7 @@ import sys
 import yaml
 
 import lib_config as cfg
+import lib_quotes as lq
 import lib_blocks as lb
 
 CAMPOS = ("valor", "regimen", "aporte", "hueco", "ejes", "salvedades")
@@ -244,6 +245,15 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
                 # PEGADO (#325: entre la cita y el link, sólo el paréntesis del localizador — la
                 # marca de segunda mano va DESPUÉS del bibcode, no en el medio).
                 formas[quote_form(texto)] += 1
+                # #598 — a page-only `linea` when the same extraction places that page by
+                # section/figure/table/equation: SHOWN, never substituted — that locator belongs
+                # to another fact on the page, and swapping it in would fabricate one.
+                if not lq.STRUCTURAL_RE.search(loc):
+                    alt = sorted({x for lo, hi in lq.page_locators(loc) if lo == hi for x in
+                                  (lq.structural_index([data]).get(bib) or {}).get(lo, ())})
+                    if alt:
+                        sm += (f" · ⚠ sólo página; en esa página la extracción ubica: "
+                               f"{' | '.join(alt)} — mirá en el PDF cuál es el de este hecho")
                 cfg.print_seguro(f"{texto} ({loc}) [[{bib}]]{sm}")
             elif filas:
                 # Una fila, UNA fuente (#317): agrupar bibcodes bajo una glosa compartida es cómo

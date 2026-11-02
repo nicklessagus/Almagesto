@@ -1543,4 +1543,58 @@ def reviewed_quote_entry(refs, cita: str) -> str:
             f"(#516)")
 
 
+#: #598 — a STRUCTURAL locator (section, figure, table, equation, appendix, theorem…): what
+#: #103/#500 put first, with the page only as a hint.
+STRUCTURAL_RE = re.compile(
+    r"§\s*[A-Z]?\d|\b(?i:secc?|sect|section|secci[óo]n|figs?|figure|figura|eqs?|equation|ecs?|"
+    r"ecuaci[óo]n|tab|table|tabla|app|appendix|ap[ée]ndice|chapter|cap[íi]tulo|theorem|teorema|"
+    r"lemma|lema)\.?\s*\(?[A-Z]?\d")
+
+
+_SEGMENT_SEP = re.compile(r"\s*[;·]\s*")
+_PDF_PAGE = re.compile(r"[\[(][^\])]*\bPDF\b[^\])]*[\])]", re.I)
+
+
+def structural_index(datas) -> dict:
+    """`{bibcode: {page_label: {locator, …}}}` — every `linea` of these extractions that names a
+    STRUCTURAL place together with ONE page (#598). The lint and `contrast --cita` read this one
+    index: a page-only locator in the prose is debt only when the extraction ITSELF placed a fact
+    on that page by section/figure/table/equation; without that, a bare page is legitimate."""
+    out: dict = {}
+
+    def _walk_lines(x, bib):
+        """Every `linea` anywhere in the extraction, whatever block it sits in."""
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if k == "linea" and isinstance(v, str):
+                    # one SEGMENT, one place: «p. 945 (texto); Fig. 3b, p. 940» must not give p. 945
+                    # the figure of p. 940; the PDF's own page numbering («[PDF p. 3]») is not the page
+                    for seg in _SEGMENT_SEP.split(_PDF_PAGE.sub(" ", v)):
+                        pags = {lo for lo, hi in page_locators(seg) if lo == hi}
+                        if STRUCTURAL_RE.search(seg) and len(pags) == 1:
+                            out.setdefault(bib, {}).setdefault(pags.pop(), set()).add(" ".join(seg.split()))
+                else:
+                    _walk_lines(v, bib)
+        elif isinstance(x, list):
+            for i in x:
+                _walk_lines(i, bib)
+    for data in datas:
+        if isinstance(data, dict) and data.get("bibcode"):
+            _walk_lines(data, str(data["bibcode"]))
+    return out
+
+
+def structural_by_page(extraccion_dir=None) -> dict:
+    """`structural_index` over every extraction JSON under `extraccion_dir` (default: the vault's),
+    unparseable ones skipped."""
+    def datas():
+        """Each parseable extraction, lazily."""
+        for f in sorted(Path(extraccion_dir or cfg.EXTRACCION).rglob("*.json")):
+            try:
+                yield json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+    return structural_index(datas())
+
+
 import lib_config as cfg   # at the END on purpose: no cycle at import time (see module docstring)

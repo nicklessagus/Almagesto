@@ -254,6 +254,9 @@
 ## ⚠ «Apellido et al.» sin año sobre una línea cuyos `[[bibcode]]` no son de ese primer autor (#594, WARN) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
+## 📍 Localizador sólo-página que la extracción ubica por sección, figura, tabla o ecuación (#598, backlog) (0)
+> sobre 29 notas de entidad (fichas, conceptos, queries)
+
 ## 📍 Par soportado con el localizador en otro lugar o sin localizador propio, según el juez (#594, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 

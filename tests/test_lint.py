@@ -12035,3 +12035,22 @@ def test_AUD566_567_607_un_motivo_que_no_es_motivo_no_abre_ninguna_escotilla():
         assert cfg.signature_text({"motivo": malo}, "motivo") == "", malo
     assert cfg.signature_text({"motivo": "segunda mano, año en la fuente"}, "motivo")
     assert cfg.signature_text({"pagina": 7}, "pagina") == "7"
+
+
+def test_598_localizador_solo_pagina_cuando_la_extraccion_ubica_esa_pagina():
+    """#598 — «(p. 4) [[b]]» cuando la extracción de b dice «§3.2, p. 4»: backlog con la propuesta.
+    Sin estructural para esa página (resumen, libro sin numeración) no es deuda."""
+    import lib_quotes as lq
+    idx = lq.structural_index([{"bibcode": "2020A", "ground_truth": [
+        {"linea": "§3.2, p. 4"}, {"linea": "p. 7"}, {"linea": "Tabla 2, pp. 8-9"}]}])
+    assert idx == {"2020A": {"4": {"§3.2, p. 4"}}}
+
+    def hits(t):
+        return [m for _s, m in lint.check_page_only_locator("n", t + "\n", 0, idx)]
+    assert len(h := hits("El período es 34 d (p. 4) [[2020A]].")) == 1 and "§3.2, p. 4" in h[0]
+    assert len(hits("El período es 34 d ([[2020A]], p. 4).")) == 1
+    for exento in ("34 d (§3.2, p. 4) [[2020A]].",       # ya estructural
+                   "34 d (p. 7) [[2020A]].",              # la extracción tampoco tiene sección ahí
+                   "34 d (p. 4) [[2099Z]].",              # sin extracción
+                   "## Papers\n\n(p. 4) [[2020A]]"):      # sección estampada
+        assert hits(exento) == [], exento
