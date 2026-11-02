@@ -3610,3 +3610,20 @@ portadores:
       - modulo: scripts/contrast.py
         estado: fuera-de-alcance
         motivo: "`autor` es el lado de ESCRITURA de la regla: imprime el `first_author` que el sintetizador copia; no juzga prosa ya escrita."
+  - issue: 594
+    regla: >-
+      Toda clave que `juez.md` le pide al juez por par tiene que estar en `VERIF_FANOUT_SCHEMA`
+      (la fuente única del fence y de la barrera): v1.408.0 agregó `localizador`/`localizador_real`
+      sólo en el prompt del skill y la barrera rebotaba al juez que obedecía.
+    funcion: lib_blocks.fanout_errors
+    patron: 'localizador_real|get\("localizador"'
+    consumidores:
+      - modulo: scripts/check_verify_fanout.py
+        estado: usa
+        motivo: "La forma la juzga `lb.fanout_errors` (lee el schema); acá además se cierra el vocabulario de `localizador`."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "`locator_cell` lee las dos claves del par DESPUÉS de la barrera: no decide qué claves existen."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "El `localizador` de `data_availability` (#424) es otra clave, del frontmatter del paper."

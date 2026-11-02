@@ -313,7 +313,10 @@ Deben quedar en **0**:
   el contenido, y «Al Moulla et al.» sobre un paper de Artigau pasó verify y `--cierre`. Con año
   es casi siempre segunda mano legítima y queda afuera; la línea cuyos bibcodes no tienen
   `first_author` no se evalúa. Por **línea**, como se midió: sobre una bóveda real (635 papers),
-  30 hits sobre 139 menciones sin año, todos segunda mano salvo el caso real. Corre después del
+  30 hits sobre 139 menciones sin año, todos segunda mano salvo el caso real. El año que el
+  hard-wrap pasó al renglón siguiente **del mismo bloque** cuenta (v1.408.1: 3 falsos positivos
+  de 29 en la instancia, «según Donati et al.⏎(1997)»); los autores siguen siendo los de la línea,
+  así que la mención y su `[[bibcode]]` en renglones distintos no se ven. Corre después del
   barrido (necesita el `first_author` de todos los papers).
 - **Localizador ajeno** (#594, backlog): un par `soportada` cuya columna `Localizador` del hermano
   dice `otro_lugar` o `sin_localizador`: el contenido está en la fuente, pero no donde la nota dice.

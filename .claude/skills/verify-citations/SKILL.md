@@ -179,12 +179,14 @@ orquestación de este archivo. Leelas también antes de resolver (paso 4).
       "condicion": "<la condición que la nota no dice, citada con su página — SIN la clase adelante (ésa va en `cond_tipo`, y repetirla acá deja la fila irresoluble) — o \"\">",
       "cond_tipo": "acota | contextualiza | \"\"",
       "completitud": "<filas/ítems de la tabla o lista de la fuente que la nota omite — o \"\">",
+      "localizador": "ok | vecina | otro_lugar | sin_localizador — sólo con `soportada`; si no, \"—\"",
+      "localizador_real": "<con vecina u otro_lugar: dónde está cada hecho («rango: Tabla 2, p. 1814») — o \"\">",
       "nota": "<una línea de por qué; en `no-soportada`, qué dice el paper en cambio>"
     }
   ]
 }
 ```
-**Estas 7 claves por par y ninguna otra.** Una clave de más rebota el archivo entero en la barrera, con la lectura del PDF ya pagada. Lo que no entre en ellas va en `nota` (#365).
+**Estas 9 claves por par y ninguna otra.** Una clave de más rebota el archivo entero en la barrera, con la lectura del PDF ya pagada. Lo que no entre en ellas va en `nota` (#365).
 
 Un objeto por par, en `pares`, identificado por su **`ancla`** (la de la fila del bloque). `condicion`,
 `cond_tipo`, `completitud` y `nota` van vacías cuando no aplican; ninguna otra clave entra.

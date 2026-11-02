@@ -6866,7 +6866,12 @@ def check_foreign_author(stem: str, body_full: str, offset: int, paper_fms: dict
                        if (a := str((paper_fms.get(bib) or {}).get("first_author") or "").strip())]
             if not autores:
                 continue
-            for m in _ET_AL_RE.finditer(ln):
+            # The year may wrap to the next line of the block (hard-wrapped prose): the
+            # lookahead sees it, matches are kept only if they start on THIS line (#594).
+            sig = lineas[i + 1] if i + 1 < min(b.last_line, len(lineas)) else ""
+            for m in _ET_AL_RE.finditer(ln + " " + sig.lstrip()):
+                if m.start() >= len(ln):
+                    break
                 dicho = _surname_key(m.group(1))
                 if not any(dicho == a or dicho.endswith(" " + a) for a in autores):
                     out.append((stem, f"L{i + 1 + offset}: «{m.group(0)}» y ningún `[[bibcode]]` de "

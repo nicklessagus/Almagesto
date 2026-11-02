@@ -11981,6 +11981,23 @@ def test_594_el_autor_sin_anio_que_no_es_el_primer_autor_de_ningun_bibcode_de_la
     assert lint.check_foreign_author("n", f"## Papers\n\nAl Moulla et al. [[{b}]]\n", 0, fms) == []
 
 
+def test_594_el_anio_que_paso_al_renglon_siguiente_sigue_siendo_segunda_mano():
+    """#594 — la prosa está hard-wrapped: «según Donati et al.⏎(1997)» daba falso `autor_ajeno`
+    (3 de 29 hits en la instancia). El año del renglón siguiente del MISMO bloque cuenta; el de otro
+    bloque, no; y el caso real del issue sigue saliendo."""
+    b = "2024AJ....168..252A"
+    fms = {b: {"first_author": "Artigau, Étienne"}}
+
+    def hits(texto):
+        return lint.check_foreign_author("n", texto + "\n", 0, fms)
+    assert hits(f"El valor [[{b}]] según Donati et al.\n(1997), es alto.") == []
+    assert hits(f"El valor [[{b}]] según Donati et al.\n1997 es alto.") == []
+    assert len(hits(f"El valor [[{b}]] según Donati et al.\n\n(1997) es otro bloque.")) == 1
+    h = hits(f"Al Moulla et al. atribuyen su valor\na 53,0° (Sec. 4.3, p. 8) [[{b}]].")
+    assert h == []  # ponytail: autores por renglón — mención y [[bibcode]] en renglones distintos no se ven
+    assert len(hits(f"Al Moulla et al. atribuyen 53,0° [[{b}]]\ny sigue la prosa.")) == 1
+
+
 def test_594_la_firma_de_autor_ajeno_no_es_huerfana_en_el_barrido_por_nota():
     """#594 — `autor_ajeno` corre después del barrido: el `split_reviewed_warn` por nota no ve sus
     hits y no tiene que reportar su firma como huérfana."""

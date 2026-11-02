@@ -71,7 +71,7 @@ skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de
   query-corpus: 6000
   setup: 15300
   test-hypothesis: 15700
-  verify-citations: 55999
+  verify-citations: 56229
 
 crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por suba
   - fecha: "2026-09-17"
@@ -205,6 +205,18 @@ crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por
       Nada: son el encabezado, el separador y cuatro celdas; la regla del eje vive en
       `reference/juez.md` y el porqué en el issue.
     techo_bytes: 55999
+
+  - fecha: "2026-11-02"
+    skill: verify-citations
+    ancla: "#594"
+    motivo: >-
+      El fence del JSON del juez es GENERADO (`lb.verify_fanout_json_block`) y el skill lo lleva
+      literal (test). v1.408.0 le pidió `localizador`/`localizador_real` al juez sin sumarlos al
+      schema: el prompt decía «7 claves y ninguna otra» y la barrera rebotaba al juez que obedecía.
+    sale: >-
+      Nada: son las dos claves del fence regenerado, que no se puede recortar a mano sin romper el
+      test que lo compara con el generado.
+    techo_bytes: 56229
 
 crecimientos:
   - fecha: "2026-08-31"

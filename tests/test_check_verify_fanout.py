@@ -211,3 +211,19 @@ def test_594_la_barrera_rechaza_un_localizador_fuera_de_vocabulario():
     errores = cvf.verdict_errors(data, "f.json")
     assert len(errores) == 1 and "pares[3]" in errores[0], errores
 
+
+
+def test_594_toda_clave_que_juez_md_pide_pasa_por_el_schema_del_fanout():
+    """v1.408.0 — juez.md pedía `localizador`/`localizador_real` y el schema no los declaraba: el
+    prompt decía «ninguna otra» y la barrera rebotaba al juez que obedecía."""
+    import re
+    juez = (cvf.cfg.ROOT / ".claude/skills/verify-citations/reference/juez.md").read_text(encoding="utf-8")
+    pedidas = set(re.findall(r"^  - `([a-z_]+)`", juez, re.M))  # the per-pair key bullets
+    declaradas = set(lb.VERIF_FANOUT_SCHEMA["par"]) | set(lb.VERIF_FANOUT_SCHEMA["par_opt"])
+    assert "localizador" in pedidas and "localizador_real" in juez
+    assert pedidas <= declaradas, pedidas - declaradas
+    bloque = lb.verify_fanout_json_block("2018A&A...620A..47D")
+    assert '"localizador"' in bloque and '"localizador_real"' in bloque
+    par = {"ancla": "a" * 10, "veredicto": "soportada", "evidencia": "«x» (p. 1)",
+           "localizador": "otro_lugar", "localizador_real": "Sect. 3.3"}
+    assert lb.fanout_errors({"bibcode": "B", "pares": [par]}, entry="f.json") == []

@@ -2070,8 +2070,10 @@ VERIF_FANOUT_SCHEMA = {
     # `no-soportada` también exige cita, de lo que el paper sí dice).
     "par": ("ancla", "veredicto", "evidencia"),
     # Opcionales porque dependen del par: `condicion`/`cond_tipo` sólo si la fuente condiciona
-    # (#221), `completitud` sólo si el par sale de una transcripción (#198).
-    "par_opt": ("condicion", "cond_tipo", "completitud", "nota"),
+    # (#221), `completitud` sólo si el par sale de una transcripción (#198), `localizador` /
+    # `localizador_real` sólo con `soportada` (#594; v1.408.0 los pidió en juez.md sin sumarlos
+    # acá y la barrera rebotaba al juez que obedecía).
+    "par_opt": ("condicion", "cond_tipo", "completitud", "localizador", "localizador_real", "nota"),
 }
 
 #: Los veredictos que el FAN-OUT puede emitir, derivados de `VERDICTS`.
@@ -2104,6 +2106,8 @@ _FANOUT_PLACEHOLDERS = {
                   " (ésa va en `cond_tipo`, y repetirla acá deja la fila irresoluble) — o \"\">"),
     "cond_tipo": " | ".join(CONDITION_KINDS) + " | \"\"",
     "completitud": "<filas/ítems de la tabla o lista de la fuente que la nota omite — o \"\">",
+    "localizador": " | ".join(LOCATOR_VERDICTS) + " — sólo con `soportada`; si no, \"—\"",
+    "localizador_real": "<con vecina u otro_lugar: dónde está cada hecho («rango: Tabla 2, p. 1814») — o \"\">",
     "nota": "<una línea de por qué; en `no-soportada`, qué dice el paper en cambio>",
 }
 
