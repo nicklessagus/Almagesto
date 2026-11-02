@@ -322,7 +322,7 @@ Progreso del ingest de <estrella>:
 > ⛔ **Autor y localizador de un `[[bibcode]]` se COPIAN, no se escriben (#594):** el «Apellido
 > et al.» sale del `first_author` de la nota del paper (`contrast.py <slug>` lo imprime), nunca del
 > recuerdo; y **un hecho, un localizador** — no varios hechos de un paper bajo la página de uno. El
-> juez de verify no lo mira.
+> juez lo marca, pero tarde.
 
 **Síntesis a la ficha** (`vault/wiki/stars/<slug>.md`), apoyada en el inventario de 3b.
    Completar el frontmatter que es **tuyo** (`activity_indicators_expected`,

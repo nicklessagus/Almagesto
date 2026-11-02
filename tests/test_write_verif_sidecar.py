@@ -1642,3 +1642,21 @@ def test_594_la_columna_localizador_va_y_vuelve_y_la_tabla_vieja_se_lee_como_no_
     assert ws.locator_cell({"localizador": "ok", "localizador_real": "x"}) == "ok"
     assert ws.locator_cell({"localizador": "vecina", "localizador_real": "p.  5"}) == "vecina: p. 5"
     assert ws.locator_cell({"localizador": "—"}) == ws.locator_cell({}) == ""
+
+
+def test_596_el_par_re_anclado_no_arrastra_el_localizador_del_texto_viejo(toy_vault):
+    """#596 — el juez juzgó el localizador del texto VIEJO; re-anclado sobre un bloque cambiado, la
+    celda quedaba diciendo `otro_lugar` de un localizador ya corregido (107 pares en la instancia).
+    Vacía = no evaluado, que es la verdad. El par cuyo bloque no cambió conserva la suya."""
+    nota = _escena(toy_vault)
+    ws.write(nota, _fanout(toy_vault, nota, {}, localizador="otro_lugar", localizador_real="p. 9"),
+             fecha="2026-03-01")
+    assert {r.locator for r in lb.verif_rows(nota)} == {"otro_lugar: p. 9"}
+    nota.write_text(nota.read_text(encoding="utf-8").replace(
+        "La amplitud es 2.5 m/s [[2019Txt]].", "La amplitud medida es 2.5 m/s [[2019Txt]]."),
+        encoding="utf-8")
+    d2 = _fanout(toy_vault, nota, {}, ronda="r2", localizador="ok")
+    _acotar(d2, "2019Txt")                             # la ronda juzga sólo 2020Pdf; 2019Txt se arrastra
+    ws.write(nota, d2, fecha="2026-03-05")
+    loc = {r.bibcode: r.locator for r in lb.verif_rows(nota)}
+    assert loc == {"2020Pdf": "ok", "2019Txt": ""}, loc

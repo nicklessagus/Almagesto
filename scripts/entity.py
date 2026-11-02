@@ -480,7 +480,8 @@ def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[lis
         n = head + body
         if n == t:
             continue
-        if lim and not isinstance(cfg.split_fm(n), dict):
+        # AUD-594: `split_fm` returns `{}` for «does not parse», so compare against BEFORE (#244/#222)
+        if lim and cfg.split_fm(t) and not cfg.split_fm(n):
             sin_tocar.append((f, "el frontmatter dejaría de parsear"))
             continue
         cfg.write_text_atomic(f, n)

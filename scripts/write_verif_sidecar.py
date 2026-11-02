@@ -390,7 +390,9 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
                                bibcode=p.bibcode, verdict=previa.verdict, anchor=p.anchor,
                                source_hash=previa.source_hash, condition=previa.condition,
                                source_kind=previa.source_kind, evidence=previa.evidence,
-                               locator=previa.locator))
+                               # #596: the judge's locator verdict was about the OLD text; on a
+                               # changed block it is not evaluated (empty), not carried
+                               locator=previa.locator if p.anchor == previa.anchor else ""))
             continue
         n += 1
         veredicto = str(par["veredicto"]).strip()

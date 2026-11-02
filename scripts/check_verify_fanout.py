@@ -80,16 +80,17 @@ def verdict_errors(data: dict, name: str) -> list[str]:
     over a source with a file it is the judge's «illegible scan», a different claim nobody reads
     back as such."""
     # @inv INV-161
-    sin_archivo = None
+    bib = str(data["bibcode"])
+    sin_archivo = cfg.pdf_slug(bib) is None and cfg.txt_slug(bib) is None
     out = []
     for i, par in enumerate(data["pares"], 1):
         v = str(par["veredicto"]).strip()
         if v in lb.VERDICTS_FANOUT:
+            if sin_archivo:   # #595 — there was nothing to read: the judge improvised
+                out.append(f"{name}: `pares[{i}]` dice `{v}` y la fuente no tiene PDF ni `.txt` en "
+                           f"disco: el veredicto es `{lb.VERDICTS_WITHOUT_SOURCE[0]}` (#223, #595)")
             continue
         if v in lb.VERDICTS_WITHOUT_SOURCE:
-            if sin_archivo is None:
-                bib = str(data["bibcode"])
-                sin_archivo = cfg.pdf_slug(bib) is None and cfg.txt_slug(bib) is None
             if sin_archivo:
                 continue
             out.append(f"{name}: `pares[{i}]` dice `{v}` y la fuente tiene PDF o `.txt` en disco: "
@@ -101,9 +102,17 @@ def verdict_errors(data: dict, name: str) -> list[str]:
     # #594 — the locator axis is closed too; absent or `—` = not evaluated, which passes.
     for i, par in enumerate(data["pares"], 1):
         loc = str(par.get("localizador") or "").strip()
-        if loc not in ("", "—", "-") and loc not in lb.LOCATOR_VERDICTS:
+        if loc in ("", "—", "-"):
+            continue
+        if loc not in lb.LOCATOR_VERDICTS:
             out.append(f"{name}: `pares[{i}]` trae `localizador` «{loc}», fuera del vocabulario "
                        f"({' | '.join(lb.LOCATOR_VERDICTS)}) (#594)")
+        elif str(par.get("veredicto") or "").strip() != "soportada":   # AUD-605
+            out.append(f"{name}: `pares[{i}]` trae `localizador` «{loc}» con `veredicto` "
+                       f"«{par.get('veredicto')}»: el localizador es sólo con `soportada`; si no, «—» (#594)")
+        elif loc in ("vecina", "otro_lugar") and not str(par.get("localizador_real") or "").strip():
+            out.append(f"{name}: `pares[{i}]` dice `localizador: {loc}` sin `localizador_real`: "
+                       f"falta dónde está el hecho (#594, AUD-635)")
     return out
 
 

@@ -21,6 +21,12 @@ NOTA = ("---\ntags: [concept]\n---\n\n# X\n\n"
         "Y el período es de 34 días [[2020A]], mientras que [[2021B]] mide 36.\n")
 
 
+@pytest.fixture(autouse=True)
+def _fuentes_con_pdf(monkeypatch):
+    """Las fuentes de estos tests tienen PDF salvo que el test diga lo contrario (#595)."""
+    monkeypatch.setattr(vf.cfg, "pdf_slug", lambda bib, *a, **k: "s")
+
+
 def _nota(tmp_path):
     p = tmp_path / "x.md"
     p.write_text(NOTA, encoding="utf-8")
@@ -228,3 +234,20 @@ def test_580_la_CLI_AVISA_las_filas_sin_bloque_y_calla_si_no_hay(tmp_path, capsy
     nota.write_text(NOTA.replace("34 días", "35 días"), encoding="utf-8")
     assert vf.main([str(nota), "--out", str(tmp_path / "v"), "--segunda-clase"]) == 0
     assert "2 `contextualiza` sin su bloque" in capsys.readouterr().out
+
+
+def test_595_la_fuente_sin_archivo_no_lanza_juez_y_su_veredicto_ya_esta_escrito(tmp_path, monkeypatch):
+    """#595 — sin PDF ni `.txt` el veredicto es `no verificable por extracción` (#223); el generador
+    lanzaba igual un juez que improvisaba desde el `## Abstract` y la barrera lo dejaba pasar."""
+    import check_verify_fanout as cvf
+    monkeypatch.setattr(vf.cfg, "pdf_slug", lambda bib, *a, **k: None if bib == "2021B" else "s")
+    monkeypatch.setattr(vf.cfg, "txt_slug", lambda bib, *a, **k: None)
+    out = tmp_path / "r"
+    m = vf.write_round(_nota(tmp_path), out)
+    assert m["sin_archivo"] == ["2021B"] and m["fuentes"]["2021B"] == 1
+    assert not (out / "prompts" / "2021B.md").exists() and (out / "prompts" / "2020A.md").exists()
+    data = json.loads((out / "2021B.json").read_text(encoding="utf-8"))
+    assert [p["veredicto"] for p in data["pares"]] == ["no verificable por extracción"]
+    assert lb.fanout_errors(data, entry="2021B.json") == [] and cvf.verdict_errors(data, "2021B.json") == []
+    data["pares"][0]["veredicto"] = "soportada"            # el juez que improvisa: la barrera lo frena
+    assert "#595" in " ".join(cvf.verdict_errors(data, "2021B.json"))

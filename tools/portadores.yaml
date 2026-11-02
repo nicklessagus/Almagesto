@@ -764,6 +764,9 @@ portadores:
     funcion: lib_config.txt_slug
     patron: 'FULLTEXT\s*/\s*\w+\s*/'
     consumidores:
+      - modulo: scripts/verify_fanout.py
+        estado: usa
+        motivo: "#595: la fuente sin PDF ni `.txt` (bajo cualquier slug) no lanza juez."
       - modulo: scripts/extraction_prompt.py
         estado: usa
         motivo: el prompt dice si hay índice y a qué copia apuntan sus `grep`
@@ -817,6 +820,9 @@ portadores:
     funcion: lib_config.pdf_slug
     patron: 'PDFS\s*/\s*\w+\s*/'
     consumidores:
+      - modulo: scripts/verify_fanout.py
+        estado: usa
+        motivo: "#595: la fuente sin PDF (bajo cualquier slug) ni `.txt` no lanza juez."
       - modulo: scripts/extraction_prompt.py
         estado: usa
         motivo: "decide si el prompt manda leer el PDF o declarar `fuente: abstract`"
@@ -2986,6 +2992,9 @@ portadores:
     funcion: check_verify_fanout.verdict_errors
     patron: 'VERDICTS_FANOUT|VERDICTS_WITHOUT_SOURCE'
     consumidores:
+      - modulo: scripts/verify_fanout.py
+        estado: fuera-de-alcance
+        motivo: "#595: ESCRIBE `no verificable por extracción` para la fuente sin archivo, antes del juez; el valor lo sigue validando la barrera."
       - modulo: scripts/lib_blocks.py
         estado: fuera-de-alcance
         motivo: "DEFINE los vocabularios y el fence del prompt; `fanout_errors` mira forma, no valor, por diseño declarado."
@@ -3020,6 +3029,9 @@ portadores:
     funcion: lib_config.declared_motive
     patron: 'get\("(sin_bibtex|sin_abstract_motivo|sin_conclusiones|pending_motivo|corpus_sin_probe)"\)'
     consumidores:
+      - modulo: scripts/query_ads.py
+        estado: usa
+        motivo: "`cero_verdadero` (#589) se lee con `declared_motive` (AUD-607)."
       - modulo: scripts/harvest_views.py
         estado: usa
         motivo: "#558 — `theme_decision_proposals` lee el `motivo` de cada tema propuesto con `declared_motive`."

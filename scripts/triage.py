@@ -221,7 +221,7 @@ def accept_key(slug: str, claves: list[str], reason: str) -> int:
     if not reason:
         sys.exit("--accept-key necesita un --reason con contenido: el motivo es la decisión.")
     decisiones = load_decisions(slug)
-    malas = []
+    malas, aceptadas = [], []
     for k in dict.fromkeys(c.strip() for c in claves if c and c.strip()):
         if cfg.is_ads_bibcode(k):
             malas.append(f"{k}: es un bibcode de ADS → `extra_core` (el carril que además lo trae)")
@@ -232,12 +232,18 @@ def accept_key(slug: str, claves: list[str], reason: str) -> int:
                          f"{previa.get('fecha', 's/f')}: {previa.get('motivo') or 's/m'}) — "
                          f"revertirlo es anularlo (D-52), no pisarlo")
         else:
-            decisiones[k] = {"decision": "aceptado", "origen": "sujeto", "motivo": reason,
-                             "fecha": dt.date.today().isoformat()}
+            nueva = {"decision": "aceptado", "origen": "sujeto", "motivo": reason,
+                     "fecha": dt.date.today().isoformat()}
+            if previa:   # AUD-612: an `anulada` keeps its `previa` (D-52); nothing is overwritten silently
+                cfg.print_seguro(f"  ⚠ {k} ya tenía decisión ({previa.get('decision', '?')}, "
+                                 f"{previa.get('fecha', 's/f')}): queda en `previa`")
+                nueva["previa"] = previa
+            decisiones[k] = nueva
+            aceptadas.append(k)
     if malas:
         sys.exit("--accept-key rehúsa (no se escribió nada):\n  " + "\n  ".join(malas))
     save_decisions(slug, decisiones)
-    cfg.print_seguro(f"  {len(claves)} clave(s) aceptada(s) en `{slug}` (carril `sujeto`) — "
+    cfg.print_seguro(f"  {len(aceptadas)} clave(s) aceptada(s) en `{slug}` (carril `sujeto`) — "
                      f"motivo: {reason}")
     return 0
 

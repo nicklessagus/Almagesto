@@ -110,7 +110,18 @@ def write_round(nota: Path, out_dir: Path, fuentes: list | None = None,
     todos = by_source(lb.pairs_of(text))
     modo, grupos = scoped_sources(nota, text, todos, fuentes, solo_nuevos)
     (out_dir / "prompts").mkdir(parents=True, exist_ok=True)
+    sin_archivo = []
     for bib, pares in grupos.items():
+        if cfg.pdf_slug(bib) is None and cfg.txt_slug(bib) is None:
+            # #595 — nothing to read: the verdict is decided here (#223), not paid to a judge who
+            # would improvise from the `## Abstract`. The file goes where a judge's would, so the
+            # manifest and the barrier count it like any other source.
+            sin_archivo.append(bib)
+            (out_dir / f"{bib}.json").write_text(json.dumps({"bibcode": bib, "pares": [
+                {"ancla": p.anchor, "veredicto": lb.VERDICTS_WITHOUT_SOURCE[0],
+                 "evidencia": "sin PDF ni `.txt` en disco (#223, #595)"} for p in pares]},
+                ensure_ascii=False, indent=1), encoding="utf-8")
+            continue
         (out_dir / "prompts" / f"{bib}.md").write_text(prompt_for(nota, bib, pares, out_dir),
                                                        encoding="utf-8")
     # @inv INV-161
@@ -120,6 +131,7 @@ def write_round(nota: Path, out_dir: Path, fuentes: list | None = None,
                 # AUD-494 — las anclas que se mandaron: la barrera cruza lo devuelto contra esto
                 "anclas": {bib: [p.anchor for p in pares] for bib, pares in grupos.items()},
                 "alcance": {"modo": modo, "fuentes": sorted(grupos)},
+                "sin_archivo": sorted(sin_archivo),
                 "nota_total": {"pares": sum(len(p) for p in todos.values()),
                                "fuentes": len(todos)},
                 "version": cfg.ALMAGESTO_VERSION}
@@ -266,7 +278,8 @@ def main(argv=None) -> int:
                      + (f"\n  alcance `{m['alcance']['modo']}`: {fuera} par(es) de la nota quedan "
                         f"FUERA y se re-anclan al escribir el hermano (#407)" if fuera else ""))
     for bib, n in m["fuentes"].items():
-        cfg.print_seguro(f"  {bib}: {n}")
+        cfg.print_seguro(f"  {bib}: {n}" + ("  — sin PDF ni `.txt`: veredicto ya escrito, sin "
+                                             "subagente (#223, #595)" if bib in m["sin_archivo"] else ""))
     cfg.print_seguro(f"Lanzá UN subagente `general-purpose` por fuente, en paralelo, con su prompt. "
                      f"Después: python scripts/check_verify_fanout.py {args.out}")
     return 0

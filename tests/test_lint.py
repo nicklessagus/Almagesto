@@ -11772,6 +11772,9 @@ def test_check_unsynthesized_by_subject_mide_el_PAR_con_reclamo_directo(toy_vaul
         {"2020P": sin_nota}, set())[0]] == ["Estrella B"]
     declarado = {**fm, "no_sintetizado": [{"sujeto": "Estrella B", "motivo": "fila de muestra"}]}
     assert lint.check_unsynthesized_by_subject({"2020P": declarado}, set())[0] == []
+    for malo in ("<motivo>", "true", "", True):     # AUD-566: sin motivo el par sigue siendo deuda
+        pelado = {**fm, "no_sintetizado": [{"sujeto": "Estrella B", "motivo": malo}]}
+        assert len(lint.check_unsynthesized_by_subject({"2020P": pelado}, set())[0]) == 1, malo
     # pasado el filtro barato (hay UN candidato en B), el loop sigue descartando: el sintetizado
     # en B, el que ya reportó el chequeo por nota, y el que el tema reclama sólo por `methods`
     mk_note(cfg.STARS, "b", {"tags": ["star"], "name": "Estrella B"}, "cita [[2021S]]\n")
@@ -12022,3 +12025,13 @@ def test_594_el_lint_lista_el_par_soportado_con_el_localizador_ajeno(tmp_path):
     hits = lint.check_wrong_locator([("n", "x\n", nota)])
     assert [h.split(" par ")[1].split(":")[0] for _s, h in hits] == ["1", "5"], hits
 
+
+
+def test_AUD566_567_607_un_motivo_que_no_es_motivo_no_abre_ninguna_escotilla():
+    """AUD-566/567/607 (familia AUD-541, INV-167): `<motivo>`, `true` o `sí` no son motivo — ni en el
+    filtro barato de #559, ni en las firmas que leen `motivo` con `signature_text`."""
+    import lib_config as cfg
+    for malo in ("<motivo>", "true", "sí", "", True):
+        assert cfg.signature_text({"motivo": malo}, "motivo") == "", malo
+    assert cfg.signature_text({"motivo": "segunda mano, año en la fuente"}, "motivo")
+    assert cfg.signature_text({"pagina": 7}, "pagina") == "7"

@@ -3289,7 +3289,8 @@ def check_unsynthesized_by_subject(paper_fms: dict, ya: set, sujetos=None) -> tu
                    and nombres & {str(x) for k in ("stars", "thesis_links")
                                   for x in cfg.as_list(fm.get(k))}
                    and not (nombres & {str(cfg.as_map(d).get("sujeto")) for d in
-                                       cfg.as_list(fm.get("no_sintetizado"))})
+                                       cfg.as_list(fm.get("no_sintetizado"))
+                                       if cfg.declared_motive(cfg.as_map(d).get("motivo"))})
                    for stem, fm in paper_fms.items()):
             continue
         try:

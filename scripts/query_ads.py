@@ -1795,7 +1795,8 @@ def main() -> int:
             # query corre igual (los reintentos de #27 siguen filtrando el espurio) y el 0 queda
             # registrado. Sin la declaración, #27 intacto.
             cero = head.get("kind") == "star" and meta.get("cero_verdadero")
-            if not (isinstance(cero, str) and cero.strip()):
+            cero = cfg.declared_motive(cero)   # AUD-607: `<motivo>`/`true`/`sí` no son motivo (INV-167)
+            if not cero:
                 raise
             if not cfg.load_extra_core(meta, entry=args.slug):
                 sys.exit(f"`cero_verdadero` declarado para '{args.slug}' pero sin `extra_core`: "

@@ -631,3 +631,14 @@ def test_renombrar_slug_en_alcance_con_subconjunto_y_dos_renglones():
         "> Alcance 2026-10-06 · estrellas: [tc(15), tau_ceti_b,\n> kapteyn] · 58 papers")
     assert rx.sub(lambda m: entity._rename_scope_list(m, "kapteyn", "gj191"), t) == (
         "> Alcance 2026-10-06 · estrellas: [tau_ceti(15), tau_ceti_b,\n> gj191] · 58 papers")
+
+
+def test_AUD594_el_rename_que_romperia_el_frontmatter_no_escribe(toy_vault):
+    """AUD-594 — la guarda #222 preguntaba `isinstance(split_fm(n), dict)`, siempre True (`{}` = no
+    parsea): un slug nuevo que rompe el YAML dejaba la nota rota. Se compara contra el ANTES."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    f = cfg.PAPERS / "2020F.md"
+    antes = "---\nbibcode: 2020F\ncola_tema:\n- {tema: pca, fecha: x, motivo: m}\n---\n"
+    f.write_text(antes, encoding="utf-8")
+    _, _, sin_tocar = entity._rewrite_subject_layers("pca", "pca: x", theme=True)
+    assert f.read_text(encoding="utf-8") == antes and [p.name for p, _ in sin_tocar] == ["2020F.md"]

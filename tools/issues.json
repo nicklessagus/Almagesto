@@ -2960,6 +2960,16 @@
    "number": 594,
    "title": "El autor y el localizador que la prosa le pega a un [[bibcode]] no los chequea nadie: «Al Moulla et al.» sobre un paper de Artigau pasó verify y lint",
    "state": "CLOSED"
+  },
+  {
+   "number": 595,
+   "title": "verify_fanout lanza un juez para la fuente sin PDF ni .txt: la regla #223 vive sólo en el escritor",
+   "state": "OPEN"
+  },
+  {
+   "number": 596,
+   "title": "El par re-anclado arrastra el Localizador del texto viejo; y una ronda no se puede acotar a pares",
+   "state": "OPEN"
   }
  ]
 }

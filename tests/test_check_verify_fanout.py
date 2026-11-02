@@ -20,6 +20,12 @@ sys.path.insert(0, str(RAIZ / "scripts"))
 import check_verify_fanout as cvf   # noqa: E402
 import lib_blocks as lb             # noqa: E402
 
+
+@pytest.fixture(autouse=True)
+def _fuentes_con_pdf(monkeypatch):
+    """Las fuentes de estos tests tienen PDF salvo que el test diga lo contrario (#595)."""
+    monkeypatch.setattr(cvf.cfg, "pdf_slug", lambda bib, *a, **k: "s")
+
 SKILL = RAIZ / ".claude" / "skills" / "verify-citations" / "SKILL.md"
 
 #: Un archivo que CUMPLE, del que salen todas las mutaciones de abajo. Se arma desde la constante
@@ -227,3 +233,13 @@ def test_594_toda_clave_que_juez_md_pide_pasa_por_el_schema_del_fanout():
     par = {"ancla": "a" * 10, "veredicto": "soportada", "evidencia": "«x» (p. 1)",
            "localizador": "otro_lugar", "localizador_real": "Sect. 3.3"}
     assert lb.fanout_errors({"bibcode": "B", "pares": [par]}, entry="f.json") == []
+
+
+def test_AUD605_635_localizador_solo_con_soportada_y_con_su_localizador_real():
+    def errs(**par):
+        return cvf.verdict_errors({"bibcode": "B", "pares": [par]}, "f.json")
+    assert errs(veredicto="soportada", localizador="ok") == []
+    assert errs(veredicto="soportada", localizador="otro_lugar", localizador_real="Sect. 3.3") == []
+    assert errs(veredicto="no-soportada", localizador="—") == []
+    assert "sólo con `soportada`" in errs(veredicto="no-soportada", localizador="ok")[0]
+    assert "localizador_real" in errs(veredicto="soportada", localizador="vecina")[0]

@@ -1303,3 +1303,17 @@ def test_583_accept_key_acepta_la_clave_off_ADS_y_cierra_fuera_del_registro(toy_
         with pytest.raises(SystemExit):
             run_main(monkeypatch, ["drs", "--accept-key", clave, "--reason", "m"])
     assert cfg.load_decisiones("drs")["2018D"]["decision"] == "descartado"
+
+
+def test_AUD612_accept_key_conserva_la_decision_previa(toy_vault, monkeypatch, capsys):
+    """AUD-612 — pisaba una decisión no-`descartado` en silencio: una `anulada` perdía su `previa`
+    (D-52) y un `aceptado` su motivo y fecha. Y contaba las claves repetidas."""
+    from conftest import seed_outside_registry
+    seed_outside_registry()
+    (cfg.PAPERS / "2023C.md").write_text("---\ntags: [paper]\n---\n", encoding="utf-8")
+    assert run_main(monkeypatch, ["drs", "--accept-key", "2023C", "2023C", "--reason", "primera"]) == 0
+    assert "  1 clave(s) aceptada(s)" in capsys.readouterr().out
+    assert run_main(monkeypatch, ["drs", "--accept-key", "2023C", "--reason", "segunda"]) == 0
+    d = cfg.load_decisiones("drs")["2023C"]
+    assert d["motivo"] == "segunda" and d["previa"]["motivo"] == "primera"
+    assert "ya tenía decisión" in capsys.readouterr().out
