@@ -201,3 +201,13 @@ def test_AUD480_el_veredicto_fuera_del_vocabulario_no_pasa_la_barrera(tmp_path):
     datos["pares"][0]["veredicto"] = "parcial"
     pares, errs = cvf.check_dir(_dir_con(tmp_path, **{"2020ApJ...900....1A": datos}))
     assert pares == {} and any("parcial" in e and "veredicto" in e for e in errs), errs
+
+
+def test_594_la_barrera_rechaza_un_localizador_fuera_de_vocabulario():
+    data = {"bibcode": "2018A&A...620A..47D",
+            "pares": [{"veredicto": "soportada", "localizador": "ok"},
+                      {"veredicto": "soportada", "localizador": "—"},
+                      {"veredicto": "soportada", "localizador": "en otra página"}]}
+    errores = cvf.verdict_errors(data, "f.json")
+    assert len(errores) == 1 and "pares[3]" in errores[0], errores
+

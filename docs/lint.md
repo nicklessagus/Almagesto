@@ -315,6 +315,11 @@ Deben quedar en **0**:
   `first_author` no se evalúa. Por **línea**, como se midió: sobre una bóveda real (635 papers),
   30 hits sobre 139 menciones sin año, todos segunda mano salvo el caso real. Corre después del
   barrido (necesita el `first_author` de todos los papers).
+- **Localizador ajeno** (#594, backlog): un par `soportada` cuya columna `Localizador` del hermano
+  dice `otro_lugar` o `sin_localizador`: el contenido está en la fuente, pero no donde la nota dice.
+  No bloquea (el dato es verdadero); se cierra corrigiendo el localizador en la nota, lo que vence
+  el ancla y la re-verificación vuelve con `ok`. Medido en una bóveda real: 7 de 40 pares
+  `soportada` con algún localizador equivocado.
 - **`.obsidian/` en la raíz del repo**: la bóveda se abrió mal (el grafo indexa el andamiaje);
   abrir `vault/` como vault y borrar ese directorio.
 - **Alias de más** (declarado en `stars.yaml` y que resuelve a otro objeto).

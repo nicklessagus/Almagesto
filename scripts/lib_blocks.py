@@ -110,6 +110,9 @@ class Row:
     # #122: el texto de `Evidencia`. Lleva el LOCALIZADOR (`(L320)` / `(p. 628)`), que dice desde
     # otro ángulo lo mismo que `source_kind` — y los dos pueden discrepar.
     evidence: str = ""
+    # #594: is each fact at the locator the claim declares? `LOCATOR_VERDICTS`, optionally followed by
+    # `: <where it really is>`. "" or `—` = not evaluated (rows older than the column), never «ok».
+    locator: str = ""
 
 
 @dataclass(frozen=True)
@@ -1443,6 +1446,7 @@ def parse_verif_table(text: str) -> list[Row] | None:
     i_hash = _idx("hash fuente", "hash", default=5)
     i_cond = _idx("condici", default=6)
     i_evid = _idx("evidencia")            # opcional: la plantilla de 7 columnas no la trae
+    i_loc = _idx("localizador")           # #594, opcional: las tablas previas no la traen
     out: list[Row] = []
     for ln in filas[1:]:
         if _SEP_ROW_RE.match(ln):
@@ -1478,8 +1482,10 @@ def parse_verif_table(text: str) -> list[Row] | None:
         bibs = _bibcodes(celdas[i_fuente]) or [celdas[i_fuente].strip("[]")]
         kind, h = split_source_ref(celdas[i_hash])
         evid = celdas[i_evid] if i_evid is not None and i_evid < len(celdas) else ""
+        loc = celdas[i_loc] if i_loc is not None and i_loc < len(celdas) else ""
         out.append(Row(celdas[i_n], celdas[i_claim], bibs[0], celdas[i_verd],
-                       celdas[i_ancla], h, celdas[i_cond], kind, evid))
+                       celdas[i_ancla], h, celdas[i_cond], kind, evid,
+                       "" if loc in ("—", "-", "–") else loc))
     return out
 
 
@@ -1496,10 +1502,14 @@ def parse_verif_table(text: str) -> list[Row] | None:
 # INV-98, #222). La salida es la de #222: **re-parsear lo escrito y exigir que devuelva lo que se le
 # escribió**; un bloque cuya lectura no reproduce lo que se escribió NO SE PUBLICA.
 
-#: Las ocho columnas de la plantilla vigente, en orden. La escritura las produce; la lectura
+#: Las nueve columnas de la plantilla vigente (#594 sumó `Localizador`), en orden. La escritura las produce; la lectura
 #: (`parse_verif_table`) indexa por NOMBRE, así que el orden de acá no es un contrato para leer.
 VERIF_COLS = ("#", "Afirmación (extracto)", "Fuente", "Veredicto", "Evidencia", "Ancla",
-              "Hash fuente", "Condición")
+              "Hash fuente", "Condición", "Localizador")
+
+#: #594 · the judge's locator axis, a closed vocabulary. Separate from the verdict: a fact at the
+#: wrong page is still supported, so it never moves `VERDICTS`.
+LOCATOR_VERDICTS = ("ok", "vecina", "otro_lugar", "sin_localizador")
 
 
 def _hash_cell(row) -> str:
@@ -1815,7 +1825,8 @@ def render_verif_row(row) -> str:
     recomposes its prefix. Escaping is `cfg.escape_cell`, the same one the view harvester uses:
     inside `$…$` a bar is `\vert`, outside it is `\|`."""
     celdas = (str(row.n), truncate_claim(row.claim), f"[[{row.bibcode}]]" if row.bibcode else "",
-              row.verdict, row.evidence, row.anchor, _hash_cell(row), row.condition or "—")
+              row.verdict, row.evidence, row.anchor, _hash_cell(row), row.condition or "—",
+              getattr(row, "locator", "") or "—")
     for c in celdas:
         # #274a — la salida estructurada del fan-out serializada con `repr()` en vez de convertida a
         # prosa: al lector le llegan los corchetes, los `', '` y los apóstrofos escapados. Medido en

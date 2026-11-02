@@ -4032,6 +4032,25 @@ def regimen_rows_citing(texto: str, bibcode: str, seccion: str = "## Régimen de
     return any(ln.strip().startswith("|") and link.search(ln) for ln in seccion.split("\n"))
 
 
+def check_wrong_locator(anchor_notes) -> list:
+    """`localizador_ajeno` — a supported pair whose judge found the fact somewhere other than the
+    locator the note declares, or no locator of its own (#594, backlog).
+
+    The content is true, so it never blocks; what is false is WHERE the note says it is, and the
+    consumer copies that page. Read on the row in force (`current_verdict`): only a `soportada`
+    pair has a locator verdict. Closed by fixing the locator in the note — the anchor moves and the
+    re-verified row comes back `ok`."""
+    out: list = []
+    for stem, _texto, ruta in sorted(anchor_notes):
+        for fila in lb.verif_rows(ruta) or []:
+            cabeza = (fila.locator or "").split(":")[0].strip()
+            if cabeza in ("otro_lugar", "sin_localizador") and \
+                    lb.current_verdict(fila.verdict) == "soportada":
+                out.append((stem, f"[[{fila.bibcode}]] par {fila.n}: localizador `{fila.locator[:120]}` "
+                                  f"→ corregí el localizador en la nota (#594)"))
+    return out
+
+
 def check_condition_destinations(anchor_notes) -> list:
     """`cond_destino` — `acota→resuelta: <dónde>` whose destination does not hold (#576, backlog).
 
@@ -7595,6 +7614,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
      found["verif_sin_localizador"], found["verif_truncada"],
      found["cond_sin_clasificar"]) = check_verification_pairs(sweep.anchor_notes, evidencia_hash_de)
     found["cond_destino"] = check_condition_destinations(sweep.anchor_notes)
+    found["localizador_ajeno"] = check_wrong_locator(sweep.anchor_notes)       # #594
     found["extraccion_despaginada"], _dep_poblacion = check_depaginated_extractions()
     # #279/#350 · la prosa que levanta un valor de SEGUNDA MANO sin decirlo.
     _sm_hallazgos, _n_pares_sm, _sm_revisados, _sm_huerfanas = check_second_hand_lifted(
@@ -7800,6 +7820,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('costura_unidad', '⚠ Costura de unidad: una unidad separada de su número, la firma de un empalme mal hecho (#406, WARN)', SEV_WARN, tuple(found['costura_unidad']), poblacion='notas'),
         Categoria('agregacion_sin_inferencia', '⚠ Agregación de fuentes sin la marca `inferencia` en la prosa de la síntesis («el corpus», «las N fuentes», «casi todos») (#556, WARN)', SEV_WARN, tuple(found['agregacion_sin_inferencia']), poblacion='entidades'),
         Categoria('autor_ajeno', '⚠ «Apellido et al.» sin año sobre una línea cuyos `[[bibcode]]` no son de ese primer autor (#594, WARN)', SEV_WARN, tuple(found['autor_ajeno']), poblacion='entidades'),
+        Categoria('localizador_ajeno', '📍 Par soportado con el localizador en otro lugar o sin localizador propio, según el juez (#594, backlog)', SEV_BACKLOG, tuple(found['localizador_ajeno']), poblacion='entidades'),
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(found['cond_sin_clasificar']), poblacion='entidades'),
         Categoria('cond_destino', '⚖ Condición `acota` resuelta en un destino que no se sostiene: fuera de vocabulario, o `regimen`/`inventario` sin fila con su bibcode (#576, backlog)', SEV_BACKLOG, tuple(found['cond_destino']), poblacion='entidades'),
         Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog)', SEV_BACKLOG, tuple(found['verif_estructura']), poblacion='entidades'),

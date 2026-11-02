@@ -427,7 +427,8 @@ def test_la_plantilla_y_el_parser_hablan_de_las_mismas_columnas():
     cols = _encabezado_plantilla()
     fila = {"Afirmación (extracto)": "claim", "Fuente": "[[2009Uno.....1..1M]]",
             "Veredicto": "soportada", "Evidencia": '"cita" (L1)',
-            "Ancla": "aaaaaaaaaa", "Hash fuente": "bbbbbbbbbb", "Condición": "—"}
+            "Ancla": "aaaaaaaaaa", "Hash fuente": "bbbbbbbbbb", "Condición": "—",
+            "Localizador": "ok"}
     celdas = ["1"] + [fila[c] for c in cols[1:]]
     nota = ("---\nname: X\n---\n# X\n\n## Verificación de citas (2026-08-25)\n\n"
             + "| " + " | ".join(cols) + " |\n"

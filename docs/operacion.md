@@ -2006,7 +2006,7 @@ cruzando archivos: R-1, la escribe el paso de cierre). ⛔ **Una sola función r
 de `entity.py`.
 
 **El bloque `## Verificación de citas`** — una fila por par, en el hermano:
-`| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`
+`| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición | Localizador |`
 - ⛔ **Sin fila no hay dónde colgar el ancla**: colapsar las soportadas en prosa deja al lint sin
   distinguir "verificada" de "nunca se miró".
 - ⛔ **Sólo `Afirmación (extracto)` se trunca (#226)**; `Evidencia` y `Condición` no, y `Evidencia`

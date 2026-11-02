@@ -11989,3 +11989,19 @@ def test_594_la_firma_de_autor_ajeno_no_es_huerfana_en_el_barrido_por_nota():
     assert huerfanas == []
     *_, huerfanas = lint.split_reviewed_warn("n", fm, "x\n", 0, {}, ("autor_ajeno",))
     assert len(huerfanas) == 1
+
+
+def test_594_el_lint_lista_el_par_soportado_con_el_localizador_ajeno(tmp_path):
+    nota = tmp_path / "n.md"
+    nota.write_text("x\n", encoding="utf-8")
+    filas = [lb.Row(str(i), "a", "2018A&A...620A..47D", v, f"{i}bcdef0123", "1234567890", "—",
+                    "pdf", "«a» (p. 1)", loc)
+             for i, (v, loc) in enumerate([("soportada", "otro_lugar: p. 4"),
+                                           ("soportada", "ok"), ("soportada", ""),
+                                           ("no-soportada", "sin_localizador"),
+                                           ("soportada", "sin_localizador")], 1)]
+    cfg.verif_sidecar(nota).write_text(f"{lb.VERIFY_HEADER}\n\n{lb.render_verif_table(filas)}\n",
+                                       encoding="utf-8")
+    hits = lint.check_wrong_locator([("n", "x\n", nota)])
+    assert [h.split(" par ")[1].split(":")[0] for _s, h in hits] == ["1", "5"], hits
+

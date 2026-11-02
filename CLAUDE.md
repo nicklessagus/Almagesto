@@ -1090,7 +1090,7 @@ enumerador), pero sus `[[bibcode]]` cuentan para los wikilinks rotos y los reesc
 es la **séptima capa** de `entity.py` (`CAPAS`).
 
 **El bloque `## Verificación de citas`** — una fila por par, en el hermano:
-`| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |`
+`| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición | Localizador |` (#594: eje aparte, vacío = no evaluado)
 - **Sin fila no hay dónde colgar el ancla**: no colapsar las soportadas en prosa.
 - **Sólo `Afirmación (extracto)` se trunca (#226)**; `Evidencia` lleva su localizador **al final y
   completo** (#122). **El corte no cae dentro de `$…$`, `` ` `` ni `[[ ]]`** (#274b/#257c:

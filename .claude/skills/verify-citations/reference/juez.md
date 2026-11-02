@@ -68,6 +68,18 @@ Por cada fuente, el subagente:
     es ruido**: *«el S/N está medido en el continuo a 4000 Å»*, *«la medición no es sobre RVs»*
     vuelven **falsa** la afirmación fuera de su régimen. La celda del bloque se escribe `acota: …` / `contextualiza: …`, y el lint
     reporta como backlog la que no lo declara.
+  - `localizador` (**sólo con `soportada`; si no, `—`**. Eje aparte, #594): ¿cada hecho que la
+    afirmación le atribuye a esta fuente está **en el localizador que la afirmación declara**
+    (página —del PDF o de la revista—, sección, figura, tabla, ecuación)? Vocabulario cerrado:
+    `ok` · `vecina` (página o sección contigua) · `otro_lugar` (al menos un hecho está en otra
+    parte; el caso típico es varios hechos de un paper bajo la página de uno solo) ·
+    `sin_localizador` (la afirmación no le da localizador propio a esta fuente, o el que lleva es
+    de otra fuente del bloque). **No cambia el veredicto**: con el localizador mal el contenido
+    sigue respaldado. Con `vecina` u `otro_lugar`, llená también **`localizador_real`**: dónde
+    está cada hecho que no estaba en el declarado («rango: Tabla 2, p. 1814»).
+    ⚠ **El autor sí cambia el veredicto:** si la afirmación nombra a esta fuente («X et al.») y X no
+    es el primer autor de este PDF, la atribución es falsa → `no-soportada`, con el autor real en la
+    `nota`. Mirá la primera página; no lo des por bueno porque el contenido coincide.
   - `completitud` (**sólo cuando el par sale de una transcripción** de tabla o lista de la fuente):
     ¿la tabla/lista del paper tiene **más filas/ítems** que los que la nota transcribe? Si sí,
     **listarlos** (con su página). Es un **hallazgo aparte**, no un grado de soporte: no cambia el

@@ -139,6 +139,17 @@ def source_ref_for(bibcode: str, verdict: str, prefiere: str | None = None) -> s
                        f"es `no verificable por extracción` (#223)")
 
 
+def locator_cell(par: dict) -> str:
+    """The `Localizador` cell from the judge's `localizador` + `localizador_real` (#594): the value,
+    and where the fact really is after a colon. `""` = not evaluated (the barrier already rejected
+    a value outside `lb.LOCATOR_VERDICTS`)."""
+    loc = str(par.get("localizador") or "").strip()
+    if loc in ("", "—", "-"):
+        return ""
+    real = " ".join(str(par.get("localizador_real") or "").split())
+    return f"{loc}: {real}" if real and loc != "ok" else loc
+
+
 def condition_cell(par: dict, bibcode: str = "") -> str:
     """`acota: …` / `contextualiza: …` from `cond_tipo` + `condicion` (#221); `—` when none.
 
@@ -378,7 +389,8 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
             rows.append(lb.Row(n=str(n), claim=lb.truncate_claim(lb.normalize_ws(p.block.text)),
                                bibcode=p.bibcode, verdict=previa.verdict, anchor=p.anchor,
                                source_hash=previa.source_hash, condition=previa.condition,
-                               source_kind=previa.source_kind, evidence=previa.evidence))
+                               source_kind=previa.source_kind, evidence=previa.evidence,
+                               locator=previa.locator))
             continue
         n += 1
         veredicto = str(par["veredicto"]).strip()
@@ -412,7 +424,7 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
         rows.append(lb.Row(n=str(n), claim=lb.truncate_claim(lb.normalize_ws(p.block.text)),
                            bibcode=p.bibcode, verdict=celda, anchor=p.anchor, source_hash=h or "—",
                            condition=cond, source_kind=kind,
-                           evidence=evidencia))
+                           evidence=evidencia, locator=locator_cell(par)))
     return rows
 
 

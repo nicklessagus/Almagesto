@@ -98,6 +98,12 @@ def verdict_errors(data: dict, name: str) -> list[str]:
             continue
         out.append(f"{name}: `pares[{i}]` trae `veredicto` «{v}», fuera del vocabulario del "
                    f"fan-out ({' | '.join(lb.VERDICTS_FANOUT)})")
+    # #594 — the locator axis is closed too; absent or `—` = not evaluated, which passes.
+    for i, par in enumerate(data["pares"], 1):
+        loc = str(par.get("localizador") or "").strip()
+        if loc not in ("", "—", "-") and loc not in lb.LOCATOR_VERDICTS:
+            out.append(f"{name}: `pares[{i}]` trae `localizador` «{loc}», fuera del vocabulario "
+                       f"({' | '.join(lb.LOCATOR_VERDICTS)}) (#594)")
     return out
 
 

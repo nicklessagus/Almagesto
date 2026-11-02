@@ -1622,3 +1622,23 @@ def test_576_migrador_ida_y_vuelta_todos_los_eslabones_y_lista_lo_que_no_mapea(t
     assert "no es una nota" in capsys.readouterr().out
     assert ws.main([str(nota), "--migrate-condition-destination"]) == 0, "una nota sola, sin --todo"
     assert ws.main([str(herm), "--migrate-condition-destination"]) == 1, "el hermano no es la nota"
+
+
+# ── #594 · el eje `Localizador` del juez ─────────────────────────────────────────────────────────
+
+def test_594_la_columna_localizador_va_y_vuelve_y_la_tabla_vieja_se_lee_como_no_evaluada():
+    """#594 — el contenido estaba y la página no: el juez lo veía y no tenía dónde decirlo. La
+    columna es opcional POR NOMBRE, así que una tabla de ocho columnas se lee con el localizador
+    vacío («no evaluado»), nunca como `ok`."""
+    fila = lb.Row("1", "820 m/s por píxel", "2018A&A...620A..47D", "soportada", "abc1234567",
+                  "1234567890", "—", "pdf", "«820 m s−1» (p. 4)",
+                  "otro_lugar: p. 4, no la nota 3 de p. 2")
+    tabla = lb.render_verif_table([fila])
+    leida, = lb.parse_verif_table(f"{lb.VERIFY_HEADER}\n\n{tabla}\n")
+    assert leida.locator == fila.locator
+    vieja = "\n".join(ln.rsplit("|", 2)[0] + "|" for ln in tabla.split("\n"))   # sin la última columna
+    assert "Localizador" not in vieja
+    assert lb.parse_verif_table(f"{lb.VERIFY_HEADER}\n\n{vieja}\n")[0].locator == ""
+    assert ws.locator_cell({"localizador": "ok", "localizador_real": "x"}) == "ok"
+    assert ws.locator_cell({"localizador": "vecina", "localizador_real": "p.  5"}) == "vecina: p. 5"
+    assert ws.locator_cell({"localizador": "—"}) == ws.locator_cell({}) == ""
