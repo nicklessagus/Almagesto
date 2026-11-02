@@ -1586,3 +1586,16 @@ def test_587_la_firma_de_una_cita_CORTA_calla_en_los_DOS_portadores_y_no_es_huer
     assert ct.validar(nota, mostrar=False)["cortas"]
     [(_s, hue)] = lt.collect().por_clave("cita_revisada_huerfana").items
     assert "cambió" in hue
+
+
+def test_594_la_vista_de_lectura_trae_el_autor_de_la_nota_del_paper(toy_vault):
+    """#594 — el apellido que la prosa le pega a un `[[bibcode]]` se COPIA de la nota del paper:
+    el sintetizador, con todo el corpus en contexto, escribió «Al Moulla et al.» sobre Artigau."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2024AJ....168..252A.md").write_text(
+        "---\nfirst_author: Artigau, Étienne\nn_authors: 9\nyear: 2024\n---\n", encoding="utf-8")
+    (cfg.PAPERS / "2020A&A...600A..10A.md").write_text(
+        "---\nfirst_author: Solo, A.\nn_authors: 1\nyear: 2020\n---\n", encoding="utf-8")
+    assert ct.autor("2024AJ....168..252A") == "Artigau et al. 2024"
+    assert ct.autor("2020A&A...600A..10A") == "Solo 2020"
+    assert ct.autor("2099Zzz...999..999Z") == "autor ?"

@@ -83,6 +83,11 @@ Progreso del append de <fuente> → <destino>:
    `## Vista — <sujeto>`, orientada a **lo que aporta a la entidad destino** (una señal RV, un mecanismo, una ecuación del
    método), no un resumen genérico.
 
+> ⛔ **Autor y localizador de un `[[bibcode]]` se COPIAN, no se escriben (#594):** el «Apellido
+> et al.» sale del `first_author` de la nota del paper (`contrast.py <slug>` lo imprime), nunca del
+> recuerdo; y **un hecho, un localizador** — no varios hechos de un paper bajo la página de uno. El
+> juez de verify no lo mira.
+
 4. **Síntesis a la nota viva — INTEGRAR EN SU LUGAR (D-31).** Plegar a la ficha/concept **sólo lo
    que cambia la lectura**, reescribiendo **los bloques afectados donde están**. Los dos extremos
    están descartados:

@@ -287,6 +287,11 @@ Progreso del ingest del tema <tema>:
    roll-up, pero **no** a la prosa de la ficha — reescribir un bloque **vence las anclas** de los
    pares que vivían ahí (D-4/D-20) y obliga a re-verificar lo tocado (#203), que con #282 no
    converge solo. La síntesis se re-escribe leyendo, como siempre.
+> ⛔ **Autor y localizador de un `[[bibcode]]` se COPIAN, no se escriben (#594):** el «Apellido
+> et al.» sale del `first_author` de la nota del paper (`contrast.py <slug>` lo imprime), nunca del
+> recuerdo; y **un hecho, un localizador** — no varios hechos de un paper bajo la página de uno. El
+> juez de verify no lo mira.
+
 4. > ⚠ **Un ítem de linaje = un BULLET propio, no una oración con seis citas.** ⚠ Y su simétrico
 > (#316): un párrafo que **contrasta** dos fuentes legítimamente las cita a las dos — lo que no
 > puede pasar es que una **cita entrecomillada** quede sin su `[[bibcode]]` al lado, porque ahí el

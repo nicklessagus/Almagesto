@@ -143,6 +143,21 @@ def _refutado(bib: str, hits: list) -> str:
                      for e in hits)
 
 
+def autor(bib: str) -> str:
+    """«Surname et al. YEAR» from the paper note's frontmatter (#594) — the name the prose pins on
+    `[[bib]]` is COPIED from here, never written from memory: the synthesizer, with every paper of
+    the subject in context, wrote «Al Moulla et al.» over a paper by Artigau. `?` when the note or
+    the field is missing: an empty author is backlog, an invented one reads as truth (#392)."""
+    f = cfg.PAPERS / f"{cfg.note_stem(bib)}.md"
+    fm = (cfg.split_fm(f.read_text(encoding="utf-8")) or {}) if f.exists() else {}
+    nombre = str(fm.get("first_author") or "").split(",")[0].strip()
+    if not nombre:
+        return "autor ?"
+    n = fm.get("n_authors")
+    resto = "" if n == 1 else " et al."
+    return f"{nombre}{resto} {fm.get('year') or ''}".strip()
+
+
 def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | None,
              eje: str | None, filas: bool,
              incluir_dropeados: bool = False, cita: bool = False) -> int:
@@ -250,7 +265,7 @@ def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | N
                                  f"{cfg.escape_dollars(cfg.escape_cell(texto))} ({loc}){sm} | "
                                  f"{GLOSA} |")
             else:
-                cfg.print_seguro(f"[[{bib}]] · {loc}{sm}\n    {mostrado}"
+                cfg.print_seguro(f"[[{bib}]] ({autor(bib)}) · {loc}{sm}\n    {mostrado}"
                                  + (f"\n    régimen: {regimen}" if regimen and not campo else "")
                                  + (f"\n{_refutado(bib, hits)}" if hits else ""))
             n += 1

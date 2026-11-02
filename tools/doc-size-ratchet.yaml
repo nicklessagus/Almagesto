@@ -61,12 +61,12 @@ sale_obligatorio_desde: "2026-09-14"
 medido_skills: 39
 
 skills:               # techo en bytes por SKILL.md (#465); se ajusta como el de CLAUDE.md
-  append-knowledge: 12200
+  append-knowledge: 12508
   audit-note: 18610
   auditar: 18400
   find-contradictions: 21500
-  ingest-star: 32000
-  ingest-theme: 51918
+  ingest-star: 32266
+  ingest-theme: 52186
   maintain: 36803
   query-corpus: 6000
   setup: 15300
@@ -158,6 +158,42 @@ crecimientos_skills:      # {fecha, skill, ancla, motivo, sale, techo_bytes} por
       Nada: es una oración en el párrafo de `apply_fixes`; la forma completa está en
       `verify-citations` y en el docstring.
     techo_bytes: 18610
+
+  - fecha: "2026-11-01"
+    skill: ingest-star
+    ancla: "#594"
+    motivo: >-
+      El paso de síntesis es donde el sintetizador, con todo el corpus en contexto, le pegó a un
+      `[[bibcode]]` el apellido de otro paper y agrupó varios hechos bajo la página de uno; ni el
+      juez ni el lint lo veían. La regla tiene que estar donde se escribe la prosa.
+    sale: >-
+      Nada: son cuatro líneas en el paso de síntesis; el caso y la medición (30/139 en la instancia,
+      7/40 localizadores) van al issue y a `docs/lint.md`.
+    techo_bytes: 32266
+
+  - fecha: "2026-11-01"
+    skill: ingest-theme
+    ancla: "#594"
+    motivo: >-
+      El paso de síntesis es donde el sintetizador, con todo el corpus en contexto, le pegó a un
+      `[[bibcode]]` el apellido de otro paper y agrupó varios hechos bajo la página de uno; ni el
+      juez ni el lint lo veían. La regla tiene que estar donde se escribe la prosa.
+    sale: >-
+      Nada: son cuatro líneas en el paso de síntesis; el caso y la medición (30/139 en la instancia,
+      7/40 localizadores) van al issue y a `docs/lint.md`.
+    techo_bytes: 52186
+
+  - fecha: "2026-11-01"
+    skill: append-knowledge
+    ancla: "#594"
+    motivo: >-
+      El paso de síntesis es donde el sintetizador, con todo el corpus en contexto, le pegó a un
+      `[[bibcode]]` el apellido de otro paper y agrupó varios hechos bajo la página de uno; ni el
+      juez ni el lint lo veían. La regla tiene que estar donde se escribe la prosa.
+    sale: >-
+      Nada: son cuatro líneas en el paso de síntesis; el caso y la medición (30/139 en la instancia,
+      7/40 localizadores) van al issue y a `docs/lint.md`.
+    techo_bytes: 12508
 
 crecimientos:
   - fecha: "2026-08-31"
