@@ -1,5 +1,5 @@
 {
- "fetched": "2026-11-01",
+ "fetched": "2026-11-02",
  "issues": [
   {
    "number": 2,
@@ -2959,7 +2959,7 @@
   {
    "number": 594,
    "title": "El autor y el localizador que la prosa le pega a un [[bibcode]] no los chequea nadie: «Al Moulla et al.» sobre un paper de Artigau pasó verify y lint",
-   "state": "OPEN"
+   "state": "CLOSED"
   }
  ]
 }
