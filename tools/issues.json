@@ -2964,11 +2964,16 @@
   {
    "number": 595,
    "title": "verify_fanout lanza un juez para la fuente sin PDF ni .txt: la regla #223 vive sólo en el escritor",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 596,
    "title": "El par re-anclado arrastra el Localizador del texto viejo; y una ronda no se puede acotar a pares",
+   "state": "CLOSED"
+  },
+  {
+   "number": 597,
+   "title": "verify_fanout: acotar una ronda a pares sueltos (--anclas)",
    "state": "OPEN"
   }
  ]

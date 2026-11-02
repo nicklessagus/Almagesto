@@ -251,3 +251,16 @@ def test_595_la_fuente_sin_archivo_no_lanza_juez_y_su_veredicto_ya_esta_escrito(
     assert lb.fanout_errors(data, entry="2021B.json") == [] and cvf.verdict_errors(data, "2021B.json") == []
     data["pares"][0]["veredicto"] = "soportada"            # el juez que improvisa: la barrera lo frena
     assert "#595" in " ".join(cvf.verdict_errors(data, "2021B.json"))
+
+
+def test_597_la_ronda_se_acota_a_PARES_por_su_ancla(tmp_path):
+    """#597 — refrescar 107 pares obligaba a `--fuentes` sobre 57 fuentes (586 pares, 58 jueces):
+    el hallazgo del juez es por par, así que el alcance también puede serlo."""
+    nota = _nota(tmp_path)
+    pares = lb.pairs_of(nota.read_text(encoding="utf-8"))
+    una = next(p for p in pares if p.bibcode == "2020A")
+    m = vf.write_round(nota, tmp_path / "r", anclas=[una.anchor])
+    assert m["alcance"]["modo"] == "anclas" and m["fuentes"] == {"2020A": 1} and m["pares"] == 1
+    assert m["anclas"] == {"2020A": [una.anchor]} and m["nota_total"]["pares"] == len(pares)
+    with pytest.raises(vf.ScopeError, match="ffffffffff"):
+        vf.write_round(nota, tmp_path / "r2", anclas=["ffffffffff"])

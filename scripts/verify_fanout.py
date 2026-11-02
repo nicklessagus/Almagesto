@@ -20,7 +20,7 @@ it WRITES what it knows:
     nota_total}`. The barrier reads it, refuses an `--esperados` that contradicts it, names the
     source that is missing, and crosses each source's returned anchors against `anclas` (AUD-494).
 
-⛔ A round can be SCOPED (#407): `--fuentes b1,b2` or `--solo-nuevos`. #282 prescribes exactly
+⛔ A round can be SCOPED (#407): `--fuentes b1,b2`, `--anclas a1,a2` (#597) or `--solo-nuevos`. #282 prescribes exactly
 that —re-verify the pairs whose claim changed, re-anchor the rest— and `reverify_subset` emits the
 partition, but the generator only knew full rounds, so the scoped one could not pass the barrier
 («faltan 114») and the three ways out were all bad: pay the full round, skip the barrier, or edit
@@ -77,7 +77,7 @@ class ScopeError(Exception):
 
 
 def scoped_sources(nota: Path, text: str, grupos: dict, fuentes: list | None,
-                   solo_nuevos: bool) -> tuple[str, dict]:
+                   solo_nuevos: bool, anclas: list | None = None) -> tuple[str, dict]:
     """`(modo, {bibcode: [pares]})` — which sources this round judges (#407).
 
     `completa` is every source; `fuentes` is the explicit list, refused if it names a source the
@@ -86,6 +86,12 @@ def scoped_sources(nota: Path, text: str, grupos: dict, fuentes: list | None,
     with no evaluable block sends every pair there (D-43: that is not «nothing to re-verify»), so
     `solo-nuevos` on such a note equals a full round, and the manifest says which mode asked for it.
     """
+    if anclas:   # #597 — the judge's finding is per pair, so the scope can be the pair
+        quiero = set(anclas)
+        sueltas = sorted(quiero - {p.anchor for ps in grupos.values() for p in ps})
+        if sueltas:
+            raise ScopeError(f"`--anclas` nombra ancla(s) que la nota no tiene: {', '.join(sueltas)}")
+        return "anclas", {b: sel for b, ps in grupos.items() if (sel := [p for p in ps if p.anchor in quiero])}
     if fuentes:
         desconocidas = sorted(set(fuentes) - set(grupos))
         if desconocidas:
@@ -100,7 +106,7 @@ def scoped_sources(nota: Path, text: str, grupos: dict, fuentes: list | None,
 
 
 def write_round(nota: Path, out_dir: Path, fuentes: list | None = None,
-                solo_nuevos: bool = False) -> dict:
+                solo_nuevos: bool = False, anclas: list | None = None) -> dict:
     """Write the prompts and the manifest for one round. Returns the manifest.
 
     `fuentes` / `pares` are what the barrier COUNTS — the scope; `alcance` says how the scope was
@@ -108,7 +114,7 @@ def write_round(nota: Path, out_dir: Path, fuentes: list | None = None,
     full round that came back short (#407)."""
     text = nota.read_text(encoding="utf-8")
     todos = by_source(lb.pairs_of(text))
-    modo, grupos = scoped_sources(nota, text, todos, fuentes, solo_nuevos)
+    modo, grupos = scoped_sources(nota, text, todos, fuentes, solo_nuevos, anclas)
     (out_dir / "prompts").mkdir(parents=True, exist_ok=True)
     sin_archivo = []
     for bib, pares in grupos.items():
@@ -237,6 +243,8 @@ def main(argv=None) -> int:
     alcance = ap.add_mutually_exclusive_group()
     alcance.add_argument("--fuentes", default=None, metavar="B1,B2",
                          help="ronda ACOTADA a estas fuentes (#407); el alcance queda en el manifiesto")
+    alcance.add_argument("--anclas", default=None, metavar="A1,A2",
+                         help="ronda ACOTADA a estos pares, por su ancla (#597)")
     alcance.add_argument("--solo-nuevos", action="store_true",
                          help="ronda acotada a los pares SIN fila que llevar (la partición de #282, "
                               "vía `reverify_subset`); el resto se re-ancla")
@@ -253,13 +261,15 @@ def main(argv=None) -> int:
     if args.muestra is not None and (not args.clase or args.muestra < 1):
         ap.error("`--muestra N` va con `--segunda-clase` y N ≥ 1")
     if args.clase:
-        if args.fuentes or args.solo_nuevos:
+        if args.fuentes or args.solo_nuevos or args.anclas:
             ap.error("`--segunda-clase` no toma alcance de ronda (`--fuentes`/`--solo-nuevos`)")
         return _main_class(nota, Path(args.out), args.muestra)
     try:
         m = write_round(nota, Path(args.out),
                         fuentes=[x.strip() for x in args.fuentes.split(",") if x.strip()]
-                        if args.fuentes else None, solo_nuevos=args.solo_nuevos)
+                        if args.fuentes else None, solo_nuevos=args.solo_nuevos,
+                        anclas=[x.strip() for x in args.anclas.split(",") if x.strip()]
+                        if args.anclas else None)
     except ScopeError as exc:
         cfg.print_seguro(f"⛔ {exc}")
         return 2
@@ -280,8 +290,9 @@ def main(argv=None) -> int:
     for bib, n in m["fuentes"].items():
         cfg.print_seguro(f"  {bib}: {n}" + ("  — sin PDF ni `.txt`: veredicto ya escrito, sin "
                                              "subagente (#223, #595)" if bib in m["sin_archivo"] else ""))
-    cfg.print_seguro(f"Lanzá UN subagente `general-purpose` por fuente, en paralelo, con su prompt. "
-                     f"Después: python scripts/check_verify_fanout.py {args.out}")
+    if len(m["fuentes"]) > len(m["sin_archivo"]):
+        cfg.print_seguro(f"Lanzá UN subagente `general-purpose` por fuente, en paralelo, con su prompt.")
+    cfg.print_seguro(f"Después: python scripts/check_verify_fanout.py {args.out}")
     return 0
 
 
