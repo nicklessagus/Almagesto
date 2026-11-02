@@ -320,8 +320,9 @@ Deben quedar en **0**:
   barrido (necesita el `first_author` de todos los papers).
 - **Localizador sólo-página** (#598, backlog): la prosa le pega a un `[[bibcode]]` sólo «(p. N)» y
   la extracción de esa fuente ubica algo en esa página por sección, figura, tabla o ecuación
-  (`lib_quotes.structural_index`, un segmento del `linea` = un lugar). Propone ése; si el hecho es
-  otro de la misma página, no es deuda. Sin estructural para esa página (resúmenes, libros sin
+  (`lib_quotes.structural_index`, un segmento del `linea` = un lugar). Muestra los candidatos como
+  **pista**, no como propuesta: el aviso es real 20/20, pero el candidato acierta 13/20 (a veces
+  el único es otra sección de la misma página); el localizador se confirma en el PDF. Sin estructural para esa página (resúmenes, libros sin
   numeración) no se reporta. `contrast --cita` avisa lo mismo al emitir el fragmento, sin sustituir.
   Medido en una bóveda real: 337 de 822 paréntesis sólo-página pegados a un `[[bibcode]]`.
 - **Localizador ajeno** (#594, backlog): un par `soportada` cuya columna `Localizador` del hermano

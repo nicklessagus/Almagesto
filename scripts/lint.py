@@ -6870,9 +6870,13 @@ def check_page_only_locator(stem: str, body_full: str, offset: int, index: dict)
             propuestas = sorted({x for lo, hi in lq.page_locators(loc) if lo == hi
                                  for x in (index.get(bib.strip()) or {}).get(lo, ())})
             if propuestas:
-                out.append((stem, f"L{i + 1 + offset}: «({loc.strip()})» sobre [[{bib.strip()}]] — la "
-                                  f"extracción ubica esa página como {' · '.join(propuestas)} → si el "
-                                  f"hecho es ése, copiá el localizador (#103/#500, #598)"))
+                # a HINT, not a proposal: measured 13/20 right, and a single candidate was wrong
+                # several times (another section/figure/equation of the same page)
+                vistos = " · ".join(propuestas[:3]) + (f" (y {len(propuestas) - 3} más)"
+                                                       if len(propuestas) > 3 else "")
+                out.append((stem, f"L{i + 1 + offset}: «({loc.strip()})» sobre [[{bib.strip()}]] — sólo "
+                                  f"página; la extracción ubica en esa página: {vistos} → confirmá en "
+                                  f"el PDF cuál corresponde al hecho (#103/#500, #598)"))
     return out
 
 

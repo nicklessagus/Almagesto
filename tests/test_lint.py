@@ -12048,6 +12048,9 @@ def test_598_localizador_solo_pagina_cuando_la_extraccion_ubica_esa_pagina():
     def hits(t):
         return [m for _s, m in lint.check_page_only_locator("n", t + "\n", 0, idx)]
     assert len(h := hits("El período es 34 d (p. 4) [[2020A]].")) == 1 and "§3.2, p. 4" in h[0]
+    assert "confirmá en el PDF" in h[0] and "copiá" not in h[0], "pista, no propuesta (13/20 medido)"
+    muchos = {"2020A": {"4": {f"Eq. ({k}), p. 4" for k in range(1, 6)}}}
+    assert "(y 2 más)" in lint.check_page_only_locator("n", "x (p. 4) [[2020A]]\n", 0, muchos)[0][1]
     assert len(hits("El período es 34 d ([[2020A]], p. 4).")) == 1
     for exento in ("34 d (§3.2, p. 4) [[2020A]].",       # ya estructural
                    "34 d (p. 7) [[2020A]].",              # la extracción tampoco tiene sección ahí
