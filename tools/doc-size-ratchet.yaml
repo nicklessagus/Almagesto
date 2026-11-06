@@ -44,8 +44,8 @@
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
 medido_en: "2026-11-05"
-techo_lineas: 1330
-techo_bytes: 99965
+techo_lineas: 1331
+techo_bytes: 100083
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -875,3 +875,17 @@ crecimientos:
       se lee justo ahí; el porqué y la lista por caso van a `docs/operacion.md` § Apéndice A.
     techo_lineas: 1330
     techo_bytes: 99965
+  - fecha: "2026-11-05"
+    ancla: "#599"
+    motivo: >-
+      Devolución del validador (gj_163, disputes[P_rot]): faltaba el caso «la fuente lo dice en
+      otro lugar» (`localizador`: se usa con la página vista y se avisa; sin él se leía como
+      «calla» y se descartaba una afirmación verdadera), y la marca `⚠verificar en el PDF` no
+      sirve en frontmatter (rompe el valor y el lint sólo barre el cuerpo): ahí se corrige el
+      campo contra el PDF y va al `log`.
+    sale: >-
+      La frase «el dato en otro lugar es un hallazgo: el localizador está mal», reemplazada por el
+      caso. El resto no puede salir: es la salida de los dos casos en el contrato de consumo; el
+      detalle (por qué no se marca el frontmatter, qué barre el lint) va al Apéndice A.
+    techo_lineas: 1331
+    techo_bytes: 100083

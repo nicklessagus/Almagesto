@@ -118,8 +118,8 @@ re-lectura del paper. La prosa de una ficha es **capa LLM** y `verify-citations`
 no prueba** (7 de 13 defectos medidos eran de atribución).
 
 **Cómo (#205, #599):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) **en el localizador que
-declara la nota** (`p. 7`, `Tabla 2`, `§3.1`) y citá la **página** vista; el dato en otro lugar es
-un hallazgo: el localizador está mal. La
+declara la nota** (`p. 7`, `Tabla 2`, `§3.1`) y citá la **página** vista; si está en otro lugar,
+usalo con la página vista y avisá igual (caso `localizador`). La
 capa de texto (el `.txt` de `vault/raw/fulltext/**/`, o `pdftotext` sobre el PDF, #544) sirve para
 *ubicar*, no para confirmar ni citar: pierde fórmulas, tablas-imagen y figuras **sin avisar**, así
 que un `grep` vacío **no** significa que la ficha esté mal. Con `pdf_source: eprint` el PDF es el
@@ -129,7 +129,8 @@ preprint: una discrepancia numérica es candidata a diferencia de versión, no a
 página, marcando en tu salida que difiere de la nota; si la fuente calla, no lo uses; si no se puede
 decidir (preprint, lectura de figura), declaralo sin elegir (regla 5). Y **avisale al usuario** con
 el hallazgo armado para la bóveda: nota, `[[bibcode]]`, afirmación, localizador declarado y lo visto
-con su página. Desde afuera no se escribe: la bóveda lo marca `⚠verificar en el PDF` y lo cierra.
+con su página. Desde afuera no se escribe: la bóveda lo marca `⚠verificar en el PDF` y lo cierra;
+en frontmatter no se marca (rompe el valor): se corrige el campo contra el PDF y va al `log`.
 
 **Test de admisión (aplicá a TODA línea de `vault/wiki/`):** *¿esto sale de una fuente
 (`vault/raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una conclusión derivada de fuentes
