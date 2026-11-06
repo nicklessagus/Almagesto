@@ -115,16 +115,21 @@ afirmación de la bóveda sin arrastrar su respaldo bibliográfico — ese es el
 Al sacar un valor, una ecuación o un mecanismo de una nota para llevarlo a código, a un informe o a
 otra síntesis, confirmá que la fuente dice eso **antes** de propagarlo — chequeo por par, no
 re-lectura del paper. La prosa de una ficha es **capa LLM** y `verify-citations` es **juicio de LLM,
-no prueba** (medido: 7 de 13 defectos eran de atribución, invisibles desde la ficha).
+no prueba** (7 de 13 defectos medidos eran de atribución).
 
-**Cómo (#205):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) y citá la **página** vista. La
+**Cómo (#205, #599):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) **en el localizador que
+declara la nota** (`p. 7`, `Tabla 2`, `§3.1`) y citá la **página** vista; el dato en otro lugar es
+un hallazgo: el localizador está mal. La
 capa de texto (el `.txt` de `vault/raw/fulltext/**/`, o `pdftotext` sobre el PDF, #544) sirve para
 *ubicar*, no para confirmar ni citar: pierde fórmulas, tablas-imagen y figuras **sin avisar**, así
 que un `grep` vacío **no** significa que la ficha esté mal. Con `pdf_source: eprint` el PDF es el
 preprint: una discrepancia numérica es candidata a diferencia de versión, no a error de la ficha.
 
-Si al validar encontrás una discrepancia, **no la arregles en silencio de tu lado**: es un hallazgo
-de la bóveda — reportalo, o el próximo consumidor tropieza con lo mismo.
+**Si discrepa, no lo arregles en silencio de tu lado (#599):** usá lo que dice la fuente, con su
+página, marcando en tu salida que difiere de la nota; si la fuente calla, no lo uses; si no se puede
+decidir (preprint, lectura de figura), declaralo sin elegir (regla 5). Y **avisale al usuario** con
+el hallazgo armado para la bóveda: nota, `[[bibcode]]`, afirmación, localizador declarado y lo visto
+con su página. Desde afuera no se escribe: la bóveda lo marca `⚠verificar en el PDF` y lo cierra.
 
 **Test de admisión (aplicá a TODA línea de `vault/wiki/`):** *¿esto sale de una fuente
 (`vault/raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una conclusión derivada de fuentes

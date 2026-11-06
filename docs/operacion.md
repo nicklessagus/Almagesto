@@ -661,14 +661,38 @@ grepeá la afirmación, mirá la línea, seguí.
 fan-out encontró **13 defectos**, y **siete eran de atribución** —el dato de un paper adjudicado a
 otro—: ninguno visible desde la ficha, se ven **sólo** abriendo la fuente.
 
-**Cómo (#205):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) y citá **página**. El `.txt`
+**Cómo (#205, #599):** abrí el **PDF** (`vault/raw/pdfs/**/<bibcode>.pdf`) **en el localizador que
+declara la nota** (`p. 7`, `Tabla 2`, `§3.1`) y citá **página**. Encontrar el dato en *otro* lugar
+del PDF no lo valida: el localizador equivocado es la familia de #594/#598, y sólo se caza mirando
+donde la nota dice. El `.txt`
 sirve para *ubicar* con `grep -n`, no para citar: es el índice de búsqueda y pierde fórmulas,
 tablas-imagen y figuras **sin avisar** —medido, incluso en papers con todos los chequeos en verde—,
 así que un `grep` vacío **no** significa que la ficha esté mal. Con `pdf_source: eprint` el PDF es
 el preprint: una discrepancia numérica es candidata a diferencia de versión, no a error de la ficha.
 
-Si al validar encontrás una discrepancia, **no la arregles en silencio de tu lado**: es un hallazgo
-de la bóveda — reportalo, o el próximo consumidor tropieza con lo mismo.
+**Si discrepa, no lo arregles en silencio de tu lado (#599).** Qué hace el consumidor con el valor:
+
+- **la fuente dice otra cosa** → usa lo que dice la fuente, citando la página vista, y marca en su
+  propia salida (comentario de código, nota al pie del informe) que difiere de la nota;
+- **la fuente no lo dice** → no usa la afirmación;
+- **no se puede decidir** (`pdf_source: eprint`, valor leído de una figura) → declara la
+  discrepancia y no elige (regla 5).
+
+Y **avisa al usuario con el hallazgo armado para la bóveda**, con lo necesario para corregir sin
+rehacer la búsqueda:
+
+```
+Hallazgo para la bóveda (#599) — <fecha>
+nota: <ruta de la nota>   fuente: [[<bibcode>]]
+afirmación: <extracto de la nota>
+localizador declarado: <el de la nota>
+visto en el PDF: <qué dice la fuente> (p. <N>)   caso: difiere | la fuente calla | no decidible
+```
+
+La bóveda es read-only desde afuera, así que el consumidor no la edita. Del lado de la bóveda, quien
+la opera pega la marca `⚠verificar en el PDF (<qué se dudó>, <fecha>)` (#225) junto a la afirmación
+—visible y levantada por el lint— y la cierra volviendo a la fuente (`audit-note`,
+`verify-citations`). Sin el aviso el próximo consumidor tropieza con lo mismo.
 
 **Test de admisión (aplicá a TODA línea de `vault/wiki/`):** *¿esto sale de una fuente
 (`vault/raw/`) y lo puedo respaldar con un `[[bibcode]]`, o es una conclusión derivada de fuentes

@@ -1,5 +1,5 @@
 {
- "fetched": "2026-11-02",
+ "fetched": "2026-11-05",
  "issues": [
   {
    "number": 2,
@@ -2974,12 +2974,17 @@
   {
    "number": 597,
    "title": "verify_fanout: acotar una ronda a pares sueltos (--anclas)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 598,
    "title": "El localizador sólo-página de la prosa cuando la extracción lo ubica por sección: (a) lint, (c) contrast --cita",
    "state": "CLOSED"
+  },
+  {
+   "number": 599,
+   "title": "El consumidor valida en el localizador que declara la nota, y la discrepancia tiene qué hacer y a quién avisar",
+   "state": "OPEN"
   }
  ]
 }

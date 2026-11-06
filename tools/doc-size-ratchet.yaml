@@ -43,9 +43,9 @@
 #   - Y la red barata del hallazgo secundario: claves `ancla:` contadas contra las entradas
 #     parseadas, o una entrada sin `- fecha:` se anida en la anterior y la firma se pierde en
 #     silencio (pasó con #345: 44 `ancla:`, 43 entradas).
-medido_en: "2026-09-23"
-techo_lineas: 1325
-techo_bytes: 99797
+medido_en: "2026-11-05"
+techo_lineas: 1330
+techo_bytes: 99965
 
 pendiente:            # aviso, no rojo: N subas firmadas dentro de una ventana móvil
   ventana_dias: 14
@@ -861,3 +861,17 @@ crecimientos:
       docstrings de `fetch_pdf`/`fetch_arxiv` y en el header de los orquestadores.
     techo_lineas: 1325
     techo_bytes: 99797
+  - fecha: "2026-11-05"
+    ancla: "#599"
+    motivo: >-
+      La regla que necesita el consumidor ANTES de propagar una afirmación de una nota: validarla
+      en el localizador que declara la nota (no en cualquier lugar del PDF; el localizador
+      equivocado es la familia #594/#598), y ante la discrepancia qué valor usar (el de la fuente,
+      ninguno, o declarar sin elegir) y a quién avisar (al usuario, con nota/bibcode/afirmación/
+      localizador/página; desde afuera la bóveda no se escribe). Antes decía «reportalo» sin canal.
+    sale: >-
+      La medición «invisibles desde la ficha» del paréntesis de atribución (queda el número, el
+      caso está en el Apéndice A). Nada más puede salir: es la regla del contrato de consumo, que
+      se lee justo ahí; el porqué y la lista por caso van a `docs/operacion.md` § Apéndice A.
+    techo_lineas: 1330
+    techo_bytes: 99965
