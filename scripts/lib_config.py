@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.413.0"
+ALMAGESTO_VERSION = "1.414.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1146,38 +1146,36 @@ def header_block(text: str) -> tuple | None:
             sum(len(x) + 1 for x in lineas[:fin + 1]))
 
 
-def set_fm_scalar(path, field: str, value: str, *, crear: bool = True) -> bool:
-    """Set a frontmatter SCALAR, replacing the key's whole block or appending it (#436).
+def write_fm_blocks(path, bloques: dict, *, crear: bool = True) -> bool | None:
+    """Replace each key's whole block with `bloques[key]` (already rendered `key: …` text), in
+    place; append the absent ones when `crear`. THE frontmatter key writer (#625).
 
-    ⛔ One definition of «escribir un escalar del frontmatter», for the same reason `fm_key_span`
-    is one definition of «el bloque de una clave»: the repo already has `make_notes._set_campo`
-    (replaces, and **does nothing at all** when the key is absent) and the replace-or-append that
-    `stamp_pdf` open-codes twice. A third copy in the PDF replacement would be the fourth.
+    Edits the TEXT (never re-serialises the whole YAML), so comments, order and the LLM extraction
+    survive byte for byte; the block of a key is `fm_key_span`'s (continuations, #244/#474), the
+    frontmatter is `fm_bounds`'s (BOM, `---` with trailing space, AUD-147), and several keys go in
+    ONE atomic write (`retracted` + `retraction`). Carries the guard of #244/#222: re-parse, and
+    nothing is written if the YAML stopped parsing.
 
-    Edits the TEXT in place (never re-serialises) so the LLM extraction is preserved byte for byte,
-    and it carries the guard of #244/#222: the frontmatter is **re-parsed** and nothing is written
-    if it stopped parsing — a note whose YAML breaks evades every check of its type, silently.
-    Returns True when the file changed.
-
-    ⚠ `crear` is what the two callers genuinely disagree about, so it is a parameter and not a
-    second function: `_set_campo` updates fields the stub already wrote (an absent key there means
-    the note is of another kind, and appending would invent schema), while the PDF replacement has
-    to CREATE `pdf_source`/`pdf_sha` on a note that predates them."""
+    Three answers, because «nothing to change» and «could not» are different facts (AUD-200):
+    `True` wrote · `False` nothing to change (or absent key with `crear=False`) · `None` could
+    not — no frontmatter, or the result would not parse."""
     text = Path(path).read_text(encoding="utf-8")
     lim = fm_bounds(text)
     if lim is None:
-        return False
+        return None
     ini, end = lim
     lines = text[ini:end].split("\n")
-    span = fm_key_span(lines, field)
-    if span is not None:
-        lines[span[0]:span[1]] = [f"{field}: {value}"]
-    elif crear:
+    nuevos = []
+    for field, bloque in bloques.items():
+        span = fm_key_span(lines, field)
+        if span is not None:
+            lines[span[0]:span[1]] = bloque.split("\n")
+        elif crear:
+            nuevos.extend(bloque.split("\n"))
+    if nuevos:
         while lines and not lines[-1].strip():
             lines.pop()
-        lines.append(f"{field}: {value}")
-    else:
-        return False
+        lines.extend(nuevos)
     head = "\n".join(lines)
     if head == text[ini:end]:
         return False                                   # idempotente por contenido
@@ -1187,11 +1185,22 @@ def set_fm_scalar(path, field: str, value: str, *, crear: bool = True) -> bool:
     # «no parsea» como para «no hay», así que se compara contra el ANTES (si antes parseaba y ahora
     # no, se rompió). Con `is None` la guarda no dispararía nunca — el falso limpio de siempre.
     if split_fm(text) and not split_fm(nuevo):
-        print_seguro(f"  ⛔ {Path(path).name}: escribir `{field}` dejaría el frontmatter sin "
-                     f"parsear → NO se escribe (una nota así evade todos los chequeos de su tipo)")
-        return False
+        print_seguro(f"  ⛔ {Path(path).name}: escribir {', '.join(f'`{k}`' for k in bloques)} "
+                     f"dejaría el frontmatter sin parsear → NO se escribe (una nota así evade "
+                     f"todos los chequeos de su tipo)")
+        return None
     write_text_atomic(Path(path), nuevo)
     return True
+
+
+def set_fm_scalar(path, field: str, value: str, *, crear: bool = True) -> bool:
+    """Set a frontmatter SCALAR already rendered (`value`); True when the file changed (#436).
+
+    ⚠ `crear` is what the callers genuinely disagree about, so it is a parameter and not a
+    second function: `_set_campo` updates fields the stub already wrote (an absent key there means
+    the note is of another kind, and appending would invent schema), while the PDF replacement has
+    to CREATE `pdf_source`/`pdf_sha` on a note that predates them."""
+    return bool(write_fm_blocks(path, {field: f"{field}: {value}"}, crear=crear))
 
 
 # #271 — el markup que los catálogos meten en título y abstract. La lista original cubría seis
@@ -1796,6 +1805,16 @@ def section_span(text: str, header: str) -> tuple[int, int] | None:
         return None
     nxt = text.find("\n## ", inicio + 1)
     return inicio, (len(text) if nxt < 0 else nxt + 1)
+
+
+def section_text(text: str, header: str) -> str:
+    """The section opening at `header`, cut BEFORE the `\n` of the next `## ` (or EOF); `""` if
+    absent. Same cut as `section_span`, without its trailing newline (#625)."""
+    span = section_span(text, header)
+    if span is None:
+        return ""
+    ini, fin = span
+    return text[ini:fin - 1 if fin < len(text) else fin]
 
 
 def _header_hits(text: str, header: str) -> list[int]:
@@ -2730,70 +2749,15 @@ def bibtex_fields(entry: str) -> dict:
     return out
 
 
-def stamp_fm_fields(path, fm: dict, body: str, fields: dict) -> None:
-    """Estampa claves de frontmatter editando el TEXTO (como merge_frontmatter_list de make_notes):
-    NO re-serializa el YAML completo → preserva byte a byte comentarios/orden que haya dejado la
-    extracción LLM. Si la nota ya traía esas claves (re-chequeo con --force, o una corrección nueva
-    sobre un paper ya anotado), las reemplaza —incluidos sus bloques indentados y los ítems `-` de
-    una lista—, **en su lugar** (AUD-419); las claves nuevas van al final. Si el texto resultante es
-    idéntico no escribe. Fallback (nota sin estructura `---\\n…\\n---\\n`): re-serializa el frontmatter parseado.
-    La publicación en disco es atómica (`cfg.write_text_atomic`, H-01/D-53): un corte a mitad de
-    camino nunca deja la nota truncada."""
-    text = path.read_text(encoding="utf-8")
-    keys = tuple(f"{k}:" for k in fields)
-    end = text.find("\n---\n", 4)
-    if text.startswith("---\n") and end > 0:
-        out, dropping = [], False
-        pendientes = {k: yaml.safe_dump({k: v}, sort_keys=False, allow_unicode=True,
-                                        default_flow_style=False).rstrip("\n")
-                      for k, v in fields.items()}
-        # una clave top-level nunca arranca con espacio/tab/`-`: mientras `dropping`, esas líneas
-        # son el bloque (mapa indentado o lista) de la clave vieja que estamos reemplazando
-        lines = text[4:end].split("\n")
-        i, n = 0, len(lines)
-        while i < n:
-            ln = lines[i]
-            if dropping:
-                if ln.strip() == "":
-                    # H-02: una línea EN BLANCO dentro del bloque (mapa/lista multilínea) es YAML
-                    # válido y no corta el bloque — el bug viejo la trataba como "clave nueva",
-                    # dejaba de dropear ahí, y el ítem huérfano que seguía se absorbía en la clave
-                    # anterior en silencio (`tags: ['paper', {'type': 'corrigendum'}]`, ninguna
-                    # categoría del lint lo veía). Se mira hacia adelante, saltando blancas: si lo
-                    # que sigue todavía está indentado, la(s) blanca(s) eran parte del bloque viejo
-                    # y se descartan con él; si lo que sigue es una clave nueva a nivel top, eran
-                    # separador legítimo y se conservan.
-                    j = i + 1
-                    while j < n and lines[j].strip() == "":
-                        j += 1
-                    if j < n and lines[j][:1] in (" ", "\t", "-"):
-                        i += 1
-                        continue
-                    dropping = False
-                    out.append(ln)
-                    i += 1
-                    continue
-                if ln[:1] in (" ", "\t", "-"):
-                    i += 1
-                    continue
-                dropping = False
-            if ln.startswith(keys):
-                # AUD-419: the new value goes WHERE the old key was, not at the end
-                k = ln.split(":", 1)[0]
-                if k in pendientes:
-                    out.append(pendientes.pop(k))
-                dropping = True
-                i += 1
-                continue
-            out.append(ln)
-            i += 1
-        new_text = "---\n" + "\n".join(out + list(pendientes.values())) + text[end:]
-    else:
-        dumped = yaml.safe_dump({**fm, **fields}, sort_keys=False, allow_unicode=True,
-                                default_flow_style=False)
-        new_text = f"---\n{dumped}---{body}"
-    if new_text != text:                         # AUD-419: same state, no rewrite
-        write_text_atomic(path, new_text)
+def stamp_fm_fields(path, fields: dict) -> bool | None:
+    """Stamp frontmatter keys from Python values, dumped in block style, in ONE write (#625).
+
+    `write_fm_blocks` does the surgery (in place, AUD-419; same state → no rewrite; re-parse guard
+    #244). There is no re-serialising fallback any more: it dropped comments, and fed a whole note
+    as `body` it duplicated the frontmatter."""
+    return write_fm_blocks(path, {k: yaml.safe_dump({k: v}, sort_keys=False, allow_unicode=True,
+                                                    default_flow_style=False).rstrip("\n")
+                                  for k, v in fields.items()})
 
 
 def frontmatter_span(text: str) -> tuple[str, str] | None:
@@ -3698,17 +3662,19 @@ def drop_fm_keys(path, *claves) -> bool:
     """
     path = Path(path)
     texto = path.read_text(encoding="utf-8")
-    if not texto.startswith("---\n") or "\n---\n" not in texto:
+    lim = fm_bounds(texto)                 # AUD-147: BOM y `---` con espacio final
+    if lim is None:
         return False
-    head, body = texto[4:].split("\n---\n", 1)
+    ini, fin = lim
+    head = texto[ini:fin]
     nuevo = "\n".join(drop_fm_keys_from_block(head, claves))
     if nuevo == head:
         return False
-    salida = "---\n" + nuevo + "\n---\n" + body
+    salida = texto[:ini] + nuevo + texto[fin:]
     # #244/#222 — el lector antes del escritor. ⚠ La condición se compara contra el ANTES y NO es
     # `is None`: `split_fm` devuelve `{}` tanto para «no parsea» como para «no hay», así que con
     # `is None` esta guarda no dispararía nunca (el falso limpio de siempre). Mismo criterio que
-    # `stamp_fm_fields`, que es la otra mitad de esta regla.
+    # `write_fm_blocks`, que es la otra mitad de esta regla.
     if split_fm(texto) and not split_fm(salida):
         print_seguro(f"  ⛔ {path.name}: sacar {list(claves)} dejaría el frontmatter sin parsear "
                      f"(#244): no se escribió nada")

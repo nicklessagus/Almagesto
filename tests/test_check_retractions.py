@@ -62,8 +62,7 @@ def test_stamp_retraction_preserva_comentarios_y_cuerpo(tmp_path):
     p = tmp_path / "n.md"
     p.write_text("---\nbibcode: x\nmethods: [gp]  # anotado por el LLM\ntags:\n- paper\n"
                  f"---{body}", encoding="utf-8")
-    fm, got_body = cr.split_note(p.read_text(encoding="utf-8"))
-    cr.stamp_retraction(p, fm, got_body, RET)
+    cr.stamp_retraction(p, RET)
     text = p.read_text(encoding="utf-8")
     assert "# anotado por el LLM" in text            # comentario intacto
     assert body in text                              # cuerpo intacto (con su ---)
@@ -75,10 +74,8 @@ def test_stamp_retraction_reemplaza_bloque_previo(tmp_path):
     """Re-chequeo con --force: el bloque retraction viejo se reemplaza, no se duplica."""
     p = tmp_path / "n.md"
     p.write_text("---\nbibcode: x\ntags:\n- paper\n---\ncuerpo\n", encoding="utf-8")
-    fm, body = cr.split_note(p.read_text(encoding="utf-8"))
-    cr.stamp_retraction(p, fm, body, RET)
-    fm, body = cr.split_note(p.read_text(encoding="utf-8"))
-    cr.stamp_retraction(p, fm, body, dict(RET, date="2022-01-01"))
+    cr.stamp_retraction(p, RET)
+    cr.stamp_retraction(p, dict(RET, date="2022-01-01"))
     text = p.read_text(encoding="utf-8")
     assert text.count("retraction:") == 1 and text.count("retracted:") == 1
     fm2, _ = cr.split_note(text)
@@ -137,9 +134,8 @@ def test_stamp_fm_fields_no_deja_la_nota_a_medias(toy_vault, monkeypatch):
         return real_write(self, data, *a, **k)
 
     monkeypatch.setattr(type(p), "write_text", write_que_se_corta)
-    fm, body = cr.split_note(p.read_text(encoding="utf-8"))
     with pytest.raises(OSError):
-        cfg.stamp_fm_fields(p, fm, body, {"retracted": True})
+        cfg.stamp_fm_fields(p, {"retracted": True})
     assert p.read_bytes() == original, "la nota quedó truncada: se perdió la extracción LLM"
 
 
@@ -163,8 +159,7 @@ def test_stamp_fm_fields_drop_de_la_clave_vieja_no_corrompe_el_frontmatter(toy_v
     p = toy_vault.PAPERS / "2020aaa...1..1A.md"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(texto, encoding="utf-8")
-    fm0, body0 = cr.split_note(texto)
-    cfg.stamp_fm_fields(p, fm0, body0, {"retraction": {"type": "retraction", "date": "2022-01-01"}})
+    cfg.stamp_fm_fields(p, {"retraction": {"type": "retraction", "date": "2022-01-01"}})
     fm = cfg.split_fm(p.read_text(encoding="utf-8"))
     assert fm.get("tags") == ["paper"], f"`tags` contaminado por el drop: {fm.get('tags')!r}"
 

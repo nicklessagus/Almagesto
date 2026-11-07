@@ -1900,3 +1900,28 @@ suman 832 entradas sin error. Lo nuevo sólo muerde lo que hoy no hay: un `motiv
 lista de strings son `fm_broken`.
 
 **Devolver si** cambia cualquier conteo o el rc, o si la cadena aborta al cargar la config.
+
+
+## §#625 · v1.414.0 — un escritor de frontmatter, un localizador, un corte de sección
+
+```bash
+python scripts/lint.py          # antes del merge y después: salida idéntica, mismo rc
+```
+
+**Qué entró.** `cfg.write_fm_blocks` es el escritor único de claves del frontmatter (en su lugar,
+varias claves en una escritura, re-parseo #244, y tres respuestas: escribió / sin cambios / no pude);
+`set_fm_scalar`, `stamp_fm_fields` (sin el fallback que re-serializaba), `upsert_view` y el viejo
+`_set_lista_de_mapas` pasan por él. Los localizadores a mano pasan a `fm_bounds`/`frontmatter_span`
+y los cortes de sección a `cfg.section_span`/`section_text`.
+
+**Validar:** la salida del lint es **idéntica** antes y después del merge (medido en el template
+sobre la instancia: 162 categorías, byte a byte, rc 0). Re-estampar es idempotente igual que antes:
+`make_notes.py --restamp-index`, `make_notes.py <slug>`, `--restamp-pdf-links`, `--restamp-alcance`
+y `harvest_views.py <slug>` dejan el mismo `git diff` con los scripts viejos y los nuevos. Lo único
+que cambia en disco es lo que antes se rompía: escribir `no_vista`/`pdf_reemplazo`/`versions` ya no
+borra las líneas en blanco del frontmatter (72 de 945 escrituras medidas cambiaban el `bibtex` de
+otra clave, #474) ni manda la clave al final; y en las 13 notas con una línea en blanco al final del
+frontmatter, `upsert_view` la conserva y agregar una clave nueva la absorbe.
+
+**Devolver si** cambia cualquier conteo o el rc, o si una cosecha (`harvest_views`) o un
+`--rename-paper` deja un frontmatter que no parsea.

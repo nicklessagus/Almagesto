@@ -102,17 +102,17 @@ def split_note(text: str) -> tuple[dict | None, str]:
         return None, text
 
 
-def stamp_retraction(path, fm: dict, body: str, retraction: dict) -> None:
+def stamp_retraction(path, retraction: dict) -> None:
     """`retracted: true` + `retraction{...}`: la fuente deja de ser válida (bloqueante en el lint)."""
     # @inv INV-33
-    cfg.stamp_fm_fields(path, fm, body, {"retracted": True, "retraction": retraction})
+    cfg.stamp_fm_fields(path, {"retracted": True, "retraction": retraction})
 
 
-def stamp_corrections(path, fm: dict, body: str, corrections: list) -> None:
+def stamp_corrections(path, corrections: list) -> None:
     """`corrections: [...]` (#52): el paper SIGUE siendo citable — lo que hay que revisar son las
     afirmaciones que lo citan (un corrigendum cambia justo el valor extraído). Backlog en el lint."""
     # @inv INV-34
-    cfg.stamp_fm_fields(path, fm, body, {"corrections": corrections})
+    cfg.stamp_fm_fields(path, {"corrections": corrections})
 
 
 def crossref_message(doi: str, headers: dict) -> tuple[dict | None, str]:
@@ -369,7 +369,7 @@ def main() -> int:
                 types = ", ".join(dict.fromkeys(c["type"] for c in soft))
                 corrected.append((bib, types))
                 if (fm.get("corrections") or []) != soft:
-                    stamp_corrections(note, fm, body, soft)
+                    stamp_corrections(note, soft)
                     annotated += 1
                     cfg.print_seguro(f"  · {bib}: corrección publicada ({types}) — anotada en `corrections`")
                 else:
@@ -379,7 +379,7 @@ def main() -> int:
                 cfg.print_seguro(f"  ⚠ {bib}: el TÍTULO parece de una retractación, pero Crossref no "
                                  f"la registra — HAY QUE CHEQUEARLO A MANO (no se marca la nota)")
             if retraction:
-                stamp_retraction(note, fm, body, retraction)
+                stamp_retraction(note, retraction)
                 marked += 1
                 found.append((fm.get("bibcode") or note.stem,
                               f"{retraction['type']} ({retraction.get('date') or 's/f'})"))

@@ -1144,11 +1144,11 @@ def clean_catalog_markup_notes() -> int:
     tocadas = 0
     for dest in notes:
         text = dest.read_text(encoding="utf-8")
-        ini = cfg.section_start(text, "## Abstract")
-        if ini < 0:
+        span = cfg.section_span(text, "## Abstract")
+        if span is None:
             continue
-        fin = text.find("\n## ", ini + 1)
-        fin = len(text) if fin < 0 else fin
+        ini, fin = span
+        fin = fin - 1 if fin < len(text) else fin     # antes del `\n` del `## ` siguiente
         limpio = cfg.clean_catalog_markup(text[ini:fin])
         if limpio == text[ini:fin]:
             continue
@@ -1686,14 +1686,14 @@ def stamp_excluded(slug: str, dest) -> bool:
         return False
     new = excluded_table(slug)                  # "" si la corrida no dejó excluidos
     text = dest.read_text(encoding="utf-8")
-    start = cfg.section_start(text, EXCLUDED_HEADER)
-    if start < 0:
+    span = cfg.section_span(text, EXCLUDED_HEADER)
+    if span is None:
         if not new:
             return False
         out = text.rstrip("\n") + "\n" + new
     else:
-        nxt = text.find("\n## ", start + 1)
-        end = len(text) if nxt < 0 else nxt
+        start, end = span
+        end = end - 1 if end < len(text) else end     # antes del `\n` del `## ` siguiente
         # `excluded_table` trae su propio "\n" inicial: se le saca UNO al prefijo (no un rstrip,
         # que se comería también la línea en blanco que separa la sección anterior).
         out = text[:start][:-1] + new.rstrip("\n") + ("\n" if new else "") + text[end:]
@@ -2569,11 +2569,10 @@ def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
     #  @inv INV-15
         return False
     text = dest.read_text(encoding="utf-8")
-    inicio = cfg.section_start(text, header)
-    if inicio < 0:
+    span = cfg.section_span(text, header)
+    if span is None:
         return False
-    nxt = text.find("\n## ", inicio + 1)
-    fin = len(text) if nxt < 0 else nxt + 1
+    inicio, fin = span
     # #260 — `fin = nxt + 1` deja `text[fin:]` arrancando EN el `## ` siguiente, así que la línea en
     # blanco que separaba las dos secciones cae dentro del tramo reemplazado; el `rstrip` borra
     # además la que el generador sí produce (las tres tablas terminan con `out.append("")`). Con un
@@ -2582,7 +2581,7 @@ def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
     # ficha real desaparecían del outline, y con ellos la población que D-10/INV-81 obligan a
     # publicar en el título. GFM (Obsidian) lo tolera, así que no se veía. `stamp_excluded` ya lo
     # hacía bien y lo documentaba: la comprensión estaba, no había llegado hasta acá.
-    sep = "\n\n" if nxt >= 0 else "\n"
+    sep = "\n\n" if fin < len(text) else "\n"
     out = text[:inicio] + nuevo.rstrip("\n") + sep + text[fin:]
     if out == text:
         return False
@@ -2942,22 +2941,6 @@ def stamp_concept_rollup(slug: str, dest) -> bool:
 # una; y para #75 ("extraído no sintetizado") es un falso positivo permanente, porque la ficha cita
 # una de las dos.
 
-# Wikilink al stem exacto: `[[stem]]` o `[[stem|alias]]`. Deliberadamente NO matchea el bibcode
-# suelto en prosa — una cita transcripta del paper que lo menciona textualmente no es un link a la
-# nota, y un replace ciego la reescribiría (adversario con test propio).
-def _wikilink_re(stem: str):
-    """`[[stem]]`, `[[stem|alias]]`, `[[stem#section]]` and `[[stem^block]]`, without matching a
-    stem that merely prefixes it.
-
-    ⚠ AUD-168 / INV-84 — the two Obsidian ANCHOR forms (`#` and `^`) were missing, and those are
-    exactly what a long note uses to point at one section or one block of a paper. A rename left
-    them pointing at the old bibcode — broken, and **listed by nobody**: the lint's broken-wikilink
-    detector does read them (its `LINK_RE` cuts at `#`), so they showed up as a finding right after
-    the rename, over a link the renamer was supposed to have fixed. The captured group is re-emitted
-    verbatim, so the anchor survives untouched."""
-    return cfg.wikilink_re(stem)
-
-
 # #114: el DOI que DataCite le asigna a un eprint de arXiv. `10.48550/arXiv.2605.28635`
 # y `arxiv_id: 2605.28635` son el mismo trabajo, y compararlos como strings distintos deja ciego
 # al detector de duplicados en la forma MÁS común del caso que D-19 existe para cazar.
@@ -3008,7 +2991,7 @@ def _reescribir_wikilinks(old_stem: str, new_bibcode: str) -> int:
     crudo: el archivo se crea con el stem saneado y todos los wikilinks que el repo genera usan el
     stem — escribir el crudo hacía que cada link reescrito apuntara a una nota inexistente.
     """
-    patron = _wikilink_re(safe_name(old_stem))
+    patron = cfg.wikilink_re(safe_name(old_stem))
     tocadas = 0
     # ⚠ Los hermanos `.verif.md` (#344) entran a propósito: su columna `Fuente` lleva el
     # `[[bibcode]]` de cada fila, así que saltearlos dejaría el rastro de auditoría apuntando al
@@ -3091,7 +3074,7 @@ def _consolidar_duplicado(old, new, old_stem: str, new_bibcode: str) -> None:
     _side_old, _side_new = cfg.verif_sidecar(old), cfg.verif_sidecar(new)
     if _side_old.exists():
         _side_old.unlink() if _side_new.exists() else _side_old.rename(_side_new)
-    _set_lista_de_mapas(new, "versions", versions)
+    cfg.stamp_fm_fields(new, {"versions": versions})
     _move_extraction(old_stem, new_bibcode)     # #228: mismo camino que `rename_paper`
     n = _reescribir_wikilinks(old_stem, new_bibcode)
     cfg.print_seguro(
@@ -3148,7 +3131,7 @@ def rename_paper(old_stem: str, new_bibcode: str, *, fix_key: bool = False) -> N
     if _side_old.exists() and not _side_new.exists():
         _side_old.rename(_side_new)
     _set_campo(new, "bibcode", new_bibcode)
-    _set_lista_de_mapas(new, "versions", versions)
+    cfg.stamp_fm_fields(new, {"versions": versions})
 
     _finish_rename(new, old_stem, new_bibcode)
 
@@ -3262,40 +3245,6 @@ def _move_extraction(old_stem: str, new_bibcode: str) -> int:
     return movidos
 
 
-def _set_lista_de_mapas(dest, clave: str, valor: list) -> None:
-    """Escribe una lista de mapas en el frontmatter, reemplazando el bloque viejo de esa clave.
-
-    Cirugía a nivel texto (familia `merge_frontmatter_list`): no re-serializa el YAML entero, así
-    que los comentarios y el orden de la extracción LLM sobreviven byte a byte."""
-    text = dest.read_text(encoding="utf-8")
-    span = cfg.frontmatter_span(text)
-    if span is None:
-        return
-    yaml_block, _ = span
-    # `frontmatter_span` corta JUSTO después del `---` de apertura y JUSTO antes del de cierre, así
-    # que el bloque empieza y termina con "\n" y el split deja una cadena vacía en cada punta. Esas
-    # dos NO son líneas en blanco: son la separación con los delimitadores. El `if ln.strip()` que
-    # había acá las filtraba junto con las de verdad, y el resultado fusionaba el `---` con la
-    # primera clave (`---bibcode: 2021pubY`) → `cfg.split_fm` devolvía `{}` y la nota quedaba
-    # ILEGIBLE para todo el tooling después de un `--rename-paper`. Se reconstruyen a mano.
-    lineas = yaml_block.split("\n")
-    cuerpo, dropping = [], False
-    for ln in lineas[1:-1]:
-        if dropping:
-            if ln[:1] in (" ", "\t", "-"):
-                continue
-            dropping = False
-        if ln.startswith(f"{clave}:"):
-            dropping = True
-            continue
-        if ln.strip():
-            cuerpo.append(ln)
-    bloque = yaml.safe_dump({clave: valor}, sort_keys=False, allow_unicode=True,
-                            default_flow_style=False).rstrip("\n")
-    nuevo = "\n" + "\n".join(cuerpo + bloque.split("\n")) + "\n"
-    cfg.write_text_atomic(dest, text.replace(yaml_block, nuevo, 1))
-
-
 def _set_campo(dest, clave: str, valor: str) -> None:
     """Set a frontmatter scalar of an EXISTING key — thin wrapper over `cfg.set_fm_scalar` (#436).
 
@@ -3313,22 +3262,10 @@ def _set_campo(dest, clave: str, valor: str) -> None:
 # viaja: una ficha copiada, exportada o leída por un agente llega sin la doc al lado. Va ARRIBA,
 # en el blockquote de cabecera donde ya vive el disclaimer de capa-LLM, porque es lo primero que se
 # lee y no se pierde al scrollear.
-def _header_block(text: str) -> tuple[int, int] | None:
-    """`(inicio, fin)` del blockquote de cabecera — delega en `cfg.header_block` (#444).
-
-    Las cirugías de cabecera (`stamp_estado`, `stamp_ground_truth_line`) borraban su línea vieja con
-    un `sub(count=1)` sobre el **texto entero**, así que se llevaban puesta la primera línea del
-    CUERPO que empezara igual (INV-15, medido el 2026-08-28). El ancla ya existía y se usaba para
-    **insertar**; lo que faltaba era usarla para **borrar**. Desde #444 la definición vive en
-    `lib_config`, porque el lint también la necesita (#431 contaba la cabecera como prosa)."""
-    #  @inv INV-15
-    return cfg.header_block(text)
-
-
 def _sub_en_cabecera(text: str, patron) -> str:
     """Borra la línea vieja de una cirugía de cabecera **sólo dentro del bloque de cabecera**."""
     #  @inv INV-15
-    span = _header_block(text)
+    span = cfg.header_block(text)
     if span is None:
         return text
     ini, fin = span

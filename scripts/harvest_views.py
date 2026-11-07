@@ -71,17 +71,6 @@ def _safe_links(texto: str) -> str:
 SIN_DATOS = "_(sin datos)_"
 
 
-def _resolve_txt_slug(bib: str, declarado: str) -> str | None:
-    """Which slug actually holds this bibcode's `.txt`, or `None` when no copy exists (#230).
-
-    Delegates to `cfg.txt_slug`, the single implementation of that rule (#405). There used to be
-    TWO of them, written apart and line-by-line identical (prefer the declared slug, else the
-    lowest copy): the repo's largest defect class, and the one `tools/carriers.py` exists to
-    catch. This was, in fact, its first finding.
-    """
-    return cfg.txt_slug(bib, declarado or None)
-
-
 def pdf_on_disk(bibcode: str) -> bool:
     """¿Hay un PDF de este bibcode bajo cualquier slug? Verdad de disco, no frontmatter.
 
@@ -774,12 +763,12 @@ def upsert_view(dest: Path, vista: dict, *, force: bool = False, derived: tuple 
     no dos."""
     import yaml
     text = dest.read_text(encoding="utf-8")
-    if not text.startswith("---\n"):
-        raise ViewUpsertError("la nota no arranca con frontmatter")
-    end = text.find("\n---\n", 4)
-    if end < 0:
-        raise ViewUpsertError("el frontmatter no cierra con `---`")
-    head = text[4:end]
+    lim = cfg.fm_bounds(text)                   # AUD-147: BOM y `---` con espacio final
+    if lim is None:
+        raise ViewUpsertError("el frontmatter no cierra con `---`"
+                              if text.lstrip(cfg.BOM).startswith("---\n")
+                              else "la nota no arranca con frontmatter")
+    head = text[lim[0]:lim[1]]
     try:
         data = yaml.safe_load(head) or {}
     except yaml.YAMLError as exc:
@@ -833,28 +822,11 @@ def upsert_view(dest: Path, vista: dict, *, force: bool = False, derived: tuple 
     nuevas = [cfg.vista_fecha_str(v) for v in nuevas]     # #481: la fecha se escribe como str
     if nuevas == previas:
         return False
-    bloque = yaml.safe_dump({"vistas": nuevas}, sort_keys=False, allow_unicode=True,
-                            default_flow_style=False)
-    lineas, out, i = head.splitlines(keepends=True), [], 0
-    while i < len(lineas):
-        if lineas[i].startswith("vistas:"):
-            i += 1
-            while i < len(lineas) and (lineas[i].startswith((" ", "-", "\t"))
-                                       or not lineas[i].strip()):
-                i += 1
-            out.append(bloque)
-        else:
-            out.append(lineas[i])
-            i += 1
-    nuevo_head = "".join(out)
-    if "vistas:" not in head:
-        nuevo_head = nuevo_head.rstrip("\n") + "\n" + bloque
-    # `head` no incluye el `\n` que separa la última clave del `---` de cierre (queda en `end`), así
-    # que se normaliza acá: se saca el salto sobrante del bloque reconstruido y se reusa `text[end:]`,
-    # que ya lo trae. Cortar en `end + 1` se lo comía, y una nota con `generator: v1.69.0---` deja de
-    # parsear ENTERA — o sea que desaparece de todos los chequeos por tipo, en silencio. Medido: 24
-    # de 202 notas de una bóveda real, con el cosechador informando «65 cosechadas».
-    cfg.write_text_atomic(dest, "---\n" + nuevo_head.rstrip("\n") + text[end:])
+    # #625 — el escritor único: reemplaza el bloque `vistas:` en su lugar y re-parsea antes de
+    # escribir. Si el resultado no parsearía, NO se escribió: es un «no pude», y el llamador no
+    # puede escribir la sección del cuerpo (AUD-200).
+    if cfg.stamp_fm_fields(dest, {"vistas": nuevas}) is None:
+        raise ViewUpsertError("escribir `vistas` dejaría el frontmatter sin parsear")
     if str(vista.get("fecha") or "").strip():
         _drop_no_vista(dest, vista["sujeto"], data.get("no_vista"))
     return True
@@ -872,7 +844,7 @@ def _drop_no_vista(dest: Path, sujeto: str, no_vista) -> None:
     if len(resto) == len(entradas):
         return
     if resto:
-        mn._set_lista_de_mapas(dest, "no_vista", resto)
+        cfg.stamp_fm_fields(dest, {"no_vista": resto})
     elif not cfg.drop_fm_keys(dest, "no_vista"):
         return          # #475: refused (it says why); the lint then blocks the pair (#581)
     for x in entradas:
@@ -1091,7 +1063,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         n["txt_traidos"] += traido
         # #507: under dry-run nothing was copied; preview what the real run stamps.
         txt_real = (slug if dry_run and traido and txt_decl == slug
-                    else _resolve_txt_slug(bib, txt_decl))
+                    else cfg.txt_slug(bib, txt_decl))
         if txt_real:
             entrada["txt"] = txt_real
         else:

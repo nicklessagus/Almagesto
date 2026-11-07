@@ -1850,17 +1850,17 @@ def test_ads_json_no_es_un_objeto_no_voltea_el_lint(toy_vault, capsys):
 
 def test_verify_block_parsea_encabezado():
     """El bloque se reconoce por su encabezado y la fecha sale de ahí (convención del skill)."""
-    assert lint.verify_block("prosa\n") == (False, None)
-    assert lint.verify_block("## Verificación de citas (2026-08-19)\n| a | b |\n") == (True, "2026-08-19")
-    assert lint.verify_block("## Verificacion de citas\nok\n") == (True, None)   # sin tilde, sin fecha
+    assert cfg.verification_date("prosa\n") == (False, None)
+    assert cfg.verification_date("## Verificación de citas (2026-08-19)\n| a | b |\n") == (True, "2026-08-19")
+    assert cfg.verification_date("## Verificacion de citas\nok\n") == (True, None)   # sin tilde, sin fecha
     # una fecha en la prosa no es la del bloque: sólo cuenta la del encabezado
-    assert lint.verify_block("El 2020-01-01 pasó algo.\n## Verificación de citas\nok\n") == (True, None)
+    assert cfg.verification_date("El 2020-01-01 pasó algo.\n## Verificación de citas\nok\n") == (True, None)
     # varios bloques (pasadas sucesivas): vigencia = la más reciente, no la primera
-    assert lint.verify_block("## Verificación de citas (2026-01-05)\na\n"
+    assert cfg.verification_date("## Verificación de citas (2026-01-05)\na\n"
                              "## Verificación de citas (2026-03-02)\nb\n"
                              "## Verificación de citas (2026-02-01)\nc\n") == (True, "2026-03-02")
     # con fecha en alguno alcanza: no se marca "sin fecha"
-    assert lint.verify_block("## Verificación de citas\na\n"
+    assert cfg.verification_date("## Verificación de citas\na\n"
                              "## Verificación de citas (2026-02-01)\nb\n") == (True, "2026-02-01")
 
 

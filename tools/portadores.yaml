@@ -377,6 +377,12 @@ portadores:
       - modulo: scripts/triage.py
         estado: fuera-de-alcance
         motivo: "Persiste juicio de CURACIÓN (`decisiones`), que lo firma una persona: no hay consulta de red de la que pueda derivar un veredicto."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "#625 — escribe `vistas`/`no_vista` con el escritor quirúrgico (`cfg.stamp_fm_fields`): persiste una LECTURA, no consulta afuera."
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "#625 — firma `pdf_reemplazo` con el escritor quirúrgico (`cfg.stamp_fm_fields`): el PDF lo trae una persona, no hay consulta de red."
   - issue: 467
     regla: >-
       El borrado de una clave del frontmatter es UNA función: se lleva la clave **y sus líneas de
@@ -2426,8 +2432,8 @@ portadores:
         estado: usa
         motivo: "Corta secciones fijas con `section_start`/`section_span`; la coherencia `vistas[] ↔ cuerpo` usa `vistas_en_cuerpo`, que extrae el sujeto completo por regex y corta sólo en espacio + puntuación: ya separaba `ica` de `ica-ruido`."
       - modulo: scripts/lib_blocks.py
-        estado: usa
-        motivo: "Busca `## Verificación de citas` (encabezado fijo): hereda el corte, sin sujeto en el nombre."
+        estado: fuera-de-alcance
+        motivo: "#625 — `verif_section` corta `## Verificación de citas` (encabezado fijo) con `cfg.section_text`, que delega en `section_span`/`section_start`: no hay un corte propio que pueda divergir."
       - modulo: scripts/bench_verify.py
         estado: usa
         motivo: "Busca `VERIFY_HEADER` (encabezado fijo): hereda el corte, sin sujeto en el nombre."
@@ -3661,3 +3667,33 @@ portadores:
       - modulo: scripts/triage.py
         estado: fuera-de-alcance
         motivo: "Sólo el docstring del módulo; el hallazgo y su receta los emite el lint."
+  - issue: 625
+    regla: >-
+      El frontmatter se ubica por LÍNEA delimitadora `^---[ \t]*$` en la posición 0, con BOM
+      (AUD-147/AUD-116, H-11): `find("\n---\n")` no ve un `---` con espacio final (la cirugía se
+      vuelve un no-op mudo) y `split("---", 2)` corta dentro de un escalar entrecomillado. Un
+      localizador, no ocho.
+    funcion: lib_config.fm_bounds
+    patron: '"\\n---\\n"|split\("---"'
+    consumidores:
+      - modulo: scripts/entity.py
+        estado: usa
+        motivo: "Ubica el frontmatter con `fm_bounds`/`frontmatter_span`; el patrón matchea además un comentario histórico (AUD-38/39)."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`upsert_view` ubica el frontmatter con `fm_bounds` y escribe con `cfg.stamp_fm_fields` (#625)."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "Las cirugías de frontmatter (`merge_frontmatter_list` y las demás) ubican con `fm_bounds`."
+      - modulo: scripts/sweep_external.py
+        estado: usa
+        motivo: "Ubica el frontmatter con `fm_bounds`."
+      - modulo: scripts/bench_verify.py
+        estado: fuera-de-alcance
+        motivo: "#625 — delimita con `cfg.frontmatter_span` (el mismo delimitador por línea); el patrón matchea sólo el comentario que nombra el corte prohibido."
+      - modulo: scripts/check_retractions.py
+        estado: fuera-de-alcance
+        motivo: "`split_note` delimita con `cfg.frontmatter_span`; el patrón matchea sólo su docstring (H-11)."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "#625 — delimita con `cfg.frontmatter_span` (el mismo delimitador por línea); el patrón matchea sólo los comentarios que nombran el corte prohibido."

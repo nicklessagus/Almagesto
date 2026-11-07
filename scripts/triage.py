@@ -146,17 +146,6 @@ def triage_file(slug: str):
     return cfg.registro_path(slug)
 
 
-def load_decisions(slug: str) -> dict:
-    """Decisiones del registro versionado. El `triage.json` pre-1.9.0 NO se lee acá: mientras exista, el lint
-    lo reporta como bloqueante (`schema_retirado`, #624)."""
-    return cfg.load_decisiones(slug)
-
-
-def save_decisions(slug: str, decisiones: dict) -> None:
-    """Escribe SIEMPRE en el registro versionado; `busqueda` (de query_ads) se preserva."""
-    cfg.save_decisiones(slug, decisiones)
-
-
 def drop(slug: str, bibcodes: list[str], reason: str) -> int:
     """Persist the rejection of chaining candidates so they are not proposed again on the next run.
 
@@ -178,7 +167,7 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
     if desconocidos:
         cfg.print_seguro(f"  ⚠ {len(desconocidos)} bibcode(s) no están entre los candidatos pendientes "
               f"(¿ya decididos, o typo?): {', '.join(desconocidos)}")
-    decisiones = load_decisions(slug)
+    decisiones = cfg.load_decisiones(slug)
     hoy = dt.date.today().isoformat()
     for b in bibcodes:
         # Los dos carriles (chaining acá, fuente-declarada en `drop_source`) comparten el mismo
@@ -191,7 +180,7 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
                   f"{previa.get('origen') or 'chaining'}, {previa.get('fecha', 's/f')}): "
                   f"{previa.get('motivo') or '(sin motivo)'} — la piso con ésta")
         decisiones[b] = {"decision": "descartado", "motivo": reason, "fecha": hoy}
-    save_decisions(slug, decisiones)
+    cfg.save_decisiones(slug, decisiones)
     cfg.print_seguro(f"  {len(bibcodes)} candidato(s) descartados en {triage_file(slug)} — motivo: {reason}")
     cfg.print_seguro("  (versionado: se commitea y viaja entre máquinas, como `extra_core` — los dos lados "
           "de la decisión sobreviven al clon)")
@@ -218,7 +207,7 @@ def accept_key(slug: str, claves: list[str], reason: str) -> int:
     reason = reason.strip()
     if not reason:
         sys.exit("--accept-key necesita un --reason con contenido: el motivo es la decisión.")
-    decisiones = load_decisions(slug)
+    decisiones = cfg.load_decisiones(slug)
     malas, aceptadas = [], []
     for k in dict.fromkeys(c.strip() for c in claves if c and c.strip()):
         if cfg.is_ads_bibcode(k):
@@ -240,7 +229,7 @@ def accept_key(slug: str, claves: list[str], reason: str) -> int:
             aceptadas.append(k)
     if malas:
         sys.exit("--accept-key rehúsa (no se escribió nada):\n  " + "\n  ".join(malas))
-    save_decisions(slug, decisiones)
+    cfg.save_decisiones(slug, decisiones)
     cfg.print_seguro(f"  {len(aceptadas)} clave(s) aceptada(s) en `{slug}` (carril `sujeto`) — "
                      f"motivo: {reason}")
     return 0
@@ -272,7 +261,7 @@ def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) 
     reason = reason.strip()
     if not reason:
         sys.exit("--drop-source necesita un --reason con contenido (no espacios).")
-    decisiones = load_decisions(slug)
+    decisiones = cfg.load_decisiones(slug)
     hoy = dt.date.today().isoformat()
     for k in limpias:
         if (previa := decisiones.get(k)):
@@ -282,7 +271,7 @@ def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) 
         decisiones[k] = {"decision": "descartado", "motivo": reason, "fecha": hoy,
                          "origen": "fuente-declarada",
                          **({"fuente": pointer.strip()} if pointer and pointer.strip() else {})}
-    save_decisions(slug, decisiones)
+    cfg.save_decisiones(slug, decisiones)
     cfg.print_seguro(f"  {len(limpias)} fuente(s) declarada(s) descartada(s) en {triage_file(slug)} — "
           f"motivo: {reason}")
     if not pointer:
@@ -631,11 +620,6 @@ CURATED_KEYS = ("no_vista", "no_sintetizado", "salvedades", "vistas", "methods",
                 "role", "refuta")
 
 
-def _yaml_scalar(v) -> str:
-    """One-line YAML scalar for `_set_campo` — delegates to `cfg.yaml_scalar` (#463)."""
-    return cfg.yaml_scalar(v)
-
-
 def promote_source(slug: str, key: str, bibcode: str) -> int:
     """Migrate a declared source (`sources:` item `key`) to its ADS identity `bibcode` (#353, T5b).
 
@@ -689,7 +673,7 @@ def promote_source(slug: str, key: str, bibcode: str) -> int:
                   "arxiv_id": r.get("arxiv_id"), "doi": r.get("doi"), "bibstem": r.get("bibstem"),
                   "citation_count": r.get("citation_count"), "source_url": None, "accessed": None}
         for k, v in campos.items():
-            make_notes._set_campo(new_note, k, _yaml_scalar(v))
+            make_notes._set_campo(new_note, k, cfg.yaml_scalar(v))
         make_notes.merge_frontmatter_list(new_note, "keywords", cfg.as_list(r.get("keyword")))
         if r.get("abstract"):
             texto = new_note.read_text(encoding="utf-8")
@@ -716,7 +700,7 @@ def promote_source(slug: str, key: str, bibcode: str) -> int:
     cfg.print_seguro(f"      fecha: {hoy}")
     texto_motivo = ((motivo + " ") if motivo else "") + (
         f"(promovido desde `sources:` `{key}`, via {item.get('via') or '?'}; tiene bibcode ADS, #353)")
-    cfg.print_seguro(f"      motivo: {_yaml_scalar(texto_motivo)}")
+    cfg.print_seguro(f"      motivo: {cfg.yaml_scalar(texto_motivo)}")
     cfg.print_seguro(f"\n  → y SACÁ el item `key: {key}` de `sources:` (la misma decisión, en el "
                      f"carril correcto). Después: `python scripts/ingest_theme.py {slug}` "
                      f"(idempotente: sólo baja lo que falte).")
@@ -883,7 +867,7 @@ def main() -> int:
         return close(drop_source(args.slug, args.drop_source, args.reason,
                                   args.pointer or None), "triage")
 
-    decisiones = load_decisions(args.slug)
+    decisiones = cfg.load_decisiones(args.slug)
     if not (cfg.ROOT / "build" / args.slug / "ads.json").exists():
         if decisiones:
             return show_decisions(args.slug, decisiones)

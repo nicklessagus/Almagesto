@@ -76,7 +76,6 @@ BIBCODE_RE = cfg.BIBCODE_LIKE_RE        # ONE heuristic (AUD-277)
 _WS_RE = re.compile(r"\s+")
 _BULLET_RE = re.compile(r"^(?:[-*+]|\d+\.)\s+")
 _SEP_ROW_RE = cfg.SEP_ROW_RE            # `|---|---|` — estructura, no contenido (AUD-278)
-_FM_DELIM_RE = cfg._FM_DELIM_RE
 
 
 @dataclass(frozen=True)
@@ -476,22 +475,15 @@ def paragraph_anchor(lineas: list, i: int) -> str:
 # ── partición ────────────────────────────────────────────────────────────────────────────────────
 
 def _cuerpo(text: str) -> tuple[str, int]:
-    """(cuerpo sin frontmatter, líneas que consumió el frontmatter). Se delimita por LÍNEA `---`,
-    no por búsqueda textual (mismo motivo que `cfg.frontmatter_span`, H-11: un `---` dentro de un
-    escalar entrecomillado parte el split a la mitad)."""
-    if not text.startswith("---"):
+    """(cuerpo sin frontmatter, líneas que consumió el frontmatter). Delimita `cfg.frontmatter_span`
+    —por LÍNEA `---` en la posición 0, con BOM (H-11, AUD-147)—: un `---` dentro de un escalar
+    entrecomillado, o dos reglas horizontales de una nota que arranca con `---algo`, no son
+    frontmatter, y tomarlos así sub-dispara el fan-out (#625: un localizador, no dos)."""
+    span = cfg.frontmatter_span(text)
+    if span is None:
         return text, 0
-    delims = list(_FM_DELIM_RE.finditer(text))
-    # `delims[0].start() != 0` es el guard que `cfg.frontmatter_span` sí tiene y acá faltaba: sin
-    # él, una nota que arranca con `---algo` (no un delimitador: la línea tiene más contenido) pasa
-    # el `startswith` y se toman como frontmatter los DOS primeros `---` sueltos del cuerpo — dos
-    # reglas horizontales, por ejemplo. El cuerpo queda recortado desde la segunda y los pares que
-    # vivían antes desaparecen del fan-out: **sub-dispara**, que es justo el error que el módulo
-    # documenta prohibir.
-    if len(delims) < 2 or delims[0].start() != 0:
-        return text, 0
-    fin = delims[1].end()
-    return text[fin:], text[:fin].count("\n")
+    cuerpo = span[1]
+    return cuerpo, text[:len(text) - len(cuerpo)].count("\n")
 
 
 def split_blocks(body: str) -> list[Block]:
@@ -1308,12 +1300,7 @@ def verif_section(text: str) -> str:
     The header is anchored to a line break and a trailing suffix is allowed (`(2026-08-31)`); the
     section ends at the next `## `. Both halves of #344 —the note, which keeps the header line and
     the three sub-sections, and the sidecar, which keeps the table— are cut with this."""
-    i = cfg.section_start(text, VERIFY_HEADER)
-    if i < 0:
-        return ""
-    seccion = text[i:]
-    corte = seccion.find("\n## ", 1)
-    return seccion[:corte] if corte > 0 else seccion
+    return cfg.section_text(text, VERIFY_HEADER)
 
 
 def inline_verif_rows(text: str) -> list[str]:

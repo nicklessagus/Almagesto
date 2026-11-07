@@ -207,9 +207,7 @@ def _nota(tmp_path, fm: dict, cuerpo="# p\n\n## Vista — X\n\nprosa que no se t
 def test_stamp_bibtex_no_toca_el_cuerpo_y_es_idempotente(tmp_path):
     f = _nota(tmp_path, {"bibcode": "1995Natur.378..355M", "tags": ["paper"]})
     for _ in range(2):
-        texto = f.read_text(encoding="utf-8")
-        fm = cfg.split_fm(texto) or {}
-        fb.stamp_bibtex(f, fm, texto.split("\n---\n", 1)[-1], ENTRADA_ADS, "ads", "2026-09-05")
+        fb.stamp_bibtex(f, ENTRADA_ADS, "ads", "2026-09-05")
     salida = f.read_text(encoding="utf-8")
     fm = cfg.split_fm(salida)
     assert fm["bibtex_source"] == "ads" and fm["bibtex_accessed"] == "2026-09-05"
@@ -347,7 +345,7 @@ def test_484_stamp_bibtex_rehusa_una_fuente_fuera_del_vocabulario(tmp_path):
     de todo lector en silencio, así que se cruza contra la lista antes de estampar."""
     f = _nota(tmp_path, {"bibcode": "2001X", "tags": ["paper"]})
     with pytest.raises(ValueError):
-        fb.stamp_bibtex(f, {}, "", ENTRADA_ADS, "scholar", "2026-09-17")
+        fb.stamp_bibtex(f, ENTRADA_ADS, "scholar", "2026-09-17")
 
 
 def test_main_sin_notas_no_sale_verde(tmp_path, monkeypatch):
@@ -777,9 +775,7 @@ def test_el_hueco_se_estampa_con_su_motivo_y_la_fecha_del_intento(tmp_path):
     `sin_conclusiones`, `no_vista`)."""
     nota = tmp_path / "2019Pfister.md"
     nota.write_text("---\ntitle: X\nfirst_author: Pfister\n---\n\n## Abstract\n\nx\n", encoding="utf-8")
-    fm = cfg.split_fm(nota.read_text(encoding="utf-8"))
-    fb.stamp_bibtex_gap(nota, fm, "\n## Abstract\n\nx\n",
-                        "sin exportación oficial (sin bibcode ADS, sin doi, sin arxiv_id)",
+    fb.stamp_bibtex_gap(nota, "sin exportación oficial (sin bibcode ADS, sin doi, sin arxiv_id)",
                         "2026-09-15")
     fm2 = cfg.split_fm(nota.read_text(encoding="utf-8"))
     assert "sin exportación oficial" in fm2["sin_bibtex"]

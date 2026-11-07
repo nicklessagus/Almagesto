@@ -2851,9 +2851,7 @@ def test_stamp_fm_fields_reemplaza_la_clave_vieja_y_no_toca_el_cuerpo(tmp_path):
     f = tmp_path / "n.md"
     f.write_text("---\nbibcode: X\n# comentario de la extracción\nretraction:\n  type: vieja\n"
                  "  date: '2020-01-01'\ntags: [paper]\n---\n\n# cuerpo\n\nprosa\n", encoding="utf-8")
-    texto = f.read_text(encoding="utf-8")
-    cfg.stamp_fm_fields(f, cfg.split_fm(texto), texto.split("\n---\n", 1)[-1],
-                        {"retraction": {"type": "nueva"}})
+    cfg.stamp_fm_fields(f, {"retraction": {"type": "nueva"}})
     salida = f.read_text(encoding="utf-8")
     fm = cfg.split_fm(salida)
     assert fm["retraction"] == {"type": "nueva"} and fm["bibcode"] == "X"
@@ -2868,13 +2866,40 @@ def test_AUD419_stamp_fm_fields_reemplaza_IN_SITU_y_no_escribe_si_nada_cambio(tm
     f.write_text("---\nbibcode: X\nretracted: false\n# de curación sobre tags\ntags: [paper]\n---\n"
                  "\ncuerpo\n", encoding="utf-8")
     texto = f.read_text(encoding="utf-8")
-    cfg.stamp_fm_fields(f, cfg.split_fm(texto), "", {"retracted": True})
+    cfg.stamp_fm_fields(f, {"retracted": True})
     assert f.read_text(encoding="utf-8") == texto.replace("retracted: false", "retracted: true")
     escrituras = []
     monkeypatch.setattr(cfg, "write_text_atomic", lambda *a, **k: escrituras.append(a))
     texto = f.read_text(encoding="utf-8")
-    cfg.stamp_fm_fields(f, cfg.split_fm(texto), "", {"retracted": True})
+    cfg.stamp_fm_fields(f, {"retracted": True})
     assert escrituras == [], "mismo estado: no se reescribe"
+
+
+def test_625_el_escritor_unico_de_frontmatter_no_altera_otras_claves_y_dice_no_pude(tmp_path):
+    """#625 — `_set_lista_de_mapas` borraba toda línea en blanco del frontmatter, y la de adentro de
+    un escalar entrecomillado es parte del VALOR (#474): medido en una instancia, 72 de 945
+    escrituras cambiaban el `bibtex` de otra clave. El escritor único reemplaza en su lugar y deja el
+    resto byte a byte. Y sus tres respuestas no se confunden: sin frontmatter o con un resultado que
+    no parsea es `None` (no pude), nunca un frontmatter inventado (el fallback viejo)."""
+    import yaml
+    bib = yaml.safe_dump({"bibtex": "@a{x,\n}\n"}, allow_unicode=True).rstrip("\n")
+    f = tmp_path / "n.md"
+    f.write_text(f"---\nbibcode: X\n{bib}\nno_vista:\n- sujeto: a\n  motivo: m\ntags: [paper]\n---\n"
+                 "cuerpo\n", encoding="utf-8")
+    antes = cfg.split_fm(f.read_text(encoding="utf-8"))
+    assert cfg.stamp_fm_fields(f, {"no_vista": [{"sujeto": "b", "motivo": "n"}]}) is True
+    despues = cfg.split_fm(f.read_text(encoding="utf-8"))
+    assert despues["bibtex"] == antes["bibtex"] and despues["tags"] == ["paper"]
+    assert despues["no_vista"] == [{"sujeto": "b", "motivo": "n"}]
+    assert f.read_text(encoding="utf-8").index("no_vista:") < f.read_text(encoding="utf-8").index("tags:")
+    assert cfg.stamp_fm_fields(f, {"no_vista": [{"sujeto": "b", "motivo": "n"}]}) is False
+    previo = f.read_text(encoding="utf-8")
+    assert cfg.write_fm_blocks(f, {"tags": "tags: [roto"}) is None
+    assert f.read_text(encoding="utf-8") == previo
+    sin = tmp_path / "s.verif.md"
+    sin.write_text("## Verificación de citas\n", encoding="utf-8")
+    assert cfg.stamp_fm_fields(sin, {"retracted": True}) is None
+    assert sin.read_text(encoding="utf-8") == "## Verificación de citas\n"
 
 
 def test_bibtex_fields_lee_las_tres_formas_de_valor():

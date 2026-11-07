@@ -411,7 +411,7 @@ def bibtex_for(fm: dict, stem: str, ads_cache: dict, sin_consultar=()) -> tuple:
     return "", "", motivo, sin_medir
 
 
-def stamp_bibtex(path: Path, fm: dict, body: str, entrada: str, fuente: str, fecha: str) -> None:
+def stamp_bibtex(path: Path, entrada: str, fuente: str, fecha: str) -> None:
     """Estampa `bibtex` + `bibtex_source` + `bibtex_accessed`, con el mismo escritor quirúrgico que
     usa `check_retractions` (`cfg.stamp_fm_fields`): no re-serializa el YAML, así que la extracción
     LLM que vive abajo queda byte a byte.
@@ -423,11 +423,10 @@ def stamp_bibtex(path: Path, fm: dict, body: str, entrada: str, fuente: str, fec
     if fuente not in cfg.BIBTEX_SOURCES:
         raise ValueError(f"`bibtex_source: {fuente}` fuera del vocabulario "
                          f"({' | '.join(cfg.BIBTEX_SOURCES)})")
-    cfg.stamp_fm_fields(path, fm, body,
-                        {"bibtex": entrada, "bibtex_source": fuente, "bibtex_accessed": fecha})
+    cfg.stamp_fm_fields(path, {"bibtex": entrada, "bibtex_source": fuente, "bibtex_accessed": fecha})
 
 
-def stamp_bibtex_gap(path: Path, fm: dict, body: str, motivo: str, fecha: str) -> None:
+def stamp_bibtex_gap(path: Path, motivo: str, fecha: str) -> None:
     """Persist the HOLE with its reason: `sin_bibtex` + `bibtex_accessed` of THIS attempt (#467).
 
     `bibtex_for` computed the reason and its docstring said what for —«the difference between *this
@@ -441,8 +440,7 @@ def stamp_bibtex_gap(path: Path, fm: dict, body: str, motivo: str, fecha: str) -
 
     ⚠ The date is the one of the attempt that produced THIS reason, same rule as `bibtex_accessed`
     (#34): otherwise the note claims an enquiry nobody made."""
-    cfg.stamp_fm_fields(path, fm, body,
-                        {"sin_bibtex": motivo, "bibtex_accessed": fecha})
+    cfg.stamp_fm_fields(path, {"sin_bibtex": motivo, "bibtex_accessed": fecha})
 
 
 def bibtex_closed(fm: dict) -> bool:
@@ -484,7 +482,7 @@ def cross_second_authority(notas: list, force: bool, hoy: str) -> tuple:
             no_evaluadas.append(f"{f.stem}: Crossref no contestó para `{doi}` — sin segunda "
                                 f"autoridad estampada (#593)")
             continue
-        cfg.stamp_fm_fields(f, fm, text.split("\n---\n", 1)[-1], {"bibtex_segunda_autoridad": {
+        cfg.stamp_fm_fields(f, {"bibtex_segunda_autoridad": {
             "fuente": "crossref", "pages": (msg or {}).get("page"), "fecha": hoy}})
         n += 1
     return n, no_evaluadas
@@ -735,7 +733,7 @@ def main() -> int:
                 sacados.append(f.stem)
                 fm, text = cfg.split_fm(t2 := f.read_text(encoding="utf-8")) or {}, t2
             huecos.append(f"{f.stem}: {motivo}")
-            stamp_bibtex_gap(f, fm, text.split("\n---\n", 1)[-1], motivo, hoy)
+            stamp_bibtex_gap(f, motivo, hoy)
             continue
         if fm.get("sin_bibtex") not in (None, ""):      # #545: presence, not motive
             # El hueco se cerró: el motivo describía un estado que ya no es. Dejarlo haría que la
@@ -751,7 +749,7 @@ def main() -> int:
                                     f"arriba de su propia entrada — arreglalo a mano y re-corré")
                 continue
             fm, text = cfg.split_fm(t2 := f.read_text(encoding="utf-8")) or {}, t2
-        stamp_bibtex(f, fm, text.split("\n---\n", 1)[-1], entrada, fuente, hoy)
+        stamp_bibtex(f, entrada, fuente, hoy)
         por_fuente[fuente] = por_fuente.get(fuente, 0) + 1
         n_ok += 1
 

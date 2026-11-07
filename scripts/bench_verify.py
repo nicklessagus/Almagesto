@@ -111,12 +111,9 @@ def claim_blocks(text: str) -> list[tuple[int, str]]:
     de oración mezcla cláusulas de citas vecinas (falsas alarmas sobre pares reales) y queda
     tan genérico que cualquier paper del tema lo "respalda" (sembradas fáciles). Las filas
     de tabla siguen siendo un claim por fila (afirmaciones atómicas por diseño del schema)."""
-    if text.startswith("---"):
-        parts = text.split("---", 2)
-        body = parts[-1]
-        offset = ("---".join(parts[:-1]) + "---").count("\n")   # líneas que consume el frontmatter
-    else:
-        body, offset = text, 0
+    span = cfg.frontmatter_span(text)            # H-11: por línea, no `split("---")`
+    body = span[1] if span else text
+    offset = text[:len(text) - len(body)].count("\n")   # líneas que consume el frontmatter
     out: list[tuple[int, str]] = []
     cur: list[str] = []
     cur_line = 0

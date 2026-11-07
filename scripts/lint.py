@@ -215,22 +215,6 @@ def fm_error(text: str) -> str | None:
 VERIF_HEAD_RE = cfg.VERIF_HEAD_RE
 
 
-def verify_block(text: str) -> tuple[bool, str | None]:
-    """(¿la nota tiene bloque `## Verificación de citas`?, fecha de la verificación más reciente).
-
-    La fecha vive en el encabezado por convención del skill (`## Verificación de citas
-    (AAAA-MM-DD)`): es lo único que permite saber si lo verificado sigue vigente o quedó atrás de
-    una edición posterior. Una nota puede acumular **varios** bloques (medido en una bóveda real:
-    hasta 11 — pasadas sucesivas sobre secciones distintas), así que la vigencia la marca la fecha
-    **máxima**, no la del primero: quedarse con el primero dejaría la nota stale para siempre por
-    más que se re-verifique."""
-    # @inv INV-31
-    # AUD-136: la regla vive UNA sola vez, en `lib_config` — `make_notes.estado_line` la
-    # reimplementaba tomando el PRIMER bloque, así que la cabecera de la nota y el veredicto del
-    # lint sobre esa misma nota podían nombrar fechas distintas.
-    return cfg.verification_date(text)
-
-
 def reanchor_of(f: str) -> str | None:
     """The carry date declared in note `f`'s verification heading, or `None` (#499).
 
@@ -655,13 +639,9 @@ def inventario_sin_llenar(text: str) -> bool:
     Mayor+2009 que la **prosa del mismo paper** contradice, y `verify-citations` **no lo puede ver**
     —«la Tabla 2 dice 4,55» es literalmente cierto—. La pasada encontró cinco inconsistencias
     internas de fuentes por esta vía, ninguna visible para el chequeo claim↔fuente."""
-    i = cfg.section_start(text, INVENTARIO_HEADER)
-    if i < 0:
+    seccion = cfg.section_text(text, INVENTARIO_HEADER)
+    if not seccion:
         return False                      # sección borrada: la escotilla declarada, no un hallazgo
-    seccion = text[i:]
-    corte = seccion.find("\n## ", 1)
-    if corte > 0:
-        seccion = seccion[:corte]
     filas = [ln.strip() for ln in seccion.split("\n")
              if ln.strip().startswith("|") and not _SEP_ROW.match(ln.strip())]
     #  @inv INV-97
@@ -3426,12 +3406,9 @@ def check_inventory_notation() -> list:
             texto = Path(f).read_text(encoding="utf-8")
         except OSError:
             continue
-        i = cfg.section_start(texto, INVENTARIO_HEADER)
-        if i < 0:
+        seccion = cfg.section_text(texto, INVENTARIO_HEADER)
+        if not seccion:
             continue
-        seccion = texto[i:]
-        if (corte := seccion.find("\n## ", 1)) > 0:
-            seccion = seccion[:corte]
         filas = [ln.strip() for ln in seccion.split("\n")
                  if ln.strip().startswith("|") and not _SEP_ROW.match(ln.strip())]
         for fila in filas[1:]:
@@ -3922,10 +3899,7 @@ DESTINATION_TABLES = {"regimen": "## Régimen de validez", "inventario": "## Inv
 def regimen_rows_citing(texto: str, bibcode: str, seccion: str = "## Régimen de validez") -> bool:
     """Does the note's `seccion` table (default `## Régimen de validez`) have a row linking
     `[[bibcode]]`? (#576)"""
-    i = cfg.section_start(texto, seccion)
-    seccion = texto[i:] if i >= 0 else ""
-    if (corte := seccion.find("\n## ", 1)) > 0:
-        seccion = seccion[:corte]
+    seccion = cfg.section_text(texto, seccion)
     link = re.compile(r"\[\[" + re.escape(bibcode) + r"(?:\\?[|#]|\])")   # `\|` inside a table
     return any(ln.strip().startswith("|") and link.search(ln) for ln in seccion.split("\n"))
 
@@ -4287,7 +4261,8 @@ def check_star_note(stem: str, fm: dict, text: str, tags, names, alias_idx_cache
         # `solo_prosa`: los proxies de autosuficiencia miden lo que alguien ESCRIBIÓ. Las
         # tablas estampadas (planetas, papers, métodos, excluidos, verificación) son metadata
         # materializada y satisfacen los patrones por construcción.
-        body = solo_prosa(text.split("---", 2)[-1] if text.startswith("---") else text)
+        _fm = cfg.frontmatter_span(text)          # H-11: por línea, no `split("---")`
+        body = solo_prosa(_fm[1] if _fm else text)
         # `P_rot_days` nulo NO es de por sí un campo incompleto (#70): el frontmatter es espejo
         # de NEA y NEA muchas veces no lo tiene — pedir que se "complete" ahí es pedir que se
         # rellene con literatura, justo lo que rompe la capa auditable. Lo accionable es otra
@@ -6068,7 +6043,8 @@ def check_inferences_without_premises(stem: str, text: str) -> list:
     @inv INV-86
     """
     infer_sin_premisas: list = []
-    cuerpo_nota = text.split("---", 2)[-1] if text.startswith("---") else text
+    _fm = cfg.frontmatter_span(text)              # H-11: por línea, no `split("---")`
+    cuerpo_nota = _fm[1] if _fm else text
     for marca in inferencias_sin_premisas(cuerpo_nota):
         infer_sin_premisas.append(
             (stem, f"`{marca}` sin premisas — una inferencia nombra al menos un `[[bibcode]]`: "
@@ -6195,7 +6171,7 @@ def check_verification_coverage(stem: str, f, text: str, nbib: int, in_verifiabl
     # tienen bloque: la nota nunca verificada se escapaba por abajo. Las fichas de estrella
     # entran: los valores NEA no se verifican contra papers, pero sus disputas y todo lo
     # atribuido a un `[[bibcode]]`, sí.
-    has_verif, verif_date = verify_block(text)
+    has_verif, verif_date = cfg.verification_date(text)
     if in_verifiable_note and nbib > 0 and not has_verif:
         unverified.append((stem, f"{nbib} cita(s) sin bloque de verify-citations → correr el skill"))
     # la vigencia del bloque se evalúa después del loop (necesita git; ver `stale_verif`). Vale
