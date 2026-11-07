@@ -2179,3 +2179,19 @@ cae en `res.failed` con su motivo (antes: `KeyError` que tiraba la tanda).
 `vault/wiki/stars/61_vir.md` → «fallan: 1 … `viejo` no lo es» y «NO se escribió nada» (antes:
 «✂ BORRA el bloque entero»). `{"n":1,"nuevo":"x"}` → «el fix no dice qué toca» (antes:
 `KeyError: 'viejo'`). **Devolver si** un borrado de bloque legítimo (fila, párrafo, ítem) rehúsa.
+
+## §#627 · v1.415.20 — un solo recorrido de citas: el lint mira las `## Vista`
+
+Sin migración. `lib_quotes.walk_quotes` (bloque → cita → dueño → fuentes → veredicto) es el
+recorrido de `contrast.validar`, y ahora el lint (`check_note_quotes`, `check_log_quotes`) lo
+recorre también: TODOS los bloques, no sólo los pares, así que la transcripción de una `## Vista`
+de nota de paper (sin wikilink: el bibcode ES la nota) entra. El `log` conserva `quote_found`
+(#391) y el lint su exención OCR (#220); las lecturas son las de `contrast`
+(`fulltext_readings`, una sola caché).
+
+**Validar (Tesis, scripts del template):** la población de las citas del lint pasa de **2156** a
+**15201** citas chequeables; `cita_txt_degradado` 241 → **3278**, `cita_txt_discrepa` 9 → **436**,
+`cita_no_verbatim` 73 → **104**, `cita_log` 17 → **18** (la entrada que hereda el bibcode del
+encabezado, como en los pares); `cita_inventada` sin cambio y `lint` rc 0. `contrast
+--validar-todo` idéntico antes y después. **Devolver si** una categoría bloqueante sube, o si
+`contrast --validar-todo` cambia.

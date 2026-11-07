@@ -8,6 +8,7 @@ it reaches through `cfg.` at call time. `lib_config` re-exports every public nam
 """
 from __future__ import annotations
 
+import collections
 import datetime as _dt
 import functools
 import json
@@ -1237,6 +1238,48 @@ def with_own_bibcode(bibs, own: str) -> list:
     the divergence #324 declared forbidden."""
     bibs = list(bibs)
     return bibs if not own or own in bibs else [*bibs, own]
+
+
+#: #627 · one «quote» of a block and its verdict, as `walk_quotes` yields it
+QuoteHit = collections.namedtuple("QuoteHit", "quote owner cited ambiguous verdict det")
+
+
+def walk_quotes(stem: str, text: str, own: str = "", readings=None):
+    """THE walk «quote → owner → sources → verdict» over every block of a note (#627).
+
+    Yields `(block, bibs, exempt, hits)` per block of `lib_blocks.split_blocks(text)`: `bibs` are
+    the block's candidates (its `[[bibcode]]`s, else its caption's, plus the note's OWN bibcode,
+    #373/#394), `exempt` the `log_quote_exempt` reason (then `hits` is empty) and `hits` one
+    `QuoteHit` per `quotes_in` of the block, judged by `quote_verdict` (#324).
+
+    ⛔ It is `contrast.validar`'s walk, and the lint walks it too. The lint used to walk the PAIRS
+    (`pairs_of`: blocks with a `[[bibcode]]`), so a `## Vista` transcription —no wikilink: the
+    bibcode IS the note— was invisible to it: measured on a real vault, 2 215 quotes against 15 773.
+    Three copies of this walk had already diverged (#337); one stays.
+
+    `readings(bibcode)` gives the source readings (default `fulltext_readings`); the lint injects
+    its own to keep the OCR exemption it declares (#220, D-43)."""
+    import lib_blocks as lb   # at call time: `lib_blocks` imports `lib_config`, which imports this
+    readings = readings or cfg.fulltext_readings
+    note_bibs = set(lb._bibcodes(text))
+    if own:
+        note_bibs.add(own)
+    for b in lb.split_blocks(text):
+        exempt = log_quote_exempt(stem, b.text, b.kind)
+        if exempt:
+            yield b, [], exempt, []
+            continue
+        bibs = with_own_bibcode(lb._bibcodes(b.text) or lb._bibcodes(b.intro or ""), own)
+        copied = quote_from_stamped_block(b.text, b.intro)
+        hits = []
+        for quote in quotes_in(b.text):
+            owner = lb.quote_owner(b.text, quote, bibs)          # #316
+            cited = [owner] if owner else bibs
+            ambiguous = not owner and len(bibs) > 1
+            verdict, det = cfg.quote_verdict(quote, cited, note_bibs, {x: readings(x) for x in cited},
+                                         ambiguo=ambiguous, copiada=copied)
+            hits.append(QuoteHit(quote, owner, cited, ambiguous, verdict, det))
+        yield b, bibs, None, hits
 
 
 #: #453/#454 · las dos marcas que abren el bloque de salvedades de una `## Vista`. Viven acá —y no

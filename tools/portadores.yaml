@@ -1116,16 +1116,19 @@ portadores:
     patron: 'quote_verdict\(|extraction_texts\(|SALVEDAD_MARCAS'
     consumidores:
       - modulo: scripts/contrast.py
-        estado: usa
+        estado: fuera-de-alcance
         motivo: >-
-          `validar` le pasa `copiada` desde el predicado compartido y emite la marca
-          `⚠verificar en el PDF` (#225/#341), con la población declarada aparte de
-          `solo_extraccion`, que mide otra cosa.
+          #627 — `validar` recorre `cfg.walk_quotes`, que llama a `quote_verdict` con `copiada`
+          del predicado compartido; acá emite la marca `⚠verificar en el PDF` (#225/#341), con la
+          población declarada aparte de `solo_extraccion`.
       - modulo: scripts/lint.py
-        estado: usa
+        estado: fuera-de-alcance
         motivo: >-
-          El otro gate que juzga la MISMA cita (#324): decide `copiada` con la misma función y
-          reporta el hallazgo en la categoría de discrepancia, con la marca.
+          #627 — el otro gate que juzga la MISMA cita (#324) recorre el mismo `cfg.walk_quotes`
+          y reporta el hallazgo en la categoría de discrepancia, con la marca.
+      - modulo: scripts/lib_quotes.py
+        estado: usa
+        motivo: "#627 — `walk_quotes` es el único que llama a `quote_verdict` por cita, con `copiada` de `quote_from_stamped_block`."
       - modulo: scripts/harvest_views.py
         estado: fuera-de-alcance
         motivo: >-
@@ -1138,12 +1141,6 @@ portadores:
           Re-exporta `quote_verdict`, `quote_from_stamped_block` y `SALVEDAD_MARCAS` para que
           `cfg.…` siga funcionando (AUD-306); no decide nada sobre una cita.
 
-      - modulo: scripts/lib_quotes.py
-        estado: fuera-de-alcance
-        motivo: >-
-          Es la casa de la regla (`quote_verdict`, `quote_from_stamped_block`, `SALVEDAD_MARCAS`):
-          no es un consumidor. `lib_config` la re-exporta y por ahí la llaman los dos gates
-          (AUD-306).
       - modulo: tools/carriers.py
         estado: fuera-de-alcance
         motivo: >-
@@ -2645,14 +2642,14 @@ portadores:
     patron: 'quote_owner\(|_ADYACENTE|_introduce\('
     consumidores:
       - modulo: scripts/lint.py
-        estado: usa
-        motivo: "`check_note_quotes` y la rama del `log` prueban cada cita contra el dueño que devuelve `quote_owner`; con `None`, contra todas y con el aviso de ambigüedad (#316)."
+        estado: fuera-de-alcance
+        motivo: "#627 — `check_note_quotes` y la rama del `log` reciben el dueño de `cfg.walk_quotes`, que lo pide a `quote_owner`; con `None`, contra todas y con el aviso de ambigüedad (#316)."
       - modulo: scripts/contrast.py
-        estado: usa
-        motivo: "`validar` elige los candidatos por `quote_owner` (#324: una sola regla con el lint)."
+        estado: fuera-de-alcance
+        motivo: "#627 — `validar` recibe los candidatos de `cfg.walk_quotes` (#324: una sola regla con el lint)."
       - modulo: scripts/lib_quotes.py
         estado: usa
-        motivo: "#587 — `short_quote_verdicts` elige el dueño de cada cita corta por `quote_owner`, para sus dos portadores (`contrast` y el lint)."
+        motivo: "`walk_quotes` (#627) y `short_quote_verdicts` (#587) eligen el dueño de cada cita por `quote_owner`, para sus dos portadores (`contrast` y el lint)."
 
   - issue: 517
     regla: >-
@@ -3842,3 +3839,27 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: "`load_fanout` lee los pares de los archivos de `fanout_files`, los mismos que pasó la barrera."
+  - issue: 627
+    regla: >-
+      Un solo recorrido «cita → dueño → fuentes → veredicto» sobre TODOS los bloques de una nota,
+      el de `contrast`: el del lint iba sobre los PARES y no miraba la transcripción de una
+      `## Vista` (sin wikilink: el bibcode ES la nota) — 2 215 citas contra 15 773 en una bóveda
+      real. Tres copias ya divergían (#337).
+    funcion: lib_config.walk_quotes
+    patron: 'quotes_in\('
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "`validar` recorre `walk_quotes` y le suma el eje de página (#492) y la cita corta (#586) por bloque."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_note_quotes` (con las lecturas sin OCR, #220) y `check_log_quotes` (con `quote_found`, #391) recorren `walk_quotes`."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Cruza las citas del JSON de extracción contra el `.txt` (#359) al cosechar: no recorre bloques de una nota."
+      - modulo: scripts/repaginate.py
+        estado: fuera-de-alcance
+        motivo: "Relee el PDF para re-paginar las citas de una extracción (#494): no juzga atribución ni recorre una nota."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Define `quotes_in` y el propio `walk_quotes`; `short_quote_verdicts` mira la cita CORTA, otro carril (#586)."

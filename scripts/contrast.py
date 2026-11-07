@@ -415,49 +415,31 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
            # #586 — las citas CORTAS (< `QUOTE_MIN`), que `quotes_in` deja afuera: población propia,
            # la marca para las que el `.txt` no trae, y nada que mueva el rc.
            "cortas": [], "cortas_n": 0, "cortas_glosa": 0, "cortas_no_eval": 0}
-    bibs_nota = set(lb._bibcodes(texto))
     # #373/#394 — en una nota de PAPER el bibcode es la nota, no un link, y desde #394 la regla
     # (y su medición) vive en `cfg.note_own_bibcode`/`cfg.with_own_bibcode`, compartida con el lint:
     # dos gates que juzgan la misma cita no pueden tener dos implementaciones (#324).
     fm = cfg.split_fm(texto)
     propio = cfg.note_own_bibcode(nota, fm)
-    if propio:
-        bibs_nota.add(propio)
     # #516 — la cita confirmada en la página y firmada calla ACÁ también (misma función que el lint,
     # #324). La firma rota no se juzga acá: la reporta el lint (`cita_revisada_huerfana`).
     try:
         firmas = cfg.load_reviewed_quotes(fm or {}, entry=nota.stem)
     except cfg.VistasError:
         firmas = []
-    for b in lb.split_blocks(texto):
-        # #386/#387 — el `log` es append-only por contrato, así que su corrección es una MARCA y no
-        # una edición, y una entrada que documenta una cita defectuosa tiene que citarla. Las dos
-        # exenciones las decide UNA función, compartida con el lint: una convención en prosa que
-        # cada chequeo aprende por su cuenta no compone, y éstos ya divergían.
-        exento = cfg.log_quote_exempt(nota.stem, b.text, b.kind)
+    # #627 — THE walk (block → quote → owner → sources → verdict) lives in `lib_quotes.walk_quotes`
+    # and the lint walks it too: three copies had diverged (#337), and the lint's —over PAIRS— did
+    # not see a `## Vista` transcription (no wikilink: the bibcode IS the note). The `log` exemption
+    # (#386/#387) and the stamped-block witness (#454) are decided inside, by the same functions.
+    for b, bibs, exento, hits in cfg.walk_quotes(nota.stem, texto, propio):
         if exento:
             for _c in cfg.quotes_in(b.text):
                 out["citas"] += 1
                 out["resueltas"].append((b.first_line, f"{exento}: visible, no es deuda"))
             continue
-        bibs = cfg.with_own_bibcode(lb._bibcodes(b.text) or lb._bibcodes(b.intro or ""), propio)
         antes = out["pag_consumidos"]
-        citas_bloque = cfg.quotes_in(b.text)
-        for cita in citas_bloque:
+        for cita, duenio, candidatos, ambiguo, ver, det in hits:
             out["citas"] += 1
-            duenio = lb.quote_owner(b.text, cita, bibs)          # #316
-            candidatos = [duenio] if duenio else bibs
-            ambiguo = not duenio and len(bibs) > 1
             _page_check(b, cita, duenio, out)
-            txts = {x: cfg.fulltext_readings(x) for x in candidatos}
-            # #324 — la MISMA función que usa el lint, no una re-implementación: con código separado
-            # daban 13 y 12 sobre el mismo corpus, y el de más era una cita CORRECTA cuya extracción
-            # simplemente no la había transcripto.
-            # #454 — la cita que la MÁQUINA copió de la extracción (el bloque de salvedades) no
-            # puede juzgarse contra la extracción: el testigo y el juzgado son el mismo archivo.
-            copiada = cfg.quote_from_stamped_block(b.text, b.intro)
-            ver, det = cfg.quote_verdict(cita, candidatos, bibs_nota, txts, ambiguo=ambiguo,
-                                         copiada=copiada)
             corte = cfg.quote_fragment(cita, 70)
             quienes = ", ".join(candidatos) or "sin fuente adyacente"
             firma = cfg.reviewed_quote(firmas, candidatos, cita) \

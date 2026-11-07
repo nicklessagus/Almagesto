@@ -4505,20 +4505,13 @@ def check_log_quotes(stem: str, body_full: str, sources_for) -> list:
     """
     cita_log: list = []
     if stem == "log":
-        for _b in lb.split_blocks(body_full):
-            # #386/#387 — la MISMA función que usa `contrast.validar`, no un `in` propio: la
-            # marca y la mención en blockquote son la misma regla para los dos consumidores.
-            if cfg.log_quote_exempt(stem, _b.text, _b.kind):
-                continue           # marcada, o mención: visible, no es deuda
-            _bibs_log = lb._bibcodes(_b.text)
-            for _c in cfg.quotes_in(_b.text):
-                # #337 — el DUEÑO de la cita, igual que la rama gemela de la prosa que sigue
-                # abajo: #316/#325 se arregló en un camino y quedó vivo en el hermano. Sin esto
-                # la cita se probaba contra CADA bibcode de la entrada, así que una cita
-                # correcta y verbatim en un párrafo que nombra ocho papers producía ocho
-                # hallazgos —uno por bibcode— y partir el párrafo en dos los bajaba.
-                _duenio_log = lb.quote_owner(_b.text, _c, _bibs_log)
-                _bibs_c = [_duenio_log] if _duenio_log else _bibs_log
+        # #627 — the same walk as the notes and `contrast` (`lib_quotes.walk_quotes`): the
+        # blockquote exemption (#386/#387) and the OWNER (#337: the quote is tested against its
+        # source, not against every bibcode of the entry) are decided inside. ⛔ The verdict here
+        # stays `quote_found` on the `.txt` (#391): stricter on purpose — the extraction does not
+        # clear a quote of the bitácora, which no verification layer audits.
+        for _b, _bibs, _exento, _hits in cfg.walk_quotes(stem, body_full):
+            for _c, _duenio, _bibs_c, *_ in _hits:
                 _fuentes_log, _ = sources_for(_bibs_c)
                 if not _fuentes_log:
                     continue       # sin `.txt` chequeable: no evaluable, no es hallazgo
@@ -4567,53 +4560,25 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
     _usadas: set = set()
     _clave_firma = lambda f: (f["ref"], cfg.normalize_quote(f["cita"]), f["pdf_sha"])  # noqa: E731
     if stem not in NON_ORPHAN:
-        _por_bloque: dict = {}
-        for _par in lb.pairs_of(text):
-            # #454 — el `intro` entra en la clave: es lo que dice si el bloque es el que la máquina
-            # copió DE la extracción (el de salvedades), y ahí la extracción no puede ser testigo.
-            _por_bloque.setdefault(
-                (_par.block.first_line, _par.block.text, _par.block.intro), []).append(_par.bibcode)
-        # #321 — los bibcodes de TODA la nota: el error de atribución medido es la frase de un
-        # paper puesta bajo otro de la misma nota (6 de 32 hits), y ésa es evidencia POSITIVA.
-        _bibs_nota = {b for _bs in _por_bloque.values() for b in _bs}
-        # #394 — el simétrico de #373, que `contrast` ya tenía y este gate no: en una nota de
-        # PAPER el bibcode es la nota y no un link, así que una transcripción de su `## Vista`
-        # se juzgaba contra el `.txt` del `[[wikilink]]` vecino —que en esa frase es una
-        # MENCIÓN—. Medido en una bóveda real: 5 de 19 hallazgos de esta categoría eran
-        # palabras del propio paper, 3 de ellas verbatim en su propio `.txt`. Misma cita, dos
-        # veredictos: limpia en `contrast --validar-todo` y backlog acá, que es la divergencia
-        # que #324 declaró prohibida — por eso la regla es UNA función, no una copia.
+        # #627 — THE walk is `contrast`'s (`lib_quotes.walk_quotes`): every block, not only the
+        # PAIRS. Over `pairs_of` a `## Vista` transcription —no wikilink: the bibcode IS the note,
+        # #394— was never looked at here (measured on a real vault: 2 215 quotes against
+        # `contrast`'s 15 773). The owner (#316), the own bibcode that ADDS (#394), the
+        # stamped-block witness (#454) and the verdict (#324) are decided inside, once.
         _propio = cfg.note_own_bibcode(Path(f), fm)   # el fm YA parseado: una sola pasada de YAML
-        if _propio:
-            _bibs_nota.add(_propio)
-        for (_ln, _btxt, _bintro), _bibs in _por_bloque.items():
-            _bibs = cfg.with_own_bibcode(_bibs, _propio)
-            # ⚠ Sin `if not _citas: continue`: el `for` de abajo no itera igual (red 8, #396).
-            for _c in cfg.quotes_in(_btxt):
-                # #316 — la cita se prueba contra SU fuente, no contra todas las del bloque. Un
-                # párrafo que contrasta dos o tres papers es la forma normal de la prosa que
-                # este framework pide, y probar cada cita contra cada bibcode marca la nota
-                # **por decir la verdad** (medido: 12 de 12 hallazgos duros de un hub, en cuatro
-                # líneas que atribuyen bien en prosa). Peor: el arreglo aparente —reatribuir la
-                # cita al bibcode contra el que se testeó— **destruye la inferencia** que la
-                # nota declara. Sin dueño adyacente la ambigüedad se DECLARA en el mensaje.
-                _duenio = lb.quote_owner(_btxt, _c, _bibs)
-                _bibs_c = [_duenio] if _duenio else _bibs
+        # el `.txt` OCR no es testigo acá (#220, D-43): se declara no evaluable, nunca en contra
+        _lecturas = lambda b: sources_for([b])[0].get(b, [])  # noqa: E731
+        for _blk, _bibs, _exento, _hits in cfg.walk_quotes(stem, text, _propio, readings=_lecturas):
+            _ln, _btxt = _blk.first_line, _blk.text
+            for _c, _duenio, _bibs_c, _ambiguo, _ver, _det in _hits:
                 _fuentes, _opacas = sources_for(_bibs_c)
                 n_evaluadas[0] += 1 if _fuentes else 0
-                _amb = "" if _duenio or len(_bibs) == 1 else (
+                # #316 — sin dueño adyacente la ambigüedad se DECLARA en el mensaje: el hallazgo
+                # es más débil y nunca bloquea (`quote_verdict(..., ambiguo=)`).
+                _amb = "" if not _ambiguo else (
                     f" ⚠ el bloque cita {', '.join(sorted(_bibs))} y la cita no lleva "
                     f"`[[bibcode]]` adyacente: se probó contra TODAS, así que el hallazgo es "
                     f"más débil — poné la cita al lado de su fuente (#316)")
-                # #324 — UNA sola implementación de la regla, en `cfg.quote_verdict`: acá y
-                # en `contrast.validar` se decide lo mismo, y con código separado ya divergían
-                # (13 contra 12 sobre el mismo corpus el mismo día). El orden lo fija esa
-                # función, y su primer paso —la cita contra el `.txt` de SU fuente— es el que
-                # evita marcar como mal atribuida una cita correcta cuya extracción,
-                # selectiva (#188), no la transcribió.
-                _ver, _det = cfg.quote_verdict(_c, _bibs_c, _bibs_nota, _fuentes,
-                                               ambiguo=bool(_amb),
-                                               copiada=cfg.quote_from_stamped_block(_btxt, _bintro))
                 _corte = _c if len(_c) <= 70 else _c[:70] + "…"
                 if _ver == "en_su_txt":
                     continue
@@ -7070,7 +7035,6 @@ def source_lookup(paper_fms: dict):
     runs per citing BLOCK: a note with 88 blocks citing 49 papers would otherwise de-interleave and
     normalise the same file dozens of times."""
     fm_cache: dict = {}
-    src_cache: dict = {}
 
     def paper_fm(bib: str) -> dict:
         """Frontmatter of a paper note: the sweep's parse if it already got there, else read now."""
@@ -7088,29 +7052,20 @@ def source_lookup(paper_fms: dict):
                 fm_cache[bib] = {}
         return fm_cache[bib]
 
-    def source_readings(txt_path) -> list:
-        """Normalized readings of a `.txt`, one per physical column, memoised (#275)."""
-        clave = str(txt_path)
-        if clave not in src_cache:
-            src_cache[clave] = cfg.source_texts(
-                txt_path.read_text(encoding="utf-8", errors="replace"))
-        return src_cache[clave]
-
     def sources_for(bibs) -> tuple:
         """`({bibcode: [texts]}, [(bibcode, reason)])` for the bibcodes a block cites."""
         fuentes, opacas = {}, []
         for b in bibs:
-            motivo = ("`fulltext_source: ocr`" if paper_fm(b).get("fulltext_source") == "ocr"
-                      else "")
-            txts = list(cfg.FULLTEXT.glob(f"*/{b}.txt")) if cfg.FULLTEXT.exists() else []
-            if not txts and (_abs := cfg.abstract_source(b)):
-                fuentes[b] = _abs          # #520: el `## Abstract` ES la fuente, declarado
-            elif not txts:
-                opacas.append((b, "sin `.txt` en disco"))
-            elif motivo:
-                opacas.append((b, motivo))
+            # #627 — the readings are `contrast`'s (`fulltext_readings`, memoised, with the
+            # `## Abstract` fallback of #520): one cache and one first-`.txt` rule for both gates.
+            # The OCR exemption (#220, D-43) is the lint's, declared, and stays here.
+            if paper_fm(b).get("fulltext_source") == "ocr" and cfg.FULLTEXT.exists() \
+                    and any(cfg.FULLTEXT.glob(f"*/{b}.txt")):
+                opacas.append((b, "`fulltext_source: ocr`"))
+            elif (_lect := cfg.fulltext_readings(b)):
+                fuentes[b] = _lect
             else:
-                fuentes[b] = source_readings(txts[0])
+                opacas.append((b, "sin `.txt` en disco"))
         return fuentes, opacas
 
     return sources_for

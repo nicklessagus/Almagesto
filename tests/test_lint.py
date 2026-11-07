@@ -12126,3 +12126,18 @@ def test_623_cola_tema_y_no_sintetizado_en_lista_de_strings_son_fm_broken():
         assert lint.normalize_lists(dict(fm)), fm
     escalar = {"no_sintetizado": "poda"}
     assert lint.normalize_lists(escalar) == [] and escalar["no_sintetizado"] == "poda"
+
+
+def test_627_la_cita_de_una_VISTA_sin_wikilink_se_mira(toy_vault, capsys):
+    """#627 — el lint recorría sólo los PARES (bloques con `[[bibcode]]`), así que la transcripción
+    de una `## Vista` de nota de paper —que no lleva wikilink: el bibcode ES la nota— no la miraba
+    nadie del lado del lint (medido en la Tesis: 2 215 citas contra 15 773 de `contrast`). Un solo
+    recorrido, el de `contrast` (`lib_quotes.walk_quotes`)."""
+    bib = "2012embc.conf..101A"
+    _paper_con_txt(bib, "the artefact subspace is estimated from a clean calibration segment\n")
+    mk_note(cfg.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "stars": ["tau Cet"]},
+            "# p\n\n## Vista — ica\n\nDice «a phrase long enough to be worth checking against the "
+            "source file», sin ningún wikilink.\n")
+    link_from_log(toy_vault, "nota", bib)
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2012embc" in _seccion(rep, "no está en su fuente"), rep
