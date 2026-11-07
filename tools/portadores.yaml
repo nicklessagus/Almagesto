@@ -3706,3 +3706,30 @@ portadores:
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "#625 — delimita con `cfg.frontmatter_span` (el mismo delimitador por línea); el patrón matchea sólo los comentarios que nombran el corte prohibido."
+  - issue: 601
+    regla: >-
+      `wiki/log.md` es append-only: un reescritor masivo de `wiki/` no reescribe rutas ni datos del
+      slug en entradas fechadas (el historial pasaría a afirmar nombres que no existían). Lo que sí
+      se reescribe en el `log` son los `[[wikilink]]`: es resolución de link, y dejarlos rotos
+      bloquea el lint.
+    funcion: entity._rewrite_subject_layers
+    patron: 'cfg\.WIKI\.rglob|note_paths\(cfg\.WIKI|cfg\.VAULT\.rglob'
+    consumidores:
+      - modulo: scripts/entity.py
+        estado: usa
+        motivo: "`rename` reescribe las capas del slug con `_rewrite_subject_layers`, que saltea `log.md` (#601) como `_mentions`; `_reescribir_wikilinks` sí entra al `log` (resolución de link)."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "`--rename-paper` reescribe en toda la bóveda sólo `[[wikilink]]` del bibcode (resolución de link, permitida en el `log`); el otro match enumera stems."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "Lee las notas para validar citas; no escribe en el `log`."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Lee los hermanos `.verif.md`; no escribe."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "Enumera notas para leer su frontmatter; no reescribe el `log`."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: fuera-de-alcance
+        motivo: "Enumera hermanos `.verif.md` para leerlos; no toca el `log`."

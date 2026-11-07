@@ -596,6 +596,19 @@ def test_562_rename_lista_el_texto_libre_con_el_slug_viejo_sin_reescribirlo(toy_
     assert "wiki/log.md" not in out, "el log es historia, no se lista"
 
 
+def test_601_rename_no_reescribe_las_entradas_fechadas_del_log(toy_vault):
+    # @inv INV-19
+    """#601 — `log.md` es append-only: las rutas y alcances del slug viejo en una entrada fechada
+    son historia. Sin la exclusión quedaba `raw/pdfs/nuevo_slug/` en una entrada de enero."""
+    slug, _ = poblar()
+    log = cfg.WIKI / "log.md"
+    viejo = (f"## 2026-01-01 — ingest\n- `raw/pdfs/{slug}/2020A.pdf`, "
+             f"`config/registro/{slug}.yaml`\n> Alcance 2026-01-01 · estrellas: [{slug}] · 1 papers\n")
+    log.write_text(viejo, encoding="utf-8")
+    assert run(["rename", slug, "nuevo_slug", "--yes"]) == 0
+    assert log.read_text(encoding="utf-8") == viejo
+
+
 def test_562_mentions_matriz(toy_vault):
     cfg.WIKI.mkdir(parents=True, exist_ok=True)
     (cfg.WIKI / "a.md").write_text("pca\npca-x\nxpca\nraw/pdfs/pca/1.pdf\n", encoding="utf-8")

@@ -1952,3 +1952,15 @@ primera cosecha ni con `--paper --force`— y se avisa con `⛔ … NO se escrib
 `_refutado` (`grep -rl _refutado vault/raw/extraccion`): `harvest_views.py <slug> --paper <bib>
 --force --dry-run` no anuncia cambios en `## Conclusiones` que reintroduzcan la cadena refutada.
 **Devolver si** una sección de lectura vuelve a contener texto que `_refutado` declara refutado.
+
+## §#601 · v1.415.2 — `entity.py rename` no reescribe las entradas fechadas de `log.md`
+
+Sin migración. `_rewrite_subject_layers` saltea `wiki/log.md` (append-only), como ya lo hacía
+`_mentions`: las rutas `raw/(pdfs|fulltext)/<viejo>/`, `config/registro/<viejo>.yaml` y los
+alcances `estrellas:/temas: [<viejo>]` de entradas viejas quedan como estaban. Los `[[wikilink]]`
+del `log` sí se re-apuntan (resolución de link; `--rename-paper` igual).
+
+**Validar:** en un worktree desechable, `python scripts/entity.py rename <slug> <slug>-x --yes`
+sobre un slug que el `log` nombre en una ruta o alcance → `vault/wiki/log.md` byte a byte igual
+salvo `[[wikilink]]` a la nota renombrada (`git diff --stat vault/wiki/log.md`).
+**Devolver si** una entrada fechada del `log` cambia una ruta, registro o alcance del slug.

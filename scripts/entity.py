@@ -463,6 +463,11 @@ def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[lis
                       (re.compile(rf"(_(?:No leído desde|Reclamado por) `){v}`"), rf"\g<1>{nuevo}`")]
     notas, sin_tocar = [], []
     for f in cfg.note_paths(cfg.WIKI, "**/*.md"):
+        # #601 — `log.md` is append-only history: the slug's paths and data in a dated entry stay
+        # as they were (as in `_mentions`). Its `[[wikilinks]]` are another matter: those are link
+        # resolution, and `_reescribir_wikilinks` / `--rename-paper` do rewrite them.
+        if f.name == "log.md":
+            continue
         t = f.read_text(encoding="utf-8")
         lim = cfg.fm_bounds(t)
         head, body = (t[:lim[1]], t[lim[1]:]) if lim else ("", t)
