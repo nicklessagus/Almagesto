@@ -348,7 +348,9 @@ def test_el_valor_que_el_texto_del_dueno_no_muestra_se_propone_REDONDEO_tolerado
         "| Teff | 5172.5 K | L5 | — | Pepe et al. (2015) |\n"
         "| M | 0.83 Msun | L6 | — | Mayor et al. 2009 |\n", encoding="utf-8")
     filas, poblacion, firmadas, no_eval = pr.unconfirmed_second_hand()
-    assert (poblacion, no_eval, firmadas) == (4, 2, []), "el dueño AUSENTE es de la otra categoría"
+    # #614 · AUD-610 — B == A (Teff, de Pepe 2015 en la nota de Pepe 2015) entra en la población
+    # como NO EVALUABLE, como promete el docstring: antes no se contaba en ninguno de los dos
+    assert (poblacion, no_eval, firmadas) == (5, 3, []), "el dueño AUSENTE es de la otra categoría"
     assert [(b, a, v) for b, a, v, _q in filas] == [("2012D", "2015P", "0.77 m/s")]
 
 
@@ -357,6 +359,17 @@ def test_la_cola_de_valores_sin_confirmar_se_DECLARA(toy_vault, monkeypatch):
     test_el_valor_que_el_texto_del_dueno_no_muestra_se_propone_REDONDEO_tolerado(toy_vault)
     monkeypatch.setattr(pr, "MISSING_OWNERS_TOP", 0)
     assert pr.unconfirmed_second_hand()[0] == [("… y 1 valor(es) más", "", "", "")]
+
+
+def test_614_el_total_cuenta_lo_que_el_tope_corta_no_la_centinela(toy_vault, monkeypatch, capsys):
+    """#614 · AUD-634 — con más filas que el tope, título y total contaban la centinela «… y K más»
+    como UNA propuesta. El número sale de la lista completa."""
+    _nota_con_segunda_mano("2020A", "Díaz, R. F.", 2020,
+                           ["Udry et al. 2007", "Mayor et al. 2009", "Sousa et al. (2008)"])
+    monkeypatch.setattr(pr, "MISSING_OWNERS_TOP", 1)
+    assert pr.report() == 3
+    out = capsys.readouterr().out
+    assert "segunda mano que la bóveda no tiene (#590) — 3" in out, out
 
 
 def test_el_numero_de_B_se_encuentra_con_5_decimales_TRUNCADO_y_entre_corchetes(toy_vault):

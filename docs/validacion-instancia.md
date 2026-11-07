@@ -2121,3 +2121,13 @@ re-sincronizadas» ya en la PRIMERA corrida (antes: 2, sólo re-citado), y `git 
 próxima cosecha que proponga una decisión sobre una de las 10 notas con lista indentada, la línea
 sale con `  - {…}` y pegada parsea. **Devolver si** la primera corrida de `--restamp-alcance` toca
 alguna nota sin cambio de valor.
+
+## §#614 · v1.415.15 — `proposals.py` cuenta bien población y total
+
+Sin migración. (a) En 🔎, el valor de segunda mano cuyo dueño es A misma entra en la población como
+**no evaluable** (antes no se contaba en ninguno). (b) Título y total cuentan lo que el tope esconde:
+la fila «… y K más» vale K, no 1.
+
+**Validar:** `python scripts/proposals.py` sobre la Tesis → 📎 **834** (antes 26), 🔎 **110** (antes
+28) con «sobre 1893 valores … (900 no evaluables)» (antes 1887/894), total **1084** (antes 194).
+**Devolver si** el número de un título no es filas listadas − 1 + K de su «… y K más».

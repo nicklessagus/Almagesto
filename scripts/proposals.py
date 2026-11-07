@@ -237,6 +237,23 @@ _OWNER_RE = re.compile(
 #: Cuántos dueños ausentes se listan; el resto se DECLARA en una fila final, nunca se calla.
 #: ponytail: tope fijo, flag `--todos` si alguien necesita la cola entera.
 MISSING_OWNERS_TOP = 25
+
+
+class _Rest(tuple):
+    """The «… y K más» row a capped list ends with: it stands for `k` proposals, not one (#614)."""
+    k = 0
+
+
+def _rest(k: int, *cols: str) -> _Rest:
+    """The tail row of a capped list, carrying the `k` rows it stands for (#614)."""
+    row = _Rest(cols)
+    row.k = k
+    return row
+
+
+def _count(filas) -> int:
+    """How many proposals `filas` holds — the capped tail counts what it hides (#614 · AUD-634)."""
+    return sum(f.k if isinstance(f, _Rest) else 1 for f in filas)
 #: La celda que cita un trabajo NO publicado todavía: su año es el del preprint, y el publicado sale
 #: uno o dos años después (medido en Almagesto-Tesis: «Bonfils et al. (2011, submitted)» es
 #: 2013A&A...549A.109B). Sólo con esta marca se acepta el corrimiento: sin ella, `Bonfils 2008` se
@@ -320,8 +337,8 @@ def missing_owners(slug: str | None = None) -> tuple:
               "lo citan: " + ", ".join(sorted(ps)[:3]) + (f" (+{len(ps) - 3})" if len(ps) > 3 else ""))
              for cita, n, ps in orden[:MISSING_OWNERS_TOP]]
     if (resto := orden[MISSING_OWNERS_TOP:]):
-        filas.append((f"… y {len(resto)} dueño(s) más", f"{sum(e[1] for e in resto)} valor(es)",
-                      "", ""))
+        filas.append(_rest(len(resto), f"… y {len(resto)} dueño(s) más",
+                           f"{sum(e[1] for e in resto)} valor(es)", "", ""))
     return filas, poblacion, [], no_eval
 
 
@@ -384,9 +401,12 @@ def unconfirmed_second_hand(slug: str | None = None) -> tuple:
     vistos: set = set()                        # las A en alcance: dónde puede haber una huérfana
     for a, q, v, _de, duenos, _claves in _second_hand_owners(slug):
         vistos.add(a)
-        if not duenos or duenos == {a}:
+        if not duenos:
             continue
         poblacion += 1
+        if duenos == {a}:      # #614 · AUD-610 — B es A misma: no evaluable, contado aparte
+            no_eval += 1
+            continue
         cantidades = lb.quantities(v)
         for b in duenos - numeros.keys():
             t = txts.get(cfg.note_stem(b))
@@ -424,8 +444,8 @@ def unconfirmed_second_hand(slug: str | None = None) -> tuple:
                        for a, decl in firmas.items() for d in decl if (a, id(d)) not in usadas)
     filas.sort()
     if len(filas) > MISSING_OWNERS_TOP:
-        filas = filas[:MISSING_OWNERS_TOP] + [(f"… y {len(filas) - MISSING_OWNERS_TOP} valor(es) más",
-                                               "", "", "")]
+        k = len(filas) - MISSING_OWNERS_TOP
+        filas = filas[:MISSING_OWNERS_TOP] + [_rest(k, f"… y {k} valor(es) más", "", "", "")]
     return huerfanas + sorted(refirmar) + filas, poblacion, sorted(firmadas), no_eval
 
 
@@ -472,7 +492,7 @@ def report(slug: str | None = None) -> int:
                          "B · A · valor · qué para ir directo al PDF")),
     ):
         estado, porque = firma
-        cfg.print_seguro(f"## {titulo} — {len(filas)}")
+        cfg.print_seguro(f"## {titulo} — {_count(filas)}")
         cfg.print_seguro(f"  > sobre {poblacion} {unidad} · firma: {estado} — {porque}")
         for a, b, motivo, contexto in filas:
             cfg.print_seguro(f"  · {a} · {b}" + (f" — «{motivo}»" if motivo else "")
@@ -486,7 +506,7 @@ def report(slug: str | None = None) -> int:
             for a, b, por, _ctx in firmadas:
                 cfg.print_seguro(f"      {a} · {b} — {por}")
             cfg.print_seguro("")
-        total += len(filas)
+        total += _count(filas)
     cfg.print_seguro("## ⚠ NO BARRIBLE — se declara, no se cuenta como cero (D-43)")
     for que, porque in NO_BARRIBLE:
         cfg.print_seguro(f"  · {que}: {porque}")
