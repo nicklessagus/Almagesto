@@ -2910,3 +2910,26 @@ def test_507_probe_registrar_con_dry_run_REHUSA_sin_escribir_el_registro(toy_vau
     assert e.value.code == 2
     despues = cfg.registro_path("hd_1").read_text() if cfg.registro_path("hd_1").exists() else None
     assert despues == antes
+
+
+@pytest.mark.parametrize("argv", [
+    ["hd_1", "--sweep", "--dry-run"],
+    ["hd_1", "--no-chain", "--dry-run"],
+    ["hd_1", "--no-glyph", "--dry-run"],
+    ["hd_1", "--theme", "--extra-only", "--dry-run"],
+    ["--probe", "abs:activity", "--dry-run"],
+    ["--probe", "abs:activity", "--criterio", "x"],
+    ["hd_1", "--criterio", "x"],
+    ["--probe", "abs:activity", "--sweep"],
+    ["--probe", "abs:activity", "--no-chain"],
+])
+def test_616_flag_que_el_modo_no_honra_se_REHUSA(toy_vault, monkeypatch, argv, capsys):
+    # @inv INV-169
+    """#616 · AUD-570 — `--dry-run` es la re-clasificación offline y retornaba antes de mirar
+    `--sweep`/`--no-chain`/…; `--criterio` sin `--registrar` no iba a ningún lado. Un flag que el
+    modo no honra se rehúsa (exit 2), antes de consultar ADS."""
+    monkeypatch.setattr(qa, "query_ads", lambda *a, **k: pytest.fail("consultó ADS"))
+    monkeypatch.setattr(qa, "reclass_diff", lambda *a, **k: pytest.fail("ignoró el flag"))
+    with pytest.raises(SystemExit) as e:
+        run_main(monkeypatch, argv)
+    assert e.value.code == 2

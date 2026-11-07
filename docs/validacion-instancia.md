@@ -2142,3 +2142,18 @@ Sin migración. Qué `*.json` de un directorio de fan-out es salida del juez lo 
 `python scripts/check_verify_fanout.py <dir>` → «0 archivo(s)» y rc **1** («no escribió nada»;
 antes: 3 hallazgos de schema sobre `_clase.json`). Sobre una ronda real con `_clase.json` al lado,
 rc 0 si los demás archivos cumplen. **Devolver si** `_clase.json` aparece nombrado en un hallazgo.
+
+## §#616 · v1.415.17 — flags que el modo no honra se rehúsan (INV-169)
+
+Sin migración. `query_ads`: `--criterio` sin `--registrar`, y `--dry-run` o `--probe` con
+`--sweep`/`--no-chain`/`--no-glyph`/`--extra-only` (y `--dry-run --probe`) salen con exit 2.
+`write_verif_sidecar`: un modo por corrida (`--from`, `--restamp-section`, `--reanclar`,
+`--refutar-extraccion`, `--resolver`/`--resoluciones`/`--reclasificar`); `--todo` sólo con
+`--restamp-section` y sin nota; `--descartar-anclas-muertas` sólo con `--from`; `--texto`/`--reason`
+sólo con `--refutar-extraccion`.
+
+**Validar:** `python scripts/write_verif_sidecar.py vault/wiki/stars/61_vir.md --reanclar --todo
+--dry-run` → exit **2** (antes: rc 0, re-anclaba la nota ignorando `--todo`); `python
+scripts/query_ads.py hd_40307 --sweep --dry-run` → exit **2** (antes: corría la re-clasificación e
+ignoraba `--sweep`). Las corridas de un solo modo siguen igual. **Devolver si** algún skill o doc
+manda una combinación que ahora rehúsa.

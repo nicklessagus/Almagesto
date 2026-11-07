@@ -1078,6 +1078,22 @@ def main(argv=None) -> int:
         # @inv INV-169
         ap.error("`--fecha` no aplica a `--refutar-extraccion`: "
                  "rehúso en vez de ignorarla (AUD-535)")
+    # #616 · AUD-571 — un modo por corrida, y cada modificador sólo con el modo que lo honra: la
+    # cascada de abajo corría el primero e ignoraba el resto en silencio (INV-169, como AUD-535).
+    modos = [m for m, v in (("--from", args.fanout), ("--restamp-section", args.restamp),
+                            ("--reanclar", args.reanclar), ("--refutar-extraccion", args.refutar),
+                            ("--resolver/--resoluciones/--reclasificar",
+                             args.resolver or args.resoluciones or args.reclasificar)) if v]
+    if len(modos) > 1:
+        ap.error(f"{' y '.join(modos)} son modos distintos: uno por corrida (#616)")
+    for flag, puesto, modo in (("--todo", args.todo, args.restamp),
+                               ("--descartar-anclas-muertas", args.descartar, args.fanout),
+                               ("--texto", args.texto, args.refutar),
+                               ("--reason", args.reason, args.refutar)):
+        if puesto and not modo:
+            ap.error(f"`{flag}` no aplica a este modo: rehúso en vez de ignorarlo (#616)")
+    if args.todo and args.nota:
+        ap.error("`--todo` barre la bóveda: no lleva nota (rehúso en vez de ignorarla, #616)")
     if args.refutar:
         return _main_refutar(args)
     if args.restamp:

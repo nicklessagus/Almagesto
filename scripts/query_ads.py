@@ -1636,6 +1636,25 @@ def main() -> int:
         # AUD-504 — the `--probe` branch returns before `args.dry_run` is read.
         # @inv INV-59
         cfg.refuse_dry_run(ap, "`--registrar` appendea a `probes:` del registro")
+    if args.criterio and not args.registrar:
+        # #616 · AUD-570 — sin `--registrar` el criterio no va a ningún lado (INV-169)
+        ap.error("--criterio va con --registrar: sin registro, el criterio no se guarda en ningún lado")
+    if args.dry_run and (_ajenos := [f for f, v in (("--sweep", args.sweep),
+                                                     ("--no-chain", args.no_chain),
+                                                     ("--no-glyph", args.no_glyph),
+                                                     ("--extra-only", args.extra_only),
+                                                     ("--probe", args.probe is not None)) if v]):
+        # #616 · AUD-570 — `--dry-run` es la re-clasificación OFFLINE de `build/`: no consulta ADS,
+        # así que no honra ningún flag de la búsqueda, y antes los ignoraba en silencio (INV-169).
+        ap.error(f"--dry-run (re-clasificación offline de build/) no honra {', '.join(_ajenos)}: "
+                 f"rehúso en vez de ignorarlo")
+    if args.probe is not None and (_ajenos := [f for f, v in (("--sweep", args.sweep),
+                                                               ("--no-chain", args.no_chain),
+                                                               ("--no-glyph", args.no_glyph),
+                                                               ("--extra-only", args.extra_only)) if v]):
+        # #616 — el preview corre la query cruda y retorna: tampoco honra los flags de la corrida
+        ap.error(f"--probe (preview de la query) no honra {', '.join(_ajenos)}: rehúso en vez de "
+                 f"ignorarlo")
     if args.probe is not None:
         # #208 — `--probe` previsualizaba SIEMPRE con la lente global, o sea con la que D-26 declara
         # «activamente dañina» para un tema de método, y sobre exactamente la población que el tema

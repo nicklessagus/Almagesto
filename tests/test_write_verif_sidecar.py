@@ -1570,3 +1570,27 @@ def test_596_el_par_re_anclado_no_arrastra_el_localizador_del_texto_viejo(toy_va
     ws.write(nota, d2, fecha="2026-03-05")
     loc = {r.bibcode: r.locator for r in lb.verif_rows(nota)}
     assert loc == {"2020Pdf": "ok", "2019Txt": ""}, loc
+
+
+@pytest.mark.parametrize("extra", [
+    ["--reanclar", "--from", "d"],
+    ["--reanclar", "--todo"],
+    ["--reanclar", "--descartar-anclas-muertas"],
+    ["--restamp-section", "--from", "d"],
+    ["--reclasificar", "a:b", "--from", "d"],
+    ["--reclasificar", "a:b", "--todo"],
+    ["--resolver", "a=b", "--reanclar"],
+    ["--restamp-section", "--todo"],
+    ["--from", "d", "--texto", "x"],
+    ["--from", "d", "--reason", "x"],
+])
+def test_616_flag_que_el_modo_no_honra_se_REHUSA(tmp_path, extra, capsys):
+    # @inv INV-169
+    """#616 · AUD-571 — dos modos a la vez corrían el primero de la cascada e ignoraban el otro, y
+    los modificadores ajenos (`--todo`, `--descartar-anclas-muertas`, `--texto`/`--reason`, la nota
+    con `--todo`) se tragaban. Se rehúsa con el `parser.error` de AUD-535 (exit 2)."""
+    nota = tmp_path / "n.md"
+    nota.write_text("---\n---\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as e:
+        ws.main([str(nota), *extra])
+    assert e.value.code == 2
