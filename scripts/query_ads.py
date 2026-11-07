@@ -683,8 +683,8 @@ def load_triage(slug: str) -> set[str]:
     """Bibcodes ya DESCARTADOS en un triage previo — no se re-proponen en el próximo refresh (si no,
     cada re-run vuelve a pedir el mismo juicio sobre el mismo ruido). Salen del registro VERSIONADO
     (`vault/config/registro/<slug>.yaml`, #51): antes el juicio vivía en scratch gitignored y se
-    perdía al clonar o limpiar (el `build/<slug>/triage.json` pre-1.9.0 ya NO se lee — se migra con
-    `triage.py --migrate` y el lint lo bloquea mientras exista).
+    perdía al clonar o limpiar (el `build/<slug>/triage.json` pre-1.9.0 ya NO se lee — el lint lo
+    bloquea mientras exista, y su migrador vive en el tag de git, #624).
 
     **El carril del BIBCODE** (#81): un rechazo de *fuente declarada* de un tema off-ADS vive en
     las mismas `decisiones` y no tiene nada que ver con un bibcode propuesto por ADS. Lo consumen
@@ -748,7 +748,7 @@ def n_dropped_chaining(slug: str) -> int:
     también incluye `aceptado` (candidatos que pasaron a `extra_core`). Este número lo persiste
     `busqueda` en el registro y la cabecera de la ficha lo publica tal cual como "N descartados": si
     no mirara `decision`, un aceptado inflaría lo que la bóveda afirma sobre su propio universo de
-    papers (alcanzable con `--migrate`, que importa el juicio viejo tal cual)."""
+    papers."""
     return sum(1 for d in cfg.load_decisiones(slug).values()
                if d.get("decision") == "descartado" and cfg.es_del_carril(d, "chaining"))
 

@@ -92,10 +92,8 @@ Deben quedar en **0**:
   concepto y lo acumulaba en el roll-up.
 - **`disputes` con la `ref` de una posición sin paper destino** (la disputa no es trazable),
   **`disputes` mal formadas** (#71: sin `field`, con menos de dos posiciones, con una posición que
-  no dice quién la sostiene, o `source` fuera del vocabulario) y **`disputes` en el schema viejo**
-  (`planets[].disputes[]` → migrar con `make_notes.py --migrate-disputes`).
-- **Nota de paper con `topics:`** (campo pre-R-5 sin lector; el vigente es `facets:`) y **registro
-  con `busqueda:`** (mapa, schema pre-D-28; hoy es `busquedas:`, lista).
+  no dice quién la sostiene, o `source` fuera del vocabulario). El schema viejo
+  (`planets[].disputes[]`) es una fila de *Schema retirado* (abajo).
 - **`role` fuera del vocabulario** (`fundacional|aplicacion|arbitro`): un typo deja el rol mudo
   para el contraste cross-paper. La misma categoría (`bad_roles`) cubre **todo campo con
   vocabulario cerrado** de la nota de paper: `unidad_cita` (`linea|pagina|seccion`, #80) y
@@ -106,20 +104,11 @@ Deben quedar en **0**:
   que las citas son contra el preprint— y un valor fuera de vocabulario cae por el `else` de todo
   `== "eprint"` en silencio (#363: ese `else` eximía además del chequeo de cita textual hasta
   1.111.0, y la doc lo siguió afirmando 59 versiones menores). Medido: 2 de 138
-  notas llevaban **prosa** en el campo. Migrador: `python scripts/make_notes.py
-  --migrate-source-fields` (pasa el valor a `null` y **mueve** la prosa a `pending_motivo` o
-  `salvedades`).
-- **Extracción que no dice desde qué sujeto se leyó** (#188: `## Extracción (LLM)` sin `vistas[]`)
-  e **incoherencia `vistas[]` ↔ cuerpo** en los dos sentidos (vista declarada sin su
-  `## Vista — <sujeto>`; sección sin declarar).
-- **Juicio de triage en `build/<slug>/triage.json`** (pre-1.9.0: mientras exista, el triage
-  re-propone lo descartado sin el motivo → `python scripts/triage.py <slug> --migrate`).
-- **Extracciones en `build/*/extraccion/`** (pre-#311): ahí no se versionan ni viajan —medido,
-  `git ls-files build/` = 0 sobre 33 extracciones que costaron ~4,9 M tokens de lectura de PDF— y
-  una extracción no se regenera sin volver a pagar el paso más caro (#228) → `python
-  scripts/make_notes.py --migrate-extracciones`. ⚠ No tiene clave propia: el hallazgo se publica
-  **dentro de `old_registro`** (el título de esa categoría habla del registro con `busqueda:`;
-  buscá la fila `build/`) — AUD-381 lo anota como mapa que atribuye mal.
+  notas llevaban **prosa** en el campo. Salida: el valor a `null` y la prosa **movida** a
+  `pending_motivo` o `salvedades` (a mano, o con el migrador del tag `v1.411.3`, #624).
+- **Incoherencia `vistas[]` ↔ cuerpo** (#188) en los dos sentidos (vista declarada sin su
+  `## Vista — <sujeto>`; sección sin declarar). La extracción sin `vistas[]` es una fila de
+  *Schema retirado*.
 - **Fila de tabla con más celdas que su encabezado (#227)**: GFM descarta el excedente, así que el
   contenido queda **invisible para el lector** mientras toda herramienta que parsea el archivo lo
   sigue viendo — y puede estar certificado como par verificado. La fila con **menos** celdas no
@@ -148,27 +137,24 @@ Deben quedar en **0**:
   la resolvió), `no-soportada→corregida` no, `no-soportada→corregida→no-soportada` sí. El hallazgo
   **nombra el vigente** cuando la celda es una cadena, porque leída de izquierda a derecha dice lo
   contrario de lo que rige.
-- **Bloque de verificación con plantilla vieja** (sin las columnas de hash): no es "cero vencidos",
-  es un bloque que nadie puede evaluar. **Bloqueante siempre**, con o sin `--cierre`.
 - **El par nota ↔ hermano de auditoría** (#344/INV-148) — tres categorías, las tres bloqueantes.
   Desde 1.165.0 la **tabla** del bloque vive en `<nota>.verif.md` (hermano, mismo directorio) y en la
   nota quedan la línea de cabecera, las tres sub-secciones y un puntero:
   - **Tabla DENTRO de la nota** (schema anterior a 1.165.0): detector, nunca lector tolerante —
-    leerla de los dos lados dejaría dos casas para una tabla. Se cierra con
-    `python scripts/make_notes.py --migrate-verif-sidecar` (mueve la tabla **verbatim**: no
-    re-renderiza, así que anclas y hashes quedan intactos; idempotente).
+    leerla de los dos lados dejaría dos casas para una tabla. Es la fila `verif_inline` de
+    *Schema retirado*.
   - **Nota con cabecera de verificación y SIN su hermano**: la nota publica una línea que afirma N
     pares y la tabla que la respalda no está en ningún lado — no es «cero vencidos», es una
     afirmación que nadie puede evaluar (D-43).
   - **Hermano `.verif.md` HUÉRFANO** (su nota ya no existe): un rastro de auditoría que no se puede
     cerrar contra nada. Lo llevan solos `entity.py delete|rename` (séptima capa, INV-19) y
     `--rename-paper`; aparece cuando algo movió la nota a mano.
-- **Celda `Hash fuente` sin prefijo `txt:`/`pdf:`** (#117): *no consta* no es `txt`; se migra con
-  `python scripts/make_notes.py --migrate-verif-archivo`. Excepción nombrada (#223): la fila
-  `no verificable por extracción` no declara archivo, porque no hay ninguno.
-- **`symbols_lost`/`fulltext_layout` presentes** (retirados en 1.71.0, #205 →
-  `python scripts/make_notes.py --migrate-txt-fields`) y **`bearing` en nota de paper** (D-21 →
-  `make_notes.py --migrate-bearing`).
+- **Celda `Hash fuente` sin prefijo `txt:`/`pdf:`** (#117): *no consta* no es `txt`; se cierra
+  re-verificando el par, o con el migrador del tag `v1.411.3` (#624), que deducía el archivo
+  del hash que la fila ya guardaba. Excepción nombrada (#223): la fila `no verificable por
+  extracción` no declara archivo, porque no hay ninguno.
+- **Schema retirado** (`schema_retirado`, #624/INV-13): una categoría, once filas — ver la tabla
+  de abajo.
 - **Duplicado por identidad** (D-19: mismo `doi`/`arxiv_id` en dos notas) y **bibcode en
   `versions[]` con nota propia** (#229).
 - **Marca `inferencia` sin premisas** (D-42: sin al menos un `[[bibcode]]` no hay nada que
@@ -262,6 +248,32 @@ Deben quedar en **0**:
   puesta contra `origin`. ⚠ Sin `origin` el chequeo **no aplica**: ahí el driver es pura
   protección. Se reporta **una vez** —es una decisión del clon, no de cada patrón— nombrando
   cuántos patrones abarca.
+
+### Schema retirado (`schema_retirado`, #624)
+
+Un schema que el lector ya no interpreta **se detecta y bloquea**, nunca se lee con un lector
+tolerante (INV-13). Los diez detectores son **una tabla** de once filas (`lint.RETIRED_SCHEMAS`:
+las extracciones en `build/` ya no se publican bajo el título de `busqueda:`, AUD-381) y **una
+función** (`lint.retired_schema`); el driver de verificación saltea la nota sobre lo que la tabla
+contestó. Cada hallazgo nombra su fila y su población (`[old_facets · papers] …`), y la
+categoría declara la suma de las tres poblaciones (INV-40). Los migradores de un solo uso salieron
+de HEAD en #624 —medido: ninguna instancia activa tenía nada que migrar— y viven en el tag
+**`v1.411.3`** (`cfg.RETIRED_MIGRATORS_TAG`): la receta es *«re-ingestar, o migrar con el
+template en el tag»*, con el comando que ese tag trae.
+
+| Fila | Mira | Población | Qué detecta | Salida (en el tag `v1.411.3`) |
+|---|---|---|---|---|
+| `old_facets` | frontmatter de paper | papers | `topics:` (pre-R-5; el vigente es `facets:`) | `make_notes.py --migrate-facets` |
+| `old_bearing` | frontmatter de paper | papers | `bearing:` (pre-D-21; la postura vive en la hipótesis) | `make_notes.py --migrate-bearing` |
+| `campos_txt_viejos` | frontmatter de paper | papers | `symbols_lost` / `fulltext_layout` (#205) | `make_notes.py --migrate-txt-fields` |
+| `old_no_sintetizado` | frontmatter de paper | papers | `no_sintetizado` escalar (#553: es por sujeto) | `make_notes.py --migrate-no-sintetizado` |
+| `vistas_schema_viejo` | cuerpo de paper | papers | `## Extracción (LLM)` sin `vistas[]` (#188) | `make_notes.py --migrate-vistas` |
+| `old_disputes` | frontmatter de toda nota | entidades | `planets[].disputes[]` (#71), y su forma inválida (`disputes` que no es lista) | `make_notes.py --migrate-disputes` |
+| `verif_inline` | nota con bloque de verificación | entidades | la tabla todavía DENTRO de la nota (#344) | `make_notes.py --migrate-verif-sidecar` |
+| `old_verif_template` | hermano `.verif.md` | entidades | plantilla sin `Ancla` / `Hash fuente`: nada evaluable | re-correr `verify-citations` (operación viva) |
+| `old_registro` | registro | registros | `busqueda:` (mapa, pre-D-28) | `make_notes.py --migrate-registros` (o re-correr la cadena) |
+| `extraccion_en_build` | `build/` | registros | extracciones en `build/*/extraccion/` (pre-#311): no viajan | `make_notes.py --migrate-extracciones` |
+| `legacy_triage` | `build/` | registros | `build/<slug>/triage.json` (pre-1.9.0), barrido propio; un JSON roto cuenta `?` | `triage.py <slug> --migrate` |
 
 ## WARN (se revisa a mano, no frena)
 
@@ -397,7 +409,7 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   `condition_resolved` esa celda es igual de muda —lee el token que sigue al **primer** separador y
   ahí encuentra la clase, no la resolución— así que la fila se resuelve, la celda lo dice, y el
   conteo la sigue contando como pendiente para siempre. Medido: 41 de 957 celdas, 7 de ellas
-  `acota`. Se cierra con `write_verif_sidecar.py <nota> --migrate-condition-prefix`.
+  `acota`. Se cierra re-verificando el par, o con el migrador del tag `v1.411.3` (#624).
   ⛔ **Y la celda puede ser una CADENA** (#451): `acota→resuelta: <dónde> · <vieja> ⟂ acota:
   <nueva>` — la clase, la resolución y el conteo se deciden por el **último eslabón**
   (`lb.current_condition`), igual que el veredicto de al lado (#450). Una fila así vuelve a contar
@@ -414,11 +426,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   ninguna fila que linkee el bibcode** (en **todo** eslabón: el viejo también lo afirma).
   `bloque`, `siguiente` y `huecos` sólo se validan: la condición vive en prosa y no hay cruce
   barato y preciso. Backlog como su hermana de la misma celda
-  (`cond_sin_clasificar`, #221). Se cierra con el migrador de un solo uso
-  `write_verif_sidecar.py --todo --migrate-condition-destination` (antepone el destino a las
-  grafías conocidas, conserva el texto firmado como detalle, **lista** lo que no mapea) y, para lo
-  listado, `--resolver <ancla>:<bibcode>=<destino>`, que antepone el destino al texto libre
-  sin pisarlo. ⚠ El cruce es **por bibcode**: no ve la condición que no llegó a una fila existente
+  (`cond_sin_clasificar`, #221). Se cierra con `--resolver <ancla>:<bibcode>=<destino>`, que
+  antepone el destino al texto libre y lo conserva **entero** como detalle, sin pisarlo ni adivinar
+  qué parte repite el destino (#613; el migrador por grafías conocidas se retiró en #624). ⚠ El cruce es **por bibcode**: no ve la condición que no llegó a una fila existente
   de esa fuente (medido en #576: 0 de los 6 casos de rv-doppler). La prosa de *Condiciones
   perdidas* queda fuera de alcance.
 - **Celda truncada que no puede truncarse** (#226): sólo `Afirmación (extracto)` admite `…`;
@@ -443,8 +453,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
 - **Veredicto que exigió acción y una ronda posterior limpió PELADO** (#522, misma categoría,
   backlog): `contradice→soportada` se cuenta como soportada y sale de «N contradicen» —medido: 47
   filas en 9 notas, siete publicando «0 contradicen»—. El escritor lo producía hasta 1.331.0; desde
-  1.332.0 anota `→corregida` (`lb.chained_verdict`). Se cierra con
-  `write_verif_sidecar.py <nota>|--todo --migrate-verdict-chain` (conserva la fecha del bloque).
+  1.332.0 anota `→corregida` (`lb.chained_verdict`). Se cierra re-verificando esos pares, o con el
+  migrador del tag `v1.411.3` (#624; conservaba la fecha del bloque).
 - **Cabecera del bloque desincronizada de la tabla de su hermano** (#344/INV-148, **R-1**: backlog
   en la pasada periódica, **bloquea con `--cierre`**). INV-81 cruzando archivos: los conteos los da
   `lib_blocks.verif_summary`, el mismo código que lee la tabla, y desde #344 la tabla vive en OTRO
@@ -657,9 +667,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   bajo un encabezado que ella misma presenta como síntesis de un LLM (#247). Medido: **47 notas**,
   46 de ellas bajo un sujeto ya declarado `no_vista`. Hoy el stub lleva **una línea de estado** —
   `_Reclamado por \`X\`; sin leer desde este sujeto._`, o `_No leído desde \`X\` (fecha): <motivo>._`
-  con `no_vista`— y el backfill es `python scripts/make_notes.py --restamp-vista-stub`, que **no
-  toca la entrada de `vistas[]`** (el frontmatter tiene que seguir diciendo que el sujeto reclama el
-  paper, #256) ni una vista con prosa redactada.
+  con `no_vista`—. La plantilla vieja la reporta `vista_con_plantilla` (backlog) y se cierra
+  re-cosechando la vista, o con el backfill del tag `v1.411.3` (#624), que **no tocaba la
+  entrada de `vistas[]`** (el frontmatter tiene que seguir diciendo que el sujeto reclama el paper,
+  #256) ni una vista con prosa redactada.
   ⛔ **Y `vistas: []` ya no apaga el chequeo de reclamos** (#398): la rama corría bajo `if vistas:`,
   así que la nota que quedaba con la lista vacía —el estado que deja el operador que saca la entrada
   y la sección— salía del chequeo **entero**, ni deuda ni declarada. Medido: la categoría de
@@ -775,10 +786,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   El lint imprime el `ancla` al final de cada hit; firmar es pegarla. ⛔ El ancla hashea el BLOQUE
   **de `split_blocks`** (#528: párrafo, ítem de lista, blockquote o fila — el mismo que producen
   los pares; con el párrafo, una firma sobre un ítem eximía a la lista entera): si la prosa cambia,
-  la firma deja de cubrir y el hit vuelve — lo juzgado ES la prosa. Migrador de las firmas
-  pre-v1.339.0: `make_notes.py --migrate-warn-anchor` (re-firma **cada firma** que cae en UN bloque,
-  aunque comparta el ancla vieja con otra categoría, AUD-540; la que cubría varios la **declara** y no
-  la reparte). Forma dura (D-58): sin `motivo` o con una categoría fuera de `WARN_REVISABLE`,
+  la firma deja de cubrir y el hit vuelve — lo juzgado ES la prosa. Las firmas pre-v1.339.0 se
+  re-firman, o con el migrador del tag `v1.411.3` (#624). Forma dura (D-58): sin `motivo` o con una categoría fuera de `WARN_REVISABLE`,
   no exime nada. Las WARN de higiene no se firman: se cierran arreglando.
 - **`warn_revisada` que no corresponde a ningún hit** (#502/#256, backlog): el bloque cambió
   (re-revisalo y firmá el ancla nueva) o el hit ya no dispara (sacá la entrada).
@@ -930,8 +939,7 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   salteable sin otro rastro (su modo de falla es omisión; `verify-citations` no lo ve: valida cada
   afirmación, no la cobertura del conjunto). Se cierra sintetizando o declarando
   `no_sintetizado: [{sujeto, motivo}]` (#553: por sujeto, como `no_vista`; el escalar viejo es la
-  categoría bloqueante `old_no_sintetizado`, `make_notes.py --migrate-no-sintetizado`, que reparte el
-  motivo a los sujetos que NO citan el paper). Dos recortes de población: la cita debe estar en nota de **entidad**
+  fila `old_no_sintetizado` de `schema_retirado`). Dos recortes de población: la cita debe estar en nota de **entidad**
   (una `queries/` es respuesta puntual) y la nota no-core (`relevance: low`) no entra. **Y por
   par (#559):** el paper que otro sujeto sí cita pero que un sujeto que lo reclama **directamente**
   (`stars`, `thesis_links`) no cita ni declara: el mismo universo que `## Papers` publica como
@@ -1003,8 +1011,7 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   regla es *no pongas un link ahí*, no *no mires ahí*: se reemplaza por el nombre del paper.
 - **Cabecera DESPLAZADA o AUSENTE** (#380, dentro de *PDF ↔ disco / cuerpo*): son **tres** estados y
   el detector modelaba dos. *Desplazada* = la línea existe fuera del contrato (típicamente adentro
-  de `## Abstract`, por el orden invertido de #378) → **mover**, con `--fix-header-order` si la
-  corrió un backfill. *Ausente* = ya se perdió (la borró el cosechador, #379) → **reconstruir**, del
+  de `## Abstract`, por el orden invertido de #378) → **mover** a mano. *Ausente* = ya se perdió (la borró el cosechador, #379) → **reconstruir**, del
   historial de git; `--restamp-pdf-links` **no** puede, porque necesita la cabecera que falta.
   ⚠ El reporte ya **no** está condicionado a que falte el link `[📄 PDF]`: `has_link` mira el texto
   entero, así que una cabecera desplazada lo lleva igual y la conjunción apagaba el detector —

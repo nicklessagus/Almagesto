@@ -80,8 +80,8 @@ portadores:
         estado: usa
         motivo: "El bloqueante de #296 y el de editor + `eprint_version` (#383) se ramifican por esta lista."
       - modulo: scripts/make_notes.py
-        estado: usa
-        motivo: "El migrador `--migrate-source-fields` decide con ella qué pasa a `null` y qué prosa se mueve a `salvedades`."
+        estado: fuera-de-alcance
+        motivo: "Estampa `pdf_source` por verdad de disco y lo copia de la config; no juzga el vocabulario (el migrador que lo hacía se retiró en #624)."
       - modulo: scripts/replace_pdf.py
         estado: usa
         motivo: "`--source` firma la procedencia del PDF entrante y avisa sin escribir el valor fuera de lista (#415/#436)."
@@ -117,8 +117,8 @@ portadores:
         estado: usa
         motivo: "Bloquea el valor fuera de vocabulario y reporta el par `fulltext: null` + `fulltext_source` poblado (#230/#296)."
       - modulo: scripts/make_notes.py
-        estado: usa
-        motivo: "Mismo migrador que el gemelo: `--migrate-source-fields` decide con las dos listas."
+        estado: fuera-de-alcance
+        motivo: "Sólo la nombra un comentario (#478); el migrador que decidía con ella se retiró en #624."
   - issue: 477
     regla: >-
       `pending` es vocabulario CERRADO y su cuarto valor existe porque describe otra cosa: un libro
@@ -604,11 +604,10 @@ portadores:
         estado: fuera-de-alcance
         motivo: Ídem — el slug del sujeto en curso viene del CLI (`excluidos_del_sujeto`).
       - modulo: scripts/make_notes.py
-        estado: usa
+        estado: fuera-de-alcance
         motivo: >-
-          Sus tres llamadas al carril son sobre el slug de la ficha que está estampando. #553 —
-          `migrate_all_no_sintetizado` resuelve el nombre de cada reclamo (`stars`, `thesis_links`)
-          con `subject_slug` para encontrar la ficha y ver si cita el paper.
+          Sus llamadas al carril son sobre el slug de la ficha que está estampando, ya resuelto. El
+          que resolvía nombres de reclamo con `subject_slug` era el migrador de #553, retirado en #624.
       - modulo: scripts/harvest_views.py
         estado: fuera-de-alcance
         motivo: >-
@@ -651,7 +650,7 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: >-
-          Los dos escritores del hermano (`resolve_conditions` y `migrate_condition_prefix`)
+          Los dos escritores del hermano (`resolve_conditions` y `reclassify_conditions`)
           indexan sus cambios con `row_key`, y `_rewrite_rows` los aplica por esa misma clave;
           `rows_addressed` resuelve la dirección `<ancla>[:<bibcode>]`.
       - modulo: scripts/reverify_subset.py
@@ -882,8 +881,8 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: >-
-          `--migrate-verif-sidecar` MUEVE la tabla verbatim y a propósito no la re-renderiza, para
-          que anclas y hashes sobrevivan (#344). Construir filas desde un fan-out es otra operación.
+          No construye filas de verificación (el migrador de #344 que movía la tabla verbatim se
+          retiró en #624). Construir filas desde un fan-out es otra operación.
 
   - issue: 404
     regla: >-
@@ -1324,10 +1323,10 @@ portadores:
     patron: 'sin_abstract'
     consumidores:
       - modulo: scripts/make_notes.py
-        estado: usa
+        estado: fuera-de-alcance
         motivo: >-
-          `--restamp-transcribed-note` (#416) reescribe la línea vieja con la que el escritor
-          pondría HOY para ese frontmatter, así que las dos comparten la decisión.
+          `fill_abstracts` lee `sin_abstract_motivo` (otro campo) y el stub de catálogo estampa
+          `sin_abstract`; no escribe la línea de transcripción (su backfill se retiró en #624).
       - modulo: scripts/query_ads.py
         estado: fuera-de-alcance
         motivo: PRODUCE el campo al clasificar; no afirma nada sobre él en la nota.
@@ -1590,7 +1589,7 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: usa
         motivo: >-
-          Sus 8 `return 0` previos son salidas de SUB-COMANDO (`--restamp-*`, `--migrate-*`,
+          Sus `return 0` previos son salidas de SUB-COMANDO (`--restamp-*`,
           `--rename-paper`) que NO deben estampar `make_notes` como paso de cadena. Auditado.
       - modulo: scripts/query_ads.py
         estado: usa
@@ -1731,7 +1730,7 @@ portadores:
         estado: usa
         motivo: >-
           Es el ÚNICO productor de la celda (`condition_cell`) y ahora también quien escribe la
-          resolución (`--resolver`) y colapsa la clase duplicada (`--migrate-condition-prefix`).
+          resolución (`--resolver`) y la re-clasifica (`--reclasificar`).
       - modulo: scripts/lint.py
         estado: usa
         motivo: >-
@@ -2251,7 +2250,7 @@ portadores:
         motivo: "Sólo la NOMBRA el docstring de `load_reviewed_quotes` (#516), la escotilla hermana para citas."
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
-        motivo: "`migrate_warn_anchor` (#528) re-escribe el ancla de firmas existentes; no decide qué exime."
+        motivo: "No decide qué exime: el re-firmador de anclas de #528 se retiró en #624."
 
   - issue: 528
     regla: >-
@@ -2265,9 +2264,6 @@ portadores:
       - modulo: scripts/lint.py
         estado: usa
         motivo: "`split_reviewed_warn` calcula el ancla de cada hit WARN con `warn_anchor`."
-      - modulo: scripts/make_notes.py
-        estado: usa
-        motivo: "`migrate_warn_anchor` re-firma del ancla de párrafo (`paragraph_anchor`) a la de bloque."
 
   - issue: 529
     regla: >-
@@ -2422,7 +2418,7 @@ portadores:
         motivo: "`write_view_section`, `restamp_view_locators` y `restamp_salvedades` cortan la vista con `section_span`; `_lens_span` dejó el `find` pelado y pasó a `section_start` (misma trampa con `### Lente — ruido` / `ruido-rosa`)."
       - modulo: scripts/make_notes.py
         estado: usa
-        motivo: "`view_stub_kind` / `restamp_vista_stub` leen la sección del sujeto con `section_span`."
+        motivo: "`view_stub_kind` lee la sección del sujeto con `section_span`."
       - modulo: scripts/contrast.py
         estado: fuera-de-alcance
         motivo: "#555 — `paraphrase_pairs` corta la vista con `cfg.section_span`, que delega en `section_start` (nombre exacto): no hay un corte propio que pueda divergir."
@@ -2453,7 +2449,7 @@ portadores:
     consumidores:
       - modulo: scripts/make_notes.py
         estado: usa
-        motivo: "Sólo `--fill-abstracts` lo respeta; todo otro modo (los `--restamp-*`/`--migrate-*`, el slug, `--rename-paper`, `--web`) rehúsa antes de despachar, y con `--dry-run` se despacha SÓLO `fill_abstracts` (antes corrían primero trece modos que escriben)."
+        motivo: "Sólo `--fill-abstracts` lo respeta; todo otro modo (los `--restamp-*`, el slug, `--rename-paper`, `--web`) rehúsa antes de despachar, y con `--dry-run` se despacha SÓLO `fill_abstracts` (antes corrían primero trece modos que escriben)."
       - modulo: scripts/repaginate.py
         estado: usa
         motivo: "`--out` (escribe el paquete de relectura) rehúsa; `--apply` lo respeta (extracción y los dos re-estampados de la nota); `--list` no escribe."
@@ -2462,7 +2458,7 @@ portadores:
         motivo: "Lo respeta en los tres modos: la cosecha corre los mismos escritores sobre una COPIA de la nota y no trae el `.txt` ni estampa la cadena (#507); `--restamp-salvedades` lo hila (#453); `--propose-pdf-leido` no escribe."
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
-        motivo: "Lo respeta en sus cinco modos (`--from`, `--reanclar`, `--restamp-section`, `--resolver`/`--resoluciones`, `--migrate-condition-prefix`): todos escriben por `emit`, que lo recibe."
+        motivo: "Lo respeta en sus cinco modos (`--from`, `--reanclar`, `--restamp-section`, `--resolver`/`--resoluciones`, `--reclasificar`): todos escriben por `emit`, que lo recibe."
       - modulo: scripts/replace_pdf.py
         estado: fuera-de-alcance
         motivo: "Lo respeta en sus dos modos (el reemplazo y `--backfill`): copia, re-extracción, firma y `_paginacion` están bajo el flag."
@@ -2769,7 +2765,7 @@ portadores:
     consumidores:
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
-        motivo: "`append_round_verdict` (toda ronda) y el migrador `--migrate-verdict-chain` (`fold_verdict_cell`) pasan por `chained_verdict`."
+        motivo: "`append_round_verdict` (toda ronda) pasa por `chained_verdict`."
       - modulo: scripts/lint.py
         estado: fuera-de-alcance
         motivo: "No escribe celdas: es el DETECTOR — `check_verif_structure` reporta en `verif_estructura` la fila `revertida` (la forma pelada, por `verif_counts`) con el migrador."
@@ -3295,9 +3291,6 @@ portadores:
       - modulo: scripts/lint.py
         estado: usa
         motivo: "La firma `segunda_mano_revisada: [{ref, que, motivo}]` emite el `que` (cita truncada) con `flow=True`."
-      - modulo: scripts/make_notes.py
-        estado: usa
-        motivo: "`no_vista` se emite en BLOQUE (`- sujeto: …` / `motivo: …`): la forma de bloque es la correcta."
       - modulo: scripts/triage.py
         estado: usa
         motivo: "`_set_campo` y el snippet de `extra_core` escriben un escalar de BLOQUE (`clave: valor`)."
@@ -3645,3 +3638,26 @@ portadores:
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: "El `localizador` de `data_availability` (#424) es otra clave, del frontmatter del paper."
+  - issue: 624
+    regla: >-
+      Un schema retirado bloquea siempre, y la receta que manda a su migrador de un solo uso —que
+      salió de HEAD— nombra el tag de git que lo trae: un bloqueante cuya receta manda a un flag que
+      HEAD no tiene es un bloqueante sin salida. El tag y la frase viven en UNA función.
+    funcion: lib_config.retired_migrator_recipe
+    patron: 'retired_migrator_recipe|RETIRED_MIGRATORS_TAG|el tag de git'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`retired_schema` (las filas de `RETIRED_SCHEMAS`) y las recetas de las categorías hermanas (verif sin archivo, clase doble, veredicto pelado, vocabulario de fuente, plantilla de vista)."
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "El aviso de `--validar-todo` sin citas sobre una bóveda pre-#311."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Sólo docstrings/comentarios que apuntan a `docs/lint.md` § *Schema retirado*; no emite recetas."
+      - modulo: scripts/query_ads.py
+        estado: fuera-de-alcance
+        motivo: "Sólo un docstring sobre el `triage.json` viejo; no emite recetas."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "Sólo el docstring del módulo; el hallazgo y su receta los emite el lint."

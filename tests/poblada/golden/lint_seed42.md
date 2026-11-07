@@ -191,20 +191,11 @@
 ## disputes mal formadas (posiciones explícitas, #71) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
-## disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee (0)
-> sobre 29 notas de entidad (fichas, conceptos, queries)
-
-## Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira (0)
-> sobre 3 registros de sujeto
-
-## ⛔ Registro con `busqueda:` (schema viejo pre-D-28) o extracciones en `build/*/extraccion/` (pre-#311) — el lector ya no los lee (0)
-> sobre 3 registros de sujeto
+## ⛔ Schema retirado (sin lector, INV-13): cada hallazgo nombra su fila de `RETIRED_SCHEMAS`, su población y su salida — re-ingestar, o migrar con el template en el tag de git (#624) (0)
+> sobre 92 notas y registros (60 de `papers/` · 29 de entidad · 3 registros de sujeto, y `build/`) — cada hallazgo nombra la población de su fila
 
 ## ⛔ Registro del sujeto ilegible — la curación (`decisiones`) queda SIN APLICAR: los descartes vuelven a ser core (0)
 > sobre 3 registros de sujeto
-
-## ⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:` (0)
-> sobre 60 notas de `papers/`
 
 ## ⛔ `inferencia` sin premisas (D-42): la marca no nombra ningún `[[bibcode]]` (0)
 > sobre 89 notas de `vault/wiki/`
@@ -214,12 +205,6 @@
 
 ## `status: sostenida` contra su propia tabla de evidencia (D-37, #177) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
-
-## ⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis (0)
-> sobre 60 notas de `papers/`
-
-## ⛔ `no_sintetizado` escalar en una nota de paper (schema pre-#553) — la escotilla es por sujeto → `make_notes.py --migrate-no-sintetizado` (0)
-> sobre 60 notas de `papers/`
 
 ## ⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad (0)
 > sobre 60 notas de `papers/`
@@ -267,9 +252,6 @@
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
 ## 🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog) (0)
-> sobre 29 notas de entidad (fichas, conceptos, queries)
-
-## ⛔ Tabla de verificación DENTRO de la nota (schema pre-1.165.0) → `make_notes.py --migrate-verif-sidecar` (#344) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
 ## ⛔ Nota con cabecera de verificación y SIN su hermano `<nota>.verif.md` (#344): afirma pares que no se pueden evaluar (0)
@@ -353,9 +335,6 @@
 ## ⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente) (0)
 > sobre 60 notas de `papers/`
 
-## ⛔ Notas con `symbols_lost`/`fulltext_layout` (schema pre-#205 sin lector — migrar) (0)
-> sobre 60 notas de `papers/`
-
 ## 📓 Operación sin entrada en `log.md` (la cadena corrió y la bitácora no lo dice) (0)
 > sobre 3 registros de sujeto
 
@@ -394,9 +373,6 @@
 - concepto-methods-010 → 1 cita(s) sin bloque de verify-citations → correr el skill
 - query-000 → 1 cita(s) sin bloque de verify-citations → correr el skill
 - query-001 → 1 cita(s) sin bloque de verify-citations → correr el skill
-
-## ⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable) (0)
-> sobre 29 notas de entidad (fichas, conceptos, queries)
 
 ## ⛔ Fila de verificación que no declara contra qué archivo se verificó (#117): el hash no se puede comparar (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
@@ -513,9 +489,6 @@
 
 ## Triage pendiente: candidatos del chaining sin juzgar (backlog) (0)
 > sobre 3 registros de sujeto
-
-## ⛔ Extracción sin declarar la LENTE: `## Extracción (LLM)` sin `vistas[]` (schema viejo, #188) (0)
-> sobre 60 notas de `papers/`
 
 ## ⛔ `vistas[]` ↔ cuerpo: vista declarada sin su sección, o sección sin declarar (0)
 > sobre 60 notas de `papers/`

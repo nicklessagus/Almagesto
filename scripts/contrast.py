@@ -851,7 +851,7 @@ def validar_todo(slug: str | None = None) -> int:
     Declares its population (INV-40), what it could not evaluate (D-43), what it approved with
     a single witness (#341), where the OTHER reading of the same PDF contradicts it (#333) and what
     the `log` declared and resolved with the mark of #238 (#386) —
-    without `--migrate-extracciones` that population is **zero**, and a silent zero would read as a
+    with the extractions still under `build/` that population is **zero**, and a silent zero would read as a
     verdict. Returns the number of blocking findings, so it works as a gate: none of the three extra
     counts moves it."""
     notas = _notes_of(slug)
@@ -901,8 +901,8 @@ def validar_todo(slug: str | None = None) -> int:
                      f"índice degradado (#205) y la extracción no es testigo de éstas")
     if not citas:
         cfg.print_seguro("  ⚠ NO EVALUADO: ninguna cita mirada. Si la bóveda es anterior a #311, "
-                         "corré `python scripts/make_notes.py --migrate-extracciones` — un cero sin "
-                         "denominador se lee como veredicto (D-43)")
+                         f"{cfg.retired_migrator_recipe('make_notes.py --migrate-extracciones')} — "
+                         "un cero sin denominador se lee como veredicto (D-43)")
     cfg.print_seguro(f"  {alteradas} cita(s) con evidencia POSITIVA de alteración"
                      + (" ✅" if not alteradas else " ⛔ — corregilas contra el JSON de extracción, "
                         "no contra el `.txt`"))

@@ -363,7 +363,6 @@ inventado. Y la condición `acota` ya resuelta se anota en su celda: `acota→re
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde>            # repetible
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>:<bibcode>=<dónde>  # #434
 python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json               # {par: dónde}
-python scripts/write_verif_sidecar.py --todo --migrate-condition-destination        # #576
 python scripts/write_verif_sidecar.py <nota.md> --refutar-extraccion <ancla>:<bib> --texto "<frag>" --reason "…"  # #526
 ```
 
@@ -381,8 +380,8 @@ anota, no se pisa.
 ⚠ Y la clase va **una sola vez**: el fan-out la declara en `cond_tipo` y **no** la repite dentro de
 `condicion`. Escrita dos veces (`acota: acota→resuelta: …`) la fila queda **irresoluble**: el lector
 encuentra la clase donde espera la resolución y el conteo la da pendiente para siempre. El escritor
-ya no la duplica y el lint la levanta; para el corpus heredado:
-`python scripts/write_verif_sidecar.py <nota.md> --migrate-condition-prefix`.
+ya no la duplica y el lint la levanta; el corpus heredado se re-verifica o se migra con el
+template en el tag que dice la receta (#624).
 
 **La clase tiene segunda opinión (#580):** una `acota` llamada `contextualiza` sale del circuito
 de resolución. `python scripts/verify_fanout.py <nota.md> --out build/<slug>/verif/clase
@@ -520,8 +519,7 @@ quedan **la línea de cabecera** (que es la afirmación, y lo único que le sirv
 nota), **las tres sub-secciones** de hallazgos y un **puntero** al hermano. Las **anclas no
 cambian**: hashean bloques de la NOTA. El lint bloquea las tres formas de romper el par —tabla
 todavía adentro, cabecera sin hermano, hermano huérfano— y reporta la cabecera desincronizada
-(bloqueante con `--cierre`). Una nota heredada se migra con
-`python scripts/make_notes.py --migrate-verif-sidecar`.
+(bloqueante con `--cierre`). La tabla todavía adentro es `schema_retirado`, con su receta (#624).
 
 **En la NOTA** (agregar/refrescar, idempotente — si ya existe, reemplazar):
 
@@ -694,8 +692,8 @@ handbook—, tres cosas cambian y las tres son del contrato, no del gusto:
   Anclar al `.txt` una cita que salió del PDF la marca vencida cada vez que ese `.txt` se re-extrae
   —cosa que el propio framework provoca (`--force`, upgrade a OCR, backfill de marcas)— mientras la
   fuente real no se movió, y **no ve** que el PDF sí cambió. Una celda **sin** prefijo es la
-  plantilla vieja: el lint la bloquea y se migra con
-  `python scripts/make_notes.py --migrate-verif-archivo`.
+  plantilla vieja: el lint la bloquea, y su receta dice cómo salir (re-verificar el par, o el
+  migrador del tag de git, #624).
 
 **Cerrá con `python scripts/lint.py --cierre <slug>`** (R-1): ahí un par vencido **frena la operación**,
 porque significa que no terminaste. Sin el flag es la pasada periódica y sólo reporta; sin el

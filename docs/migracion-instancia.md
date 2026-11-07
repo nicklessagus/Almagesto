@@ -13,6 +13,10 @@ dejar en la instancia tres cosas distintas, y sólo la primera se arregla sola a
 versión que tenías. La versión de tu bóveda está en `scripts/lib_config.py`
 (`ALMAGESTO_VERSION`) — la del framework que tenés, no la del contenido.
 
+⚠ **Desde v1.412.0 (#624) los migradores de un solo uso no están en HEAD.** Las secciones de
+versiones anteriores que los nombran se corren con el template en el tag `v1.411.3`
+(`git -C <template> checkout v1.411.3`, el script contra tu bóveda, y de vuelta a `main`); ver §2ab.
+
 ⚠ Cada sección declara **qué mide** y **qué NO**: un chequeo que no puede correr sale *no evaluable*
 con su motivo, nunca en verde (D-43).
 
@@ -318,13 +322,13 @@ EOF
 
 | estado | qué pasó | qué hacer |
 |---|---|---|
-| **desplazada** | está, en el lugar equivocado | `python scripts/make_notes.py --fix-header-order` |
+| **desplazada** | está, en el lugar equivocado | moverla a mano, o `make_notes.py --fix-header-order` en el tag `v1.411.3` |
 | **ausente** | ya se perdió | **reconstruir del historial de git** — `--restamp-pdf-links` NO puede: necesita la cabecera que falta |
 
 Y una tercera, sin daño pero con riesgo: la nota con el **orden invertido** que todavía tiene su
 `## Abstract`. No se rompe hoy; si alguna vez pierde la sección, el backfill corre encima y la
-cascada arranca. Las normaliza el mismo `--fix-header-order`, que **no toca** las que ya están en
-orden canónico.
+cascada arranca. Las normalizaba el mismo migrador (en el tag `v1.411.3`), que **no toca** las que
+ya están en orden canónico.
 
 > Medido en `Almagesto-Tesis` (2026-09-03): **188 notas de paper, 188 en contrato, 0 y 0** — las 10
 > dañadas ya se habían reparado a mano cuando se abrieron los issues. En la instancia donde se
@@ -569,7 +573,7 @@ contra el banner del propio archivo y contra #403.
 **Migración y uso** (idempotentes, no mueven la fecha del bloque):
 
 ```bash
-python scripts/write_verif_sidecar.py <nota.md> --migrate-condition-prefix
+# write_verif_sidecar.py <nota.md> --migrate-condition-prefix   ← en el tag v1.411.3 (#624)
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>[:<bibcode>]=<dónde se resolvió>
 python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json     # `{ancla[:bibcode]: dónde}`
 python scripts/lint.py                                                      # rc 0
@@ -837,9 +841,8 @@ resuelven con juicio:
    <clave> --reason "<motivo>"` (el lint imprime el comando); `extra_core` queda para bibcodes ADS.
 3. **`Rol` de Régimen (#575).** El lint suma `rol_regimen`: la fila o el `role` del paper está mal.
    La tilde no cuenta como discrepancia.
-4. **Destino de la `acota` resuelta (#576).** Corré `python scripts/write_verif_sidecar.py
-   --migrate-condition-destination --todo` (primero con `--dry-run`, que no escribe). Lo que no
-   mapea queda listado: re-declaralo con `--resolver <ancla>:<bibcode>=<destino>`
+4. **Destino de la `acota` resuelta (#576).** El migrador por grafías conocidas vive en el tag
+   `v1.411.3` (#624); desde HEAD, re-declará cada una con `--resolver <ancla>:<bibcode>=<destino>`
    (`bloque|siguiente|regimen|inventario|huecos`, v1.390.0), que conserva el texto viejo como
    detalle. El lint suma `cond_destino`. Lo listado es lo que no dice **qué** bloque («en la
    prosa»): elegir el destino es juicio.
@@ -857,6 +860,21 @@ resuelven con juicio:
 
 `apply_fixes` (#578) inserta filas (`despues_de` + `nuevo`) y mueve bloques (`mover`). No hay nada
 que migrar.
+
+## 2ab · v1.412.0 (#624) — los migradores de un solo uso salen de HEAD
+
+**Hábito.** Los migradores `make_notes.py --migrate-*`,
+`--fix-header-order`, `--restamp-transcribed-note`, `--restamp-vista-stub`, los tres
+`write_verif_sidecar.py --migrate-*` y `triage.py --migrate` ya no existen en HEAD: viven en el tag
+`v1.411.3`. Se quedan `--restamp-abstracts` y `--clean-catalog-markup`.
+
+**Artefacto.** Nada que migrar si tu bóveda estaba al día con v1.411.x. El lint junta los diez
+detectores de schema retirado en **una** categoría bloqueante, `schema_retirado` (cada hallazgo
+nombra su fila y su población); los conteos no cambian salvo esa fusión. Si aparece un hallazgo,
+su receta dice el comando y el tag.
+
+**Chequeo.** `python scripts/lint.py` → `## ⛔ Schema retirado … (0)` y el mismo rc que antes del
+merge.
 
 ## 3 · Cierre
 

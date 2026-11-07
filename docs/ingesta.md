@@ -220,10 +220,10 @@ llena `methods`, `thesis_links`, `role` y —desde #188— **una VISTA por sujet
 `vistas[]` (`sujeto`/`tipo`, más `fecha`/`txt`/`lente` que estampa `harvest_views.py`) y su
 sección `## Vista — <sujeto>`. La sección única `## Extracción (LLM)` es **schema viejo y el lint
 la bloquea**: sin el scope, el silencio de la nota
-sobre un eje no se distingue de «se miró y no hay nada». El migrador es
-`make_notes.py --migrate-vistas` (regla de schema nuevo: migrador de un uso + detector bloqueante;
-los dos siguen en el repo). ⛔ **`bearing` es schema viejo
-y el lint lo BLOQUEA** (D-21; migrador: `make_notes.py --migrate-bearing`): la *postura* respecto de
+sobre un eje no se distingue de «se miró y no hay nada» (regla de schema nuevo: migrador de un uso
++ detector bloqueante; el detector sigue en HEAD como `schema_retirado` y el migrador vive en el tag
+`v1.411.3`, #624). ⛔ **`bearing` es schema viejo
+y el lint lo BLOQUEA** (D-21, `schema_retirado`): la *postura* respecto de
 una tesis no vive en el paper —depende de la tesis, y un paper puede tocar varias— sino en la tabla
 de evidencia de la hipótesis, donde va con cita y `verify-citations` puede chequearla. Lo que **sí**
 vive en el paper es **`role`**: **qué tipo de aporte es** — `fundacional` (introduce el método) ·

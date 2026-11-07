@@ -323,7 +323,7 @@ encontró **18** banderas de `argparse` que ningún documento del repo nombraba 
 `fetch_web --force-note`, cuya propia ayuda dice *"PISA la extracción LLM"*. Un flag destructivo sin
 mención fuera de su `--help` no tiene dónde declararse como escotilla, que es justamente lo que este
 bloque arregla. Las otras quedan cubiertas por los bloques de arriba (`--prioridad`, `--drop-core`,
-`--accept-source`, `--migrate-verif-archivo`, `--theme`/`--topics`/`--resolve` de `discover.py`,
+`--accept-source`, `--theme`/`--topics`/`--resolve` de `discover.py`,
 `extraction_prompt --out-dir`, `extract_fulltext --ocr`, `trace_invariants --check`) o son de
 conveniencia (`--max`, `--paper`, `--out`, `--limit`, `--accessed`, `--json`, `--por-slug`,
 `--listar`, `--no-chain`, `--root`): la lista completa está en el issue.
@@ -338,27 +338,25 @@ los nombra ningún otro documento: este párrafo es su única mención fuera del
 reintroducía el corte dentro de la cita que #314 midió, y ningún skill los usaba — `contrast.py`
 imprime cada valor entero, siempre.
 
-**Migradores y backfills** (una sola corrida; el framework no lleva capas de retrocompatibilidad,
-así que cada cambio de schema entrega migrador **y** detector bloqueante — INV-64):
+**Backfills** (re-estampados deterministas e idempotentes):
 
 ```bash
-python scripts/make_notes.py --migrate-disputes   # #71: planets[].disputes[] → disputes a nivel nota
-python scripts/make_notes.py --migrate-bearing    # D-21: `bearing` fuera de la nota de paper
-python scripts/make_notes.py --migrate-facets     # R-5: `topics:` → `facets:`
-python scripts/make_notes.py --migrate-registros  # D-28: `busqueda:` → `busquedas: []` (pliega, no borra)
-python scripts/triage.py <slug> --migrate         # #51: el juicio del build/<slug>/triage.json viejo
 python scripts/make_notes.py --restamp-headers    # cabecera a las notas que nacieron sin ella
-python scripts/make_notes.py --fix-header-order  # #378: el aviso de capa LLM, debajo de la cabecera
+python scripts/make_notes.py --restamp-abstracts  # #277: el `## Abstract` que falte (bloqueante)
+python scripts/make_notes.py --clean-catalog-markup  # #271: re-aplica el limpiador de catálogo
 python scripts/make_notes.py --rename-paper VIEJO NUEVO --fix-key   # #355: clave errónea, no alias
 python scripts/make_notes.py --restamp-keywords   # D-17: `keywords:` desde build/*/ads.json
 python scripts/make_notes.py --restamp-pdf-links  # #47: el link [📄 PDF] ↔ frontmatter `pdf`
 python scripts/make_notes.py --sync-mirror        # #70: campos espejo de NEA que quedaron en null
-python scripts/make_notes.py --migrate-verif-archivo # #117: prefija cada `Hash fuente` con `txt:`/`pdf:`
-python scripts/make_notes.py --migrate-txt-fields # #205: saca `symbols_lost:`/`fulltext_layout:`
-python scripts/make_notes.py --migrate-vistas     # #188: `## Extracción (LLM)` → `vistas[]` + `## Vista — <sujeto>`
-python scripts/make_notes.py --restamp-vista-stub # #269: el stub `## Vista` con la plantilla VIEJA (citar por línea del `.txt`, retirada en #205) → la vigente; la prosa redactada no se toca
 python scripts/make_notes.py --rename-paper VIEJO NUEVO   # D-19: ciclo preprint → publicado
 ```
+
+**Los migradores de un solo uso salieron de HEAD en #624** (medido migrador por migrador: ninguna
+instancia activa tenía nada que migrar). Cada cambio de schema sigue entregando migrador **y**
+detector bloqueante (INV-64); el detector se queda en HEAD —`schema_retirado`, ver
+`docs/lint.md` § *Schema retirado*— y el migrador vive en el tag de git `v1.411.3`
+(`cfg.RETIRED_MIGRATORS_TAG`). La receta de cada hallazgo dice *«re-ingestar, o migrar con el
+template en el tag»* y nombra el comando que ese tag trae.
 
 **La cadena de `verify-citations`** (paso de cierre de toda operación que escriba prosa con
 `[[bibcode]]`; el procedimiento vive en el skill — acá los cinco scripts, en el orden en que corren:
@@ -878,7 +876,7 @@ discrepancias **materiales** (mayores que el error). Reflejar la disputa tambié
 ⚠ **El schema viejo** (`planets[].disputes[]` con `field`/`ref`/`note`/`alt`) tenía el polo de
 verdad hardcodeado en la forma: servía para paper↔NEA y **no podía expresar paper↔paper** —el caso
 normal cuando NEA calla—, y `P_rot`, que es de la estrella, no tenía dónde colgar. **El lint no lo
-lee: lo detecta y bloquea** (`python scripts/make_notes.py --migrate-disputes`) — una disputa que el
+lee: lo detecta y bloquea** (`schema_retirado`, #624) — una disputa que el
 lector ignora en silencio es peor que un error.
 
 #### A · papers/
@@ -1060,7 +1058,6 @@ marcador de posición para que el chequeo `vistas[]` ↔ cuerpo cerrara: no las 
 vive en `extraction_prompt`— y mientras la lectura no ocurre la nota publica un **pedido como si
 fuera contenido** (medido: 47 notas, 46 bajo `no_vista`). Hoy dice *«reclamado, sin leer»* o *«no
 leído desde X (fecha): motivo»*, que es lo que antes había que reconstruir leyendo el `log`.
-Backfill: `make_notes.py --restamp-vista-stub`.
 
 ⛔ **`vistas[]` la escribe SÓLO la lectura, nunca el retro-link.** Es lo que mantiene a
 `stars`/`thesis_links`/`methods` como **reclamos** (`make_notes` los mergea add-only sin leer nada) y
@@ -1159,8 +1156,8 @@ cosmético, porque el campo **decide lecturas** —`eprint` dice que las citas s
 preprint— y un valor fuera de vocabulario cae por el `else` de todo `== "eprint"` **en silencio**.
 ⚠ Ese `else` **ya no exime** del chequeo de cita textual (#275/#363). Medido: 2 de 138 notas llevaban **prosa** en el campo
 —una, información de adquisición legítima que terminó ahí porque el schema no tenía dónde ponerla—.
-Migrador: `python scripts/make_notes.py --migrate-source-fields`, que pasa el valor a `null` y
-**mueve** la prosa (a `pending_motivo` o a `salvedades`), no la tira.
+La salida pasa el valor a `null` y **mueve** la prosa (a `pending_motivo` o a `salvedades`), no la
+tira (el migrador vive en el tag `v1.411.3`, #624).
 
 **`fulltext_source` vs `pdf_source` (#57):** el primero dice **cómo se extrajo** el texto, el segundo
 **de qué documento salió** — `eprint` (arXiv: puede ser un **v1 pre-referato**, con `eprint_version`
@@ -1176,8 +1173,8 @@ discrepancia numérica contra un valor publicado es candidata a **diferencia de 
 
 ⚠ **`symbols_lost` y `fulltext_layout` se RETIRARON en 1.71.0 (#205).** Existían para decidir si el
 extractor leía el `.txt` o el PDF, y esa decisión ya no se toma: la fuente es el PDF. Ninguno de los
-dos discriminaba (#193, #194). Migrador `--migrate-txt-fields`; el lint **bloquea** la nota que los
-lleve. Lo que sobrevive es un hecho: **`Read` rasteriza el PDF, así que el
+dos discriminaba (#193, #194). El lint **bloquea** la nota que los
+lleve (`schema_retirado`). Lo que sobrevive es un hecho: **`Read` rasteriza el PDF, así que el
 modelo *ve* la fórmula** — es cuestión de **modalidad, no de modelo**.
 
 ##### A · `keywords` (D-17)
@@ -1375,7 +1372,7 @@ El cuerpo lleva **tres cosas propias**:
    depende de la tesis —un paper puede tocar varias— y como escalar suelto en el paper es un
    veredicto sin evidencia que `verify-citations` **no puede chequear**. En la tabla hay una fila por
    par, con cita: es verificable. ⛔ `bearing` en una nota de paper es schema viejo y **el lint lo
-   bloquea** (`make_notes.py --migrate-bearing`).
+   bloquea** (`schema_retirado`).
 3. **El veredicto global marcado `inferencia`** (D-36), con sus premisas: agregar N filas en una
    conclusión es juicio del agente, no algo que una fuente diga.
 
@@ -2004,8 +2001,8 @@ sí o sí: fila de `## Régimen de validez`) / **`contextualiza`** (va al report
 prosa**: el juez es estable en el eje textual y no exhaustivo en el de régimen, así que absorberla
 sin rastro borra lo que hay que poder re-auditar. ⛔ **Clase UNA vez; la resolución la escribe
 `write_verif_sidecar --resolver <ancla>[:<bibcode>]=<dónde>` (#427):** duplicada, la fila es
-**irresoluble** y su conteo miente para siempre (41 de 957) — migrador
-`--migrate-condition-prefix`. ⛔ **Y se direcciona por el PAR, no por el ancla (#434):** el ancla
+**irresoluble** y su conteo miente para siempre (41 de 957) — su migrador vive en el
+tag `v1.411.3` (#624). ⛔ **Y se direcciona por el PAR, no por el ancla (#434):** el ancla
 hashea el BLOQUE, así que un bloque que cita dos fuentes tiene dos filas con la misma; con clases
 distintas la `acota` no se podía marcar resuelta por ningún medio (medidas: 5 de 20).
 ⛔ **Y la condición de una ronda posterior tampoco se pierde (#451):** rige el **último eslabón**,
@@ -2027,7 +2024,7 @@ cabecera** (la afirmación, y lo único que le sirve a quien copia la nota), **l
 sub-secciones** de hallazgos y un **puntero**. ⚠ Hermano en el mismo directorio, **no** un `.verif/`
 con punto: con punto Obsidian lo esconde y el par deja de ser obvio. Las **anclas no cambian**:
 hashean bloques **de la nota**. El par es un **iff** (INV-148) y el lint lo vigila con cuatro
-categorías: tabla todavía adentro (schema viejo → `make_notes.py --migrate-verif-sidecar`), cabecera
+categorías: tabla todavía adentro (`schema_retirado`), cabecera
 sin hermano, hermano huérfano —las tres bloqueantes— y cabecera desincronizada de su tabla (INV-81
 cruzando archivos: R-1, la escribe el paso de cierre). ⛔ **Una sola función resuelve dónde vive**
 (`lib_blocks.verif_rows`) para los cuatro consumidores —lint, `make_notes`, `reverify_subset`,
@@ -2047,8 +2044,7 @@ de `entity.py`.
   PROSA, nunca un `repr()`** (#274a).
 - ⛔ **`Hash fuente` declara CONTRA QUÉ ARCHIVO se verificó: `txt:<sha10>` o `pdf:<sha10>` (#117).**
   La decisión la toma el verificador par por par, así que la declara la **fila**. En filas nuevas:
-  `pdf:`. Sin prefijo = *no consta* y el lint **bloquea** (`make_notes.py
-  --migrate-verif-archivo`). Excepción (#223): la fila `no verificable por extracción` **no declara
+  `pdf:`. Sin prefijo = *no consta* y el lint **bloquea**. Excepción (#223): la fila `no verificable por extracción` **no declara
   archivo**, porque no hay ninguno.
 - ⛔ **Documento largo leído del `.txt`: los DOS localizadores (#200)** — `pdf:` mentiría sobre qué
   se abrió y la línea sola rompe #80. ⚠ Desde #205 no se produce en filas nuevas.

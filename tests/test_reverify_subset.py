@@ -46,13 +46,11 @@ def _nota_con_anclas() -> str:
 def _en_disco(tmp_path, texto=None) -> Path:
     """La nota en disco, con su tabla ya en el hermano `<nota>.verif.md` (#344).
 
-    Se parte con el MIGRADOR real: un doble con otro contrato esconde el bug en la diferencia
-    (regla de método nº2), y acá el contrato es justamente qué queda en la nota y qué se va."""
-    import make_notes
+    Con las mismas primitivas de `lib_blocks` que usa el escritor (`conftest`, #624)."""
+    from conftest import move_verif_table_to_sidecar
     nota = tmp_path / "n.md"
     nota.write_text(texto if texto is not None else _nota_con_anclas(), encoding="utf-8")
-    make_notes.migrate_verif_sidecar(nota)
-    return nota
+    return move_verif_table_to_sidecar(nota)
 
 
 def _clasificar(tmp_path, texto=None, umbral=0.60) -> dict:

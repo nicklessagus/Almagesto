@@ -723,170 +723,6 @@ PROSA = ("# Estrella Test\n\n> Cabecera.\n>\n> _Generado con Almagesto v1.0.0._\
          "## Resumen\nLa señal **b** es dudosa según [[2020disD...1..1D]].\n")
 
 
-def ficha_vieja(toy_vault, planets):
-    return mk_note(toy_vault.STARS, "test_star",
-                   {"name": "Estrella Test", "slug": "test_star", "P_rot_days": 34.0,
-                    "planets": planets, "tags": ["star"]}, PROSA)
-
-
-def test_migrate_disputes_materializa_el_polo_implicito(toy_vault, capsys):
-    """El schema viejo escribía UN solo lado (el paper, con `alt`); el otro era implícito — el valor
-    del frontmatter, o sea NEA. La migración lo hace explícito, que es justo lo que el consumidor
-    necesita ver: "hay autoridad" vs "la bóveda no sabe"."""
-    dest = ficha_vieja(toy_vault, [
-        {"letter": "b", "P_days": 20.0, "K_ms": 0.9, "e": 0.1, "mass_earth": 2.0,
-         "status": "confirmed",
-         "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4, "note": "K distinto"}]}])
-    assert mn.migrate_disputes(dest) is True
-    fm = read_fm(dest)
-    assert fm["disputes"] == [{"field": "b.K", "note": "K distinto", "posiciones": [
-        {"ref": "2020disD...1..1D", "value": 1.4},
-        {"source": "ground_truth", "value": 0.9}]}]
-    assert "disputes" not in fm["planets"][0]        # no queda duplicada en el schema viejo
-    claves = list(fm)                               # va donde vivía la información que discute
-    assert claves.index("disputes") == claves.index("planets") + 1
-
-
-def test_migrate_disputes_no_borra_los_comentarios_del_frontmatter(toy_vault, capsys):
-    """AUD-169 / INV-139 — la re-serialización con `yaml.safe_dump` tiraba TODOS los comentarios.
-
-    El framework instruye editar el frontmatter a mano («el `P_rot` lo puso el usuario»), así que
-    esos comentarios son curación: un estampador que los borra destruye trabajo que nadie puede
-    reconstruir, y encima informa éxito."""
-    dest = ficha_vieja(toy_vault, [
-        {"letter": "b", "P_days": 20.0, "K_ms": 0.9, "e": 0.1, "mass_earth": 2.0,
-         "status": "confirmed",
-         "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
-    texto = dest.read_text(encoding="utf-8")
-    dest.write_text(texto.replace("P_rot_days: 34.0",
-                                  "# lo puso el usuario a mano (Baliunas 1996)\nP_rot_days: 34.0  # sin NEA"),
-                    encoding="utf-8")
-    assert mn.migrate_disputes(dest) is True
-    salida = dest.read_text(encoding="utf-8")
-    assert "# lo puso el usuario a mano (Baliunas 1996)" in salida
-    assert "P_rot_days: 34.0  # sin NEA" in salida
-    assert read_fm(dest)["P_rot_days"] == 34.0           # y sigue parseando
-
-
-def test_migrate_disputes_existence_usa_el_status_de_nea(toy_vault):
-    """`existence` no tiene valor numérico: lo que NEA sostiene es el `status` del planeta."""
-    dest = ficha_vieja(toy_vault, [
-        {"letter": "b", "P_days": 20.0, "status": "confirmed",
-         "disputes": [{"field": "existence", "ref": "2020disD...1..1D", "note": "no la ve"}]}])
-    mn.migrate_disputes(dest)
-    d = read_fm(dest)["disputes"][0]
-    assert d["field"] == "b.existence"
-    assert d["posiciones"][1] == {"source": "ground_truth", "value": "confirmed"}
-
-
-def test_migrate_disputes_sin_valor_en_nea_no_lo_inventa(toy_vault):
-    """Si NEA no tiene el valor —el caso normal con K y e (#70)— la posición queda SIN `value`: es
-    "hay autoridad y calla", no un número supuesto."""
-    dest = ficha_vieja(toy_vault, [
-        {"letter": "b", "P_days": 20.0, "K_ms": None,
-         "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
-    mn.migrate_disputes(dest)
-    assert read_fm(dest)["disputes"][0]["posiciones"][1] == {"source": "ground_truth"}
-
-
-def test_migrate_disputes_no_toca_la_prosa_ni_las_fichas_sin_disputas(toy_vault, capsys):
-    """La migración re-serializa el FRONTMATTER (cambia la estructura, no se puede hacer por línea),
-    así que el cuerpo tiene que sobrevivir byte a byte — y una ficha sin disputas viejas no se
-    reescribe: sin esto, un backfill tocaría toda la bóveda para nada."""
-    limpia = ficha_vieja(toy_vault, [{"letter": "b", "P_days": 20.0}])
-    antes = limpia.read_text(encoding="utf-8")
-    assert mn.migrate_disputes(limpia) is False
-    assert limpia.read_text(encoding="utf-8") == antes          # byte a byte
-
-    dest = mk_note(toy_vault.STARS, "otra",
-                   {"name": "Otra", "planets": [{"letter": "b", "K_ms": 0.9, "disputes": [
-                       {"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}], "tags": ["star"]},
-                   PROSA)
-    mn.migrate_disputes(dest)
-    assert dest.read_text(encoding="utf-8").split("---\n", 2)[2] == PROSA
-
-
-def test_migrate_disputes_tampoco_inventa_el_valor_del_paper(toy_vault):
-    """La regla "si no hay valor, la posición va sin `value`" se aplicaba SÓLO al polo ground_truth.
-    `alt` era exclusivo de las disputas de VALOR, así que toda disputa de `existence` —el caso más
-    frecuente— migraba con `value: null` del lado del paper, que por la convención del otro polo se
-    lee como "esta fuente calla": lo contrario de lo que el paper sostiene."""
-    dest = ficha_vieja(toy_vault, [{"letter": "b", "status": "confirmed", "disputes": [
-        {"field": "existence", "ref": "2020disD...1..1D", "note": "no la ve"}]}])
-    mn.migrate_disputes(dest)
-    assert read_fm(dest)["disputes"][0]["posiciones"][0] == {"ref": "2020disD...1..1D"}
-
-
-def test_migrate_disputes_avisa_cuando_la_vieja_no_tiene_ref(toy_vault, capsys):
-    """El lint pre-1.19.0 aceptaba una disputa sin `ref`; migrada queda como posición sin quién la
-    sostenga y el lint la bloquea. El migrador es idempotente, así que sin aviso la bóveda quedaba
-    en exit 1 tras correr exactamente el comando que el lint recomienda, sin pista de qué pasó."""
-    dest = ficha_vieja(toy_vault, [{"letter": "b", "K_ms": 0.9, "disputes": [
-        {"field": "K", "alt": 1.4, "note": "sin ref"}]}])
-    mn.migrate_disputes(dest)
-    assert "sin `ref`" in capsys.readouterr().out
-
-
-def test_migrate_all_disputes_no_muere_a_mitad_del_barrido(toy_vault, capsys):
-    """Una ficha con `planets` mal formado tiraba el backfill con AttributeError y dejaba la bóveda
-    a MEDIO migrar: las fichas posteriores quedaban con el schema viejo y sin aviso."""
-    for stem in ("a_sana", "c_sana"):
-        mk_note(toy_vault.STARS, stem, {"name": stem, "tags": ["star"], "planets": [
-            {"letter": "b", "K_ms": 0.9,
-             "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}]}, PROSA)
-    mk_note(toy_vault.STARS, "b_rara", {"name": "B", "tags": ["star"], "planets": ["b"]}, PROSA)
-    mn.migrate_all_disputes()
-    assert "disputes" in read_fm(toy_vault.STARS / "c_sana.md")      # la de después SÍ se migró
-    assert "no es una lista de mapas" in capsys.readouterr().out     # y la rara se avisó
-
-
-def test_migrate_disputes_no_escribe_basura_si_disputes_no_es_lista(toy_vault, capsys):
-    """`disputes: "b.K"` a nivel nota + una disputa vieja escribía la lista de CARACTERES a disco
-    (y con un mapa, sus claves). Cobarde: no toca el archivo."""
-    dest = mk_note(toy_vault.STARS, "test_star",
-                   {"name": "T", "tags": ["star"], "disputes": "b.K", "planets": [
-                       {"letter": "b", "K_ms": 0.9,
-                        "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}]}, PROSA)
-    antes = dest.read_text(encoding="utf-8")
-    assert mn.migrate_disputes(dest) is False
-    assert dest.read_text(encoding="utf-8") == antes
-    assert "no es una lista" in capsys.readouterr().out
-
-
-def test_migrate_disputes_no_pierde_la_disputa_que_deja_sin_migrar(toy_vault, capsys):
-    """`pop("disputes")` corre ANTES del `isinstance`, así que el `continue` "cobarde" salta la
-    migración con el dato ya fuera del dict y el `write_text` final lo borra del disco. El mensaje
-    dice "esa quedó sin migrar, revisala a mano" y no queda nada que revisar: se pierden el bibcode
-    y el valor discrepante, y después el lint queda en verde afirmando que no hay desacuerdos."""
-    dest = ficha_vieja(toy_vault, [
-        {"letter": "b", "disputes": "Feng+2017 dice que b no existe (ref 2017AJ....154..135F)"},
-        {"letter": "c", "disputes": [{"field": "K", "ref": "2019MNRAS.484L...8K", "alt": 1.6}]},
-    ])
-    mn.migrate_disputes(dest)
-    texto = dest.read_text(encoding="utf-8")
-    assert "2017AJ....154..135F" in texto, (
-        "la disputa que el mensaje manda revisar a mano desapareció del archivo")
-
-
-def test_migrate_disputes_no_pierde_la_entrada_vieja_que_no_es_un_mapa(toy_vault, capsys):
-    """Hermano del anterior por la otra rama cobarde: el elemento que no es un mapa también se
-    pierde, porque `viejas` ya salió del planeta cuando el `continue` lo saltea."""
-    dest = ficha_vieja(toy_vault, [{"letter": "b", "disputes": ["esto-no-es-un-mapa",
-                                                                {"field": "K",
-                                                                 "ref": "2019MNRAS.484L...8K"}]}])
-    mn.migrate_disputes(dest)
-    assert "esto-no-es-un-mapa" in dest.read_text(encoding="utf-8")
-
-
-def test_migrate_disputes_letter_nulo_no_inventa_un_eje(toy_vault):
-    """`letter: null` es estado normal (lo copia el ground-truth cuando NEA no nombra el planeta):
-    producía `field: None.K`, un eje que no existe y que el lint no valida."""
-    dest = ficha_vieja(toy_vault, [{"letter": None, "K_ms": 0.9, "disputes": [
-        {"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
-    mn.migrate_disputes(dest)
-    assert read_fm(dest)["disputes"][0]["field"] == "K"
-
-
 @pytest.mark.parametrize("obj", [{"short": 2026}, {"short": "s", "relevance": "rv"},
                                  {"short": "s", "relevance": {"facets": "radial velocity"}},
                                  {"short": "s", "relevance": {"facets": [{"rv": "x"}]}}])
@@ -900,88 +736,11 @@ def test_objetivo_mal_formado_degrada_sin_romper_ni_inventar(toy_vault, obj):
     assert "· " not in block.split("Ejes del objetivo")[1].split(":**")[0]   # sin facetas inventadas
 
 
-def test_migrate_disputes_es_idempotente(toy_vault):
-    dest = ficha_vieja(toy_vault, [
-        {"letter": "b", "K_ms": 0.9,
-         "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
-    assert mn.migrate_disputes(dest) is True
-    texto = dest.read_text(encoding="utf-8")
-    assert mn.migrate_disputes(dest) is False                   # ya no hay schema viejo que migrar
-    assert dest.read_text(encoding="utf-8") == texto
-
-
-def test_migrate_disputes_preserva_las_ya_migradas_y_el_orden(toy_vault):
-    """Una ficha a medio migrar (o con disputas nuevas escritas a mano) no pierde las que ya
-    estaban, y `disputes` queda donde vivía la información: después de `planets`."""
-    dest = mk_note(toy_vault.STARS, "test_star",
-                   {"name": "Estrella Test", "planets": [
-                       {"letter": "b", "K_ms": 0.9,
-                        "disputes": [{"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}],
-                    "disputes": [{"field": "P_rot", "posiciones": [
-                        {"ref": "2018autA...1..1A", "value": 33},
-                        {"ref": "2021autB...1..1B", "value": 11.5}]}],
-                    "data_local": None, "tags": ["star"]}, PROSA)
-    mn.migrate_disputes(dest)
-    fm = read_fm(dest)
-    assert [d["field"] for d in fm["disputes"]] == ["P_rot", "b.K"]
-    assert list(fm).index("disputes") == list(fm).index("planets") + 1
-
-
-def test_cli_migrate_disputes_no_pide_slug(toy_vault, monkeypatch, capsys):
-    """El cableado del backfill (flag → dest → despacho) sólo existe en el CLI: sin un test de punta
-    a punta, un `dest` mal escrito pasaría los 480 tests y fallaría en la primera corrida real."""
-    ficha_vieja(toy_vault, [{"letter": "b", "K_ms": 0.9, "disputes": [
-        {"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
-    assert run_main(monkeypatch, ["--migrate-disputes"]) == 0
-    assert read_fm(toy_vault.STARS / "test_star.md")["disputes"][0]["field"] == "b.K"
-    assert "1 de 1 ficha(s) migradas" in capsys.readouterr().out
-
-
-def test_cli_migrate_disputes_sin_nada_que_migrar_lo_dice(toy_vault, monkeypatch, capsys):
-    """Y el mensaje del caso vacío no puede leerse como "todo bien": aclara que el lector no mira el
-    schema viejo, así que un cero acá no significa que no queden disputas viejas en otra bóveda."""
-    assert run_main(monkeypatch, ["--migrate-disputes"]) == 0
-    out = capsys.readouterr().out
-    assert "0 de 0 ficha(s) migradas" in out and "NO lee el schema viejo" in out
-
-
 def test_cli_sin_slug_ni_backfill_es_error_amigable(toy_vault, monkeypatch):
     """El `ap.error` nombra los tres modos que corren sin slug — si se agrega un cuarto y no se
     actualiza, el mensaje manda al usuario a adivinar."""
     with pytest.raises(SystemExit):
         run_main(monkeypatch, [])
-
-
-def test_migrate_disputes_degrada_sin_romper_nada(toy_vault, capsys):
-    """Una migración que reescribe frontmatter tiene que ser cobarde: ante cualquier cosa que no
-    entiende, NO toca el archivo. Sobre todo con el YAML roto — ahí reescribir sería destruir la
-    nota (el lint ya reporta el frontmatter no parseable como bloqueante)."""
-    assert mn.migrate_disputes(toy_vault.STARS / "no-existe.md") is False
-
-    sin_fm = toy_vault.STARS / "sin_fm.md"
-    sin_fm.write_text("# Sólo prosa, sin frontmatter\n", encoding="utf-8")
-    assert mn.migrate_disputes(sin_fm) is False
-    assert sin_fm.read_text(encoding="utf-8") == "# Sólo prosa, sin frontmatter\n"
-
-    abierto = toy_vault.STARS / "abierto.md"
-    abierto.write_text("---\nname: X\n", encoding="utf-8")     # frontmatter sin cerrar
-    assert mn.migrate_disputes(abierto) is False
-
-    roto = toy_vault.STARS / "roto.md"
-    contenido = "---\ntitle: dos: puntos sin comillas\n---\n# Cuerpo\n"
-    roto.write_text(contenido, encoding="utf-8")
-    assert mn.migrate_disputes(roto) is False
-    assert roto.read_text(encoding="utf-8") == contenido        # intacta, no destruida
-    assert "no parseable — migralo a mano" in capsys.readouterr().out
-
-
-def test_migrate_all_disputes_barre_y_reporta(toy_vault, capsys):
-    ficha_vieja(toy_vault, [{"letter": "b", "K_ms": 0.9, "disputes": [
-        {"field": "K", "ref": "2020disD...1..1D", "alt": 1.4}]}])
-    mk_note(toy_vault.STARS, "sin_disputas", {"name": "X", "tags": ["star"]}, PROSA)
-    assert mn.migrate_all_disputes() == 0
-    out = capsys.readouterr().out
-    assert "1 de 2 ficha(s) migradas" in out and "la prosa NO se tocó" in out
 
 
 # ── #74: régimen de validez (sólo en conceptos) ─────────────────────────────────────────────
@@ -1867,36 +1626,6 @@ def test_la_cabecera_sobrevive_a_la_secuencia_COMPLETA_de_backfills(toy_vault):
     assert t.index("· fuente off-ADS") < t.index("## Abstract")
 
 
-def test_fix_header_order_normaliza_la_nota_ya_invertida(toy_vault, capsys):
-    """La otra mitad de #378: el fix impide notas nuevas invertidas, y las que ya lo están siguen
-    igual —`stamp_header` es idempotente y no vuelve a tocarlas—. Medido en una instancia real: 50
-    notas con el orden invertido y SIN daño (ya tenían `## Abstract`, así que la cascada se detuvo),
-    pero con el riesgo condicional de que alguna pierda la sección y el backfill corra encima."""
-    from conftest import mk_note
-    mk_note(cfg.PAPERS, "2020d....1D", {"tags": ["paper"], "bibcode": "2020d....1D"},
-            "# Paper\n\n> ⚠ **Capa LLM — revisar antes de citar.**\n>\n"
-            "> _Generado con Almagesto v1.94.0._\n\n**Autor** (2020)\n"
-            "· fuente off-ADS · `2020d....1D`\n\n## Abstract\n_(no disponible)_\n")
-    dest = cfg.PAPERS / "2020d....1D.md"
-    assert mn.fix_header_order() == 1
-    t = dest.read_text(encoding="utf-8")
-    assert t.index("· fuente off-ADS") < t.index("Capa LLM"), t
-    assert mn.find_header_line(t) is not None
-    assert mn.fix_header_order() == 0, "idempotente: la segunda corrida no toca nada"
-
-
-def test_fix_header_order_no_toca_la_nota_en_ORDEN_CANONICO(toy_vault):
-    """El recorte: 109 de 169 notas de esa bóveda estaban bien, y un migrador que las reescriba
-    produce un diff de 169 archivos donde el cambio real son 60."""
-    from conftest import mk_note
-    mk_note(cfg.PAPERS, "2020e....1E", {"tags": ["paper"], "bibcode": "2020e....1E"},
-            "# Paper\n\n**Autor** (2020)\n· fuente off-ADS · `2020e....1E`\n\n"
-            "> ⚠ **Capa LLM — revisar antes de citar.**\n>\n> _Generado con Almagesto v1.94.0._\n")
-    antes = (cfg.PAPERS / "2020e....1E.md").read_text(encoding="utf-8")
-    assert mn.fix_header_order() == 0
-    assert (cfg.PAPERS / "2020e....1E.md").read_text(encoding="utf-8") == antes
-
-
 def test_stamp_header_destraba_el_puntero_de_busqueda(toy_vault):
     """El punto del backfill: sin cabecera, stamp_search_line no-opea EN SILENCIO (medido: 22 de 25
     notas de una bóveda real). Después del backfill, la misma llamada sí estampa."""
@@ -2244,7 +1973,6 @@ def test_notas_pasan_por_el_helper(toy_vault, monkeypatch):
     assert run_main(monkeypatch, ["gp", "--theme"]) == 0
     assert run_main(monkeypatch, ["--restamp-headers"]) == 0
     assert run_main(monkeypatch, ["--restamp-pdf-links"]) == 0
-    assert run_main(monkeypatch, ["--migrate-disputes"]) == 0
     assert run_main(monkeypatch, ["--sync-mirror"]) == 0
     assert (toy_vault.STARS / "test_star.md").exists(), "el test no escribió nada — no prueba nada"
 
@@ -2673,26 +2401,6 @@ def test_keywords_no_pisa_la_extraccion(toy_vault):
     assert read_fm(p)["keywords"] == ["editada"]
 
 
-def test_migrate_bearing_saca_el_campo_y_es_idempotente(toy_vault):
-    # @inv INV-13
-    """Migrador de un solo uso de D-21. Borrado puro y sin pérdida recuperable: el dato viejo era
-    **un** valor de postura para N tesis, o sea que ya estaba mal por construcción. Quirúrgico: no
-    toca la extracción LLM ni el cuerpo."""
-    mk_note(toy_vault.PAPERS, "2020Bear",
-            {"tags": ["paper"], "bibcode": "2020Bear", "thesis_links": ["hip"],
-             "bearing": "supports", "methods": ["ICA"]},
-            "# 2020Bear\n\nExtracción LLM que no se toca.\n")
-    assert mn.migrate_all_bearing() == 1
-    p = toy_vault.PAPERS / "2020Bear.md"
-    fm = read_fm(p)
-    assert "bearing" not in fm
-    assert fm["thesis_links"] == ["hip"] and fm["methods"] == ["ICA"], "no toca el resto"
-    assert "Extracción LLM que no se toca." in p.read_text(encoding="utf-8")
-    antes = p.read_bytes()
-    assert mn.migrate_all_bearing() == 0, "segunda pasada: nada que hacer"
-    assert p.read_bytes() == antes, "y no reescribe"
-
-
 # ── D-17 · backfill de `keywords` (--restamp-keywords) ──────────────────────
 
 def _ads_json(slug, records):
@@ -2812,50 +2520,6 @@ def test_concept_dest_resuelve_area_y_nombre(toy_vault):
 
 
 # ── INV-64 · los dos migradores que faltaban ────────────────────────────────
-
-def test_migrate_facets_renombra_y_es_idempotente(toy_vault):
-    """R-5 entregó el detector bloqueante y **no** el migrador: el lint mandaba a renombrar a mano,
-    nota por nota (medido en una instancia real: 908 de 908 la traían).  @inv INV-64"""
-    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    bloque = cfg.PAPERS / "2020Bloque.md"
-    bloque.write_text("---\nbibcode: 2020Bloque\ntopics:\n  - rv\n  - activity\nmethods: []\n"
-                      "tags: [paper]\n---\n# T\n\n## Extracción\nno se toca\n", encoding="utf-8")
-    inline = cfg.PAPERS / "2020Inline.md"
-    inline.write_text("---\nbibcode: 2020Inline\ntopics: [rv]\nmethods: []\ntags: [paper]\n---\n# T\n",
-                      encoding="utf-8")
-    assert mn.migrate_all_facets() == 2
-    fm = cfg.split_fm(bloque.read_text(encoding="utf-8"))
-    assert fm["facets"] == ["rv", "activity"] and "topics" not in fm
-    assert "no se toca" in bloque.read_text(encoding="utf-8")
-    assert cfg.split_fm(inline.read_text(encoding="utf-8"))["facets"] == ["rv"]
-    assert mn.migrate_all_facets() == 0, "idempotente"
-
-
-def test_migrate_facets_no_pisa_un_facets_existente(toy_vault):
-    """Si la nota ya tiene el campo vigente, el `topics:` residual se **borra**: el vigente manda."""
-    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    p = cfg.PAPERS / "2020Dos.md"
-    p.write_text("---\nbibcode: 2020Dos\nfacets: [rv]\ntopics: [viejo]\nmethods: []\n"
-                 "tags: [paper]\n---\n# T\n", encoding="utf-8")
-    mn.migrate_all_facets()
-    fm = cfg.split_fm(p.read_text(encoding="utf-8"))
-    assert fm["facets"] == ["rv"] and "topics" not in fm
-
-
-def test_migrate_registros_pliega_sin_perder_la_corrida(toy_vault):
-    """D-28 tenía detector y no migrador: el lint mandaba a "re-correr la cadena", que cuesta una
-    pasada de red **y pierde la corrida vieja** — en el único artefacto no regenerable.  @inv INV-64"""
-    cfg.save_registro("test_star", {"slug": "test_star",
-                                    "busqueda": {"fecha": "2026-01-01", "query": "q", "n_total": 40},
-                                    "decisiones": {"2020X": {"decision": "descartado",
-                                                             "motivo": "ruido", "fecha": "2026-01-01"}}})
-    assert mn.migrate_all_registros() == 1
-    reg = cfg.load_registro("test_star")
-    assert reg.get("busqueda") is None
-    assert len(reg["busquedas"]) == 1 and reg["busquedas"][0]["n_total"] == 40
-    assert "pre-D-28" in reg["busquedas"][0]["schema"]
-    assert reg["decisiones"]["2020X"]["motivo"] == "ruido", "el juicio de curación no se toca"
-    assert mn.migrate_all_registros() == 0, "idempotente"
 
 
 # ── INV-81 / D-11 · los otros dos roll-ups de la ficha, materializados ──────
@@ -3427,162 +3091,6 @@ def test_el_drop_core_se_ve_en_la_tabla_de_papers(toy_vault, monkeypatch):
 
 # ── #117 · el migrador deduce el archivo del HASH, no del frontmatter ────────────────────────────
 
-def _tabla(nota):
-    """La tabla de verificación de esa nota — que desde #344 vive en su hermano."""
-    return cfg.verif_sidecar(nota).read_text(encoding="utf-8")
-
-
-def _fila(nota, viejo, nuevo):
-    """Edita una celda de la tabla, en el hermano (#344)."""
-    h = cfg.verif_sidecar(nota)
-    h.write_text(h.read_text(encoding="utf-8").replace(viejo, nuevo), encoding="utf-8")
-
-
-def _nota_con_fila(toy_vault, bib="2020citC...1..1C", hash_fila=""):
-    """Una nota con un bloque de verificación de UNA fila, más el `.txt` y el PDF de esa fuente."""
-    import lib_blocks as lb
-    (toy_vault.FULLTEXT / "slug").mkdir(parents=True, exist_ok=True)
-    ft = toy_vault.FULLTEXT / "slug" / f"{bib}.txt"
-    ft.write_text("El período es de 34 días.\n", encoding="utf-8")
-    (toy_vault.PDFS / "slug").mkdir(parents=True, exist_ok=True)
-    pdf = toy_vault.PDFS / "slug" / f"{bib}.pdf"
-    pdf.write_bytes(b"%PDF-1.4\n escaneo del editor \xff\n")
-    mk_note(toy_vault.PAPERS, bib, {"tags": ["paper"], "stars": ["Estrella Test"]}, "")
-    cuerpo = f"Afirmación con cita [[{bib}]].\n"
-    par = lb.pairs_of(cuerpo)[0]
-    nota = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
-    nota.parent.mkdir(parents=True, exist_ok=True)
-    nota.write_text(
-        "---\ntags: [methods]\n---\n" + cuerpo +
-        "\n## Verificación de citas (2026-01-01)\n\n"
-        "| # | Afirmación (extracto) | Fuente | Veredicto | Ancla | Hash fuente | Condición |\n"
-        "|---|---|---|---|---|---|---|\n"
-        f"| 1 | extracto | [[{bib}]] | soportada | {par.anchor} | {hash_fila} | — |\n",
-        encoding="utf-8")
-    mn.migrate_verif_sidecar(nota)   # #344: la tabla vive en el hermano, que es lo que se migra
-    return nota, ft, pdf
-
-
-def test_migrar_verif_deduce_el_archivo_del_hash_no_del_frontmatter(toy_vault, capsys):
-    """El punto de #117: la fila la escribió el verificador, que a veces leyó el PDF aunque el
-    frontmatter no dijera nada. Inferir de un campo escribiría `txt:` sobre una fila anclada al
-    PDF — una declaración falsa, en justo las filas que motivaron el issue. Se identifica el
-    archivo por su huella.
-
-    @inv INV-107"""
-    import lib_blocks as lb
-    nota, ft, pdf = _nota_con_fila(toy_vault, hash_fila="")
-    # la fila guarda el hash del PDF — y vive en el hermano (#344)
-    _fila(nota, "|  | — |", f"| {lb.bytes_hash(pdf)} | — |")
-    assert mn.migrate_verif_archivo(nota) == 1
-    assert f"| pdf:{lb.bytes_hash(pdf)} |" in _tabla(nota)
-
-    nota2, ft2, _ = _nota_con_fila(toy_vault, bib="2021txtC...1..1D",
-                                   hash_fila=lb.source_hash(
-                                       toy_vault.FULLTEXT / "slug" / "2021txtC...1..1D.txt")
-                                   if (toy_vault.FULLTEXT / "slug" / "2021txtC...1..1D.txt").exists()
-                                   else "")
-    _fila(nota2, "|  | — |", f"| {lb.source_hash(ft2)} | — |")
-    capsys.readouterr()
-    assert mn.migrate_verif_archivo(nota2) == 1
-    assert f"| txt:{lb.source_hash(ft2)} |" in _tabla(nota2)
-    assert "no coincide" not in capsys.readouterr().out, \
-        "coincide con el `.txt`: es identificación, no el default con aviso"
-
-
-def test_migrar_verif_NO_toca_la_fila_sin_archivo_ni_las_otras_celdas(toy_vault, capsys):
-    """⛔ #443 — sobre una bóveda YA migrada (`lint` rc 0), el migrador cambió 10 filas: las de
-    veredicto `no verificable por extracción` con `Hash fuente` = `—` —la fila que #223 exime porque
-    no hay archivo— y las escribió como `txt:—`, y en una fila lo hizo TRES veces porque el
-    `replace` buscaba el placeholder donde estuviera (Condición incluida). Dejó un bloqueante. Un
-    migrador es no-op sobre lo migrado (red 6) y escribe una CELDA, no una fila."""
-    import lib_blocks as lb
-    nota, ft, _ = _nota_con_fila(toy_vault)
-    # la fila exenta (#223): veredicto sin archivo y `—` en el hash — y `—` también en Condición
-    _fila(nota, "| soportada |", "| no verificable por extracción |")
-    _fila(nota, "|  | — |", "| — | — |")
-    antes = cfg.verif_sidecar(nota).read_bytes()
-    assert mn.migrate_verif_archivo(nota) == 0, "no hay archivo que declarar: no se toca"
-    assert cfg.verif_sidecar(nota).read_bytes() == antes, "ni un byte (red 6)"
-    # y la fila normal con `—` en Condición: cambia UNA celda, la del hash; Condición sigue `—`
-    nota2, ft2, _ = _nota_con_fila(toy_vault, bib="2021txtC...1..1D")
-    _fila(nota2, "|  | — |", f"| {lb.source_hash(ft2)} | — |")
-    assert mn.migrate_verif_archivo(nota2) == 1
-    tabla = _tabla(nota2)
-    assert f"| txt:{lb.source_hash(ft2)} | — |" in tabla, tabla
-    assert "txt:—" not in tabla
-    # la cirugía por celda respeta una barra ESCAPADA en otra celda
-    assert mn._replace_cell("| 1 | dice \\| esto | [[b]] | — |", 3, " x ") == "| 1 | dice \\| esto | [[b]] | x |"
-    assert mn._cell_of("| 1 | dice \\| esto | [[b]] | — |", 1) == " dice \\| esto "
-    assert mn._verif_column(["| # | Ancla | Hash fuente | Condición |"], "Hash fuente") == 2
-    assert mn._verif_column(["sin tabla"], "Hash fuente") is None
-    assert mn._verif_column(["prosa que menciona Hash fuente", "| # | Hash fuente |"], "Hash fuente") == 1, \
-        "la columna sale de una línea de TABLA, no de la prosa que nombra el título"
-    assert mn._verif_column(["| otra tabla |", "| # | Hash fuente |"], "Hash fuente") == 1, \
-        "y de la línea de tabla que TRAE el título, no de la primera que haya"
-    assert mn._raw_cells("| a | b \\|") == [" a ", " b \\|"], "la barra escapada al final no cierra"
-    assert mn._raw_cells("| a\\") == [" a\\"], "una barra invertida suelta al final no explota"
-    # la fila con hash VACÍO no se migra (no hay archivo que identificar) y se avisa
-    nota3, _, _ = _nota_con_fila(toy_vault, bib="2022vacC...1..1E", hash_fila="")
-    antes3 = cfg.verif_sidecar(nota3).read_bytes()
-    assert mn.migrate_verif_archivo(nota3) == 0
-    assert cfg.verif_sidecar(nota3).read_bytes() == antes3
-    assert "no tiene hash de fuente" in capsys.readouterr().out
-    # una tabla SIN columna `Hash fuente` no se migra ni explota
-    nota4, ft4, _ = _nota_con_fila(toy_vault, bib="2023sinC...1..1F")
-    herm4 = cfg.verif_sidecar(nota4)
-    herm4.write_text(herm4.read_text(encoding="utf-8").replace("Hash fuente", "Huella"), encoding="utf-8")
-    _fila(nota4, "|  | — |", f"| {lb.source_hash(ft4)} | — |")
-    assert mn.migrate_verif_archivo(nota4) == 0
-    assert "txt:" not in _tabla(nota4)
-    # dos filas con el MISMO hash y distinta ancla: cambia la fila de la ancla, no la primera que lo lleve
-    nota5, ft5, _ = _nota_con_fila(toy_vault, bib="2024dosC...1..1G")
-    _fila(nota5, "|  | — |", f"| {lb.source_hash(ft5)} | — |")
-    herm5 = cfg.verif_sidecar(nota5); texto5 = herm5.read_text(encoding="utf-8")
-    fila_real = next(l for l in texto5.split("\n") if l.startswith("| 1 |"))
-    herm5.write_text(texto5.replace(fila_real, fila_real.replace("| 1 |", "| 0 |").replace(
-        lb.verif_rows(nota5)[0].anchor, "ffffffffff") + "\n" + fila_real, 1), encoding="utf-8")
-    assert mn.migrate_verif_archivo(nota5) == 2
-    assert _tabla(nota5).count(f"txt:{lb.source_hash(ft5)}") == 2
-
-
-def test_migrar_verif_es_idempotente(toy_vault):
-    """Segunda corrida: cero cambios. Una celda ya prefijada se saltea.  @inv INV-107"""
-    import lib_blocks as lb
-    nota, ft, _ = _nota_con_fila(toy_vault)
-    _fila(nota, "|  | — |", f"| {lb.source_hash(ft)} | — |")
-    assert mn.migrate_verif_archivo(nota) == 1
-    antes = _tabla(nota)
-    assert mn.migrate_verif_archivo(nota) == 0
-    assert _tabla(nota) == antes
-
-
-def test_migrar_verif_avisa_cuando_no_coincide_ningun_archivo(toy_vault, capsys):
-    """Sin coincidencia el par ya está vencido: se declara `txt:` —el default de cuando esas filas
-    se escribieron, antes de que #205 moviera la lectura al PDF— y **se avisa** de que hay que
-    re-verificar. Lo que no se hace es callarse y escribir una declaración que se lee como
-    verificada.  @inv INV-107"""
-    nota, _, _ = _nota_con_fila(toy_vault, hash_fila="")
-    _fila(nota, "|  | — |", "| deadbeef99 | — |")
-    assert mn.migrate_verif_archivo(nota) == 1
-    assert "| txt:deadbeef99 |" in _tabla(nota)
-    assert "re-verificar el par" in capsys.readouterr().out
-
-
-def test_migrar_verif_backfill_recorre_la_boveda(toy_vault, capsys):
-    """El backfill sobre toda la bóveda: toca sólo notas CON bloque de verificación y nombra cada
-    una. Una bóveda sin bloques no se reescribe.  @inv INV-107"""
-    import lib_blocks as lb
-    assert mn.migrate_all_verif_archivo() == 0
-    assert "0 fila(s)" in capsys.readouterr().out, "sin bloques no hay nada que migrar"
-
-    nota, ft, _ = _nota_con_fila(toy_vault)
-    _fila(nota, "|  | — |", f"| {lb.source_hash(ft)} | — |")
-    assert mn.migrate_all_verif_archivo() == 0            # exit code, no cantidad
-    salida = capsys.readouterr().out
-    assert "nota-verif.md: 1 fila(s)" in salida and "1 fila(s) declaran su archivo" in salida
-    assert f"txt:{lb.source_hash(ft)}" in _tabla(nota)
-
 
 # ── #125 · la puerta de entrada al paper que no se sintetizó ─────────────────────────────────────
 
@@ -3603,8 +3111,6 @@ def test_la_tabla_de_papers_lleva_el_titulo(toy_vault):
     tabla = mn.papers_table(filas)
     assert "| Título |" in tabla or "| Titulo |" in tabla
     assert "Blind separation of telluric lines" in tabla
-
-
 
 
 # ── #176 · el roll-up de concepto sobrevive al estampado de `## Papers` ──────────────────────────
@@ -3997,36 +3503,6 @@ def test_reemplazar_seccion_no_agrega_linea_de_mas_al_final_del_archivo(toy_vaul
 # ── #205 · migrador de `symbols_lost` / `fulltext_layout` ───────────────────────────────────────
 
 
-def test_migrar_txt_fields_saca_los_dos_campos_y_no_toca_nada_mas(toy_vault):
-    # @inv INV-26
-    """Los dos campos existían para UNA decisión —¿el extractor lee el `.txt` o el PDF?— y esa
-    decisión ya no se toma. Un campo sin lector se lee como un gate vivo, y éstos además **mienten**
-    (medido: un paper con `symbols_lost: False` había perdido igual el radical `√`).
-
-    Cirugía a nivel línea: el resto del frontmatter y el cuerpo quedan intactos."""
-    mk_note(toy_vault.PAPERS, "2020aaa...1..1A",
-            {"tags": ["paper"], "symbols_lost": True, "fulltext_layout": "two-column",
-             "relevance": "high"}, "Prosa que no se toca.\n")
-    assert mn.migrate_all_txt_fields() == 1
-    texto = (toy_vault.PAPERS / "2020aaa...1..1A.md").read_text(encoding="utf-8")
-    assert "symbols_lost" not in texto and "fulltext_layout" not in texto
-    assert "relevance: high" in texto, "se llevó puesto otro campo"
-    assert "Prosa que no se toca." in texto, "tocó el cuerpo"
-
-
-def test_migrar_txt_fields_es_idempotente_y_no_reescribe_lo_limpio(toy_vault):
-    """Segunda corrida = 0 notas tocadas. Sin esto el migrador reescribiría toda la bóveda en cada
-    pasada y rompería la regla «corré dos veces y hasheá»."""
-    mk_note(toy_vault.PAPERS, "2020bbb...1..1B", {"tags": ["paper"], "fulltext_layout": "single-column"}, "")
-    mk_note(toy_vault.PAPERS, "2020ccc...1..1C", {"tags": ["paper"], "relevance": "low"}, "")
-    assert mn.migrate_all_txt_fields() == 1, "sólo la nota con el campo viejo"
-    antes = (toy_vault.PAPERS / "2020ccc...1..1C.md").read_text(encoding="utf-8")
-    assert mn.migrate_all_txt_fields() == 0
-    assert (toy_vault.PAPERS / "2020ccc...1..1C.md").read_text(encoding="utf-8") == antes
-
-
-
-
 def test_unpend_saca_tambien_el_motivo_pendiente(toy_vault):
     """`pending_motivo` viaja con `pending_source` (#80). Al llegar la fuente salía sólo el primero,
     y la nota quedaba con el motivo de un estado que ya no existe —«nadie la está consiguiendo»—
@@ -4125,33 +3601,6 @@ def test_write_star_note_no_revienta_con_ground_truth_malformado(toy_vault, caps
 
 
 # ── AUD-175 / INV-64: el migrador que #188 no entregó ────────────────────────
-
-def test_migrate_vistas_convierte_el_schema_viejo(toy_vault, capsys):
-    """AUD-175 / INV-64 — #188 entregó un **detector bloqueante sin migrador**, que es la mitad del
-    contrato del repo: «schema nuevo = migrador de un solo uso + detector bloqueante, nunca lector
-    tolerante». Sin él, toda nota anterior a 1.68.0 queda en rojo con la única salida de editarla a
-    mano (medido en una bóveda real: 908 notas de paper)."""
-    una = mk_note(cfg.PAPERS, "2020unoA...1..1A",
-                  {"bibcode": "2020unoA...1..1A", "tags": ["paper"], "stars": ["Estrella Test"]},
-                  "## Extracción (LLM)\n\nProsa cara.\n")
-    varias = mk_note(cfg.PAPERS, "2020dosB...1..1B",
-                     {"bibcode": "2020dosB...1..1B", "tags": ["paper"],
-                      "stars": ["Estrella Test"], "thesis_links": ["gp"]},
-                     "## Extracción (LLM)\n\nProsa cara.\n")
-    n, ambiguas = mn.migrate_all_vistas()
-
-    assert n == 1 and [a[0] for a in ambiguas] == ["2020dosB...1..1B"]
-    fm = read_fm(una)
-    assert fm["vistas"] == [{"sujeto": "Estrella Test", "tipo": "star"}]
-    assert "fecha" not in fm["vistas"][0], "la extracción vieja ocurrió, pero CUÁNDO no consta"
-    texto = una.read_text(encoding="utf-8")
-    assert "## Vista — Estrella Test" in texto and "## Extracción (LLM)" not in texto
-    assert "Prosa cara." in texto                       # la extracción no se toca
-
-    # la ambigua queda intacta: elegir un sujeto afirmaría una lectura que nadie hizo desde ahí
-    assert "## Extracción (LLM)" in varias.read_text(encoding="utf-8")
-    # y es idempotente
-    assert mn.migrate_all_vistas()[0] == 0
 
 
 def test_force_no_pisa_la_nota_de_OTRO_sujeto(toy_vault, capsys):
@@ -4480,35 +3929,6 @@ def test_el_stub_y_el_prompt_no_divergen_sobre_el_localizador(toy_vault):
     assert "el **localizador** es lo que" not in prompt, "el recorte no sacó el prefijo"
 
 
-def test_el_migrador_deja_la_vista_cosechable(toy_vault):
-    """Sin el migrador, cambiar la plantilla rompe la cosecha que el arreglo viene a destrabar:
-    `write_view_section` sólo pisa mientras la sección **sea** la plantilla, así que todo stub ya
-    escrito deja de matchear y la próxima cosecha no escribe la vista."""
-    import harvest_views as hv
-    dest = mk_note(cfg.PAPERS, "2019A....1A",
-                   {"bibcode": "2019A....1A", "tags": ["paper"], "stars": ["tau Cet"],
-                    "vistas": [{"sujeto": "tau Cet", "tipo": "star"}]},
-                   "# p\n\n" + mn._legacy_vista_block("tau Cet", theme=False).replace(
-                       mn._BULLET_ANOTACION, mn._BULLET_ANOTACION_VIEJO))
-    assert hv.write_view_section(dest, "tau Cet", "## Vista — tau Cet\n\nnueva\n",
-                                 theme=False) is False, "la guarda no reconoce el stub viejo"
-    mn.restamp_vista_stub()
-    assert "pegá el **nº de línea**" not in dest.read_text(encoding="utf-8")
-    assert hv.write_view_section(dest, "tau Cet", "## Vista — tau Cet\n\nnueva\n",
-                                 theme=False) is True, "tras migrar, la vista se puede cosechar"
-
-
-def test_el_migrador_no_toca_una_vista_con_prosa(toy_vault):
-    """Prosa ya redactada no se pisa: sus anclas de verificación cuelgan del texto exacto."""
-    cuerpo = "# p\n\n## Vista — tau Cet (2026-08-30)\n\nprosa redactada de verdad\n"
-    dest = mk_note(cfg.PAPERS, "2019A....1A",
-                   {"bibcode": "2019A....1A", "tags": ["paper"], "stars": ["tau Cet"],
-                    "vistas": [{"sujeto": "tau Cet", "tipo": "star"}]}, cuerpo)
-    antes = dest.read_text(encoding="utf-8")
-    mn.restamp_vista_stub()
-    assert dest.read_text(encoding="utf-8") == antes
-
-
 def test_no_vista_no_es_sin_extraer_en_el_rollup(toy_vault):
     """#268 — el roll-up publicaba `sin extraer` sobre un paper cuyo dueño DECLARÓ que no lo va a
     leer para ese sujeto: la declaración no valía nada donde el consumidor la mira."""
@@ -4656,88 +4076,6 @@ def test_clean_catalog_markup_notes_es_idempotente(toy_vault):
     antes = dest.read_bytes()
     mn.clean_catalog_markup_notes()
     assert dest.read_bytes() == antes
-
-
-# ── #296 · `pdf_source`/`fulltext_source`, vocabulario cerrado y su migrador ──
-def _paper_con_source(toy_vault, stem, **fm):
-    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    campos = "\n".join(f"{k}: {v}" for k, v in fm.items())
-    (cfg.PAPERS / f"{stem}.md").write_text(
-        f"---\nbibcode: {stem}\ntitle: T\nstars: [tau Cet]\n{campos}\n---\n\n## Abstract\n\nx\n",
-        encoding="utf-8")
-    return cfg.PAPERS / f"{stem}.md"
-
-
-def test_migrar_source_fields_pone_null_y_MUEVE_la_prosa(toy_vault, capsys):
-    """#296 — el valor fuera de vocabulario pasa a `null` (que es el valor legítimo de
-    *desconocido*, y no «publicado»), pero la prosa **se mueve, no se tira**: medido, uno de los dos
-    casos reales era una nota de adquisición legítima que terminó en el campo equivocado porque el
-    schema no tenía dónde ponerla."""
-    f = _paper_con_source(toy_vault, "2010ComonJutten",
-                          pdf_source="'null consigue el usuario. ADS sólo indexa una RESEÑA'")
-    n, movidas = mn.migrate_all_source_fields()
-    assert n == 1 and movidas == [("2010ComonJutten", "salvedades")]
-    fm = cfg.split_fm(f.read_text(encoding="utf-8"))
-    assert fm["pdf_source"] is None
-    assert any("consigue el usuario" in str(s) for s in cfg.as_list(fm.get("salvedades"))), \
-        "la prosa no se puede perder: era información que alguien escribió a propósito"
-
-
-def test_migrar_source_fields_manda_a_pending_motivo_si_la_fuente_falta(toy_vault):
-    """Si la nota declara `pending_source`, el lugar natural de esa prosa es `pending_motivo` (#80):
-    describe por qué la fuente todavía no está."""
-    f = _paper_con_source(toy_vault, "1998Hyvarinen", pending_source="adquisicion",
-                          pdf_source="'null el 2026-08-29'")
-    n, movidas = mn.migrate_all_source_fields()
-    assert n == 1 and movidas == [("1998Hyvarinen", "pending_motivo")]
-    fm = cfg.split_fm(f.read_text(encoding="utf-8"))
-    assert fm["pdf_source"] is None and "2026-08-29" in str(fm["pending_motivo"])
-
-
-def test_migrar_source_fields_no_pisa_un_pending_motivo_que_ya_existe(toy_vault):
-    """El motivo declarado por el usuario es información que alguien escribió: la prosa rescatada no
-    puede reemplazarlo. Cuando el destino ya está ocupado, la nota queda **visible** para moverla a
-    mano en vez de perderse o pisar."""
-    f = _paper_con_source(toy_vault, "2011libro", pending_source="adquisicion",
-                          pending_motivo="'lo consigue el usuario'",
-                          pdf_source="'null el 2026-08-29'")
-    mn.migrate_all_source_fields()
-    texto = f.read_text(encoding="utf-8")
-    fm = cfg.split_fm(texto)
-    assert fm["pending_motivo"] == "lo consigue el usuario"
-    assert "2026-08-29" in texto, "la prosa sigue visible en la nota"
-
-
-def test_migrar_source_fields_saltea_la_nota_ilegible(toy_vault):
-    """Una nota cuyo frontmatter no parsea ya es un bloqueante del lint; el migrador no la toca —
-    editar a ciegas un YAML roto es cómo se rompe más."""
-    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    rota = cfg.PAPERS / "2020rota.md"
-    rota.write_text("---\nbibcode: [sin cerrar\npdf_source: 'prosa'\n---\n\ntexto\n",
-                    encoding="utf-8")
-    antes = rota.read_text(encoding="utf-8")
-    assert mn.migrate_all_source_fields() == (0, [])
-    assert rota.read_text(encoding="utf-8") == antes
-
-
-def test_migrar_source_fields_no_toca_lo_valido(toy_vault):
-    """`eprint`, `ads`, `publisher`, `web` y la ausencia son todos valores legítimos: un migrador
-    que reescribe lo válido es un migrador que hay que revisar entero."""
-    _paper_con_source(toy_vault, "2020ok", pdf_source="eprint", fulltext_source="ocr")
-    _paper_con_source(toy_vault, "2021sin", pdf_source="null")
-    assert mn.migrate_all_source_fields() == (0, [])
-
-
-def test_migrar_source_fields_no_escribe_si_rompe_el_yaml(toy_vault, capsys, monkeypatch):
-    """#244 — una operación no puede dejar la nota PEOR de lo que la encontró: si el frontmatter
-    resultante dejó de parsear, no se escribe."""
-    f = _paper_con_source(toy_vault, "2020roto", pdf_source="'prosa suelta'")
-    antes = f.read_text(encoding="utf-8")
-    monkeypatch.setattr(cfg, "split_fm", lambda t: {} if "pdf_source: null" in t
-                        else {"bibcode": "2020roto", "pdf_source": "prosa suelta"})
-    assert mn.migrate_all_source_fields() == (0, [])
-    assert f.read_text(encoding="utf-8") == antes
-    assert "NO se escribe" in capsys.readouterr().out
 
 
 # ── #304 · `stamp_pdf`: el gemelo que faltaba de `stamp_fulltext` ────────────
@@ -4909,36 +4247,6 @@ def test_merge_escribe_una_lista_flow_QUE_NO_ENVUELVE(toy_vault):
     assert len(cfg.split_fm(f.read_text(encoding="utf-8"))["methods"]) == 13
 
 
-# ── #311 · la extracción es cara, así que se versiona ───────────────────────
-def test_migrar_extracciones_las_saca_de_build(toy_vault, capsys):
-    """#311 — el framework decía dos cosas contradictorias del mismo directorio: la regla de oro
-    del scratch («`build/` guarda lo REGENERABLE») y, para las extracciones, «no se regenera sin
-    volver a pagar el paso más caro» (#228). Medido en un tema: 33 extracciones, 988 KB, ~4,9 M
-    tokens de lectura de PDF, y `git ls-files build/` = **0** — no viajaban a ninguna máquina."""
-    viejo = cfg.ROOT / "build" / "ica_ruido" / "extraccion"
-    viejo.mkdir(parents=True, exist_ok=True)
-    (viejo / "2002Cardoso.json").write_text('{"bibcode": "2002Cardoso"}', encoding="utf-8")
-    n, choques = mn.migrate_all_extracciones()
-    assert (n, choques) == (1, [])
-    assert (cfg.EXTRACCION / "ica_ruido" / "2002Cardoso.json").exists()
-    assert not (viejo / "2002Cardoso.json").exists(), "se MUEVE: dos copias es cosechar una vieja"
-
-
-def test_migrar_extracciones_no_pisa_el_destino(toy_vault):
-    """Un destino que ya existe no se sobreescribe: comparar dos extracciones del mismo bibcode es
-    juicio, y pisarla sería tirar la que ya estaba versionada."""
-    viejo = cfg.ROOT / "build" / "ica" / "extraccion"
-    viejo.mkdir(parents=True, exist_ok=True)
-    (viejo / "2000Hyv.json").write_text('{"bibcode": "2000Hyv", "v": "vieja"}', encoding="utf-8")
-    (cfg.EXTRACCION / "ica").mkdir(parents=True, exist_ok=True)
-    (cfg.EXTRACCION / "ica" / "2000Hyv.json").write_text('{"bibcode": "2000Hyv", "v": "nueva"}',
-                                                         encoding="utf-8")
-    n, choques = mn.migrate_all_extracciones()
-    assert n == 0 and choques == ["ica/2000Hyv.json"]
-    assert "nueva" in (cfg.EXTRACCION / "ica" / "2000Hyv.json").read_text(encoding="utf-8")
-    assert (viejo / "2000Hyv.json").exists(), "la vieja queda para comparar a mano"
-
-
 # ── #312 · `alcance`/`unidad_cita`: la config es la autoridad ────────────────
 def test_restamp_alcance_re_sincroniza_la_nota(toy_vault, capsys):
     """#312 — los dos campos viajan de `sources[]` al stub y se congelan ahí, así que ampliar el
@@ -5040,92 +4348,6 @@ def test_un_slug_que_no_esta_en_NINGUNA_config_nombra_las_dos(toy_vault, monkeyp
 
 # ── #344 · el migrador: la tabla se va al hermano ────────────────────────────────────────────────
 
-_BLOQUE_344 = (
-    "## Verificación de citas (2026-08-31)\n\n"
-    "1 pares; 1 soportadas / 0 no-soportadas (0 resueltas) / 0 contradicen (0 resueltas) / "
-    "0 no verificables — 0 con condición declarada.\n\n"
-    "| # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición |\n"
-    "|---|---|---|---|---|---|---|---|\n"
-    "| 1 | x | [[2020citC...1..1C]] | soportada | «y» (p. 1) | aaaaaaaaaa | pdf:bbbbbbbbbb | — |\n\n"
-    "**Inferencias declaradas** — 0 marcas en el cuerpo: ninguna.\n"
-    "**Omisiones en transcripciones:** ninguna.\n"
-    "**Condiciones perdidas** — 0 con condición: ninguna.\n")
-
-
-def _nota_inline(toy_vault, stem="ica"):
-    """Una nota con el schema VIEJO: la tabla adentro. Es lo que el migrador tiene que mover."""
-    d = toy_vault.CONCEPTS / "methods"
-    d.mkdir(parents=True, exist_ok=True)
-    nota = d / f"{stem}.md"
-    nota.write_text("---\ntags: [methods]\n---\n# ica\n\nAfirmación [[2020citC...1..1C]].\n\n"
-                    + _BLOQUE_344 + "\n## Huecos\n\nnada\n", encoding="utf-8")
-    return nota
-
-
-def test_migrar_sidecar_mueve_la_tabla_y_deja_cabecera_subsecciones_y_puntero(toy_vault):
-    """#344 — el 71-77 % de los bytes de una nota de entidad es la tabla, y NO es para el lector.
-    Lo que se queda es lo que le sirve a quien copia la nota: la línea de cabecera (que es la
-    afirmación), las tres sub-secciones de hallazgos y el puntero al hermano.  @inv INV-148"""
-    import lib_blocks as lb
-    nota = _nota_inline(toy_vault)
-    assert mn.migrate_verif_sidecar(nota) == 3        # encabezado + separador + 1 fila
-    texto = nota.read_text(encoding="utf-8")
-    assert lb.inline_verif_rows(texto) == [], "la tabla se fue de la nota"
-    assert "1 pares; 1 soportadas" in texto, "la cabecera se queda: es la afirmación que viaja"
-    assert "Omisiones en transcripciones" in texto, "las tres sub-secciones se quedan"
-    assert lb.verif_pointer(nota) in texto, "y el puntero al hermano"
-    assert "## Huecos" in texto, "no se tocó nada fuera del bloque"
-    hermano = cfg.verif_sidecar(nota)
-    assert "| 1 | x | [[2020citC...1..1C]] | soportada |" in hermano.read_text(encoding="utf-8")
-    assert lb.verif_rows(nota) is not None and len(lb.verif_rows(nota)) == 1
-
-
-def test_migrar_sidecar_es_idempotente(toy_vault):
-    """Red 6 — la segunda corrida no encuentra ninguna línea de tabla dentro de la nota y no
-    escribe NADA: ni la nota ni el hermano cambian."""
-    nota = _nota_inline(toy_vault)
-    assert mn.migrate_verif_sidecar(nota) == 3
-    antes_n = nota.read_text(encoding="utf-8")
-    antes_h = cfg.verif_sidecar(nota).read_text(encoding="utf-8")
-    assert mn.migrate_verif_sidecar(nota) == 0
-    assert nota.read_text(encoding="utf-8") == antes_n
-    assert cfg.verif_sidecar(nota).read_text(encoding="utf-8") == antes_h
-
-
-def test_migrar_sidecar_no_re_renderiza_la_tabla(toy_vault):
-    """⛔ La tabla se mueve VERBATIM. Re-renderizarla exigiría que las filas parseen, y la nota que
-    más necesita migrar es justo la de plantilla vieja; además mover byte a byte deja intactos los
-    anclas y los hashes, que es la propiedad que #344 promete."""
-    nota = _nota_inline(toy_vault)
-    original = [l for l in nota.read_text(encoding="utf-8").split("\n") if l.startswith("|")]
-    mn.migrate_verif_sidecar(nota)
-    hermano = cfg.verif_sidecar(nota).read_text(encoding="utf-8").split("\n")
-    assert [l for l in hermano if l.startswith("|")] == original
-
-
-def test_migrar_sidecar_no_toca_una_nota_sin_bloque(toy_vault):
-    """Una nota sin bloque de verificación no se reescribe ni estrena hermano."""
-    d = toy_vault.CONCEPTS / "methods"
-    d.mkdir(parents=True, exist_ok=True)
-    nota = d / "sin.md"
-    nota.write_text("---\ntags: [methods]\n---\n# sin\n\nProsa.\n", encoding="utf-8")
-    antes = nota.read_text(encoding="utf-8")
-    assert mn.migrate_verif_sidecar(nota) == 0
-    assert nota.read_text(encoding="utf-8") == antes
-    assert not cfg.verif_sidecar(nota).exists()
-
-
-def test_migrar_sidecar_backfill_recorre_la_boveda_y_saltea_los_hermanos(toy_vault, capsys):
-    """El backfill nombra cada nota tocada, y NO se barre a sí mismo: un hermano no es una nota, así
-    que pasarlo por el migrador crearía `ica.verif.verif.md`."""
-    nota = _nota_inline(toy_vault)
-    assert mn.migrate_all_verif_sidecar() == 0
-    salida = capsys.readouterr().out
-    assert "ica.md" in salida and "3 línea(s)" in salida
-    assert mn.migrate_all_verif_sidecar() == 0
-    assert "#344: 0 línea(s)" in capsys.readouterr().out
-    assert not cfg.verif_sidecar(cfg.verif_sidecar(nota)).exists()
-
 
 def test_rename_paper_se_lleva_el_hermano_de_verificacion(toy_vault):
     """#344/D-19 — el renombre preprint→publicado mueve la nota y sus artefactos; si deja el hermano
@@ -5137,18 +4359,6 @@ def test_rename_paper_se_lleva_el_hermano_de_verificacion(toy_vault):
     mn.rename_paper("2020arXiv", "2021ApJ")
     assert cfg.verif_sidecar(cfg.PAPERS / "2021ApJ.md").exists()
     assert not viejo.exists()
-
-
-def test_migrar_sidecar_rehusa_sobre_un_hermano_y_sobre_lo_que_no_existe(toy_vault):
-    """Las dos guardas de entrada. Sobre un HERMANO produciría `ica.verif.verif.md` —un rastro del
-    rastro— y sobre una ruta inexistente devolvería un 0 que se lee como «no había nada que
-    migrar» habiendo mirado la nada."""
-    nota = _nota_inline(toy_vault)
-    mn.migrate_verif_sidecar(nota)
-    hermano = cfg.verif_sidecar(nota)
-    assert mn.migrate_verif_sidecar(hermano) == 0
-    assert not cfg.verif_sidecar(hermano).exists()
-    assert mn.migrate_verif_sidecar(toy_vault.CONCEPTS / "methods" / "no-existe.md") == 0
 
 
 def test_rename_paper_no_pisa_un_hermano_que_ya_esta_en_el_destino(toy_vault):
@@ -5270,16 +4480,6 @@ def test_fix_key_no_promete_un_alias_que_no_escribe(toy_vault, capsys):
 
 # ── Auditoría 2026-09-04 · tests rojos (xfail estricto) ─────────────────────────────────────────
 
-# AUD-221 — cerrado en la pasada de fix de la auditoría 2026-09-04
-def test_AUD221_migrar_DOS_source_fields_no_pierde_la_prosa_del_primero(toy_vault, capsys):
-    """AUD-221 — el bucle decide por `fm.get("pending_motivo")` (dict viejo) y en la segunda vuelta
-    filtra la línea `pending_motivo:` que acaba de escribir."""
-    f = _paper_con_source(toy_vault, "2010DosCampos", pending_source="paywall",
-                          pdf_source="'prosa A sobre el pdf'", fulltext_source="'prosa B sobre el txt'")
-    mn.migrate_all_source_fields()
-    txt = f.read_text(encoding="utf-8")
-    assert "prosa A" in txt and "prosa B" in txt, txt
-
 
 # AUD-223 — cerrado en la pasada de fix de la auditoría 2026-09-04
 def test_AUD223_consolidar_REHUSA_si_la_vieja_tiene_una_vista_fechada(toy_vault):
@@ -5297,34 +4497,6 @@ def test_AUD223_consolidar_REHUSA_si_la_vieja_tiene_una_vista_fechada(toy_vault)
 
 
 # ── #269 · `--restamp-vista-stub`: la plantilla vieja del stub se re-estampa, la prosa no ────────
-
-def test_restamp_vista_stub_reemplaza_SOLO_la_plantilla_vieja_y_es_idempotente(toy_vault):
-    """AUD-288 + #398: el migrador prueba las tres cosas que su `help` promete, sobre las DOS
-    plantillas legacy —la de #269 (citar por nº de línea) y la vigente hasta 1.211.0—: las dos son
-    un stub y las dos pasan a la línea de estado; una vista con prosa redactada NO se toca (sus
-    anclas cuelgan del texto exacto); y correrlo dos veces no cambia nada."""
-    vieja = mn._legacy_vista_block("gp", True).replace(mn._BULLET_ANOTACION, mn._BULLET_ANOTACION_VIEJO)
-    assert "nº de línea" in vieja and vieja != mn._legacy_vista_block("gp", True)
-    stub = mk_note(toy_vault.PAPERS, "2020stubA...1A",
-                   {"tags": ["paper"], "vistas": [{"sujeto": "gp", "tipo": "theme"}]},
-                   "## Abstract\n\nx\n\n" + vieja)
-    stub2 = mk_note(toy_vault.PAPERS, "2020stubC...1C",
-                    {"tags": ["paper"], "vistas": [{"sujeto": "gp", "tipo": "theme"}]},
-                    "## Abstract\n\nx\n\n" + mn._legacy_vista_block("gp", True))
-    prosa = mk_note(toy_vault.PAPERS, "2020prosB...1B",
-                    {"tags": ["paper"], "vistas": [{"sujeto": "gp", "tipo": "theme"}]},
-                    "## Vista — gp\n- **Aporte al tema:** el kernel cuasi-periódico [[2020stubA...1A]]\n")
-    antes_prosa = prosa.read_text(encoding="utf-8")
-    assert mn.restamp_vista_stub() == 0
-    for f in (stub, stub2):
-        despues = f.read_text(encoding="utf-8")
-        assert "_Reclamado por `gp`; sin leer desde este sujeto._" in despues, despues
-        assert "nº de línea" not in despues and cfg.REGLA_LOCALIZADOR not in despues
-        assert "## Abstract" in despues, "la cirugía es sobre la sección, no sobre la nota"
-    assert prosa.read_text(encoding="utf-8") == antes_prosa
-    despues = stub.read_text(encoding="utf-8")
-    assert mn.restamp_vista_stub() == 0
-    assert stub.read_text(encoding="utf-8") == despues, "no es idempotente"
 
 
 # ── #395 · `--restamp-lente`: la lente y las líneas de eje, por verdad de la extracción ──────────
@@ -5529,58 +4701,6 @@ def test_restamp_lente_backfillea_la_SEGUNDA_lente_en_su_subseccion(toy_vault, c
 
 # ── #398 · la plantilla del stub bajo un sujeto declarado `no_vista` ─────────────────────────────
 
-def _nota_no_vista(cuerpo: str, no_vista=True):
-    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    fm = {"bibcode": "2020nv....1..1N", "tags": ["paper"], "thesis_links": ["ica"],
-          "vistas": [{"sujeto": "ica", "tipo": "theme"}]}
-    if no_vista:
-        fm["no_vista"] = [{"sujeto": "ica", "motivo": "no aporta al eje, entra por el roll-up"}]
-    f = cfg.PAPERS / "2020nv....1..1N.md"
-    f.write_text("---\n" + yaml.safe_dump(fm, sort_keys=False, allow_unicode=True) + "---\n\n"
-                 + cuerpo, encoding="utf-8")
-    return f
-
-
-def test_restamp_vista_stub_cambia_el_prompt_por_la_linea_de_no_vista(toy_vault, capsys):
-    """#398 — el stub siembra la vista con las INSTRUCCIONES AL EXTRACTOR y nada las retira al
-    declarar que ese sujeto no se va a leer: medido, 46 notas publicando el prompt bajo `## Vista —
-    ica`, bajo un encabezado que la nota presenta como síntesis de un LLM (#247).
-
-    ⛔ La entrada de `vistas[]` NO se toca: el frontmatter tiene que seguir diciendo que el sujeto
-    reclama el paper (#256), y borrarla es la opción que el issue descarta a propósito."""
-    f = _nota_no_vista("# p\n\n" + mn._legacy_vista_block("ica", True))
-    mn.restamp_vista_stub()
-    salida = f.read_text(encoding="utf-8")
-    assert "_No leído desde `ica`: no aporta al eje, entra por el roll-up._" in salida, salida
-    assert "Aporte al tema:" not in salida, "la plantilla se fue entera"
-    assert cfg.split_fm(salida)["vistas"] == [{"sujeto": "ica", "tipo": "theme"}]
-    antes = salida
-    capsys.readouterr()
-    mn.restamp_vista_stub()
-    assert f.read_text(encoding="utf-8") == antes, "idempotente"
-    assert "0 sección(es)" in capsys.readouterr().out, \
-        "y el conteo lo dice: una sección ya en su forma vigente no se cuenta como tocada"
-
-
-def test_restamp_vista_stub_NO_pisa_una_vista_con_prosa(toy_vault, capsys):
-    """Sólo la sección que es la plantilla byte a byte: una vista con prosa real se deja como está
-    —sus anclas cuelgan de ese texto exacto— aunque el sujeto figure en `no_vista`, que es un estado
-    contradictorio y lo reporta el lint, no algo que un migrador resuelva pisando contenido."""
-    f = _nota_no_vista("# p\n\n## Vista — ica\n\nEsto lo escribió alguien y vale.\n")
-    mn.restamp_vista_stub()
-    assert "Esto lo escribió alguien y vale." in f.read_text(encoding="utf-8")
-
-
-def test_restamp_vista_stub_le_deja_al_sujeto_sin_leer_su_linea_de_reclamo(toy_vault, capsys):
-    """Sin `no_vista` el reclamo sigue pendiente de lectura, así que la línea es la otra: la nota
-    dice que el sujeto lo reclama y que nadie lo leyó desde ahí. Lo que NO puede seguir publicando
-    es el prompt — el extractor recibe sus reglas de `extraction_prompt`, no del cuerpo de la nota."""
-    f = _nota_no_vista("# p\n\n" + mn._legacy_vista_block("ica", True), no_vista=False)
-    mn.restamp_vista_stub()
-    salida = f.read_text(encoding="utf-8")
-    assert "_Reclamado por `ica`; sin leer desde este sujeto._" in salida, salida
-    assert "Aporte al tema:" not in salida
-
 
 def test_view_stub_kind_acepta_la_plantilla_VIEJA(toy_vault):
     """Las dos plantillas son un stub: la nota que quedó con la de #269 no deja de serlo por no
@@ -5596,20 +4716,6 @@ def test_view_stub_kind_acepta_la_plantilla_VIEJA(toy_vault):
                              "ica", True) == "estado"
     assert mn.view_stub_kind("# p\n\n## Vista — ica\n\nprosa real\n", "ica", True) == ""
     assert mn.view_stub_kind("# p\n", "ica", True) == "", "sin sección no hay stub"
-
-
-def test_restamp_vista_stub_saltea_la_entrada_malformada_sin_romperse(toy_vault, capsys):
-    """`vistas` se lee CRUDO acá (no por `load_vistas`, que rechaza la forma inválida y aborta), así
-    que una entrada que no es un mapa tiene que saltearse: el migrador no puede caerse sobre una
-    nota que el lint ya está reportando como frontmatter con forma inválida."""
-    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
-    f = cfg.PAPERS / "2020nv....1..1N.md"
-    f.write_text("---\nbibcode: 2020nv....1..1N\ntags: [paper]\n"
-                 "vistas:\n- ica\n- {sujeto: ica, tipo: theme}\n"
-                 "no_vista:\n- {sujeto: ica, motivo: entra por el roll-up}\n---\n\n"
-                 "# p\n\n" + mn._legacy_vista_block("ica", True), encoding="utf-8")
-    mn.restamp_vista_stub()
-    assert "_No leído desde `ica`: entra por el roll-up._" in f.read_text(encoding="utf-8")
 
 
 def test_el_carril_sources_puede_declarar_pdf_source(toy_vault, monkeypatch, capsys):
@@ -5758,27 +4864,6 @@ def test_fill_abstracts_no_confunde_la_RED_CAIDA_con_no_lo_tiene(toy_vault, monk
     out = capsys.readouterr().out
     assert "OpenAlex no contestó" in out and "NO es «no lo tiene»" in out
     assert cfg.ABSTRACT_PLACEHOLDER in d.read_text(encoding="utf-8"), "no se toca la nota"
-
-
-def test_restamp_transcribed_note_backfillea_la_afirmacion_falsa(toy_vault):
-    """#416 — las 26 notas ya estampadas llevan hoy la afirmación falsa, así que sacarla del
-    escritor no alcanza. La línea se reemplaza por la que el escritor pondría HOY para ESE
-    frontmatter, así que la nota que sí declara el campo conserva su cláusula."""
-    viejo = ("_(transcrito del PDF por la extracción — el catálogo no lo devolvió; la nota "
-             "sigue declarando `sin_abstract` porque así se **clasificó**.)_")
-    sin = cfg.PAPERS / "1997Wentzell.md"
-    sin.write_text(f"---\ntags: [paper]\nbibcode: 1997Wentzell\n---\n\n"
-                   f"## Abstract\n{viejo}\n\nMLPCA estima.\n", encoding="utf-8")
-    con = cfg.PAPERS / "2011Naik.md"
-    con.write_text(f"---\ntags: [paper]\nbibcode: 2011Naik\nsin_abstract: true\n---\n\n"
-                   f"## Abstract\n{viejo}\n\nOtro.\n", encoding="utf-8")
-    assert mn.restamp_transcribed_note() == 0
-    t_sin = sin.read_text(encoding="utf-8")
-    assert "sin_abstract" not in t_sin and "no es la copia de catálogo" in t_sin
-    assert "MLPCA estima." in t_sin, "el abstract de abajo no se toca"
-    assert "sin_abstract" in con.read_text(encoding="utf-8"), "la que SÍ lo declara conserva la cláusula"
-    antes = sin.read_text(encoding="utf-8")
-    assert mn.restamp_transcribed_note() == 0 and sin.read_text(encoding="utf-8") == antes
 
 
 def test_fill_abstracts_respeta_la_fuente_que_NO_TIENE_abstract(toy_vault, monkeypatch, capsys):
@@ -6240,7 +5325,7 @@ def _modos_de_make_notes() -> list:
     src = src[src.index("def main("):]
     flags = [m.group(1) for m in re.finditer(r'ap\.add_argument\("(--[\w-]+)"(.*?)\)\n', src, re.S)
              if "store_true" in m.group(2) and m.group(1) not in ("--dry-run", "--fill-abstracts")]
-    assert len(flags) > 20, "el parseo del fuente dejó de ver los modos"
+    assert len(flags) > 12, "el parseo del fuente dejó de ver los modos"   # #624: 16 tras retirar migradores
     return [[f] for f in flags] + [["test_star"], ["--rename-paper", "2020A", "2020B"]]
 
 
@@ -6321,39 +5406,6 @@ def test_stamp_pdf_sin_PDF_deja_la_marca_pendiente(toy_vault):
     assert "pending_source: paywall" in dest.read_text(encoding="utf-8")
 
 
-def test_528_migrar_warn_anchor_re_firma_un_bloque_y_DECLARA_la_que_cubria_varios(toy_vault, capsys):
-    """#528 — la firma de un ítem se hacía sobre el PÁRRAFO (la lista entera). El migrador la pasa
-    al bloque de `split_blocks` sólo si lo que cubría cae en UNO; si cubría ítems distintos no la
-    reparte —cuál revisó quien firmó no está en la nota— y la declara. Idempotente."""
-    import lib_blocks as lb
-    pat = lint.IMPL_LEAK_RE
-    lista = ["- La perilla ξ de la ec. 33 regula el peso.", "- Otra perilla del modelo, ec. 34."]
-    uno = ["- La perilla ξ de la ec. 33 regula el peso.", "- Un ítem sin nada que marcar."]
-    motivo = "el parámetro del paper, citado con página"
-    notas = {}
-    for stem, lineas in (("varios", lista), ("uno", uno)):
-        vieja = lb.paragraph_anchor(lineas, 0)
-        notas[stem] = (mk_note(toy_vault.CONCEPTS / "methods", stem, {"tags": ["methods"],
-                       "warn_revisada": [{"categoria": "impl_leaks", "ancla": vieja,
-                                          "motivo": motivo}]}, "\n".join(lineas) + "\n"),
-                       vieja, lb.warn_anchor(lineas, 0))
-    nota, vieja, _ = notas["varios"]
-    antes = nota.read_text(encoding="utf-8")
-    n, declaradas = mn.migrate_warn_anchor(nota, pat)
-    assert n == 0 and [(s, a, k) for s, _c, a, k in declaradas] == [("varios", vieja, 2)]
-    assert nota.read_text(encoding="utf-8") == antes              # no se reparte en silencio
-    nota, vieja, nueva = notas["uno"]
-    assert vieja != nueva
-    assert mn.migrate_warn_anchor(nota, pat) == (1, [])
-    assert read_fm(nota)["warn_revisada"][0]["ancla"] == nueva
-    assert read_fm(nota)["warn_revisada"][0]["motivo"] == motivo
-    assert mn.migrate_warn_anchor(nota, pat) == (0, [])          # idempotente
-    # sobre la bóveda: la declarada se NOMBRA, con su ancla y cuántos bloques cubría
-    assert mn.migrate_all_warn_anchor() == 0
-    out = capsys.readouterr().out
-    assert "0 ancla(s) re-firmada(s)" in out and f"varios: `impl_leaks` · ancla `{notas['varios'][1]}` → 2 bloques" in out
-
-
 def test_AUD499_el_renombre_mueve_tambien_la_extraccion_de_LENTE(toy_vault):
     """AUD-499 — la segunda lectura con énfasis vive en `<bib>__<lente>.json` (#371), y el glob del
     renombre sólo veía `<bib>.json`: la lectura de lente quedaba con el bibcode viejo adentro,
@@ -6382,35 +5434,6 @@ def test_AUD509_estado_paper_no_toma_una_cita_que_EXTIENDE_el_stem():
             == mn.ESTADO_SINTETIZADO, forma
 
 
-def test_AUD540_dos_categorias_con_la_misma_ancla_vieja_se_re_firman_cada_una(toy_vault,
-                                                                               monkeypatch):
-    """AUD-540 — dos firmas de categorías DISTINTAS sobre la misma ancla de párrafo, cada una con su
-    hit en UN bloque distinto: el migrador agrupaba por ancla sin categoría, veía dos destinos y
-    hacía `continue` en silencio — ni re-firmaba ni declaraba. Cada firma es inequívoca: se
-    re-firma cada una a su bloque."""
-    import lib_blocks as lb
-    lineas = ["- La perilla ξ de la ec. 33 regula el peso.", "- Un ítem largo con varios hechos."]
-    vieja = lb.paragraph_anchor(lineas, 0)
-    nueva0, nueva1 = lb.warn_anchor(lineas, 0), lb.warn_anchor(lineas, 1)
-    assert len({vieja, nueva0, nueva1}) == 3
-    nota = mk_note(toy_vault.CONCEPTS / "methods", "dos", {"tags": ["methods"], "warn_revisada": [
-        {"categoria": "impl_leaks", "ancla": vieja, "motivo": "m1"},
-        {"categoria": "bloque_con_varios_hechos", "ancla": vieja, "motivo": "m2"}]},
-        "\n".join(lineas) + "\n")
-    texto = nota.read_text(encoding="utf-8")
-    body = cfg.frontmatter_span(texto)[1]
-    offset = len(texto[:len(texto) - len(body)].split("\n")) - 1
-    li = [i for i, ln in enumerate(body.split("\n")) if ln in lineas]
-    monkeypatch.setattr(lint, "warn_hits", lambda stem, *a: {
-        "impl_leaks": [(stem, f"L{li[0] + 1 + offset}: x")],
-        "bloque_con_varios_hechos": [(stem, f"L{li[1] + 1 + offset}: y")]})
-    assert mn.migrate_warn_anchor(nota, []) == (2, [])
-    firmas = read_fm(nota)["warn_revisada"]
-    assert [(f["categoria"], f["ancla"], f["motivo"]) for f in firmas] == [
-        ("impl_leaks", nueva0, "m1"), ("bloque_con_varios_hechos", nueva1, "m2")]
-    assert mn.migrate_warn_anchor(nota, []) == (0, [])          # idempotente
-
-
 def test_552_el_apendice_dice_que_suma_su_numero_no_traidos(toy_vault):
     """#552 — el encabezado ponía `n_total` (query + extra_core + chaining) bajo la palabra
     «traídos», que en el registro es `traidos`: lo que devolvió la query sola (medido: 334 vs 326)."""
@@ -6432,40 +5455,6 @@ def test_553_no_sintetizado_es_por_SUJETO_en_el_rollup(toy_vault):
     assert mn._estado_paper("2011P", fm, "ver [[2011P]]", set(), {"HD 40307"}) == mn.ESTADO_SINTETIZADO
     assert mn._estado_paper("2011P", {**fm, "no_sintetizado": "escalar"}, "", set(),
                             {"HD 40307"}) == mn.ESTADO_EXTRAIDO, "el escalar no vale: lo bloquea el lint"
-
-
-def test_553_el_migrador_reparte_el_motivo_sólo_a_quien_NO_lo_cita(toy_vault, capsys):
-    """El caso medido: el motivo escrito para HD 40307 regía sobre toliman, que sí lo sintetiza. El
-    migrador se lo da sólo al sujeto donde la escotilla hacía algo; idempotente."""
-    write_yaml(cfg.STARS_YAML, {"HD 40307": {"slug": "hd_40307"}, "toliman": {"slug": "toliman"}})
-    mk_note(cfg.STARS, "hd_40307", {"tags": ["star"], "name": "HD 40307"}, "prosa sin citarlo\n")
-    mk_note(cfg.STARS, "toliman", {"tags": ["star"], "name": "toliman"}, "lo sintetiza [[2011P]]\n")
-    p = mk_note(cfg.PAPERS, "2011P", {"tags": ["paper"], "bibcode": "2011P", "methods": ["gls"],
-                                      "stars": ["HD 40307", "toliman"],
-                                      "no_sintetizado": "HD 40307 es una fila: roll-up"}, "# p\n")
-    sola = mk_note(cfg.PAPERS, "2012Q", {"tags": ["paper"], "bibcode": "2012Q", "methods": ["rv"],
-                                         "stars": ["toliman"], "no_sintetizado": "viejo"}, "# p\n")
-    (cfg.STARS / "toliman.md").write_text("---\ntags: [star]\n---\n[[2011P]] y [[2012Q]]\n",
-                                          encoding="utf-8")
-    pelada = mk_note(cfg.PAPERS, "2013R", {"tags": ["paper"], "bibcode": "2013R",
-                                           "no_sintetizado": True}, "# p\n")
-    mk_note(cfg.PAPERS, "2014S", {"tags": ["paper"], "bibcode": "2014S"}, "# p\n")   # sin escotilla
-    ya = mk_note(cfg.PAPERS, "2015T", {"tags": ["paper"], "bibcode": "2015T",
-                                       "no_sintetizado": [{"sujeto": "X", "motivo": "m"}]}, "# p\n")
-    antes_ya = ya.read_text(encoding="utf-8")
-    # un TEMA que lo reclama por `methods` y todavía no tiene nota: también recibe el motivo
-    write_yaml(cfg.THEMES_YAML, {"gls": {"title": "GLS", "concept": "gls", "area": "methods"}})
-    n, avisos = mn.migrate_all_no_sintetizado()
-    assert n == 2 and len(avisos) == 2, avisos
-    assert ya.read_text(encoding="utf-8") == antes_ya, "la forma nueva no se toca"
-    assert cfg.load_no_sintetizado(cfg.split_fm(p.read_text(encoding="utf-8"))) == [
-        {"sujeto": "HD 40307", "motivo": "HD 40307 es una fila: roll-up"},
-        {"sujeto": "gls", "motivo": "HD 40307 es una fila: roll-up"}]
-    assert "no_sintetizado" not in cfg.split_fm(sola.read_text(encoding="utf-8")), "nadie la usaba"
-    assert cfg.split_fm(pelada.read_text(encoding="utf-8"))["no_sintetizado"] is True, "sin motivo no se toca"
-    assert any("2012Q" in a and "se retira" in a for a in avisos)
-    assert any("2013R" in a and "sin motivo" in a for a in avisos)
-    assert mn.migrate_all_no_sintetizado()[0] == 0, "idempotente"
 
 
 def test_558_cola_tema_es_estado_propio_y_la_estrella_re_estampa_sus_temas(toy_vault):

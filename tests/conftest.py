@@ -50,6 +50,33 @@ STARS = {
 }
 
 
+def move_verif_table_to_sidecar(nota: Path) -> Path:
+    """Put a note's inline verification table into its `<nota>.verif.md` sibling (#344).
+
+    Test setup only: the one-use migrator that did this left HEAD in #624, and the tests that write a
+    note with its table inline still need the on-disk shape the readers expect. Built from the same
+    `lib_blocks` primitives the writer uses (`verif_section`, `inline_verif_rows`, `verif_pointer`,
+    `render_verif_sidecar`), so its contract is the writer's, not a copy of it (rule of method 2):
+    the table moves verbatim, the header line and the sub-sections stay, the pointer replaces it."""
+    import lib_blocks as lb
+    text = nota.read_text(encoding="utf-8")
+    seccion, tabla = lb.verif_section(text), lb.inline_verif_rows(text)
+    if not tabla:
+        return nota
+    fuera, puesto = [], False
+    for ln in seccion.split("\n"):
+        if ln.strip().startswith("|"):
+            if not puesto:
+                fuera.append(lb.verif_pointer(nota))
+                puesto = True
+            continue
+        fuera.append(ln)
+    cfg.verif_sidecar(nota).write_text(lb.render_verif_sidecar(nota, "\n".join(tabla)),
+                                       encoding="utf-8")
+    nota.write_text(text.replace(seccion, "\n".join(fuera), 1), encoding="utf-8")
+    return nota
+
+
 def tree_digest(root: Path) -> dict:
     """`{ruta relativa: sha256}` de todo archivo bajo `root`: el testigo de que un `--dry-run` no
     escribió NADA (#507) — ni la nota, ni un `.txt` traído, ni el registro."""

@@ -283,7 +283,7 @@ def sembrar_corpus(paths, n_papers: int = 900, n_stars: int = 4, n_concepts: int
     if vintage_old and anomalias:
         raise NotImplementedError(
             "combinar vintage='1.11.0' con `anomalias` no está soportado: el schema viejo ya "
-            "dispara sus categorías bloqueantes (old_disputes, legacy_triage, contradicciones del "
+            "dispara sus categorías bloqueantes (schema_retirado, contradicciones del "
             "espejo #70) sobre TODO el corpus, así que 'inyectar exactamente K' del resto de las "
             "categorías dejaría de tener el significado que promete el Censo. Sembrá dos corpus "
             "separados (uno por vintage, otro por anomalias) si necesitás las dos cosas."

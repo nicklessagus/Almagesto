@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.411.3"
+ALMAGESTO_VERSION = "1.412.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3049,7 +3049,7 @@ def theme_core(facet_ok: bool, core_global: bool, citas, umbral) -> bool:
 def reattach_yaml_comments(original: str, nuevo: str) -> tuple[str, list[str]]:
     """Put back into `nuevo` the YAML comments that `original` carried. `(head, huérfanos)`.
 
-    ⛔ AUD-169 / INV-139 — `sync_mirror` and `migrate_disputes` re-serialize the whole frontmatter
+    ⛔ AUD-169 / INV-139 — `sync_mirror` re-serializes the whole frontmatter
     with `yaml.safe_dump`, which **silently drops every comment**. The framework explicitly tells
     people to hand-edit these files («el `P_rot` lo puso el usuario a mano», «sacá la entrada de
     `decisiones`»), so those comments are curation: a stamper that erases them destroys work nobody
@@ -3380,11 +3380,17 @@ def registro_path(slug: str) -> Path:
     return REGISTRO / f"{slug}.yaml"
 
 
-def legacy_triage_path(slug: str) -> Path:
-    """Ubicación PRE-#51 de las decisiones de triage (scratch gitignored). Ya NO se lee en el flujo
-    normal: sólo la usan el migrador (`triage.py --migrate`) y el detector del lint, que la reporta
-    como bloqueante mientras exista. Nunca se escribe ahí."""
-    return ROOT / "build" / slug / "triage.json"
+#: #624 · the git tag that still carries the one-use migrators retired from HEAD. They left because
+#: no active vault had anything left to migrate (measured migrator by migrator); the upgrade path
+#: did not disappear, it lives in the tag — and every recipe that used to name one says so.
+RETIRED_MIGRATORS_TAG = "v1.411.3"
+
+
+def retired_migrator_recipe(cmd: str) -> str:
+    """The way out of a retired schema whose migrator left HEAD (#624): re-ingest, or migrate with
+    the template checked out at `RETIRED_MIGRATORS_TAG` running `cmd` (relative to `scripts/`)."""
+    return (f"re-ingestar, o migrar con el template en el tag `{RETIRED_MIGRATORS_TAG}`: "
+            f"`python scripts/{cmd}`")
 
 
 #: #126 · CLOSED vocabulary of the D-26 gates, in evaluation order. AUD-208: THREE, not two —
@@ -3590,7 +3596,7 @@ def load_decisiones(slug: str) -> dict:
 
     Antes esto mergeaba también el `build/<slug>/triage.json` pre-1.9.0 (migración transparente).
     Se sacó: una capa de compatibilidad en el lector es complejidad permanente, y el juicio viejo
-    tiene un camino explícito —`python scripts/triage.py <slug> --migrate`—. Lo que NO puede pasar
+    tiene un camino explícito —el migrador del tag de git (#624)—. Lo que NO puede pasar
     es que ese archivo quede **mudo** y el triage vuelva a proponer lo ya descartado sin decir nada:
     el lint lo detecta y bloquea.
 
@@ -4459,8 +4465,8 @@ def load_no_sintetizado(meta: dict, *, entry: str = "?") -> list:
     subject), and the scalar of #75 let the motive one subject wrote («HD 40307 is a row…») rule
     over every other subject sharing the paper — measured, 15 of 52 hatched notes had ≥2 subjects.
 
-    ⛔ No tolerant reader: the scalar raises and `make_notes.py --migrate-no-sintetizado` converts
-    it once; the lint blocks the scalar."""
+    ⛔ No tolerant reader: the scalar raises and the lint blocks it (`schema_retirado`); its
+    one-use migrator lives in the git tag (#624)."""
     v = meta.get("no_sintetizado")
     if v is None:
         return []
@@ -4468,7 +4474,7 @@ def load_no_sintetizado(meta: dict, *, entry: str = "?") -> list:
         raise VistasError(
             f"'{entry}': `no_sintetizado` es una lista de `{{sujeto, motivo}}` (#553): el motivo "
             f"suelto no dice para QUÉ sujeto vale, y en un paper compartido eximía a todos → "
-            f"`python scripts/make_notes.py --migrate-no-sintetizado`")
+            f"{retired_migrator_recipe('make_notes.py --migrate-no-sintetizado')}")
     out = []
     for x in v:
         sujeto, motivo = str(x.get("sujeto") or "").strip(), declared_motive(x.get("motivo"))

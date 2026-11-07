@@ -6,11 +6,10 @@ Uso:
     python scripts/make_notes.py --web <clave> --concept <c> [--url … | --pending …] [--slug-hint <s>]
     python scripts/make_notes.py --restamp-pdf-links             # backfill del link PDF, sin slug
     python scripts/make_notes.py --restamp-headers               # backfill de la cabecera, sin slug
-    python scripts/make_notes.py --migrate-disputes              # migración #71 de disputes, sin slug
-    python scripts/make_notes.py --migrate-vistas                # migración #188 de vistas, sin slug
     python scripts/make_notes.py --sync-mirror                   # backfill espejo NEA (#70), sin slug
-    (los otros backfills/migradores —`--restamp-*`, `--migrate-*`, `--rename-paper`, `--fix-*`—
-     se listan en `--help`, con su issue; casi todos corren sin slug)
+    (los otros backfills —`--restamp-*`, `--rename-paper`, `--fix-key`— se listan en `--help`,
+     con su issue; casi todos corren sin slug. Los migradores de un solo uso se retiraron en #624:
+     viven en el tag de git de su versión, ver `docs/lint.md` § *Schema retirado*)
 
 - vault/wiki/stars/<slug>.md            : ficha índice de la estrella (frontmatter + roll-ups
   ESTAMPADOS, D-10/D-11 — el único bloque Dataview que este script emite es el de `index.md`,
@@ -32,9 +31,7 @@ de escritura única); (d) en una ficha/concept que ya existía re-estampa la lí
 (#64). Aparte, `stamp_fulltext` (lo llama extract_fulltext al cerrar) estampa
 `fulltext`/`fulltext_source`/`pdf_source` sobre notas ya existentes. Backfill masivo del link PDF:
 `python scripts/make_notes.py --restamp-pdf-links` (sin slug).
-(e) `--migrate-disputes` (#71) cambia la estructura del frontmatter, así que lo re-serializa — por
-eso toca sólo las fichas con disputas del schema viejo y el cuerpo se conserva byte a byte. Ver
-migrate_disputes. (f) `--sync-mirror` rellena en `stars/` los campos espejo de NEA (#70) que están
+(e) `--sync-mirror` rellena en `stars/` los campos espejo de NEA (#70) que están
 en null y el ground-truth trae — también re-serializa sólo el frontmatter, add-only y en un solo
 sentido (nunca pisa un valor existente ni distinto del ground-truth). Ver sync_mirror.
 """
@@ -1054,9 +1051,9 @@ def restamp_headers() -> int:
 AVISO_LLM_MARCA = cfg.AVISO_LLM_MARCA         # #444: UNA definición, en lib_config
 
 
-#: #269 · el bullet de anotación ANTERIOR a 1.117.0, embebido sólo para que el migrador reconozca
-#: el stub viejo. Se borra cuando la migración termine: una copia del texto retirado que sobreviva
-#: es exactamente lo que este issue arregla.
+#: #269 · el bullet de anotación ANTERIOR a 1.117.0, embebido sólo para que `view_stub_kind`
+#: reconozca el stub viejo (lo reporta el lint como `vista_con_plantilla`, y el cosechador no lo
+#: pisa sin `--force`). Nunca se escribe.
 _BULLET_ANOTACION_VIEJO = (
     "- **Cómo anotar cada valor (#103):** pegá el **nº de línea** del `.txt` (`grep -n`, nunca "
     "`splitlines()`) junto a cada número que copies, y el **régimen** en el que la fuente lo afirma "
@@ -1105,14 +1102,14 @@ def _cola_declarada(fm: dict, stem: str, sujetos: set) -> bool:
 def view_stub_kind(text: str, sujeto: str, theme: bool) -> str:
     """What the `## Vista — <subject>` section IS: `""` (written prose), `"plantilla"` or `"estado"`.
 
-    Three states, not two, because the migrator and the lint ask different things of the same
+    Three states, not two, because the harvester and the lint ask different things of the same
     section (#398): the lint reports only the section that still publishes the extractor's TEMPLATE
-    —a request shown as content— while the migrator also rewrites a status LINE whose reason
-    changed. Collapsing them into a boolean makes one of the two questions unanswerable.
+    —a request shown as content— while the harvester overwrites only a status LINE (#581).
+    Collapsing them into a boolean makes one of the two questions unanswerable.
 
     `"plantilla"` accepts the current legacy template and the previous one (#269): both are a stub,
-    and the note left on the old one does not stop being one for not having gone through the
-    migrator. The `no_vista` line carries its reason inside, so it is recognised by its opening —
+    and the note left on the old one does not stop being one for not having been migrated (the
+    migrator retired in #624 and lives in the git tag, `docs/lint.md` § *Schema retirado*). The `no_vista` line carries its reason inside, so it is recognised by its opening —
     the only part the stamper writes."""
     import harvest_views as hv          # import local: `harvest_views` importa este módulo
     span = hv.section_span(text, f"## Vista — {sujeto}")
@@ -1127,50 +1124,6 @@ def view_stub_kind(text: str, sujeto: str, theme: bool) -> str:
             hv._norm(f"## Vista — {sujeto}\n\n_No leído desde")):
         return "estado"
     return ""
-
-
-def restamp_vista_stub() -> int:
-    """Migration #398: swaps the extractor's TEMPLATE for the status line, in every stub section.
-
-    Also the reason it existed for #269: `harvest_views.write_view_section` only overwrites a view
-    section **while it is still a stub**, so changing what a stub looks like makes every note stop
-    matching and the next harvest would print «ya tiene prosa redactada → NO se pisa» and **write no
-    view at all** — the fix would break the harvest it is meant to unblock.
-
-    ⛔ Only sections that are a stub **byte for byte** are touched: a view with real prose is left
-    alone (its anchors hang off that exact text). The subject declared `no_vista` gets the line with
-    its reason; the rest, the «claimed, not read» one — and re-running it regenerates the line when
-    the reason changes."""
-    import harvest_views as hv          # import local: `harvest_views` importa `make_notes`
-    notes = cfg.note_paths(cfg.PAPERS)
-    tocadas = 0
-    for dest in notes:
-        text = dest.read_text(encoding="utf-8")
-        fm = cfg.split_fm(text) or {}
-        try:
-            no_vista = {v["sujeto"]: v["motivo"]
-                        for v in cfg.load_no_vista(fm, entry=dest.stem)}
-        except cfg.VistasError:
-            continue                     # frontmatter inválido: lo reporta el lint, no se toca acá
-        for v in cfg.as_list(fm.get("vistas")):
-            if not isinstance(v, dict) or not (suj := str(v.get("sujeto") or "").strip()):
-                continue
-            theme = str(v.get("tipo") or "") == "theme"
-            if not view_stub_kind(text, suj, theme):
-                continue                 # tiene prosa redactada: no se toca
-            nuevo = vista_block(suj, theme, motivo=no_vista.get(suj, ""),
-                                fecha=str(v.get("fecha") or ""))
-            span = hv.section_span(text, f"## Vista — {suj}")
-            if hv._norm(text[span[0]:span[1]]) == hv._norm(nuevo):
-                continue                 # ya está en la forma vigente
-            sep = "\n\n" if span[1] < len(text) else "\n"
-            text = text[:span[0]] + nuevo.rstrip("\n") + sep + text[span[1]:]
-            tocadas += 1
-        if text != dest.read_text(encoding="utf-8"):
-            cfg.write_text_atomic(dest, text)
-    cfg.print_seguro(f"vistas: {tocadas} sección(es) de stub pasaron de la PLANTILLA del extractor "
-                     f"a la línea de estado (#398) — la entrada de `vistas[]` NO se toca")
-    return 0
 
 
 def clean_catalog_markup_notes() -> int:
@@ -1205,78 +1158,6 @@ def clean_catalog_markup_notes() -> int:
         f"markup de catálogo: {tocadas} de {len(notes)} notas de paper limpiadas en `## Abstract` "
         f"(#271). ⚠ Re-medí el detector de duplicados (#216) y el diff de lente offline (D-49): "
         f"los dos leen esos bytes.")
-    return 0
-
-
-def fix_header_order() -> int:
-    """Migrator for #378: moves the header blockquote BELOW the header line.
-
-    The fix stops inverted notes from being born; the ones already inverted stay that way, because
-    `stamp_header` is idempotent and never looks at them again. Measured on a real instance: **60 of
-    169** inverted, of which 50 **undamaged** —they already had `## Abstract`, so the cascade
-    stopped— and 10 that advanced, 6 with the header already deleted by the harvester (#379).
-
-    Those 50 are not a problem today and are a conditional risk: if one loses its `## Abstract`, the
-    backfill of #277 runs on top of it and the cascade starts. They get normalised.
-
-    ⛔ **It does not touch a note already in canonical order** (109 of 169 in that measurement): a
-    migrator that rewrites everything yields a 169-file diff where the real change is 60, and at
-    that point the diff stops being reviewable. Idempotent: the second run returns 0.
-
-    Returns how many notes were normalised."""
-    n = 0
-    for dest in cfg.note_paths(cfg.PAPERS):
-        text = dest.read_text(encoding="utf-8")
-        cab = find_header_line(text)
-        i = text.find(GENERATOR_LINE)
-        if cab is None or i < 0 or i > cab[0]:
-            continue                      # sin cabecera, sin blockquote, o ya en orden canónico
-        # el blockquote arranca en la primera línea `> ` contigua hacia arriba de `GENERATOR_LINE`
-        ini = i
-        while ini > 0:
-            prev = text.rfind("\n", 0, ini - 1) + 1
-            if not text[prev:ini].lstrip().startswith(">"):
-                break
-            ini = prev
-        fin = text.find("\n", i) + 1
-        bloque = text[ini:fin]
-        resto = text[:ini] + text[fin:]
-        cab2 = find_header_line(resto)
-        if cab2 is None:
-            cfg.print_seguro(f"  ⚠ {dest.name}: sacar el blockquote deja la nota sin cabecera "
-                             f"reconocible — no se toca")
-            continue
-        nuevo = resto[:cab2[1]] + "\n\n" + bloque.rstrip("\n") + resto[cab2[1]:]
-        cfg.write_text_atomic(dest, nuevo)
-        n += 1
-    cfg.print_seguro(f"orden de cabecera: {n} nota(s) normalizada(s) (el aviso pasa DEBAJO de la "
-                     f"línea de cabecera, #378)")
-    return n
-
-
-def restamp_transcribed_note() -> int:
-    """Backfill #416: the line above a PDF-transcribed `## Abstract` no longer claims the note
-    declares `sin_abstract` when it does not.
-
-    Measured on a real vault: 26 of the 27 notes carrying the line had no such field. The line is
-    replaced by the one `harvest_views.transcribed_note` would write TODAY for that frontmatter, so
-    the note that really declares the field keeps its clause. Surgery on the line, never on the
-    abstract below it; idempotent."""
-    import harvest_views as hv
-    viejo = ("_(transcrito del PDF por la extracción — el catálogo no lo devolvió; la nota "
-             "sigue declarando `sin_abstract` porque así se **clasificó**.)_")
-    notes = cfg.note_paths(cfg.PAPERS)
-    tocadas = 0
-    for dest in notes:
-        text = dest.read_text(encoding="utf-8")
-        if viejo not in text:
-            continue
-        nuevo_txt = text.replace(viejo, hv.transcribed_note(cfg.split_fm(text) or {}))
-        if nuevo_txt != text:
-            cfg.write_text_atomic(dest, nuevo_txt)
-            tocadas += 1
-    cfg.print_seguro(f"papers: {tocadas} de {len(notes)} notas dejaron de afirmar un "
-                     f"`sin_abstract` que su frontmatter no declara (#416)")
     return 0
 
 
@@ -1399,715 +1280,6 @@ def fill_abstracts(*, dry_run: bool = False) -> int:
     return 0
 
 
-# `field` viejo (dentro de planets[]) → clave del frontmatter con el valor de NEA, para materializar
-# la posición `{source: ground_truth}` con su valor real. `existence` no tiene valor numérico: lo que
-# NEA sostiene es el `status` del planeta.
-LEGACY_FIELD_TO_GT = {"P": "P_days", "K": "K_ms", "e": "e", "msini": "mass_earth",
-                      "existence": "status"}
-
-
-def migrate_verif_archivo(dest) -> int:
-    """Migración #117 de UNA nota: prefija cada celda `Hash fuente` con el archivo que se leyó
-    (`txt:` / `pdf:`). Devuelve cuántas filas cambió.
-
-    ⛔ **No infiere del frontmatter: deduce del HASH.** Inferir de un campo del frontmatter
-    escribiría una declaración **falsa** justo en las filas que motivaron el issue. En cambio se
-    calculan los dos hashes y se declara el que **coincide** con lo que la fila ya guardaba: eso no
-    es heurística, es identificar el archivo por su huella.
-
-    Si no coincide ninguno, el par está vencido igual (hay que re-verificarlo) y ahí se declara
-    `txt:` —el default de cuando esas filas se escribieron— avisando: la fila declara algo que el
-    próximo `verify-citations` va a reescribir. Cirugía a nivel celda: no toca la prosa.
-    Idempotente — una celda ya prefijada se saltea.
-
-    ⚠ Desde #344 la cirugía es sobre el **hermano** `<nota>.verif.md`, que es donde vive la tabla;
-    quién la resuelve es `lb.verif_rows`, el mismo camino que usan los otros tres consumidores.
-
-    @inv INV-107"""
-    if not dest.exists() or cfg.is_verif_sidecar(dest):
-        return 0
-    filas = lb.verif_rows(dest)
-    if not filas:
-        return 0
-    dest = cfg.verif_sidecar(dest)
-    text = dest.read_text(encoding="utf-8")
-    cambios, lineas = 0, text.split("\n")
-    # ⛔ #443 — la celda, no la fila. `ln.replace("| — |", …)` reemplazaba el placeholder DONDE LO
-    # ENCONTRARA (Condición, Evidencia…), tres veces en una misma fila medida, y prefijaba `txt:`
-    # a un `—` que no es un hash: la fila `no verificable por extracción` que #223 exime porque no
-    # hay archivo. Sobre una bóveda ya migrada dejaba un bloqueante. La columna se localiza por el
-    # ENCABEZADO y se reemplaza sólo esa celda, contando barras no escapadas.
-    col = _verif_column(lineas, "Hash fuente")
-    for fila in filas:
-        # (la fila ya migrada no necesita guarda propia: su celda dice `txt:<hash>`, que no es
-        # igual a `<hash>`, y la comparación por celda de abajo la deja como está — red 8)
-        if not fila.source_hash or fila.source_hash == "—":
-            # #223: la fila sin archivo (`no verificable por extracción`) NO declara ninguno — es
-            # el caso exento, no un hash que falta; se saltea sin aviso porque es lo correcto
-            if fila.source_hash != "—":
-                cfg.print_seguro(f"  ⚠ {dest.name}: la fila de {fila.bibcode} no tiene hash de "
-                                 f"fuente — no hay archivo que identificar; re-verificar el par")
-            continue
-        bib = fila.bibcode
-        h_txt = next((lb.source_hash(f) for f in cfg.FULLTEXT.glob(f"**/{safe_name(bib)}.txt")), None)
-        h_pdf = next((lb.bytes_hash(f) for f in cfg.PDFS.glob(f"**/{safe_name(bib)}.pdf")), None)
-        if fila.source_hash == h_pdf:
-            kind = "pdf"
-        elif fila.source_hash == h_txt:
-            kind = "txt"
-        else:
-            # ninguno coincide ⇒ el par ya está vencido. Se declara `txt:`, que es de donde se
-            # leía cuando estas filas se escribieron (#205 movió la lectura al PDF), y se avisa: no
-            # es una verificación, es un puntero para re-verificar.
-            kind = "txt"
-            cfg.print_seguro(f"  ⚠ {dest.name}: la fila de {bib} no coincide con ningún archivo en "
-                             f"disco — se declara `txt:` (el default de cuando se escribió) y hay "
-                             f"que re-verificar el par")
-        for i, ln in enumerate(lineas):
-            # (`col` no puede ser None acá: `verif_rows` sólo parsea la tabla con el encabezado
-            # canónico, que es el que `_verif_column` lee — red 8)
-            if (ln.lstrip().startswith("|") and fila.anchor in ln
-                    and _cell_of(ln, col).strip() == fila.source_hash):
-                lineas[i] = _replace_cell(ln, col, f" {kind}:{fila.source_hash} ")
-                cambios += 1
-                break
-    if cambios:
-        cfg.write_text_atomic(dest, "\n".join(lineas))
-    return cambios
-
-
-def _verif_column(lineas: list, titulo: str) -> int | None:
-    """Index of the column titled `titulo` in the first table header of `lineas`, or `None` (#443)."""
-    for ln in lineas:
-        if ln.lstrip().startswith("|") and titulo in ln:
-            celdas = [c.strip() for c in _raw_cells(ln)]
-            return celdas.index(titulo) if titulo in celdas else None
-    return None
-
-
-def _raw_cells(line: str) -> list:
-    """The cells of a table line as RAW text (escapes kept), split on unescaped bars (#443).
-
-    Not `lb.split_row`: that one unescapes for reading, and this is for writing one cell back
-    without touching the others — a `\\|` inside a quote has to survive the round trip."""
-    cells, cur, i = [], "", 0
-    s = line.strip()
-    if s.startswith("|"):
-        s = s[1:]
-    if s.endswith("|") and not s.endswith("\\|"):
-        s = s[:-1]
-    while i < len(s):
-        ch = s[i]
-        if ch == "\\":
-            cur += s[i:i + 2]; i += 2; continue       # el slice tolera la barra suelta al final
-        if ch == "|":
-            cells.append(cur); cur = ""; i += 1; continue
-        cur += ch; i += 1
-    cells.append(cur)
-    return cells
-
-
-def _cell_of(line: str, k: int) -> str:
-    """Raw text of the `k`-th cell of a table line (`""` when the line is shorter)."""
-    celdas = _raw_cells(line)
-    return celdas[k] if k < len(celdas) else ""
-
-
-def _replace_cell(line: str, k: int, nuevo: str) -> str:
-    """The table line with ONLY its `k`-th cell replaced; every other byte stays (#443)."""
-    celdas = _raw_cells(line)
-    celdas[k] = nuevo
-    return "|" + "|".join(celdas) + "|"
-
-
-def migrate_all_verif_archivo() -> int:
-    """Backfill #117 sobre toda la bóveda. Toca sólo notas con bloque de verificación."""
-    total = tocadas = 0
-    for nota in cfg.note_paths(cfg.WIKI, "**/*.md"):
-        n = migrate_verif_archivo(nota)
-        if n:
-            total, tocadas = total + n, tocadas + 1
-            cfg.print_seguro(f"  → {nota.relative_to(cfg.WIKI)}: {n} fila(s)")
-    cfg.print_seguro(f"#117: {total} fila(s) declaran su archivo en {tocadas} nota(s).")
-    return 0
-
-
-def migrate_verif_sidecar(dest) -> int:
-    """#344 — move ONE note's inline verification table to its `<nota>.verif.md` sibling.
-
-    Returns how many table lines moved; `0` when there is nothing to move (no block, or already
-    migrated), which is what makes it idempotent — the second run finds no `|` line inside the
-    section and writes nothing at all.
-
-    ⛔ **The table moves verbatim, it is not re-rendered.** Re-rendering through
-    `render_verif_table` would need the rows to parse, and the one note that most needs migrating is
-    the one whose block is of the pre-hash template: a migrator that refuses exactly there leaves
-    the schema it was written to retire. Moving the lines byte for byte also keeps every anchor and
-    every hash untouched, which is the property #344 promises (the anchors hash blocks of the NOTE).
-
-    What stays in the note: the header line —the claim, and the only part useful to whoever copies
-    the note—, the three sub-sections of findings, and the pointer to the sibling.
-
-    @inv INV-148"""
-    if not dest.exists() or cfg.is_verif_sidecar(dest):
-        return 0
-    text = dest.read_text(encoding="utf-8")
-    seccion = lb.verif_section(text)
-    tabla = lb.inline_verif_rows(text)
-    if not tabla:
-        return 0
-    puntero = lb.verif_pointer(dest)
-    fuera, puesto = [], False
-    for ln in seccion.split("\n"):
-        if ln.strip().startswith("|"):
-            if not puesto:
-                fuera.append(puntero)
-                puesto = True
-            continue
-        fuera.append(ln)
-    nueva = "\n".join(fuera)
-    side = cfg.verif_sidecar(dest)
-    cfg.write_text_atomic(side, lb.render_verif_sidecar(dest, "\n".join(tabla)))
-    cfg.write_text_atomic(dest, text.replace(seccion, nueva, 1))
-    return len(tabla)
-
-
-def migrate_all_verif_sidecar() -> int:
-    """#344 over the whole vault: every note's table moves to its sibling. Idempotent."""
-    total = tocadas = 0
-    for nota in cfg.note_paths(cfg.WIKI, "**/*.md"):
-        n = migrate_verif_sidecar(nota)
-        if n:
-            total, tocadas = total + n, tocadas + 1
-            cfg.print_seguro(f"  → {nota.relative_to(cfg.WIKI)}: {n} línea(s) → "
-                             f"{cfg.verif_sidecar(nota).name}")
-    cfg.print_seguro(f"#344: {total} línea(s) de tabla movidas al hermano en {tocadas} nota(s).")
-    return 0
-
-
-def migrate_warn_anchor(dest, leak_patterns) -> tuple[int, list]:
-    """#528 — re-sign ONE note's `warn_revisada` from the paragraph anchor to the block anchor.
-
-    Returns `(re-signed, declared)`. A signature is re-signed only when every hit it covered falls
-    in ONE block today; one that covered hits in several blocks is NOT split among them —which one
-    the reviewer meant is not in the note— and is returned declared, so those hits come back as
-    WARN. A signature that already covered nothing stays as it was (the lint names it orphan).
-    ⛔ The frontmatter is re-parsed before writing and nothing is written if it stops parsing (#222).
-    """
-    import lint                       # import local: `lint` importa a `make_notes`
-    text = dest.read_text(encoding="utf-8")
-    fm = cfg.split_fm(text) or {}
-    firmas = [f for f in cfg.as_list(fm.get("warn_revisada")) if isinstance(f, dict)]
-    partes = cfg.frontmatter_span(text)
-    if not firmas or not partes:
-        return 0, []
-    body = partes[1]
-    head = text[:len(text) - len(body)]
-    offset = len(head.split("\n")) - 1
-    stem = dest.stem
-    hits = lint.warn_hits(stem, body, offset, lint.check_impl_leaks(
-        stem, body, offset, leak_patterns, stem not in lint.NON_ORPHAN))
-    lineas = body.split("\n")
-    nuevas: dict = {}
-    for cat, items in hits.items():
-        for _st, msg in items:
-            m = re.match(r"L(\d+)", msg)
-            i = int(m.group(1)) - 1 - offset if m else -1
-            if 0 <= i < len(lineas):
-                nuevas.setdefault((cat, lb.paragraph_anchor(lineas, i)), set()).add(
-                    lb.warn_anchor(lineas, i))
-    # Target per signature, in list order: its new anchor, or None (covers nothing today, or
-    # covered several blocks — declared). ⛔ AUD-540: grouping by the old anchor WITHOUT the category
-    # made two categories with different blocks look ambiguous and fell into a silent `continue`.
-    por_ancla: dict = {}
-    declaradas = []
-    for f in firmas:
-        destino = nuevas.get((f.get("categoria"), str(f.get("ancla"))))
-        if destino is not None and len(destino) > 1:
-            declaradas.append((stem, f.get("categoria"), f.get("ancla"), len(destino)))
-        por_ancla.setdefault(str(f.get("ancla")), []).append(
-            next(iter(destino)) if destino and len(destino) == 1 else None)
-    reemplazo = {}                    # old anchor → the new one for each of its occurrences
-    for vieja, destinos in por_ancla.items():
-        if all(d in (None, vieja) for d in destinos):
-            continue
-        ocurrencias = len(re.findall(r"\b" + re.escape(vieja) + r"\b", head))
-        if ocurrencias == len(destinos):
-            reemplazo[vieja] = iter([d or vieja for d in destinos])
-        elif len(set(destinos)) == 1:              # one destination: every occurrence goes there
-            reemplazo[vieja] = iter(destinos * ocurrencias)
-        else:
-            # the anchor also shows up outside its signatures: which occurrence is whose is unknown
-            declaradas += [(stem, f.get("categoria"), vieja, len(set(destinos)))
-                           for f in firmas if str(f.get("ancla")) == vieja]
-    if not reemplazo:
-        return 0, declaradas
-    n = sum(d not in (None, v) for v in reemplazo for d in por_ancla[v])
-    head2 = re.sub(r"\b(" + "|".join(map(re.escape, reemplazo)) + r")\b",
-                   lambda mm: next(reemplazo[mm.group(1)]), head)
-    if not cfg.split_fm(head2 + body):
-        cfg.print_seguro(f"  ⛔ {stem}: el frontmatter dejó de parsear — no se escribe (#222)")
-        return 0, declaradas
-    cfg.write_text_atomic(dest, head2 + body)
-    return n, declaradas
-
-
-def migrate_all_warn_anchor() -> int:
-    """#528 over the whole vault. Idempotent: a second run finds every anchor already current."""
-    import lint
-    patrones = lint.IMPL_LEAK_RE + lint.downstream_leaks(cfg.load_downstream())
-    total, declaradas = 0, []
-    for nota in cfg.note_paths(cfg.WIKI, "**/*.md"):
-        n, d = migrate_warn_anchor(nota, patrones)
-        declaradas += d
-        if n:
-            total += n
-            cfg.print_seguro(f"  → {nota.relative_to(cfg.WIKI)}: {n} ancla(s) re-firmada(s)")
-    cfg.print_seguro(f"#528: {total} ancla(s) re-firmada(s) al bloque que parte el lint.")
-    if declaradas:
-        cfg.print_seguro(f"⚠ {len(declaradas)} firma(s) cubrían hits en VARIOS bloques y NO se "
-                         f"reparten (cuál revisó quien firmó no está en la nota): sus hits vuelven "
-                         f"como WARN y la firma queda huérfana — re-revisá y firmá el ancla de cada "
-                         f"bloque:")
-        for stem, cat, ancla, n in declaradas:
-            cfg.print_seguro(f"  - {stem}: `{cat}` · ancla `{ancla}` → {n} bloques")
-    return 0
-
-
-def migrate_disputes(dest) -> bool:
-    """Migración #71 de UNA ficha: `planets[].disputes[]` (polo de verdad hardcodeado) → `disputes`
-    a nivel nota, con **posiciones explícitas**.
-
-    Cada disputa vieja tenía un solo lado escrito (el paper discrepante, con `alt`); el otro era
-    implícito: el valor del frontmatter, o sea NEA. Acá ese lado se **materializa** como
-    `{source: ground_truth, value: <el valor que la ficha tiene hoy>}` — que es justamente la
-    información que el schema viejo no podía expresar y el consumidor necesita ver ("hay autoridad"
-    vs "la bóveda no sabe").
-
-    A diferencia del resto de la familia `--restamp-*`, esto NO es cirugía a nivel línea: cambia la
-    ESTRUCTURA del frontmatter, así que se re-serializa. Por eso toca **sólo** las fichas que
-    realmente tienen disputas viejas (una bóveda sin disputas no se reescribe) y **nunca** el
-    cuerpo: la prosa se conserva byte a byte. Idempotente: sin `planets[].disputes[]` no hace nada."""
-    if not dest.exists():
-        return False
-    text = dest.read_text(encoding="utf-8")
-    lim = cfg.fm_bounds(text)             # AUD-147
-    if lim is None:
-        return False
-    ini, end = lim
-    try:
-        front = yaml.safe_load(text[ini:end]) or {}
-    except yaml.YAMLError:
-        cfg.print_seguro(f"  ⚠ {dest.name}: frontmatter no parseable — migralo a mano")
-        return False
-    # Cobarde ante cualquier forma que no entiende: si `planets` no es una lista de mapas, o
-    # `disputes` a nivel nota no es una lista, NO toca el archivo. Antes un solo planeta mal formado
-    # tiraba `migrate_all_disputes` a mitad del barrido y dejaba la bóveda medio migrada, y un
-    # `disputes:` escalar se convertía en una lista de CARACTERES escrita a disco.
-    planets = front.get("planets")
-    if not isinstance(planets, list) or not all(isinstance(pl, dict) for pl in planets if pl):
-        cfg.print_seguro(f"  ⚠ {dest.name}: `planets` no es una lista de mapas — migralo a mano")
-        return False
-    if "disputes" in front and not isinstance(front.get("disputes") or [], list):
-        cfg.print_seguro(f"  ⚠ {dest.name}: `disputes` a nivel nota no es una lista — migralo a mano")
-        return False
-    if not any((pl or {}).get("disputes") for pl in planets):
-        return False
-    nuevas = list(front.get("disputes") or [])
-    for pl in planets:
-        letra = str((pl or {}).get("letter") or "").strip()      # `letter: null` daba "None.K"
-        # NO hacer `pop` acá: hasta no saber que la entrada efectivamente migró, el dato sigue
-        # siendo el único respaldo en disco de esa disputa (bibcode + valor discrepante). `pop`
-        # antes de las guardas de forma era el bug — el `continue` "cobarde" saltaba con el dato
-        # YA fuera del dict, y el `write_text` de abajo lo borraba para siempre.
-        viejas = (pl or {}).get("disputes")
-        if viejas is None:
-            continue
-        if not isinstance(viejas, list):
-            cfg.print_seguro(f"  ⚠ {dest.name}: `planets[{letra or '?'}].disputes` no es una lista — esa quedó "
-                  f"sin migrar, revisala a mano")
-            continue                          # se deja intacta en el planeta: nada que pop-ear
-        sin_migrar = []                       # elementos que no se pudieron migrar: se quedan acá
-        for d in viejas:
-            if not isinstance(d, dict):
-                cfg.print_seguro(f"  ⚠ {dest.name}: disputa vieja de `{letra or '?'}` que no es un mapa — sin "
-                      f"migrar, revisala a mano")
-                sin_migrar.append(d)
-                continue
-            campo = str(d.get("field") or "").strip()
-            gt_key = LEGACY_FIELD_TO_GT.get(campo)
-            gt_pos = {"source": "ground_truth"}
-            if gt_key is not None and pl.get(gt_key) is not None:
-                gt_pos["value"] = pl.get(gt_key)
-            # El lado del paper se arma con la MISMA regla que el de NEA: `value` sólo si hay valor.
-            # `alt` era exclusivo de las disputas de VALOR, así que en una de `existence` —el caso
-            # más frecuente— quedaba `value: null`, que por la convención del otro polo se lee como
-            # "esta fuente calla": lo contrario de lo que el paper sostiene.
-            paper_pos = {"ref": d.get("ref")}
-            if d.get("alt") is not None:
-                paper_pos["value"] = d["alt"]
-            if not d.get("ref"):
-                cfg.print_seguro(f"  ⚠ {dest.name}: disputa `{campo or '?'}` sin `ref` → la posición queda sin "
-                      f"quién la sostenga y el lint la va a bloquear: agregá el bibcode a mano")
-            if not campo:
-                cfg.print_seguro(f"  ⚠ {dest.name}: disputa de `{letra or '?'}` sin `field` → queda sin eje y "
-                      f"el lint la va a bloquear: nombrá el eje a mano")
-            nueva = {"field": f"{letra}.{campo}" if (letra and campo) else campo,
-                     "posiciones": [paper_pos, gt_pos]}
-            if d.get("note"):
-                nueva["note"] = d["note"]
-            nuevas.append(nueva)
-        # Recién acá se decide qué pasa con `planets[].disputes`: lo que migró se saca (ya vive en
-        # `nuevas`), lo que no migró se queda escrito — visible, no perdido — para revisar a mano.
-        if sin_migrar:
-            pl["disputes"] = sin_migrar
-        else:
-            pl.pop("disputes", None)
-    # `disputes` va donde vivía la información: justo después de `planets`. Si la ficha ya lo tiene
-    # (migración a medias, o disputas nuevas escritas a mano), se respeta su lugar y se acumula.
-    # `planets` existe sí o sí: sin él la función ya habría vuelto arriba.
-    if "disputes" in front:
-        front["disputes"] = nuevas
-    else:
-        reordenado = {}
-        for k, v in front.items():
-            reordenado[k] = v
-            if k == "planets":
-                reordenado["disputes"] = nuevas
-        front = reordenado
-    cfg.write_text_atomic(dest, text[:ini]
-                          + _fm_preservando_comentarios(fm(front), text[ini:end], dest)
-                          + text[end:])
-    cfg.print_seguro(f"  {dest.name}: {len(nuevas)} disputa(s) migradas a posiciones explícitas")
-    return True
-
-
-def migrate_all_facets() -> int:
-    """Migrador de un solo uso de R-5: renombra `topics:` → `facets:` en las notas de paper.
-
-    INV-64 pide **dos piezas** por cambio de schema: migración idempotente y detector bloqueante de
-    la forma vieja. R-5 entregó el detector y **no** el migrador: el mensaje del lint mandaba a
-    "renombrarlo" a mano, nota por nota (medido en una instancia real: 908 de 908 notas traían el
-    campo viejo). Un cambio de schema sin migrador convierte a la instancia en trabajo manual, que
-    es exactamente lo que la regla de "sin capa de retrocompatibilidad" asume resuelto.
-
-    Renombre **quirúrgico a nivel línea** (como `merge_frontmatter_list`): no toca la extracción
-    LLM ni el cuerpo. Si la nota ya trae `facets:`, el `topics:` residual se **borra** en vez de
-    pisarlo — el vigente manda.  @inv INV-64"""
-    n = 0
-    for f in cfg.note_paths(cfg.PAPERS):
-        texto = f.read_text(encoding="utf-8")
-        span = cfg.frontmatter_span(texto)
-        if span is None:
-            continue
-        head, resto = span
-        lineas = head.split("\n")
-        if not any(ln.startswith("topics:") for ln in lineas):
-            continue
-        ya_tiene = any(ln.startswith("facets:") for ln in lineas)
-        out, dropping = [], False
-        for ln in lineas:
-            if dropping:
-                if ln[:1] in (" ", "\t", "-"):
-                    if not ya_tiene:
-                        out.append(ln)
-                    continue
-                dropping = False
-            if ln.startswith("topics:"):
-                dropping = True
-                if not ya_tiene:
-                    out.append("facets:" + ln[len("topics:"):])
-                continue
-            out.append(ln)
-        # ⚠ Reconstrucción EXACTA: `head` ya viene con su `\n` inicial y final desde
-        # `frontmatter_span`. Agregar `"\n---\n"` metía una línea en blanco DENTRO del
-        # frontmatter y `resto.lstrip("\n")` borraba la de después del `---`: las dos rompían el
-        # "byte a byte" que el docstring promete (AUD-38/39, auditoría 2026-08-24).
-        cfg.write_text_atomic(f, "---" + "\n".join(out) + "---" + resto)
-        n += 1
-    cfg.print_seguro(f"`topics:` → `facets:` en {n} nota(s) de paper (R-5).")
-    return n
-
-
-def migrate_all_registros() -> int:
-    """Migrador de un solo uso de D-28: `busqueda:` (mapa, una corrida) → `busquedas: []`.
-
-    La otra mitad que INV-64 pedía y no existía: el lint bloqueaba el registro viejo y mandaba a
-    "re-correr la cadena", que cuesta una pasada de red entera **y pierde la corrida vieja**. El
-    registro es el único artefacto no regenerable de la bóveda, así que la corrida se **pliega**
-    (marcada como pre-D-28), no se recrea.  @inv INV-64"""
-    n = 0
-    for rf in sorted(cfg.REGISTRO.glob("*.yaml")) if cfg.REGISTRO.exists() else []:
-        slug = rf.stem
-        data = cfg.load_registro(slug)
-        vieja = data.get("busqueda")
-        if not isinstance(vieja, dict):
-            continue
-        previas = [b for b in cfg.as_list(data.get("busquedas")) if isinstance(b, dict)]
-        data.pop("busqueda", None)
-        data["busquedas"] = ([{**vieja, "schema": "pre-D-28 (plegada al migrar; una sola corrida)"}]
-                             if not previas else previas)
-        cfg.save_registro(slug, data)
-        n += 1
-    cfg.print_seguro(f"`busqueda:` → `busquedas: []` en {n} registro(s) (D-28).")
-    return n
-
-
-def migrate_all_txt_fields() -> int:
-    """Migrador de un solo uso de #205: saca `symbols_lost:` y `fulltext_layout:` de las notas.
-
-    Los dos campos existían para una sola decisión —**¿el extractor lee el `.txt` o el PDF?**— y esa
-    decisión ya no se toma: la fuente es el PDF, siempre. Un campo sin lector no se deja «por las
-    dudas»: se lee como un gate vivo, y éstos además **mienten**. Medido el 2026-08-28: un paper con
-    `symbols_lost: False` y `single-column` había perdido igual el radical `√`, la prima de `p′` y
-    superíndices de transpuesta.
-
-    Es borrado puro y no pierde nada recuperable: los dos se derivan del `.txt`, que sigue en disco.
-    Edición **quirúrgica a nivel línea** (como `migrate_all_bearing`): no toca la extracción LLM ni
-    el cuerpo.  @inv INV-26"""
-    n = 0
-    for f in cfg.note_paths(cfg.PAPERS):
-        texto = f.read_text(encoding="utf-8")
-        lim = cfg.fm_bounds(texto)        # AUD-147
-        if lim is None:
-            continue
-        ini, fin = lim
-        head, resto = texto[ini:fin], texto[fin:]
-        lineas = [ln for ln in head.split("\n")
-                  if not ln.startswith(("symbols_lost:", "fulltext_layout:"))]
-        if len(lineas) == len(head.split("\n")):
-            continue
-        cfg.write_text_atomic(f, texto[:ini] + "\n".join(lineas) + resto)
-        n += 1
-    return n
-
-
-def migrate_all_extracciones() -> tuple[int, list]:
-    """One-shot migrator for #311: `build/<slug>/extraccion/` → `vault/raw/extraccion/<slug>/`.
-
-    ⛔ The framework declared two contradictory things about the same directory: the golden rule of
-    scratch (*"`build/` holds what is REGENERABLE"*) and, for extractions, *"an extraction is not
-    regenerated without paying the most expensive step again"* (#228). Measured on one theme: 33
-    extractions, 988 KB, ~4.9 M subagent tokens of PDF reading — and `git ls-files build/` returned
-    **0**, so none of it travelled to another machine. The user's stated intent was that they
-    persist; the repo did not deliver it, they survived by filesystem inertia and any `git clean`
-    erased them.
-
-    Moves, never copies: two copies of the same extraction is how a stale one gets harvested.
-    Returns `(moved, [collisions])` — a destination that already exists is NOT overwritten."""
-    n, choques = 0, []
-    for viejo in sorted(cfg.ROOT.glob("build/*/extraccion/*.json")):
-        slug = viejo.parent.parent.name
-        dest = cfg.EXTRACCION / slug / viejo.name
-        if dest.exists():
-            choques.append(f"{slug}/{viejo.name}")
-            continue
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        cfg.write_text_atomic(dest, viejo.read_text(encoding="utf-8"))
-        viejo.unlink()
-        n += 1
-    return n, choques
-
-
-def migrate_all_source_fields() -> tuple[int, list]:
-    """One-shot migrator for #296: a `pdf_source`/`fulltext_source` outside its closed vocabulary.
-
-    The value becomes `null` —which is the legitimate value for *unknown*, and not "published"—
-    and the prose that was living in the field is **moved, never dropped**: measured, one of the
-    two real cases was a legitimate acquisition note (*«the user gets it; ADS only indexes a REVIEW
-    of the book»*) that ended up in the wrong field because the schema had nowhere to put it. It
-    goes to `pending_motivo` when the note declares `pending_source`, and to `salvedades`
-    otherwise, so the migration cannot destroy information the operator wrote on purpose.
-
-    Returns `(migrated, [(stem, where the prose went)])`, and writes nothing when the resulting
-    frontmatter stops parsing (#244)."""
-    n, movidas = 0, []
-    for f in cfg.note_paths(cfg.PAPERS):
-        texto = f.read_text(encoding="utf-8")
-        fm = cfg.split_fm(texto)
-        lim = cfg.fm_bounds(texto)
-        if not fm or lim is None:
-            continue
-        malos = {campo: str(fm[campo]).strip()
-                 for campo, ok in (("pdf_source", cfg.PDF_SOURCE_OK),
-                                   ("fulltext_source", cfg.FULLTEXT_SOURCE_OK))
-                 if fm.get(campo) not in (None, "") and str(fm[campo]).strip() not in ok}
-        if not malos:
-            continue
-        ini, fin = lim
-        head, resto = texto[ini:fin], texto[fin:]
-        lineas = _drop_keys(head, tuple(f"{c}:" for c in malos))
-        destino = "pending_motivo" if fm.get("pending_source") else "salvedades"
-        # AUD-221 — con DOS campos malos el bucle decidía por el `fm` viejo y en la segunda vuelta
-        # borraba la línea que acababa de escribir (o abría un segundo `salvedades:`). Las notas
-        # se juntan y se escriben UNA vez.
-        notas = []
-        for campo, valor in sorted(malos.items()):
-            lineas.append(f"{campo}: null")
-            notas.append(f"[{campo} decía] {valor}")
-        if destino == "pending_motivo" and not cfg.declared_motive(fm.get("pending_motivo")):
-            lineas = [ln for ln in lineas if not ln.startswith("pending_motivo:")]
-            lineas.append(f"pending_motivo: {json.dumps(' · '.join(notas), ensure_ascii=False)}")
-        elif not fm.get("salvedades"):
-            lineas.append("salvedades:\n" + "\n".join(f"  - {json.dumps(n_, ensure_ascii=False)}" for n_ in notas))
-        else:
-            lineas.extend(f"# ⚠ #296 — mové a mano esta nota: {n_}" for n_ in notas)
-        nuevo = texto[:ini] + "\n".join(lineas) + resto
-        if not cfg.split_fm(nuevo):
-            cfg.print_seguro(f"  ⛔ {f.name}: la migración dejaría el frontmatter sin parsear — NO "
-                             f"se escribe. Movelo a mano.")
-            continue
-        cfg.write_text_atomic(f, nuevo)
-        movidas.append((f.stem, destino))
-        n += 1
-    return n, movidas
-
-
-EXTRACCION_VIEJA_RE = cfg.EXTRACCION_VIEJA_RE      # ONE definition (AUD-278)
-
-
-def migrate_all_vistas() -> tuple[int, list]:
-    """One-shot migrator for #188: `## Extracción (LLM)` → `vistas[]` + `## Vista — <sujeto>`.
-
-    ⛔ AUD-175 / INV-64 — #188 shipped a **blocking detector with no migrator**, which is half of
-    the contract this repo set itself: «a new schema means a one-shot migrator plus a blocking
-    detector, never a tolerant reader». Without it every note older than 1.68.0 stays red with no
-    way out but hand-editing them one by one (measured in a real vault: 908 paper notes).
-
-    What can be migrated and what cannot. The view's **subject** comes from the note's own claim
-    (`stars` / `thesis_links`): with exactly **one** it is unambiguous. With two or more it is NOT
-    guessed — picking one would assert a reading nobody performed from there — and the note comes
-    back in the ambiguous list along with its candidates.
-
-    `fecha` is NOT stamped: the old extraction did happen, but **when** and **through which lens**
-    is not on record, and absent means exactly «not on record» (#188). The lint then reports it as
-    *vista sin fecha*, which is backlog and is the truth. `fuente` (#207) is not invented either.
-
-    Returns `(migrated, ambiguous)`."""
-    migradas, ambiguas = 0, []
-    for f in cfg.note_paths(cfg.PAPERS):
-        text = f.read_text(encoding="utf-8")
-        if not EXTRACCION_VIEJA_RE.search(text):
-            continue
-        fm = cfg.split_fm(text)
-        if cfg.as_list(fm.get("vistas")):
-            continue                      # ya migrada (o escrita con el schema nuevo)
-        estrellas = [str(x) for x in cfg.as_list(fm.get("stars")) if str(x).strip()]
-        temas = [str(x) for x in cfg.as_list(fm.get("thesis_links")) if str(x).strip()]
-        reclamos = [(n, "star") for n in estrellas] + [(n, "theme") for n in temas]
-        if len(reclamos) != 1:
-            ambiguas.append((f.stem, [n for n, _ in reclamos]))
-            continue
-        sujeto, tipo = reclamos[0]
-        lim = cfg.fm_bounds(text)
-        if lim is None:
-            ambiguas.append((f.stem, []))
-            continue
-        ini, end = lim
-        bloque = yaml.safe_dump({"vistas": [{"sujeto": sujeto, "tipo": tipo}]},
-                                sort_keys=False, allow_unicode=True, default_flow_style=False)
-        head = text[ini:end].rstrip("\n") + "\n" + bloque.rstrip("\n")
-        cuerpo = EXTRACCION_VIEJA_RE.sub(f"## Vista — {sujeto}", text[end:])
-        cfg.write_text_atomic(f, text[:ini] + head + cuerpo)
-        migradas += 1
-    return migradas, ambiguas
-
-
-def migrate_all_no_sintetizado() -> tuple[int, list]:
-    """One-shot migrator of #553: `no_sintetizado: <motivo>` → `[{sujeto, motivo}]`.
-
-    The motive goes to each subject that claims the paper (`stars`, `thesis_links`, or a theme via
-    `methods`) and does NOT cite it in its note: where the ficha synthesises it the hatch did
-    nothing, and copying it there is exactly the measured defect (the HD 40307 motive over a ficha
-    that does synthesise the paper). Which subject should keep each motive is judgement, not done here.
-
-    Returns `(migrated, warnings)`: a mark without motive is not migrated —there is nothing to
-    distribute— and one left with no subject is retired, saying so."""
-    themes = {} if cfg.themes_error() else (cfg.load_themes() or {})
-    n, avisos = 0, []
-    for f in cfg.note_paths(cfg.PAPERS):
-        texto = f.read_text(encoding="utf-8")
-        fm = cfg.split_fm(texto) or {}
-        v = fm.get("no_sintetizado")
-        if v is None or isinstance(v, list):
-            continue
-        motivo = cfg.declared_motive(v)
-        if not motivo:
-            avisos.append(f"{f.stem}: `no_sintetizado` sin motivo — no hay qué repartir, "
-                          f"escribilo a mano en la forma nueva")
-            continue
-        sujetos = [str(x) for k in ("stars", "thesis_links") for x in cfg.as_list(fm.get(k))]
-        for slug_t, meta in themes.items():
-            if any(theme_membership(
-                    str(cfg.as_map(meta).get("concept") or slug_t), fm)):
-                sujetos.append(slug_t)
-        entradas = []
-        for sujeto in dict.fromkeys(sujetos):
-            dest = cfg.entity_note(cfg.subject_slug(sujeto) or sujeto)
-            if dest and cfg.wikilink_re(f.stem).search(_prosa(dest.read_text(encoding="utf-8"))):
-                continue
-            entradas.append(sujeto)
-        ini, fin = cfg.fm_bounds(texto)          # never None here: `split_fm` found the field
-        head = "\n".join(cfg.drop_fm_keys_from_block(texto[ini:fin], ["no_sintetizado"]))
-        if entradas:
-            head = head.rstrip("\n") + "\nno_sintetizado:\n" + "".join(
-                f"  - sujeto: {cfg.yaml_scalar(s)}\n    motivo: {cfg.yaml_scalar(motivo)}\n"
-                for s in entradas)
-        else:
-            avisos.append(f"{f.stem}: todos los sujetos que lo reclaman lo sintetizan — la escotilla "
-                          f"se retira (motivo era: «{motivo[:80]}»)")
-        salida = texto[:ini] + head.rstrip("\n") + texto[fin:]
-        # #244: the reader before the writer. ⚠ An atajo `--guardas` reports as a survivor: no
-        # fixture makes this rebuild unparsable, and dropping it would trade a guard for nothing.
-        if not cfg.split_fm(salida):
-            avisos.append(f"{f.stem}: la migración dejaría el frontmatter sin parsear: no se escribió")
-            continue
-        cfg.write_text_atomic(f, salida)
-        n += 1
-    return n, avisos
-
-
-def migrate_all_bearing() -> int:
-    """Migrador de un solo uso de D-21: saca `bearing:` del frontmatter de las notas de paper.
-
-    La **postura** de un paper respecto de una tesis no es propiedad del paper —depende de la tesis,
-    y un paper puede tocar varias—, así que vive en la tabla de evidencia de la hipótesis. Dejarla
-    en el paper obligaba a elegir una sola postura para todas.
-
-    Es borrado puro y no pierde nada recuperable: el dato viejo era un único valor para N tesis, o
-    sea que ya estaba mal por construcción. Edición **quirúrgica a nivel línea** (como
-    `merge_frontmatter_list`): no toca la extracción LLM ni el cuerpo.  @inv INV-13"""
-    n = 0
-    for f in cfg.note_paths(cfg.PAPERS):
-        texto = f.read_text(encoding="utf-8")
-        lim = cfg.fm_bounds(texto)        # AUD-147
-        if lim is None:
-            continue
-        ini, fin = lim
-        head, resto = texto[ini:fin], texto[fin:]
-        lineas = [ln for ln in head.split("\n") if not ln.startswith("bearing:")]
-        if len(lineas) == len(head.split("\n")):
-            continue
-        cfg.write_text_atomic(f, texto[:ini] + "\n".join(lineas) + resto)
-        n += 1
-    return n
-
-
-def migrate_all_disputes() -> int:
-    """Backfill #71 sobre toda la bóveda. Ver migrate_disputes para el porqué del alcance."""
-    # @inv INV-64
-    notes = cfg.note_paths(cfg.STARS)
-    changed = sum(1 for n in notes if migrate_disputes(n))
-    cfg.print_seguro(f"disputas: {changed} de {len(notes)} ficha(s) migradas al schema con posiciones (#71)")
-    if changed:
-        cfg.print_seguro("  → el frontmatter se re-serializó (la prosa NO se tocó): revisá el diff antes de "
-              "commitear.")
-    else:
-        cfg.print_seguro("  → nada que migrar. (El lint NO lee el schema viejo: si queda alguno, lo reporta "
-              "como bloqueante en vez de ignorarlo en silencio.)")
-    return 0
-
-
 def sync_mirror() -> int:
     """Backfill: rellena el frontmatter de `stars/` —espejo puro de NEA (#70)— con lo que el
     ground-truth trae y la ficha todavía tiene en `null`. Resuelve el residuo medido al migrar una
@@ -2137,8 +1309,8 @@ def sync_mirror() -> int:
     import arriba crearía un ciclo; adentro de la función, cuando se llama, `make_notes` ya terminó
     de cargar y el ciclo no existe.
 
-    Como el resto de la familia de migradores del archivo: no toca la prosa (re-serializa sólo el
-    frontmatter, igual que `migrate_disputes`), es idempotente (segunda corrida, cero cambios: ya
+    Como los otros backfills del archivo: no toca la prosa (re-serializa sólo el
+    frontmatter), es idempotente (segunda corrida, cero cambios: ya
     no hay más `null` que rellenar) y sin ground-truth para una ficha no hace nada —sin autoridad
     no hay contra qué espejar, y tocarla igual sería inventar."""
     from lint import MIRROR_HOST, MIRROR_PLANET, same_value
@@ -2191,7 +1363,7 @@ def sync_mirror() -> int:
                   "— sincronizalo a mano")
         host = cfg.as_map(raw_host)
         planets = front.get("planets")
-        # Cobarde ante una forma que no entiende, mismo criterio que migrate_disputes: si
+        # Cobarde ante una forma que no entiende: si
         # `planets` no es una lista de mapas, no tocar nada en vez de arriesgar basura escrita.
         if planets is not None and (not isinstance(planets, list)
                                      or not all(isinstance(pl, dict) for pl in planets if pl)):
@@ -2370,7 +1542,7 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
 def _fm_preservando_comentarios(nuevo_bloque: str, head_viejo: str, dest) -> str:
     """The re-serialised YAML block (no delimiters) carrying the old head's comments.
 
-    AUD-169 / INV-139 — `sync_mirror` and `migrate_disputes` re-serialise the whole frontmatter with
+    AUD-169 / INV-139 — `sync_mirror` re-serialises the whole frontmatter with
     `yaml.safe_dump`, which drops every comment. The framework tells people to hand-edit these
     files, so those comments are curation: a stamper that erases them destroys work nobody can
     reconstruct, and reports success while doing it. Whatever cannot be re-anchored is **named**
@@ -2729,10 +1901,10 @@ def vista_block(sujeto: str, theme: bool = False, motivo: str = "", fecha: str =
 
 
 def _legacy_vista_block(sujeto: str, theme: bool) -> str:
-    """La PLANTILLA que el stub estampaba hasta 1.211.0 — sólo para RECONOCERLA y migrarla (#398).
+    """La PLANTILLA que el stub estampaba hasta 1.211.0 — sólo para RECONOCERLA (#398).
 
-    No la escribe nadie más: es el insumo de `is_view_stub`, que decide qué secciones puede pisar el
-    migrador sin tocar prosa. Ramificada por tipo de sujeto
+    No la escribe nadie: es el insumo de `view_stub_kind`, que la reconoce para el lint
+    (`vista_con_plantilla`) y para el cosechador (no la pisa sin `--force`). Ramificada por tipo de sujeto
     (#76). Tema → el eje del concept (aporte, mecanismo/ecuación, régimen). Estrella → el
     ground-truth (que es del schema de `stars/`, no del objetivo) y los ejes de la lente. El rol
     del paper (fundacional/aplicación/árbitro) es #73, que define el campo antes que el bullet.
@@ -4411,7 +3583,7 @@ def write_star_note(slug: str, force: bool) -> None:
         # (`P_rot`, `b.K`, `b.existence`) y cada posición dice quién la sostiene —`ref` un paper, o
         # `source: ground_truth` cuando NEA arbitra—. El schema viejo (dentro de `planets[]`) tenía
         # el polo de verdad hardcodeado y no podía expresar paper↔paper, que es el caso normal
-        # cuando NEA calla. Migración: make_notes.py --migrate-disputes.
+        # cuando NEA calla. El schema viejo lo bloquea el lint (`schema_retirado`, #624).
         "disputes": [],
         "data_local": meta.get("data_local"),
         "methods_applied": {"literature": [], "ours": []},
@@ -4931,7 +4103,6 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
     return True
 
 
-
 def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -4944,7 +4115,7 @@ def main() -> int:
                          "preprint→publicado, D-19)")
     ap.add_argument("slug", nargs="?",
                     help="slug de estrella/tema; en --web es la CLAVE de cita (AAAA+Autor). "
-                         "Opcional con los backfills y migradores que abajo dicen «sin slug» / "
+                         "Opcional con los backfills que abajo dicen «sin slug» / "
                          "«no requiere slug».")
     ap.add_argument("--all", action="store_true", help="incluir papers no-relevantes")
     ap.add_argument("--restamp-pdf-links", action="store_true", dest="restamp_pdf_links",
@@ -4970,48 +4141,11 @@ def main() -> int:
                          "`methods_applied.literature` y `methods` son dos vocabularios sin clave "
                          "de join, y llenarla publicaba huecos FALSOS. Idempotente, cirugía. "
                          "No requiere slug.")
-    ap.add_argument("--fix-header-order", action="store_true", dest="fix_header_order",
-                    help="migrador #378: en las notas de paper donde el aviso de capa LLM quedó "
-                         "ENTRE el H1 y la línea de cabecera, lo baja debajo de ella. Idempotente; "
-                         "no toca las que ya están en orden canónico.")
     ap.add_argument("--restamp-headers", action="store_true", dest="restamp_headers",
                     help="backfill #69: barre TODAS las fichas/conceptos y estampa la cabecera "
                          "(aviso de capa LLM + línea del generador) a las que nacieron sin ella. "
                          "La versión sale del `generator` del frontmatter, no se inventa. No toca "
                          "la síntesis LLM; no requiere slug.")
-    ap.add_argument("--migrate-facets", action="store_true", dest="migrate_facets",
-                    help="migración R-5: renombra `topics:` → `facets:` en las notas de paper "
-                         "(quirúrgico, no toca la extracción LLM). No requiere slug.")
-    ap.add_argument("--migrate-registros", action="store_true", dest="migrate_registros",
-                    help="migración D-28: pliega `busqueda:` (mapa) en `busquedas: []` "
-                         "preservando la corrida vieja. No requiere slug.")
-    ap.add_argument("--migrate-disputes", action="store_true", dest="migrate_disputes",
-                    help="migración #71: pasa `planets[].disputes[]` (polo de verdad hardcodeado) a "
-                         "`disputes` a nivel nota con posiciones explícitas. Toca sólo las fichas "
-                         "que tienen disputas viejas; no toca el cuerpo. No requiere slug.")
-    ap.add_argument("--migrate-verif-archivo", action="store_true", dest="migrate_verif_archivo",
-                    help="migración #117: prefija cada `Hash fuente` del bloque de verificación con "
-                         "el archivo que se leyó (`txt:`/`pdf:`), deducido del hash que la fila ya "
-                         "guardaba. No requiere slug.")
-    ap.add_argument("--migrate-verif-sidecar", action="store_true", dest="migrate_verif_sidecar",
-                    help="migración #344: mueve la TABLA del bloque de verificación al hermano "
-                         "`<nota>.verif.md` (la nota conserva la línea de cabecera, las tres "
-                         "sub-secciones y un puntero). Idempotente. No requiere slug.")
-    ap.add_argument("--migrate-warn-anchor", action="store_true", dest="migrate_warn_anchor",
-                    help="migración #528: re-firma cada `warn_revisada` del ancla de PÁRRAFO al "
-                         "bloque que parte el lint; la firma que cubría varios bloques no se "
-                         "reparte: se declara. Idempotente. No requiere slug.")
-    ap.add_argument("--migrate-no-sintetizado", action="store_true", dest="migrate_no_sintetizado",
-                    help="migración #553: `no_sintetizado: <motivo>` → `[{sujeto, motivo}]`, "
-                         "repartido a los sujetos que reclaman el paper y no lo citan. "
-                         "Idempotente. No requiere slug.")
-    ap.add_argument("--migrate-bearing", action="store_true", dest="migrate_bearing",
-                    help="migración D-21: saca `bearing:` del frontmatter de las notas de paper (la "
-                         "postura vive en la tabla de evidencia de la hipótesis). No requiere slug.")
-    ap.add_argument("--migrate-txt-fields", action="store_true", dest="migrate_txt_fields",
-                    help="migración #205: saca `symbols_lost:` y `fulltext_layout:` del frontmatter "
-                         "de las notas de paper (la fuente de lectura es el PDF, así que ya no "
-                         "deciden nada). No requiere slug.")
     ap.add_argument("--restamp-sources-meta", action="store_true", dest="restamp_sources_meta",
                     help="#353: re-sincroniza title/first_author/year/doi/n_authors del stub off-ADS "
                          "desde su item de `sources:` (la corrección de la config no llegaba a la nota)")
@@ -5021,9 +4155,6 @@ def main() -> int:
                          "vigentes al cosechar). No requiere slug.")
     ap.add_argument("--dry-run", action="store_true", dest="dry_run",
                     help="sólo con --fill-abstracts: dice qué llenaría y no escribe nada")
-    ap.add_argument("--restamp-transcribed-note", action="store_true", dest="restamp_transcribed",
-                    help="#416: la línea sobre un `## Abstract` transcrito del PDF deja de afirmar "
-                         "un `sin_abstract` que el frontmatter no declara")
     ap.add_argument("--fill-abstracts", action="store_true", dest="fill_abstracts",
                     help="#413: completa el `## Abstract` con el placeholder desde el CATÁLOGO "
                          "(OpenAlex por `doi`, red). Para una nota `pending_source` es el único "
@@ -5031,28 +4162,11 @@ def main() -> int:
     ap.add_argument("--restamp-alcance", action="store_true", dest="restamp_alcance",
                     help="#312: re-estampa `alcance`/`unidad_cita` de las notas desde `sources[]` de "
                          "themes.yaml (la config es la autoridad). No requiere slug.")
-    ap.add_argument("--migrate-extracciones", action="store_true", dest="migrate_extracciones",
-                    help="migración #311: mueve `build/<slug>/extraccion/*.json` a "
-                         "`vault/raw/extraccion/<slug>/`, que SÍ se versiona. No requiere slug.")
-    ap.add_argument("--migrate-source-fields", action="store_true", dest="migrate_source_fields",
-                    help="migración #296: `pdf_source`/`fulltext_source` fuera de su vocabulario "
-                         "cerrado → `null`, y la prosa que vivía en el campo se MUEVE (a "
-                         "`pending_motivo` o a `salvedades`), no se tira. No requiere slug.")
-    ap.add_argument("--migrate-vistas", action="store_true", dest="migrate_vistas",
-                    help="migración #188: `## Extracción (LLM)` → `vistas[]` + `## Vista — "
-                         "<sujeto>`. El sujeto sale del reclamo de la nota cuando es UNO solo; con "
-                         "varios se lista para declararlo a mano (elegir uno afirmaría una lectura "
-                         "que nadie hizo). No estampa `fecha`: ausente es «no consta». Sin slug.")
     ap.add_argument("--clean-catalog-markup", action="store_true", dest="clean_catalog_markup",
                     help="backfill #271: saca el markup crudo de catálogo (`<SUB>`, `<ASTROBJ>`, "
                          "`<A href>`…) de `## Abstract` en las notas de paper. ⚠ Cambia bytes que "
                          "leen el detector de duplicados (#216) y el diff de lente (D-49): "
                          "re-medilos después. Sin slug.")
-    ap.add_argument("--restamp-vista-stub", action="store_true", dest="restamp_vista_stub",
-                    help="migración #398: la sección `## Vista` de un stub deja de publicar las "
-                         "INSTRUCCIONES AL EXTRACTOR y pasa a una línea de estado (reclamado sin "
-                         "leer, o no leído con su motivo de `no_vista`). No toca una vista con "
-                         "prosa. Sin slug.")
     ap.add_argument("--restamp-abstracts", action="store_true", dest="restamp_abstracts",
                     help="backfill #277: escribe el `## Abstract` que falte en una nota de paper "
                          "(contenido `_(no disponible)_` — lo completa la próxima extracción). La "
@@ -5115,36 +4229,14 @@ def main() -> int:
         return restamp_index()
     if args.restamp_matrix:
         return restamp_matrix()
-    if args.fix_header_order:
-        fix_header_order()
-        return 0
     if args.restamp_headers:
         return restamp_headers()
     if args.restamp_abstracts:
         return restamp_abstracts()
-    if args.restamp_vista_stub:
-        return restamp_vista_stub()
     if args.clean_catalog_markup:
         return clean_catalog_markup_notes()
-    if args.migrate_no_sintetizado:
-        n, avisos = migrate_all_no_sintetizado()
-        for a in avisos:
-            cfg.print_seguro(f"  ⚠ {a}")
-        cfg.print_seguro(f"`no_sintetizado` migrado a la forma por sujeto en {n} nota(s) (#553).")
-        return 0
-    if args.migrate_bearing:
-        n = migrate_all_bearing()
-        cfg.print_seguro(f"`bearing` retirado de {n} nota(s) de paper (D-21).")
-        return 0
-    if args.migrate_txt_fields:
-        n = migrate_all_txt_fields()
-        cfg.print_seguro(f"`symbols_lost`/`fulltext_layout` retirados de {n} nota(s) (#205).")
-        return 0
-
     if args.restamp_sources_meta:
         return restamp_sources_meta()
-    if args.restamp_transcribed:
-        return restamp_transcribed_note()
     if args.fill_abstracts:
         return fill_abstracts(dry_run=bool(getattr(args, "dry_run", False)))
     if args.restamp_alcance:
@@ -5152,50 +4244,6 @@ def main() -> int:
     if args.restamp_lente:
         return restamp_lens()
 
-    if args.migrate_extracciones:
-        n, choques = migrate_all_extracciones()
-        cfg.print_seguro(f"{n} extracción(es) movidas a `vault/raw/extraccion/` (#311) — "
-                         f"commiteálas: son el artefacto más caro de la cadena.")
-        for c in choques:
-            cfg.print_seguro(f"  ⚠ {c}: ya existe en el destino, NO se pisó — comparalas a mano")
-        return 0
-
-    if args.migrate_source_fields:
-        n, movidas = migrate_all_source_fields()
-        cfg.print_seguro(f"{n} nota(s) con `pdf_source`/`fulltext_source` fuera de vocabulario → "
-                         f"`null` (#296).")
-        for stem, destino in movidas:
-            cfg.print_seguro(f"  {stem}: la prosa se movió a `{destino}` — revisala")
-        return 0
-
-    if args.migrate_vistas:
-        n, ambiguas = migrate_all_vistas()
-        cfg.print_seguro(f"{n} nota(s) migradas a `vistas[]` + `## Vista — <sujeto>` (#188).")
-        if ambiguas:
-            cfg.print_seguro(
-                f"  ⚠ {len(ambiguas)} nota(s) NO se pudieron migrar solas: el sujeto de la vista "
-                f"no es inequívoco (elegir uno afirmaría una lectura que nadie hizo desde ahí). "
-                f"Declarala a mano en cada una:")
-            for stem, cands in ambiguas[:20]:
-                cfg.print_seguro(f"      {stem}: {', '.join(cands) or '(sin reclamos)'}")
-            if len(ambiguas) > 20:
-                cfg.print_seguro(f"      … y {len(ambiguas) - 20} más")
-        return 0
-
-    if args.migrate_verif_archivo:
-        return migrate_all_verif_archivo()
-    if args.migrate_verif_sidecar:
-        return migrate_all_verif_sidecar()
-    if args.migrate_warn_anchor:
-        return migrate_all_warn_anchor()
-    if args.migrate_facets:
-        migrate_all_facets()
-        return 0
-    if args.migrate_registros:
-        migrate_all_registros()
-        return 0
-    if args.migrate_disputes:
-        return migrate_all_disputes()
     if args.sync_mirror:
         return sync_mirror()
     # `--rename-paper VIEJO NUEVO` ANTES del guard de slug: sus dos bibcodes son el argumento y no
@@ -5215,12 +4263,9 @@ def main() -> int:
     if not args.slug:
         ap.error("falta el slug (corren sin slug: --restamp-pdf-links, --restamp-keywords, "
                  "--restamp-index, --restamp-matrix, "
-                 "--restamp-headers, --restamp-abstracts, --fill-abstracts, --restamp-vista-stub, "
-                 "--restamp-transcribed-note, "
+                 "--restamp-headers, --restamp-abstracts, --fill-abstracts, "
                  "--restamp-alcance, --restamp-lente, --clean-catalog-markup, "
-                 "--migrate-disputes, --migrate-bearing, --migrate-no-sintetizado, --migrate-extracciones, "
-                 "--migrate-source-fields, "
-                 "--migrate-txt-fields, --migrate-vistas, --sync-mirror y --rename-paper)")
+                 "--sync-mirror y --rename-paper)")
 
     if args.web:
         if args.pending and not str(args.pending_motivo or "").strip():

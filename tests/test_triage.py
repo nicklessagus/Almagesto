@@ -111,8 +111,8 @@ def test_drop_acumula_decisiones_previas(toy_vault, monkeypatch):
 
 def test_el_triage_json_viejo_ya_no_se_lee_solo(toy_vault, monkeypatch):
     """El lector NO mergea el `triage.json` pre-1.9.0: una capa de compatibilidad es complejidad
-    permanente, y el juicio viejo tiene un camino explícito (`--migrate`). El riesgo que eso
-    introduce —que el archivo quede mudo— lo cubre el detector bloqueante del lint."""
+    permanente, y el migrador vive en el tag de git (#624). El riesgo que eso introduce —que el
+    archivo quede mudo— lo cubre el detector bloqueante del lint (`schema_retirado`)."""
     d = write_ads(toy_vault, candidates=[cand("2020b....1B")])
     (d / "triage.json").write_text(json.dumps({"slug": "test_star", "decisiones": {
         "2020a....1A": {"decision": "descartado", "motivo": "juicio viejo"}}}), encoding="utf-8")
@@ -120,11 +120,6 @@ def test_el_triage_json_viejo_ya_no_se_lee_solo(toy_vault, monkeypatch):
     run_main(monkeypatch, ["test_star", "--drop", "2020b....1B", "--reason", "nuevo"])
     dec = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))["decisiones"]
     assert set(dec) == {"2020b....1B"}
-    # y el camino explícito sí lo recupera, sin perder el motivo
-    run_main(monkeypatch, ["test_star", "--migrate"])
-    dec = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))["decisiones"]
-    assert set(dec) == {"2020a....1A", "2020b....1B"}
-    assert dec["2020a....1A"]["motivo"] == "juicio viejo"
 
 
 def test_registro_preserva_la_busqueda_al_dropear(toy_vault, monkeypatch):
@@ -315,28 +310,6 @@ def test_offads_puro_sin_decisiones_no_da_un_consejo_imposible(toy_vault, monkey
         run_main(monkeypatch, ["gp"])
 
 
-def test_migrate_consume_el_triage_json_viejo(toy_vault, monkeypatch, capsys):
-    """El detector del lint bloquea por EXISTENCIA del archivo: sin borrarlo, correr el único
-    comando que el propio mensaje recomienda dejaba el lint en 1 para siempre, sin ninguna acción
-    disponible. Borrarlo es lo que el mismo mensaje declara seguro (`build/` es scratch)."""
-    legacy = cfg.legacy_triage_path("test_star")
-    legacy.parent.mkdir(parents=True, exist_ok=True)
-    legacy.write_text(json.dumps({"decisiones": {"2019A....1A": {"decision": "descartado",
-                                                                "motivo": "ruido"}}}),
-                      encoding="utf-8")
-    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
-    assert not legacy.exists()
-    assert cfg.load_decisiones("test_star")["2019A....1A"]["motivo"] == "ruido"
-
-
-def test_migrate_con_json_valido_pero_no_objeto(toy_vault, monkeypatch):
-    legacy = cfg.legacy_triage_path("test_star")
-    legacy.parent.mkdir(parents=True, exist_ok=True)
-    legacy.write_text('["2019A....1A"]', encoding="utf-8")
-    with pytest.raises(SystemExit, match="no es un objeto JSON"):
-        run_main(monkeypatch, ["test_star", "--migrate"])
-
-
 def test_listado_sin_ads_json_cae_al_registro_versionado(toy_vault, monkeypatch, capsys):
     """CON juicio registrado y sin `ads.json`, el triage **no aborta**: cae al registro versionado
     y muestra lo ya decidido. Es la contraparte de `test_sin_ads_json_error_amigable`, y el punto
@@ -363,69 +336,6 @@ def test_show_decisions_con_busqueda_no_mapa_no_crashea(toy_vault, capsys):
 
 
 # ── --migrate: consolidar el triage.json viejo (#51) ─────────────────────────
-
-def test_migrate_consolida_sin_esperar_un_drop(toy_vault, monkeypatch, capsys):
-    """El juicio pre-1.9.0 no puede depender de que el usuario justo descarte algo: hasta el
-    próximo --drop seguiría viviendo sólo en scratch, y un clon lo perdería igual que antes."""
-    d = write_ads(toy_vault)
-    (d / "triage.json").write_text(json.dumps({"slug": "test_star", "decisiones": {
-        "2020a....1A": {"decision": "descartado", "motivo": "ruido", "fecha": "2026-01-01"},
-        "2020b....1B": {"decision": "descartado", "motivo": "otro"}}}), encoding="utf-8")
-    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
-    dec = yaml.safe_load(cfg.registro_path("test_star").read_text(encoding="utf-8"))["decisiones"]
-    assert set(dec) == {"2020a....1A", "2020b....1B"}
-    assert dec["2020a....1A"]["motivo"] == "ruido"          # el motivo viaja, no sólo el bibcode
-    assert "2 decisión(es) migradas" in capsys.readouterr().out
-
-
-def test_migrate_es_idempotente_y_no_pisa_lo_versionado(toy_vault, monkeypatch, capsys):
-    # @inv INV-54
-    d = write_ads(toy_vault)
-    (d / "triage.json").write_text(json.dumps({"decisiones": {
-        "2020a....1A": {"decision": "descartado", "motivo": "viejo"}}}), encoding="utf-8")
-    cfg.save_decisiones("test_star", {"2020a....1A": {"decision": "descartado",
-                                                      "motivo": "revisado después"}})
-    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
-    dec = cfg.load_registro("test_star")["decisiones"]
-    assert dec["2020a....1A"]["motivo"] == "revisado después"      # gana el registro
-    assert "ya estaban en el registro" in capsys.readouterr().out
-
-
-def test_migrate_sin_legacy_no_rompe(toy_vault, monkeypatch, capsys):
-    write_ads(toy_vault)
-    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
-    assert "nada que migrar" in capsys.readouterr().out
-
-
-def test_migrate_no_borra_un_triage_json_que_no_consolido(toy_vault, monkeypatch, capsys):
-    """El `unlink` es correcto cuando el migrador CONSUMIÓ su entrada. Si el JSON no trae la clave
-    `decisiones` no se consolidó nada: borrarlo diciendo "ya consolidado" destruye un archivo que
-    nadie leyó y cierra el hallazgo del lint con una afirmación falsa."""
-    legacy = cfg.ROOT / "build" / "test_star" / "triage.json"
-    legacy.parent.mkdir(parents=True, exist_ok=True)
-    legacy.write_text('{"otra_cosa": 1}', encoding="utf-8")
-    triage.migrate("test_star")
-    assert legacy.exists(), "se borró un triage.json del que no se consolidó ninguna decisión"
-
-
-def test_migrate_con_decisiones_escalar_en_el_registro(toy_vault, capsys):
-    """`triage.py:194` — `ya = cfg.load_registro(slug).get("decisiones") or {}`.
-
-    El registro es el archivo que el framework **manda editar a mano** (el aviso de #81 dice
-    literalmente "sacá la entrada de `decisiones`"). `cfg.load_decisiones` (lib_config:374) ya
-    tiene el `isinstance` que hace falta; este lector paralelo del migrador no lo usa. Con
-    `decisiones` escalar el `b not in ya` de la línea siguiente se vuelve un **substring match**
-    silencioso y el `{**viejas, **ya}` termina en `TypeError: 'str' object is not a mapping` —
-    a mitad de una migración que toca el único artefacto no regenerable de la bóveda."""
-    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
-    cfg.registro_path("test_star").write_text(
-        yaml.safe_dump({"slug": "test_star", "decisiones": "ninguna"}), encoding="utf-8")
-    legacy = cfg.legacy_triage_path("test_star")
-    legacy.parent.mkdir(parents=True, exist_ok=True)
-    legacy.write_text(json.dumps(
-        {"decisiones": {"2020a....1A": {"decision": "descartado", "motivo": "ruido"}}}),
-        encoding="utf-8")
-    assert triage.migrate("test_star") == 0
 
 
 def test_triage_imprime_el_snippet_estructurado(toy_vault, capsys, monkeypatch):
@@ -913,29 +823,6 @@ def test_reporte_ya_no_es_un_via_valido(monkeypatch):
     with pytest.raises(SystemExit, match="vocabulario cerrado"):
         triage.accept_source("ica", ["10.1/x"], "reporte", "vino del reporte de Undermind")
     assert triage.VIA_FUENTE == ("usuario", "descubrimiento")
-
-
-
-
-def test_migrate_con_decisiones_no_mapa_no_deja_el_bloqueante_sin_salida(toy_vault, monkeypatch, capsys):
-    """AUD-152 — un `decisiones` que no es un mapa reventaba con `AttributeError` a mitad, y como el
-    lint bloquea por EXISTENCIA del archivo el usuario quedaba con un bloqueante **sin salida**: el
-    único comando que el propio mensaje receta no podía correr nunca."""
-    legacy = cfg.legacy_triage_path("test_star")
-    legacy.parent.mkdir(parents=True, exist_ok=True)
-    legacy.write_text(json.dumps({"decisiones": ["2019A....1A"]}), encoding="utf-8")
-    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 1
-    assert legacy.exists(), "no se borra lo que no se pudo migrar"
-    assert "no es un mapa" in capsys.readouterr().out
-
-    # y una ENTRADA que no es mapa no se migra (el lector la descartaría igual), pero sí el resto
-    legacy.write_text(json.dumps({"decisiones": {"2019A....1A": "descartado",
-                                                 "2020B....1B": {"decision": "descartado",
-                                                                 "motivo": "ruido"}}}),
-                      encoding="utf-8")
-    assert run_main(monkeypatch, ["test_star", "--migrate"]) == 0
-    assert "2019A....1A" not in cfg.load_decisiones("test_star")
-    assert cfg.load_decisiones("test_star")["2020B....1B"]["motivo"] == "ruido"
 
 
 def test_drop_normaliza_como_su_gemelo_drop_source(toy_vault, monkeypatch, capsys):

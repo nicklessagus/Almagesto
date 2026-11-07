@@ -295,8 +295,8 @@ def condition_resolved(condicion: str) -> bool:
     `CONDITION_RESOLUTIONS`, whole (the lesson of #276: `resueltamente` is not `resuelta`).
 
     ⛔ And it stays a STRICT reader: the doubled-class cell (`acota: acota→resuelta: …`) reads as
-    UNRESOLVED (#427). This repo carries no compatibility layers — the way out is the migrator
-    (`write_verif_sidecar.py --migrate-condition-prefix`), because a tolerant reader would leave two
+    UNRESOLVED (#427). This repo carries no compatibility layers — the way out is the migrator in
+    the git tag (#624), because a tolerant reader would leave two
     valid spellings for one thing and the defect comes back through the other one."""
     kind, resto = condition_split(condicion)
     if kind is None:
@@ -457,7 +457,7 @@ def warn_anchor(lineas: list, i: int) -> str:
 def paragraph_anchor(lineas: list, i: int) -> str:
     """The PARAGRAPH that holds line `i` — or the row itself in a table, where a paragraph would be
     the whole table. `warn_anchor`'s fallback for lines `split_blocks` does not read, and the
-    pre-#528 anchor that `make_notes --migrate-warn-anchor` re-signs from."""
+    pre-#528 anchor (its re-signing migrator lives in the git tag, #624)."""
     if lineas[i].strip().startswith("|"):
         return sha10(normalize_ws(lineas[i]))
 
@@ -1203,8 +1203,8 @@ def verif_counts(rows: list) -> dict:
     keeps counting as a contradiction, resolved. What #232 feared —round 2 blanking the number—
     happens with a bare `contradice→soportada`, and that is exactly what `revertidas` publishes.
     ⛔ #522 — the writer produced that form itself until 1.332.0 (it no longer does: it annotates
-    through `chained_verdict`); `write_verif_sidecar.py --migrate-verdict-chain` folds the rows
-    already written, and the lint reports a `revertidas` > 0 under `verif_estructura`.
+    through `chained_verdict`); the lint reports a `revertidas` > 0 under `verif_estructura`, and
+    the migrator that folded the rows already written lives in the git tag (#624).
     """
     vs = [current_verdict(r.verdict) for r in rows]
     return {"pares": len(rows),
@@ -1320,8 +1320,8 @@ def inline_verif_rows(text: str) -> list[str]:
     """Table rows still sitting **inside** the note — the pre-1.165.0 schema (#344).
 
     ⛔ Detector, never a tolerant reader: the repo does not carry compatibility layers. A note that
-    keeps its table inline is migrated with `make_notes.py --migrate-verif-sidecar`, and until then
-    the lint blocks. Reading it from either place would leave two homes for one table, which is the
+    keeps its table inline blocks in the lint (`schema_retirado`; its migrator lives in the git
+    tag, #624). Reading it from either place would leave two homes for one table, which is the
     duplication #344 exists to remove."""
     return [ln.strip() for ln in verif_section(text).split("\n") if ln.strip().startswith("|")]
 
@@ -1365,7 +1365,7 @@ def rows_addressed(rows: list, anchor: str, bibcode: str | None = None) -> list:
 def verif_rows(note) -> list[Row] | None:
     """The rows of this note's verification table, read from its sidecar (#344).
 
-    ⛔ **The single entry point for the four consumers** (`lint`, `make_notes.migrate_verif_archivo`,
+    ⛔ **The single entry point for its consumers** (`lint`, `write_verif_sidecar`,
     `reverify_subset`, `contrast`). `None` means *not evaluable* —no sidecar, or a sidecar with the
     pre-hash template— and that is not "zero expired pairs": D-43 again."""
     #  @inv INV-148

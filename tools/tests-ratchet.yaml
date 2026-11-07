@@ -21,7 +21,7 @@
 #   - el techo NUNCA se sube. Si una función nueva lo necesita, su test está en el archivo equivocado.
 #   - la guarda contra subidas es `cfg.ratchet_raises` (`tests/test_ratchets.py`, INV-140, AUD-485).
 medido_en: "2026-09-11"
-techo: 25
+techo: 24
 conocidos:
   - bench_verify.py::flush
   - extract_fulltext.py::tesseract_version
@@ -32,7 +32,6 @@ conocidos:
   - lib_config.py::combination_rule
   - lib_config.py::frontmatter_span
   - lib_config.py::get_mailto
-  - lib_config.py::legacy_triage_path
   - lib_config.py::missing_schema_fields
   - lib_config.py::ratchet_raises
   - lib_config.py::record_pdf_source

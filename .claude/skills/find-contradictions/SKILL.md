@@ -221,8 +221,8 @@ de concepto) que se agregaría en cada caso, y **pedir aprobación**. Formato de
   (el otro lado era el frontmatter), así que un desacuerdo **paper↔paper** —el caso normal cuando NEA
   calla— terminaba en prosa: no acumulable, no chequeable por el lint, invisible al consumidor
   máquina. Y `P_rot`, que es de la estrella, no tenía dónde colgar. El lint **no lee** el schema
-  viejo: si la bóveda todavía lo tiene, lo reporta como bloqueante y hay que migrar
-  (`make_notes.py --migrate-disputes`) antes de taguear nada nuevo.
+  viejo: si la bóveda todavía lo tiene, lo reporta como bloqueante (`schema_retirado`) y hay que
+  salir de ahí —re-ingestar, o el migrador del tag de git, #624— antes de taguear nada nuevo.
 - **Concepto (mecanismo/signo/lag):** `disputes` a nivel nota **igual que en una ficha** (#71) —
   acá la disputa es **simétrica por definición**, no hay valor de frontmatter contra el cual poner un
   `alt`, así que las dos posiciones son `{ref: …, value: …}`. Más una línea en la prosa citando

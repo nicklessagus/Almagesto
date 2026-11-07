@@ -61,7 +61,6 @@ EXTRACCION_ESCRITORES = {
     "replace_pdf.stamp_depagination": "agrega `_paginacion` (#436); no toca la lectura",
     "repaginate.apply": "localizadores tras RELEER el PDF (#494), con sus guardas",
     "make_notes._move_extraction": "`--rename-paper`: mueve y reescribe SÓLO `bibcode` (#228/#374)",
-    "make_notes.migrate_all_extracciones": "migrador #311: MUEVE de `build/`, sin tocar contenido",
     "write_verif_sidecar.refute_extraction": "agrega `_refutado` (#526); no toca la lectura",
     "entity._rewrite_subject_layers": "rename: SÓLO `vista.sujeto`/`vista.txt`/`thesis_links` == slug, por texto (#570)",
 }
@@ -77,7 +76,6 @@ OTROS_ESCRITORES = {
     "harvest_views.restamp_salvedades": "la NOTA (lee la extracción)",
     "lib_config.record_pdf_source": "build/<slug>/pdf_source.json",
     "make_notes.stamp_scope": "frontmatter de la nota",
-    "make_notes.migrate_all_source_fields": "frontmatter de la nota",
     "query_ads.main": "build/<slug>/ads.json",
     "repaginate.write_round": "el paquete de la ronda (fuera de raw/)",
     "reverify_subset.main": "la salida que pide `--json`",

@@ -4,10 +4,12 @@
 25 notas / 4 estrellas) midió un ciclo de tres pasos que una bóveda vacía no puede ejercitar: (1) el
 lint del framework nuevo, corrido sobre un corpus del schema viejo, **bloquea** con categorías que
 el lector ya no tolera (`planets[].disputes[]` pre-#71, `build/<slug>/triage.json` pre-#51, el
-espejo #70 roto porque `planets[]` no traía `mass_earth`); (2) los migradores/estampadores
-(`make_notes.py --migrate-disputes/--restamp-headers/--sync-mirror`, `triage.py --migrate`) se
-corren; (3) el lint **cierra** el hallazgo — no sólo "el comando no tiró error", sino que el
-CONTEO baja a 0. Ese tercer paso es el que fallaba en el propio framework hasta hace poco: el
+espejo #70 roto porque `planets[]` no traía `mass_earth`); (2) los estampadores
+(`make_notes.py --restamp-headers/--sync-mirror`) se corren; (3) el lint **cierra** el hallazgo — no
+sólo "el comando no tiró error", sino que el CONTEO baja a 0. Los migradores de un solo uso del schema
+viejo salieron de HEAD en #624 (viven en el tag de git `cfg.RETIRED_MIGRATORS_TAG`): lo que este
+archivo fija de ese lado es que el schema viejo **sigue bloqueando**, con la receta visible, y que
+ningún estampador vivo lo vuelve mudo. Ese tercer paso es el que fallaba en el propio framework hasta hace poco: el
 deadlock #69 (documentado en el docstring de `make_notes.stamp_header`) hacía que
 `--restamp-headers` informara "22 estampadas" en CADA corrida sin que el lint bajara nunca de 22 —
 el comando recetado por el propio mensaje del lint no cerraba el hallazgo que recetaba. `sembrar_corpus(vintage="1.11.0")` (`tests/poblada/generador.py`) reproduce ese schema viejo de
@@ -39,7 +41,6 @@ import yaml
 import lib_config as cfg
 import lint
 import make_notes
-import triage
 
 from generador import hash_tree
 
@@ -127,7 +128,7 @@ def test_vintage_bloquea_con_categorias_de_schema_viejo_y_receta_visible(sembrar
     propio `Censo.star_gt` — un planeta por dispute vieja, un planeta por contradicción de espejo —
     así que valen para cualquier seed/tamaño. Referencia del ensayo real (no el umbral de este
     test): 16 bloqueantes, de los cuales 13 eran el espejo #70 y 2+1 el resto del schema viejo.  @inv INV-64"""
-    _, censo = sembrar(n_papers=60, n_stars=4, n_concepts=8, seed=100, vintage="1.11.0")
+    paths, censo = sembrar(n_papers=60, n_stars=4, n_concepts=8, seed=100, vintage="1.11.0")
 
     n_planetas = sum(len(gt["planets"]) for gt in censo.star_gt.values())
     n_estrellas_con_planeta = sum(1 for gt in censo.star_gt.values() if gt["planets"])
@@ -138,13 +139,16 @@ def test_vintage_bloquea_con_categorias_de_schema_viejo_y_receta_visible(sembrar
     rc, reporte = _run_lint_reporte()
     assert rc == 1
 
-    n_old, items_old = _categoria(reporte, "disputes en el schema viejo")
-    assert n_old == n_estrellas_con_planeta
-    assert all("python scripts/make_notes.py --migrate-disputes" in it for it in items_old)
-
-    n_legacy, items_legacy = _categoria(reporte, "Juicio de triage en build")
-    assert n_legacy == 1                     # un solo build/<slug>/triage.json sembrado
-    assert f"python scripts/triage.py {censo.star_slugs[0]} --migrate" in items_legacy[0]
+    n_ret, items_ret = _categoria(reporte, "Schema retirado")
+    old = [it for it in items_ret if "[old_disputes · entidades]" in it]
+    assert len(old) == n_estrellas_con_planeta
+    assert all("python scripts/make_notes.py --migrate-disputes" in it
+               and cfg.RETIRED_MIGRATORS_TAG in it for it in old), "receta visible, con su tag"
+    legacy = [it for it in items_ret if "[legacy_triage · registros]" in it]
+    assert len(legacy) == 1                  # un solo build/<slug>/triage.json sembrado
+    assert legacy[0].startswith(f"`{censo.star_slugs[0]}`") or censo.star_slugs[0] in legacy[0]
+    assert "python scripts/triage.py <slug> --migrate" in legacy[0]
+    assert n_ret == _n_retirado(paths, censo)
 
     n_mirror, _ = _categoria(reporte, "Contradicciones ground-truth")
     # un `mass_earth` faltante por planeta (#70) **y** un `mass_msun` por estrella: la masa estelar
@@ -164,79 +168,8 @@ def test_vintage_bloquea_con_categorias_de_schema_viejo_y_receta_visible(sembrar
 
 # ── 2. --migrate-disputes cierra, no toca prosa, es idempotente ────────────────────────────────
 
-def test_migrate_disputes_cierra_y_es_idempotente_sin_tocar_prosa(sembrar):
-    """El modo de falla medido en el ensayo real: la primera corrida migra ("2 de 4 fichas
-    migradas"), pero sin el `unlink`/guardas correctos una segunda corrida podía migrar DE NUEVO
-    (duplicando posiciones) o dejar el archivo a medio migrar. Fija las dos mitades: 1ª corrida
-    baja la categoría a 0 y migra EXACTAMENTE las fichas con disputa vieja; 2ª corrida no cambia
-    nada (ni el conteo del lint ni un solo byte de las fichas)."""
-    paths, censo = sembrar(n_papers=50, n_stars=5, n_concepts=6, seed=101, vintage="1.11.0")
-    n_esperadas = sum(1 for gt in censo.star_gt.values() if gt["planets"])
-
-    pre_bodies = _all_bodies(paths)          # migrate_disputes NUNCA debe tocar el cuerpo
-
-    rc0, reporte0 = _run_lint_reporte()
-    assert rc0 == 1
-    n0, _ = _categoria(reporte0, "disputes en el schema viejo")
-    assert n0 == n_esperadas
-
-    changed1 = sum(1 for slug in censo.star_slugs
-                   if make_notes.migrate_disputes(paths.STARS / f"{slug}.md"))
-    assert changed1 == n_esperadas
-
-    rc1, reporte1 = _run_lint_reporte()
-    n1, _ = _categoria(reporte1, "disputes en el schema viejo")
-    assert n1 == 0, "el migrador corrió pero el lint sigue viendo el schema viejo"
-    # el nuevo schema con posiciones explícitas tiene que ser LEGIBLE, no sólo "no viejo":
-    n_bad, _ = _categoria(reporte1, "disputes mal formadas")
-    assert n_bad == 0
-    n_dangling, _ = _categoria(reporte1, "disputes: ref de una posición")
-    assert n_dangling == 0                   # el `ref` migrado (paper_stems[0]) resuelve a una nota
-
-    post_bodies = _all_bodies(paths)
-    assert post_bodies == pre_bodies, "migrate_disputes tocó el cuerpo de alguna nota (sólo debe re-serializar frontmatter)"
-
-    changed2 = sum(1 for slug in censo.star_slugs
-                   if make_notes.migrate_disputes(paths.STARS / f"{slug}.md"))
-    assert changed2 == 0, "segunda corrida: no debería quedar nada para migrar"
-    rc2, reporte2 = _run_lint_reporte()
-    n2, _ = _categoria(reporte2, "disputes en el schema viejo")
-    assert n2 == 0
-
 
 # ── 3. triage --migrate consolida y CONSUME su entrada (el detector deja de bloquear) ──────────
-
-def test_triage_migrate_consolida_borra_legacy_y_es_idempotente(sembrar):
-    """El ciclo que #51 exige: el detector del lint bloquea por EXISTENCIA de
-    `build/<slug>/triage.json`, así que el migrador tiene que CONSUMIR el archivo (borrarlo), no
-    sólo leerlo — si lo dejara en disco, `triage.migrate` "tendría éxito" en cada corrida sin que el
-    lint bajara nunca de 1, el mismo patrón de deadlock que #69. Referencia del ensayo real: "100
-    decisiones ya estaban en el registro"; acá el `triage.json` sintético trae `decisiones: {}`
-    (0), así que el número relevante no es CUÁNTAS se migran sino que el archivo se borra Y el
-    lint cierra."""
-    paths, censo = sembrar(n_papers=40, n_stars=3, n_concepts=5, seed=102, vintage="1.11.0")
-    slug0 = censo.star_slugs[0]
-    legacy = cfg.legacy_triage_path(slug0)
-    assert legacy.exists()
-
-    rc0, reporte0 = _run_lint_reporte()
-    n0, _ = _categoria(reporte0, "Juicio de triage en build")
-    assert n0 == 1
-
-    rc = triage.migrate(slug0)
-    assert rc == 0
-    assert not legacy.exists(), "el migrador tiene que CONSUMIR (borrar) el triage.json viejo"
-
-    rc1, reporte1 = _run_lint_reporte()
-    n1, _ = _categoria(reporte1, "Juicio de triage en build")
-    assert n1 == 0
-
-    # idempotente: sin el archivo, una segunda corrida no revienta y no hay nada más que consolidar
-    rc2 = triage.migrate(slug0)
-    assert rc2 == 0
-    rc3, reporte3 = _run_lint_reporte()
-    n3, _ = _categoria(reporte3, "Juicio de triage en build")
-    assert n3 == 0
 
 
 # ── 4. --sync-mirror cierra el espejo del corpus vintage y es idempotente ──────────────────────
@@ -360,22 +293,29 @@ def test_sync_mirror_es_add_only_nunca_pisa_ni_inventa(sembrar, capsys):
 # ── 6. el ciclo completo: bloquea → migra → cierra → segunda pasada es un no-op byte a byte ────
 
 def _correr_ciclo(paths, censo) -> None:
-    """Los migradores/estampadores, en el orden del deploy real (CLAUDE.md, plan §5)."""
-    make_notes.migrate_all_bearing()             # D-21: la postura sale del paper
-    make_notes.migrate_all_disputes()
+    """Los estampadores vivos, en el orden del deploy real (CLAUDE.md, plan §5). Los migradores del
+    schema viejo salieron de HEAD en #624: lo que queda de ellos acá es que `schema_retirado` siga
+    bloqueando con el mismo conteo."""
     make_notes.restamp_headers()
     make_notes.sync_mirror()
-    triage.migrate(censo.star_slugs[0])          # el único sujeto con build/<slug>/triage.json
+
+
+def _n_retirado(paths, censo) -> int:
+    """Los hallazgos de `schema_retirado` que siembra el vintage: una ficha por estrella con
+    planeta (`planets[].disputes[]`), un `bearing:` por paper que lo lleve y el `triage.json`."""
+    return (sum(1 for gt in censo.star_gt.values() if gt["planets"])
+            + sum(1 for p in censo.paper_stems
+                  if _load_fm_body(paths.PAPERS / f"{p}.md")[0].get("bearing") is not None) + 1)
 
 
 def test_ciclo_completo_cierra_el_lint_y_la_segunda_pasada_es_no_op(sembrar):
     """EL test del task: no alcanza con "el migrador corrió sin error" (eso es lo que ya fallaba en
     el propio framework con el deadlock #69 — "22 estampadas" en cada corrida sin que el lint
     bajara nunca de 22). Acá el criterio es el ciclo completo: bloquea con las categorías del
-    schema viejo (conteo > 0) → se corren los migradores en el orden del deploy → el lint da
-    EXIT 0 con las 12 categorías bloqueantes en 0 → se corren DE NUEVO → el árbol de
-    `vault/` es BYTE A BYTE idéntico al de la primera pasada (no sólo "el lint sigue en 0": nada se
-    reescribió) y el lint sigue en exit 0.  @inv INV-22"""
+    schema viejo (conteo > 0) → se corren los estampadores en el orden del deploy → toda categoría
+    bloqueante queda en 0 salvo `schema_retirado`, que sigue con su conteo exacto (#624: su salida es
+    re-ingestar o el migrador del tag, no un estampador vivo) → se corren DE NUEVO → el árbol de
+    `vault/` es BYTE A BYTE idéntico al de la primera pasada (nada se reescribió).  @inv INV-22"""
     paths, censo = sembrar(n_papers=70, n_stars=5, n_concepts=8, seed=105, vintage="1.11.0")
 
     rc0, _ = _run_lint_reporte()
@@ -384,25 +324,27 @@ def test_ciclo_completo_cierra_el_lint_y_la_segunda_pasada_es_no_op(sembrar):
     _correr_ciclo(paths, censo)
 
     rc1, reporte1 = _run_lint_reporte()
-    assert rc1 == 0, reporte1[:3000]
+    assert rc1 == 1, "el schema retirado sigue bloqueando: ningún estampador vivo lo vuelve mudo"
     for titulo in ("Wikilinks rotos", "Frontmatter no parseable", "Papers RETRACTADOS",
                   "Notas huérfanas", "Contradicciones ground-truth", "masa inconsistente con m",
                   "thesis_links sin página destino", "disputes: ref de una posición",
-                  "disputes mal formadas", "disputes en el schema viejo",
-                  "`bearing` en una nota de paper",
-                  "Juicio de triage en build", "`role` fuera del vocabulario"):
+                  "disputes mal formadas", "`role` fuera del vocabulario"):
         n, _ = _categoria(reporte1, titulo)
         assert n == 0, f"{titulo!r} sigue con hallazgos después del ciclo completo"
+    n_ret, _ = _categoria(reporte1, "Schema retirado")
+    assert n_ret == _n_retirado(paths, censo)
+    assert sum(len(lint.collect().en_alcance(c)) for c in lint.collect().bloquean()) == n_ret, \
+        "lo único que bloquea es el schema retirado"
 
     hash1 = hash_tree(paths.VAULT)
 
     _correr_ciclo(paths, censo)                  # segunda pasada: nada más que hacer
 
     rc2, reporte2 = _run_lint_reporte()
-    assert rc2 == 0
+    assert rc2 == 1 and _categoria(reporte2, "Schema retirado")[0] == n_ret
     hash2 = hash_tree(paths.VAULT)
     assert hash1 == hash2, (
-        "la segunda pasada de los migradores reescribió algo en vault/ — no es no-op: "
+        "la segunda pasada de los estampadores reescribió algo en vault/ — no es no-op: "
         "un estampador sin ancla de idempotencia (el patrón del deadlock #69) reescribiría en "
         "cada corrida sin que el lint lo note, porque el lint mide CATEGORÍAS, no bytes")
 
@@ -410,9 +352,9 @@ def test_ciclo_completo_cierra_el_lint_y_la_segunda_pasada_es_no_op(sembrar):
 # ── 7. el ciclo no pierde contenido: papers intactos, prosa de fichas/conceptos preservada ─────
 
 def test_upgrade_no_pierde_contenido_fuera_de_frontmatter_y_cabecera(sembrar):
-    """Los cuatro pasos re-serializan frontmatter (los tres primeros) o insertan un bloque de
-    cabecera (`restamp_headers`, después del `# H1`) — ninguno debería BORRAR o EDITAR una línea de
-    prosa ya escrita. Papers: ningún migrador los toca → cuerpo IDÉNTICO byte a byte. Fichas y
+    """Los dos pasos re-serializan frontmatter (`sync_mirror`) o insertan un bloque de cabecera
+    (`restamp_headers`, después del `# H1`) — ninguno debería BORRAR o EDITAR una línea de prosa ya
+    escrita. Papers: ningún migrador los toca → cuerpo IDÉNTICO byte a byte. Fichas y
     conceptos: el cuerpo cambia (crece con la cabecera), pero cada línea que estaba ANTES tiene que
     seguir apareciendo DESPUÉS, en el mismo orden relativo — la firma de "sólo inserción, nunca
     reescritura" (ver `_is_line_subsequence`).

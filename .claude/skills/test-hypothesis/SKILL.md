@@ -137,7 +137,7 @@ Los pasos 4–9 corren **sólo si el usuario pide archivar**:
    como escalar suelto en la nota del paper es **un veredicto sin evidencia que `verify-citations`
    no puede chequear** (no hay nada que un subagente pueda ir a mirar). En la tabla hay
    naturalmente una fila por par, con cita: es verificable. ⛔ El campo `bearing` en una nota de
-   paper es **schema viejo y el lint lo bloquea** (migrador: `make_notes.py --migrate-bearing`).
+   paper es **schema viejo y el lint lo bloquea** (`schema_retirado`, #624).
 
    **`status` con vocabulario CERRADO (D-37)** — el lint lo valida y bloquea lo que no esté en la
    lista (`status: supuesto operativo con caveat conocido` era prosa libre que nadie validaba):

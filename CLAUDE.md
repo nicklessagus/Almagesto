@@ -305,7 +305,7 @@ discrepancias **materiales** (mayores que el error). Reflejar la disputa tambié
 
 ⚠ **El schema viejo** (`planets[].disputes[]` con `field`/`ref`/`note`/`alt`) no podía expresar
 paper↔paper ni colgar `P_rot`. **El lint no lo lee: lo detecta y bloquea**
-(`python scripts/make_notes.py --migrate-disputes`).
+(`schema_retirado`, #624).
 
 ### papers/
 
@@ -408,7 +408,7 @@ sección `### Lente — <énfasis>` **dentro** de la `## Vista` del sujeto (AUD-
 `<bibcode>__<lente>.json` (#371)**: al canónico pisaba un artefacto no regenerable (#311).
 
 **La sección de una vista sin leer es una línea de estado, no un prompt (#398):** *«reclamado, sin
-leer»* o *«no leído desde X (fecha): motivo»*. Backfill: `make_notes.py --restamp-vista-stub`.
+leer»* o *«no leído desde X (fecha): motivo»*.
 
 **`vistas[]` la escribe sólo la lectura, nunca el retro-link.** `stars`/`thesis_links`/`methods`
 son **reclamos** (add-only sin leer); `vistas[]`, **lecturas**. Un reclamo sin vista es backlog y se
@@ -475,9 +475,8 @@ repunta (#217/#304).
 ⛔ **Los dos son vocabulario CERRADO y el lint los BLOQUEA (#296)** —`pdf_source: eprint|ads|
 publisher|web`, `fulltext_source: pdftotext|ocr|web`, con `null`/ausente = **desconocido**—: el
 campo **decide lecturas** y un valor fuera de vocabulario cae por el `else` en silencio. ⚠ Ese `else`
-**ya no exime** del chequeo de cita textual (#275/#363). Migrador:
-`python scripts/make_notes.py --migrate-source-fields` (pasa el valor a `null` y **mueve** la prosa
-a `pending_motivo` o `salvedades`).
+**ya no exime** del chequeo de cita textual (#275/#363). Salida: el
+valor a `null` y la prosa **movida** a `pending_motivo` o `salvedades`.
 
 **`fulltext_source` vs `pdf_source` (#57):** el primero dice **cómo se extrajo** el texto, el segundo
 **de qué documento salió** — `eprint` (arXiv: puede ser un **v1 pre-referato**, con `eprint_version`
@@ -491,8 +490,8 @@ editor y lo no conseguido queda en `missing_pdf.json` (`publicado-no-conseguido`
 sólo con `acepta_preprint: [{bibcode, motivo, fecha}]` junto a `extra_core` (`triage.py <slug>
 --acepta-preprint <bib> --reason`), y vale por bibcode. arXiv-only y tesis: el eprint ES la fuente.
 
-⚠ **`symbols_lost` y `fulltext_layout` se RETIRARON (#205, #193, #194):** migrador
-`--migrate-txt-fields`; el lint **bloquea** la nota que los lleve. **`Read` rasteriza el PDF, así que
+⚠ **`symbols_lost` y `fulltext_layout` se RETIRARON (#205, #193, #194):** el lint
+**bloquea** la nota que los lleve. **`Read` rasteriza el PDF, así que
 el modelo *ve* la fórmula**.
 
 #### `keywords` (D-17)
@@ -516,8 +515,8 @@ resuelve, no promedia. Vocabulario **cerrado** y bloqueante.
 
 #### Escotillas y metadata de estado
 
-- `no_sintetizado: [{sujeto, motivo}]` (#75, **por sujeto** #553 — el escalar bloquea,
-  `--migrate-no-sintetizado`): este paper **ya extraído** legítimamente no se inlinea en la nota de
+- `no_sintetizado: [{sujeto, motivo}]` (#75, **por sujeto** #553 — el escalar bloquea):
+  este paper **ya extraído** legítimamente no se inlinea en la nota de
   ese sujeto —típicamente por la **regla de poda**—. Motivo **obligatorio** (no curar en silencio);
   sin ella, el lint lo reporta como *extraído pero no sintetizado*.
 - `retracted: true` + `retraction{type,notice_doi,date,source}`: lo estampa
@@ -639,7 +638,7 @@ El cuerpo lleva **tres cosas propias**:
 2. **La tabla de evidencia** (D-21) — una fila por paper: `Paper | Postura | Qué dice (cita textual)
    | L | Régimen`. Acá vive la **postura** (`apoya`/`desafía`/`método`), **no** en la nota del paper
    (depende de la tesis, y en la tabla es verificable). ⛔ `bearing` en una nota de paper es schema
-   viejo y **el lint lo bloquea** (`make_notes.py --migrate-bearing`).
+   viejo y **el lint lo bloquea** (`schema_retirado`).
 3. **El veredicto global marcado `inferencia`** (D-36), con sus premisas: agregar N filas en una
    conclusión es juicio del agente, no algo que una fuente diga.
 
@@ -985,8 +984,7 @@ La compuerta de triage **no se apaga por flag** (D-48: `--no-triage` se eliminó
 `chain_autoaccept`). Efectos: `make_notes` estampa en la cabecera **una línea** con fecha,
 universo→core, pendientes y la ruta al registro; el lint deja de dar **falso limpio** sin `build/`
 (*triage pendiente* y *corpus truncado* caen al registro, con fecha). El `build/<slug>/triage.json`
-viejo **ya no se lee**: se consolida con `triage.py <slug> --migrate` y, mientras exista, el **lint
-lo bloquea**.
+viejo **ya no se lee**: mientras exista, el **lint lo bloquea** (`schema_retirado`).
 
 ### Los cuatro cuadrantes de la curación — quién decidió y por qué (#111)
 
@@ -1076,7 +1074,7 @@ vuelven.
 ***¿la afirmación queda falsa si se saca la condición?*** → **`acota`** (se resuelve sí o sí: fila de
 `## Régimen de validez`) / **`contextualiza`** (va al reporte). Es **columna, no prosa**.
 **Clase una vez; la resolución la escribe `write_verif_sidecar --resolver
-<ancla>[:<bibcode>]=<dónde>` (#427)** — migrador `--migrate-condition-prefix`. **Se direcciona por
+<ancla>[:<bibcode>]=<dónde>` (#427)**. **Se direcciona por
 el par, no por el ancla (#434).** **La condición de una ronda posterior no se pierde (#451):** rige
 el **último eslabón** (#450); la condición **distinta** se encadena —`acota→resuelta: <dónde> · <vieja>
 ⟂ acota: <nueva>`— y la fila vuelve a contar como pendiente; el escritor **declara** la que no quedó
@@ -1088,8 +1086,8 @@ transcripciones, la **completitud** (afirma **de menos**).
 ⛔ **La TABLA vive en el HERMANO `<nota>.verif.md`, no en la nota (#344).** En la nota quedan **la
 línea de cabecera**, **las tres sub-secciones** de hallazgos y un **puntero**. ⚠ Hermano en el mismo
 directorio, **no** un `.verif/` con punto (Obsidian lo esconde). Las **anclas** hashean bloques **de
-la nota**. El par es un **iff** (INV-148): tabla todavía adentro (→ `make_notes.py
---migrate-verif-sidecar`), cabecera sin hermano y hermano huérfano **bloquean**; cabecera
+la nota**. El par es un **iff** (INV-148): tabla todavía adentro (`schema_retirado`),
+cabecera sin hermano y hermano huérfano **bloquean**; cabecera
 desincronizada de su tabla es R-1. **Una sola función resuelve dónde vive**
 (`lib_blocks.verif_rows`). Un hermano **no es una nota** (`cfg.note_paths` lo saca de todo
 enumerador), pero sus `[[bibcode]]` cuentan para los wikilinks rotos y los reescribe todo renombre;
@@ -1102,7 +1100,7 @@ es la **séptima capa** de `entity.py` (`CAPAS`).
   completo** (#122). **El corte no cae dentro de `$…$`, `` ` `` ni `[[ ]]`** (#274b/#257c:
   `lib_blocks.truncate_claim`). **La celda lleva prosa, nunca un `repr()`** (#274a).
 - ⛔ **`Hash fuente` declara CONTRA QUÉ ARCHIVO se verificó: `txt:<sha10>` o `pdf:<sha10>` (#117).**
-  En filas nuevas: `pdf:`. Sin prefijo el lint **bloquea** (`make_notes.py --migrate-verif-archivo`).
+  En filas nuevas: `pdf:`. Sin prefijo el lint **bloquea**.
   Excepción (#223): la fila `no verificable por extracción` **no declara archivo**.
 - **Documento largo leído del `.txt`: los dos localizadores (#200)**; desde #205 no se produce en
   filas nuevas.
@@ -1276,7 +1274,8 @@ que había acá, en el *Apéndice A*): wikilinks rotos, frontmatter inválido, f
 cerrados violados, veredictos sin resolver, identidad duplicada, `inferencia` sin premisas, paper sin
 `## Abstract` o sin destino, par nota↔`.verif.md` roto, driver `merge=ours` registrado (#390) y
 `bibtex` sin `bibtex_source` (#397) o a la vez con `sin_bibtex` (#475). Si agregás una, va a esa
-lista.
+lista. **El schema retirado bloquea siempre y su migrador sale de HEAD al tag de git (#624):** la
+receta dice *«re-ingestar, o migrar con el template en el tag vX»* (`cfg.retired_migrator_recipe`).
 
 **La fuga de implementación** (regla #0) es **WARN**: heurística de alta señal, cada hit se revisa
 a mano. No mira las `SECCIONES_ESTAMPADAS` (#214), y la exención no alcanza a `## Vista — <sujeto>`.

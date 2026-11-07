@@ -8,7 +8,9 @@ issue, qué entró, cómo validarlo y qué cuenta como «devolver».
 ⛔ **Sin medición no se cierra.** Un issue nació de un caso medido en la instancia; se cierra cuando
 ese caso, corrido de nuevo, hace lo que el fix promete. Lo que no se pudo correr se declara.
 
-Acumulativo por tanda; la sección de la guía de migración que corresponde va nombrada.
+Acumulativo por tanda; la sección de la guía de migración que corresponde va nombrada. ⚠ Las
+secciones anteriores a v1.412.0 que corren un migrador de un solo uso lo hacen con el template en el
+tag `v1.411.3`: #624 los sacó de HEAD.
 
 ---
 
@@ -1258,9 +1260,10 @@ positivo), o si vuelve una cola corta (<24 caracteres) a perdonarse.
 
 ```bash
 python scripts/lint.py
-python scripts/write_verif_sidecar.py --migrate-verdict-chain --todo --dry-run
-python scripts/write_verif_sidecar.py --migrate-verdict-chain --todo
-python scripts/write_verif_sidecar.py --migrate-verdict-chain --todo   # idempotente
+# en el tag v1.411.3 (#624):
+#   write_verif_sidecar.py --migrate-verdict-chain --todo --dry-run
+#   write_verif_sidecar.py --migrate-verdict-chain --todo
+#   write_verif_sidecar.py --migrate-verdict-chain --todo   # idempotente
 python scripts/lint.py
 ```
 
@@ -1369,7 +1372,7 @@ cita). (4) sin `retira` rehúsa; con `retira` escribe, 212 → 211 pares.
 ## §#528 · v1.339.0 — el ancla de `warn_revisada` es el bloque, no el párrafo
 
 ```bash
-python scripts/make_notes.py --migrate-warn-anchor
+# make_notes.py --migrate-warn-anchor   ← en el tag v1.411.3 (#624)
 python scripts/lint.py
 ```
 
@@ -1863,3 +1866,21 @@ página. Firmar 2 con `fetch_bibtex.py --paper 2017isbi.conf...31K --firmar --ca
 pasan a `bibtex_drift_firmado`. **Devolver si** aparece un falso positivo por formato (`L12`,
 `e1234`, rango con otro guion), si alguna corrida estampa sobre una caída de Crossref, o si
 re-correr re-consulta las ya estampadas sin `--force`.
+
+
+## §#624 · v1.412.0 — los migradores de un solo uso salen de HEAD; los detectores, a una tabla
+
+```bash
+python scripts/lint.py          # antes del merge y después: mismo rc, mismos conteos
+```
+
+**Validar:** los conteos del lint son **iguales** antes y después del merge, salvo la fusión
+declarada: las diez categorías de schema retirado (`old_facets`, `old_bearing`,
+`campos_txt_viejos`, `old_no_sintetizado`, `old_disputes`, `legacy_triage`, `old_registro`,
+`vistas_schema_viejo`, `verif_inline`, `old_verif_template`) son ahora **una**,
+`## ⛔ Schema retirado …`, con la suma de sus conteos (medido en el template sobre la instancia:
+0 → 0). Su población declara las tres (papers · entidades · registros). `make_notes.py --help`
+ya no lista los migradores; `--restamp-abstracts` y `--clean-catalog-markup` siguen.
+
+**Devolver si** cambia cualquier otro conteo, si el rc cambia, o si una receta del lint manda a
+un flag que HEAD no tiene sin nombrar el tag `v1.411.3`.

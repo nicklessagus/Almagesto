@@ -66,8 +66,8 @@ GOLDEN_KWARGS: dict = dict(
 BLOQUEANTES = (
     "Wikilinks rotos", "Frontmatter no parseable", "Papers RETRACTADOS", "Notas huérfanas",
     "Contradicciones ground-truth", "masa inconsistente con m", "thesis_links sin página destino",
-    "disputes: ref de una posición", "disputes mal formadas", "disputes en el schema viejo",
-    "Juicio de triage en build", "`role` fuera del vocabulario",
+    "disputes: ref de una posición", "disputes mal formadas", "Schema retirado",
+    "`role` fuera del vocabulario",
 )
 
 

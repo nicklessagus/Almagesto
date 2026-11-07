@@ -755,7 +755,7 @@ _SIN_MARCA = object()
 # autoridad" de "la bóveda genuinamente no sabe", que es la diferencia que el consumidor necesita ver.
 # El schema viejo NO se lee: mantener las dos formas sería complejidad permanente en el lector para
 # una compatibilidad que nadie necesita (decisión del usuario, 2026-08-22 — la bóveda que existe se
-# migra con `python scripts/make_notes.py --migrate-disputes`, o se re-ingesta). Lo que sí se hace es
+# re-ingesta, o se migra con el template en el tag de git — `schema_retirado`, #624). Lo que sí se hace es
 # **detectarlo y bloquear**: una disputa vieja que el lector ignora en silencio es peor que un error.
 # Vocabulario de `posiciones[].source` en una disputa. D-2 / INV-77: con una sola entrada las dos
 # posiciones de una disputa nea↔simbad decían lo mismo, así que el desacuerdo ENTRE AUTORIDADES no
@@ -1120,7 +1120,6 @@ def mirror_issues(slug: str, fm: dict, gt: dict) -> list:
 # Impresión tolerante a consolas no-UTF8 (6ª pasada de auditoría) — implementación única en
 # lib_config (la comparten los otros scripts que mueren por el mismo motivo, ver su docstring).
 _print_seguro = cfg.print_seguro
-
 
 
 # ── el resultado del lint, estructurado (10.1) ───────────────────────────────────────────────────
@@ -2081,26 +2080,6 @@ def check_scope_desync(paper_fms: dict) -> list:
     return alcance_desfasado
 
 
-def check_extraction_in_build() -> list:
-    """`old_registro` rows for extractions still under `build/` (#311, BLOQUEANTE).
-
-    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
-    """
-    old_registro: list = []
-    # #311 — la extracción en `build/` es schema viejo: ese directorio es scratch por `.gitignore`,
-    # así que ahí las extracciones NO viajan (medido: `git ls-files build/` = 0 sobre 33 extracciones
-    # que costaron ~4,9 M tokens de lectura de PDF). Bloqueante y con migrador, como el
-    # `triage.json` pre-1.9.0: un artefacto caro en un directorio declarado descartable es una
-    # trampa puesta, no una convención.
-    for _ext in sorted(cfg.ROOT.glob("build/*/extraccion/*.json"))[:1]:
-        _n = len(list(cfg.ROOT.glob("build/*/extraccion/*.json")))
-        old_registro.append(
-            ("build/", f"{_n} extracción(es) en `build/*/extraccion/` (schema pre-#311): ahí NO se "
-                       f"versionan ni viajan, y una extracción no se regenera sin volver a leer el "
-                       f"PDF → `python scripts/make_notes.py --migrate-extracciones`"))
-    return old_registro
-
-
 def check_depaginated_extractions() -> tuple:
     """`(hallazgos, población)` — extractions whose LOCATORS are from a replaced document (#436).
 
@@ -2434,40 +2413,6 @@ def check_undeclared_areas() -> list:
                     (f"concepts/{d.name}/",
                      f"área fuera de concept_areas; {n} nota(s) — ¿typo o área nueva sin declarar?"))
     return undeclared_areas
-
-
-def check_legacy_triage() -> list:
-    """`legacy_triage` — curation judgement still in `build/<slug>/triage.json` (pre-1.9.0).
-
-    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Its own
-    sweep, not hung off the `ads.json` one: a half-cleaned `build/` would still have the
-    `triage.json` and hanging it off the other loop made it undetectable in the very case this
-    check exists to cover.
-    """
-    legacy_triage: list = []
-    # Juicio de triage en el lugar pre-1.9.0 (bloqueante): barrido PROPIO, no colgado del de
-    # ads.json — un `build/` limpiado a medias (o una bóveda vieja sin ads.json) tendría el
-    # triage.json igual, y colgarlo del otro loop lo volvía indetectable justo en el caso que este
-    # chequeo existe para cubrir.
-    for lt in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "triage.json"))):
-        slug = Path(lt).parent.name
-        try:
-            data_lt = json.loads(open(lt, encoding="utf-8").read())
-            # El guard `isinstance(data_lt, dict)` sólo cubría data_lt mismo: un
-            # `{"decisiones": 3}` (JSON válido, forma inválida un nivel más abajo) lo pasaba igual
-            # y `len(3)` volteaba el reporte ENTERO — el modo de falla equivocado para el chequeo
-            # que existe para no quedar mudo. `as_map` + el `isinstance` sobre `dec` mueven el
-            # guard al nivel donde de verdad se usa (#h03).
-            dec = cfg.as_map(data_lt).get("decisiones")
-            n_viejas = len(dec) if isinstance(dec, (dict, list)) else -1
-        except (ValueError, OSError):
-            n_viejas = -1
-        legacy_triage.append(
-            (slug, f"{'?' if n_viejas < 0 else n_viejas} decisión(es) en "
-                   f"build/{slug}/triage.json, el lugar pre-1.9.0 que el lector ya no mira → "
-                   f"`python scripts/triage.py {slug} --migrate` (si no, el triage vuelve a "
-                   f"proponer lo que ya descartaste, sin el motivo)"))
-    return legacy_triage
 
 
 def check_dangling_layers() -> list:
@@ -2855,25 +2800,6 @@ def check_registro_unreadable(slug: str) -> list:
     return registro_ilegible
 
 
-def check_old_registro_schema(slug: str, reg: dict) -> list:
-    """`old_registro` — the registro still using the pre-D-28 `busqueda:` key.
-
-    Extracted from `lint.collect` by #396; the block computes and the caller accumulates.
-    """
-    old_registro: list = []
-    # D-28: la clave vieja `busqueda:` (mapa, UNA corrida) es el schema pre-1.26. El lector
-    # nuevo no la entiende y no se le agrega un lector tolerante (regla del repo): se detecta y
-    # bloquea, porque un registro mudo deja la ficha afirmando sobre un universo que nadie puede
-    # reconstruir. Se cierra re-corriendo la cadena (la corrida nueva reescribe `busquedas`).
-    if reg.get("busqueda") is not None:
-        old_registro.append(
-            (slug, "el registro usa la clave `busqueda:` (schema pre-D-28, una sola corrida) — "
-                   "el lector ya no la lee → `python scripts/make_notes.py "
-                   "--migrate-registros` (pliega la corrida vieja en `busquedas: []` sin "
-                   "perderla; re-correr la cadena también sirve, pero cuesta una pasada de red)"))
-    return old_registro
-
-
 def check_chain_incomplete(slug: str, stars_slugs) -> list:
     """`cadena_incompleta` — the chain trace that stops before the canonical order ends (D-57).
 
@@ -3094,7 +3020,7 @@ def check_build_snapshots() -> tuple:
 def check_registro_sweep(stars_slugs, vistos) -> tuple:
     """The seven checks of the VERSIONED registro, one subject at a time (#396).
 
-    Returns `(registro_ilegible, old_registro, cadena_incompleta, bad_decisions, lente_desync,
+    Returns `(registro_ilegible, schema_retirado, cadena_incompleta, bad_decisions, lente_desync,
     triage_pending, truncated_corpora)`. Extracted from `lint.collect`: seven verdicts shared one
     loop and the one call to `cfg.load_registro`, so the loop stays here as the driver and each
     verdict is its own module function — which is what lets `mutar --dirigida` isolate them.
@@ -3104,7 +3030,7 @@ def check_registro_sweep(stars_slugs, vistos) -> tuple:
     `vistos`, the subjects whose living truth `check_build_snapshots` already reported.
     """
     registro_ilegible: list = []
-    old_registro: list = []
+    schema_retirado: list = []
     cadena_incompleta: list = []
     bad_decisions: list = []
     lente_desync: list = []
@@ -3124,7 +3050,7 @@ def check_registro_sweep(stars_slugs, vistos) -> tuple:
         if (ilegible := check_registro_unreadable(slug)):
             registro_ilegible += ilegible
             continue
-        old_registro += check_old_registro_schema(slug, reg)
+        schema_retirado += retired_schema("registro", slug, reg=reg)
         cadena_incompleta += check_chain_incomplete(slug, stars_slugs)
         bad_decisions += check_decisions_shape(slug, reg)
         lente_desync += check_lens_desync(slug)
@@ -3134,7 +3060,7 @@ def check_registro_sweep(stars_slugs, vistos) -> tuple:
         _tp, _tc = check_registro_fallback(slug, reg)
         triage_pending += _tp
         truncated_corpora += _tc
-    return (registro_ilegible, old_registro, cadena_incompleta, bad_decisions, lente_desync,
+    return (registro_ilegible, schema_retirado, cadena_incompleta, bad_decisions, lente_desync,
             triage_pending, truncated_corpora)
 
 
@@ -3242,7 +3168,7 @@ def check_unsynthesized(extracted, cited_in_entity) -> list:
         if stem in cited_in_entity:
             continue
         if marca is not _SIN_MARCA:
-            # #553 — la forma es `[{sujeto, motivo}]`; el escalar lo bloquea `old_no_sintetizado`
+            # #553 — la forma es `[{sujeto, motivo}]`; el escalar lo bloquea `schema_retirado`
             # y no se reporta dos veces. Una lista vacía o con una entrada sin motivo es la marca
             # pelada: cerraba el hallazgo en silencio, que es lo que «motivo obligatorio» impide.
             if isinstance(marca, list):
@@ -3326,7 +3252,7 @@ def check_no_sintetizado_citado(paper_fms: dict, sujetos=None) -> list:
         try:
             decl[stem] = {d["sujeto"] for d in cfg.load_no_sintetizado(fm, entry=stem)}
         except cfg.VistasError:
-            pass                                 # the shape is `old_no_sintetizado`'s finding
+            pass                                 # the shape is `schema_retirado`'s finding
     filas: list = []
     for kind, slug, nombre, meta in (cfg.all_subjects() if sujetos is None else sujetos):
         nombres = {slug, str(nombre), str(cfg.as_map(meta).get("concept") or slug)}
@@ -3646,26 +3572,6 @@ def check_objective_placeholder(obj_err) -> list:
     return objective_warn
 
 
-def check_verif_inline(stem: str, texto: str, ruta) -> list:
-    """`verif_inline` — the verification table is still INSIDE the note (#344, BLOQUEANTE).
-
-    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Rows here
-    mean the caller must SKIP the note: **detector, never tolerant reader** — reading the table from
-    both sides would give it two homes, which is the duplication #344 came to remove.
-    """
-    verif_inline: list = []
-    # #344 · schema viejo: la tabla adentro de la nota. **Detector, nunca lector tolerante** —
-    # leerla de los dos lados dejaría dos casas para una tabla, que es la duplicación que #344
-    # vino a sacar (y la política del repo es migrador + bloqueante, sin capa de compat).
-    if lb.inline_verif_rows(texto):
-        verif_inline.append(
-            (stem, f"la tabla de verificación sigue DENTRO de la nota (schema anterior a "
-                   f"1.165.0) → `python scripts/make_notes.py --migrate-verif-sidecar` la mueve "
-                   f"a `{cfg.verif_sidecar(ruta).name}` y deja la cabecera, las tres "
-                   f"sub-secciones y el puntero"))
-    return verif_inline
-
-
 def check_verif_sidecar_missing(stem: str, ruta) -> list:
     """`verif_sin_hermano` — the note claims N verified pairs and the sibling holding them is gone.
 
@@ -3680,26 +3586,9 @@ def check_verif_sidecar_missing(stem: str, ruta) -> list:
         verif_sin_hermano.append(
             (stem, f"la nota tiene bloque `## Verificación de citas` y no existe su hermano "
                    f"`{cfg.verif_sidecar(ruta).name}` → la cabecera afirma pares que no se "
-                   f"pueden evaluar; re-correr `verify-citations` o mover la tabla con "
-                   f"`make_notes.py --migrate-verif-sidecar`"))
+                   f"pueden evaluar; re-correr `verify-citations` (si la tabla quedó dentro de "
+                   f"la nota, lo dice `schema_retirado`)"))
     return verif_sin_hermano
-
-
-def check_old_verif_template(stem: str, ruta, filas) -> list:
-    """`old_verif_template` — the sidecar has no `Ancla` / `Hash fuente` columns (BLOQUEANTE).
-
-    Extracted from `lint.collect` by #396; the block computes and the caller accumulates. `filas is
-    None` is what `lb.verif_rows` answers for the old template, and it is not «zero pairs»: nothing
-    about that note can be evaluated, so rows here mean the caller must SKIP it.
-    """
-    old_verif_template: list = []
-    if filas is None:
-        old_verif_template.append(
-            (stem, f"`{cfg.verif_sidecar(ruta).name}` no tiene las columnas `Ancla` / "
-                   f"`Hash fuente` (plantilla vieja) → no se puede evaluar qué par sigue "
-                   f"vigente; re-correr `verify-citations` para que lo reescriba con un par "
-                   f"por fila"))
-    return old_verif_template
 
 
 def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
@@ -3744,8 +3633,8 @@ def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
         verif_estructura.append(
             (stem, f"{_rev} fila(s) con un veredicto que exigió acción y una ronda posterior "
                    f"limpió sin anotar la resolución (`contradice→soportada`): la cabecera no la "
-                   f"cuenta → `python scripts/write_verif_sidecar.py <nota> "
-                   f"--migrate-verdict-chain` (o `--todo`)"))
+                   f"cuenta → re-verificar esos pares con `verify-citations`, o "
+                   f"{cfg.retired_migrator_recipe('write_verif_sidecar.py --todo --migrate-verdict-chain')}"))
     _resumen = lb.verif_summary(filas)
     if not lb.verif_summary_stated(texto, filas):
         verif_cabecera.append(
@@ -3856,8 +3745,9 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tu
                 # EVALUABLE y se migra — no se adivina.
                 verif_sin_archivo.append(
                     (stem, f"la fila de [[{fila.bibcode}]] no declara contra qué archivo se "
-                           f"verificó (`Hash fuente` sin prefijo `txt:`/`pdf:`) → "
-                           f"`python scripts/make_notes.py --migrate-verif-archivo`"))
+                           f"verificó (`Hash fuente` sin prefijo `txt:`/`pdf:`) → re-verificar "
+                           f"el par con `verify-citations`, o "
+                           f"{cfg.retired_migrator_recipe('make_notes.py --migrate-verif-archivo')}"))
                 continue
             # #122: el localizador de `Evidencia` y el prefijo dicen lo mismo desde ángulos
             # distintos. Si discrepan, el hash vigila un archivo del que la cita no salió —
@@ -3904,8 +3794,8 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tu
                 cond_sin_clasificar.append(
                     (stem, f"[[{fila.bibcode}]] par {fila.n}: la condición escribe su clase "
                            f"`{_clase}` DOS veces, así que `condition_resolved` la lee como no "
-                           f"resuelta para siempre → `python scripts/write_verif_sidecar.py "
-                           f"<nota> --migrate-condition-prefix`"))
+                           f"resuelta para siempre → re-verificar el par con `verify-citations`, o "
+                           f"{cfg.retired_migrator_recipe('write_verif_sidecar.py <nota> --migrate-condition-prefix')}"))
             _locs = lb.locator_kinds(fila.evidence)
             # #226 — `_locs` vacío NO puede ser silencio: es NO EVALUABLE, y acá eso se declara
             # (D-43) en vez de resolverse a favor. Medido: al truncar `Evidencia` se va el `p. N`
@@ -3964,8 +3854,8 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tu
 def check_verification_pairs(anchor_notes, evidencia_hash_de) -> tuple:
     """The whole `## Verificación de citas` sweep, one note at a time (#396).
 
-    Returns `(stale_pairs, old_verif_template, verif_sin_archivo, verif_localizador,
-    verif_sin_resolver, verif_estructura, verif_inline, verif_sin_hermano, verif_cabecera,
+    Returns `(stale_pairs, schema_retirado, verif_sin_archivo, verif_localizador,
+    verif_sin_resolver, verif_estructura, verif_sin_hermano, verif_cabecera,
     verif_sin_localizador, verif_truncada, cond_sin_clasificar)`.
 
     Extracted from `lint.collect` by #396, and it was the most entangled of the three regions the
@@ -3980,27 +3870,26 @@ def check_verification_pairs(anchor_notes, evidencia_hash_de) -> tuple:
     that note, so the sweep moves on.
     """
     stale_pairs: list = []
-    old_verif_template: list = []
+    schema_retirado: list = []          # #624 · the table decides, this driver only skips
     verif_sin_archivo: list = []
     verif_localizador: list = []
     verif_sin_resolver: list = []
     verif_estructura: list = []
-    verif_inline: list = []
     verif_sin_hermano: list = []
     verif_cabecera: list = []
     verif_sin_localizador: list = []
     verif_truncada: list = []
     cond_sin_clasificar: list = []
     for stem, texto, ruta in sorted(anchor_notes):
-        if (inline := check_verif_inline(stem, texto, ruta)):
-            verif_inline += inline
+        if (inline := retired_schema("nota_verif", stem, texto=texto, ruta=ruta)):
+            schema_retirado += inline
             continue
         if (sin_hermano := check_verif_sidecar_missing(stem, ruta)):
             verif_sin_hermano += sin_hermano
             continue
         filas = lb.verif_rows(ruta)
-        if (plantilla := check_old_verif_template(stem, ruta, filas)):
-            old_verif_template += plantilla
+        if (plantilla := retired_schema("hermano_verif", stem, filas=filas, ruta=ruta)):
+            schema_retirado += plantilla
             continue
         _est, _cab = check_verif_structure(stem, texto, ruta, filas)
         verif_estructura += _est
@@ -4014,8 +3903,8 @@ def check_verification_pairs(anchor_notes, evidencia_hash_de) -> tuple:
         verif_sin_localizador += _sin_loc
         verif_truncada += _trunc
         cond_sin_clasificar += _cond
-    return (stale_pairs, old_verif_template, verif_sin_archivo, verif_localizador,
-            verif_sin_resolver, verif_estructura, verif_inline, verif_sin_hermano, verif_cabecera,
+    return (stale_pairs, schema_retirado, verif_sin_archivo, verif_localizador,
+            verif_sin_resolver, verif_estructura, verif_sin_hermano, verif_cabecera,
             verif_sin_localizador, verif_truncada, cond_sin_clasificar)
 
 
@@ -4076,7 +3965,7 @@ def check_condition_destinations(anchor_notes) -> list:
                     out.append((stem, f"[[{fila.bibcode}]] par {fila.n}: `acota→resuelta: "
                                       f"«{res[:60]}»` no nombra un destino del vocabulario, así que nada "
                                       f"lo cruza contra la nota → `python scripts/write_verif_sidecar"
-                                      f".py --todo --migrate-condition-destination`, o `--resolver "
+                                      f".py <nota> --resolver "
                                       f"{fila.anchor}:{fila.bibcode}=<{'|'.join(lb.CONDITION_DESTINATIONS)}>` (#576)"))
                 elif ((tabla := DESTINATION_TABLES.get(destino))
                       and not regimen_rows_citing(texto, fila.bibcode, tabla)):
@@ -4978,46 +4867,24 @@ def check_state_header(stem: str, f, text: str, slug_ent, fms: dict | None = Non
     return estado_desfasado
 
 
-def check_old_no_sintetizado(stem: str, f, fm: dict, err) -> list:
-    """`old_no_sintetizado` — the scalar `no_sintetizado: <motivo>` of #75 (BLOQUEANTE, #553).
+def check_paper_destination(stem: str, f, fm: dict, err) -> list:
+    """`sin_destino` — the paper note that belongs to no entity (D-23/INV-94).
 
-    The hatch is per pair (paper, subject), like `no_vista`: the scalar let the motive one subject
-    wrote rule over every subject sharing the paper. Retired schema, no tolerant reader — migrate
-    once."""
-    v = fm.get("no_sintetizado")
-    if not in_dir(f, "papers") or err or v is None or isinstance(v, list):
-        return []
-    return [(stem, "`no_sintetizado` escalar (schema pre-#553): la escotilla es por sujeto, "
-                   "`[{sujeto, motivo}]` → `python scripts/make_notes.py --migrate-no-sintetizado`")]
-
-
-def check_paper_destination(stem: str, f, fm: dict, err) -> tuple:
-    """`(sin_destino, old_bearing)` — the paper note that belongs to no entity (D-23/INV-94).
-
-    Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
-    accumulates. With none of `stars`, `thesis_links` or `methods` populated the paper enters no
-    roll-up and no note reaches it: it is extraction already paid for, turned invisible. The way out
-    is to populate the field, never to delete the note.
+    Extracted from the main note sweep of `lint.collect` by #396. With none of `stars`,
+    `thesis_links` or `methods` populated the paper enters no roll-up and no note reaches it: it is
+    extraction already paid for, turned invisible. The way out is to populate the field, never to
+    delete the note.
 
     @inv INV-94
     """
     sin_destino: list = []
-    old_bearing: list = []
     if in_dir(f, "papers") and not err:
-        # D-21: la POSTURA de un paper depende de la TESIS, y un paper puede tocar varias.
-        # Dejarla en el paper obligaba a elegir una sola para todas; vive en la tabla de
-        # evidencia de la hipótesis.
-        if fm.get("bearing") is not None:
-            old_bearing.append((stem, "usa `bearing:` (schema pre-D-21) — la postura respecto de "
-                                      "una tesis vive en la tabla de evidencia de la hipótesis, "
-                                      "no en el paper: depende de la tesis, y un paper puede "
-                                      "tocar varias"))
         # D-23: sin ninguno de los tres, el paper no pertenece a nada — no entra en ningún
         # roll-up y ninguna síntesis lo alcanza. Que además esté linkeado no lo salva.
         if not any(fm.get(k) for k in ("stars", "thesis_links", "methods")):
             sin_destino.append((stem, "sin destino: ni `stars`, ni `thesis_links`, ni `methods` "
                                       "— no entra en ningún roll-up ni lo alcanza ninguna síntesis"))
-    return sin_destino, old_bearing
+    return sin_destino
 
 
 def check_verificar_pdf_mark(stem: str, body_full: str, offset: int) -> list:
@@ -5144,27 +5011,6 @@ def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf
                    "`python scripts/make_notes.py --restamp-headers`"))
     return (sin_abstract, sin_conclusiones, sin_conclusiones_ok, sin_aviso_llm, vista_solo_abstract,
             solo_abstract_ok)
-
-
-def check_paper_legacy_fields(stem: str, fm: dict, body_full: str, segunda_mano: dict) -> list:
-    """`campos_txt_viejos` — `symbols_lost` / `fulltext_layout`, retired in 1.71.0 (#205).
-
-    Extracted from the paper sub-block of `lint.collect` by #396; the block computes and the caller
-    accumulates. They existed to decide whether the extractor read the `.txt` or the PDF, and that
-    decision is no longer taken: the source is the PDF.
-
-    `segunda_mano` comes in as the index it fills —second-hand rows of this note— because it is
-    consumed later by `check_second_hand_lifted`, not a finding of its own.
-    """
-    campos_txt_viejos: list = []
-    if (_sm := lb.second_hand_rows(body_full)):
-        segunda_mano[stem] = _sm
-    _viejos = [k for k in ("symbols_lost", "fulltext_layout") if k in fm]
-    if _viejos:
-        campos_txt_viejos.append(
-            (stem, f"`{'`, `'.join(_viejos)}` — schema pre-#205, ya no lo lee nadie: "
-                   "`python scripts/make_notes.py --migrate-txt-fields`"))
-    return campos_txt_viejos
 
 
 def check_paper_citation_unit(stem: str, fm: dict) -> tuple:
@@ -5367,8 +5213,8 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
             bad_roles.append((stem, f"`{_campo}: {str(_v)[:60]}` fuera del vocabulario "
                                     f"({' | '.join(_ok)}) — `null`/ausente es el valor de "
                                     f"«desconocido»; si querías escribir una nota, va a "
-                                    f"`pending_motivo` o a `salvedades`. Migrador: "
-                                    f"`python scripts/make_notes.py --migrate-source-fields`"))
+                                    f"`pending_motivo` o a `salvedades` (a mano); o "
+                                    f"{cfg.retired_migrator_recipe('make_notes.py --migrate-source-fields')}"))
     return (bibtex_sin_fuente, bibtex_drift, bad_roles, sin_bibtex, sin_bibtex_mudo,
             bibtex_hueco_contradictorio, bibtex_drift_firmado)
 
@@ -5606,8 +5452,7 @@ def check_paper_pdf_link(stem: str, fm: dict, text: str, pdf_on_disk: dict, head
         desplazada = mn.header_line_anywhere(text) is not None
         pdf_issues.append((stem, (
             "cabecera DESPLAZADA (existe, fuera del contrato: no es la primera línea del "
-            "cuerpo antes de la primera `## `) → movela a su lugar, o corré "
-            "`make_notes.py --fix-header-order` si la corrió un backfill (#378)")
+            "cuerpo antes de la primera `## `) → movela a su lugar (#378)")
             if desplazada else (
             "cabecera AUSENTE (no hay línea `· ` con la clave en backticks) → hay que "
             "reconstruirla, del historial de git si la borró el cosechador (#379); "
@@ -5748,7 +5593,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
     @inv INV-146
     """
     fm_broken: list = []
-    vistas_schema_viejo: list = []
+    schema_retirado: list = []
     vistas_vs_cuerpo: list = []
     vista_sin_fecha: list = []
     vista_sin_fuente: list = []
@@ -5851,13 +5696,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                        f"`vistas[]` la declara"))
         secciones = vistas_en_cuerpo(text)
         declaradas = {v["sujeto"] for v in vistas}
-        #  @inv INV-134
-        if not vistas and EXTRACCION_VIEJA_RE.search(text):
-            vistas_schema_viejo.append(
-                (stem, "`## Extracción (LLM)` sin `vistas[]`: no consta desde qué sujeto se "
-                       "leyó este paper, así que su silencio sobre un eje no se distingue "
-                       "de «se miró y no hay nada» → `python scripts/make_notes.py "
-                       "--migrate-vistas` (AUD-175)"))
+        schema_retirado += retired_schema("vistas", stem, vistas=vistas, text=text)  # #624
         # Declarada y sin hacer. El stub nace con la vista de su sujeto y SIN `fecha`
         # (la ausencia es «no consta», paso 1): la fecha es lo que dice que la lectura
         # ocurrió. Sin este renglón, declarar la vista al crear el stub apagaría
@@ -5975,7 +5814,8 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
             vista_con_plantilla.append(
                 (stem, f"la `## Vista` de **{_suj}** sigue publicando la PLANTILLA del stub "
                        f"(las instrucciones al extractor, visibles como si fueran "
-                       f"contenido) → `python scripts/make_notes.py --restamp-vista-stub`"))
+                       f"contenido) → re-cosechar la vista (`harvest_views.py … --force`), o "
+                       f"{cfg.retired_migrator_recipe('make_notes.py --restamp-vista-stub')}"))
         for falta in sorted(declaradas - secciones):
             vistas_vs_cuerpo.append(
                 (stem, f"`vistas[]` declara la lectura de **{falta}** y el cuerpo no tiene "
@@ -6028,7 +5868,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                     reclamo_sin_vista.append(
                         (stem, f"lo reclama **{sujeto}** y nadie lo leyó desde ahí → hacer "
                                f"la vista, o declararla con `no_vista` y su motivo"))
-    return fm_broken, vistas_schema_viejo, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado, reclamo_refutado_firmado, doc_en_disco, vista_fecha_no_str, no_vista_lectura_ausente
+    return fm_broken, schema_retirado, vistas_vs_cuerpo, vista_sin_fecha, vista_sin_fuente, vista_sin_fuente_en_disco, vista_solo_abstract, vista_con_plantilla, vista_ejes_faltantes, reclamo_sin_vista, reclamo_sin_vista_declarado, reclamo_refutado, reclamo_refutado_firmado, doc_en_disco, vista_fecha_no_str, no_vista_lectura_ausente
 
 
 def check_impl_leaks(stem: str, body_full: str, offset: int, leak_patterns, scan: bool) -> list:
@@ -6068,49 +5908,146 @@ def check_headerless(stem: str, f, text: str) -> list:
     return headerless
 
 
-def check_legacy_disputes(stem: str, fm: dict) -> list:
-    """`old_disputes` — `planets[].disputes[]`, the pre-1.19.0 schema (BLOQUEANTE, #71).
+@dataclass(frozen=True)
+class RetiredSchema:
+    """One row of `RETIRED_SCHEMAS`: a schema the reader no longer interprets (INV-13).
 
-    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
-    accumulates. The old schema had the truth pole hard-coded in its SHAPE: it worked for paper↔NEA
-    and could not express paper↔paper, which is the normal case when NEA is silent. They are not
-    read — they are detected and they block, because a dispute the reader ignores in silence is
-    worse than an error.
+    `where` is the sweep that evaluates it (`paper`, `nota`, `vistas`, `nota_verif`,
+    `hermano_verif`, `registro`, `build`), `poblacion` the INV-40 population it covers, `predicate`
+    `(stem, ctx) -> [(stem, what is wrong)]`, and the way out is `migrator` (the command at
+    `cfg.RETIRED_MIGRATORS_TAG`) or, when the form is re-made by an operation that still exists, `fix`."""
+    key: str
+    where: str
+    poblacion: str
+    predicate: object
+    migrator: str = ""
+    fix: str = ""
 
-    @inv INV-13
+
+def _old_triage_json(_stem, _ctx) -> list:
+    """`build/<slug>/triage.json` (pre-1.9.0), its OWN sweep: a half-cleaned `build/` keeps it.
+
+    @inv INV-54"""
+    out = []
+    for lt in sorted(glob.glob(str(cfg.ROOT / "build" / "*" / "triage.json"))):
+        slug = Path(lt).parent.name
+        try:
+            # El guard sobre `dec` va al nivel donde se usa: un `{"decisiones": 3}` (JSON válido,
+            # forma inválida un nivel más abajo) volteaba el reporte ENTERO (#h03).
+            dec = cfg.as_map(json.loads(open(lt, encoding="utf-8").read())).get("decisiones")
+            n = len(dec) if isinstance(dec, (dict, list)) else "?"
+        except (ValueError, OSError):
+            n = "?"
+        out.append((slug, f"{n} decisión(es) en build/{slug}/triage.json, el lugar pre-1.9.0 que el "
+                          f"lector ya no mira (si no se migra, el triage vuelve a proponer lo que "
+                          f"ya descartaste, sin el motivo)"))
+    return out
+
+
+def _extraction_in_build(_stem, _ctx) -> list:
+    """`build/*/extraccion/*.json` (pre-#311): scratch by `.gitignore`, so it does not travel."""
+    n = len(list(cfg.ROOT.glob("build/*/extraccion/*.json")))
+    return [("build/", f"{n} extracción(es) en `build/*/extraccion/` (schema pre-#311): ahí NO se "
+                       f"versionan ni viajan, y una extracción no se regenera sin volver a leer el "
+                       f"PDF")] if n else []
+
+
+def _old_disputes(stem, ctx) -> list:
+    """`planets[].disputes[]` (pre-1.19.0, #71) and its non-list shapes, which `legacy_disputes` names."""
+    n, motivos = legacy_disputes(ctx["fm"])
+    return ([(stem, f"{n} disputa(s) en `planets[].disputes[]`, el schema pre-1.19.0 que el lint "
+                    f"ya no lee (#71)")] if n else []) + [(stem, m) for m in motivos]
+
+
+def _txt_fields(stem, ctx) -> list:
+    """`symbols_lost` / `fulltext_layout` (#205): they decided `.txt` vs PDF, and the source is the PDF."""
+    viejos = [k for k in ("symbols_lost", "fulltext_layout") if k in ctx["fm"]]
+    return [(stem, f"`{'`, `'.join(viejos)}` — schema pre-#205, ya no lo lee nadie")] if viejos else []
+
+
+def _scalar_no_sintetizado(stem, ctx) -> list:
+    """The scalar `no_sintetizado: <motivo>` of #75: one subject's motive ruled every subject (#553)."""
+    v = ctx["fm"].get("no_sintetizado")
+    return [] if v is None or isinstance(v, list) else [
+        (stem, "`no_sintetizado` escalar (schema pre-#553): la escotilla es por sujeto, "
+               "`[{sujeto, motivo}]`")]
+
+
+#: #624 · INV-13: a schema the reader no longer interprets is DETECTED and BLOCKS — never a tolerant
+#: reader. Ten detectors, eleven rows (`old_registro` used to publish the extractions under `build/`
+#: under the title of `busqueda:`, AUD-381: now each has its own row), one
+#: category (`schema_retirado`); each finding names its row and its
+#: population (INV-40), and the verification driver SKIPS the note on what this table answered.
+RETIRED_SCHEMAS = (
+    RetiredSchema("old_facets", "paper", "papers",
+                  lambda stem, c: [(stem, "usa `topics:` (schema pre-R-5) — el campo vigente es "
+                                          "`facets:` y el lector ya no mira `topics`")]
+                  if "topics" in c["fm"] else [],
+                  migrator="make_notes.py --migrate-facets"),
+    RetiredSchema("old_bearing", "paper", "papers",
+                  lambda stem, c: [(stem, "usa `bearing:` (schema pre-D-21) — la postura respecto "
+                                          "de una tesis vive en la tabla de evidencia de la "
+                                          "hipótesis: depende de la tesis, y un paper puede tocar "
+                                          "varias")]
+                  if c["fm"].get("bearing") is not None else [],
+                  migrator="make_notes.py --migrate-bearing"),
+    RetiredSchema("campos_txt_viejos", "paper", "papers", _txt_fields,
+                  migrator="make_notes.py --migrate-txt-fields"),
+    RetiredSchema("old_no_sintetizado", "paper", "papers", _scalar_no_sintetizado,
+                  migrator="make_notes.py --migrate-no-sintetizado"),
+    #  @inv INV-134
+    RetiredSchema("vistas_schema_viejo", "vistas", "papers",
+                  lambda stem, c: [(stem, "`## Extracción (LLM)` sin `vistas[]`: no consta desde "
+                                          "qué sujeto se leyó este paper, así que su silencio sobre "
+                                          "un eje no se distingue de «se miró y no hay nada» "
+                                          "(AUD-175)")]
+                  if not c["vistas"] and EXTRACCION_VIEJA_RE.search(c["text"]) else [],
+                  migrator="make_notes.py --migrate-vistas"),
+    RetiredSchema("old_disputes", "nota", "entidades", _old_disputes,
+                  migrator="make_notes.py --migrate-disputes"),
+    RetiredSchema("verif_inline", "nota_verif", "entidades",
+                  lambda stem, c: [(stem, "la tabla de verificación sigue DENTRO de la nota "
+                                          "(schema anterior a 1.165.0, #344) — va al hermano "
+                                          f"`{cfg.verif_sidecar(c['ruta']).name}`")]
+                  if lb.inline_verif_rows(c["texto"]) else [],
+                  migrator="make_notes.py --migrate-verif-sidecar"),
+    RetiredSchema("old_verif_template", "hermano_verif", "entidades",
+                  lambda stem, c: [(stem, f"`{cfg.verif_sidecar(c['ruta']).name}` no tiene las "
+                                          f"columnas `Ancla` / `Hash fuente` (plantilla vieja): no "
+                                          f"se puede evaluar qué par sigue vigente")]
+                  if c["filas"] is None else [],
+                  fix="re-correr `verify-citations`, que reescribe el hermano con un par por fila"),
+    RetiredSchema("old_registro", "registro", "registros",
+                  lambda stem, c: [(stem, "el registro usa la clave `busqueda:` (schema pre-D-28, "
+                                          "una sola corrida) — el lector ya no la lee")]
+                  if c["reg"].get("busqueda") is not None else [],
+                  migrator="make_notes.py --migrate-registros (pliega la corrida vieja en "
+                           "`busquedas: []` sin perderla; re-correr la cadena también sirve, pero "
+                           "cuesta una pasada de red)"),
+    RetiredSchema("extraccion_en_build", "build", "registros", _extraction_in_build,
+                  migrator="make_notes.py --migrate-extracciones"),
+    RetiredSchema("legacy_triage", "build", "registros", _old_triage_json,
+                  migrator="triage.py <slug> --migrate"),
+)
+
+
+def retired_schema(where: str, stem: str = "", **ctx) -> list:
+    """The `schema_retirado` findings of the rows of `RETIRED_SCHEMAS` evaluated at `where` (#624).
+
+    The one function behind the ten retired-schema detectors (INV-13): every finding says which row
+    fired and over which population, and its way out — the row's `fix`, or «re-ingest, or migrate
+    with the template at the tag» with the command that tag carries.
+
+    @inv INV-13, INV-64
     """
-    old_disputes: list = []
-    # Disputas (#71): a nivel NOTA y con posiciones explícitas — vale para estrellas y para
-    # conceptos, donde la disputa es simétrica por definición (no hay valor de frontmatter
-    # contra el cual poner un `alt`). Las del schema viejo NO se leen: se detectan y bloquean.
-    n_viejas, motivos_viejas = legacy_disputes(fm)
-    if n_viejas:
-        old_disputes.append((stem, f"{n_viejas} disputa(s) en `planets[].disputes[]`, el schema "
-                                   f"pre-1.19.0 que el lint ya no lee → migralas con "
-                                   f"`python scripts/make_notes.py --migrate-disputes` (#71)"))
-    for motivo in motivos_viejas:
-        old_disputes.append((stem, motivo))
-    return old_disputes
-
-
-def check_legacy_facets(stem: str, f, fm: dict, err) -> list:
-    """`old_facets` — a paper note still carrying `topics:` (pre-R-5, BLOQUEANTE).
-
-    Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
-    accumulates. `topics:` was BOTH the lens facet and the theme-subject; the rename split it into
-    `facets:` and `themes.yaml`, and the old field was left WITH NO READER — the note keeps the
-    datum and the system does not see it.
-    """
-    old_facets: list = []
-    # R-5: `topics:` era a la vez la faceta de la lente y el tema-sujeto. El renombre lo
-    # partió en `facets:` y `themes.yaml`, y el campo viejo quedó SIN LECTOR: la nota
-    # conserva el dato y el sistema no lo ve. Mismo trato que `busqueda:` pre-D-28 —
-    # detector bloqueante, nunca lector tolerante.
-    if in_dir(f, "papers") and "topics" in fm and not err:
-        old_facets.append((stem, "usa `topics:` (schema pre-R-5) — el campo vigente es "
-                                 "`facets:` y el lector ya no mira `topics` → "
-                                 "`python scripts/make_notes.py --migrate-facets`"))
-    return old_facets
+    out = []
+    for r in RETIRED_SCHEMAS:
+        if r.where != where:
+            continue
+        salida = r.fix or cfg.retired_migrator_recipe(r.migrator)
+        for item_stem, que in r.predicate(stem, ctx):
+            out.append((item_stem, f"[{r.key} · {r.poblacion}] {que} → {salida}"))
+    return out
 
 
 def check_inferences_without_premises(stem: str, text: str) -> list:
@@ -6812,7 +6749,7 @@ def split_reviewed_warn(stem: str, fm: dict, body_full: str, offset: int, hits: 
 
 def warn_hits(stem: str, body_full: str, offset: int, impl_leaks: list, f=None) -> dict:
     """The hits of the signable WARN categories (`cfg.WARN_REVISABLE`), by category. One
-    assembly for the sweep and for `make_notes --migrate-warn-anchor` (#528). `f` scopes the
+    assembly for the sweep and for the signatures it checks (#528). `f` scopes the
     aggregation check to entity notes (#556); without it that check is not run."""
     entidad = f is not None and (in_dir(f, "stars") or in_dir(f, "concepts"))
     return {"impl_leaks": impl_leaks,
@@ -7267,9 +7204,9 @@ def check_paper_note(stem: str, f: str, fm: dict, text: str, body_full: str, swe
                            "sin_aviso_llm", "vista_solo_abstract", "solo_abstract_ok"),
                           check_paper_reading_aids(stem, fm, text, body_full, sweep.pdf_on_disk)):
         add(key, items)
-    # #205 · `symbols_lost`/`fulltext_layout` (schema sin lector, bloquea); `segunda_mano` (#279) es
-    # el índice que la nota alimenta, no un hallazgo suyo.
-    add("campos_txt_viejos", check_paper_legacy_fields(stem, fm, body_full, sweep.segunda_mano))
+    # `segunda_mano` (#279) es el índice que la nota alimenta, no un hallazgo suyo.
+    if (_sm := lb.second_hand_rows(body_full)):
+        sweep.segunda_mano[stem] = _sm
     # #80: la unidad de cita de una fuente larga y el recorte que entró.
     _c1, _c2, _c3 = check_paper_citation_unit(stem, fm)
     add("bad_roles", _c1)
@@ -7308,7 +7245,7 @@ def check_paper_note(stem: str, f: str, fm: dict, text: str, body_full: str, swe
         stem, fm, relevancia, sweep.pdf_on_disk, sweep.fulltext, sweep.sin_extraer_por_sujeto,
         sweep.extracted)
     add("incomplete", _cv)
-    for key, items in zip(("fm_broken", "vistas_schema_viejo", "vistas_vs_cuerpo",
+    for key, items in zip(("fm_broken", "schema_retirado", "vistas_vs_cuerpo",
                            "vista_sin_fecha", "vista_sin_fuente", "vista_sin_fuente_en_disco",
                            "vista_solo_abstract", "vista_con_plantilla", "vista_ejes_faltantes",
                            "reclamo_sin_vista", "reclamo_sin_vista_declarado", "reclamo_refutado",
@@ -7418,7 +7355,7 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
         add(key, items)
     # #69 — ficha/concepto sin la línea del generador: los estampadores de cabecera no-opean.
     add("headerless", check_headerless(stem, f, text))
-    add("old_disputes", check_legacy_disputes(stem, fm))
+    add("schema_retirado", retired_schema("nota", stem, fm=fm))     # #624 · INV-13
     # #267 — las citas textuales de `disputes[]` quedaban fuera de TODO (el frontmatter no es prosa).
     _d1, _d2, _d3, _d4 = check_note_disputes(stem, fm, sweep.sources_for)
     add("bad_disputes", _d1)
@@ -7433,11 +7370,9 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     if in_dir(f, "papers") and "paper" not in tags and not err:   # con YAML roto ya se reportó
         add("fm_broken", [(stem, "nota en `papers/` sin `tags: [paper]` → evade TODOS los "
                                  "chequeos de su tipo (retracción, PDF, role, citas)")])
-    add("old_facets", check_legacy_facets(stem, f, fm, err))
-    _pd1, _pd2 = check_paper_destination(stem, f, fm, err)
-    add("sin_destino", _pd1)
-    add("old_bearing", _pd2)
-    add("old_no_sintetizado", check_old_no_sintetizado(stem, f, fm, err))
+    if in_dir(f, "papers") and not err:
+        add("schema_retirado", retired_schema("paper", stem, fm=fm))
+    add("sin_destino", check_paper_destination(stem, f, fm, err))
     for key, items in zip(("alcance_corto", "alcance_wikilink", "bad_status",
                            "status_vs_evidencia"),
                           check_hypothesis_note(stem, f, fm, text, err)):
@@ -7503,6 +7438,8 @@ def lint_populations(files: list, paper_fms: dict, anchor_bodies: dict, fulltext
     afterwards, which is where a population comes loose from the check it claims to describe)."""
     # #442 — las notas de paper con `versions_disponible`: la marca la estampa sólo
     # `sweep_external.sweep_versiones`; las demás se deciden por `pdf_source` y la población lo dice.
+    _n_registros = (len([f for f in cfg.REGISTRO.glob("*.yaml") if not f.name.startswith("_")])
+                    if cfg.REGISTRO.exists() else 0)
     papers_con_version = sum(1 for _fm in paper_fms.values()
                              if str((_fm or {}).get("versions_disponible") or "").strip())
     return {
@@ -7525,8 +7462,7 @@ def lint_populations(files: list, paper_fms: dict, anchor_bodies: dict, fulltext
         # #297 — `_red.yaml` es de la bóveda entera (D-46), no de un sujeto: contarlo infla el
         # denominador de las siete categorías que declaran esta población, y un denominador que
         # incluye lo que el barrido no mira es exactamente lo que INV-40 existe para evitar.
-        "registros": (len([f for f in cfg.REGISTRO.glob("*.yaml") if not f.name.startswith("_")])
-                      if cfg.REGISTRO.exists() else 0, "registros de sujeto"),
+        "registros": (_n_registros, "registros de sujeto"),
         "citas": (sweep.n_citas[0], "citas «…» de ≥40 caracteres con fuente chequeable"),
         "huecos": (sweep.n_huecos[0], "notas con `## Huecos` escrito"),
         "extracciones": (dep_poblacion, "extracciones de `raw/extraccion/` (#311)"),
@@ -7543,6 +7479,12 @@ def lint_populations(files: list, paper_fms: dict, anchor_bodies: dict, fulltext
         # categoría declaraba una población ajena, y «sobre 0 ground-truth» arriba de un hallazgo
         # se lee como que no se miró nada.
         "merge_ours": (len(merge_ours_patterns()[0]), "patrones `merge=ours` de `.gitattributes`"),
+        # #624 · las filas de `RETIRED_SCHEMAS` miran tres poblaciones: cada hallazgo lleva
+        # la suya entre corchetes, y el denominador es la suma de las tres (INV-40).
+        "schema_retirado": (len(paper_fms) + len(anchor_bodies) + _n_registros,
+                            f"notas y registros ({len(paper_fms)} de `papers/` · "
+                            f"{len(anchor_bodies)} de entidad · {_n_registros} registros de sujeto, "
+                            f"y `build/`) — cada hallazgo nombra la población de su fila"),
     }
 
 
@@ -7649,9 +7591,9 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["sweep_pendiente"] += _sweep_pendiente
     found["not_evaluated"] += _log_no_eval
     # Pares de verificación vencidos (D-4 / D-20 / INV-78): las DOCE categorías del bloque.
-    (found["stale_pairs"], found["old_verif_template"], found["verif_sin_archivo"],
+    (found["stale_pairs"], _verif_retirado, found["verif_sin_archivo"],
      found["verif_localizador"], found["verif_sin_resolver"], found["verif_estructura"],
-     found["verif_inline"], found["verif_sin_hermano"], found["verif_cabecera"],
+     found["verif_sin_hermano"], found["verif_cabecera"],
      found["verif_sin_localizador"], found["verif_truncada"],
      found["cond_sin_clasificar"]) = check_verification_pairs(sweep.anchor_notes, evidencia_hash_de)
     found["cond_destino"] = check_condition_destinations(sweep.anchor_notes)
@@ -7747,11 +7689,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # contestaron con su verdad viva.
     found["triage_pending"], found["truncated_corpora"], _bd_ads, vistos = check_build_snapshots()
     found["bad_decisions"] += _bd_ads
-    found["legacy_triage"] = check_legacy_triage()
+    found["schema_retirado"] += _verif_retirado + retired_schema("build")
     (_reg_ileg, _reg_old, _reg_cad, _reg_bd, _reg_lente,
      _reg_tp, _reg_tc) = check_registro_sweep(stars_slugs, vistos)
     found["registro_ilegible"] += _reg_ileg
-    found["old_registro"] += _reg_old
+    found["schema_retirado"] += _reg_old
     found["cadena_incompleta"] += _reg_cad
     found["bad_decisions"] += _reg_bd
     found["lente_desync"] += _reg_lente
@@ -7761,7 +7703,6 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["verif_huerfano"] = check_verif_orphan_sidecar()
     found["status_apilado"] += check_status_stacked()
     found["alcance_desfasado"] += check_scope_desync(paper_fms)
-    found["old_registro"] += check_extraction_in_build()
     found["reuso_sin_chequear"] += check_red_pass_missing()
     found["reuso_sin_chequear"] += check_reused_artifact_unchecked(paper_fms)
     found["incomplete"] += check_fulltext_without_note()
@@ -7849,16 +7790,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   SEV_BACKLOG, tuple(found['methods_colision']), poblacion='papers'),
         Categoria('dangling_disputes', 'disputes: ref de una posición sin paper destino', SEV_BLOQUEANTE, tuple(found['dangling_disputes']), poblacion='entidades'),
         Categoria('bad_disputes', 'disputes mal formadas (posiciones explícitas, #71)', SEV_BLOQUEANTE, tuple(found['bad_disputes']), poblacion='entidades'),
-        Categoria('old_disputes', 'disputes en el schema viejo (planets[].disputes[]) — el lint ya no las lee', SEV_BLOQUEANTE, tuple(found['old_disputes']), poblacion='entidades'),
-        Categoria('legacy_triage', 'Juicio de triage en build/<slug>/triage.json (pre-1.9.0) — el lector ya no lo mira', SEV_BLOQUEANTE, tuple(found['legacy_triage']), poblacion='registros'),
-        Categoria('old_registro', '⛔ Registro con `busqueda:` (schema viejo pre-D-28) o extracciones en `build/*/extraccion/` (pre-#311) — el lector ya no los lee', SEV_BLOQUEANTE, tuple(found['old_registro']), poblacion='registros'),
+        Categoria('schema_retirado', '⛔ Schema retirado (sin lector, INV-13): cada hallazgo nombra su fila de `RETIRED_SCHEMAS`, su población y su salida — re-ingestar, o migrar con el template en el tag de git (#624)', SEV_BLOQUEANTE, tuple(found['schema_retirado']), poblacion='schema_retirado'),
         Categoria('registro_ilegible', '⛔ Registro del sujeto ilegible — la curación (`decisiones`) queda SIN APLICAR: los descartes vuelven a ser core', SEV_BLOQUEANTE, tuple(found['registro_ilegible']), poblacion='registros'),
-        Categoria('old_facets', '⛔ Nota de paper con `topics:` (schema viejo pre-R-5) — el campo vigente es `facets:`', SEV_BLOQUEANTE, tuple(found['old_facets']), poblacion='papers'),
         Categoria('infer_sin_premisas', '⛔ `inferencia` sin premisas (D-42): la marca no nombra ningún `[[bibcode]]`', SEV_BLOQUEANTE, tuple(found['infer_sin_premisas']), poblacion='notas'),
         Categoria('bad_status', '⛔ `status` de hipótesis fuera del vocabulario cerrado (D-37)', SEV_BLOQUEANTE, tuple(found['bad_status']), poblacion='entidades'),
         Categoria('status_vs_evidencia', '`status: sostenida` contra su propia tabla de evidencia (D-37, #177)', SEV_BACKLOG, tuple(found['status_vs_evidencia']), poblacion='entidades'),
-        Categoria('old_bearing', '⛔ `bearing` en una nota de paper (schema pre-D-21) — la postura vive en la hipótesis', SEV_BLOQUEANTE, tuple(found['old_bearing']), poblacion='papers'),
-        Categoria('old_no_sintetizado', '⛔ `no_sintetizado` escalar en una nota de paper (schema pre-#553) — la escotilla es por sujeto → `make_notes.py --migrate-no-sintetizado`', SEV_BLOQUEANTE, tuple(found['old_no_sintetizado']), poblacion='papers'),
         Categoria('sin_destino', '⛔ Nota de paper sin destino (D-23): no pertenece a ninguna entidad', SEV_BLOQUEANTE, tuple(found['sin_destino']), poblacion='papers'),
         Categoria('identidad_dup', '⛔ Identidad duplicada: dos notas del mismo trabajo (mismo doi/arxiv_id)', SEV_BLOQUEANTE, tuple(found['identidad_dup']), poblacion='papers'),
         Categoria('alias_con_nota', '⛔ Bibcode listado en `versions[]` que TIENE su propia nota: apaga los dos chequeos de identidad (#229)', SEV_BLOQUEANTE, tuple(found['alias_con_nota']), poblacion='papers'),
@@ -7875,7 +7811,6 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('cond_sin_clasificar', '⚖ Condición sin clasificar: no dice si acota la afirmación o sólo la contextualiza (#221, backlog)', SEV_BACKLOG, tuple(found['cond_sin_clasificar']), poblacion='entidades'),
         Categoria('cond_destino', '⚖ Condición `acota` resuelta en un destino que no se sostiene: fuera de vocabulario, o `regimen`/`inventario` sin fila con su bibcode (#576, backlog)', SEV_BACKLOG, tuple(found['cond_destino']), poblacion='entidades'),
         Categoria('verif_estructura', '🧾 Bloque de verificación incompleto: faltan sub-secciones o su conteo no cuadra (#232, backlog)', SEV_BACKLOG, tuple(found['verif_estructura']), poblacion='entidades'),
-        Categoria('verif_inline', '⛔ Tabla de verificación DENTRO de la nota (schema pre-1.165.0) → `make_notes.py --migrate-verif-sidecar` (#344)', SEV_BLOQUEANTE, tuple(found['verif_inline']), poblacion='entidades'),
         Categoria('verif_sin_hermano', '⛔ Nota con cabecera de verificación y SIN su hermano `<nota>.verif.md` (#344): afirma pares que no se pueden evaluar', SEV_BLOQUEANTE, tuple(found['verif_sin_hermano']), poblacion='entidades'),
         Categoria('verif_huerfano', '⛔ Hermano `.verif.md` HUÉRFANO (#344): la nota que audita ya no existe', SEV_BLOQUEANTE, tuple(found['verif_huerfano']), poblacion='notas'),
         Categoria('verif_cabecera', 'Cabecera del bloque desincronizada de la tabla de su hermano (INV-148/#344)' + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(found['verif_cabecera']), poblacion='entidades'),
@@ -7903,7 +7838,6 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('root_obsidian', 'Obsidian en la raíz del repo (WARN — la bóveda se abre en vault/)', SEV_WARN, tuple(found['root_obsidian']), poblacion='config'),
         Categoria('pdf_issues', 'PDF ↔ disco / cuerpo (WARN — higiene: frontmatter `pdf` vs PDF bajado vs link de cabecera)', SEV_WARN, tuple(found['pdf_issues']), poblacion='papers'),
         Categoria('pending_srcs', '⏳ Fuentes pendientes (pending_source — el usuario debe proveer la fuente)', SEV_BACKLOG, tuple(found['pending_srcs']), poblacion='papers'),
-        Categoria('campos_txt_viejos', '⛔ Notas con `symbols_lost`/`fulltext_layout` (schema pre-#205 sin lector — migrar)', SEV_BLOQUEANTE, tuple(found['campos_txt_viejos']), poblacion='papers'),
         Categoria('log_sin_entrada', '📓 Operación sin entrada en `log.md` (la cadena corrió y la bitácora no lo dice)', SEV_BACKLOG, tuple(found['log_sin_entrada']), poblacion='registros'),
         Categoria('illegible_txt', 'Fulltext ilegible (mojibake/escaneo — existe pero no sirve para grep/verify)', SEV_BACKLOG, tuple(found['illegible_txt']), poblacion='fulltext'),
         Categoria('divergent_txt', '⛔ Mismo bibcode con `.txt` DISTINTO entre slugs: las copias de '
@@ -7912,7 +7846,6 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('unverifiable', 'Citas no verificables en ficha/query/concepto/hipótesis (sin fulltext)', SEV_BACKLOG, tuple(found['unverifiable']), poblacion='entidades'),
         Categoria('unverified', 'Sin verificar: nota con citas y sin bloque verify-citations'
                   + (' (BLOQUEA: modo --cierre)' if cierre else ' (backlog: pasada periódica; con `--cierre` bloquea)'), SEV_CIERRE, tuple(found['unverified']), poblacion='entidades'),
-        Categoria('old_verif_template', '⛔ Bloque de verificación con plantilla vieja (sin columnas de hash — no evaluable)', SEV_BLOQUEANTE, tuple(found['old_verif_template']), poblacion='entidades'),
         Categoria('verif_sin_archivo', '⛔ Fila de verificación que no declara contra qué archivo se '
                   'verificó (#117): el hash no se puede comparar', SEV_BLOQUEANTE,
                   tuple(found['verif_sin_archivo']), poblacion='entidades'),
@@ -7957,7 +7890,6 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   'segunda red para el punto ciego de la query se haya tendido entera (backlog)',
                   SEV_BACKLOG, tuple(found['sweep_pendiente']), poblacion='registros'),
         Categoria('triage_pending', 'Triage pendiente: candidatos del chaining sin juzgar (backlog)', SEV_BACKLOG, tuple(found['triage_pending']), poblacion='registros'),
-        Categoria('vistas_schema_viejo', '⛔ Extracción sin declarar la LENTE: `## Extracción (LLM)` sin `vistas[]` (schema viejo, #188)', SEV_BLOQUEANTE, tuple(found['vistas_schema_viejo']), poblacion='papers'),
         Categoria('vistas_vs_cuerpo', '⛔ `vistas[]` ↔ cuerpo: vista declarada sin su sección, o sección sin declarar', SEV_BLOQUEANTE, tuple(found['vistas_vs_cuerpo']), poblacion='papers'),
         Categoria('reclamo_sin_vista', 'Reclamado por un sujeto y nunca leído desde ahí (backlog: la vista es opcional, el silencio no)', SEV_BACKLOG, tuple(found['reclamo_sin_vista']), poblacion='papers'),
         Categoria('vista_sin_fecha', 'Vista declarada y sin `fecha`: el stub la sembró y nadie leyó desde ahí (backlog)', SEV_BACKLOG, tuple(found['vista_sin_fecha']), poblacion='papers'),

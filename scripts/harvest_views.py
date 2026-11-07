@@ -636,8 +636,8 @@ def upsert_section(dest: Path, header: str, cuerpo: str) -> bool:
                                              for ln in descarta.splitlines()) else "")
         if ajeno:
             cfg.print_seguro(f"  ⛔ {dest.name}: `{header}` contiene {ajeno} — reemplazarla la "
-                             f"borraría. NO se escribe: movela a su lugar "
-                             f"(`make_notes.py --fix-header-order`) y volvé a cosechar (#379)")
+                             f"borraría. NO se escribe: movela a su lugar a mano (fuera de "
+                             f"`{header}`) y volvé a cosechar (#379)")
             return False
         nuevo = text[:ini] + cuerpo.rstrip("\n") + "\n\n" + text[fin:]
     else:
@@ -715,7 +715,7 @@ def write_view_section(dest: Path, sujeto: str, cuerpo: str, *, theme: bool,
         actual = text[ini:fin]
         # #581 — the status line is overwritable in both forms, including the `no_vista` one
         # («_No leído desde…_»), which the reading being written now makes false. The LEGACY
-        # template is not: it goes through its migrator (#398, `--restamp-vista-stub`).
+        # template is not overwritten without `--force` (#398; the lint reports it).
         if not force and mn.view_stub_kind(text, sujeto, theme) != "estado":
             # AUD-200: esto se contaba como «sin cambios». Es una NEGATIVA —la sección ya tiene
             # prosa redactada, cuyas anclas cuelgan del texto exacto— y el operador tiene que

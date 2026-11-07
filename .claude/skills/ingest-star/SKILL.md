@@ -125,8 +125,8 @@ Progreso del ingest de <estrella>:
    ```bash
    python scripts/triage.py <slug>            # listar (agregá --report para la tabla en outputs/)
    ```
-   (En una bóveda ingestada antes de 1.9.0, `--migrate` consolida de una vez el juicio que haya
-   quedado en el `build/<slug>/triage.json` viejo; ver `maintain E`.)
+   (En una bóveda ingestada antes de 1.9.0, el `build/<slug>/triage.json` viejo bloquea en el lint
+   (`schema_retirado`) con su receta; ver `maintain E`.)
    La marca distingue **tres** estados (#189): `◆` = hay **vista fechada de ESTE sujeto** (ya se
    leyó desde acá); `◇` = **hay nota** (entró por otro slug: PDF y `.txt` ya están) pero **ninguna
    lectura desde este sujeto**; sin marca = candidato nuevo. La decisión sigue siendo por-slug

@@ -60,14 +60,14 @@ Progreso del refresh de <entidad>:
    Armá el prompt con `python scripts/extraction_prompt.py <slug> <bibcode> [--theme]` y cosechá
    con `python scripts/harvest_views.py <slug> [--theme]`, que estampa `fecha`/`txt`/`lente` y
    mergea add-only. La incoherencia `vistas[]` ↔ cuerpo es **bloqueante** en el lint.
-   ⚠ Una nota del **schema viejo** (`## Extracción (LLM)` sin `vistas[]`) se migra con
-   `python scripts/make_notes.py --migrate-vistas`: deriva el sujeto del reclamo de la nota cuando
-   es UNO solo y **lista** las que reclaman varios, porque elegir uno afirmaría una lectura que
-   nadie hizo desde ahí. No estampa `fecha` — la extracción vieja ocurrió, pero cuándo no consta.
+   ⚠ Una nota del **schema viejo** (`## Extracción (LLM)` sin `vistas[]`) bloquea
+   (`schema_retirado`): se re-lee desde el sujeto, o se migra con el template en el tag que dice la
+   receta (#624). Con varios reclamos, el sujeto se declara a mano: elegir uno afirmaría una lectura
+   que nadie hizo desde ahí.
    ⚠ **`bearing` NO va en la nota del paper** (D-21): la postura respecto de una tesis depende de la
    tesis —un paper puede tocar varias— y vive en la **tabla de evidencia de la hipótesis**, con cita
    textual, donde `verify-citations` la puede chequear. En el paper es un veredicto sin evidencia y
-   el lint lo **bloquea** como schema viejo (migrador: `make_notes.py --migrate-bearing`).
+   el lint lo **bloquea** como schema viejo (`schema_retirado`).
 2b. **Contraste con lo que ya estaba (#72):** el `## Inventario por eje` de la nota es **lo que
    evita re-derivar la síntesis desde cero** — dice qué papers sostienen cada eje en disputa, con qué
    método y qué baseline. Para cada paper nuevo: si toca un eje ya inventariado, **agregar su fila**;
@@ -245,20 +245,17 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   prosa. Rellenar el campo lo convierte en un hallazgo **bloqueante** (espejo roto).
 - **Juicio de triage en `build/<slug>/triage.json`** → **bloqueante**: el lector dejó de mergear ese
   archivo pre-1.9.0 (el framework no lleva capas de compatibilidad). Mientras exista, el triage
-  vuelve a proponer lo ya descartado **sin el motivo**, que es el bug que #51 arregló. Una sola
-  corrida: `python scripts/triage.py <slug> --migrate`.
+  vuelve a proponer lo ya descartado **sin el motivo**, que es el bug que #51 arregló. La receta
+  del hallazgo (`schema_retirado`) dice el tag de git que trae el migrador (#624).
 - **`concept_areas` sin declarar** (WARN) → el typo-check de áreas de `concepts/` está **apagado**.
   Declarar la lista en `vault/config/objective.yaml` —aunque sea con las áreas que ya usás—: no se
   infiere de las carpetas en disco porque eso convertiría un typo ya cometido en área legítima.
 - **disputes en el schema viejo** (#71) → **bloqueante**: el lint dejó de leer
   `planets[].disputes[]` a propósito (una sola semántica), así que esas disputas están **mudas**
-  hasta migrarlas. Correr la migración una vez:
-  `python scripts/make_notes.py --migrate-disputes`. Pasa `planets[].disputes[]` (que tenía el polo
-  de verdad hardcodeado) a `disputes` a nivel nota con posiciones explícitas, materializando el lado
-  implícito como `{source: ground_truth, value: <el valor que la ficha tiene hoy>}`. Toca **sólo**
-  las fichas con disputas viejas y **no** el cuerpo, pero re-serializa el frontmatter: **revisá el
-  diff antes de commitear**. (La otra vía válida es **re-ingestar** el sujeto y rehacer las disputas
-  con la extracción, que de paso compara.)
+  hasta migrarlas: **re-ingestar** el sujeto y rehacer las disputas con la extracción (que de paso
+  compara), o migrar con el template en el tag que dice la receta (`schema_retirado`, #624), que
+  materializa el lado implícito como `{source: ground_truth, value: …}` y re-serializa el
+  frontmatter: **revisá el diff antes de commitear**.
 - **disputes mal formadas / ref de una posición sin paper** (#71) → resolver a mano: una disputa con
   **una sola** posición no es un desacuerdo (va a la prosa citada), y una `ref` colgante es un typo
   de bibcode o un paper sin ingestar.
@@ -275,10 +272,9 @@ martes cualquiera no frena nada útil; el gate es el cierre de la operación que
   donde el link no existía). Si el hallazgo dice **"cabecera fuera del contrato"** (#48), el backfill
   **no** la va a tocar: normalizá primero esa línea a la forma canónica (`· … · ADS: \`<bibcode>\``, o
   `· … fuente off-ADS · \`<citekey>\``) y recién ahí re-corré el backfill.
-- **Juicio de triage todavía en `build/`** (bóveda ingestada antes de 1.9.0, migración one-shot;
-  el lint **sí** lo surface y **bloquea** —`legacy_triage`, ver el bullet de arriba—) → consolidarlo en el
-  registro versionado, **sin esperar al próximo `--drop`**:
-  `python scripts/triage.py <slug> --migrate` (idempotente; ante el mismo bibcode gana lo ya
+- **Juicio de triage todavía en `build/`** (bóveda ingestada antes de 1.9.0; el lint lo **bloquea**
+  —fila `legacy_triage` de `schema_retirado`, ver el bullet de arriba—) → consolidarlo en el registro
+  versionado con el migrador del tag que dice la receta (#624; ante el mismo bibcode gana lo ya
   versionado). Después commitear `vault/config/registro/<slug>.yaml`: recién ahí el juicio viaja.
 - **Cabecera no estampable** (#69 — ficha/concepto sin la línea `> _Generado con Almagesto v…_`:
   los estampadores de cabecera no-opean en silencio sobre ella, así que el puntero de búsqueda de

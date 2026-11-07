@@ -297,7 +297,8 @@ def test_contradiccion_gt_ficha(toy_vault, capsys):
 
 def test_triage_json_viejo_es_bloqueante(toy_vault, capsys):
     """`load_decisiones` dejó de mergear el `build/<slug>/triage.json` pre-1.9.0. Sin detector eso
-    sería una pérdida SILENCIOSA: el triage volvería a proponer lo ya descartado, sin el motivo."""
+    sería una pérdida SILENCIOSA: el triage volvería a proponer lo ya descartado, sin el motivo.
+    @inv INV-54"""
     d = toy_vault.ROOT / "build" / "test_star"
     d.mkdir(parents=True, exist_ok=True)
     (d / "ads.json").write_text(json.dumps({"slug": "test_star", "records": []}), encoding="utf-8")
@@ -307,7 +308,8 @@ def test_triage_json_viejo_es_bloqueante(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert rc == 1
     assert "2 decisión(es) en build/test_star/triage.json" in out
-    assert "triage.py test_star --migrate" in out
+    assert "triage.py <slug> --migrate" in out and cfg.RETIRED_MIGRATORS_TAG in out, \
+        "la receta nombra el migrador y el tag de git que lo trae (#624)"
 
 
 def test_triage_json_se_detecta_sin_ads_json(toy_vault, capsys):
@@ -1892,12 +1894,10 @@ def _editar_tabla(toy_vault, viejo, nuevo, stem="nota-verif"):
 def _al_hermano(nota):
     """#344 — la tabla del bloque se va a `<nota>.verif.md`, que es donde el lint la lee.
 
-    Se usa el MIGRADOR de verdad, no una copia: un doble con otro contrato esconde el bug en la
-    diferencia (regla de método nº2), y acá el contrato es exactamente «qué queda en la nota y qué
-    se va al hermano»."""
-    import make_notes
-    make_notes.migrate_verif_sidecar(nota)
-    return nota
+    Con las mismas primitivas de `lib_blocks` que usa el escritor (`conftest`, #624): el contrato
+    es exactamente «qué queda en la nota y qué se va al hermano»."""
+    from conftest import move_verif_table_to_sidecar
+    return move_verif_table_to_sidecar(nota)
 
 
 def _nota_verif(toy_vault, stem, cuerpo):
@@ -2251,7 +2251,6 @@ def test_in_dir_no_confunde_carpeta_hermana_stars_borradores(toy_vault, capsys):
     rc, out = run_lint(capsys)
     assert "Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog) (1)" in out
     assert "2020ext....1E → extraído" in out
-
 
 
 # ── issue 0.3 · "no evaluado": un chequeo que no pudo correr NO aporta un cero (D-43 / INV-87) ──
@@ -3099,7 +3098,8 @@ def test_bearing_en_una_nota_de_paper_es_schema_viejo(toy_vault, capsys):
                                      "thesis_links": ["hip"], "bearing": "supports"})
     link_from_log(toy_vault, "2020Bear")
     rc, rep = run_lint_reporte(capsys)
-    assert rc == 1 and "2020Bear" in _seccion(rep, "bearing")
+    assert rc == 1 and "2020Bear" in _seccion(rep, "Schema retirado")
+    assert "[old_bearing · papers]" in _seccion(rep, "Schema retirado")
 
 
 # ── Tanda 8 · issue 8.6 (D-56 + D-23 + D-32) ──────────────────────────────────────────────────
@@ -4933,9 +4933,10 @@ def test_schema_viejo_sin_vistas_es_bloqueante(toy_vault, capsys):
     paper_extraido(toy_vault, no_sintetizado=[{"sujeto": "Estrella Test", "motivo": "tangencial"}], role=["aplicacion"],
                    body="## Extracción (LLM)\n\n- **Planetas** — —\n")
     r = lint.collect()
-    cat = r.por_clave("vistas_schema_viejo")
+    cat = r.por_clave("schema_retirado")
     assert len(cat) == 1 and "2020ext....1E" == cat.items[0][0]
-    assert "vistas_schema_viejo" in [c.clave for c in r.bloquean()], "cuenta para el exit"
+    assert "[vistas_schema_viejo · papers]" in cat.items[0][1]
+    assert "schema_retirado" in [c.clave for c in r.bloquean()], "cuenta para el exit"
     assert run_lint(capsys)[0] == 1
 
 
@@ -4945,7 +4946,7 @@ def test_una_nota_sin_extraccion_y_sin_vistas_no_dispara_nada(toy_vault, capsys)
     mk_note(toy_vault.PAPERS, "2020stb....1S",
             {"tags": ["paper"], "relevance": "low", "stars": ["Estrella Test"]}, "")
     r = lint.collect()
-    assert r.por_clave("vistas_schema_viejo").items == ()
+    assert r.por_clave("schema_retirado").items == ()
     assert r.por_clave("vistas_vs_cuerpo").items == ()
 
 
@@ -5024,7 +5025,7 @@ def test_reclamo_declarado_con_no_vista_es_informativo(toy_vault, capsys):
 
 
 def test_reclamo_sin_vista_no_se_le_pide_a_una_nota_del_schema_viejo(toy_vault, capsys):
-    """Contra-caso: una nota sin ninguna vista ya está reportada por `vistas_schema_viejo` (o no se
+    """Contra-caso: una nota sin ninguna vista ya está reportada por `schema_retirado` (o no se
     leyó nunca). Pedirle además una vista por sujeto duplicaría el hallazgo en cada nota vieja del
     corpus, que es cómo un backlog nace con 900 ítems y se deja de mirar."""
     paper_extraido(toy_vault, thesis_links=["s_index"], role=["aplicacion"],
@@ -7807,7 +7808,7 @@ def test_el_par_completo_no_dispara_ninguna_de_las_cuatro(toy_vault, capsys):
     _con_subsecciones(toy_vault)
     rc, _ = run_lint_reporte(capsys)
     res = lint.collect()
-    for clave in ("verif_inline", "verif_sin_hermano", "verif_huerfano", "verif_cabecera"):
+    for clave in ("schema_retirado", "verif_sin_hermano", "verif_huerfano", "verif_cabecera"):
         assert res.por_clave(clave).items == (), clave
     assert rc == 0
 
@@ -7826,8 +7827,9 @@ def test_la_tabla_dentro_de_la_nota_es_schema_viejo_y_BLOQUEA(toy_vault, capsys)
     nota.write_text(nota.read_text(encoding="utf-8") + "\n" + tabla + "\n", encoding="utf-8")
     rc, rep = run_lint_reporte(capsys)
     assert rc == 1
-    assert "--migrate-verif-sidecar" in _seccion(rep, "DENTRO de la nota"), rep
-    assert lint.collect().por_clave("verif_inline").severidad == lint.SEV_BLOQUEANTE
+    assert "--migrate-verif-sidecar" in _seccion(rep, "Schema retirado"), rep
+    assert "[verif_inline · entidades]" in _seccion(rep, "Schema retirado"), rep
+    assert lint.collect().por_clave("schema_retirado").severidad == lint.SEV_BLOQUEANTE
 
 
 def test_la_cabecera_sin_su_hermano_BLOQUEA(toy_vault, capsys):
@@ -8678,19 +8680,6 @@ def test_check_scope_desync_compara_contra_la_config_y_calla_cuando_no_declara(t
     assert lint.check_scope_desync({"2001Libro": fm}) == []
 
 
-def test_check_extraction_in_build_cuenta_las_que_no_viajan(toy_vault):
-    """#396/#311 — `build/` es scratch por `.gitignore`: una extracción ahí no se versiona y no se
-    regenera sin volver a leer el PDF. El hallazgo es UNO y trae el conteo, no una fila por archivo."""
-    assert lint.check_extraction_in_build() == []
-    d = cfg.ROOT / "build" / "ica" / "extraccion"
-    d.mkdir(parents=True)
-    (d / "2001X.json").write_text("{}", encoding="utf-8")
-    (d / "2002Y.json").write_text("{}", encoding="utf-8")
-    filas = lint.check_extraction_in_build()
-    assert len(filas) == 1 and "2 extracción(es)" in filas[0][1]
-    assert "--migrate-extracciones" in filas[0][1]
-
-
 def test_check_red_pass_missing_calla_en_la_boveda_sin_papers(toy_vault):
     """#396/AUD-282 — «`sweep_external` nunca corrió» sólo es deuda si hay corpus del que hablar.
     La guarda de los papers es la que ningún test distinguía: sin ella, una bóveda recién
@@ -8823,22 +8812,6 @@ def test_check_undeclared_areas_es_blando_y_se_apaga_sin_declaracion(toy_vault):
     assert len(filas) == 1 and "indicatorz" in filas[0][0] and "1 nota(s)" in filas[0][1]
 
 
-def test_check_legacy_triage_nombra_el_slug_y_cuenta_lo_que_puede(toy_vault):
-    """#396 — el juicio de triage en `build/<slug>/triage.json` (pre-1.9.0) es el que el lector ya
-    no mira: sin migrarlo, el triage vuelve a proponer lo descartado, sin el motivo. El conteo sale
-    `?` cuando el JSON no se deja contar, que es distinto de cero."""
-    assert lint.check_legacy_triage() == []
-    d = cfg.ROOT / "build" / "ica"
-    d.mkdir(parents=True)
-    (d / "triage.json").write_text(json.dumps({"decisiones": {"a": 1, "b": 2}}), encoding="utf-8")
-    filas = lint.check_legacy_triage()
-    assert len(filas) == 1 and filas[0][0] == "ica" and "2 decisión(es)" in filas[0][1]
-    (d / "triage.json").write_text('{"decisiones": 3}', encoding="utf-8")
-    assert "? decisión(es)" in lint.check_legacy_triage()[0][1], "forma inválida ⇒ `?`, no 0"
-    (d / "triage.json").write_text("no es json", encoding="utf-8")
-    assert "? decisión(es)" in lint.check_legacy_triage()[0][1]
-
-
 def test_check_dangling_layers_saltea_lo_que_no_es_capa_de_entidad(toy_vault):
     """#396/INV-19 — las cuatro capas de una entidad que ya no existe. Tres guardas que separan una
     capa colgada de algo que no lo es: `build/auditoria/` (scratch del tooling, no capa), `_red.yaml`
@@ -8934,7 +8907,6 @@ def test_check_sources_metadata_separa_lo_que_bloquea_de_lo_que_es_backlog(toy_v
     write_yaml(cfg.THEMES_YAML, {"ica": {"title": "ICA", "area": "methods", "source": "local-pdfs",
                                          "sources": [{**decl, "author": "Otro"}]}})
     assert "lo declarado cambió" in lint.check_sources_metadata()[1][0][1]
-
 
 
 def test_la_firma_de_catalogo_equivocado_baja_el_bloqueante_a_declarado(toy_vault):
@@ -9142,14 +9114,6 @@ def test_check_registro_unreadable_y_decisions_shape(toy_vault):
     assert len(filas) == 1 and "no es un mapa" in filas[0][1] and "2001X" in filas[0][1]
 
 
-def test_check_old_registro_schema_bloquea_la_clave_busqueda(toy_vault):
-    """#396/D-28 — `busqueda:` (mapa, UNA corrida) es el schema pre-1.26 y el lector nuevo no lo
-    lee: un registro mudo deja la ficha afirmando sobre un universo que nadie puede reconstruir."""
-    assert lint.check_old_registro_schema("ica", {"busquedas": []}) == []
-    filas = lint.check_old_registro_schema("ica", {"busqueda": {"fecha": "2026-01-01"}})
-    assert len(filas) == 1 and "--migrate-registros" in filas[0][1]
-
-
 def test_check_lens_desync_nombra_POR_QUE_el_diff_offline_no_puede(toy_vault):
     """#396/D-49/#106 — las dos guardas que sobrevivían son las que eligen el MOTIVO, y elegir mal
     es la regla de método nº 4: hasta #106 el mensaje decía siempre «la nota no guarda `doctype`»,
@@ -9336,7 +9300,7 @@ def test_check_unsynthesized_exige_MOTIVO_y_no_acepta_la_marca_pelada(toy_vault)
     assert len(filas) == 1 and "no está citado" in filas[0][1]
     assert lint.check_unsynthesized([("2001X", [{"sujeto": "X", "motivo": "regla de poda"}])],
                                     set()) == []
-    # #553 — el escalar lo bloquea `old_no_sintetizado`: acá no se reporta dos veces
+    # #553 — el escalar lo bloquea `schema_retirado`: acá no se reporta dos veces
     assert lint.check_unsynthesized([("2001X", "regla de poda")], set()) == []
     for motivo in ("", "   ", True, 3, ["x"], "true", "sí", "SI", "yes"):
         filas = lint.check_unsynthesized([("2001X", [{"sujeto": "X", "motivo": motivo}])], set())
@@ -9352,10 +9316,9 @@ def test_553_no_sintetizado_escalar_es_schema_retirado_y_BLOQUEA(toy_vault, caps
     paper_extraido(toy_vault, no_sintetizado="tangencial")
     rc, out = run_lint(capsys)
     assert rc == 1 and "--migrate-no-sintetizado" in out and "2020ext....1E" in out
-    assert lint.check_old_no_sintetizado("x", cfg.PAPERS / "x.md", {"no_sintetizado": [
-        {"sujeto": "X", "motivo": "poda"}]}, None) == []
-    assert lint.check_old_no_sintetizado("x", cfg.STARS / "x.md", {"no_sintetizado": "p"}, None) == []
-    assert lint.check_old_no_sintetizado("x", cfg.PAPERS / "x.md", {"no_sintetizado": "p"}, "roto") == []
+    assert lint.retired_schema("paper", "x", fm={"no_sintetizado": [
+        {"sujeto": "X", "motivo": "poda"}]}) == []
+    assert lint.retired_schema("paper", "x", fm={"no_sintetizado": None}) == []
 
 
 def test_check_contraste_pendiente_solo_donde_el_contraste_es_POSIBLE(toy_vault):
@@ -9487,7 +9450,7 @@ def test_check_verification_pairs_saltea_la_nota_en_sus_TRES_casos(toy_vault):
     anchor = {("nota-verif", ruta.read_text(encoding="utf-8"), ruta)}
     sin_hash = lambda _b, _k: None      # noqa: E731
     r = lint.check_verification_pairs(anchor, sin_hash)
-    assert r[6] == [] and r[7] == [] and r[1] == [], "la nota sana no dispara ningún salto"
+    assert r[6] == [] and r[1] == [], "la nota sana no dispara ningún salto"
 
     # (1) la tabla vuelve a la nota (schema pre-1.165.0) → `verif_inline`, y NADA más se evalúa.
     # Se arma sin el migrador a propósito: lo que este caso simula es la nota que nunca se migró.
@@ -9497,17 +9460,18 @@ def test_check_verification_pairs_saltea_la_nota_en_sus_TRES_casos(toy_vault):
                                   .splitlines() if l.startswith("|")) + "\n")
     r = lint.check_verification_pairs(
         {("sin-migrar", inline.read_text(encoding="utf-8"), inline)}, sin_hash)
-    assert len(r[6]) == 1 and "--migrate-verif-sidecar" in r[6][0][1]
-    assert r[0] == [] and r[8] == [], "salteada: no se dice nada más de ella"
+    assert len(r[1]) == 1 and "[verif_inline · entidades]" in r[1][0][1]
+    assert "--migrate-verif-sidecar" in r[1][0][1]
+    assert r[0] == [] and r[7] == [], "salteada: no se dice nada más de ella"
 
     # (2) el hermano desaparece → `verif_sin_hermano`
     _con_ancla(toy_vault, CUERPO)
     _hermano(toy_vault).unlink()
     texto = ruta.read_text(encoding="utf-8")
     r = lint.check_verification_pairs({("nota-verif", texto, ruta)}, sin_hash)
-    assert len(r[7]) == 1 and "no existe su hermano" in r[7][0][1]
+    assert len(r[6]) == 1 and "no existe su hermano" in r[6][0][1]
 
-    # (3) plantilla vieja: sin `Ancla` / `Hash fuente` → `old_verif_template`
+    # (3) plantilla vieja: sin `Ancla` / `Hash fuente` → `schema_retirado` (fila `old_verif_template`)
     _con_ancla(toy_vault, CUERPO)
     h = _hermano(toy_vault)
     h.write_text("| # | Afirmación (extracto) | Fuente | Veredicto |\n|---|---|---|---|\n"
@@ -10035,15 +9999,12 @@ def test_check_paper_destination_y_radio_sin_link(toy_vault):
     ⚠ Declarado: el `concept_slugs` de `if concept_slugs and str(f).startswith(…)` sobrevive — el
     `_slug in concept_slugs` de adentro ya lo subsume. Red 8, código anterior a #396.  @inv INV-94"""
     pap, otra = cfg.PAPERS / "2020X.md", cfg.STARS / "s.md"
-    assert lint.check_paper_destination("s", otra, {}, None) == ([], []), "sólo notas de paper"
-    assert lint.check_paper_destination("2020X", pap, {}, "fm rota") == ([], []), \
+    assert lint.check_paper_destination("s", otra, {}, None) == [], "sólo notas de paper"
+    assert lint.check_paper_destination("2020X", pap, {}, "fm rota") == [], \
         "con el frontmatter roto no se opina"
-    sin, _b = lint.check_paper_destination("2020X", pap, {}, None)
-    assert len(sin) == 1 and "no pertenece a ninguna entidad" in sin[0][1].lower() or sin, sin
-    assert lint.check_paper_destination("2020X", pap, {"stars": ["tau Cet"]}, None)[0] == []
-    _s, bear = lint.check_paper_destination("2020X", pap, {"bearing": "apoya",
-                                                           "stars": ["x"]}, None)
-    assert len(bear) == 1, "el `bearing` es schema viejo (D-21)"
+    sin = lint.check_paper_destination("2020X", pap, {}, None)
+    assert len(sin) == 1 and "sin destino" in sin[0][1], sin
+    assert lint.check_paper_destination("2020X", pap, {"stars": ["tau Cet"]}, None) == []
 
     hub = cfg.CONCEPTS / "methods" / "hub.md"
     cuerpo = "# hub\n\nel radio `gp-kernels` profundiza el kernel.\n"
@@ -10361,26 +10322,6 @@ def test_check_headerless_solo_pide_cabecera_a_fichas_y_conceptos(toy_vault):
     assert len(filas) == 1 and "--restamp-headers" in filas[0][1]
     assert lint.check_headerless("test_star", str(cfg.STARS / "test_star.md"),
                                  f"{lint.GENERATOR_LINE}\n") == []
-
-
-def test_check_legacy_disputes_y_facets_bloquean_el_schema_sin_lector(toy_vault):
-    """#396/#71/INV-13/R-5 — los dos son la misma doctrina: schema viejo, detector bloqueante, nunca
-    lector tolerante. `planets[].disputes[]` tenía el polo de verdad hardcodeado en su FORMA (servía
-    para paper↔NEA y no podía expresar paper↔paper); `topics:` quedó SIN LECTOR, o sea que la nota
-    conserva el dato y el sistema no lo ve.  @inv INV-13"""
-    assert lint.check_legacy_disputes("s", {}) == []
-    filas = lint.check_legacy_disputes("s", {"planets": [{"letter": "b", "disputes": [
-        {"field": "K", "ref": "2020X", "alt": 1}]}]})
-    assert filas and any("--migrate-disputes" in m for _s, m in filas)
-
-    pap = str(cfg.PAPERS / "2020X.md")
-    assert lint.check_legacy_facets("2020X", pap, {"facets": ["rv"]}, None) == []
-    assert lint.check_legacy_facets("2020X", pap, {"topics": ["rv"]}, "fm rota") == [], \
-        "con el YAML roto ya se reportó: no se duplica el hallazgo"
-    assert lint.check_legacy_facets("s", str(cfg.STARS / "s.md"), {"topics": ["rv"]}, None) == [], \
-        "`topics:` es schema de una nota de PAPER"
-    filas = lint.check_legacy_facets("2020X", pap, {"topics": ["rv"]}, None)
-    assert len(filas) == 1 and "--migrate-facets" in filas[0][1]
 
 
 def test_check_inferences_without_premises_exige_al_menos_un_bibcode(toy_vault):
@@ -10858,11 +10799,13 @@ def test_los_tres_saltos_del_bloque_de_verificacion_tienen_test_propio(toy_vault
     ruta = cfg.CONCEPTS / "methods" / "nota-verif.md"
     texto = ruta.read_text(encoding="utf-8")
 
-    assert lint.check_verif_inline("nota-verif", texto, ruta) == [], "la tabla ya está afuera"
+    assert lint.retired_schema("nota_verif", "nota-verif", texto=texto, ruta=ruta) == [], \
+        "la tabla ya está afuera"
     tabla = "\n".join(l for l in _hermano(toy_vault).read_text(encoding="utf-8").splitlines()
                       if l.startswith("|"))
     inline = CUERPO + "\n## Verificación de citas (2026-01-01)\n\n" + tabla + "\n"
-    filas_i = lint.check_verif_inline("sin-migrar", inline, cfg.CONCEPTS / "methods" / "x.md")
+    filas_i = lint.retired_schema("nota_verif", "sin-migrar", texto=inline,
+                                  ruta=cfg.CONCEPTS / "methods" / "x.md")
     assert len(filas_i) == 1 and "--migrate-verif-sidecar" in filas_i[0][1]
 
     assert lint.check_verif_sidecar_missing("nota-verif", ruta) == []
@@ -10870,9 +10813,10 @@ def test_los_tres_saltos_del_bloque_de_verificacion_tienen_test_propio(toy_vault
     assert len(huerfana) == 1 and "no existe su hermano" in huerfana[0][1]
 
     filas = lb.verif_rows(ruta)
-    assert lint.check_old_verif_template("nota-verif", ruta, filas) == []
-    vieja = lint.check_old_verif_template("nota-verif", ruta, None)
+    assert lint.retired_schema("hermano_verif", "nota-verif", filas=filas, ruta=ruta) == []
+    vieja = lint.retired_schema("hermano_verif", "nota-verif", filas=None, ruta=ruta)
     assert len(vieja) == 1 and "plantilla vieja" in vieja[0][1]
+    assert "verify-citations" in vieja[0][1], "su salida es una operación viva, no un migrador"
 
 
 def test_check_table_shape_y_verificar_pdf_mark_cuentan_la_LINEA_real(toy_vault):
@@ -10894,14 +10838,14 @@ def test_check_table_shape_y_verificar_pdf_mark_cuentan_la_LINEA_real(toy_vault)
         "la navegación no lleva marcas de auditoría"
 
 
-def test_check_paper_legacy_fields_y_pending(toy_vault):
+def test_campos_txt_viejos_y_pending(toy_vault):
     """#205/#80/#298 — los campos retirados en 1.71.0 (`symbols_lost`/`fulltext_layout`) ya no los
     lee nadie, y `pending` es vocabulario CERRADO con motivo OBLIGATORIO: en seis meses sirve el
     motivo, no la categoría, y un typo entraba mudo."""
-    sm: dict = {}
-    assert lint.check_paper_legacy_fields("2020X", {}, "cuerpo\n", sm) == [] and sm == {}
-    filas = lint.check_paper_legacy_fields("2020X", {"symbols_lost": 3}, "cuerpo\n", sm)
+    assert lint.retired_schema("paper", "2020X", fm={}) == []
+    filas = lint.retired_schema("paper", "2020X", fm={"symbols_lost": 3})
     assert len(filas) == 1 and "symbols_lost" in filas[0][1]
+    assert "[campos_txt_viejos · papers]" in filas[0][1]
 
     ver, pend, bad, _acep = lint.check_paper_pending("2020X", {})
     assert (ver, pend, bad, _acep) == ([], [], [], [])
@@ -11843,7 +11787,7 @@ def test_check_no_sintetizado_citado_cruza_la_escotilla_contra_la_prosa(toy_vaul
     assert [s for s, _m in filas] == ["2020P"] and "`Estrella A`" in filas[0][1], filas
     assert run([{"sujeto": "Estrella B", "motivo": "m"}]) == [], "la tabla estampada no es prosa"
     assert len(run([{"sujeto": "gls", "motivo": "m"}])) == 1, "el tema, por su `concept`"
-    assert run("escalar viejo") == [], "la forma rota la reporta `old_no_sintetizado`"
+    assert run("escalar viejo") == [], "la forma rota la reporta `schema_retirado`"
     assert run(None, no_vista=[{"sujeto": "Estrella A", "motivo": "m"}]) == [], "no_vista no es esto"
     assert lint.check_no_sintetizado_citado({}) == []
     write_yaml(cfg.STARS_YAML, {"Estrella A": {"slug": "a"}, "Estrella C": {"slug": "c"}})
@@ -11921,7 +11865,6 @@ def test_581_no_vista_con_vista_fechada_del_mismo_sujeto_bloquea(toy_vault, caps
     r = lint.collect()
     assert any("FECHADA" in d for _s, d in r.por_clave("fm_broken").items)
     assert "fm_broken" in [c.clave for c in r.bloquean()]
-
 
 
 def test_582_lint_reporta_el_paper_leido_fuera_del_registro_con_el_snippet_de_triage(toy_vault):
@@ -12026,7 +11969,6 @@ def test_594_el_lint_lista_el_par_soportado_con_el_localizador_ajeno(tmp_path):
     assert [h.split(" par ")[1].split(":")[0] for _s, h in hits] == ["1", "5"], hits
 
 
-
 def test_AUD566_567_607_un_motivo_que_no_es_motivo_no_abre_ninguna_escotilla():
     """AUD-566/567/607 (familia AUD-541, INV-167): `<motivo>`, `true` o `sí` no son motivo — ni en el
     filtro barato de #559, ni en las firmas que leen `motivo` con `signature_text`."""
@@ -12057,3 +11999,60 @@ def test_598_localizador_solo_pagina_cuando_la_extraccion_ubica_esa_pagina():
                    "34 d (p. 4) [[2099Z]].",              # sin extracción
                    "## Papers\n\n(p. 4) [[2020A]]"):      # sección estampada
         assert hits(exento) == [], exento
+
+
+def test_624_cada_fila_de_RETIRED_SCHEMAS_bloquea_con_su_poblacion_y_su_salida(toy_vault):
+    """#624/INV-13/INV-40 — los diez detectores de schema retirado son UNA tabla y una función: cada
+    fila conserva su predicado, sus variantes no binarias (la forma inválida de `old_disputes`, el
+    JSON roto de `legacy_triage`), su población y una salida escrita — el migrador vive en el tag
+    de git, así que ningún bloqueante queda sin receta.  @inv INV-13"""
+    assert {r.key for r in lint.RETIRED_SCHEMAS} == {
+        "old_facets", "old_bearing", "campos_txt_viejos", "old_no_sintetizado",
+        "vistas_schema_viejo", "old_disputes", "verif_inline", "old_verif_template",
+        "old_registro", "extraccion_en_build", "legacy_triage"}
+    for r in lint.RETIRED_SCHEMAS:
+        assert r.poblacion in ("papers", "entidades", "registros"), r
+        assert bool(r.migrator) != bool(r.fix), f"{r.key}: una salida, y sólo una"
+    # paper: el frontmatter decide; lo vigente no dispara
+    assert lint.retired_schema("paper", "2020X", fm={"facets": ["rv"]}) == []
+    (f,) = lint.retired_schema("paper", "2020X", fm={"topics": ["rv"]})
+    assert f[0] == "2020X" and "[old_facets · papers]" in f[1] and "--migrate-facets" in f[1]
+    assert cfg.RETIRED_MIGRATORS_TAG in f[1] and "re-ingestar" in f[1]
+    (f,) = lint.retired_schema("paper", "2020X", fm={"bearing": "apoya"})
+    assert "[old_bearing · papers]" in f[1]
+    (f,) = lint.retired_schema("paper", "2020X", fm={"no_sintetizado": "p"})
+    assert "[old_no_sintetizado · papers]" in f[1]
+    # nota: `old_disputes` con su variante de forma inválida (no es N disputas)
+    assert lint.retired_schema("nota", "s", fm={}) == []
+    filas = lint.retired_schema("nota", "s", fm={"planets": [
+        {"letter": "b", "disputes": [{"field": "K", "ref": "2020X", "alt": 1}]},
+        {"letter": "c", "disputes": 5}]})
+    assert len(filas) == 2 and all("[old_disputes · entidades]" in m for _s, m in filas)
+    assert "1 disputa(s)" in filas[0][1] and "no es una lista" in filas[1][1]
+    # vistas: sólo la sección vieja SIN `vistas[]`
+    assert lint.retired_schema("vistas", "p", vistas=[], text="cuerpo\n") == []
+    assert len(lint.retired_schema("vistas", "p", vistas=[],
+                                   text="## Extracción (LLM)\n\n- x\n")) == 1
+    # registro
+    assert lint.retired_schema("registro", "ica", reg={"busquedas": []}) == []
+    (f,) = lint.retired_schema("registro", "ica", reg={"busqueda": {"fecha": "2026-01-01"}})
+    assert f[0] == "ica" and "[old_registro · registros]" in f[1] and "--migrate-registros" in f[1]
+    # build: el `triage.json` (barrido PROPIO, aun sin `ads.json`) y las extracciones
+    assert lint.retired_schema("build") == []
+    d = cfg.ROOT / "build" / "ica"
+    (d / "extraccion").mkdir(parents=True)
+    (d / "extraccion" / "2001X.json").write_text("{}", encoding="utf-8")
+    (d / "extraccion" / "2002Y.json").write_text("{}", encoding="utf-8")
+    (d / "triage.json").write_text(json.dumps({"decisiones": {"a": 1, "b": 2}}), encoding="utf-8")
+    filas = lint.retired_schema("build")
+    assert [s for s, _m in filas] == ["build/", "ica"], filas
+    assert "2 extracción(es)" in filas[0][1] and "2 decisión(es)" in filas[1][1]
+    (d / "triage.json").write_text('{"decisiones": 3}', encoding="utf-8")
+    assert "? decisión(es)" in lint.retired_schema("build")[1][1], "forma inválida ⇒ `?`, no 0"
+    (d / "triage.json").write_text("no es json", encoding="utf-8")
+    assert "? decisión(es)" in lint.retired_schema("build")[1][1]
+    # la categoría: una, bloqueante, con población declarada
+    res = lint.collect()
+    cat = res.por_clave("schema_retirado")
+    assert cat.severidad == lint.SEV_BLOQUEANTE and cat.poblacion == "schema_retirado"
+    assert len(cat) == 2 and res.poblaciones["schema_retirado"][0] >= 0

@@ -53,7 +53,6 @@ import extract_fulltext
 import lib_config as cfg
 import lint
 import make_notes
-import triage
 
 THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR))
@@ -158,7 +157,7 @@ def test_thesis_links_y_disputes_colgantes_y_mal_formadas_en_cero(reporte):
     """Las tres categorías bloqueantes que quedan del set de 12 que suman `n_block` en `lint.py`
     sin cubrir por otro test de este archivo (las otras nueve: wikilinks, frontmatter, retracted,
     huérfanas, masa, `role`, y las dos del ratchet con techo>0 — contradicciones_gt/
-    disputes_schema_viejo/triage_legacy). Medido hoy: 0 en las tres. Existe separado de
+    schema_retirado). Medido hoy: 0 en las tres. Existe separado de
     `test_ratchet_categorias_no_superan_el_techo` porque ESE test necesita, para chequear que no
     quedó ninguna categoría bloqueante sin cubrir, la lista COMPLETA de títulos bloqueantes — y
     estos tres son la parte de esa lista que no tiene su propio test dedicado en otro lado."""
@@ -378,7 +377,7 @@ def test_gt_y_fichas_apareados(instancia_real):
 
 # Los 12 títulos que `lint.py::main()` suma en `n_block` (el cómputo del exit code) — mismo orden
 # que la tupla `(broken, fm_broken, retracted, orphans, contradictions, mass_issues,
-# dangling_thesis, dangling_disputes, bad_roles, bad_disputes, old_disputes, legacy_triage)` de
+# dangling_thesis, dangling_disputes, bad_roles, bad_disputes, schema_retirado)` de
 # `lint.py`. Se usa para RECALCULAR `n_block` a mano a partir del REPORTE (archivo en disco, no
 # stdout — la línea `✗ N hallazgo(s)...` sólo se imprime a consola y no se escribe al `.md`, así
 # que no hay forma de leerla del reporte; recomputarla acá evita depender de stdout, que
@@ -388,7 +387,7 @@ BLOQUEANTE_TITULOS = (
     "Wikilinks rotos", "Frontmatter no parseable", "Papers RETRACTADOS", "Notas huérfanas",
     "Contradicciones ground-truth", "masa inconsistente con m", "thesis_links sin página destino",
     "disputes: ref de una posición", "`role` fuera del vocabulario", "disputes mal formadas",
-    "disputes en el schema viejo", "Juicio de triage en build",
+    "Schema retirado",
     # ⛔ #498 — «No evaluado» faltaba, y CUENTA para el exit (D-43: un chequeo que no pudo correr
     # suprime su categoría normal, así que un `(0)` que nadie midió se leería como veredicto). Sin
     # él, un lint con rc 1 por esa vía hacía fallar este test con «alguna categoría bloqueante no
@@ -520,13 +519,12 @@ def _copiar_instancia_mutable(instancia_real, tmp_path: Path) -> SimpleNamespace
 
     ⚠ `build/` NO se puede dejar como symlink acá. `instancia_real` lo symlinkea al `build/` REAL
     de la instancia (legítimo: los tests read-only sólo lo GLOBEAN para leer `ads.json`/
-    `triage.json`, nunca escriben). Pero `triage.migrate()` (`scripts/triage.py`) hace
-    `legacy.unlink()` sobre `build/<slug>/triage.json` al consolidar — si esta copia heredara el
-    symlink de `instancia_real`, ese unlink borraría el archivo REAL de la instancia del usuario.
-    Por eso acá se reemplaza el symlink de `build/` por una copia de verdad (liviana: ~3.6 MB
-    medido) ANTES de que cualquier migrador corra. `raw/pdfs`/`raw/fulltext` sí quedan como
-    symlinks: ningún migrador de la cadena (`restamp_headers`, `restamp_pdf_links`,
-    `migrate_disputes`, `sync_mirror`, `triage.migrate`) escribe ahí — sólo leen `raw/ground_truth`
+    `triage.json`, nunca escriben). Un paso del ciclo que escribiera en `build/` (el migrador de
+    triage lo hacía hasta #624: `legacy.unlink()`) borraría a través del symlink el archivo REAL de
+    la instancia del usuario. Por eso acá se reemplaza el symlink de `build/` por una copia de
+    verdad (liviana: ~3.6 MB medido) ANTES de que cualquier paso corra. `raw/pdfs`/`raw/fulltext` sí quedan como
+    symlinks: ningún paso de la cadena (`restamp_headers`, `restamp_pdf_links`, `sync_mirror`)
+    escribe ahí — sólo leen `raw/ground_truth`
     (que ya es una copia real, heredada de `instancia_real`) y escriben en `wiki/`+`config/registro`."""
     dest = tmp_path / "instancia_mutable"
     shutil.copytree(instancia_real.ROOT, dest, symlinks=True)
@@ -549,8 +547,8 @@ def test_idempotencia_ciclo_de_migradores_sobre_datos_reales(instancia_real, tmp
     corpus SINTÉTICO vintage — acá la pregunta es si el ciclo también cierra sobre la mugre REAL,
     que el generador no puede fabricar a propósito (ediciones a mano, campos que faltan por razones
     que nadie documentó). Fija dos cosas:
-      1. **Cierra**: las tres categorías bloqueantes del ratchet (`contradicciones_gt`,
-         `disputes_schema_viejo`, `triage_legacy`) bajan — no hace falta que lleguen a 0 exacto (el
+      1. **Cierra**: los bloqueantes del ratchet que un paso vivo cierra (`contradicciones_gt`)
+         bajan, y `schema_retirado` queda igual (#624: su salida es re-ingestar o el tag de git) — no hace falta que lleguen a 0 exacto (el
          plan documenta 1 residuo humano, `hd40307 P_rot_days`, que ningún migrador puede resolver
          solo — es una decisión de contenido, no de forma), pero si el ciclo no las mueve NADA, algo
          se rompió.
@@ -586,33 +584,23 @@ def test_idempotencia_ciclo_de_migradores_sobre_datos_reales(instancia_real, tmp
                     f"qué medir: NO es un fallo (#498)")
 
     # el ciclo del deploy real, mismo orden que `test_upgrade.py::_correr_ciclo` y que CLAUDE.md
-    # (plan §5, pasos 6-9): disputas → cabeceras → espejo → triage legacy del único sujeto que lo trae.
-    make_notes.migrate_all_disputes()
+    # (plan §5): cabeceras → espejo. Los migradores del schema viejo salieron de HEAD en #624.
     make_notes.restamp_headers()
     make_notes.sync_mirror()
-    legacy_slugs = [p.parent.name for p in (paths.ROOT / "build").glob("*/triage.json")]
-    for slug in legacy_slugs:
-        triage.migrate(slug)
 
     rc1, reporte1 = _run_lint_reporte()
     despues_conteo = {c: _categoria(reporte1, m["titulo"])[0] for c, m in bloqueantes.items()}
     assert sum(despues_conteo.values()) < sum(antes_conteo.values()), (
         f"el ciclo de migradores no bajó ningún bloqueante: antes={antes_conteo} "
         f"después={despues_conteo}")
-    # disputes_schema_viejo y triage_legacy son 100% mecánicos (sin residuo posible) — tienen que
-    # cerrar en 0 exacto; contradicciones_gt puede dejar el residuo humano documentado en el ratchet.
-    for clave in ("disputes_schema_viejo", "triage_legacy"):
-        if clave in despues_conteo:
-            assert despues_conteo[clave] == 0, (
-                f"{clave} no cerró en 0 tras el ciclo: {despues_conteo[clave]} — "
-                f"{bloqueantes[clave]['titulo']!r} debería ser 100% mecánico")
+    # #624 — el schema retirado no lo cierra ningún paso vivo: su salida es re-ingestar o el
+    # migrador del tag de git, así que tiene que quedar EXACTAMENTE como estaba (no mudo).
+    if "schema_retirado" in despues_conteo:
+        assert despues_conteo["schema_retirado"] == antes_conteo["schema_retirado"]
 
     hash1 = hash_tree(paths.VAULT)
-    make_notes.migrate_all_disputes()
     make_notes.restamp_headers()
     make_notes.sync_mirror()
-    for slug in legacy_slugs:
-        triage.migrate(slug)          # ya no hay legacy.json — cada llamada debe ser un no-op
     hash2 = hash_tree(paths.VAULT)
     assert hash1 == hash2, (
         "la segunda pasada del ciclo reescribió algo en vault/ — no es no-op (el patrón del "

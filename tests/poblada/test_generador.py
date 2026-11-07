@@ -66,8 +66,8 @@ def _categoria(reporte: str, contiene: str) -> tuple[int, list[str]]:
 BLOQUEANTES = (
     "Wikilinks rotos", "Frontmatter no parseable", "Papers RETRACTADOS", "Notas huérfanas",
     "Contradicciones ground-truth", "masa inconsistente con m", "thesis_links sin página destino",
-    "disputes: ref de una posición", "disputes mal formadas", "disputes en el schema viejo",
-    "Juicio de triage en build", "`role` fuera del vocabulario",
+    "disputes: ref de una posición", "disputes mal formadas", "Schema retirado",
+    "`role` fuera del vocabulario",
 )
 
 
@@ -248,10 +248,10 @@ def test_vintage_1_11_0_bloquea_con_categorias_de_schema_viejo(sembrar):
     _, censo = sembrar(n_papers=50, n_stars=3, n_concepts=10, seed=30, vintage="1.11.0")
     rc, reporte = _run_lint_reporte()
     assert rc == 1
-    n_old_disp, _ = _categoria(reporte, "disputes en el schema viejo")
-    assert n_old_disp > 0
-    n_legacy_triage, _ = _categoria(reporte, "Juicio de triage en build")
-    assert n_legacy_triage == 1                 # un solo build/<slug>/triage.json sembrado
+    _n, _ = _categoria(reporte, "Schema retirado")
+    assert reporte.count("[old_disputes · entidades]") > 0
+    # un solo build/<slug>/triage.json sembrado
+    assert reporte.count("[legacy_triage · registros]") == 1
     n_mirror, _ = _categoria(reporte, "Contradicciones ground-truth")
     assert n_mirror > 0                          # mass_earth ausente en planets[] vs GT (#70)
     # sin la línea del generador en NINGUNA ficha/concepto (backlog, no bloqueante, pero real):
@@ -269,8 +269,7 @@ def test_vintage_actual_no_dispara_categorias_de_schema_viejo(sembrar):
     sembrar(n_papers=50, n_stars=3, n_concepts=10, seed=30)
     rc, reporte = _run_lint_reporte()
     assert rc == 0
-    for titulo in ("disputes en el schema viejo", "Juicio de triage en build",
-                  "Contradicciones ground-truth"):
+    for titulo in ("Schema retirado", "Contradicciones ground-truth"):
         n, _ = _categoria(reporte, titulo)
         assert n == 0, titulo
 

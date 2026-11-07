@@ -49,17 +49,17 @@ categorias:
                         # 1.11.0 (ese schema no traía el campo). Se cierra con
                         # `python scripts/make_notes.py --sync-mirror` + 1 residuo a mano
                         # (hd40307 P_rot_days, ver plan §5 paso 8).
-  disputes_schema_viejo:
-    titulo: "disputes en el schema viejo"
+  schema_retirado:
+    titulo: "Schema retirado"
     severidad: bloqueante
-    techo: 2            # medido: 2026-08-23 — au_mic + hd40307, las dos estrellas con planetas
-                         # (planets[].disputes[] pre-#71). Se cierra con
-                         # `python scripts/make_notes.py --migrate-disputes`.
-  triage_legacy:
-    titulo: "Juicio de triage en build"
-    severidad: bloqueante
-    techo: 1             # medido: 2026-08-23 — build/eps_eridani/triage.json (pre-1.9.0). Se
-                          # cierra con `python scripts/triage.py eps_eridani --migrate`.
+    techo: 3             # medido: 2026-08-23 — las dos categorías que esta fusiona (#624):
+                          # `disputes en el schema viejo` 2 (au_mic + hd40307, planets[].disputes[]
+                          # pre-#71) + `Juicio de triage en build` 1 (build/eps_eridani/triage.json,
+                          # pre-1.9.0). ⚠ Cambió de DEFINICIÓN en #624: ahora suma las once filas de
+                          # `RETIRED_SCHEMAS`, y las otras no se midieron sobre esta instancia (el
+                          # loader de HEAD ya no la lee: `extra_core` sin la forma de D-58) — re-medir
+                          # al próximo deploy. La salida es re-ingestar, o los migradores del tag de
+                          # git `v1.411.3`.
 
   # ── WARN (no bloquean el exit code; higiene/typo a revisar a mano) ─────────────────────────────
   areas_no_declaradas:

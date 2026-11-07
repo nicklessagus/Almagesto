@@ -12,7 +12,6 @@ Uso:
     python scripts/triage.py <slug> --prioridad                                # core agrupados por puerta (#126)
     python scripts/triage.py <slug> --extraccion todos|subconjunto [--reason …]  # D-13: qué se leyó
     python scripts/triage.py <slug> --sintesis [--n-papers N] [--reason …]     # INV-82: fecha de síntesis
-    python scripts/triage.py <slug> --migrate                 # consolidar el triage.json pre-1.9.0
 
 El chaining trae papers conectados por citas al corpus del sujeto. La lente
 (`relevance.facets`) clasifica **tema**, no **pertinencia al sujeto**: anclado a "menciona al
@@ -34,7 +33,7 @@ Los tres niveles:
   viven en config versionada (#51): hasta 1.8.x el descarte iba a `build/<slug>/triage.json`
   —scratch gitignored— y en otra máquina el triage volvía a proponer todo lo descartado, sin el
   motivo. Ese archivo viejo **ya no se lee** (sin capas de compatibilidad: son complejidad permanente
-  en el lector): se consolida con `--migrate`, y mientras exista el **lint lo reporta como
+  en el lector): se consolida con el migrador del tag de git (#624: `docs/lint.md` § *Schema retirado*), y mientras exista el **lint lo reporta como
   bloqueante** — que quede mudo sería justamente el bug que #51 arregló.
   Los candidatos que **ya tienen nota** en la bóveda (entraron por OTRO slug — papers de método
   curados a otra estrella) se marcan (#42): no se filtran, se etiquetan, porque la decisión sigue
@@ -148,14 +147,13 @@ def triage_file(slug: str):
 
 
 def load_decisions(slug: str) -> dict:
-    """Decisiones del registro versionado. El `triage.json` pre-1.9.0 NO se lee acá: se migra con
-    `--migrate` y, mientras exista, el lint lo reporta como bloqueante."""
+    """Decisiones del registro versionado. El `triage.json` pre-1.9.0 NO se lee acá: mientras exista, el lint
+    lo reporta como bloqueante (`schema_retirado`, #624)."""
     return cfg.load_decisiones(slug)
 
 
 def save_decisions(slug: str, decisiones: dict) -> None:
-    """Escribe SIEMPRE en el registro versionado; `busqueda` (de query_ads) se preserva. Lo que
-    venía del legacy entra por `--migrate`, que es el único camino."""
+    """Escribe SIEMPRE en el registro versionado; `busqueda` (de query_ads) se preserva."""
     cfg.save_decisiones(slug, decisiones)
 
 
@@ -291,81 +289,6 @@ def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) 
         cfg.print_seguro("  (sin --pointer: la clave queda sin url/doi que la resuelva — conviene pasarlo)")
     cfg.print_seguro("  (versionado: se commitea y viaja. `ingest_theme` avisa si volvés a declarar esta "
           "clave en `sources:`)")
-    return 0
-
-
-def migrate(slug: str) -> int:
-    """Consolida en el registro VERSIONADO las decisiones que hayan quedado en el
-    `build/<slug>/triage.json` de una bóveda pre-1.9.0 (#51).
-
-    Es el **único** camino: el lector no mergea el archivo viejo (sin capas de compatibilidad), así
-    que mientras no se corra esto el juicio sigue viviendo únicamente en scratch gitignored y un
-    clon en otra máquina lo pierde — exactamente el bug que #51 arregla. Por eso el lint lo reporta
-    como bloqueante. Idempotente: ante el mismo bibcode gana lo ya versionado, y si no hay nada que
-    migrar no escribe."""
-    legacy = cfg.legacy_triage_path(slug)
-    if not legacy.exists():
-    #  @inv INV-54
-        cfg.print_seguro(f"{slug}: no hay {legacy} — nada que migrar "
-              f"(el juicio nuevo ya se escribe en {cfg.registro_path(slug)}).")
-        return 0
-    try:
-        data = json.loads(legacy.read_text(encoding="utf-8"))
-    except (ValueError, OSError) as e:
-        sys.exit(f"{legacy} no se pudo leer ({type(e).__name__}) — revisalo a mano antes de migrar.")
-    if not isinstance(data, dict):
-        sys.exit(f"{legacy} no es un objeto JSON (es {type(data).__name__}) — revisalo a mano.")
-    # `"decisiones" not in data` (no `.get(...) or {}`) porque acá SÍ hace falta distinguir "no
-    # tiene la clave" de "la tiene vacía": lo primero es un triage.json que este migrador no sabe
-    # leer (no consolidó nada, no toca borrar); lo segundo es un legado sin decisiones pendientes,
-    # que sigue siendo un migrar-y-borrar legítimo.
-    if "decisiones" not in data:
-        cfg.print_seguro(f"{slug}: {legacy} no tiene la clave 'decisiones' — no es el formato que este "
-              f"migrador consolida, así que no se leyó ni se migró nada. Lo dejo: si es scratch "
-              f"viejo sin valor, borralo a mano; si trae un juicio en otra forma, migralo primero "
-              f"a `decisiones` y volvé a correr `--migrate`.")
-        return 1
-    viejas = data["decisiones"] or {}
-    # AUD-152 — un `decisiones` que no es un mapa (o con entradas que no lo son) reventaba con
-    # `AttributeError`/`TypeError` a mitad de la migración, y como el lint bloquea por EXISTENCIA
-    # del archivo el usuario quedaba con un bloqueante **sin salida**: el único comando que el
-    # propio mensaje receta no podía correr nunca. Se reporta con la forma real y no se borra nada.
-    if not isinstance(viejas, dict):
-        cfg.print_seguro(f"{slug}: `decisiones` de {legacy} no es un mapa (es "
-                         f"{type(viejas).__name__}) — no se migró nada y NO lo borro. Arreglalo a "
-                         f"mano (tiene que ser `{{bibcode: {{decision, motivo, fecha}}}}`) y volvé "
-                         f"a correr `--migrate`.")
-        return 1
-    if (malas := sorted(b for b, d in viejas.items() if not isinstance(d, dict))):
-        cfg.print_seguro(f"  ⚠ {len(malas)} entrada(s) de {legacy} no son un mapa y NO se migran "
-                         f"({', '.join(malas[:3])}…): `load_decisiones` las descartaría igual, así "
-                         f"que migrarlas guardaría un juicio que nadie lee.")
-        viejas = {b: d for b, d in viejas.items() if isinstance(d, dict)}
-    # `cfg.load_decisiones`, no un `.get(...) or {}` propio: el registro es el ÚNICO artefacto no
-    # regenerable de la bóveda y el framework instruye editarlo a mano — una `decisiones:` escalar
-    # (edición a mano rota) es YAML válido. `cfg.load_decisiones` ya trae el `isinstance` que hace
-    # falta (lib_config:412); duplicar el lector acá es donde vivía el defecto (R15): con `ya`
-    # escalar, `b not in ya` se volvía un substring match silencioso y `{**viejas, **ya}` reventaba
-    # con `TypeError: 'str' object is not a mapping` a mitad de la migración.
-    ya = cfg.load_decisiones(slug)
-    nuevas = {b: d for b, d in viejas.items() if b not in ya}
-    if nuevas:
-        cfg.save_decisiones(slug, {**viejas, **ya})   # el registro gana ante el mismo bibcode
-        cfg.print_seguro(f"{slug}: {len(nuevas)} decisión(es) migradas a {cfg.registro_path(slug)} "
-              f"({len(ya)} ya estaban).")
-    else:
-        cfg.print_seguro(f"{slug}: las {len(viejas)} decisión(es) del triage.json viejo ya estaban en el "
-              f"registro.")
-    # El migrador CONSUME su entrada. Sin esto, el detector del lint —que bloquea por EXISTENCIA del
-    # archivo— seguía en 1 después de correr el único comando que el propio mensaje recomienda, sin
-    # ninguna acción disponible: el círculo migrador→detector no cerraba. Borrarlo es exactamente lo
-    # que este mismo mensaje declaraba seguro ("build/ es scratch"), y lo que ya está en el registro
-    # versionado sobrevive al borrado (que es el punto de #51). Pero eso vale sólo llegados hasta
-    # acá: con `viejas` vacío (clave presente pero sin contenido) o ya cubierto por `ya`, seguimos
-    # habiendo LEÍDO y consolidado la clave — es distinto del caso de arriba, que nunca la leyó.
-    legacy.unlink()
-    cfg.print_seguro(f"  Ahora viajan en git: commiteá el registro. Borré {legacy} (scratch, ya consolidado): "
-          f"el lint deja de reportarlo.")
     return 0
 
 
@@ -873,9 +796,6 @@ def main() -> int:
                          "(citas como desempate); #126: agrupado por POLÍTICA, o sea por cuál puerta "
                          "de D-26 entró (fundacional / astro / las dos), que es con lo que se decide "
                          "el recorte de lectura UNA vez y se declara con --extraccion.")
-    ap.add_argument("--migrate", action="store_true",
-                    help="consolidar en el registro versionado las decisiones del "
-                         "build/<slug>/triage.json viejo (bóvedas pre-1.9.0) y salir")
     args = ap.parse_args()
 
     def close(rc: int, paso: str) -> int:
@@ -908,8 +828,6 @@ def main() -> int:
         return close(promote_source(args.slug, args.promote_source, args.bibcode), "triage")
     if args.prioridad:
         return prioridad(args.slug)
-    if args.migrate:
-        return migrate(args.slug)
 
     # D-13/INV-83 — el canal de DECLARACIÓN del recorte de lectura. Vivía sólo como función de
     # `lib_config` y **ningún script ni skill la llamaba**: el detector del lint existía y el

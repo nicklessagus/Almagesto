@@ -138,12 +138,35 @@ FLAGS_AJENOS = {
 # Flags que la doc nombra **precisamente porque ya no existen**. No van con los ajenos: el motivo es
 # otro y la distinción importa — un flag retirado que se documenta como retirado es correcto, y uno
 # retirado que la doc sigue mandando a usar es un bug. Cada uno con su decisión.
+#: #624 — los migradores de un solo uso salieron de HEAD (ninguna instancia activa tenía trabajo) y
+#: viven en el tag de git `cfg.RETIRED_MIGRATORS_TAG`: la doc los nombra como historia o como receta
+#: de ese tag, nunca como comando de HEAD.
+_RETIRADO_624 = "#624 — migrador de un solo uso retirado de HEAD; vive en el tag de git v1.411.3."
 FLAGS_RETIRADOS = {
     "--no-triage": "D-48 — se eliminó: permitía que un candidato ya descartado volviera a entrar "
                    "en silencio. La doc lo nombra para decir que no está.",
     "--corto": "AUD-287 — se eliminó de `contrast.py`: reintroducía el corte dentro de la cita "
                "que #314 midió (2 fabricadas), y nadie lo usaba.",
     "--limite": "AUD-287 — el ancho del corte de `--corto`; se fue con él.",
+    "--migrate-facets": _RETIRADO_624,
+    "--migrate-registros": _RETIRADO_624,
+    "--migrate-disputes": _RETIRADO_624,
+    "--migrate-verif-archivo": _RETIRADO_624,
+    "--migrate-warn-anchor": _RETIRADO_624,
+    "--migrate-bearing": _RETIRADO_624,
+    "--migrate-txt-fields": _RETIRADO_624,
+    "--migrate-extracciones": _RETIRADO_624,
+    "--migrate-source-fields": _RETIRADO_624,
+    "--migrate-vistas": _RETIRADO_624,
+    "--migrate-verif-sidecar": _RETIRADO_624,
+    "--migrate-no-sintetizado": _RETIRADO_624,
+    "--fix-header-order": _RETIRADO_624,
+    "--restamp-transcribed-note": _RETIRADO_624,
+    "--restamp-vista-stub": _RETIRADO_624,
+    "--migrate-condition-prefix": _RETIRADO_624,
+    "--migrate-verdict-chain": _RETIRADO_624,
+    "--migrate-condition-destination": _RETIRADO_624,
+    "--migrate": _RETIRADO_624,
 }
 
 

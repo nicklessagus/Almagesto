@@ -96,7 +96,7 @@ def test_escribe_el_hermano_y_la_nota_con_los_hashes_que_el_lint_LEE(toy_vault):
 
     res = lint.collect()
     for cat in ("stale_pairs", "verif_sin_archivo", "verif_cabecera", "verif_sin_hermano",
-                "verif_inline", "old_verif_template", "verif_estructura"):
+                "schema_retirado", "verif_estructura"):
         assert res.por_clave(cat).items == (), (cat, res.por_clave(cat).items)
 
 
@@ -743,41 +743,14 @@ def test_row_key_es_el_par_y_la_reescritura_NO_pisa_las_filas_vecinas(toy_vault)
     assert lb.rows_addressed(filas, filas[0].anchor) == filas, "sin bibcode, la dirección es ambigua"
     assert [f.bibcode for f in lb.rows_addressed(filas, filas[0].anchor, "2019Txt")] == ["2019Txt"]
     assert lb.rows_addressed(filas, "0" * 10) == []
-    # el migrador de #427 escribe por la misma clave: con la clase doble en UNA de las dos filas del
-    # ancla, indexar por ancla le habría escrito la celda colapsada también a la vecina
-    herm = cfg.verif_sidecar(nota)
-    herm.write_text(herm.read_text(encoding="utf-8")
-                    .replace("acota: SNR > 50", "acota: acota: SNR > 50", 1), encoding="utf-8")
-    r = ws.migrate_condition_prefix(nota)
-    assert r["migradas"] == 1, r
+    # `--resolver` escribe por la misma clave: indexar por ancla le habría escrito la celda
+    # resuelta también a la vecina del MISMO ancla
+    r = ws.resolve_conditions(nota, {f"{filas[0].anchor}:2020Pdf": "regimen — fila A"})
+    assert r["resueltas"] == 1, r
     por_bib = {f.bibcode: f for f in lb.verif_rows(nota)}
-    assert por_bib["2020Pdf"].condition == "acota: SNR > 50"
+    assert lb.condition_resolved(por_bib["2020Pdf"].condition)
     assert por_bib["2019Txt"].condition == "contextualiza: la muestra es de 12", \
         "la fila vecina del MISMO ancla queda como estaba"
-
-
-def test_migrate_condition_prefix_colapsa_la_clase_DOBLE_y_es_idempotente(toy_vault):
-    """#427 — el migrador de las 41 celdas medidas. Colapsa la cabeza repetida dejando el texto de
-    adentro VERBATIM, que es justo la forma canónica; no re-escribe la condición."""
-    assert ws.collapse_condition("acota: acota→resuelta: fila") == "acota→resuelta: fila"
-    assert ws.collapse_condition("acota: acota: SNR > 50") == "acota: SNR > 50"
-    assert ws.collapse_condition("contextualiza: contextualiza: x") == "contextualiza: x"
-    assert ws.collapse_condition("acota: SNR > 50") == "acota: SNR > 50", "sin doble, no toca"
-    assert ws.collapse_condition("acota: contextualiza: x") == "acota: contextualiza: x", \
-        "clases DISTINTAS no son una duplicación: eso es una contradicción y no se resuelve sola"
-    assert ws.collapse_condition("—") == "—"
-    nota = _escena(toy_vault)
-    d = _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota")
-    ws.write(nota, d, fecha="2026-03-01")
-    herm = cfg.verif_sidecar(nota)
-    herm.write_text(herm.read_text(encoding="utf-8")
-                    .replace("acota: SNR > 50", "acota: acota→resuelta: fila A", 1), encoding="utf-8")
-    assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == 0, "irresoluble hoy"
-    assert ws.migrate_condition_prefix(nota)["migradas"] == 1
-    assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == 1
-    t1 = nota.read_bytes(), herm.read_bytes()
-    assert ws.migrate_condition_prefix(nota)["migradas"] == 0
-    assert (nota.read_bytes(), herm.read_bytes()) == t1, "idempotente"
 
 
 def test_el_cli_de_condiciones_toma_una_nota_y_rehusa_el_par_MAL_FORMADO(toy_vault, capsys):
@@ -793,9 +766,9 @@ def test_el_cli_de_condiciones_toma_una_nota_y_rehusa_el_par_MAL_FORMADO(toy_vau
     assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == 1
     assert ws.main(["--resolver", "sin-igual", str(nota)]) == 1
     assert "falta el `=`" in capsys.readouterr().out
-    assert ws.main(["--migrate-condition-prefix"]) == 2
+    assert ws.main(["--resolver", f"{ancla}=bloque"]) == 2
     assert "UNA nota" in capsys.readouterr().out
-    assert ws.main(["--migrate-condition-prefix", str(cfg.verif_sidecar(nota))]) == 2
+    assert ws.main(["--resolver", f"{ancla}=bloque", str(cfg.verif_sidecar(nota))]) == 2
 
 
 def test_el_cli_de_condiciones_acepta_el_LOTE_por_json(toy_vault, capsys):
@@ -933,34 +906,30 @@ def test_el_no_op_de_las_dos_modalidades_NO_pasa_por_el_escritor(toy_vault):
     nota = _escena(toy_vault)
     ws.write(nota, _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota"),
              fecha="2026-03-01")
-    assert ws.migrate_condition_prefix(nota) == {"migradas": 0, "filas": 2}
     ancla = lb.verif_rows(nota)[0].anchor
     ws.resolve_conditions(nota, {ancla: "regimen — fila A"})
     assert ws.resolve_conditions(nota, {ancla: "regimen — fila A"}) == {"resueltas": 0, "filas": 2}
 
 
-def test_el_cli_migra_de_verdad_y_el_dry_run_NO_escribe(toy_vault, capsys):
-    """#427 — la modalidad `--migrate-condition-prefix` por CLI, con efecto: hasta acá el CLI sólo
-    estaba probado por sus rehúses, así que saltearse la migración entera pasaba limpio. Y el
-    `--dry-run` dice qué haría sin tocar el artefacto, que es como se corre sobre una bóveda ajena."""
+def test_el_cli_resuelve_de_verdad_y_el_dry_run_NO_escribe(toy_vault, capsys):
+    """#427 — la modalidad `--resolver` por CLI, con efecto, y su `--dry-run`: dice qué haría sin
+    tocar el artefacto, que es como se corre sobre una bóveda ajena."""
     nota = _escena(toy_vault)
     ws.write(nota, _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota"),
              fecha="2026-03-01")
     herm = cfg.verif_sidecar(nota)
-    herm.write_text(herm.read_text(encoding="utf-8")
-                    .replace("acota: SNR > 50", "acota: acota→resuelta: fila A", 1), encoding="utf-8")
+    ancla = lb.verif_rows(nota)[0].anchor
     antes = herm.read_bytes()
-    assert ws.main(["--migrate-condition-prefix", "--dry-run", str(nota)]) == 0
+    assert ws.main(["--resolver", f"{ancla}=regimen — fila A", "--dry-run", str(nota)]) == 0
     assert "dry-run" in capsys.readouterr().out and herm.read_bytes() == antes
-    assert ws.main(["--migrate-condition-prefix", str(nota)]) == 0
-    assert "1 celda(s)" in capsys.readouterr().out
+    assert ws.main(["--resolver", f"{ancla}=regimen — fila A", str(nota)]) == 0
     assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == 1
 
 
 def test_el_cli_de_condiciones_rehusa_la_nota_QUE_NO_EXISTE(toy_vault, capsys):
     """#427 — la ruta inexistente (un tipeo, o la nota que se renombró) se nombra; sin esto el
     error saldría desde adentro, sobre un archivo que nadie abrió."""
-    assert ws.main(["--migrate-condition-prefix", str(cfg.WIKI / "no-existe.md")]) == 2
+    assert ws.main(["--resolver", "a=bloque", str(cfg.WIKI / "no-existe.md")]) == 2
     assert "no es una nota" in capsys.readouterr().out
 
 
@@ -1210,7 +1179,7 @@ def test_510_chained_condition_sin_condicion_sobre_cadena_pendiente_vuelve_al_es
         assert lb.condition_kind(lb.current_condition(c)) == "acota" and lb.condition_resolved(c)
 
 
-def test_522_la_ronda_que_limpia_ANOTA_la_resolucion_y_el_migrador_la_repone(toy_vault):
+def test_522_la_ronda_que_limpia_ANOTA_la_resolucion_y_el_lint_publica_la_pelada(toy_vault):
     """⛔ #522 — `append_round_verdict` concatenaba `contradice→soportada` pelado: `verif_counts` la
     archiva como soportada y la contradicción sale de la cabecera («0 contradicen»). La ronda que
     limpia anota `→corregida` (`lb.chained_verdict`), y una cadena ya resuelta no se extiende."""
@@ -1221,13 +1190,6 @@ def test_522_la_ronda_que_limpia_ANOTA_la_resolucion_y_el_migrador_la_repone(toy
     assert ws.append_round_verdict("no-soportada→la fuente es un contraste", "soportada") == \
         "no-soportada→la fuente es un contraste", "la anotación libre (#316) no se pisa"
     assert ws.append_round_verdict("soportada", "contradice") == "soportada→contradice"
-    # el migrador: re-encadena lo que el escritor viejo dejó, y lo canónico vuelve igual
-    for viejo, nuevo in [("contradice→soportada", "contradice→corregida"),
-                         ("soportada→contradice→soportada", "soportada→contradice→corregida"),
-                         ("no-soportada→corregida→soportada", "no-soportada→corregida"),
-                         ("contradice → corregida (ver p. 3)", "contradice → corregida (ver p. 3)"),
-                         ("soportada→contradice", "soportada→contradice")]:
-        assert ws.fold_verdict_cell(viejo) == nuevo, viejo
     nota = _escena(toy_vault)
     ws.write(nota, _fanout(toy_vault, nota, {"2020Pdf": "contradice"}, ronda="r1"),
              fecha="2026-03-01")
@@ -1238,15 +1200,10 @@ def test_522_la_ronda_que_limpia_ANOTA_la_resolucion_y_el_migrador_la_repone(toy
     ws.restamp_section(nota)
     assert lb.verif_counts(lb.verif_rows(nota))["contradicen"] == 0, "la forma pelada blanquea"
     est = lint.collect().por_clave("verif_estructura").items
-    assert any("--migrate-verdict-chain" in str(x) for x in est), est
-    assert ws.main(["--migrate-verdict-chain", "--todo"]) == 0
-    c = lb.verif_counts(lb.verif_rows(nota))
-    assert (c["contradicen"], c["contradicen_resueltas"], c["revertidas"]) == (1, 1, 0)
-    t1 = nota.read_bytes(), herm.read_bytes()
-    assert ws.migrate_verdict_chain(nota)["migradas"] == 0
-    assert (nota.read_bytes(), herm.read_bytes()) == t1, "idempotente"
-    assert not any("--migrate-verdict-chain" in str(x)
-                   for x in lint.collect().por_clave("verif_estructura").items)
+    # #624 — la forma vieja la sigue publicando el lint, con su salida a la vista (el migrador vive
+    # en el tag de git)
+    assert any("revertidas" in str(x) or "sin anotar la resolución" in str(x) for x in est), est
+    assert any(cfg.RETIRED_MIGRATORS_TAG in str(x) for x in est), est
 
 
 def test_refutar_extraccion_ANOTA_add_only_idempotente_y_rehusa_lo_que_no_se_refuto(toy_vault):
@@ -1367,7 +1324,7 @@ def test_AUD534_sin_argumentos_el_mensaje_nombra_TODOS_los_modos(capsys):
     assert ws.main([]) == 2
     out = capsys.readouterr().out
     for modo in ("--from", "--restamp-section", "--reanclar", "--resolver", "--resoluciones",
-                 "--migrate-condition-prefix", "--migrate-verdict-chain", "--refutar-extraccion"):
+                 "--reclasificar", "--refutar-extraccion"):
         assert modo in out, (modo, out)
 
 
@@ -1545,8 +1502,9 @@ def test_576_resolver_REHUSA_el_destino_fuera_de_vocabulario(toy_vault):
 
 
 def test_576_resolver_DECLARA_el_destino_de_una_resolucion_en_texto_libre_sin_pisarla(toy_vault):
-    """Lo que el migrador no mapea lo cierra `--resolver <par>=<destino>`: el destino va adelante y
-    el texto firmado queda como detalle (#232: anota, no pisa). Con detalle propio rehúsa."""
+    """La resolución en texto libre la cierra `--resolver <par>=<destino>`: el destino va adelante y
+    el texto firmado queda ENTERO como detalle (#232: anota, no pisa; #613: no se adivina qué parte
+    sólo repite el destino). Con detalle propio rehúsa."""
     nota, _ = _legacy(toy_vault, "acota→resuelta: en la prosa del §2 · SNR > 50")
     f = lb.verif_rows(nota)[0]
     with pytest.raises(ws.SidecarError, match="texto libre"):
@@ -1555,73 +1513,16 @@ def test_576_resolver_DECLARA_el_destino_de_una_resolucion_en_texto_libre_sin_pi
     cel = lb.verif_rows(nota)[0].condition
     assert cel == "acota→resuelta: bloque — en la prosa del §2 · SNR > 50", cel
     assert ws.resolve_conditions(nota, {f"{f.anchor}:{f.bibcode}": "bloque"})["resueltas"] == 0
-    assert ws.migrate_condition_destination(nota)["sin_mapear"] == [], \
-        "la fila PENDIENTE (sin resolución) no es algo que mapear"
 
 
-def test_576_legacy_destination_mapea_SOLO_las_variantes_conocidas():
-    """Las grafías medidas en la instancia (HEAD 454997d8); lo ambiguo NO se adivina."""
-    casos = {"su propio bloque, con cita y página": "bloque", "en el bloque": "bloque",
-             "en el propio bloque (valores absolutos)": "bloque",
-             "la condición quedó escrita en el propio bloque, con su cita": "bloque",
-             "el bloque se acotó en esta pasada — Acota: x": "bloque",
-             "ya estaba en el bloque (parte inactiva)": "bloque",
-             "## Régimen de validez": "regimen", "fila de `## Régimen de validez`": "regimen",
-             "en la fila de régimen": "regimen", "Régimen de validez, misma fila: x": "regimen",
-             "fila de Régimen «El factor Q»": "regimen", "en las filas de régimen sobre X": "regimen",
-             # los 45 que los dos primeros destinos dejaban afuera (desglose de la instancia)
-             "el bloque siguiente («Y vale sólo»)": "siguiente",
-             "párrafo siguiente de la nota, que declara x": "siguiente",
-             "bloque siguiente de §7, «El universo»": "siguiente",
-             "en la fila": "bloque", "mismo ítem: (p. 2)": "bloque", "la celda ya dice x": "bloque",
-             "en la propia fila: «x»": "bloque", "la fila declara que x": "bloque",
-             "la afirmación se acotó a x": "bloque", "prosa corregida a «x»": "bloque",
-             "`## Huecos`, hueco 1": "huecos", "el propio hueco declara x": "huecos",
-             "en el propio ítem de Huecos: x": "huecos",
-             "en la fila del inventario": "inventario",
-             "la fila «A es identificable» de `## Régimen de validez` declara x": "regimen",
-             # lo que no dice QUÉ bloque, o vive en otra nota, no se adivina
-             "en la prosa: «x»": None, "ya estaba en la prosa — x": None,
-             "en el ítem rv de la vista: x": None, "Síntesis §2, mismo ítem: x": None}
-    for texto, esperado in casos.items():
-        assert ws.legacy_destination(texto) == esperado, texto
-    assert ws._bare_destination_phrase("## Régimen de validez")
-    assert ws._bare_destination_phrase("en el bloque.")
-    assert not ws._bare_destination_phrase("su propio bloque, con cita y página"), \
-        "el detalle firmado no se tira"
-
-
-def test_576_migrador_ida_y_vuelta_todos_los_eslabones_y_lista_lo_que_no_mapea(toy_vault, capsys):
-    nota, herm = _legacy(
-        toy_vault,
-        "acota→resuelta: ## Régimen de validez · SNR > 50 ⟂ acota→resuelta: en la prosa · B",
-        "acota→resuelta: su propio bloque, con cita y página · SNR > 50")
-    antes = nota.read_text(encoding="utf-8")
-    t0 = herm.read_bytes()
-    r = ws.migrate_condition_destination(nota, dry_run=True)
-    assert herm.read_bytes() == t0, "dry-run no escribe"
-    assert r["migradas"] == 2
-    assert [(x[2], x[3]) for x in r["sin_mapear"]] == [("en la prosa", True)]
-    ws.migrate_condition_destination(nota)
-    celdas = [f.condition for f in lb.verif_rows(nota)]
-    assert celdas == [
-        "acota→resuelta: regimen · SNR > 50 ⟂ acota→resuelta: en la prosa · B",
-        "acota→resuelta: bloque — su propio bloque, con cita y página · SNR > 50"], celdas
-    assert cfg.verification_date(nota.read_text(encoding="utf-8")) == cfg.verification_date(antes), \
-        "migrar no es re-verificar: la fecha del bloque se conserva"
-    t1 = herm.read_bytes()
-    assert ws.migrate_condition_destination(nota)["migradas"] == 0
-    assert herm.read_bytes() == t1, "idempotente"
-    assert ws.main(["--todo", "--migrate-condition-destination"]) == 0
-    out = capsys.readouterr().out
-    assert "1 sin mapear" in out and "«en la prosa»" in out
-    with pytest.raises(SystemExit):
-        ws.main(["--todo", "--migrate-condition-destination", "--fecha", "2026-01-01"])
-    assert ws.main(["--migrate-condition-destination"]) == 2
-    assert ws.main([str(nota) + ".no", "--migrate-condition-destination"]) == 1
-    assert "no es una nota" in capsys.readouterr().out
-    assert ws.main([str(nota), "--migrate-condition-destination"]) == 0, "una nota sola, sin --todo"
-    assert ws.main([str(herm), "--migrate-condition-destination"]) == 1, "el hermano no es la nota"
+def test_613_resolver_NO_adivina_que_parte_del_texto_libre_repite_el_destino(toy_vault):
+    """#613 — sin la tabla de grafías conocidas (#624) nada decide que «## Régimen de validez» sea
+    sólo el destino: el texto firmado queda entero como detalle, también cuando es la frase sola."""
+    nota, _ = _legacy(toy_vault, "acota→resuelta: ## Régimen de validez · SNR > 50")
+    f = lb.verif_rows(nota)[0]
+    ws.resolve_conditions(nota, {f"{f.anchor}:{f.bibcode}": "regimen"})
+    assert lb.verif_rows(nota)[0].condition == \
+        "acota→resuelta: regimen — ## Régimen de validez · SNR > 50"
 
 
 # ── #594 · el eje `Localizador` del juez ─────────────────────────────────────────────────────────

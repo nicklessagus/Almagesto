@@ -57,7 +57,11 @@ def _categoria(reporte: str, contiene: str) -> tuple[int, list[str]]:
     título declare tantas líneas como hay listadas, exige que NINGÚN stem se repita dentro de la
     categoría: un duplicado es la firma de un doble conteo (dos caminos de código reportando la
     misma nota), y a la escala de este archivo (K de hasta 26, corpus de hasta 900 notas) un
-    duplicado que compensa un faltante pasaría desapercibido si sólo se mirara el número `(K)`."""
+    duplicado que compensa un faltante pasaría desapercibido si sólo se mirara el número `(K)`.
+
+    `"<título>::<fila>"` cuenta sólo los ítems de esa fila de una categoría-tabla (#624:
+    `schema_retirado` publica `[<fila> · <población>]` en cada hallazgo)."""
+    contiene, _, fila = contiene.partition("::")
     lines = reporte.splitlines()
     start = next((i for i, l in enumerate(lines) if l.startswith("## ") and contiene in l), None)
     assert start is not None, f"categoría no encontrada en el reporte: {contiene!r}"
@@ -70,6 +74,10 @@ def _categoria(reporte: str, contiene: str) -> tuple[int, list[str]]:
             break
         if l.startswith("- "):
             stems.append(l[2:].split(" → ", 1)[0].strip())
+            if fila and f"[{fila} · " not in l:
+                stems.pop()
+    if fila:
+        n = len(stems)
     assert len(stems) == n, f"{contiene!r}: título dice {n} pero hay {len(stems)} líneas listadas"
     assert len(stems) == len(set(stems)), (
         f"{contiene!r}: hay un stem repetido dentro de la categoría → doble conteo: {stems}")
@@ -92,10 +100,10 @@ _CATEGORIAS_SOPORTADAS = {
     "identidad_duplicada": "Identidad duplicada",
     "role_invalido": "`role` fuera del vocabulario",
     "paper_sin_destino": "Nota de paper sin destino",
-    "topics_viejo": "Nota de paper con `topics:`",
+    "topics_viejo": "Schema retirado::old_facets",
     "inferencia_pelada": "`inferencia` sin premisas",
     "status_invalido": "`status` de hipótesis fuera del vocabulario",
-    "registro_viejo": "Registro con `busqueda:`",
+    "registro_viejo": "Schema retirado::old_registro",
     "alcance_sin_declarar": "Alcance de hipótesis",
     "capas_colgadas": "Capas colgadas",
 }
@@ -110,8 +118,8 @@ _CLAVE_LINT = {
     "cobertura_citas": "coverage", "cabecera_no_estampable": "headerless",
     "fulltext_ilegible": "illegible_txt", "identidad_duplicada": "identidad_dup",
     "role_invalido": "bad_roles", "paper_sin_destino": "sin_destino",
-    "topics_viejo": "old_facets", "inferencia_pelada": "infer_sin_premisas",
-    "status_invalido": "bad_status", "registro_viejo": "old_registro",
+    "topics_viejo": "schema_retirado", "inferencia_pelada": "infer_sin_premisas",
+    "status_invalido": "bad_status", "registro_viejo": "schema_retirado",
     "alcance_sin_declarar": "alcance_corto", "capas_colgadas": "artefactos_colgados",
 }
 def _bloqueantes() -> set:
@@ -206,7 +214,7 @@ def test_disputes_colgantes_exacto_no_contamina_otras_categorias(sembrar):
     _assert_otras_categorias_en_cero(reporte, "disputes_colgantes")
     n_mal, _ = _categoria(reporte, "disputes mal formadas")
     assert n_mal == 0
-    n_viejo, _ = _categoria(reporte, "disputes en el schema viejo")
+    n_viejo, _ = _categoria(reporte, "Schema retirado")
     assert n_viejo == 0
 
 
@@ -329,8 +337,8 @@ def test_siete_anomalias_juntas_a_900_notas_sin_contaminacion_ni_duplicados_y_ex
     # si no, hay contaminación hacia una categoría bloqueante que este archivo no siembra.
     for titulo_hermano in ("Wikilinks rotos", "Frontmatter no parseable", "Papers RETRACTADOS",
                            "Contradicciones ground-truth", "masa inconsistente con m",
-                           "disputes mal formadas", "disputes en el schema viejo",
-                           "Juicio de triage en build", "`role` fuera del vocabulario"):
+                           "disputes mal formadas", "Schema retirado",
+                           "`role` fuera del vocabulario"):
         n_hermano, _ = _categoria(reporte, titulo_hermano)
         assert n_hermano == 0, f"{titulo_hermano!r}: {n_hermano} — contaminación inesperada"
 
