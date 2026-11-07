@@ -572,6 +572,8 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > — sin ella la fecha se lee como "todo verificado a esta fecha", que es lo que el ancla corrige),
 > ⛔ **y el ARRASTRE del re-anclaje se declara al lado (#499)**: `· re-anclado AAAA-MM-DD` en el
 > encabezado del bloque, `, re-anclado AAAA-MM-DD` en esta línea — `--reanclar` conserva la fecha (nada se verificó, #395) y el lint compara contra ésa.
+> **La ronda parcial también (#617):** la que deja pares sin juzgar (`verify_fanout --anclas`/`--fuentes`)
+> conserva la fecha de la nota y se declara `· ronda parcial AAAA-MM-DD`; la que juzga todo re-fecha.
 > Con una sola fecha, refrescar el corpus hacía parecer re-verificado lo que nadie volvió a chequear
 > —y re-sintetizado lo que nadie volvió a escribir (INV-82).
 

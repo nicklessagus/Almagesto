@@ -3418,8 +3418,9 @@ def estado_line(slug: str, dest, fms: dict | None = None) -> str:
         # #499 — el re-anclaje declarado va AL LADO de la fecha de verificación, nunca en su lugar:
         # las filas se llevaron a las anclas de ese día y no se re-verificó nada (#395), que es la
         # misma distinción que D-12 hace entre las tres fechas.
-        rea = cfg.reanchor_date(texto)
-        partes.append(f"verificación {fecha_verif}" + (f", re-anclado {rea}" if rea else "")
+        # #617 — o la ronda parcial, que conserva la fecha y se declara igual, con su rótulo.
+        rea = cfg.reanchor_suffix(texto)
+        partes.append(f"verificación {fecha_verif}" + (f", {rea}" if rea else "")
                       + " (vigencia por par: la dicen las anclas)")
     if not partes:
         return ""

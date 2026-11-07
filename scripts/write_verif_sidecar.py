@@ -238,7 +238,8 @@ def append_round_verdict(previous: str | None, new: str) -> str:
 
 def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
                descartar_muertas: bool = False, descartadas: list | None = None,
-               cond_fuera: list | None = None, pag_fuera: list | None = None) -> list:
+               cond_fuera: list | None = None, pag_fuera: list | None = None,
+               judged: set | None = None) -> list:
     """One `Row` per body pair that the fan-out judged, in body order (#403).
 
     Matching is by `(bibcode, ancla)`, the two keys the fan-out schema carries at file and pair
@@ -267,7 +268,10 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
     their reason** — the round repeated what the row already said, or it declared none over a
     signed resolution. The writer reported «N juzgada(s)» and said nothing about this, which is how
     55 lost conditions went unnoticed; the cases that remain are benign, and that is exactly why
-    they have to be visible rather than assumed."""
+    they have to be visible rather than assumed.
+
+    `judged` (#617) collects the `(bibcode, anchor)` of the body pairs this fan-out judged, so the
+    caller can tell a round over every pair from a PARTIAL one."""
     pares = lb.pairs_of(text)
     por_clave = {(p.bibcode, p.anchor): p for p in pares}
     # #407/#282 — la fila previa de cada par se resuelve como `reverify_subset`: ancla exacta
@@ -330,6 +334,8 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
                                locator=previa.locator if p.anchor == previa.anchor else ""))
             continue
         n += 1
+        if judged is not None:
+            judged.add((p.bibcode, p.anchor))
         veredicto = str(par["veredicto"]).strip()
         celda = append_round_verdict(previa.verdict if previa else None, veredicto)
         ref = source_ref_for(p.bibcode, veredicto)
@@ -366,7 +372,7 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
 
 
 def note_section(note: Path, text: str, rows: list, fecha: str,
-                 reanclado: str | None = None) -> str:
+                 arrastre: str | None = None) -> str:
     """The `## Verificación de citas` section the NOTE keeps: header line, pointer, sub-sections.
 
     The header line is GENERATED (`verif_summary`, INV-81) and the three sub-sections carry their
@@ -374,14 +380,15 @@ def note_section(note: Path, text: str, rows: list, fecha: str,
     preserved when it exists; when it does not, a visible placeholder says so rather than a
     «ninguna» nobody wrote.
 
-    `reanclado` appends the `· re-anclado AAAA-MM-DD` declarant to the heading (#499) — the date
-    the rows were CARRIED, next to and never instead of the date they were verified on."""
+    `arrastre` appends the declarant to the heading —`re-anclado AAAA-MM-DD` (#499) or `ronda
+    parcial AAAA-MM-DD` (#617)—: the date the rows were CARRIED, next to and never instead of the
+    date the note was verified on."""
     fm = cfg.frontmatter_span(text)
     prosa = cfg.solo_prosa(fm[1] if fm else text)
     frags = lb.verif_subsection_lines(rows, prosa)
     vieja = lb.verif_section(text)
     # @inv INV-82
-    sufijo = f" · re-anclado {reanclado}" if reanclado and reanclado != fecha else ""
+    sufijo = f" · {arrastre}" if arrastre and not arrastre.endswith(fecha) else ""
     lineas = [f"{lb.VERIFY_HEADER} ({fecha}{sufijo})", f"{INTRO} {lb.verif_summary(rows)}", "",
               lb.verif_pointer(note), ""]
     for sub in lb.VERIF_SUBSECCIONES:
@@ -484,7 +491,7 @@ def _lost_prose(vieja: str, nueva: str) -> list:
 
 
 def emit(note: Path, text: str, rows: list, fecha: str, *, dry_run: bool = False,
-         solo_seccion: bool = False, reanclado: str | None = None) -> str:
+         solo_seccion: bool = False, arrastre: str | None = None) -> str:
     """Render the sibling and the note's section from `rows`, and (unless `dry_run`) write them.
     Returns the note's new text — written or not —, so a preview can compare it (AUD-506).
 
@@ -493,12 +500,12 @@ def emit(note: Path, text: str, rows: list, fecha: str, *, dry_run: bool = False
     of them and cannot be forgotten by a mode added later. `solo_seccion` keeps the sibling
     untouched: that is the re-stamping mode, which reads the rows FROM the sibling.
 
-    ⛔ `reanclado` DEFAULTS TO NONE, and that default is the rule (#499): the declarant belongs to
-    the carry, so a mode that does not pass it —a fan-out round, `--from`— ERASES the suffix, which
-    is what a new verification should do to it. The modes that rewrite cells without re-reading
+    ⛔ `arrastre` DEFAULTS TO NONE, and that default is the rule (#499): the declarant belongs to
+    the carry, so a round that judges every pair ERASES the suffix, which is what a new
+    verification should do to it; a PARTIAL round declares itself instead (#617). The modes that rewrite cells without re-reading
     anything (`--resolver`, `--reclasificar`, `--restamp-section`) pass the one already
     in the heading, because none of them re-verified anything either."""
-    seccion = note_section(note, text, rows, fecha, reanclado)  # #430: rehúsa antes de escribir nada
+    seccion = note_section(note, text, rows, fecha, arrastre)  # #430: rehúsa antes de escribir nada
     vieja = lb.verif_section(text)
     if perdida := _lost_prose(vieja, seccion):
         raise SidecarError(
@@ -545,7 +552,7 @@ def _rewrite_rows(note: Path, cambios: dict, fecha: str | None, dry_run: bool) -
                            f"`--fecha`: re-fechar es una decisión, no un default")
     nuevas = [replace(f, condition=cambios[k]) if (k := lb.row_key(f)) in cambios else f
               for f in filas]
-    emit(note, text, nuevas, d, dry_run=dry_run, reanclado=cfg.reanchor_date(text))
+    emit(note, text, nuevas, d, dry_run=dry_run, arrastre=cfg.reanchor_suffix(text))
     return {"filas": len(filas), "fecha": d}
 
 
@@ -786,7 +793,7 @@ def restamp_section(note: Path, fecha: str | None = None, dry_run: bool = False)
                            f"`--fecha`: re-fechar es una decisión, no un default")
     # AUD-506 — el preview compara el texto que ESCRIBIRÍA, no anuncia todo como cambiado
     nuevo = emit(note, text, rows, d, dry_run=dry_run, solo_seccion=True,
-                 reanclado=cfg.reanchor_date(text))
+                 arrastre=cfg.reanchor_suffix(text))
     return {"nota": note.name, "filas": len(rows), "fecha": d, "cambio": nuevo != text}
 
 
@@ -802,20 +809,32 @@ def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = Fals
     dirs = [fanout_dir] if isinstance(fanout_dir, (str, Path)) else list(fanout_dir)
     text = note.read_text(encoding="utf-8")
     rows = lb.verif_rows(note) if cfg.verif_sidecar(note).exists() else None
-    juzgados, descartadas, cond_fuera, pag_fuera = 0, [], [], []
+    previas = bool(rows)
+    juzgados, descartadas, cond_fuera, pag_fuera, juzgadas = 0, [], [], [], set()
     for d in dirs:
         fanout = load_fanout(Path(d))
         rows = build_rows(note, text, fanout, rows, descartar_muertas, descartadas, cond_fuera,
-                          pag_fuera)
+                          pag_fuera, juzgadas)
         juzgados += sum(len(ps) for ps in fanout.values())
     juzgados -= len(descartadas)
     if not rows:
         raise SidecarError("el fan-out no juzgó ningún par del cuerpo: no hay tabla que escribir")
     # @inv INV-82
-    emit(note, text, rows, fecha or dt.date.today().isoformat(), dry_run=dry_run)
+    # ⛔ #617 — la fecha del bloque dice cuándo se verificó LA NOTA: una ronda que dejó filas sin
+    # juzgar (arrastradas de la anterior) la CONSERVA y se declara al lado, como el re-anclaje
+    # (#499). Se decide por conjunto, no por conteo: dos rondas sobre los mismos pares suman más
+    # juzgadas que filas y siguen siendo parciales.
+    ronda = fecha or dt.date.today().isoformat()
+    previa = cfg.verification_date(text)[1]
+    parcial = previas and bool(previa) and any(
+        (r.bibcode, r.anchor) not in juzgadas for r in rows)
+    if parcial:
+        emit(note, text, rows, previa, dry_run=dry_run, arrastre=f"ronda parcial {ronda}")
+    else:
+        emit(note, text, rows, ronda, dry_run=dry_run)
     c = lb.verif_counts(rows)
     return {"filas": len(rows), "pares_cuerpo": len(lb.pairs_of(text)), "juzgadas": juzgados,
-            "arrastradas": max(0, len(rows) - juzgados), "rondas": len(dirs),
+            "arrastradas": max(0, len(rows) - juzgados), "rondas": len(dirs), "parcial": parcial,
             "descartadas": descartadas, "cond_fuera": cond_fuera, "pag_fuera": pag_fuera,
             "encadenadas": c["cadenas"], "hermano": cfg.verif_sidecar(note).name}
 
@@ -858,7 +877,7 @@ def reanchor(note: Path, fecha: str | None = None, dry_run: bool = False) -> dic
     viejas = {(r.bibcode, r.anchor) for r in rows}
     nuevas = build_rows(note, text, {}, rows)
     hoy = dt.date.today().isoformat()
-    emit(note, text, nuevas, d, dry_run=dry_run, reanclado=hoy)
+    emit(note, text, nuevas, d, dry_run=dry_run, arrastre=f"re-anclado {hoy}")
     return {"filas": len(nuevas), "pares_cuerpo": len(pares), "fecha": d,
             "reanclado": hoy if hoy != d else None,
             "reancladas": sum(1 for r in nuevas if (r.bibcode, r.anchor) not in viejas),
@@ -1116,6 +1135,8 @@ def main(argv=None) -> int:
                      + (f", {r['arrastradas']} arrastrada(s) re-ancladas de la anterior (#407)"
                         if r["arrastradas"] else "")
                      + (f", {r['encadenadas']} encadenada(s)" if r["encadenadas"] else "")
+                     + (" — ronda PARCIAL: la fecha de verificación de la nota se conserva y la "
+                        "ronda se declara al lado (`· ronda parcial`, #617)" if r["parcial"] else "")
                      + f" — la cabecera de la nota la da `verif_summary`; las sub-secciones que "
                        f"digan «{PENDIENTE}» son el triage de la corrida: completalas")
     return 0

@@ -2028,3 +2028,18 @@ de idioma. Una sola función para `contrast --validar` y el lint (#587).
 «$D>3$» de 2019AJ....158..161D en icasso, «3.10^6» de 2014MNRAS.443.2517H en rv-doppler —el `.txt`
 dice «3.106», el exponente se perdió— y «P(χ2) = 0.0001» de 2012A&A...541A...9G en gj_581). rc igual.
 **Devolver si** una cita corta sin letras ausente del `.txt` sale contada como glosa.
+
+## §#617 · v1.415.8 — la ronda parcial de verify no mueve la fecha de la nota
+
+Sin migración (no reescribe encabezados existentes). `write_verif_sidecar --from` sobre un fan-out
+que deja pares sin juzgar (`verify_fanout --anclas`/`--fuentes`) **conserva** la fecha del bloque y
+estampa `· ronda parcial AAAA-MM-DD` al lado, como `· re-anclado` (#499); el lint compara contra la
+mayor y `> _Estado —_` lo publica con su rótulo. Parcial = alguna fila quedó sin juzgar (por
+conjunto, no por conteo). La ronda que juzga todos los pares re-fecha y borra el sufijo.
+
+**Validar:** `python scripts/lint.py` idéntico (Tesis 2026-11-07: idéntico, ninguna nota lleva
+todavía el sufijo). En la próxima ronda acotada real (p. ej. `verify_fanout.py <nota> --anclas …`
++ `write_verif_sidecar.py <nota> --from <dir>`): el encabezado queda `(<fecha vieja> · ronda parcial
+<hoy>)`, la salida dice «ronda PARCIAL», y `make_notes.py <slug>` estampa `, ronda parcial <hoy>` en
+`> _Estado —_` sin dejar la cabecera desfasada. **Devolver si** una ronda de 4 de 36 pares mueve la
+fecha, o una ronda completa deja el sufijo.

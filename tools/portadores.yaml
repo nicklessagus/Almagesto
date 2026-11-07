@@ -2145,8 +2145,10 @@ portadores:
       declara como sufijo del mismo encabezado (`· re-anclado AAAA-MM-DD`) y lo lee UNA función:
       el escritor lo estampa, el detector compara contra `max(d, re-anclado)` y la cabecera de D-12
       lo publica al lado de la fecha de verificación. Es la misma forma que D-12 ya le dio a la
-      fecha de SÍNTESIS (`cfg.save_sintesis`): lo que no se puede derivar, se declara.
-    funcion: lib_config.reanchor_date
+      fecha de SÍNTESIS (`cfg.save_sintesis`): lo que no se puede derivar, se declara. #617: la
+      ronda PARCIAL es el mismo declarante (`· ronda parcial AAAA-MM-DD`), así que la función que
+      lo lee es `reanchor_suffix` (`reanchor_date` le delega) y los portadores llevan el rótulo.
+    funcion: lib_config.reanchor_suffix
     patron: 're-anclado|reanchor'
     consumidores:
       - modulo: scripts/write_verif_sidecar.py

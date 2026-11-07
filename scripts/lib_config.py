@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.7"
+ALMAGESTO_VERSION = "1.415.8"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -2834,7 +2834,9 @@ def stdout_tolerante() -> None:
 
 VERIF_HEAD_RE = re.compile(r"^##\s+Verificaci[oó]n de citas\b(.*)$", re.M)
 _VERIF_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
-_REANCHOR_RE = re.compile(r"·\s*re-anclado\s+(\d{4}-\d{2}-\d{2})")
+# #617 — `ronda parcial` is the same declarant for a round that judged PART of the pairs: it keeps
+# the note's verification date and carries the rest, so for the comparison it is a carry too.
+_REANCHOR_RE = re.compile(r"·\s*(re-anclado|ronda parcial)\s+(\d{4}-\d{2}-\d{2})")
 
 
 def verification_date(text: str) -> tuple[bool, str | None]:
@@ -2875,12 +2877,21 @@ def reanchor_date(text: str) -> str | None:
     FIRST date of each heading (its verdict does not change) and this one reads the suffix of the
     heading `verification_date` picked. A fan-out round erases it: a new verification supersedes the
     carry.  @inv INV-82"""
+    suf = reanchor_suffix(text)
+    return suf.rsplit(" ", 1)[1] if suf else None
+
+
+def reanchor_suffix(text: str) -> str | None:
+    """The declarant itself —`re-anclado AAAA-MM-DD` or `ronda parcial AAAA-MM-DD` (#617)— of the
+    heading `verification_date` picked, or `None`. The writers that re-stamp without verifying
+    carry it as is: re-labelling a partial round as a re-anchor would misstate what happened.
+    @inv INV-82"""
     fechados = [(m.group(0), h) for h in VERIF_HEAD_RE.findall(text)
                 if (m := _VERIF_DATE_RE.search(h))]
     if not fechados:
         return None
     m = _REANCHOR_RE.search(max(fechados, key=lambda p: p[0])[1])
-    return m.group(1) if m else None
+    return f"{m.group(1)} {m.group(2)}" if m else None
 
 
 def ratchet_raises(rel_path: str, fields, root: Path | None = None) -> list | None:

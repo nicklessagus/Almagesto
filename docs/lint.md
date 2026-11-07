@@ -380,7 +380,7 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   un extracto del primero); si no hay commit hasta esa fecha o `git` falla, se cae al comportamiento
   viejo **declarándolo** («no se pudo aislar la prosa: se compara la fecha del archivo»). Cuesta dos
   llamadas a `git` por nota **disparada**, no por nota.
-  ⛔ **Y la fecha contra la que se compara es `max(fecha del bloque, re-anclado)` (#499).** El
+  ⛔ **Y la fecha contra la que se compara es `max(fecha del bloque, re-anclado | ronda parcial)` (#499, #617).** El
   comando que el propio framework manda correr para cerrar esta categoría —`write_verif_sidecar
   --reanclar` (#480)— **conserva** la fecha del bloque a propósito (#395: re-anclar no es
   verificar), así que la comparación por fecha dejaba encendida para siempre justo la corrección

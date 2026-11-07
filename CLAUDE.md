@@ -24,7 +24,8 @@ El usuario cura las fuentes (`vault/raw/`) y hace preguntas.
 > no la reescritura) y **verificación** (fecha del bloque, con la salvedad fija *"vigencia por par: la
 > dicen las anclas"*). **El arrastre del re-anclaje se declara al lado (#499)**: `· re-anclado
 > AAAA-MM-DD` en el encabezado del bloque, `, re-anclado AAAA-MM-DD` en esta línea — `--reanclar`
-> conserva la fecha (nada se verificó, #395) y el lint compara contra ésa. Con una sola fecha,
+> conserva la fecha (#395), la ronda parcial también (`· ronda parcial`, #617), y el lint compara
+> contra la mayor. Con una sola fecha,
 > refrescar hacía parecer re-verificado lo que nadie volvió a chequear (INV-82).
 
 > **Al iniciar sesión, leé `vault/STATUS.md` (estado + próximos pasos) y `vault/wiki/log.md` (historial

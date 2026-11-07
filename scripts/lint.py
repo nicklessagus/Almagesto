@@ -216,13 +216,14 @@ VERIF_HEAD_RE = cfg.VERIF_HEAD_RE
 
 
 def reanchor_of(f: str) -> str | None:
-    """The carry date declared in note `f`'s verification heading, or `None` (#499).
+    """The carry declared in note `f`'s verification heading —`re-anclado D` or `ronda parcial D`
+    (#499, #617)—, or `None`.
 
     Read from the file rather than carried in the `verif_blocks` index on purpose: it is only
     needed for the note that already FIRED the date trigger — a handful — so the expensive check
     keeps costing what it cost (two history calls per fired note, none per note)."""
     try:
-        return cfg.reanchor_date(Path(f).read_text(encoding="utf-8"))
+        return cfg.reanchor_suffix(Path(f).read_text(encoding="utf-8"))
     except OSError:
         return None
 
@@ -6425,7 +6426,8 @@ def check_stale_verif(verif_blocks, changed: dict) -> list:
             # #499 — el arrastre declarado (`· re-anclado R`) es la fecha contra la que se compara:
             # las filas se llevaron a las anclas de ESE día, así que la prosa anterior a R ya está
             # cubierta por el juicio que alguien firmó. La de verificación no se mueve (#395).
-            r = reanchor_of(f)
+            suf = reanchor_of(f)
+            rotulo, r = suf.rsplit(" ", 1) if suf else (None, None)
             base = max(d, r) if r else d
             # AUD-542 — lo que el arrastre CERTIFICÓ son las anclas del hermano, no el commit de
             # esa fecha: el lint corre antes del commit, así que con `r` = hoy el commit «a la
@@ -6440,7 +6442,7 @@ def check_stale_verif(verif_blocks, changed: dict) -> list:
             salvedad = (f"la prosa cambió ({que[0]})" if cambio
                         else "no se pudo aislar la prosa: se compara la fecha del archivo")
             stale_verif.append((stem, f"la nota se editó el {c} y su último verify es del {d}"
-                                      + (f" (re-anclado el {r})" if r else "")
+                                      + (f" ({rotulo} el {r})" if r else "")
                                       + f" — {salvedad} → correr `verify-citations` sobre lo agregado"))
     return stale_verif
 
