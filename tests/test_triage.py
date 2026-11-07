@@ -1204,3 +1204,36 @@ def test_AUD612_accept_key_conserva_la_decision_previa(toy_vault, monkeypatch, c
     d = cfg.load_decisiones("drs")["2023C"]
     assert d["motivo"] == "segunda" and d["previa"]["motivo"] == "primera"
     assert "ya tenía decisión" in capsys.readouterr().out
+
+
+def test_626_accept_source_imprime_YAML_no_repr_de_python(monkeypatch, capsys):
+    """#626 — `title`/`venue`/`motivo` salían con `!r` de Python: una comilla simple del título
+    (`'s`) daba `"…"` con escapes de Python, y un motivo multilínea, `'a\\nb'` literal."""
+    import discover
+    w = dict(_work(), title="Comon's ICA: a new concept, {really} #1")
+    monkeypatch.setattr(discover, "_json", lambda url: w)
+    monkeypatch.setattr(discover, "resolve_pdf", lambda doi, title=None: (None, "sin copia"))
+    motivo = "canon\ndel método: con , { } #"
+    assert triage.accept_source("ica", ["10.1/x"], "usuario", motivo) == 0
+    out = capsys.readouterr().out
+    bloque = out[out.index("  sources:"):out.index("\n  →")]
+    e = yaml.safe_load(bloque)["sources"][0]
+    assert e["title"] == w["title"] and e["motivo"] == motivo and e["venue"] == "Signal Processing"
+    assert e["pending"] == "paywall" and e["via"] == "usuario"
+
+
+def test_626_promote_source_conserva_el_motivo_real_y_el_pdf_source(toy_vault, monkeypatch, capsys):
+    """Condición de la verificación de P5: vía el snippet canónico, sin perder el `motivo` de la
+    fuente (no el placeholder) ni el `pdf_source` que el item declaró (#479)."""
+    import query_ads
+    _fuente_off_ads(toy_vault)
+    t = yaml.safe_load(cfg.THEMES_YAML.read_text(encoding="utf-8"))
+    t["ica"]["sources"][0].update(pdf_source="publisher", motivo="extension de RAICAR:\ncon , { } #")
+    write_yaml(cfg.THEMES_YAML, t)
+    monkeypatch.setattr(query_ads, "fetch_bibcodes", lambda bibs, via_de=None: [])
+    triage.promote_source("ica", "2011Yang", "2011PLoSO...627594P")
+    out = capsys.readouterr().out
+    e = cfg.load_extra_core(yaml.safe_load(out[out.index("  extra_core:"):out.index("\n  →")]),
+                            entry="t")[0]
+    assert e["motivo"].startswith("extension de RAICAR:\ncon , { } #") and "2011Yang" in e["motivo"]
+    assert e["pdf_source"] == "publisher" and e["via"] == "usuario"

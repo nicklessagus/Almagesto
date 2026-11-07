@@ -578,8 +578,8 @@ def conclusions_conflict(texto_nota: str, data: dict) -> str | None:
 
 
 def theme_decision_proposals(fm: dict, data: dict, hoy: str) -> list:
-    """The YAML entry to paste for each theme the reader said the paper touches and nobody decided
-    yet (#558). `aporta: false` → `no_sintetizado`, `true` → `cola_tema` dated today. Proposes,
+    """`(key, entry)` to paste for each theme the reader said the paper touches and nobody decided
+    yet (#558): the `- {…}` line goes UNDER that frontmatter key (#610). `aporta: false` → `no_sintetizado`, `true` → `cola_tema` dated today. Proposes,
     never writes: the decision is the user's, the reader only saw one paper."""
     decididos = ({str(cfg.as_map(x).get("sujeto")) for x in cfg.as_list(fm.get("no_sintetizado"))}
                  | {str(cfg.as_map(x).get("tema")) for x in cfg.as_list(fm.get("cola_tema"))})
@@ -589,12 +589,11 @@ def theme_decision_proposals(fm: dict, data: dict, hoy: str) -> list:
         tema, motivo = str(t.get("tema") or "").strip(), cfg.declared_motive(t.get("motivo"))
         if not tema or not motivo or tema in decididos or not isinstance(t.get("aporta"), bool):
             continue
-        if t["aporta"]:
-            out.append(f"cola_tema: - {{tema: {cfg.yaml_scalar(tema, flow=True)}, fecha: \"{hoy}\", "
-                       f"motivo: {cfg.yaml_scalar(motivo, flow=True)}}}")
-        else:
-            out.append(f"no_sintetizado: - {{sujeto: {cfg.yaml_scalar(tema, flow=True)}, "
-                       f"motivo: {cfg.yaml_scalar(motivo, flow=True)}}}")
+        clave, e = (("cola_tema", {"tema": tema, "fecha": hoy, "motivo": motivo}) if t["aporta"]
+                    else ("no_sintetizado", {"sujeto": tema, "motivo": motivo}))
+        # #610: the ENTRY alone, named with its key — `clave: - {…}` on one line does not parse,
+        # and re-printing the key would duplicate it in a note that already has the list
+        out.append((clave, cfg.paste_yaml(clave, [e], flow=True).split("\n")[1].strip()))
     return out
 
 
@@ -1137,10 +1136,11 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
         if (_sc := conclusions_hatch_proposal(dest.read_text(encoding="utf-8"), data)):
             cfg.print_seguro(f"  → {bib}: la lectura volvió sin conclusiones; si la fuente no tiene "
                              f"esa sección, declaralo en la nota (#538, no se escribe solo): {_sc}")
-        for _prop in theme_decision_proposals(cfg.split_fm(dest.read_text(encoding="utf-8")) or {},
-                                              data, _dt.date.today().isoformat()):
+        for _clave, _prop in theme_decision_proposals(
+                cfg.split_fm(dest.read_text(encoding="utf-8")) or {}, data,
+                _dt.date.today().isoformat()):
             cfg.print_seguro(f"  → {bib}: el lector propone decidir el par (paper, tema) (#558, no "
-                             f"se escribe solo): {_prop}")
+                             f"se escribe solo) — pegá bajo `{_clave}:` del frontmatter: {_prop}")
         if (_cc := conclusions_conflict(dest.read_text(encoding="utf-8"), data)):
             cfg.print_seguro(f"  ⚠ {bib}: esta lectura dice que la fuente no tiene conclusiones "
                              f"(«{_cc}») y la nota publica `## Conclusiones` de otra lectura. Mirá "

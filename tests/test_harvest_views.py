@@ -2260,23 +2260,25 @@ def test_558_el_lector_propone_la_decision_del_par_paper_tema_y_no_la_escribe():
                       {"tema": "y", "aporta": True, "motivo": ""},           # sin motivo
                       {"tema": "", "aporta": True, "motivo": "m"}]}          # sin tema
     props = hv.theme_decision_proposals({}, data, "2026-09-28")
-    assert props == ["no_sintetizado: - {sujeto: gls, motivo: sólo lo usa}",
-                     'cola_tema: - {tema: rv, fecha: "2026-09-28", motivo: estimador nuevo}']
+    assert props == [("no_sintetizado", "- {sujeto: gls, motivo: sólo lo usa}"),
+                     ("cola_tema", "- {tema: rv, fecha: '2026-09-28', motivo: estimador nuevo}")]
     ya = {"no_sintetizado": [{"sujeto": "gls", "motivo": "m"}],
           "cola_tema": [{"tema": "rv", "fecha": "f", "motivo": "m"}]}
     assert hv.theme_decision_proposals(ya, data, "2026-09-28") == [], "lo decidido no se re-propone"
 
 
 @pytest.mark.parametrize("motivo", ["Calibración del $S_{HK}$ de Keck, con error", "a: b", "x #y",
-                                    "[1]", "{k}", "12", "null", "sólo lo usa"])
+                                    "[1]", "{k}", "12", "null", "sólo lo usa",
+                                    "línea uno\nlínea dos: con , { } #"])
 def test_571_la_propuesta_pegada_parsea_con_el_valor_que_lleva(motivo):
     """#571 — el snippet es flow (`- {…}`): `yaml_scalar` de bloque dejaba `,` y `{}` sueltos y la
     línea pegada daba ParserError (1 de 80 propuestas medidas en tau Ceti, con `$S_{HK}$`)."""
     data = {"temas": [{"tema": "rv", "aporta": True, "motivo": motivo},
                       {"tema": "gls", "aporta": False, "motivo": motivo}]}
-    for linea in hv.theme_decision_proposals({}, data, "2026-10-04"):
-        clave, valor = linea.split(": ", 1)
-        assert yaml.safe_load(f"{clave}:\n{valor}")[clave][0]["motivo"] == motivo, linea
+    for clave, linea in hv.theme_decision_proposals({}, data, "2026-10-04"):
+        # #610: pegada bajo su clave —sola o detrás de una entrada que ya estaba— parsea al valor
+        fm = yaml.safe_load(f"{clave}:\n- {{sujeto: x, tema: x, motivo: m}}\n{linea}\nbibcode: B")
+        assert fm[clave][1]["motivo"] == motivo and fm["bibcode"] == "B", linea
 
 
 def test_565_render_view_sangra_el_valor_multilinea_y_view_axes_ve_los_ejes_siguientes():

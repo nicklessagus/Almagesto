@@ -4415,3 +4415,39 @@ def test_623_el_placeholder_o_un_booleano_no_son_motivo_en_extra_core_ni_en_alia
     ok = [{"bibcode": "2020X", "via": "usuario", "motivo": "es core", "fecha": __import__("datetime").date(2026, 1, 1)}]
     assert cfg.load_extra_core({"extra_core": ok}, entry="t") is ok, "extra_core devuelve el crudo"
 
+
+
+# ── #626 / #603 · un solo generador de YAML «para pegar», que re-parsea lo que emite ─────────────
+
+RAROS = ["línea uno\nlínea dos", "a: b, {c} #d", "línea uno\nlínea dos: con , { } #", "null", "12"]
+
+
+@pytest.mark.parametrize("v", RAROS)
+def test_603_yaml_scalar_re_parsea_al_mismo_valor_en_las_dos_formas(v):
+    assert yaml.safe_load(f"k: {cfg.yaml_scalar(v)}") == {"k": v}
+    assert yaml.safe_load(f"{{k: {cfg.yaml_scalar(v, flow=True)}}}") == {"k": v}
+    assert "\n" not in cfg.yaml_scalar(v), "un escalar de UNA línea"
+
+
+def test_626_paste_yaml_rehusa_lo_que_no_re_parsea():
+    with pytest.raises(ValueError, match="no re-parsea"):
+        cfg.paste_yaml("x", [{"k": ("a",)}])   # tupla: vuelve lista
+
+
+@pytest.mark.parametrize("motivo", RAROS)
+def test_626_cada_snippet_pegado_en_su_lugar_re_parsea_al_valor(motivo):
+    # extra_core (con el comentario de #479) — pegado bajo la entrada de la estrella
+    ec = cfg.extra_core_snippet([{"bibcode": "2020x....1A"}], fields={"motivo": motivo})
+    e = cfg.load_extra_core(yaml.safe_load(ec), entry="t")[0]
+    assert e["motivo"] == motivo and e["pdf_source"] is None and "(#479)" in ec
+    # acepta_preprint
+    ap = cfg.acepta_preprint_snippet(["2020ApJ...1..1X"], motivo)
+    assert cfg.load_acepta_preprint(yaml.safe_load(ap), entry="t")[0]["motivo"] == motivo
+    # metadata_revisada — en el item de `sources:` (sangría 4) y en el frontmatter (columna 0)
+    for destino in (None, "papers/2012Naik.md"):
+        bloque = cfg.metadata_revisada_snippet("2012Naik", "author", "Naik", motivo, motivo,
+                                               "2026-11-07", destino)
+        pegado = f"sources:\n  - key: 2012Naik\n{bloque}" if destino is None else bloque
+        fm = yaml.safe_load(pegado)
+        firma = (fm["sources"][0] if destino is None else fm)["metadata_revisada"][0]
+        assert firma["motivo"] == motivo and firma["catalogo"] == cfg._metadata_val(motivo)

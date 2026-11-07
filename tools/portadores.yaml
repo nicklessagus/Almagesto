@@ -97,6 +97,9 @@ portadores:
       - modulo: scripts/discover.py
         estado: fuera-de-alcance
         motivo: "`resolve_pdf` PROPONE una URL y para (#313/#358): no estampa procedencia ni toca la nota."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "`promote_source` copia el `pdf_source` del item de `sources:` al snippet de `extra_core` (#626): pasa el valor, no juzga el vocabulario (lo valida el loader al pegarlo)."
       - modulo: scripts/extract_fulltext.py
         estado: fuera-de-alcance
         motivo: "Re-estampa `pdf_source` por VERDAD DE DISCO —la marca de arXiv en el `.txt`, que es retroactiva (#57)—, no por la lista: su entrada es el archivo, no un valor declarado."
@@ -165,6 +168,9 @@ portadores:
       - modulo: scripts/proposals.py
         estado: fuera-de-alcance
         motivo: "Declara su población leyendo `unidad_cita` del frontmatter para juntar los pedidos de ampliar el `alcance` (#328); no valida el vocabulario."
+      - modulo: scripts/triage.py
+        estado: fuera-de-alcance
+        motivo: "`promote_source` copia `unidad_cita`/`alcance` del item de `sources:` al snippet de `extra_core` (#626); los valida `load_extra_core` al pegarlo."
   - issue: 477
     regla: >-
       El espejo de ground-truth tiene AUTORIDAD POR CAMPO: cada campo vale lo que dice SU autoridad
@@ -3292,8 +3298,11 @@ portadores:
     patron: '\{\{(?:sujeto|tema|ref|bibcode|campo): \{'
     consumidores:
       - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "`theme_decision_proposals` arma la entrada con `cfg.paste_yaml(..., flow=True)` (#626), que llama a `yaml_scalar(v, flow=True)` y re-parsea lo que emite."
+      - modulo: scripts/make_notes.py
         estado: usa
-        motivo: "`theme_decision_proposals`: `tema`/`sujeto` y `motivo` con `flow=True` (las dos ramas)."
+        motivo: "Re-sincroniza un campo de `sources:` al frontmatter con `yaml_scalar` de BLOQUE (`clave: valor`, #603); no hay flow."
       - modulo: scripts/lint.py
         estado: usa
         motivo: "La firma `segunda_mano_revisada: [{ref, que, motivo}]` emite el `que` (cita truncada) con `flow=True`."

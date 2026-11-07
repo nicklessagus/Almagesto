@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.414.0"
+ALMAGESTO_VERSION = "1.415.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3693,16 +3693,40 @@ def yaml_scalar(v, *, flow: bool = False) -> str:
     ⛔ `flow=True` for a value that goes INSIDE `{…}`/`[…]` (#571): the block form leaves `,` `{`
     `}` bare, and in a flow mapping they cut it (`$S_{HK}$ de Keck, con error` → ParserError).
     The plain form is kept only if it re-parses to the same value there; else JSON, which is
-    valid flow YAML."""
+    valid flow YAML. ⛔ The block form gets the SAME check (#603): a multiline value dumps to
+    several lines and its first one was a scalar with the quote left open."""
     plano = yaml.safe_dump(v, allow_unicode=True, width=10 ** 6).split("\n")[0]
-    if not flow:
-        return plano
     try:
-        if yaml.safe_load(f"{{k: {plano}}}") == {"k": v}:
+        if yaml.safe_load(f"{{k: {plano}}}" if flow else f"k: {plano}") == {"k": v}:
             return plano
     except yaml.YAMLError:
         pass
     return json.dumps(v, ensure_ascii=False)
+
+
+def paste_yaml(key: str, entries: list, *, indent: str = "", flow: bool = False,
+               comments: dict | None = None) -> str:
+    """`key:` + a block sequence of maps, ready to PASTE (#626) — the one generator of every
+    «pegar en …» snippet. Each value goes through `yaml_scalar`; `flow=True` writes each entry as
+    `- {k: v, …}` on one line. `comments={k: text}` renders a `None` value as an empty key with a
+    help comment (`pdf_source:   # …`, #479), which re-parses to `None`.
+
+    ⛔ It re-parses what it emits and RAISES if that is not `{key: entries}`: a snippet the user
+    copies and the next run rejects is worse than none (#463/#571/#610)."""
+    comments = comments or {}
+    lines = [f"{key}:"]
+    for e in entries:
+        if flow:
+            lines.append("  - {" + ", ".join(f"{k}: {yaml_scalar(v, flow=True)}"
+                                             for k, v in e.items()) + "}")
+            continue
+        for i, (k, v) in enumerate(e.items()):
+            val = f"   # {comments[k]}" if v is None and k in comments else f" {yaml_scalar(v)}"
+            lines.append(f"  {'  ' if i else '- '}{k}:{val}")
+    out = "\n".join(lines)
+    if yaml.safe_load(out) != {key: list(entries)}:
+        raise ValueError(f"el snippet de `{key}` no re-parsea al valor que lleva:\n{out}")
+    return "\n".join(indent + ln for ln in lines) + "\n"
 
 
 def _metadata_val(v) -> str:
@@ -3814,16 +3838,11 @@ def metadata_revisada_snippet(key: str, campo: str, declarado, catalogo, motivo:
     without rewriting it (same doctrine as `triage --accept-source`). The two values come from the
     REGISTRY —what the check actually compared—, never from memory (#392)."""
     sangria = "" if destino else "    "
-    return "\n".join([
-        f"# pegar en el frontmatter de {destino}" if destino else
-        f"# pegar DENTRO del item `key: {key}` de `sources:` en vault/config/themes.yaml",
-        f"{sangria}metadata_revisada:",
-        f"{sangria}  - campo: {campo}",
-        f"{sangria}    declarado: {yaml_scalar(_metadata_val(declarado))}",
-        f"{sangria}    catalogo: {yaml_scalar(_metadata_val(catalogo))}",
-        f"{sangria}    motivo: {yaml_scalar(motivo)}",
-        f'{sangria}    fecha: "{fecha}"',
-    ])
+    cabecera = (f"# pegar en el frontmatter de {destino}" if destino else
+                f"# pegar DENTRO del item `key: {key}` de `sources:` en vault/config/themes.yaml")
+    return cabecera + "\n" + paste_yaml("metadata_revisada", [{
+        "campo": campo, "declarado": _metadata_val(declarado), "catalogo": _metadata_val(catalogo),
+        "motivo": motivo, "fecha": fecha}], indent=sangria).rstrip("\n")
 
 
 # Vocabulario CERRADO de `via` en `extra_core` (D-58): de dónde salió la aceptación de ese paper.
@@ -3839,7 +3858,8 @@ EXTRA_CORE_MOTIVO_PLACEHOLDER = "<por qué es core para este sujeto>"
 EXTRA_CORE_SNIPPET_TOPE = 10
 
 
-def extra_core_snippet(recs, via: str = "usuario") -> str:
+def extra_core_snippet(recs, via: str = "usuario", *, indent: str = "",
+                       fields: dict | None = None) -> str:
     """El bloque `extra_core:` listo para pegar, en la forma DURA de D-58 (#161).
 
     Una sola implementación para los dos carriles que lo imprimen. `query_ads --sweep` dictaba
@@ -3849,21 +3869,24 @@ def extra_core_snippet(recs, via: str = "usuario") -> str:
     pega, y la corrida siguiente muere.
 
     El `via` sale de `EXTRA_CORE_VIA` y se valida acá, así que un typo revienta al generar el
-    snippet y no seis pasos después, al cargar la config."""
+    snippet y no seis pasos después, al cargar la config.
+
+    `fields` overrides/extends every entry (#626): `promote_source` passes the REAL `motivo` and the
+    `pdf_source`/`unidad_cita`/`alcance` of the `sources:` item, never the placeholder."""
     if via not in EXTRA_CORE_VIA:
         raise ValueError(f"`via: {via}` no está en el vocabulario ({' | '.join(EXTRA_CORE_VIA)})")
-    hoy = _dt.date.today().isoformat()
+    hoy = _dt.date.today()
     recs = list(recs)
-    out = ["extra_core:"]
-    for r in recs[:EXTRA_CORE_SNIPPET_TOPE]:
-        out.append(f"  - bibcode: {r['bibcode']}\n    via: {via}\n    fecha: {hoy}\n"
-                   f"    motivo: {EXTRA_CORE_MOTIVO_PLACEHOLDER}\n"
-                   f"    pdf_source:   # {'|'.join(PDF_SOURCE_OK)} — mirá la portada del PDF que "
-                   f"trajiste (#479); vacío = desconocido")
+    entradas = [{"bibcode": r["bibcode"], "via": via, "fecha": hoy,
+                 "motivo": EXTRA_CORE_MOTIVO_PLACEHOLDER, "pdf_source": None, **(fields or {})}
+                for r in recs[:EXTRA_CORE_SNIPPET_TOPE]]
+    out = paste_yaml("extra_core", entradas, indent=indent, comments={
+        "pdf_source": f"{'|'.join(PDF_SOURCE_OK)} — mirá la portada del PDF que trajiste (#479); "
+                      f"vacío = desconocido"})
     if len(recs) > EXTRA_CORE_SNIPPET_TOPE:
-        out.append(f"  # … {len(recs) - EXTRA_CORE_SNIPPET_TOPE} candidato(s) más (snippet acotado "
-                   f"a los {EXTRA_CORE_SNIPPET_TOPE} primeros del orden en que se listaron)")
-    return "\n".join(out) + "\n"
+        out += (f"{indent}  # … {len(recs) - EXTRA_CORE_SNIPPET_TOPE} candidato(s) más (snippet "
+                f"acotado a los {EXTRA_CORE_SNIPPET_TOPE} primeros del orden en que se listaron)\n")
+    return out
 
 
 def load_extra_core(meta: dict, *, entry: str = "?") -> list:
@@ -3963,10 +3986,8 @@ def acepta_preprint_snippet(bibcodes, motivo: str) -> str:
     """The `acepta_preprint:` block ready to paste (#512) — printed by `triage.py --acepta-preprint`
     and by the loader's error; the config is curated and versioned, so nothing writes it."""
     hoy = _dt.date.today().isoformat()
-    out = ["acepta_preprint:"]
-    for b in bibcodes:
-        out += [f"  - bibcode: {b}", f"    motivo: {yaml_scalar(motivo)}", f'    fecha: "{hoy}"']
-    return "\n".join(out) + "\n"
+    return paste_yaml("acepta_preprint",
+                      [{"bibcode": b, "motivo": motivo, "fecha": hoy} for b in bibcodes])
 
 
 def acepta_preprint_bibcodes() -> dict:

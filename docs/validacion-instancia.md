@@ -1925,3 +1925,18 @@ frontmatter, `upsert_view` la conserva y agregar una clave nueva la absorbe.
 
 **Devolver si** cambia cualquier conteo o el rc, o si una cosecha (`harvest_views`) o un
 `--rename-paper` deja un frontmatter que no parsea.
+
+## §#626 · v1.415.0 — un solo generador de YAML «para pegar» (absorbe #603 y #610)
+
+Sin migración. Todo snippet «pegar en …» sale de `cfg.paste_yaml`, que re-parsea lo que emite y
+**rehúsa** si no da el mismo valor; `yaml_scalar` de bloque ya no trunca un valor multilínea (#603);
+`theme_decision_proposals` imprime la entrada `- {…}` sola y nombra bajo qué clave va (#610: la
+línea `cola_tema: - {…}` no parseaba); `triage --accept-source` deja de imprimir `!r` de Python;
+`--promote-source` usa el snippet canónico con el `motivo` real y el `pdf_source`/`unidad_cita`/
+`alcance` del item.
+
+**Validar:** `harvest_views.py <slug> --theme --dry-run` sobre un tema con propuestas #558: pegar
+cada `- {…}` bajo la clave que nombra en un frontmatter de prueba y `split_fm` lee el `motivo` igual
+al de la extracción. `triage.py <slug>` (bloque `extra_core:`) y `--acepta-preprint … --reason`
+pegados tal cual parsean con su loader. `python scripts/lint.py`: salida idéntica antes y después.
+**Devolver si** alguna línea emitida no parsea pegada en su lugar, o si un motivo llega truncado.

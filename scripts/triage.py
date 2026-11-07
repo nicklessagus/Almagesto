@@ -540,9 +540,8 @@ def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
                  "la asimetría que #51 cerró del lado del descarte. Poné el motivo.")
     import discover
     import openalex as oa
-    hoy = dt.date.today().isoformat()
-    cfg.print_seguro(f"\n  sources:      # pegar en la entrada `{slug}` de vault/config/themes.yaml")
-    fallidos = []
+    hoy = dt.date.today()
+    fallidos, entradas = [], []
     for ident in idents:
         try:
             w = discover._json(oa.API + "/doi:" + urllib.parse.quote(ident) + "?" +
@@ -557,29 +556,29 @@ def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
         if not isinstance(w, dict):
             fallidos.append((ident, "el archivo no devolvió metadata para ese identificador"))
             continue
-        key = oa.citekey(w) or ident
         doi = oa._bare_doi(w.get("doi"))
         url, _por = discover.resolve_pdf(doi)
         venue = ((w.get("primary_location") or {}).get("source") or {}).get("display_name")
         autor = (((w.get("authorships") or [{}])[0].get("author") or {}).get("display_name") or "")
-        cfg.print_seguro(f"    - key: {key}")
         # `url:` si hay copia libre; si no, `pending: paywall` — el carril que ya existe para
-        # derivar al usuario sin frenar la cadena. Nunca se inventa un archivo.
-        cfg.print_seguro(f"      url: {url}" if url else "      pending: paywall")
-        cfg.print_seguro(f"      title: {(w.get('title') or '').replace(chr(10), ' ')!r}")
+        # derivar al usuario sin frenar la cadena. Nunca se inventa un archivo. #626: los valores
+        # los escribe `cfg.paste_yaml` (antes `!r` de Python, que no es YAML).
+        e = {"key": oa.citekey(w) or ident, **({"url": url} if url else {"pending": "paywall"}),
+             "title": (w.get("title") or "").replace(chr(10), " ")}
         if autor:
-            cfg.print_seguro(f"      author: {autor.split()[-1]}")
+            e["author"] = autor.split()[-1]
         if w.get("publication_year"):
-            cfg.print_seguro(f"      year: {w['publication_year']}")
+            e["year"] = w["publication_year"]
         if venue:
-            cfg.print_seguro(f"      venue: {venue!r}")
+            e["venue"] = venue
         if doi:
-            cfg.print_seguro(f"      doi: {doi}")
+            e["doi"] = doi
         if w.get("authorships"):
-            cfg.print_seguro(f"      n_authors: {len(w['authorships'])}")
-        cfg.print_seguro(f"      via: {via}")
-        cfg.print_seguro(f"      fecha: {hoy}")
-        cfg.print_seguro(f"      motivo: {motivo!r}")
+            e["n_authors"] = len(w["authorships"])
+        entradas.append({**e, "via": via, "fecha": hoy, "motivo": motivo})
+    if entradas:
+        cfg.print_seguro(f"\n  # pegar en la entrada `{slug}` de vault/config/themes.yaml")
+        cfg.print_seguro(cfg.paste_yaml("sources", entradas, indent="  ").rstrip("\n"))
     for ident, why in fallidos:
         cfg.print_seguro(f"  ⚠ {ident}: no se pudo resolver la metadata ({why}) — NO se inventa "
                          "una entrada a medias; re-intentá o declarala a mano")
@@ -692,15 +691,14 @@ def promote_source(slug: str, key: str, bibcode: str) -> int:
     if perdidos:
         cfg.print_seguro(f"  ⛔ la promoción PERDIÓ curación de la nota vieja: {', '.join(perdidos)} — "
                          f"recuperala de `git show HEAD:vault/wiki/papers/{old_note.name}`")
-    hoy = dt.date.today().isoformat()
     motivo = str(item.get("motivo") or "").strip()
-    cfg.print_seguro(f"\n  extra_core:   # pegar en la entrada `{slug}` de vault/config/themes.yaml")
-    cfg.print_seguro(f"    - bibcode: {bibcode}")
-    cfg.print_seguro(f"      via: usuario")
-    cfg.print_seguro(f"      fecha: {hoy}")
     texto_motivo = ((motivo + " ") if motivo else "") + (
         f"(promovido desde `sources:` `{key}`, via {item.get('via') or '?'}; tiene bibcode ADS, #353)")
-    cfg.print_seguro(f"      motivo: {cfg.yaml_scalar(texto_motivo)}")
+    # #626: the canonical snippet, with the REAL motive and what the item declared (#479/#382)
+    lleva = {k: item[k] for k in ("pdf_source", "unidad_cita", "alcance") if item.get(k)}
+    cfg.print_seguro(f"\n  # pegar en la entrada `{slug}` de vault/config/themes.yaml")
+    cfg.print_seguro(cfg.extra_core_snippet([{"bibcode": bibcode}], via="usuario", indent="  ",
+                                            fields={"motivo": texto_motivo, **lleva}).rstrip("\n"))
     cfg.print_seguro(f"\n  → y SACÁ el item `key: {key}` de `sources:` (la misma decisión, en el "
                      f"carril correcto). Después: `python scripts/ingest_theme.py {slug}` "
                      f"(idempotente: sólo baja lo que falte).")

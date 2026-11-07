@@ -391,8 +391,7 @@ def restamp_sources_meta() -> int:
             for src_k, note_k in SOURCES_META:
                 if item.get(src_k) in (None, "") or fm.get(note_k) == item.get(src_k):
                     continue
-                _set_campo(dest, note_k, yaml.safe_dump(item.get(src_k), allow_unicode=True,
-                                                        width=10 ** 6).split("\n")[0])
+                _set_campo(dest, note_k, cfg.yaml_scalar(item.get(src_k)))   # #603: no truncar
                 cambios += 1
             if cambios:
                 cfg.print_seguro(f"  {key}: {cambios} campo(s) re-sincronizados desde `sources:` de `{slug}`")
