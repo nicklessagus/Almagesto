@@ -4963,9 +4963,6 @@ def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf
     # estructurales y machine-readable — un documento largo no tiene esa sección, y un paper
     # leído sólo del abstract no la tiene POR CONSTRUCCIÓN (#207).
     _marca_sc = fm.get("sin_conclusiones", _SIN_MARCA)
-    _solo_abstract = bool(cfg.solo_abstract_motivo(fm)) or bool(fm.get("vistas")) and all(
-        str((v_ or {}).get("fuente") or "") == "abstract"
-        for v_ in cfg.as_list(fm.get("vistas")) if isinstance(v_, dict))
     # #520 — la escotilla declarada se lista APARTE (AUD-207): visible, no es deuda.
     if (_sa := cfg.solo_abstract_motivo(fm)):
         # @inv INV-167
@@ -4979,8 +4976,7 @@ def check_paper_reading_aids(stem: str, fm: dict, text: str, body_full: str, pdf
             sin_conclusiones.append(
                 (stem, "`sin_conclusiones` sin motivo: la escotilla lo exige (en seis meses "
                        "sirve el motivo, no la categoría)"))
-    elif (str(fm.get("unidad_cita") or "") != "pagina" and stem in pdf_on_disk
-            and not _solo_abstract and cfg.section_start(text, "## Conclusiones") < 0):
+    elif cfg.conclusions_owed(fm, text, stem in pdf_on_disk):      # #611: el mismo que propone
         sin_conclusiones.append(
             (stem, "sin `## Conclusiones`: es lo que el paper afirma SIN lente, y lo que "
                    "hace barata una segunda vista (#124) → transcribilas, o declará "

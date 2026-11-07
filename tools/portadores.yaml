@@ -3797,3 +3797,17 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "`reviewed_quote` (`cita_revisada`, #516) ya tiene piso (`QUOTE_MIN`) y se vence por `pdf_sha`: no calla de más."
+  - issue: 611
+    regla: >-
+      Quien propone la escotilla `sin_conclusiones` usa el mismo predicado que el lint que la pide
+      (red 10): una copia a mano divergía en `seccion`, `sin_conclusiones: true`, PDF en disco y
+      vistas todas del abstract, y proponía cuando el lint no pedía o callaba cuando sí.
+    funcion: lib_config.conclusions_owed
+    patron: '"## Conclusiones"\) *[<>]'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_paper_reading_aids` pide `## Conclusiones` con este predicado."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`conclusions_hatch_proposal` propone `sin_conclusiones` exactamente cuando el lint lo pediría."

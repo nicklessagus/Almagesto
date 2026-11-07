@@ -2074,3 +2074,14 @@ real de `fetch_pdf.py <slug>` con un publicado sin PDF del editor: las copias de
 «salteada: versión desconocida … (#512, #609)» y el paper queda en `missing_pdf.json`; con
 `acepta_preprint` para ese bibcode, se prueban. **Devolver si** una copia de HAL con carátula queda
 instalada por `fetch_web`, o una copia `src=None` entra sin `acepta_preprint`.
+
+## §#611 · v1.415.11 — la propuesta de `sin_conclusiones` usa el predicado del lint
+
+Sin migración. `cfg.conclusions_owed(fm, texto, pdf_en_disco)` decide si se debe `## Conclusiones`
+para el lint (`check_paper_reading_aids`) y para `harvest_views.conclusions_hatch_proposal`: ya no
+difieren en `unidad_cita: seccion`, `sin_conclusiones: true`, PDF en disco ni vistas todas del abstract.
+
+**Validar:** `python scripts/lint.py` idéntico (Tesis 2026-11-07: idéntico). En la próxima cosecha
+que vuelva sin conclusiones, la línea «→ <bib>: la lectura volvió sin conclusiones…» sale sólo para
+notas que la categoría «sin `## Conclusiones`» del lint lista. **Devolver si** la propuesta aparece
+para una nota que el lint no pide (o falta para una que sí).

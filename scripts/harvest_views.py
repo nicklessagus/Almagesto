@@ -544,17 +544,15 @@ def stamp_reading_aids(dest: Path, data: dict, *, force: bool = False) -> bool:
     return toco
 
 
-def conclusions_hatch_proposal(texto_nota: str, data: dict) -> str | None:
+def conclusions_hatch_proposal(texto_nota: str, data: dict, stem: str) -> str | None:
     """The `sin_conclusiones` line to paste when the reading came back without conclusions (#538).
 
     Proposes, never writes: whether the source really lacks the section is the reader's call, and
-    the escape hatch needs a motive a person writes. Only when the lint would ask for it — not a
-    long document, not read from the abstract alone, no `## Conclusiones` and no hatch declared."""
-    fm = cfg.split_fm(texto_nota) or {}
-    if (str(fm.get("unidad_cita") or "").strip() not in ("", "linea") or "sin_conclusiones" in fm
-            or cfg.solo_abstract_motivo(fm) or str(data.get("conclusiones") or "").strip()
-            or str((data.get("vista") or {}).get("fuente") or "") == "abstract"
-            or cfg.section_start(texto_nota, "## Conclusiones") >= 0):
+    the escape hatch needs a motive a person writes. Exactly when the lint asks for it: the same
+    predicate, `cfg.conclusions_owed` (#611); `stem` names the PDF looked for on disk."""
+    pdf = cfg.PDFS.exists() and any(cfg.PDFS.glob(f"*/{stem}.pdf"))
+    if str(data.get("conclusiones") or "").strip() or not cfg.conclusions_owed(
+            cfg.split_fm(texto_nota) or {}, texto_nota, pdf):
         return None
     return 'sin_conclusiones: "<motivo: p. ej. Letter que cierra en la discusión>"'
 
@@ -1152,7 +1150,7 @@ def harvest(slug: str, *, theme: bool = False, force: bool = False,
             toco = True
         if stamp_reading_aids(dest, data, force=force):
             toco = True
-        if (_sc := conclusions_hatch_proposal(dest.read_text(encoding="utf-8"), data)):
+        if (_sc := conclusions_hatch_proposal(dest.read_text(encoding="utf-8"), data, dest.stem)):
             cfg.print_seguro(f"  → {bib}: la lectura volvió sin conclusiones; si la fuente no tiene "
                              f"esa sección, declaralo en la nota (#538, no se escribe solo): {_sc}")
         for _clave, _prop in theme_decision_proposals(

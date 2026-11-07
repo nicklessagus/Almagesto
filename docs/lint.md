@@ -481,7 +481,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   la escotilla declarada **`sin_conclusiones: <motivo>`** — motivo obligatorio, como toda escotilla
   de curación acá; la declarada se reporta aparte, en «visible, no es deuda». Cuando la lectura
   vuelve sin conclusiones, `harvest_views` imprime la línea lista para pegar y **no** la escribe
-  (#538): si la fuente no tiene esa sección lo decide quien leyó. Y avisa en la otra dirección
+  (#538): si la fuente no tiene esa sección lo decide quien leyó; propone exactamente cuando este
+  chequeo pide — un predicado para los dos, `cfg.conclusions_owed` (#611). Y avisa en la otra dirección
   (#546): la lectura que vuelve vacía **y lo declara en `salvedades`** contra una nota que ya
   publica `## Conclusiones` de una lectura vieja — propone sacar la sección, no la saca.
 - **Nota de paper sin el aviso de capa LLM** (#247/#277, backlog): es la clase de nota con más

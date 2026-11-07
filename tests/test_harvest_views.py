@@ -616,8 +616,37 @@ def test_538_sin_conclusiones_se_PROPONE_y_no_se_escribe(toy_vault, capsys):
     for fm_extra, concl in (({}, "C."), ({"sin_conclusiones": "Letter"}, ""),
                             ({"unidad_cita": "pagina", "alcance": "cap. 1"}, "")):
         assert hv.conclusions_hatch_proposal(
-            "---\n" + "".join(f"{k}: {v}\n" for k, v in fm_extra.items()) + "---\n\nx\n",
-            {"conclusiones": concl}) is None, (fm_extra, concl)
+            "---\n" + "".join(f"{k}: {v}\n" for k, v in fm_extra.items()) + "---\n\nx\n"
+            + ("\n## Conclusiones\nC.\n" if concl else ""), {"conclusiones": concl}, BIB) is None, \
+            (fm_extra, concl)
+
+
+def test_611_la_propuesta_de_sin_conclusiones_usa_EL_predicado_del_lint(toy_vault):
+    """#611 · AUD-590 — `conclusions_hatch_proposal` re-escribía a mano la regla del lint y difería
+    (`seccion`, `sin_conclusiones: true`, PDF en disco, vistas todas del abstract): proponía cuando el
+    lint no pedía, o callaba cuando sí. Un predicado (`cfg.conclusions_owed`) para los dos."""
+    import lint
+    import make_notes as mn
+    cuerpo = f"## Abstract\nx\n{mn.AVISO_LLM_MARCA}\n"
+    pdf = [{"sujeto": "x", "fuente": "pdf"}]
+    casos = [({"vistas": pdf}, True), ({"vistas": pdf}, False),
+             ({"vistas": pdf, "unidad_cita": "seccion"}, True),
+             ({"vistas": pdf, "sin_conclusiones": True}, True),
+             ({"vistas": pdf, "unidad_cita": "pagina"}, True),
+             ({"vistas": pdf + [{"sujeto": "y", "fuente": "abstract"}]}, True),
+             ({"vistas": [{"sujeto": "x", "fuente": "abstract"}]}, True),
+             ({"vistas": pdf, "solo_abstract": "resumen de congreso"}, True)]
+    for fm, en_disco in casos:
+        (toy_vault.PDFS / "s").mkdir(parents=True, exist_ok=True)
+        for p_ in toy_vault.PDFS.glob("*/2020X.pdf"):
+            p_.unlink()
+        if en_disco:
+            (toy_vault.PDFS / "s" / "2020X.pdf").write_bytes(b"%PDF-1.4\n")
+        texto = "---\n" + __import__("yaml").safe_dump(dict(fm, bibcode="2020X"), allow_unicode=True) + "---\n\n" + cuerpo
+        pide = any("sin `## Conclusiones`" in m for _s, m in lint.check_paper_reading_aids(
+            "2020X", fm, texto, cuerpo, {"2020X": "x.pdf"} if en_disco else {})[1])
+        propone = hv.conclusions_hatch_proposal(texto, {"conclusiones": ""}, "2020X") is not None
+        assert pide == propone, (fm, en_disco, pide, propone)
 
 
 def test_546_lectura_sin_conclusiones_contra_nota_que_las_publica_AVISA_y_no_escribe():

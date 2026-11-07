@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.10"
+ALMAGESTO_VERSION = "1.415.11"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4061,6 +4061,22 @@ def solo_abstract_motivo(fm: dict) -> str:
     a motive it does not apply — nor with a boolean or the unfilled `<motivo>` of the template
     (AUD-541): neither says WHY, which is what makes the exemption auditable (D-58)."""
     return declared_motive((fm or {}).get("solo_abstract"))
+
+
+def conclusions_owed(fm: dict, text: str, pdf_on_disk: bool) -> bool:
+    """Does the lint ask this paper note for `## Conclusiones`? (#124, #611)
+
+    ONE predicate for the lint (`check_paper_reading_aids`) and for whoever proposes the
+    `sin_conclusiones` hatch (`harvest_views.conclusions_hatch_proposal`): a hand copy diverged
+    (`seccion`, `sin_conclusiones: true`, PDF on disk, every view from the abstract — AUD-590).
+    Owed when no hatch is declared, the source is not a long document (`unidad_cita: pagina`), its
+    PDF is on disk, it was not read from the abstract alone, and the section is not written."""
+    fm = fm or {}
+    vistas = [v for v in as_list(fm.get("vistas")) if isinstance(v, dict)]
+    solo_abstract = bool(solo_abstract_motivo(fm)) or bool(vistas) and all(
+        str(v.get("fuente") or "") == "abstract" for v in vistas)
+    return ("sin_conclusiones" not in fm and str(fm.get("unidad_cita") or "") != "pagina"
+            and pdf_on_disk and not solo_abstract and section_start(text, "## Conclusiones") < 0)
 
 
 def declared_motive(value) -> str:
