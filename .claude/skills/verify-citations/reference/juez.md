@@ -33,6 +33,10 @@ Por cada fuente, el subagente:
   pertenece a otra fuente del mismo bloque, **decilo en la `nota` y no la cuentes en contra**:
   «resolverla» reatribuyendo la cita al bibcode contra el que se testeó **destruye la inferencia
   que la nota declara**.
+- **El par `inferencia` (D-42, #618).** Si el bloque lleva `(inferencia de [[b1]], [[b2]])` y tu
+  fuente es una de ellas, el prompt lo marca: juzgás **sólo la premisa que tu fuente aporta**, no la
+  conclusión — la combinación es justo lo que ninguna fuente dice y lo declara la marca. `soportada`
+  si tu fuente dice su parte; la conclusión no la cuentes en contra.
 - Devuelve, para la afirmación dada:
   - `veredicto`: `soportada` | `no-soportada` | `contradice` — **vocabulario cerrado**, y el eje es
     **sólo el respaldo textual**: ¿la fuente dice esto? La pregunta «¿está completa la afirmación?»

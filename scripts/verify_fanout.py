@@ -66,6 +66,11 @@ def prompt_for(nota: Path, bibcode: str, pares: list, out_dir: Path) -> str:
               f"Pares a juzgar: {len(pares)}. Cada uno vuelve con su `ancla` tal cual.", ""]
     for i, p in enumerate(pares, 1):
         partes += [f"### Par {i} · ancla `{p.anchor}`", "", p.block.text.strip(), ""]
+        # #618 · AUD-565 — the skill promises the judge checks only the PREMISE here; the judge
+        # only knows it if the prompt says so (D-42: the combination is what no source says).
+        if any(bibcode in lb._bibcodes(m) for m in lb.inference_marks(p.block.text)):
+            partes += [f"⚠ Par `inferencia`: juzgá SÓLO la premisa que `{bibcode}` aporta, no la "
+                       f"conclusión — ver «El par `inferencia`» en las reglas del juez.", ""]
     partes += ["## Salida", "",
                f"Escribí el resultado en `{(out_dir / f'{bibcode}.json').as_posix()}` con "
                f"EXACTAMENTE esta forma:", "", lb.verify_fanout_json_block(bibcode), ""]

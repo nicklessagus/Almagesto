@@ -2157,3 +2157,14 @@ sólo con `--refutar-extraccion`.
 scripts/query_ads.py hd_40307 --sweep --dry-run` → exit **2** (antes: corría la re-clasificación e
 ignoraba `--sweep`). Las corridas de un solo modo siguen igual. **Devolver si** algún skill o doc
 manda una combinación que ahora rehúsa.
+
+## §#618 · v1.415.18 — el juez sabe que en un par `inferencia` chequea sólo la premisa
+
+Sin migración. `verify_fanout.prompt_for` marca el par cuyo bloque lleva `(inferencia de …)` con
+la fuente del prompt entre sus premisas («⚠ Par `inferencia`: juzgá SÓLO la premisa…»), y `juez.md`
+trae la regla («El par `inferencia`»).
+
+**Validar:** sobre la Tesis hay **586** pares `inferencia` (de 8238) en **35** notas: en la próxima
+ronda de `verify_fanout.py <nota> --out <dir>` sobre una de ellas, el prompt de cada premisa lleva
+la línea ⚠ debajo del par. **Devolver si** un `no-soportada` de un par `inferencia` se justifica en
+que la fuente no dice la conclusión.

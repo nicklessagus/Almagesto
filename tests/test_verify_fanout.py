@@ -264,3 +264,21 @@ def test_597_la_ronda_se_acota_a_PARES_por_su_ancla(tmp_path):
     assert m["anclas"] == {"2020A": [una.anchor]} and m["nota_total"]["pares"] == len(pares)
     with pytest.raises(vf.ScopeError, match="ffffffffff"):
         vf.write_round(nota, tmp_path / "r2", anclas=["ffffffffff"])
+
+
+def test_618_el_par_inferencia_le_dice_al_juez_que_chequea_SOLO_la_premisa(tmp_path):
+    """#618 · AUD-565 — el skill promete que en un par `inferencia` el juez chequea sólo la premisa
+    de SU fuente; sin decírselo, juzgaba la conclusión, que por definición ninguna fuente dice
+    (D-42). El prompt marca el par y `juez.md` trae la regla."""
+    nota = tmp_path / "i.md"
+    nota.write_text("---\ntags: [concept]\n---\n\n# X\n\n"
+                    "La señal es estelar (inferencia de [[2020A]], [[2021B]]).\n\n"
+                    "El período es de 34 días [[2020A]].\n", encoding="utf-8")
+    out = tmp_path / "r1"
+    vf.write_round(nota, out)
+    texto = (out / "prompts" / "2020A.md").read_text(encoding="utf-8")
+    par_inf, par_llano = texto.split("### Par 2")
+    assert "`inferencia`" in par_inf and "premisa" in par_inf
+    assert "premisa" not in par_llano.split("## Salida")[0], "el par sin marca no lleva el aviso"
+    juez = (Path(__file__).resolve().parent.parent / vf.JUEZ).read_text(encoding="utf-8")
+    assert "**El par `inferencia`" in juez
