@@ -274,15 +274,20 @@ def fetch_free_copy(slug: str, r: dict, dest: Path, token: str,
     location → `eprint`, a `publishedVersion` one → `publisher`); otherwise it stays unknown.
 
     `eprint_ok=False` (#512: published version, no `acepta_preprint`) skips the eprint candidates
-    (arXiv, or a preprint server's `submittedVersion`, AUD-508) — not tried, not listed as tried."""
+    (arXiv, or a preprint server's `submittedVersion`, AUD-508) and those of UNKNOWN version
+    (`src=None`, #609) — not tried, not listed as tried."""
     bib = r["bibcode"]
     tried: list = []
     for url, why, src in oa_candidates(r.get("doi"), r.get("title")):
-        if not eprint_ok and is_eprint_candidate(url, src):
+        if not eprint_ok and (src is None or is_eprint_candidate(url, src)):
             # ponytail: the arXiv-by-title lookup still runs inside the generator (one request);
             # pass the flag down to `discover` if that cost ever matters.
-            cfg.print_seguro(f"      · copia libre ({why}) salteada: es el eprint y el paper tiene "
-                             f"versión publicada sin `acepta_preprint` (#512)")
+            # #609 — an UNKNOWN version (HAL, Europe PMC: `src=None`) may be the author's manuscript:
+            # with a published version it is treated as the eprint.
+            cfg.print_seguro(f"      · copia libre ({why}) salteada: "
+                             + ("versión desconocida" if src is None else "es el eprint")
+                             + f" y el paper tiene versión publicada sin `acepta_preprint` "
+                               f"(#512, #609) — {url}")
             continue
         prev = next((t for t in tried if t["url"] == url), None)
         if prev is not None:

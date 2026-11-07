@@ -2060,3 +2060,17 @@ y 2026RASTI...5ag065B); el bloque «ya FIRMADA(s)» de 🔎 desaparece. Cierre: 
 `valor: <el «…» de la fila>` → vuelven a «ya FIRMADA(s)» y `re-firmá` da 0. **Devolver si** una
 firma vigente de `segunda_mano_revisada` deja de eximir, o la firma con `valor` correcto sigue
 pidiendo re-firmar.
+
+## §#609 · v1.415.10 — todo PDF instalado pasa por las compuertas de `fetch_pdf`
+
+Sin migración (no toca lo ya instalado). (1) `fetch_web.download_pdf` (la `url:` que sirve un PDF,
+#242) rehúsa la copia con carátula de repositorio (`cfg.repository_cover`, INV-168) y la borra. (2)
+Con versión publicada y sin `acepta_preprint`, `fetch_pdf` saltea también la copia libre de versión
+**desconocida** (`src=None`: HAL, Europe PMC, OpenAlex sin `version`) — puede ser el manuscrito del
+autor (#512); la línea impresa dice «versión desconocida» y la URL.
+
+**Validar:** `python scripts/lint.py` idéntico (Tesis 2026-11-07: idéntico). En la próxima corrida
+real de `fetch_pdf.py <slug>` con un publicado sin PDF del editor: las copias de HAL/Europe PMC salen
+«salteada: versión desconocida … (#512, #609)» y el paper queda en `missing_pdf.json`; con
+`acepta_preprint` para ese bibcode, se prueban. **Devolver si** una copia de HAL con carátula queda
+instalada por `fetch_web`, o una copia `src=None` entra sin `acepta_preprint`.

@@ -130,7 +130,8 @@ def download_pdf(url: str, dest) -> bool:
 
     The magic bytes are checked because a server can answer `application/pdf` and send an error
     page: writing that under `raw/pdfs/` would put a non-PDF where the whole reading chain assumes
-    one, and `pdftotext` would fail later with a message about the wrong thing.
+    one, and `pdftotext` would fail later with a message about the wrong thing. A copy with a
+    repository cover page is not installed either (#609, INV-168).
     """
     req = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=180) as r:
@@ -140,6 +141,12 @@ def download_pdf(url: str, dest) -> bool:
         return False
     dest.parent.mkdir(parents=True, exist_ok=True)
     cfg.write_bytes_atomic(dest, datos)
+    # #609 — the same gate as `fetch_pdf` (INV-168): a repository cover shifts every «p. N» by one
+    if (caratula := cfg.repository_cover(dest)):
+        dest.unlink()
+        cfg.print_seguro(f"    ! {url} trae CARÁTULA de repositorio («{caratula}»): no se instala — "
+                         f"bajalo a mano, quitale la página 1 e instalalo con `replace_pdf.py` (#531)")
+        return False
     return True
 
 

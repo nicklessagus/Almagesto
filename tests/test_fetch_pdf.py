@@ -583,7 +583,8 @@ def test_copia_libre_bloqueada_se_distingue_de_sin_copia_libre(toy_vault, monkey
     ads_json(toy_vault.ROOT, "test_star", recs)
     monkeypatch.setattr(fp, "esource_records", lambda bib, tok: [])
     monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter(
-        [("https://oup/cloudflare.pdf", "OpenAlex best_oa_location", None)] if doi == "10.1/w" else []))
+        [("https://oup/cloudflare.pdf", "OpenAlex best_oa_location", "publisher")]
+        if doi == "10.1/w" else []))   # #609: con versión publicada, la de versión desconocida no se prueba
     monkeypatch.setattr(fp, "download_pdf", lambda url, tok: None)
     assert run_main(monkeypatch, ["test_star"]) == 0
     out = capsys.readouterr().out
@@ -591,7 +592,7 @@ def test_copia_libre_bloqueada_se_distingue_de_sin_copia_libre(toy_vault, monkey
         (toy_vault.ROOT / "build" / "test_star" / "missing_pdf.json").read_text(encoding="utf-8"))}
     assert miss["1978oldW...1..1W"]["estado"] == "bloqueado"
     assert miss["1978oldW...1..1W"]["copias_libres"] == [{"url": "https://oup/cloudflare.pdf",
-                                                          "src": None}]
+                                                          "src": "publisher"}]
     assert miss["2020newA...1..1A"]["estado"] == "sin-copia-libre"
     assert "bloqueó" in out and "sin copia libre" in out, out
     assert "sin conseguir 2 (1 con copia libre que el host bloqueó)" in out, out
@@ -712,11 +713,29 @@ def test_512_cascada_abierta_saltea_arxiv_si_no_hay_aceptacion(toy_vault, monkey
     monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter([
         ("https://arxiv.org/pdf/1409.00001", "OpenAlex best_oa_location", None),
         ("https://export.arxiv.org/pdf/1409.00001", "arXiv por título", "eprint"),
-        ("https://pmc/x.pdf", "Europe PMC", None)]))
+        ("https://pmc/x.pdf", "Europe PMC", "publisher")]))
     pedidos = []
     monkeypatch.setattr(fp, "download_pdf", lambda url, tok: pedidos.append(url) or None)
     assert run_main(monkeypatch, ["test_star"]) == 0
     assert pedidos == ["https://pmc/x.pdf"]
+
+
+def test_609_copia_libre_de_version_DESCONOCIDA_con_publicado_no_entra_sin_acepta_preprint(
+        toy_vault, monkeypatch):
+    """#609 · AUD-573 — con versión publicada, la copia libre sin procedencia (HAL, Europe PMC:
+    `src=None`) se instalaba: puede ser el manuscrito del autor. Versión desconocida = eprint (#512);
+    con `acepta_preprint` sí se prueba."""
+    dest = cfg.PDFS / "s" / "x.pdf"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(fp, "oa_candidates", lambda doi, title=None: iter(
+        [("https://hal.science/hal-1/document", "HAL", None)]))
+    pedidos = []
+    monkeypatch.setattr(fp, "download_pdf", lambda url, tok: pedidos.append(url) or None)
+    ok, tried = fp.fetch_free_copy("s", {"bibcode": "2014S", "doi": "10.1/s"}, dest, "tok",
+                                   eprint_ok=False)
+    assert (ok, tried, pedidos) == (False, [], [])
+    fp.fetch_free_copy("s", {"bibcode": "2014S", "doi": "10.1/s"}, dest, "tok", eprint_ok=True)
+    assert pedidos == ["https://hal.science/hal-1/document"]
 
 
 def test_512_residuo_publicado_no_conseguido(toy_vault, monkeypatch, capsys):

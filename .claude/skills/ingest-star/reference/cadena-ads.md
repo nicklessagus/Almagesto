@@ -77,7 +77,8 @@ que resuelve contra ADS en cascada: `EPRINT_PDF` → `ADS_PDF` (escaneo alojado 
 **Publisher-first (#512): con versión publicada el eprint no se adopta sin decisión.** Si el
 bibcode no es de arXiv ni una tesis (`cfg.has_published_version`) y ninguna config declara
 `acepta_preprint` para él, `fetch_arxiv` no lo baja y `fetch_pdf` prueba sólo `ADS_PDF` → `PUB_PDF`
-y la cascada abierta **sin** los candidatos de arXiv. Lo que así no sale queda en el residuo como
+y la cascada abierta **sin** los candidatos de arXiv ni los de versión desconocida (HAL, Europe PMC:
+pueden ser el manuscrito del autor, #609). Lo que así no sale queda en el residuo como
 `estado: publicado-no-conseguido`, con `doi`, `editor` (enlace) y `eprint` (el arxiv_id disponible),
 y el cierre lo lista. Las dos salidas son del usuario: traer el PDF del editor
 (`replace_pdf.py <bib> <pdf> --source publisher --slug <slug> --reason`, que instala la primera

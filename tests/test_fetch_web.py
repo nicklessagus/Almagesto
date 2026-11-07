@@ -312,6 +312,19 @@ def test_download_pdf_rechaza_lo_que_NO_es_un_pdf(toy_vault, monkeypatch, capsys
     assert "no lo es" in capsys.readouterr().out
 
 
+@pytest.mark.skipif(not __import__("shutil").which("pdftotext"), reason="sin pdftotext")
+def test_609_download_pdf_no_instala_la_copia_con_CARATULA_de_repositorio(toy_vault, monkeypatch,
+                                                                           capsys):
+    """#609 · AUD-569 — `download_pdf` instalaba la copia de HAL con su carátula (cada «p. N» corrida
+    en 1) y el lint la veía recién después. Misma compuerta que `fetch_pdf` (INV-168), sobre el PDF real."""
+    from test_fetch_pdf import _pdf_con_texto
+    monkeypatch.setattr(fw.urllib.request, "urlopen", lambda req, timeout=0: _RespFalsa(
+        _pdf_con_texto("HAL Id: hal-00460653", "Article text")))
+    dest = toy_vault.PDFS / "ica" / "2015Voss.pdf"
+    assert fw.download_pdf("https://hal.science/hal-00460653/document", dest) is False
+    assert not dest.exists() and "CARÁTULA" in capsys.readouterr().out
+
+
 # ── #352 · `content_type`: la decisión PDF-vs-snapshot se toma con esto ──────
 
 class _RespConHeaders(_RespFalsa):

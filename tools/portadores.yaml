@@ -2305,6 +2305,9 @@ portadores:
       - modulo: scripts/fetch_pdf.py
         estado: usa
         motivo: "`fetch_free_copy` no instala la copia libre con carátula y la marca en `copias_libres`."
+      - modulo: scripts/fetch_web.py
+        estado: usa
+        motivo: "`download_pdf` (la `url:` que sirve un PDF, #242) no instala la copia con carátula (#609)."
       - modulo: scripts/replace_pdf.py
         estado: usa
         motivo: "`check_incoming` rehúsa con `REPOSITORY_COVER_RE` sobre la página 1 (la que ya lee para la marca de arXiv)."
@@ -2597,6 +2600,9 @@ portadores:
       - modulo: scripts/fetch_pdf.py
         estado: fuera-de-alcance
         motivo: "El residuo `publicado-no-conseguido` NOMBRA el comando (`--slug`) como salida; no instala nada."
+      - modulo: scripts/fetch_web.py
+        estado: fuera-de-alcance
+        motivo: "`download_pdf` NOMBRA el comando como salida de la copia con carátula que rehúsa (#609); no instala el PDF del usuario."
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: "Sólo NOMBRA `replace_pdf.py --backfill` en un mensaje; no instala ni declara procedencia."
