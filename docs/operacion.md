@@ -2264,9 +2264,12 @@ fuera una referencia (devuelto por la instancia; 159 → 93 filas en Almagesto-T
 es una propuesta —*abrí el PDF de B*—, agrupada por B, y **nunca acusa** (#318): el `.txt` pierde
 tablas-imagen (#205), una calibración citada (Noyes 1984 para un $\log R'_{HK}$) no contiene el
 valor que A calculó con ella, y apellido + año puede resolver al paper equivocado. **Lo verificado en
-el PDF de B se firma en la nota de A (#591):** `segunda_mano_verificada: [{ref, que, localizador,
-motivo}]` (forma dura, D-58: sin `localizador` el lint bloquea) — la fila sale de lo pendiente y se
-lista aparte (AUD-207), y la firma que no exime ninguna fila se propone sacar (#256). **Sus campos
+el PDF de B se firma en la nota de A (#591):** `segunda_mano_verificada: [{ref, que, valor,
+localizador, motivo}]` (forma dura, D-58: sin `localizador` el lint bloquea) — la fila sale de lo pendiente y se
+lista aparte (AUD-207), y la firma que no exime ninguna fila se propone sacar (#256). **La firma
+cubre el valor que vio (#608):** si el `valor` de la fila cambió, o la firma no lo guarda, la fila
+vuelve arriba como «re-firmá»; `que`/`valor` matchean como prefijo sólo con el `…` del corte
+(`lib_config.signed_text_matches`, también para `segunda_mano_revisada`). **Sus campos
 son texto (#592):** una lista, un mapa o el `<…>` de la plantilla cuentan como faltantes, igual en
 las firmas hermanas (`lib_config.signature_text`), y todas —con `extra_core`, `acepta_preprint`,
 `aliases_descartados`, `no_vista`, `no_sintetizado` y `cola_tema`— cargan por un solo

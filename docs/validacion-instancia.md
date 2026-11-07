@@ -2043,3 +2043,20 @@ todavía el sufijo). En la próxima ronda acotada real (p. ej. `verify_fanout.py
 <hoy>)`, la salida dice «ronda PARCIAL», y `make_notes.py <slug>` estampa `, ronda parcial <hoy>` en
 `> _Estado —_` sin dejar la cabecera desfasada. **Devolver si** una ronda de 4 de 36 pares mueve la
 fecha, o una ronda completa deja el sufijo.
+
+## §#608 · v1.415.9 — las firmas de segunda mano cubren un estado
+
+Sin migración. (a) `que`/`valor` firmados matchean por igualdad normalizada, o como prefijo sólo con
+el `…` del corte (#481) o con exactamente 80 caracteres (el corte viejo `_q[:80]`,
+`cfg.LEGACY_CUT`): un `que` corto ya no calla toda fila del `ref`. (b) `segunda_mano_verificada`
+guarda `valor` (el que imprime `proposals.py`); la firma sin `valor`, o cuyo valor cambió, vuelve
+arriba en 🔎 como «⟲ re-firmá» — no rompe la nota ni es huérfana. (c) `warn_revisada` de
+`autor_ajeno` en una nota que no es ficha/concepto/query sale en `warn_revisada_huerfana`.
+
+**Validar:** `python scripts/lint.py` idéntico (Tesis 2026-11-07: idéntico; las 5 firmas
+`segunda_mano_revisada` de 80 caracteres siguen eximiendo). `python scripts/proposals.py | grep -c
+"re-firmá"` → **2** (las dos `segunda_mano_verificada` de la Tesis, sin `valor`: 2024ApJS..274...35I
+y 2026RASTI...5ag065B); el bloque «ya FIRMADA(s)» de 🔎 desaparece. Cierre: agregarles
+`valor: <el «…» de la fila>` → vuelven a «ya FIRMADA(s)» y `re-firmá` da 0. **Devolver si** una
+firma vigente de `segunda_mano_revisada` deja de eximir, o la firma con `valor` correcto sigue
+pidiendo re-firmar.

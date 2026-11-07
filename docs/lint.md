@@ -780,8 +780,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   declaración que no exime nada. Un `que` mal copiado deja la escotilla en **no-op silencioso** —el
   modo de falla de #256, un campo parseado y consumido por nadie—, así que se reporta: o el cruce ya
   no dispara (sacá la entrada) o el `ref`/`que` no es el que el lint nombra. El `qué` se compara
-  **normalizado y por prefijo**, porque la forma canónica de firmar es pegar lo que el reporte dice
-  y el reporte lo trunca (`_q[:80]`).
+  **normalizado**, y por prefijo **sólo si termina en el `…`** del corte (#481, #608): la forma
+  canónica de firmar es pegar lo que el reporte dice y el reporte lo trunca; un prefijo pelado
+  («P») callaba toda fila del `ref` (`cfg.signed_text_matches`). El corte viejo, `_q[:80]` sin `…`
+  (exactamente 80 caracteres, `cfg.LEGACY_CUT`), sigue valiendo como prefijo.
 - **Hit de fuga/bloque/costura REVISADO y firmado con motivo** (#502, backlog): la escotilla de las
   WARN que decide una persona leyendo (`cfg.WARN_REVISABLE`: fuga de implementación, bloque con más
   de un hecho, costura de unidad, agregación sin `inferencia` #556, autor ajeno #594) — `warn_revisada: [{categoria, ancla, motivo}]` en el frontmatter de la nota.
@@ -792,7 +794,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   re-firman, o con el migrador del tag `v1.411.3` (#624). Forma dura (D-58): sin `motivo` o con una categoría fuera de `WARN_REVISABLE`,
   no exime nada. Las WARN de higiene no se firman: se cierran arreglando.
 - **`warn_revisada` que no corresponde a ningún hit** (#502/#256, backlog): el bloque cambió
-  (re-revisalo y firmá el ancla nueva) o el hit ya no dispara (sacá la entrada).
+  (re-revisalo y firmá el ancla nueva) o el hit ya no dispara (sacá la entrada). Una de
+  `autor_ajeno` en una nota que no es ficha/concepto/query (donde no corre) es huérfana (#608).
 - **Cita CONFIRMADA en la página del PDF y firmada** (#516, backlog): la escotilla de #220
   (`cita_no_verbatim`) y #333 (`cita_txt_discrepa`), cuyo propio mensaje manda al PDF —
   `cita_revisada: [{ref, cita, pdf_sha, pagina, motivo, fecha}]` en el frontmatter de la nota. El

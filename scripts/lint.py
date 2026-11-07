@@ -7610,6 +7610,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["segunda_mano_revisada"] += _sm_revisados
     found["segunda_mano_huerfana"] += _sm_huerfanas
     # #594 · el autor que la prosa le pega a un [[bibcode]]: necesita `paper_fms` completo.
+    _aj_vistas: set = set()
     for f_, t_ in anchor_bodies.items():
         if not (in_dir(f_, "stars") or in_dir(f_, "concepts") or in_dir(f_, "queries")):
             continue
@@ -7623,6 +7624,16 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         found["autor_ajeno"] += _aj
         found["warn_revisada"] += _rev
         found["warn_revisada_huerfana"] += _hu
+        _aj_vistas.add(_st)
+    # #608 · AUD-614 — fuera de ficha/concepto/query `autor_ajeno` no corre: su firma no exime nada
+    for _st, _fm in todos_fm.items():
+        if _st not in _aj_vistas:
+            try:
+                cfg.load_reviewed_warn(_fm, entry=_st)
+            except cfg.VistasError:
+                continue                    # la forma rota ya la reporta el barrido por nota
+            found["warn_revisada_huerfana"] += split_reviewed_warn(
+                _st, _fm, "", 0, {}, ("autor_ajeno",))[-1]
     # #598 · el localizador sólo-página que la extracción ubica por sección/figura/tabla/ecuación
     _idx598 = lq.structural_by_page()
     found["localizador_solo_pagina"] = []

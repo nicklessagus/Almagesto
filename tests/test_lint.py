@@ -11994,6 +11994,15 @@ def test_594_la_firma_de_autor_ajeno_no_es_huerfana_en_el_barrido_por_nota():
     assert len(huerfanas) == 1
 
 
+def test_608_la_firma_de_autor_ajeno_en_una_nota_de_PAPER_es_huerfana(toy_vault):
+    """#608 · AUD-614 — `autor_ajeno` no corre sobre notas de paper: su `warn_revisada` no se usaba
+    ni salía huérfana. Una firma que no exime nada es una afirmación falsa (#256)."""
+    paper_con_vista(toy_vault, warn_revisada=[{"categoria": "autor_ajeno", "ancla": "abc",
+                                               "motivo": "segunda mano"}])
+    cat = lint.collect().por_clave("warn_revisada_huerfana")
+    assert [s for s, m in cat.items if "autor_ajeno" in m] == ["2020vis....1V"], cat.items
+
+
 def test_594_el_lint_lista_el_par_soportado_con_el_localizador_ajeno(tmp_path):
     nota = tmp_path / "n.md"
     nota.write_text("x\n", encoding="utf-8")

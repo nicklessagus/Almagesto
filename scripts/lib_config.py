@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.8"
+ALMAGESTO_VERSION = "1.415.9"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4523,7 +4523,7 @@ def load_reviewed_second_hand(meta: dict, *, entry: str = "?") -> list:
 
 
 def load_verified_second_hand(meta: dict, *, entry: str = "?") -> list:
-    """`segunda_mano_verificada: [{ref, que, localizador, motivo}]` — a second-hand value CONFIRMED in
+    """`segunda_mano_verificada: [{ref, que, valor, localizador, motivo}]` — a second-hand value CONFIRMED in
     the PDF of its owner B (#591).
 
     `proposals.unconfirmed_second_hand` (#590) proposes *open B's PDF* for every value whose number
@@ -4535,10 +4535,16 @@ def load_verified_second_hand(meta: dict, *, entry: str = "?") -> list:
 
     Sibling of `segunda_mano_revisada` (#433): identity `(ref, que)` matched by
     `reviewed_second_hand`, scoped to the note of A, HARD FORM (D-58). `localizador` is required
-    because the signature claims B says it: it has to say WHERE (#205: the page seen)."""
+    because the signature claims B says it: it has to say WHERE (#205: the page seen).
+
+    ⛔ The signature covers a STATE (INV-167, #608): `valor` keeps the row's value as it was signed
+    (like `metadata_revisada` keeps `declarado`/`catalogo`, #463) and `proposals` compares it — if
+    A's value changes, the row comes back. Optional at load so an older signature does not break the
+    note: without it the row comes back as «re-firmá» instead of staying silent."""
     forma = (f"'{entry}': {{}}. Forma canónica:\n\nsegunda_mano_verificada:\n"
              f"  - ref: <el bibcode de B, el dueño del valor>\n"
              f"    que: <el `qué` de la fila, como lo imprime proposals.py>\n"
+             f"    valor: <el valor de la fila, como lo imprime proposals.py>\n"
              f"    localizador: <dónde lo dice B: p. 14, Tabla 2>\n"
              f"    motivo: <qué se vio: «3846 d = 10.53 yr»>\n")
     return load_map_list(
@@ -4597,8 +4603,9 @@ def reviewed_second_hand(declaraciones: list, ref: str, que: str) -> str | None:
 
     ⛔ ONE function decides the match, for the same reason `method_key` does: the declaration is
     written by a person copying the finding the lint printed, and that finding **truncates** the
-    *qué* (`truncate_claim(_q, 80)`, at a word boundary with a trailing `…` — #481). So the comparison is normalised —whitespace collapsed, casefolded— and a
-    declared `que` that is a PREFIX of the row's counts: otherwise the canonical way of signing
+    *qué* (`truncate_claim(_q, 80)`, at a word boundary with a trailing `…` — #481). So the comparison
+    is normalised and a declared `que` ending in that `…` matches as a PREFIX (`signed_text_matches`,
+    #608: only with the `…`, never any prefix): otherwise the canonical way of signing
     (paste what the report says) would produce a hatch that silently matches nothing, which is the
     #256 failure mode (a field parsed and consumed by nobody).
 
@@ -4606,16 +4613,34 @@ def reviewed_second_hand(declaraciones: list, ref: str, que: str) -> str | None:
     because a hatch that exempts nothing is a claim about the vault that is false.
 
     @inv INV-142"""
-    def _norm(t) -> str:
-        """Whitespace collapsed, casefolded, and without the `…` the report's cut leaves (#481)."""
-        return " ".join(str(t or "").split()).casefold().rstrip("…").rstrip()
-
-    ref_n, que_n = _norm(ref), _norm(que)
+    ref_n = " ".join(str(ref or "").split()).casefold()
     for d in declaraciones or []:
-        d_que = _norm(d.get("que"))
-        if _norm(d.get("ref")) == ref_n and d_que and que_n.startswith(d_que):
+        if (" ".join(str(d.get("ref") or "").split()).casefold() == ref_n
+                and signed_text_matches(d.get("que"), que)):
             return str(d.get("motivo") or "").strip()
     return None
+
+
+def signed_text_matches(declared, actual) -> bool:
+    """Does a signed text (`que`, `valor`) still name `actual`? (#433, #481, #608)
+
+    Normalised —whitespace collapsed, casefolded—; equal, or a PREFIX only when the declared text
+    ends in the `…` the report's cut leaves (#481): a bare prefix with no floor let a short `que`
+    («P») silence every row of its `ref` and never come out orphan (AUD-604). Empty never matches.
+    A bare text of exactly `LEGACY_CUT` chars is the pre-#481 cut (`_q[:80]`, no `…`) and still
+    matches as a prefix: measured, 5 live signatures of a real vault are that cut."""
+    def _norm(t) -> str:
+        """Whitespace collapsed and casefolded."""
+        return " ".join(str(t or "").split()).casefold()
+    d, a = _norm(declared), _norm(actual)
+    if d.endswith("…") or len(str(declared or "").strip()) == LEGACY_CUT:
+        d = d.rstrip("…").rstrip()
+        return bool(d) and a.startswith(d)
+    return bool(d) and d == a
+
+
+#: the lint's cut of a second-hand *qué* before #481 (`_q[:80]`, with no `…`)
+LEGACY_CUT = 80
 
 
 def _no_vista_error(entry: str, motivo: str) -> str:

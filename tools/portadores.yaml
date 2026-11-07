@@ -3587,6 +3587,9 @@ portadores:
       - modulo: scripts/lint.py
         estado: usa
         motivo: "`check_data_availability` (#424) pide `que`/`localizador`/`doi|url` como texto."
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: "`unconfirmed_second_hand` lee el `valor` firmado de `segunda_mano_verificada` como texto (#608)."
       - modulo: scripts/citation_index.py
         estado: fuera-de-alcance
         motivo: "El `get(k) or` es un lookup en el índice, no un campo de firma."
@@ -3770,3 +3773,21 @@ portadores:
       - modulo: scripts/replace_pdf.py
         estado: usa
         motivo: "`sign_note` appendea a `pdf_reemplazo` de la nota con `cfg.append_entry` (#604)."
+  - issue: 608
+    regla: >-
+      Una firma cubre un ESTADO, no un campo (INV-167): el texto firmado (`que`, `valor`) matchea
+      por igualdad normalizada, o como prefijo SÓLO con el `…` del corte del reporte (#481) —un
+      prefijo sin piso callaba toda fila del `ref`—; y `segunda_mano_verificada` guarda el `valor`
+      que vio, así que si el valor cambia la fila vuelve («re-firmá»).
+    funcion: lib_config.signed_text_matches
+    patron: 'rstrip\("…"\)'
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: usa
+        motivo: "`reviewed_second_hand` (`segunda_mano_revisada` en el lint, `segunda_mano_verificada` en proposals) compara `que` con esta función."
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: "`unconfirmed_second_hand` compara el `valor` firmado contra el de la fila (#608)."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "`reviewed_quote` (`cita_revisada`, #516) ya tiene piso (`QUOTE_MIN`) y se vence por `pdf_sha`: no calla de más."

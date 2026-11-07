@@ -380,6 +380,7 @@ def unconfirmed_second_hand(slug: str | None = None) -> tuple:
     numeros: dict = {}         # B → todos los números de su texto, ordenados
     filas, poblacion, no_eval = [], 0, 0
     firmadas, firmas, usadas = [], {}, set()   # #591: A → sus `segunda_mano_verificada`
+    refirmar: list = []                        # #608: firma vigente cuyo valor no es el de hoy
     vistos: set = set()                        # las A en alcance: dónde puede haber una huérfana
     for a, q, v, _de, duenos, _claves in _second_hand_owners(slug):
         vistos.add(a)
@@ -397,18 +398,26 @@ def unconfirmed_second_hand(slug: str | None = None) -> tuple:
                 firmas[a] = _verified_of(a)
             firma = next(((b, d) for b in sorted(duenos) for d in firmas[a]
                           if cfg.reviewed_second_hand([d], b, q) is not None), None)
+            valor = lb.truncate_claim(v.strip(), 80)
             if firma:
                 usadas.add((a, id(firma[1])))
-                firmadas.append((firma[0], a, f"verificado en {firma[1]['localizador']}: "
-                                              f"{firma[1]['motivo']}", ""))
+                # #608 — the signature covers the VALUE it saw: changed or not kept, it comes back
+                firmado = cfg.signature_text(firma[1], "valor")
+                if cfg.signed_text_matches(firmado, v.strip()):
+                    firmadas.append((firma[0], a, f"verificado en {firma[1]['localizador']}: "
+                                                  f"{firma[1]['motivo']}", ""))
+                    continue
+                refirmar.append((firma[0], a, valor, "⟲ re-firmá: " + (
+                    f"el valor cambió desde la firma («{firmado}»)" if firmado else
+                    "la firma no guarda `valor`") + f" — `que: {lb.truncate_claim(q.strip(), 60)}`"
+                    f" (#608)"))
             else:
-                filas.append((", ".join(sorted(duenos)), a, lb.truncate_claim(v.strip(), 80),
-                              lb.truncate_claim(q.strip(), 60)))
+                filas.append((", ".join(sorted(duenos)), a, valor, lb.truncate_claim(q.strip(), 60)))
     # #256 — la firma que no exime ninguna fila es una afirmación falsa sobre la bóveda: se propone
     # sacarla (el número ya aparece, o el `ref`/`que` no es el que esta superficie imprime)
     for a in (vistos if slug else {f.stem for f in cfg.note_paths(cfg.PAPERS)}) - firmas.keys():
         firmas[a] = _verified_of(a)
-    # ⛔ las huérfanas van ARRIBA y fuera del tope (devuelto por la instancia): ordenadas entre las
+    # ⛔ las huérfanas (y las de re-firmar, #608) van ARRIBA y fuera del tope (devuelto por la instancia): ordenadas entre las
     # pendientes caían en el «… y N más» y la firma falsa no se veía nunca
     huerfanas = sorted((d["ref"], a, f"`segunda_mano_verificada` huérfana: ninguna fila corresponde "
                                      f"a «{lb.truncate_claim(d['que'], 60)}» → sacala", "")
@@ -417,7 +426,7 @@ def unconfirmed_second_hand(slug: str | None = None) -> tuple:
     if len(filas) > MISSING_OWNERS_TOP:
         filas = filas[:MISSING_OWNERS_TOP] + [(f"… y {len(filas) - MISSING_OWNERS_TOP} valor(es) más",
                                                "", "", "")]
-    return huerfanas + filas, poblacion, sorted(firmadas), no_eval
+    return huerfanas + sorted(refirmar) + filas, poblacion, sorted(firmadas), no_eval
 
 
 #: #435 · DÓNDE aterriza la firma de cada categoría, y si el barrido puede cruzarla. Los tres
@@ -458,7 +467,7 @@ def report(slug: str | None = None) -> int:
          tuple(sin_confirmar), f"valores con dueño en la bóveda ({no_eval_b} no evaluables)",
          "abrí el PDF de B: si lo dice, firmalo en la nota de A (`segunda_mano_verificada`); si dice "
          "otro número, corregí la vista de A",
-         (FIRMA_CRUZADA, "`segunda_mano_verificada: [{ref, que, localizador, motivo}]` en la nota "
+         (FIRMA_CRUZADA, "`segunda_mano_verificada: [{ref, que, valor, localizador, motivo}]` en la nota "
                          "de A (#591); el silencio del `.txt` NO acusa (#318), así que la fila trae "
                          "B · A · valor · qué para ir directo al PDF")),
     ):

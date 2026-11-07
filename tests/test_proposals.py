@@ -384,7 +384,7 @@ def test_la_verificacion_en_el_PDF_de_B_se_FIRMA_y_la_huerfana_se_propone_sacar(
     nota = cfg.PAPERS / "2015P.md"
     nota.write_text(nota.read_text(encoding="utf-8").replace(
         "stars: [GJ 1]", "stars: [GJ 1]\nsegunda_mano_verificada:\n"
-        "  - {ref: 2012D, que: K, localizador: Tabla 2 p. 4, motivo: imagen de tabla}\n"
+        "  - {ref: 2012D, que: K, valor: 0.77 m/s, localizador: Tabla 2 p. 4, motivo: imagen de tabla}\n"
         "  - {ref: 2012D, que: Teff, localizador: p. 1, motivo: ya no hace falta}"), encoding="utf-8")
     filas, _p, firmadas, _n = pr.unconfirmed_second_hand()
     assert firmadas == [("2012D", "2015P", "verificado en Tabla 2 p. 4: imagen de tabla", "")]
@@ -396,6 +396,25 @@ def test_la_verificacion_en_el_PDF_de_B_se_FIRMA_y_la_huerfana_se_propone_sacar(
         "motivo: m}]"), encoding="utf-8")
     assert ("X", "2016Q") in [(b, a) for b, a, *_ in pr.unconfirmed_second_hand()[0]]
 
+
+
+def test_608_la_firma_cubre_el_VALOR_si_cambia_o_no_lo_guarda_vuelve_como_re_firmar(toy_vault):
+    """#608 · AUD-613 — la firma no se ataba al valor: cambiado el número de A, seguía callando la 🔎.
+    Guarda `valor` (como `metadata_revisada`, #463); la vieja sin `valor` no rompe la nota: vuelve
+    como «re-firmá», arriba y fuera del tope, y no es huérfana."""
+    test_la_verificacion_en_el_PDF_de_B_se_FIRMA_y_la_huerfana_se_propone_sacar(toy_vault)
+    nota = cfg.PAPERS / "2015P.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace("| K | 0.77 m/s |", "| K | 0.79 m/s |"),
+                    encoding="utf-8")
+    filas, _p, firmadas, _n = pr.unconfirmed_second_hand()
+    assert firmadas == [] and [(b, a, v) for b, a, v, q in filas if "re-firmá" in q] == [
+        ("2012D", "2015P", "0.79 m/s")]
+    assert "«0.77 m/s»" in next(q for *_x, q in filas if "re-firmá" in q)
+    nota.write_text(nota.read_text(encoding="utf-8").replace("valor: 0.77 m/s, ", ""), encoding="utf-8")
+    filas = pr.unconfirmed_second_hand()[0]
+    assert sum("no guarda `valor`" in q for *_x, q in filas) == 1
+    assert [f[1] for f in filas if "huérfana" in f[2]] == ["2015P", "2016Q"], \
+        "la de K, sin valor, está USADA: sólo Teff (2015P) y la de X (2016Q) son huérfanas"
 
 
 def test_la_huerfana_no_se_esconde_en_el_tope(toy_vault, monkeypatch):

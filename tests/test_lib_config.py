@@ -1532,9 +1532,9 @@ def test_reviewed_second_hand_matchea_el_QUE_TRUNCADO_del_reporte(toy_vault):
     """⛔ El hallazgo del lint trunca el `qué` (`_q[:80]`), y la forma canónica de firmar es pegar lo
     que el reporte dice. Comparando exacto, el modo normal de escribir la escotilla produciría un
     no-op silencioso — el defecto de #256 (un campo parseado y consumido por nadie)."""
-    d = [{"ref": "2010A....2A", "que": "m_V de la compilación", "motivo": "coincidencia"}]
+    d = [{"ref": "2010A....2A", "que": "m_V de la compilación…", "motivo": "coincidencia"}]
     assert cfg.reviewed_second_hand(d, "2010A....2A", "m_V  de la  compilación de PASTEL") \
-        == "coincidencia", "prefijo + whitespace colapsado + casefold"
+        == "coincidencia", "prefijo con el `…` del corte + whitespace colapsado + casefold"
     assert cfg.reviewed_second_hand(d, "2010A....2A", "otra cosa") is None
     assert cfg.reviewed_second_hand(d, "2011B....3B", "m_V de la compilación") is None, \
         "el `ref` es parte de la identidad: otra fuente es otro cruce"
@@ -1557,6 +1557,20 @@ def test_481_la_fecha_de_una_vista_se_lee_como_STR_aunque_venga_sin_comillas():
     assert cfg.vista_fecha_str({"fecha": "2026-08-30"}) == {"fecha": "2026-08-30"}, "la str queda igual"
     vistas = cfg.load_vistas({"vistas": [v]})
     assert vistas[0]["fecha"] == "2026-08-30" and vistas[0]["previa"]["fecha"] == "2026-08-01"
+
+
+def test_608_el_prefijo_sin_el_corte_del_reporte_NO_matchea():
+    """#608 · AUD-604 — un `que` corto sin el `…` del corte callaba toda fila del `ref` que empezara
+    igual y nunca salía huérfano. Prefijo sólo con el `…` (#481); si no, igualdad normalizada."""
+    d = [{"ref": "2010A....2A", "que": "P", "motivo": "m"}]
+    assert cfg.reviewed_second_hand(d, "2010A....2A", "P orbital del planeta b") is None
+    assert cfg.reviewed_second_hand(d, "2010A....2A", " p ") == "m", "igualdad normalizada"
+    assert cfg.signed_text_matches("P orbital…", "P  orbital del planeta b")
+    assert not cfg.signed_text_matches("…", "cualquier cosa"), "el `…` solo no es un prefijo"
+    assert not cfg.signed_text_matches("", "")
+    viejo = "x" * cfg.LEGACY_CUT
+    assert cfg.signed_text_matches(viejo, viejo + " y la cola"), "el corte pre-#481 sigue firmando"
+    assert not cfg.signed_text_matches(viejo[:-1], viejo + " y la cola")
 
 
 def test_481_la_firma_pegada_con_el_puntos_suspensivos_del_reporte_matchea():
