@@ -1012,6 +1012,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
 - **Cabecera no estampable** (#69: sin la línea `> _Generado con Almagesto v…_`, ancla de todos los
   estampadores): las cirugías de cabecera devuelven `False` en silencio sobre ella. Se arregla con
   `python scripts/make_notes.py --restamp-headers` (lee la versión del `generator`, no la inventa).
+  Población: fichas, conceptos **y notas de paper** —las mismas que barre `--restamp-headers`—
+  (`lint.carries_header`, #631).
 - **Wikilink en el blockquote de ALCANCE** (#368): el alcance de `## Huecos` o de una hipótesis
   (D-34) es contabilidad del corpus —qué temas, cuántos papers, a qué fecha— y un `[[bibcode]]` ahí
   entra al fan-out como par que **ningún PDF puede respaldar**: medido, 3 links → 2 `no-soportada`

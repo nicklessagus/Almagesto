@@ -416,8 +416,8 @@
 - 1996Alm00057A → extraído (leído) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o declarar `no_sintetizado: [{sujeto, motivo}]` en la nota del paper (#553)
 - 2019Alm00056A → extraído (leído) pero su bibcode no está citado en ninguna ficha ni concepto → sintetizarlo donde corresponda, o declarar `no_sintetizado: [{sujeto, motivo}]` en la nota del paper (#553)
 
-## Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog) (2)
-> sobre 29 notas de entidad (fichas, conceptos, queries)
+## Cabecera no estampable: ficha/concepto/paper sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog) (2)
+> sobre 84 fichas, conceptos y notas de paper (llevan cabecera, #631)
 - star01 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 - star02 → sin la línea `_Generado con Almagesto v…_`: los estampadores de cabecera no pueden actuar → `python scripts/make_notes.py --restamp-headers`
 

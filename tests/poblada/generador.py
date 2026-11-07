@@ -617,7 +617,9 @@ _(ninguno relevante — corpus sintético)_
         # corpus sintético lo lleva: sin él, el golden nace con una categoría de 60 hallazgos que
         # no describe ningún defecto de la bóveda y tapa las regresiones que el golden existe para
         # cazar. (En `vintage` NO se estampa: ahí la ausencia es el residuo a migrar.)
-        aviso = "" if vintage_old else f"\n{make_notes.LLM_DISCLAIMER['paper']}\n"
+        # #631 — y la línea del generador: la nota de paper también lleva cabecera (`headerless`).
+        aviso = ("" if vintage_old else
+                 f"\n{make_notes.LLM_DISCLAIMER['paper']}\n{GENERATOR_LINE}{ALMAGESTO_VERSION}._\n")
         body = (f"# {front['title']}\n\n**{front['first_author']}** ({year}) · ADS: `{stem}`\n"
                f"{aviso}\n## Abstract\n{_lorem(rng, 40)}{related_txt}\n")
         _write_note(paths.PAPERS / f"{stem}.md", front, body, flow)
@@ -772,7 +774,8 @@ _(ninguno relevante — corpus sintético)_
                  "generator": f"Almagesto v{ALMAGESTO_VERSION}"}
         front.update(front_extra)
         _write_note(paths.PAPERS / f"{stem}.md", front,
-                    f"# {front['title']}\n\n## Abstract\n{_lorem(rng, 20)}\n{cuerpo}", flow=False)
+                    f"# {front['title']}\n\n{GENERATOR_LINE}{ALMAGESTO_VERSION}._\n\n"
+                    f"## Abstract\n{_lorem(rng, 20)}\n{cuerpo}", flow=False)
         extra_idx.append(stem)
 
     def _concepto_anom(stem: str, area: str, cuerpo: str, front_extra: dict | None = None) -> None:

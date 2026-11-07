@@ -157,7 +157,8 @@ def test_vintage_bloquea_con_categorias_de_schema_viejo_y_receta_visible(sembrar
     assert n_mirror == n_planetas + len(censo.star_slugs)
 
     n_headerless, items_headerless = _categoria(reporte, "Cabecera no estampable")
-    assert n_headerless == len(censo.star_slugs) + len(censo.concept_stems)
+    # #631: las notas de paper también llevan cabecera
+    assert n_headerless == len(censo.star_slugs) + len(censo.concept_stems) + censo.n_papers
     assert all("python scripts/make_notes.py --restamp-headers" in it for it in items_headerless)
 
     # las categorías del schema NUEVO que el vintage no toca siguen mudas de verdad (no por

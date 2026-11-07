@@ -5873,6 +5873,12 @@ def check_impl_leaks(stem: str, body_full: str, offset: int, leak_patterns, scan
     return impl_leaks
 
 
+def carries_header(f) -> bool:
+    """Does this note type carry the stamped header? Fichas, concepts and —#247, #631— papers: the
+    same population `make_notes.restamp_headers` sweeps."""
+    return str(f).startswith((str(cfg.STARS), str(cfg.CONCEPTS), str(cfg.PAPERS)))
+
+
 def check_headerless(stem: str, f, text: str) -> list:
     """`headerless` — a note with no `_Generado con Almagesto v…_` line (backlog).
 
@@ -5880,7 +5886,7 @@ def check_headerless(stem: str, f, text: str) -> list:
     accumulates. The stampers key off that line, so without it none of them can have run.
     """
     headerless: list = []
-    if f.startswith((str(cfg.STARS), str(cfg.CONCEPTS))) and GENERATOR_LINE not in text:
+    if carries_header(f) and GENERATOR_LINE not in text:
         headerless.append((stem, "sin la línea `_Generado con Almagesto v…_`: los estampadores "
                                  "de cabecera no pueden actuar → `python scripts/make_notes.py "
                                  "--restamp-headers`"))
@@ -7446,6 +7452,8 @@ def lint_populations(files: list, paper_fms: dict, anchor_bodies: dict, fulltext
         "notas": (len(files), "notas de `vault/wiki/`"),
         "papers": (len(paper_fms), "notas de `papers/`"),
         "entidades": (len(anchor_bodies), "notas de entidad (fichas, conceptos, queries)"),
+        "con_cabecera": (sum(1 for f in files if carries_header(f)),
+                         "fichas, conceptos y notas de paper (llevan cabecera, #631)"),
         "fulltext": (len(fulltext_files), "`.txt` de `raw/fulltext/`"),
         "ground_truth": (len(vistos_gt), "ground-truth de `raw/ground_truth/`"),
         # #442 — la población que el chequeo MIRA, y la que no: `_cambios` la estampa sólo
@@ -7875,7 +7883,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('huecos_sin_alcance', 'Hueco sin ALCANCE declarado: una afirmación negativa sin alcance se lee como universal, y ninguna otra capa la mira (#342, backlog)', SEV_BACKLOG, tuple(found['huecos_sin_alcance']), poblacion='huecos'),
         Categoria('coverage', 'Cobertura: concepto/hipótesis sin citas [[bibcode]] (backlog)', SEV_BACKLOG, tuple(found['coverage']), poblacion='entidades'),
         Categoria('unsynthesized', 'Extraído pero no sintetizado: el paper se extrajo y su contenido nunca llegó a una ficha/concepto (backlog)', SEV_BACKLOG, tuple(found['unsynthesized']), poblacion='papers'),
-        Categoria('headerless', 'Cabecera no estampable: ficha/concepto sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog)', SEV_BACKLOG, tuple(found['headerless']), poblacion='entidades'),
+        Categoria('headerless', 'Cabecera no estampable: ficha/concepto/paper sin la línea del generador — los estampadores de cabecera no-opean en silencio (backlog)', SEV_BACKLOG, tuple(found['headerless']), poblacion='con_cabecera'),
         Categoria('sin_abstract', '⛔ Nota de paper sin `## Abstract`: se pierde la única capa AUDITABLE del cuerpo (#124/#277)', SEV_BLOQUEANTE, tuple(found['sin_abstract']), poblacion='papers'),
         Categoria('sin_conclusiones', '📄 Nota de paper sin `## Conclusiones` ni exención declarada (#124/#277, backlog)', SEV_BACKLOG, tuple(found['sin_conclusiones']), poblacion='papers'),
         Categoria('sin_aviso_llm', '⚠ Nota de paper sin el aviso de capa LLM: no dice cuál de sus tres capas es auditable (#247/#277, backlog)', SEV_BACKLOG, tuple(found['sin_aviso_llm']), poblacion='papers'),

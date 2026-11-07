@@ -10352,12 +10352,13 @@ def test_check_impl_leaks_no_mira_lo_que_escribe_la_MAQUINA(toy_vault):
         "en una `## Vista` sí: la escribe el extractor, no la máquina"
 
 
-def test_check_headerless_solo_pide_cabecera_a_fichas_y_conceptos(toy_vault):
+def test_check_headerless_pide_cabecera_a_fichas_conceptos_y_papers(toy_vault):
     """#396 — los estampadores de cabecera se enganchan de la línea `_Generado con Almagesto v…_`,
-    así que sin ella ninguno pudo actuar. La guarda que sobrevivía acota la población: se le pide a
-    `stars/` y `concepts/`, no a una nota de paper ni al `log`."""
-    assert lint.check_headerless("2020X", str(cfg.PAPERS / "2020X.md"), "sin línea") == [], \
-        "a una nota de paper no se le pide esta cabecera"
+    así que sin ella ninguno pudo actuar. La guarda acota la población a la que `--restamp-headers`
+    barre: `stars/`, `concepts/` y —#631, 353 sin cabecera en una bóveda real— `papers/`; no el `log`."""
+    assert len(lint.check_headerless("2020X", str(cfg.PAPERS / "2020X.md"), "sin línea")) == 1, \
+        "la nota de paper también lleva cabecera (#247, #631)"
+    assert lint.check_headerless("log", str(cfg.WIKI / "log.md"), "sin línea") == []
     filas = lint.check_headerless("test_star", str(cfg.STARS / "test_star.md"), "sin línea")
     assert len(filas) == 1 and "--restamp-headers" in filas[0][1]
     assert lint.check_headerless("test_star", str(cfg.STARS / "test_star.md"),

@@ -254,9 +254,10 @@ def test_vintage_1_11_0_bloquea_con_categorias_de_schema_viejo(sembrar):
     assert reporte.count("[legacy_triage · registros]") == 1
     n_mirror, _ = _categoria(reporte, "Contradicciones ground-truth")
     assert n_mirror > 0                          # mass_earth ausente en planets[] vs GT (#70)
-    # sin la línea del generador en NINGUNA ficha/concepto (backlog, no bloqueante, pero real):
+    # sin la línea del generador en NINGUNA ficha/concepto/paper (backlog, no bloqueante, pero real):
     n_headerless, _ = _categoria(reporte, "Cabecera no estampable")
-    assert n_headerless == len(censo.star_slugs) + len(censo.concept_stems)
+    # #631: las notas de paper también llevan cabecera
+    assert n_headerless == len(censo.star_slugs) + len(censo.concept_stems) + censo.n_papers
     # papers sin `role`: el vocabulario no puede estar "mal" porque el campo no existe
     n_bad_roles, _ = _categoria(reporte, "`role` fuera del vocabulario")
     assert n_bad_roles == 0

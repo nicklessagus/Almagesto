@@ -2097,3 +2097,14 @@ Sin migración. `cfg.author_surname` extrae el apellido de `first_author` para `
 idénticos; `autor_ajeno` en 0; ningún `first_author` cambia de apellido). `python scripts/contrast.py
 <slug> --cita --grep <re>` sobre uno de los 23 papers sin `n_authors` → `Apellido et al.? AAAA`.
 **Devolver si** un «Apellido et al.» sobre su propio paper sigue saliendo `autor_ajeno`.
+
+## §#631 · v1.415.13 — `headerless` también mira las notas de paper
+
+Sin migración en el template. `check_headerless` usa la población de `--restamp-headers`
+(`lint.carries_header`: `stars/`, `concepts/`, `papers/`), declarada como «fichas, conceptos y
+notas de paper».
+
+**Validar:** `python scripts/lint.py | grep "Cabecera no estampable"` → **(353)** en la Tesis
+(2026-11-07, worktree limpio). Cierre del validador: `python scripts/make_notes.py --restamp-headers`
+→ «cabeceras: 353 de … estampadas», y la categoría baja a **0**. **Devolver si** el conteo no
+coincide con lo que estampa `--restamp-headers`.
