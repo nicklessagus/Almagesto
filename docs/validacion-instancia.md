@@ -2016,3 +2016,15 @@ pasan de re-anclar a re-verificar —cinco son valores entre paréntesis (`(0.4)
 `(0.42)`), dos referencias a ecuación sin palabra (`(6.71)`, `(12.22)` de 2010ComonJutten: re-verificar
 de más, aceptado)— y **0** en la otra dirección. **Devolver si** un decimal tras «por ejemplo» o un
 `(0.3)` suelto agregado a un bloque se re-ancla con `reverify_subset.py`.
+
+## §#607 · v1.415.7 — la cita corta numérica ausente del `.txt` lleva la marca
+
+Sin migración. `short_quote_verdict`: una cita corta sin palabras («0.995», «K=9.9») que el `.txt`
+no trae sale `ausente` (con su marca `⚠verificar en el PDF`), no `glosa`: sin palabras no hay test
+de idioma. Una sola función para `contrast --validar` y el lint (#587).
+
+**Validar:** `python scripts/contrast.py --validar-todo` → en la línea *citas cortas*, glosas
+**−3** y «que el `.txt` no trae» **+3** (Tesis 2026-11-07: 96 → 93 y 41 → 44; las nuevas:
+«$D>3$» de 2019AJ....158..161D en icasso, «3.10^6» de 2014MNRAS.443.2517H en rv-doppler —el `.txt`
+dice «3.106», el exponente se perdió— y «P(χ2) = 0.0001» de 2012A&A...541A...9G en gj_581). rc igual.
+**Devolver si** una cita corta sin letras ausente del `.txt` sale contada como glosa.

@@ -1309,6 +1309,16 @@ def test_586_short_quote_verdict_por_PALABRA_entera_y_por_vocabulario_de_la_fuen
     assert lq.short_quotes_in("«no» «star b» «" + "x" * 40 + "»") == ["star b"]
 
 
+def test_607_cita_corta_SIN_PALABRAS_ausente_del_txt_lleva_la_marca():
+    """#607 — sin palabras no hay test de idioma: una cita numérica («0.995», «3.24 d», «K=9.9»)
+    que el `.txt` no trae salía `glosa`, sin marca — justo el valor citado que no se encuentra."""
+    src = [lq.normalize_source_text("The correlation is 0.991 and the period 3.25 d, K = 9.8.")]
+    for cita in ("0.995", "3.24 d", "K=9.9"):
+        assert lq.short_quote_verdict(cita, src) == "ausente", cita
+    assert lq.short_quote_verdict("0.991", src) == "en_su_txt"
+    assert lq.short_quote_verdict("no daña", src) == "glosa", "con palabras ajenas sigue siendo glosa"
+
+
 @pytest.mark.parametrize("malo", [[7], {"a": 1}])
 def test_592_cita_revisada_pagina_que_no_es_texto_BLOQUEA(toy_vault, malo):
     base = {"ref": "B", "cita": "c", "pdf_sha": "abc", "pagina": 7, "motivo": "m"}

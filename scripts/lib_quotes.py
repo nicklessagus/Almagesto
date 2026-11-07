@@ -153,8 +153,12 @@ def short_quote_verdict(quote: str, readings: list) -> str:
                          for f in frags):
             return "en_su_txt"
     palabras = _WORD_RE.findall(normalize_quote(quote))
+    # #607 — without words there is no language test: a numeric quote («0.995», «K=9.9») the `.txt`
+    # does not hold is a value to check on the page, never a gloss.
+    if not palabras:
+        return "ausente"
     vocab = _source_vocabulary(tuple(readings))
-    if not palabras or sum(p in vocab for p in palabras) / len(palabras) < SHORT_QUOTE_VOCAB:
+    if sum(p in vocab for p in palabras) / len(palabras) < SHORT_QUOTE_VOCAB:
         return "glosa"
     return "ausente"
 
