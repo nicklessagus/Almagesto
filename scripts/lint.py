@@ -6277,7 +6277,8 @@ def check_simbad_aliases() -> tuple:
     return alias_faltantes, alias_rechazados, alias_ajenos
 
 
-def prose_changed_since(f: str, date: str, detail: list | None = None) -> bool | None:
+def prose_changed_since(f: str, date: str, detail: list | None = None,
+                        certified: set | None = None) -> bool | None:
     """Did the note's PROSE change after `date`? `None` when it cannot be told (#431).
 
     `check_stale_verif` compared the date of the FILE, and `## Verificación de citas` is one of
@@ -6302,6 +6303,11 @@ def prose_changed_since(f: str, date: str, detail: list | None = None) -> bool |
     `detail` is an optional sink: when the prose did change, the citable blocks that differ (by
     anchor, `lb.split_blocks`) are described into it, so the caller can say WHAT changed instead of
     ordering a re-verification of nothing.
+
+    `certified` (#605) is the set of anchors a re-anchor carried (`_certified_anchors`): a current
+    block whose anchor is there hangs from a row, so it is not compared against git — every OTHER
+    current block must already be in the version at `date`. That covers the correction still
+    uncommitted on the day of the carry (AUD-542) without excusing what was written after it.
 
     Returns `None` —and the caller declares it (D-43)— when there is no commit at or before `date`
     (a note newer than its own block) or git refuses: with nothing to diff against, answering
@@ -6347,6 +6353,17 @@ def prose_changed_since(f: str, date: str, detail: list | None = None) -> bool |
     viejas = {lb.block_anchor(b.text, b.intro) for b in lb.split_blocks(prose(antes))}
     bloques_ahora = lb.split_blocks(prose(ahora))
     nuevas = {lb.block_anchor(b.text, b.intro) for b in bloques_ahora}
+    if certified is not None:
+        # #605 — las filas certifican los bloques citados (y `certified` exige que ninguna cuelgue
+        # de un bloque borrado); todo bloque que no cuelga de una fila tiene que estar en git.
+        nuevos = [b for b in bloques_ahora
+                  if (a := lb.block_anchor(b.text, b.intro)) not in viejas and a not in certified]
+        if not nuevos:
+            return False
+        if detail is not None:
+            detail.append(f"{len(nuevos)} bloque(s) distintos, el primero: "
+                          f"«{lb.truncate_claim(nuevos[0].text, 60)}»")
+        return True
     if viejas == nuevas:
         return False                       # nada, o cambió la FORMA y no una afirmación
     if detail is not None:
@@ -6360,19 +6377,21 @@ def prose_changed_since(f: str, date: str, detail: list | None = None) -> bool |
     return True
 
 
-def _pairs_hang_from_rows(f: str) -> bool:
-    """Does every pair of note `f` have a sidecar row with its exact `(bibcode, anchor)`? (AUD-542)
+def _certified_anchors(f: str) -> set | None:
+    """The anchors a re-anchor certified: those of the pairs, when pairs and rows are the SAME set.
 
-    `False` with no sidecar, no rows or no pairs: nothing was certified, so the git comparison
-    decides."""
+    AUD-542 — every pair hangs from a row with its exact `(bibcode, anchor)`. ⛔ #605 — and EQUAL,
+    not a subset: a row whose block was deleted is an edit after the carry. `None` with no sidecar,
+    no rows or no pairs: nothing was certified, so the plain git comparison decides."""
     try:
         text = Path(f).read_text(encoding="utf-8")
     except OSError:
-        return False
+        return None
     filas = lb.verif_rows(Path(f)) or []
-    pares = lb.pairs_of(text)
-    return bool(filas and pares) and {(p.bibcode, p.anchor) for p in pares} <= {
-        (x.bibcode, x.anchor) for x in filas}
+    pares = {(p.bibcode, p.anchor) for p in lb.pairs_of(text)}
+    if not (filas and pares) or pares != {(x.bibcode, x.anchor) for x in filas}:
+        return None
+    return {a for _, a in pares}
 
 
 def check_stale_verif(verif_blocks, changed: dict) -> list:
@@ -6410,12 +6429,12 @@ def check_stale_verif(verif_blocks, changed: dict) -> list:
             base = max(d, r) if r else d
             # AUD-542 — lo que el arrastre CERTIFICÓ son las anclas del hermano, no el commit de
             # esa fecha: el lint corre antes del commit, así que con `r` = hoy el commit «a la
-            # fecha» es HEAD sin la corrección. Si cada par del cuerpo cuelga de una fila, no hay
-            # afirmación sin verificar; si no, se compara contra git como siempre.
-            if r and r > d and _pairs_hang_from_rows(f):
-                continue
+            # fecha» es HEAD sin la corrección. ⛔ #605 — certifican los bloques CITADOS y nada
+            # más: el resto de la prosa se compara contra git igual (un párrafo sin cita agregado
+            # después del arrastre, aun el mismo día, dispara).
+            cert = _certified_anchors(f) if r and r > d else None
             que: list = []
-            cambio = prose_changed_since(f, base, que)
+            cambio = prose_changed_since(f, base, que, certified=cert)
             if cambio is False:
                 continue                   # sólo se tocó una sección estampada: no hay qué verificar
             salvedad = (f"la prosa cambió ({que[0]})" if cambio

@@ -1989,3 +1989,16 @@ escribían lo filtrado. Filtrar para leer sigue igual.
 de esas listas (p. ej. `cadena:` de un `registro/<slug>.yaml` de un worktree desechable) sobrevive
 a la próxima corrida que appendea (`make_notes.py <slug>` estampa su paso en `cadena`).
 **Devolver si** un append deja la lista con menos entradas que antes más una.
+
+## §#605 · v1.415.5 — `stale_verif` ve la edición posterior a un re-anclaje
+
+Sin migración. Tras un arrastre declarado (`· re-anclado R`), las filas del hermano certifican los
+bloques CITADOS (con pares = filas, igualdad); el resto de la prosa se compara contra git igual.
+Antes, con todo par colgando de una fila, la nota se salteaba entera: un párrafo sin cita agregado
+después del arrastre, o un bloque citado borrado, no disparaban.
+
+**Validar:** `python scripts/lint.py` → *Verificación stale* igual que antes si nadie editó después
+de un arrastre (Tesis 2026-11-07: 2 → 2; las 5 notas re-ancladas certifican y no disparan). En un
+worktree desechable, agregar un párrafo sin cita a una nota re-anclada → la nota aparece en
+*Verificación stale* nombrando ese bloque.
+**Devolver si** el párrafo agregado no dispara, o una nota re-anclada sin edición posterior dispara.

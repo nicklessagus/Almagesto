@@ -2175,6 +2175,46 @@ def test_AUD542_tras_reanclar_SIN_COMMITEAR_la_nota_no_sale_stale(toy_vault):
     assert len(_stale(toy_vault, hoy=hoy)) == 1, "y la edición posterior al arrastre sigue disparando"
 
 
+def test_605_tras_el_arrastre_la_edicion_SIN_PAR_nuevo_sigue_disparando(toy_vault):
+    """#605 (AUD-588) — el atajo de AUD-542 salteaba la nota re-anclada si cada par colgaba de una
+    fila, sin mirar git: un párrafo agregado SIN cita (no crea par) y un bloque citado BORRADO (sus
+    filas quedan colgando, `pares ⊆ filas` se cumple) pasaban, aun el MISMO día del arrastre. Las
+    filas certifican los bloques citados; el resto de la prosa se compara contra git."""
+    import datetime as dt
+    import lib_blocks as lb
+    cuerpo = ("Afirmación [[2020citC...1..1C]].\n\nOtra cosa [[2020citC...1..1C]].\n\n"
+              + CUERPO_VERIF.split("\n\n", 1)[1])
+    _skip_sin_git(_repo_con_nota(toy_vault, cuerpo, fecha="2020-01-01"))
+    p = toy_vault.CONCEPTS / "methods" / "nota-verif.md"
+    hoy = dt.date.today().isoformat()
+    p.write_text(p.read_text(encoding="utf-8").replace("Afirmación [[", "Afirmacion [[").replace(
+        "## Verificación de citas (2020-01-01)",
+        f"## Verificación de citas (2020-01-01 · re-anclado {hoy})"), encoding="utf-8")
+    filas = [lb.Row(n=str(i), claim="x", bibcode=par.bibcode, verdict="soportada",
+                    anchor=par.anchor, source_hash="0123456789", source_kind="pdf",
+                    evidence="«x» (p. 1)")
+             for i, par in enumerate(lb.pairs_of(p.read_text(encoding="utf-8")), 1)]
+    _hermano(toy_vault).write_text(lb.render_verif_sidecar(p, lb.render_verif_table(filas)),
+                                   encoding="utf-8")
+    assert _stale(toy_vault, hoy=hoy) == [], "el fixture: el arrastre de hoy cubre la corrección"
+    limpio = p.read_text(encoding="utf-8")
+    # (a) párrafo agregado sin cita, el mismo día del arrastre
+    p.write_text(limpio.replace("Otra cosa [[", "La estrella tiene tres planetas.\n\nOtra cosa [["),
+                 encoding="utf-8")
+    filas_a = _stale(toy_vault, hoy=hoy)
+    assert len(filas_a) == 1 and "tres planetas" in filas_a[0][1], filas_a
+    # (b) bloque citado borrado: su fila queda colgando
+    p.write_text(limpio.replace("Otra cosa [[2020citC...1..1C]].\n\n", ""), encoding="utf-8")
+    assert len(_stale(toy_vault, hoy=hoy)) == 1, "el bloque citado borrado deja una fila huérfana"
+    # (c) y con el arrastre ya commiteado en una fecha anterior, igual
+    p.write_text(limpio, encoding="utf-8")
+    _git(toy_vault.ROOT, "add", "-A")
+    _git(toy_vault.ROOT, "commit", "-q", "-m", "re-ancla", fecha=hoy)
+    p.write_text(limpio.replace("Otra cosa [[", "Un párrafo nuevo.\n\nOtra cosa [["),
+                 encoding="utf-8")
+    assert len(_stale(toy_vault, hoy=hoy)) == 1
+
+
 def test_prose_changed_since_devuelve_None_si_el_commit_no_TIENE_la_nota(toy_vault):
     """El commit más reciente hasta la fecha puede ser el que BORRÓ la nota (un `entity rename`, una
     nota movida y restaurada): ahí `git show <sha>:<ruta>` no devuelve nada. Sin la guarda se
