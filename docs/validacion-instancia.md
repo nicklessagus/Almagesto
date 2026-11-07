@@ -1964,3 +1964,16 @@ del `log` sí se re-apuntan (resolución de link; `--rename-paper` igual).
 sobre un slug que el `log` nombre en una ruta o alcance → `vault/wiki/log.md` byte a byte igual
 salvo `[[wikilink]]` a la nota renombrada (`git diff --stat vault/wiki/log.md`).
 **Devolver si** una entrada fechada del `log` cambia una ruta, registro o alcance del slug.
+
+## §#602 · v1.415.3 — la lectura que cierra una `no_vista` guarda su motivo (D-52)
+
+Sin migración. Cuando `harvest_views` estampa una vista fechada y saca la `no_vista` de ese sujeto
+(#581), la entrada de `vistas[]` que la cierra lleva `previa_no_vista: <motivo>` (precedente D-52:
+el `previa` de una decisión de triage anulada). Las escotillas de estado (`sin_bibtex`,
+`pending_source`) se siguen sacando sin rastro. La parte AUD-581 (`migrate_all_no_sintetizado`)
+desapareció con el migrador en v1.412.0 (#624).
+
+**Validar:** `python scripts/lint.py` idéntico antes y después. Sobre una nota con `no_vista` de
+un sujeto con extracción pendiente: `harvest_views.py <slug> [--theme] --paper <bib>` → la vista
+fechada lleva `previa_no_vista` con el motivo que tenía la escotilla y la `no_vista` ya no está.
+**Devolver si** la escotilla se saca y su motivo no queda en la nota.

@@ -3733,3 +3733,24 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: "Enumera hermanos `.verif.md` para leerlos; no toca el `log`."
+  - issue: 602
+    regla: >-
+      Un juicio de curación declarado con motivo no se pierde cuando el sistema lo da por cerrado:
+      se anula explícito con el motivo viejo al lado (D-52). La lectura fechada que cierra una
+      `no_vista` (#581) guarda su `motivo` en `previa_no_vista` de la vista. Las escotillas que
+      describen un ESTADO (`sin_bibtex`, `pending_source`) se sacan sin rastro: no son juicio.
+    funcion: harvest_views.upsert_view
+    patron: 'drop_fm_keys|_drop_keys\('
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`upsert_view` estampa `previa_no_vista` en la vista que cierra la escotilla y `_drop_no_vista` la saca (#581/#602)."
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "Declara vistas con `upsert_view`; su `_drop_keys` saca `pending_source`/`pending_motivo`, un ESTADO (la fuente se consiguió), no un juicio."
+      - modulo: scripts/fetch_bibtex.py
+        estado: fuera-de-alcance
+        motivo: "Saca `sin_bibtex` cuando la exportación llegó: describe un estado que dejó de ser cierto, no una decisión."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Define `drop_fm_keys`/`drop_fm_keys_from_block`, el borrado mecánico (#244); no decide qué escotilla se cierra."

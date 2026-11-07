@@ -827,6 +827,17 @@ def upsert_view(dest: Path, vista: dict, *, force: bool = False, derived: tuple 
     if not visto:
         nuevas.append(vista)
     nuevas = [cfg.vista_fecha_str(v) for v in nuevas]     # #481: la fecha se escribe como str
+    # @inv INV-145
+    # ⛔ #602 — a dated reading closes its subject's `no_vista` (#581, `_drop_no_vista`), and the
+    # judgement it carried is not lost: the view that closes it keeps the motive in
+    # `previa_no_vista` (D-52, the `previa` of an annulled triage decision). A hatch is a DECISION;
+    # the bibtex and source hatches describe a STATE that stopped being true and are just dropped.
+    if str(vista.get("fecha") or "").strip():
+        if (_cierra := [str(x.get("motivo") or "").strip() for x in cfg.as_list(data.get("no_vista"))
+                        if isinstance(x, dict)
+                        and str(x.get("sujeto") or "").strip() == vista["sujeto"]]):
+            nuevas = [{**v, "previa_no_vista": "; ".join(_cierra)}
+                      if cfg.vista_key(v) == cfg.vista_key(vista) else v for v in nuevas]
     if nuevas == previas:
         return False
     # #625 — el escritor único: reemplaza el bloque `vistas:` en su lugar y re-parsea antes de
