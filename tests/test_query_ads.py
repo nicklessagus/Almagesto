@@ -2245,7 +2245,8 @@ def test_el_sweep_dicta_un_snippet_que_el_framework_ACEPTA(toy_vault, capsys, mo
              "abstract": "", "facets": [], "relevant": False}]
     monkeypatch.setattr(qa, "sweep_records", lambda *a, **k: recs, raising=False)
     texto = qa.extra_core_snippet(recs)
-    bloque = yaml.safe_load(texto)
+    # #623 — el usuario llena el `motivo`: el `<…>` sin completar aborta (no es un motivo)
+    bloque = yaml.safe_load(texto.replace(qa.cfg.EXTRA_CORE_MOTIVO_PLACEHOLDER, "es core"))
     assert isinstance(bloque, dict) and isinstance(bloque["extra_core"], list)
     entradas = qa.cfg.load_extra_core(bloque, entry="sweep")
     assert entradas and entradas[0]["bibcode"] == "2020ApJ...900....1X"

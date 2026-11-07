@@ -810,7 +810,12 @@ LIST_FIELDS = {"tags": False, "aliases": False, "stars": False, "facets": False,
                "versions": True, "vistas": True, "no_vista": True,
                "segunda_mano_revisada": True, "pdf_reemplazo": True,
                "warn_revisada": True, "cita_revisada": True,
-               "segunda_mano_verificada": True}
+               "segunda_mano_verificada": True,
+               "cola_tema": True, "no_sintetizado": True}                     # #623 · D-58
+
+#: The scalar of these is a RETIRED schema (#553): `schema_retirado` reports it with its exit, so
+#: `normalize_lists` leaves it in place instead of reporting it twice and erasing it (#623).
+SCALAR_RETIRED = ("no_sintetizado",)
 
 
 def normalize_lists(fm: dict) -> list:
@@ -830,6 +835,8 @@ def normalize_lists(fm: dict) -> list:
         if v is None or v == "" or v == []:
             continue
         if not isinstance(v, list):
+            if campo in SCALAR_RETIRED:
+                continue
             motivos.append(f"`{campo}` no es una lista (es {type(v).__name__}) → los chequeos por "
                            f"elemento de esta nota no corren")
             fm[campo] = []

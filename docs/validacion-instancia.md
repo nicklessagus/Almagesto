@@ -1884,3 +1884,19 @@ ya no lista los migradores; `--restamp-abstracts` y `--clean-catalog-markup` sig
 
 **Devolver si** cambia cualquier otro conteo, si el rc cambia, o si una receta del lint manda a
 un flag que HEAD no tiene sin nombrar el tag `v1.411.3`.
+
+
+## §#623 · v1.413.0 — un solo cargador para las listas de mapas con motivo
+
+```bash
+python scripts/lint.py          # antes del merge y después: mismo rc, mismos conteos
+```
+
+**Validar:** la salida del lint es **idéntica** antes y después del merge (medido en el template
+sobre la instancia: 162 categorías, 5433 hallazgos, rc 0 en los dos lados) y la config sigue
+cargando: `extra_core`, `aliases_descartados` y `acepta_preprint` de `stars.yaml`/`themes.yaml`
+suman 832 entradas sin error. Lo nuevo sólo muerde lo que hoy no hay: un `motivo` placeholder
+(`<…>`), booleano o numérico en esos campos aborta, y `cola_tema` no-mapa o `no_sintetizado` como
+lista de strings son `fm_broken`.
+
+**Devolver si** cambia cualquier conteo o el rc, o si la cadena aborta al cargar la config.

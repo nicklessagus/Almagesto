@@ -3565,8 +3565,8 @@ portadores:
     patron: 'get\(k\) or'
     consumidores:
       - modulo: scripts/lib_quotes.py
-        estado: usa
-        motivo: "`load_reviewed_quotes` (`cita_revisada`, #516) juzga sus cinco claves con la misma función."
+        estado: fuera-de-alcance
+        motivo: "`load_reviewed_quotes` (`cita_revisada`, #516) juzga sus cinco claves por `cfg.load_map_list` (#623), que llama a esta función."
       - modulo: scripts/lint.py
         estado: usa
         motivo: "`check_data_availability` (#424) pide `que`/`localizador`/`doi|url` como texto."

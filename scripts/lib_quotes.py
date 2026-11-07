@@ -1471,25 +1471,14 @@ def load_reviewed_quotes(meta: dict, *, entry: str = "?") -> list:
     same quotes. ⛔ The signature covers a STATE: the quote (normalized, by prefix) and the sha of
     the PDF of `ref` at signing — edit the quote or replace the PDF (#436) and the finding comes
     back. Same hard form (D-58): a bare scalar, a missing key or an unfilled `<placeholder>` aborts."""
-    v = (meta or {}).get("cita_revisada")
-    if v is None:
-        return []
     forma = (f"'{entry}': {{}}. Forma canónica (el lint y `contrast` la imprimen lista para pegar "
              f"al lado del hallazgo): cita_revisada: - {{{{ref: <bibcode>, cita: \"<la cita>\", "
              f"pdf_sha: <sha10 del PDF>, pagina: <página del PDF>, motivo: <qué dice la hoja>, "
              f"fecha: <AAAA-MM-DD>}}}}")
-    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
-        raise cfg.VistasError(forma.format("`cita_revisada` no acepta un motivo suelto ni una lista "
-                                           "de strings: sin `ref` y `cita` no dice QUÉ cita se leyó"))
-    out = []
-    for x in v:
-        campos = {k: cfg.signature_text(x, k) for k in REVIEWED_QUOTE_KEYS}
-        faltan = [k for k, val in campos.items() if not val]
-        if faltan:
-            raise cfg.VistasError(forma.format(f"a una entrada de `cita_revisada` le falta "
-                                               f"{', '.join(faltan)} (o quedó el `<…>` de la plantilla)"))
-        out.append(dict(x, **campos))
-    return out
+    return cfg.load_map_list(
+        meta, "cita_revisada", REVIEWED_QUOTE_KEYS, entry=entry, error=lambda m, _: forma.format(m),
+        shape="`cita_revisada` no acepta un motivo suelto ni una lista de strings: sin `ref` y "
+              "`cita` no dice QUÉ cita se leyó")
 
 
 def quote_pdf_sha(bibcode: str) -> str | None:

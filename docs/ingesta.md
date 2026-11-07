@@ -289,7 +289,7 @@ archivo. Cada cierre se verificó contra el código, no contra el issue.
 | #86 · registro sin abstract | `query_ads` marca y cuenta `sin_abstract` |
 | #87 · facetas matcheadas sin usar | `triage.py --prioridad` |
 | #88 · el `--sweep` no deja rastro | `cfg.save_barrido` → `barridos: []` (acumulativo) |
-| #89 · el aceptado sin motivo ni origen | `extra_core` como lista de mapas `{bibcode, via, motivo[, fecha]}` (D-58; `lib_config.load_extra_core` exige los tres primeros, `fecha` es opcional y el snippet la estampa) |
+| #89 · el aceptado sin motivo ni origen | `extra_core` como lista de mapas `{bibcode, via, motivo[, fecha]}` (D-58; `lib_config.load_extra_core` exige los tres primeros —el `motivo` por `declared_motive`: ni `true` ni el `<…>` del snippet, #623—, `fecha` es opcional y el snippet la estampa) |
 | #90 · core sin PDF no se marca en su nota | lint: *paper relevante sin fuente en disco* |
 | #91 · veredictos sin resolver bajo un encabezado que certifica | lint: `verif_sin_resolver` (bloqueante, INV-117) |
 | #92 · las keywords no llegan a la nota | `make_notes.stamp_keywords` (D-17) |

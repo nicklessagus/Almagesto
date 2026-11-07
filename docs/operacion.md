@@ -2266,7 +2266,9 @@ el PDF de B se firma en la nota de A (#591):** `segunda_mano_verificada: [{ref, 
 motivo}]` (forma dura, D-58: sin `localizador` el lint bloquea) — la fila sale de lo pendiente y se
 lista aparte (AUD-207), y la firma que no exime ninguna fila se propone sacar (#256). **Sus campos
 son texto (#592):** una lista, un mapa o el `<…>` de la plantilla cuentan como faltantes, igual en
-las firmas hermanas (`lib_config.signature_text`).
+las firmas hermanas (`lib_config.signature_text`), y todas —con `extra_core`, `acepta_preprint`,
+`aliases_descartados`, `no_vista`, `no_sintetizado` y `cola_tema`— cargan por un solo
+`lib_config.load_map_list` (#623).
 
 #### A · Lint (chequeo de salud)
 

@@ -3155,7 +3155,8 @@ def test_479_extra_core_declara_pdf_source_por_los_DOS_carriles(monkeypatch, cap
     import yaml
     snippet = cfg.extra_core_snippet([{"bibcode": "2020x....1A"}], via="triage")
     assert "pdf_source:" in snippet and "|".join(cfg.PDF_SOURCE_OK) in snippet
-    assert cfg.load_extra_core(yaml.safe_load(snippet), entry="t")[0].get("pdf_source") is None
+    llenado = snippet.replace(cfg.EXTRA_CORE_MOTIVO_PLACEHOLDER, "es core")   # #623: el `<…>` aborta
+    assert cfg.load_extra_core(yaml.safe_load(llenado), entry="t")[0].get("pdf_source") is None
 
 
 #: Exportación REAL de Crossref para `10.1002/hbm.20432`, traída con
@@ -4370,3 +4371,22 @@ def test_592_acepta_preprint_y_metadata_revisada_rechazan_lista(toy_vault):
     assert cfg.metadata_review({"metadata_revisada": [firma]}, "author", ["A", "B"], ["A"])[0] == "firmada"
     assert cfg.metadata_review({"metadata_revisada": [dict(firma, motivo={"a": 1})]},
                                "author", ["A", "B"], ["A"])[0] == "rota"
+
+
+def test_623_el_placeholder_o_un_booleano_no_son_motivo_en_extra_core_ni_en_aliases():
+    """#623 — `extra_core` y `aliases_descartados` leían sus claves truthy: aceptaban el `<…>` que
+    imprime el propio snippet y `motivo: true`. Ahora pasan por `declared_motive` como sus hermanos,
+    y el mensaje sigue trayendo la forma canónica para pegar."""
+    pegado = yaml.safe_load(cfg.extra_core_snippet([{"bibcode": "2020X"}]))
+    for meta in (pegado, {"extra_core": [{"bibcode": "2020X", "via": "usuario", "motivo": True}]}):
+        with pytest.raises(SystemExit) as e:
+            cfg.load_extra_core(meta, entry="t")
+        assert "le falta motivo" in str(e.value) and "extra_core:\n  - bibcode: 2020X" in str(e.value)
+    for motivo in ("<motivo>", True, "sí"):
+        with pytest.raises(SystemExit) as e:
+            cfg.load_discarded_aliases({"aliases_descartados": [{"id": "Gaia DR3 1", "motivo": motivo}]},
+                                       entry="t")
+        assert "le falta motivo" in str(e.value) and "- id: Gaia DR3 1" in str(e.value)
+    ok = [{"bibcode": "2020X", "via": "usuario", "motivo": "es core", "fecha": __import__("datetime").date(2026, 1, 1)}]
+    assert cfg.load_extra_core({"extra_core": ok}, entry="t") is ok, "extra_core devuelve el crudo"
+

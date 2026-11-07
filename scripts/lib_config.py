@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.412.0"
+ALMAGESTO_VERSION = "1.413.0"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3916,21 +3916,13 @@ def load_extra_core(meta: dict, *, entry: str = "?") -> list:
 
     Aborta con el snippet correcto en el mensaje ante cualquier forma vieja — un detector que no
     muestra la salida obliga a leer la doc, y ahí es donde la gente inventa una tercera forma."""
-    v = meta.get("extra_core")
-    if v is None:
-        return []
-    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
     #  @inv INV-60, INV-48
-        sueltos = [v] if isinstance(v, str) else [x for x in as_list(v) if isinstance(x, str)]
-        sys.exit(_extra_core_error(entry, sueltos,
-                                   "`extra_core` ya no acepta un bibcode suelto ni una lista de "
-                                   "strings (D-58): sin `via` y `motivo` el registro no dice quién "
-                                   "aceptó ese paper ni por qué"))
+    v = load_map_list(meta, "extra_core", ("bibcode", "via", "motivo"), entry=entry, raw=True,
+                      exc=SystemExit, error=lambda m, ids: _extra_core_error(entry, ids, m),
+                      shape="`extra_core` ya no acepta un bibcode suelto ni una lista de strings "
+                            "(D-58): sin `via` y `motivo` el registro no dice quién aceptó ese "
+                            "paper ni por qué")
     for x in v:
-        faltan = [k for k in ("bibcode", "via", "motivo") if not x.get(k)]
-        if faltan:
-            sys.exit(_extra_core_error(entry, [x.get("bibcode") or "<bibcode>"],
-                                       f"a una entrada de `extra_core` le falta {', '.join(faltan)}"))
         if x["via"] not in EXTRA_CORE_VIA:
             sys.exit(_extra_core_error(
                 entry, [x["bibcode"]],
@@ -3977,11 +3969,11 @@ def signature_text(x: dict, k: str) -> str:
     orphan with the wrong diagnosis. Text, a number (`pagina: 7`) or a YAML date pass; anything
     else, and the unfilled `<…>` of the canonical form, read as missing."""
     v = x.get(k)
+    if k == "motivo":           # AUD-567: a `motivo` is read as a motive (INV-167), not just as text;
+        return declared_motive(v)   # a number says no WHY either (#623)
     if isinstance(v, bool) or not isinstance(v, (str, int, float, _dt.date)):
         return ""
     t = str(v).strip()
-    if k == "motivo":           # AUD-567: a `motivo` is read as a motive (INV-167), not just as text
-        return declared_motive(t)
     return "" if t.startswith("<") and t.endswith(">") else t
 
 
@@ -3991,20 +3983,14 @@ def load_acepta_preprint(meta: dict, *, entry: str = "?") -> list:
     a bare bibcode, a list of strings or a map missing any of the three keys ABORTS with the
     canonical form, because an acceptance that does not say why nor when cannot tell «the preprint
     was accepted» from «nobody looked for the published one» — which is the whole point."""
-    v = meta.get("acepta_preprint")
-    if v is None:
-        return []
-    ok = isinstance(v, list) and all(
-        isinstance(x, dict) and all(signature_text(x, k) for k in ("bibcode", "motivo", "fecha"))
-        for x in v)
-    if not ok:
-        bibs = ([v] if isinstance(v, str) else
-                [x if isinstance(x, str) else as_map(x).get("bibcode") or "<bibcode>" for x in as_list(v)])
-        sys.exit(f"'{entry}': `acepta_preprint` es una lista de mapas con `bibcode`, `motivo` y `fecha`, "
-                 f"los tres obligatorios (#512): sin motivo ni fecha el registro no distingue «se aceptó "
-                 f"el preprint» de «nadie buscó el publicado». Forma canónica:\n\n"
-                 + acepta_preprint_snippet(bibs or ["<bibcode>"], "<por qué se lee el preprint>"))
-    return v
+    return load_map_list(
+        meta, "acepta_preprint", ("bibcode", "motivo", "fecha"), entry=entry, raw=True,
+        exc=SystemExit, shape="`acepta_preprint` no acepta un bibcode suelto ni una lista de strings",
+        error=lambda m, ids: (
+            f"'{entry}': {m}. `acepta_preprint` es una lista de mapas con `bibcode`, `motivo` y "
+            f"`fecha`, los tres obligatorios (#512): sin motivo ni fecha el registro no distingue «se "
+            f"aceptó el preprint» de «nadie buscó el publicado». Forma canónica:\n\n"
+            + acepta_preprint_snippet(ids or ["<bibcode>"], "<por qué se lee el preprint>")))
 
 
 def acepta_preprint_snippet(bibcodes, motivo: str) -> str:
@@ -4085,6 +4071,37 @@ def declared_motive(value) -> str:
     if v.startswith("<") and v.endswith(">") or v.lower() in ("true", "false", "sí", "si", "yes", "no"):
         return ""
     return v
+
+
+def load_map_list(meta: dict, field: str, keys: tuple, *, entry: str, shape: str, error,
+                  raw: bool = False, exc: type = None) -> list:
+    # @inv INV-167
+    """ONE loader for every «list of maps with required keys and a motive» (#623, D-58).
+
+    Absent → `[]`. A bare scalar or a list of strings raises `exc(error(shape, ids))`; an entry
+    missing a key —read by `signature_text`, so the `motivo` goes through `declared_motive`: a
+    boolean or the unfilled `<…>` of the canonical form is no motive— raises
+    `exc(error(<what is missing>, ids))`. `ids` are the loose strings, or the first key of the
+    failing entry, for the message to print the canonical form ready to paste. Returns the entries
+    normalized (`dict(x, **keys as text)`), or the list as written with `raw=True` (`extra_core`
+    keeps a YAML `fecha` a date). What is proper to each field —a vocabulary, the #581 crossing of
+    `no_vista`, `unidad_cita`— stays in the caller. Before #623 `extra_core` and
+    `aliases_descartados` read the keys truthy, and took the placeholder their own snippet prints."""
+    exc = exc or VistasError
+    v = (meta or {}).get(field)
+    if v is None:
+        return []
+    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
+        raise exc(error(shape, [v] if isinstance(v, str) else
+                        [x for x in as_list(v) if isinstance(x, str)]))
+    out = []
+    for x in v:
+        campos = {k: signature_text(x, k) for k in keys}
+        if (faltan := [k for k, val in campos.items() if not val]):
+            raise exc(error(f"a una entrada de `{field}` le falta {', '.join(faltan)} (o quedó el "
+                            f"`<…>` de la plantilla)", [i] if (i := campos[keys[0]]) else []))
+        out.append(dict(x, **campos))
+    return v if raw else out
 
 
 def config_items() -> list:
@@ -4186,21 +4203,12 @@ def load_discarded_aliases(meta: dict, *, entry: str = "?") -> list:
     in older material). The framework **proposes**, curation **decides and signs**.
 
     @inv INV-142"""
-    v = meta.get("aliases_descartados")
-    if v is None:
-        return []
-    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
-        sueltos = [v] if isinstance(v, str) else [x for x in as_list(v) if isinstance(x, str)]
-        sys.exit(_discarded_alias_error(
-            entry, sueltos, "`aliases_descartados` no acepta un identificador suelto ni una lista "
-                            "de strings: sin `motivo` no se distingue «lo miré y no sirve» de «no "
-                            "lo miró nadie», que es toda la información que el campo aporta"))
-    for x in v:
-        faltan = [k for k in ("id", "motivo") if not x.get(k)]
-        if faltan:
-            sys.exit(_discarded_alias_error(entry, [x.get("id") or "<identificador>"],
-                                            f"a una entrada le falta {', '.join(faltan)}"))
-    return v
+    return load_map_list(
+        meta, "aliases_descartados", ("id", "motivo"), entry=entry, raw=True, exc=SystemExit,
+        error=lambda m, ids: _discarded_alias_error(entry, ids, m),
+        shape="`aliases_descartados` no acepta un identificador suelto ni una lista de strings: sin "
+              "`motivo` no se distingue «lo miré y no sirve» de «no lo miró nadie», que es toda la "
+              "información que el campo aporta")
 
 
 def _discarded_alias_error(entry: str, ids: list, motivo: str) -> str:
@@ -4429,22 +4437,11 @@ def load_no_vista(meta: dict, *, entry: str = "?") -> list:
     now decides over the DATELESS view, which is where a pending claim actually lives.
 
     @inv INV-145"""
-    v = meta.get("no_vista")
-    if v is None:
-        return []
-    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
-        raise VistasError(_no_vista_error(
-            entry, "`no_vista` no acepta un motivo suelto ni una lista de strings: sin `sujeto` la "
-                   "escotilla no dice de QUÉ reclamo se declara, y en un paper compartido eximiría "
-                   "a todos"))
-    out = []
-    for x in v:
-        sujeto, motivo = str(x.get("sujeto") or "").strip(), declared_motive(x.get("motivo"))
-        faltan = [k for k, val in (("sujeto", sujeto), ("motivo", motivo)) if not val]
-        if faltan:
-            raise VistasError(_no_vista_error(
-                entry, f"a una entrada de `no_vista` le falta {', '.join(faltan)}"))
-        out.append(dict(x, sujeto=sujeto, motivo=motivo))
+    out = load_map_list(
+        meta, "no_vista", ("sujeto", "motivo"), entry=entry,
+        error=lambda m, _: _no_vista_error(entry, m),
+        shape="`no_vista` no acepta un motivo suelto ni una lista de strings: sin `sujeto` la "
+              "escotilla no dice de QUÉ reclamo se declara, y en un paper compartido eximiría a todos")
     # #581 — `no_vista` says the subject was NOT read; a DATED view of the same subject says it was.
     # The two together are a form error, not two facts: the dateless stub entry is the designed
     # companion of the hatch (#256), the dated one contradicts it. The harvester drops the hatch
@@ -4467,23 +4464,12 @@ def load_no_sintetizado(meta: dict, *, entry: str = "?") -> list:
 
     ⛔ No tolerant reader: the scalar raises and the lint blocks it (`schema_retirado`); its
     one-use migrator lives in the git tag (#624)."""
-    v = meta.get("no_sintetizado")
-    if v is None:
-        return []
-    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
-        raise VistasError(
-            f"'{entry}': `no_sintetizado` es una lista de `{{sujeto, motivo}}` (#553): el motivo "
-            f"suelto no dice para QUÉ sujeto vale, y en un paper compartido eximía a todos → "
-            f"{retired_migrator_recipe('make_notes.py --migrate-no-sintetizado')}")
-    out = []
-    for x in v:
-        sujeto, motivo = str(x.get("sujeto") or "").strip(), declared_motive(x.get("motivo"))
-        faltan = [k for k, val in (("sujeto", sujeto), ("motivo", motivo)) if not val]
-        if faltan:
-            raise VistasError(f"'{entry}': a una entrada de `no_sintetizado` le falta "
-                              f"{', '.join(faltan)} (#553)")
-        out.append(dict(x, sujeto=sujeto, motivo=motivo))
-    return out
+    return load_map_list(
+        meta, "no_sintetizado", ("sujeto", "motivo"), entry=entry,
+        error=lambda m, _: f"'{entry}': {m} (#553)",
+        shape=f"`no_sintetizado` es una lista de `{{sujeto, motivo}}`: el motivo suelto no dice para "
+              f"QUÉ sujeto vale, y en un paper compartido eximía a todos → "
+              f"{retired_migrator_recipe('make_notes.py --migrate-no-sintetizado')}")
 
 
 def load_cola_tema(meta: dict, *, entry: str = "?") -> list:
@@ -4493,21 +4479,9 @@ def load_cola_tema(meta: dict, *, entry: str = "?") -> list:
 
     Same hard form as `no_vista`: without the date the queue cannot age, and without the motive
     it is the silent debt this exists to end."""
-    v = meta.get("cola_tema")
-    if v is None:
-        return []
-    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
-        raise VistasError(f"'{entry}': `cola_tema` es una lista de `{{tema, fecha, motivo}}` (#558)")
-    out = []
-    for x in v:
-        tema, fecha = str(x.get("tema") or "").strip(), str(x.get("fecha") or "").strip()
-        motivo = declared_motive(x.get("motivo"))
-        faltan = [k for k, val in (("tema", tema), ("fecha", fecha), ("motivo", motivo)) if not val]
-        if faltan:
-            raise VistasError(f"'{entry}': a una entrada de `cola_tema` le falta "
-                              f"{', '.join(faltan)} (#558)")
-        out.append(dict(x, tema=tema, fecha=fecha, motivo=motivo))
-    return out
+    return load_map_list(meta, "cola_tema", ("tema", "fecha", "motivo"), entry=entry,
+                         error=lambda m, _: f"'{entry}': {m} (#558)",
+                         shape="`cola_tema` es una lista de `{tema, fecha, motivo}`")
 
 
 def load_reviewed_second_hand(meta: dict, *, entry: str = "?") -> list:
@@ -4535,23 +4509,11 @@ def load_reviewed_second_hand(meta: dict, *, entry: str = "?") -> list:
     It is scoped to the note that declares it: the same crossing in another note is another review.
 
     @inv INV-142"""
-    v = meta.get("segunda_mano_revisada")
-    if v is None:
-        return []
-    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
-        raise VistasError(_reviewed_second_hand_error(
-            entry, "`segunda_mano_revisada` no acepta un motivo suelto ni una lista de strings: sin "
-                   "`ref` y `que` la escotilla no dice QUÉ cruce se revisó, y apagaría todos los de "
-                   "la nota"))
-    out = []
-    for x in v:
-        campos = {k: signature_text(x, k) for k in ("ref", "que", "motivo")}
-        faltan = [k for k, val in campos.items() if not val]
-        if faltan:
-            raise VistasError(_reviewed_second_hand_error(
-                entry, f"a una entrada de `segunda_mano_revisada` le falta {', '.join(faltan)}"))
-        out.append(dict(x, **campos))
-    return out
+    return load_map_list(
+        meta, "segunda_mano_revisada", ("ref", "que", "motivo"), entry=entry,
+        error=lambda m, _: _reviewed_second_hand_error(entry, m),
+        shape="`segunda_mano_revisada` no acepta un motivo suelto ni una lista de strings: sin `ref` "
+              "y `que` la escotilla no dice QUÉ cruce se revisó, y apagaría todos los de la nota")
 
 
 def load_verified_second_hand(meta: dict, *, entry: str = "?") -> list:
@@ -4568,25 +4530,16 @@ def load_verified_second_hand(meta: dict, *, entry: str = "?") -> list:
     Sibling of `segunda_mano_revisada` (#433): identity `(ref, que)` matched by
     `reviewed_second_hand`, scoped to the note of A, HARD FORM (D-58). `localizador` is required
     because the signature claims B says it: it has to say WHERE (#205: the page seen)."""
-    v = meta.get("segunda_mano_verificada")
-    if v is None:
-        return []
     forma = (f"'{entry}': {{}}. Forma canónica:\n\nsegunda_mano_verificada:\n"
              f"  - ref: <el bibcode de B, el dueño del valor>\n"
              f"    que: <el `qué` de la fila, como lo imprime proposals.py>\n"
              f"    localizador: <dónde lo dice B: p. 14, Tabla 2>\n"
              f"    motivo: <qué se vio: «3846 d = 10.53 yr»>\n")
-    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
-        raise VistasError(forma.format("`segunda_mano_verificada` no acepta un motivo suelto ni una "
-                                       "lista de strings: sin `ref` y `que` no dice QUÉ se verificó"))
-    out = []
-    for x in v:
-        campos = {k: signature_text(x, k) for k in ("ref", "que", "localizador", "motivo")}
-        if (faltan := [k for k, val in campos.items() if not val]):
-            raise VistasError(forma.format(f"a una entrada de `segunda_mano_verificada` le falta "
-                                           f"{', '.join(faltan)}"))
-        out.append(dict(x, **campos))
-    return out
+    return load_map_list(
+        meta, "segunda_mano_verificada", ("ref", "que", "localizador", "motivo"), entry=entry,
+        error=lambda m, _: forma.format(m),
+        shape="`segunda_mano_verificada` no acepta un motivo suelto ni una lista de strings: sin "
+              "`ref` y `que` no dice QUÉ se verificó")
 
 
 #: #502 — las WARN cuyo hit decide una PERSONA leyéndolo (regla #0, #408, #406). Las de higiene
@@ -4608,27 +4561,19 @@ def load_reviewed_warn(meta: dict, *, entry: str = "?") -> list:
     (`lib_blocks.warn_anchor`): the signature covers a STATE, so if the prose changes the hit comes
     back — unlike #433, whose `(ref, que)` survives a reflow, here the thing judged IS the prose.
     Same hard form as its siblings (D-58): no motive or a category outside `WARN_REVISABLE` aborts."""
-    v = meta.get("warn_revisada")
-    if v is None:
-        return []
     forma = (f"'{entry}': {{}}. Forma canónica:\n\nwarn_revisada:\n"
              f"  - categoria: <{' | '.join(WARN_REVISABLE)}>\n"
              f"    ancla: <la que el lint imprime al final del hit>\n"
              f"    motivo: <por qué NO es deuda>\n")
-    if not isinstance(v, list) or any(not isinstance(x, dict) for x in v):
-        raise VistasError(forma.format("`warn_revisada` no acepta un motivo suelto ni una lista de "
-                                       "strings: sin `categoria` y `ancla` no dice QUÉ hit se revisó"))
-    out = []
-    for x in v:
-        campos = {k: signature_text(x, k) for k in ("categoria", "ancla", "motivo")}
-        faltan = [k for k, val in campos.items() if not val]
-        if faltan:
-            raise VistasError(forma.format(f"a una entrada de `warn_revisada` le falta "
-                                           f"{', '.join(faltan)}"))
-        if campos["categoria"] not in WARN_REVISABLE:
+    out = load_map_list(
+        meta, "warn_revisada", ("categoria", "ancla", "motivo"), entry=entry,
+        error=lambda m, _: forma.format(m),
+        shape="`warn_revisada` no acepta un motivo suelto ni una lista de strings: sin `categoria` y "
+              "`ancla` no dice QUÉ hit se revisó")
+    for x in out:
+        if x["categoria"] not in WARN_REVISABLE:
             raise VistasError(forma.format(f"`warn_revisada` declara la categoría "
-                                           f"`{campos['categoria']}`, que no es una WARN de juicio"))
-        out.append(dict(x, **campos))
+                                           f"`{x['categoria']}`, que no es una WARN de juicio"))
     return out
 
 

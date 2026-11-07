@@ -12056,3 +12056,13 @@ def test_624_cada_fila_de_RETIRED_SCHEMAS_bloquea_con_su_poblacion_y_su_salida(t
     cat = res.por_clave("schema_retirado")
     assert cat.severidad == lint.SEV_BLOQUEANTE and cat.poblacion == "schema_retirado"
     assert len(cat) == 2 and res.poblaciones["schema_retirado"][0] >= 0
+
+
+def test_623_cola_tema_y_no_sintetizado_en_lista_de_strings_son_fm_broken():
+    """#623 · D-58 — la forma dura bloquea también en `cola_tema` (cualquier forma no-mapa) y en la
+    lista de strings de `no_sintetizado`; el escalar de éste sigue siendo `schema_retirado` y no se
+    reporta dos veces ni se borra antes de que lo vea su detector."""
+    for fm in ({"cola_tema": "tema-x"}, {"cola_tema": ["tema-x"]}, {"no_sintetizado": ["poda"]}):
+        assert lint.normalize_lists(dict(fm)), fm
+    escalar = {"no_sintetizado": "poda"}
+    assert lint.normalize_lists(escalar) == [] and escalar["no_sintetizado"] == "poda"

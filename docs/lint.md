@@ -950,7 +950,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   paper, así que `lint --cierre <estrella>` frena en los pares que crearon sus papers. `make_notes
   <estrella>` re-estampa el roll-up de los temas que tocan sus papers, y el extractor propone
   `temas: [{tema, aporta, motivo}]`, que el cosechador imprime listo para pegar. Medido en una
-  bóveda real: 91 pares. La **cola** se lista aparte, con fecha (`cola_tema`, backlog).
+  bóveda real: 91 pares. La **cola** se lista aparte, con fecha (`cola_tema`, backlog). La forma
+  no-mapa de `cola_tema` y la lista de strings de `no_sintetizado` son `fm_broken` (D-58, #623).
 - **`no_sintetizado[X]` y la nota de X cita el paper** (#574, `no_sintetizado_citado`, backlog): la
   escotilla por par afirma que la nota de X no sintetiza ese paper, y la prosa (`cfg.solo_prosa`)
   dice lo contrario. El roll-up publica la cita; cuál de las dos mitades está mal lo decide quien
