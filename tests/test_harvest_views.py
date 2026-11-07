@@ -2252,6 +2252,26 @@ def test_526_force_NO_re_escribe_lo_que_una_verificacion_REFUTO(toy_vault, capsy
     assert [b for b, _ in r["rehusadas"]] == [BIB] and not r["tocadas"]
 
 
+@pytest.mark.parametrize("force", [True, False])
+def test_600_las_ayudas_de_lectura_tampoco_re_escriben_lo_REFUTADO(toy_vault, capsys, force):
+    # @inv INV-160
+    """#600 — el guard de #526 cubría la vista; `stamp_reading_aids` escribía igual `## Conclusiones`
+    con el texto refutado: con `--force` pisaba la corrección, y en la primera cosecha lo metía."""
+    data = extraccion(conclusiones="usa una grilla aleatoria", conclusiones_es="otra cosa",
+                      _refutado=[{"texto": "grilla aleatoria", "por": "x.verif#abc",
+                                  "motivo": "adaptativa", "fecha": "2026-09-24"}])
+    body = mn.vista_block("Estrella Test", theme=False)
+    if force:
+        body += "\n## Conclusiones\nusa una grilla adaptativa\n"
+    dest = sembrar(toy_vault, data, body=body)
+    hv.harvest("test_star", force=force)
+    t = dest.read_text(encoding="utf-8")
+    assert "grilla aleatoria" not in t
+    assert ("grilla adaptativa" in t) is force
+    assert "otra cosa" in t, "la pieza sin texto refutado se escribe"
+    assert "`## Conclusiones` NO se escribe" in capsys.readouterr().out
+
+
 def test_558_el_lector_propone_la_decision_del_par_paper_tema_y_no_la_escribe():
     """#558 — quien leyó el paper propone `aporta` por tema; el cosechador imprime la entrada."""
     data = {"temas": [{"tema": "gls", "aporta": False, "motivo": "sólo lo usa"},

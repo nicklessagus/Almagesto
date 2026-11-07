@@ -1940,3 +1940,15 @@ cada `- {…}` bajo la clave que nombra en un frontmatter de prueba y `split_fm`
 al de la extracción. `triage.py <slug>` (bloque `extra_core:`) y `--acepta-preprint … --reason`
 pegados tal cual parsean con su loader. `python scripts/lint.py`: salida idéntica antes y después.
 **Devolver si** alguna línea emitida no parsea pegada en su lugar, o si un motivo llega truncado.
+
+## §#600 · v1.415.1 — las ayudas de lectura tampoco re-escriben lo `_refutado` (INV-160)
+
+Sin migración. `stamp_reading_aids` aplica el mismo guard que la vista (#526): una pieza
+(`## Abstract` transcripto, `## Traducción del abstract`, `## Conclusiones`, `## Traducción de las
+conclusiones`) cuyo texto contiene una cadena `_refutado` de la extracción no se escribe —ni en la
+primera cosecha ni con `--paper --force`— y se avisa con `⛔ … NO se escribe`.
+
+**Validar:** `python scripts/lint.py` idéntico antes y después. Si hay una extracción con
+`_refutado` (`grep -rl _refutado vault/raw/extraccion`): `harvest_views.py <slug> --paper <bib>
+--force --dry-run` no anuncia cambios en `## Conclusiones` que reintroduzcan la cadena refutada.
+**Devolver si** una sección de lectura vuelve a contener texto que `_refutado` declara refutado.

@@ -518,6 +518,14 @@ def stamp_reading_aids(dest: Path, data: dict, *, force: bool = False) -> bool:
         # llega ACÁ lo transcribió el modelo del PDF, no es el verbatim de catálogo; y escapar no
         # cambia lo que se ve. Idempotente: el `\$` ya escapado no se re-escapa.
         limpio = cfg.escape_dollars(limpio)
+        # @inv INV-160
+        # ⛔ #600 — the same guard as the view (#526): text a verification refuted does not come
+        # back into the note through the reading aids either, with or without `--force`.
+        if (_ref := cfg.refuted_in(data, limpio)):
+            cfg.print_seguro(f"  ⛔ {dest.stem}: `{header}` NO se escribe — la extracción lleva "
+                             f"texto refutado (`_refutado`): "
+                             + "; ".join(f"«{e.get('texto')}» por {e.get('por')}" for e in _ref))
+            continue
         # ⛔ #569 — the aids are ONE per note, the readings are many (one per subject and lens, and
         # the same paper read from several themes). Replacing on every harvest made the last JSON
         # harvested win: measured, re-harvesting four unchanged themes rewrote 17 notes (+94/−188),

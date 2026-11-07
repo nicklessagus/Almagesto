@@ -2863,7 +2863,7 @@ portadores:
         motivo: "`--filas`/`--cita` no sirven la fila refutada (la nombran con su refutación); la lectura (`--grep`, `--campo`, `--eje`) la muestra marcada. `validar` no la mira: la extracción sigue siendo testigo de QUIÉN dijo la frase."
       - modulo: scripts/harvest_views.py
         estado: usa
-        motivo: "La vista (también bajo `--force`) y `--restamp-salvedades` no re-escriben un cuerpo que lleve texto refutado."
+        motivo: "La vista (también bajo `--force`), las ayudas de lectura (`stamp_reading_aids`: `## Abstract` transcripto, `## Conclusiones` y las traducciones, #600) y `--restamp-salvedades` no re-escriben un texto que lleve lo refutado."
       - modulo: scripts/write_verif_sidecar.py
         estado: usa
         motivo: "`--refutar-extraccion` es el ÚNICO escritor de la marca: exige un par con `contradice`/`no-soportada` en la cadena y un texto que la extracción contenga."
