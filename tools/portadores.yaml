@@ -3831,3 +3831,14 @@ portadores:
       - modulo: scripts/proposals.py
         estado: usa
         motivo: "`_second_hand_owners` indexa los dueños por el apellido de `author_surname`."
+  - issue: 615
+    regla: >-
+      Qué `*.json` de un directorio de fan-out es SALIDA del juez lo decide una sola función: el
+      manifiesto (#369) y la salida de `--segunda-clase` (`_clase.json`) no lo son. Saltear sólo
+      el manifiesto dejaba que `_clase.json` hiciera rechazar la ronda entera.
+    funcion: check_verify_fanout.fanout_files
+    patron: '(==|!=|in)\s*(\w+\.)?MANIFEST\b'
+    consumidores:
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "`load_fanout` lee los pares de los archivos de `fanout_files`, los mismos que pasó la barrera."

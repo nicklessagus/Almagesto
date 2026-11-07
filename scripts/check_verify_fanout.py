@@ -50,10 +50,8 @@ def check_dir(directory: Path) -> tuple[dict, list[str]]:
     """
     # @inv INV-161
     pairs, errors = {}, []
-    for f in sorted(directory.glob("*.json")):
+    for f in fanout_files(directory):
         name = f.name
-        if name == MANIFEST:
-            continue                    # #369: el manifiesto no es salida del fan-out
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -69,6 +67,18 @@ def check_dir(directory: Path) -> tuple[dict, list[str]]:
 
 
 MANIFEST = "_esperado.json"
+CLASS_OUT = "_clase.json"
+#: los `*.json` que `verify_fanout` escribe en el directorio y NO son salida del fan-out: el
+#: manifiesto (#369) y la salida de `--segunda-clase` (#615)
+NOT_OUTPUT = frozenset({MANIFEST, CLASS_OUT})
+
+
+def fanout_files(directory: Path) -> list:
+    """The fan-out's output files of `directory`, sorted — every `*.json` but `NOT_OUTPUT` (#615).
+
+    The ONE place both readers (this barrier and `write_verif_sidecar.load_fanout`) decide what
+    counts as output: skipping only the manifest let `_clase.json` reject the whole round."""
+    return [f for f in sorted(directory.glob("*.json")) if f.name not in NOT_OUTPUT]
 
 
 def verdict_errors(data: dict, name: str) -> list[str]:
@@ -249,7 +259,7 @@ def main() -> int:
         return 2
 
     pairs, errors = check_dir(directory)
-    archivos = len(list(directory.glob("*.json")))
+    archivos = len(fanout_files(directory))
     print(f"{directory}: {archivos} archivo(s) `*.json` · {sum(pairs.values())} par(es) en los "
           f"{len(pairs)} que cumplen el schema")
     if archivos == 0:

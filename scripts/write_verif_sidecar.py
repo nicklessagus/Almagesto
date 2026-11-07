@@ -104,9 +104,7 @@ def load_fanout(directory: Path) -> dict:
         raise SidecarError("el fan-out no pasa la barrera (#259) — no se arma nada:\n  "
                            + "\n  ".join(errors))
     out: dict = {}
-    for f in sorted(directory.glob("*.json")):
-        if f.name == check_verify_fanout.MANIFEST:
-            continue
+    for f in check_verify_fanout.fanout_files(directory):
         data = json.loads(f.read_text(encoding="utf-8"))
         out.setdefault(str(data["bibcode"]), []).extend(data["pares"])
     return out

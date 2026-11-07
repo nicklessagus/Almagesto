@@ -63,6 +63,10 @@ def test_el_directorio_vacio_tampoco_es_un_verde(tmp_path, monkeypatch):
     d.mkdir()
     monkeypatch.setattr(sys, "argv", ["check_verify_fanout.py", str(d)])
     assert cvf.main() == 1
+    # #615 — el manifiesto y `_clase.json` tampoco son salida: con sólo ellos, sigue sin ser verde
+    for nombre in cvf.NOT_OUTPUT:
+        (d / nombre).write_text("{}", encoding="utf-8")
+    assert cvf.main() == 1
 
 
 def test_el_validador_nombra_el_archivo_que_no_cumple(tmp_path, monkeypatch, capsys):
@@ -148,6 +152,20 @@ def test_el_manifiesto_NO_cuenta_como_salida_del_fanout(tmp_path):
     _manifiesto(d, {"2020ApJ...900....1A": 1})
     pairs, errors = cvf.check_dir(d)
     assert errors == [] and list(pairs) == ["2020ApJ...900....1A.json"]
+
+
+def test_615_la_salida_de_segunda_clase_NO_rompe_la_ronda(tmp_path):
+    """#615 · AUD-615 — `verify_fanout --segunda-clase --out <dir de la ronda>` deja ahí
+    `_clase.json`, otro artefacto conocido del mismo script: la barrera Y el lector del hermano lo
+    saltean como al manifiesto, en vez de rechazar la ronda entera."""
+    import verify_fanout as vf
+    import write_verif_sidecar as ws
+    d = _dir_con(tmp_path, **{"2020ApJ...900....1A": _ok()})
+    _manifiesto(d, {"2020ApJ...900....1A": 1})
+    (d / vf.CLASS_OUT).write_text(json.dumps({"clases": []}), encoding="utf-8")
+    pairs, errors = cvf.check_dir(d)
+    assert errors == [] and list(pairs) == ["2020ApJ...900....1A.json"]
+    assert list(ws.load_fanout(d)) == ["2020ApJ...900....1A"]
 
 
 def test_la_barrera_lee_el_alcance_y_no_pide_lo_que_quedo_afuera(tmp_path, capsys, monkeypatch):

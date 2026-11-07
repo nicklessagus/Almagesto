@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lib_blocks as lb   # noqa: E402
 import lib_config as cfg  # noqa: E402
 
-MANIFEST = "_esperado.json"
+from check_verify_fanout import MANIFEST, CLASS_OUT  # noqa: E402 — una sola definición (#615)
 JUEZ = ".claude/skills/verify-citations/reference/juez.md"
 
 
@@ -147,7 +147,6 @@ def write_round(nota: Path, out_dir: Path, fuentes: list | None = None,
 
 
 CLASS_PROMPT = "_clase.md"
-CLASS_OUT = "_clase.json"
 
 
 def class_items(nota: Path, text: str) -> tuple[list, int]:

@@ -2131,3 +2131,14 @@ la fila «… y K más» vale K, no 1.
 **Validar:** `python scripts/proposals.py` sobre la Tesis → 📎 **834** (antes 26), 🔎 **110** (antes
 28) con «sobre 1893 valores … (900 no evaluables)» (antes 1887/894), total **1084** (antes 194).
 **Devolver si** el número de un título no es filas listadas − 1 + K de su «… y K más».
+
+## §#615 · v1.415.16 — `_clase.json` no rompe la barrera del fan-out
+
+Sin migración. Qué `*.json` de un directorio de fan-out es salida del juez lo decide
+`check_verify_fanout.fanout_files` (sin el manifiesto ni `_clase.json`), y lo usan la barrera y
+`write_verif_sidecar.load_fanout`; el conteo de archivos de la pantalla también.
+
+**Validar:** en un directorio con sólo `{"clases": []}` como `_clase.json`,
+`python scripts/check_verify_fanout.py <dir>` → «0 archivo(s)» y rc **1** («no escribió nada»;
+antes: 3 hallazgos de schema sobre `_clase.json`). Sobre una ronda real con `_clase.json` al lado,
+rc 0 si los demás archivos cumplen. **Devolver si** `_clase.json` aparece nombrado en un hallazgo.
