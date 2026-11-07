@@ -2316,6 +2316,19 @@ def test_558_el_lector_propone_la_decision_del_par_paper_tema_y_no_la_escribe():
     assert hv.theme_decision_proposals(ya, data, "2026-09-28") == [], "lo decidido no se re-propone"
 
 
+def test_632_la_propuesta_lleva_la_indentacion_de_la_lista_existente():
+    """#632 — `- {…}` en columna 0 pegado bajo una lista indentada (`  - sujeto:`) rompía el YAML
+    (10 notas de la Tesis): la línea sale con la indentación de la lista que ya está."""
+    data = {"temas": [{"tema": "gls", "aporta": False, "motivo": "sólo lo usa"}]}
+    nota = "---\nbibcode: B\nno_sintetizado:\n  - sujeto: x\n    motivo: m\nyear: 2020\n---\n\nx\n"
+    [(clave, linea)] = hv.theme_decision_proposals(cfg.split_fm(nota), data, "2026-11-07", nota)
+    assert linea == "  - {sujeto: gls, motivo: sólo lo usa}"
+    pegada = nota.replace("    motivo: m\n", "    motivo: m\n" + linea + "\n")
+    assert cfg.split_fm(pegada)["no_sintetizado"][1] == {"sujeto": "gls", "motivo": "sólo lo usa"}
+    assert hv.theme_decision_proposals({}, data, "2026-11-07", "---\nbibcode: B\n---\n")[0][1] \
+        .startswith("- {"), "sin lista previa, columna 0"
+
+
 @pytest.mark.parametrize("motivo", ["Calibración del $S_{HK}$ de Keck, con error", "a: b", "x #y",
                                     "[1]", "{k}", "12", "null", "sólo lo usa",
                                     "línea uno\nlínea dos: con , { } #"])

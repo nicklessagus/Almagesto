@@ -4422,6 +4422,20 @@ def test_extra_core_largo_estampa_alcance_en_el_stub_y_el_prompt_ramifica(toy_va
     assert read_fm(toy_vault.PAPERS / "2021PhDT.........6D.md")["alcance"] == "caps. 2-5"
 
 
+def test_632_stamp_scope_no_re_cita_un_valor_igual(toy_vault):
+    """#632 — la primera corrida re-serializaba `unidad_cita`/`alcance` planos a comillas dobles con
+    el MISMO valor: un estampador es idempotente desde la primera corrida."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    nota = cfg.PAPERS / "2021X.md"
+    nota.write_text("---\nbibcode: 2021X\nunidad_cita: pagina\nalcance: caps. 2-3\n---\n\nx\n",
+                    encoding="utf-8")
+    assert mn.stamp_scope(nota, "caps. 2-3", "pagina") is False
+    assert "alcance: caps. 2-3\n" in nota.read_text(encoding="utf-8")
+    assert mn.stamp_scope(nota, "caps. 2-5", "pagina") is True
+    assert read_fm(nota)["alcance"] == "caps. 2-5" and "unidad_cita: pagina\n" in nota.read_text(
+        encoding="utf-8")
+
+
 def test_restamp_alcance_saltea_los_items_malformados_de_sources(toy_vault, capsys):
     """#312/#382 — un item de `sources:` que no es un mapa, o sin `key`, no tumba el backfill ni
     estampa nada: lo reporta el lint (`bad_sources`), no este comando."""

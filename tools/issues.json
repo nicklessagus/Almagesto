@@ -2989,42 +2989,42 @@
   {
    "number": 600,
    "title": "harvest_views: las ayudas de lectura re-escriben texto `_refutado` en la nota (INV-160)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 601,
    "title": "entity.py rename reescribe entradas fechadas de wiki/log.md (append-only)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 602,
    "title": "harvest_views borra la no_vista al estampar la vista y pierde su motivo (D-52)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 603,
    "title": "yaml_scalar trunca un valor multilínea y deja una comilla abierta",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 604,
    "title": "Los append del registro podan en silencio las entradas no-mapa (INV-59)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 605,
    "title": "stale_verif no ve ediciones posteriores a un re-anclaje",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 606,
    "title": "Re-anclaje: localizador vs dato se decide mal en las dos direcciones",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 607,
    "title": "Cita corta numérica ausente del .txt sale glosa, sin marca de verificar",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 608,
@@ -3039,7 +3039,7 @@
   {
    "number": 610,
    "title": "theme_decision_proposals imprime YAML que no parsea pegado tal cual",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 611,
@@ -3054,7 +3054,7 @@
   {
    "number": 613,
    "title": "legacy_destination adivina 'bloque' en vez de dejar la fila pendiente",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 614,
@@ -3074,7 +3074,7 @@
   {
    "number": 617,
    "title": "Una ronda parcial de verify mueve la fecha de la cabecera de verificación",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 618,
@@ -3104,22 +3104,22 @@
   {
    "number": 623,
    "title": "Simplificación: un solo cargador para las listas con motivo (y cierra el placeholder aceptado como motivo)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 624,
    "title": "Simplificación: borrar ~20 migradores sin trabajo y juntar los detectores de schema retirado en una tabla",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 625,
    "title": "Simplificación: frontmatter, fin de sección y filas de tabla por la función canónica",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 626,
    "title": "Simplificación: un solo generador de YAML para pegar, con re-parseo",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 627,
@@ -3144,6 +3144,11 @@
   {
    "number": 631,
    "title": "check_headerless no mira las notas de paper (353 sin cabecera en la Tesis)",
+   "state": "OPEN"
+  },
+  {
+   "number": 632,
+   "title": "Snippet de propuesta sin la indentación de la lista; --restamp-alcance re-cita valores iguales",
    "state": "OPEN"
   }
  ]

@@ -337,6 +337,7 @@ def stamp_scope(dest, alcance: str | None, unidad_cita: str | None) -> bool:
         return False
     ini, end = lim
     lines = text[ini:end].split("\n")
+    actual = cfg.split_fm(text) or {}
 
     def upsert(field: str, value: str) -> None:
         """Replace that frontmatter KEY —line plus continuations (#327)— or append it.
@@ -347,6 +348,8 @@ def stamp_scope(dest, alcance: str | None, unidad_cita: str | None) -> bool:
         `cfg.fm_key_span`, the same notion `_drop_keys` uses for the deletion side."""
         want = f"{field}: {json.dumps(value, ensure_ascii=False)}"
         span = cfg.fm_key_span(lines, field)
+        if span and actual.get(field) == value:
+            return                          # #632: same parsed value — re-quoting is not a change
         if span:
             lines[span[0]:span[1]] = [want]
         else:

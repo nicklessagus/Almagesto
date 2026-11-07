@@ -2108,3 +2108,16 @@ notas de paper».
 (2026-11-07, worktree limpio). Cierre del validador: `python scripts/make_notes.py --restamp-headers`
 → «cabeceras: 353 de … estampadas», y la categoría baja a **0**. **Devolver si** el conteo no
 coincide con lo que estampa `--restamp-headers`.
+
+## §#632 · v1.415.14 — la propuesta se pega tal cual y `--restamp-alcance` es idempotente
+
+Sin migración. (a) `harvest_views.theme_decision_proposals` emite la entrada `- {…}` con la
+indentación de la lista `no_sintetizado:`/`cola_tema:` que la nota ya tiene (`  - ` si así está), en
+su propio renglón; sin lista previa, columna 0. (b) `make_notes.stamp_scope` no reescribe
+`unidad_cita`/`alcance` cuando el valor parseado es igual (no re-cita plano → comillas).
+
+**Validar:** `python scripts/make_notes.py --restamp-alcance` sobre la Tesis → «0 nota(s)
+re-sincronizadas» ya en la PRIMERA corrida (antes: 2, sólo re-citado), y `git status` limpio. En la
+próxima cosecha que proponga una decisión sobre una de las 10 notas con lista indentada, la línea
+sale con `  - {…}` y pegada parsea. **Devolver si** la primera corrida de `--restamp-alcance` toca
+alguna nota sin cambio de valor.
