@@ -2002,3 +2002,17 @@ de un arrastre (Tesis 2026-11-07: 2 → 2; las 5 notas re-ancladas certifican y 
 worktree desechable, agregar un párrafo sin cita a una nota re-anclada → la nota aparece en
 *Verificación stale* nombrando ese bloque.
 **Devolver si** el párrafo agregado no dispara, o una nota re-anclada sin edición posterior dispara.
+
+## §#606 · v1.415.6 — localizador vs dato: una definición, y ante la duda dato
+
+Sin migración (no reescribe filas: cambia qué se re-ancla de acá en más). `claim_objects_changed`
+aplica el filtro de localizadores también a la ventana (agregar «(p. 5)» a un extracto entero ya no
+manda a re-verificar) y el filtro se angosta: «ejemplo»/«example», un `(0.3)` suelto y un año son
+dato. Lo sacado (un localizador que la fila llevaba y el bloque cambió) sigue mandando a re-verificar.
+
+**Validar:** `python scripts/lint.py` idéntico (el lint no usa esta función). Sobre la Tesis
+(2026-11-07), evaluando cada fila contra su bloque actual como si se hubiera editado: **7** pares
+pasan de re-anclar a re-verificar —cinco son valores entre paréntesis (`(0.4)`, `(1.45)`, `(0.02)`,
+`(0.42)`), dos referencias a ecuación sin palabra (`(6.71)`, `(12.22)` de 2010ComonJutten: re-verificar
+de más, aceptado)— y **0** en la otra dirección. **Devolver si** un decimal tras «por ejemplo» o un
+`(0.3)` suelto agregado a un bloque se re-ancla con `reverify_subset.py`.

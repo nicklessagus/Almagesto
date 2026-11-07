@@ -1974,6 +1974,30 @@ def test_573_una_cola_agregada_despues_de_la_ventana_manda_a_re_verificar():
     assert not lb.claim_objects_changed(extracto, bloque.replace("1,51", "1,04"), evidencia)
 
 
+def test_606_localizador_vs_dato_UNA_definicion_y_ante_la_duda_dato():
+    """#606 — AUD-592: «por ejemplo 0,3» y un «(0,3)» suelto en la cola se tomaban por localizador y
+    el valor nuevo se re-anclaba como `soportada` sin juez. AUD-564: en la ventana el filtro no se
+    aplicaba, así que agregar «(p. 5)» a un extracto entero mandaba a re-verificar."""
+    extracto = "El límite no está cuantificado; lo más…"
+    base = "El límite no está cuantificado; lo más cercano es el RMS de 1,04 m/s"
+    evidencia = "Table 3, Test set: 1.04 ± 0.03 (p. 15)"
+    assert lb.claim_objects_changed(extracto, base + ", por ejemplo 0,3 m/s [[x]].", evidencia)
+    assert lb.claim_objects_changed(extracto, base + ", for example 0.3 m/s [[x]].", evidencia)
+    assert lb.claim_objects_changed(extracto, base + " (0,3) [[x]].", evidencia)
+    assert lb.claim_objects_changed(extracto, base + " (0.3) [[x]].", evidencia)
+    # el localizador estructural sigue sin contar en la cola
+    assert not lb.claim_objects_changed(extracto, base + " (Tabla 2.1, ec. (2.5)) [[x]].", evidencia)
+    # AUD-564 — extracto ENTERO (sin `…`): un localizador agregado en la ventana no es dato
+    entero = "El período es 4,3 días"
+    assert not lb.claim_objects_changed(entero, entero + " (p. 5) [[x]].")
+    assert not lb.claim_objects_changed(entero, entero + " (Tabla 2) [[x]].")
+    # …pero un número nuevo sí, y cambiar un localizador que el extracto llevaba también (dato)
+    assert lb.claim_objects_changed(entero, entero + " y 5,1 días [[x]].")
+    assert lb.claim_objects_changed(entero + " (p. 5)", entero + " (p. 6) [[x]].")
+    # un año en la ventana es dato (la época de una observación), no localizador
+    assert lb.claim_objects_changed("Observado en 2015", "Observado en 2019 [[x]].")
+
+
 def test_564_locator_kinds_lee_la_pagina_de_actas_con_guion():
     """#564 — la celda `Evidencia` con `(p. V-61)` (actas ISCAS'99) contaba como SIN localizador."""
     assert lb.locator_kinds("(p. V-61)") == {"pdf"}

@@ -1970,15 +1970,18 @@ def _claim_tokens(text: str, hasta: int | None = None) -> set:
 
 
 #: #573 — a number that only says WHERE in the source (page, section, figure, table, equation,
-#: theorem…, or a bare `(2.5)` equation reference) or a bare year: none is what a claim asserts, and
-#: together they were most of the noise measured on an instance.
+#: theorem…): none is what a claim asserts, and together they were most of the noise measured on an
+#: instance. ⛔ #606 — ONE definition for the whole claim (window and tail), and it names the place
+#: with a word: «ejemplo»/«example» («por ejemplo 0,3»), a bare `(0.3)` and a bare year are DATA
+#: (a value, an epoch) — eating them re-anchored a `soportada` nobody judged. Ante la duda, dato.
+#: Not shared with `lib_quotes.STRUCTURAL_RE` (#598): that one asks whether a `linea` names a
+#: structural place (pages excluded); this one blanks every number that is only a place.
 _LOCALIZADOR_RE = re.compile(
     r"(?:\bpp?\.|§|\b(?i:secc?|sect|section|secci[óo]n|figs?|figure|figura|eqs?|equation|ecs?|"
     r"ecuaci[óo]n|tab|table|tabla|app?|appendix|ap[ée]ndice|chapter|cap|cap[íi]tulo|theorem|teorema|"
     r"lemma|lema|proposition|proposici[óo]n|corollary|corolario|remark|definition|definici[óo]n|"
-    r"example|ejemplo|algorithm|algoritmo)s?\.?)\s*\(?[A-Z]?\d+(?:[.,]\d+)*\)?"
-    r"(?:\s*[-–]\s*\d+(?:[.,]\d+)*)?"
-    r"|\(\d+\.\d+\)|\b(?:19|20)\d{2}\b")
+    r"algorithm|algoritmo)s?\.?)\s*\(?[A-Z]?\d+(?:[.,]\d+)*\)?"
+    r"(?:\s*[-–]\s*\d+(?:[.,]\d+)*)?")
 
 
 def claim_objects_changed(extract: str, block: str, seen: str = "") -> bool:
@@ -1991,15 +1994,18 @@ def claim_objects_changed(extract: str, block: str, seen: str = "") -> bool:
     ext = normalize_ws(extract)
     # an extract without the `…` of `truncate_claim` IS the whole claim: the window is the block
     ventana = len(ext) if ext.endswith("…") else None
+    # #606 — the ADDED side drops locators everywhere; the REMOVED side does not: a locator the row
+    # carried and the block lost or changed is data. The filler is NOT whitespace: `_claim_tokens`
+    # re-normalises, and a run of blanks collapsing would pull the tail into the window.
+    sin_loc = _LOCALIZADOR_RE.sub(lambda m: "\x00" * len(m.group(0)), normalize_ws(block))
     if (_claim_tokens(extract, hasta=ventana) - _claim_tokens(block)
-            or _claim_tokens(block, hasta=ventana) - _claim_tokens(extract)):
+            or _claim_tokens(sin_loc, hasta=ventana) - _claim_tokens(extract)):
         return True
     # #573 — the window only sees the opening: a tail appended past it (new numbers, a new object)
     # re-anchored a `soportada` nobody judged. Carrying a row asserts the block says nothing the row
     # did not see, so the WHOLE block is checked against everything the row saw.
     # ponytail: only decimal numbers past the window — integers, objects and authors there were mostly
     # attribution and locators (measured); widen if an added integer or object slips through.
-    sin_loc = _LOCALIZADOR_RE.sub(lambda m: " " * len(m.group(0)), normalize_ws(block))
     vistos = _claim_tokens(f"{extract} {seen}")
     return any(re.fullmatch(r"\d+\.\d+", t) and t not in vistos for t in _claim_tokens(sin_loc))
 
