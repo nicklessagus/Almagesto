@@ -265,7 +265,7 @@ def _second_hand_owners(slug: str | None = None):
     for stem, fm in fms.items():
         if fm.get("first_author"):
             for y in [fm.get("year")] + [str(v)[:4] for v in cfg.as_list(fm.get("versions"))]:
-                indice.setdefault(_owner_key(str(fm["first_author"]).split(",")[0], y), set()).add(stem)
+                indice.setdefault(_owner_key(cfg.author_surname(fm["first_author"]), y), set()).add(stem)
     for f in notas:
         fm = fms[f.stem]
         if slug and slug not in {cfg.subject_slug(str(s)) for s in

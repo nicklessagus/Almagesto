@@ -82,9 +82,8 @@ def family_match(declared_author, found_family) -> bool:
 def declared_family(author) -> str:
     """The first author's SURNAME from a hand-written `author` field, normalised. Accepts
     `Hyvärinen, A.`, `Pendse et al.`, `Rasmussen & Williams`, `Gautam V. Pendse`."""
-    chunk = _SPLIT_AUTHORS.split(str(author or ""), maxsplit=1)[0].strip()
-    tokens = [t for t in chunk.split() if not t.endswith(".")] or chunk.split()
-    return norm(tokens[-1]) if tokens else ""
+    apellido = cfg.author_surname(author).split()      # #612: one extraction for every reader
+    return norm(apellido[-1]) if apellido else ""
 
 
 def declared_of(item: dict) -> dict:

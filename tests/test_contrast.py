@@ -1601,6 +1601,17 @@ def test_594_la_vista_de_lectura_trae_el_autor_de_la_nota_del_paper(toy_vault):
     assert ct.autor("2099Zzz...999..999Z") == "autor ?"
 
 
+def test_612_autor_marca_con_interrogacion_lo_que_no_consta_y_conserva_la_grafia(toy_vault):
+    """#612 · AUD-611 — sin `n_authors` salía «et al.» aunque hubiera un solo autor, y sin `year`
+    sin año ni `?` (#392). «Nombre Apellido» da el apellido; la grafía no se normaliza (se pega)."""
+    cfg.PAPERS.mkdir(parents=True, exist_ok=True)
+    (cfg.PAPERS / "2011P.md").write_text("---\nfirst_author: Gautam V. Pendse\n---\n", encoding="utf-8")
+    (cfg.PAPERS / "2001H.md").write_text("---\nfirst_author: Hyvärinen, A.\nn_authors: 3\n"
+                                         "year: 2001\n---\n", encoding="utf-8")
+    assert ct.autor("2011P") == "Pendse et al.? ?"
+    assert ct.autor("2001H") == "Hyvärinen et al. 2001"
+
+
 def test_598_cita_avisa_el_localizador_estructural_de_esa_pagina_sin_sustituirlo(toy_vault, capsys):
     """#598 — un `linea` sólo-página cuando la extracción ubica esa página por sección: el
     fragmento lo AVISA y no lo sustituye (sería pegarle a un hecho el localizador de otro)."""

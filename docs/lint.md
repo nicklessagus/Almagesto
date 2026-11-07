@@ -324,7 +324,8 @@ template en el tag»*, con el comando que ese tag trae.
   del paper). Ninguna capa miraba el autor que la prosa le pega a una cita: el juez de verify juzga
   el contenido, y «Al Moulla et al.» sobre un paper de Artigau pasó verify y `--cierre`. Con año
   es casi siempre segunda mano legítima y queda afuera; la línea cuyos bibcodes no tienen
-  `first_author` no se evalúa. Por **línea**, como se midió: sobre una bóveda real (635 papers),
+  `first_author` no se evalúa. El apellido sale de `cfg.author_surname` —la misma extracción que
+  `contrast.autor` y `check_sources`—: «Gautam V. Pendse» da `Pendse` (#612). Por **línea**, como se midió: sobre una bóveda real (635 papers),
   30 hits sobre 139 menciones sin año, todos segunda mano salvo el caso real. El año que el
   hard-wrap pasó al renglón siguiente **del mismo bloque** cuenta (v1.408.1: 3 falsos positivos
   de 29 en la instancia, «según Donati et al.⏎(1997)»); los autores siguen siendo los de la línea,

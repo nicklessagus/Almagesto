@@ -148,15 +148,17 @@ def autor(bib: str) -> str:
     """«Surname et al. YEAR» from the paper note's frontmatter (#594) — the name the prose pins on
     `[[bib]]` is COPIED from here, never written from memory: the synthesizer, with every paper of
     the subject in context, wrote «Al Moulla et al.» over a paper by Artigau. `?` when the note or
-    the field is missing: an empty author is backlog, an invented one reads as truth (#392)."""
+    the field is missing: an empty author is backlog, an invented one reads as truth (#392) — and
+    the same for `n_authors` (`et al.?`) and `year` (#612). The surname keeps its spelling."""
     f = cfg.PAPERS / f"{cfg.note_stem(bib)}.md"
     fm = (cfg.split_fm(f.read_text(encoding="utf-8")) or {}) if f.exists() else {}
-    nombre = str(fm.get("first_author") or "").split(",")[0].strip()
+    nombre = cfg.author_surname(fm.get("first_author"))
     if not nombre:
         return "autor ?"
     n = fm.get("n_authors")
-    resto = "" if n == 1 else " et al."
-    return f"{nombre}{resto} {fm.get('year') or ''}".strip()
+    # #612 — what is not recorded is marked `?`, never assumed (#392): no `n_authors`, no «et al.»
+    resto = "" if n == 1 else " et al." if isinstance(n, int) and n > 1 else " et al.?"
+    return f"{nombre}{resto} {fm.get('year') or '?'}"
 
 
 def imprimir(slug: str, *, campo: str | None, patron: str | None, paper: str | None,

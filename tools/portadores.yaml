@@ -3811,3 +3811,23 @@ portadores:
       - modulo: scripts/harvest_views.py
         estado: usa
         motivo: "`conclusions_hatch_proposal` propone `sin_conclusiones` exactamente cuando el lint lo pediría."
+  - issue: 612
+    regla: >-
+      El autor de un `[[bibcode]]` se arma con UNA extracción del apellido a partir del
+      frontmatter (#594): «Apellido, N.», «Nombre Apellido» y «Apellido et al.» dan lo mismo; lo que
+      no consta se marca `?` (#392). La grafía se conserva (se pega en prosa); comparar normaliza.
+    funcion: lib_config.author_surname
+    patron: 'first_author.{0,40}split\(","\)'
+    consumidores:
+      - modulo: scripts/check_sources.py
+        estado: usa
+        motivo: "`declared_family` toma el último token de `author_surname`, normalizado."
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "`autor` imprime el apellido con su grafía, y `et al.?`/`?` si falta `n_authors`/`year`."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_foreign_author` compara contra el apellido de `author_surname` (AUD-608)."
+      - modulo: scripts/proposals.py
+        estado: usa
+        motivo: "`_second_hand_owners` indexa los dueños por el apellido de `author_surname`."

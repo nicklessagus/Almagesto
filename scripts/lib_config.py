@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.11"
+ALMAGESTO_VERSION = "1.415.12"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3179,6 +3179,20 @@ def append_entry(previas, entrada) -> list:
     the note, keeping EVERY earlier entry (#604). Filtering `isinstance(x, dict)` on the way pruned
     a hand-written entry in silence; what is odd stays visible where it was."""
     return as_list(previas) + [entrada]
+
+
+def author_surname(author) -> str:
+    """The first author's SURNAME as written (#392, #612): `Hyvärinen, A.` → `Hyvärinen`, `Al
+    Moulla, Khaled` → `Al Moulla`, `Gautam V. Pendse` → `Pendse`, `Rasmussen & Williams` →
+    `Rasmussen`. ONE extraction for the lint's `autor_ajeno`, `contrast.autor` and `check_sources`:
+    the lint split on the comma only and took «Nombre Apellido» whole, a false WARN (AUD-608).
+    Spelling kept —it is pasted into prose—; comparing normalises on its own side. `""` if none."""
+    chunk = re.split(r"&|;|\band\b|\bet al\b|\by\b", str(author or ""), maxsplit=1,
+                     flags=re.I)[0].strip()
+    if "," in chunk:
+        return chunk.split(",")[0].strip()
+    tokens = [t for t in chunk.split() if not t.endswith(".")] or chunk.split()
+    return tokens[-1] if tokens else ""
 
 
 def as_list(v) -> list:

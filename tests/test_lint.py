@@ -11967,6 +11967,16 @@ def test_594_el_autor_sin_anio_que_no_es_el_primer_autor_de_ningun_bibcode_de_la
     assert lint.check_foreign_author("n", f"## Papers\n\nAl Moulla et al. [[{b}]]\n", 0, fms) == []
 
 
+def test_612_first_author_NOMBRE_APELLIDO_no_da_autor_ajeno_falso():
+    """#612 · AUD-608 — `first_author: Gautam V. Pendse` (forma que `check_sources` acepta) hacía
+    acusar «Pendse et al.» sobre su propio paper: el apellido sale de `cfg.author_surname`."""
+    fms = {"2011NeuIm..55..593P": {"first_author": "Gautam V. Pendse"}}
+    assert lint.check_foreign_author("n", "Pendse et al. lo proponen [[2011NeuIm..55..593P]].\n",
+                                     0, fms) == []
+    assert len(lint.check_foreign_author("n", "Smith et al. lo proponen [[2011NeuIm..55..593P]].\n",
+                                         0, fms)) == 1
+
+
 def test_594_el_anio_que_paso_al_renglon_siguiente_sigue_siendo_segunda_mano():
     """#594 — la prosa está hard-wrapped: «según Donati et al.⏎(1997)» daba falso `autor_ajeno`
     (3 de 29 hits en la instancia). El año del renglón siguiente del MISMO bloque cuenta; el de otro

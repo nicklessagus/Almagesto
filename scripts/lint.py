@@ -6835,7 +6835,7 @@ def check_foreign_author(stem: str, body_full: str, offset: int, paper_fms: dict
                 continue
             vistas.add(i)
             ln = lineas[i]
-            autores = [_surname_key(a.split(",")[0]) for bib in lb._bibcodes(ln)
+            autores = [_surname_key(cfg.author_surname(a)) for bib in lb._bibcodes(ln)
                        if (a := str((paper_fms.get(bib) or {}).get("first_author") or "").strip())]
             if not autores:
                 continue

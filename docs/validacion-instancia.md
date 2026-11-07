@@ -2085,3 +2085,15 @@ difieren en `unidad_cita: seccion`, `sin_conclusiones: true`, PDF en disco ni vi
 que vuelva sin conclusiones, la línea «→ <bib>: la lectura volvió sin conclusiones…» sale sólo para
 notas que la categoría «sin `## Conclusiones`» del lint lista. **Devolver si** la propuesta aparece
 para una nota que el lint no pide (o falta para una que sí).
+
+## §#612 · v1.415.12 — el autor de un bibcode sale de una sola extracción
+
+Sin migración. `cfg.author_surname` extrae el apellido de `first_author` para `autor_ajeno` (lint),
+`contrast.autor` (`--cita`/`--filas`), `check_sources.declared_family` y el índice de dueños de
+`proposals` (#590): «Nombre Apellido» y «Apellido et al.» ya no dan un apellido equivocado.
+`contrast.autor` marca `et al.?` sin `n_authors` y `?` sin `year` (#392); conserva la grafía.
+
+**Validar:** `python scripts/lint.py` y `python scripts/proposals.py` idénticos (Tesis 2026-11-07:
+idénticos; `autor_ajeno` en 0; ningún `first_author` cambia de apellido). `python scripts/contrast.py
+<slug> --cita --grep <re>` sobre uno de los 23 papers sin `n_authors` → `Apellido et al.? AAAA`.
+**Devolver si** un «Apellido et al.» sobre su propio paper sigue saliendo `autor_ajeno`.
