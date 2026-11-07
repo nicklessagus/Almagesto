@@ -75,14 +75,14 @@ discriminaban, y hoy la fuente es siempre el PDF. **Nunca declares `no-soportada
 fórmula, una fila de tabla o un valor no aparezcan en el `.txt`** — el índice no los tiene y su
 ausencia no dice nada sobre el paper.
 
-**Excepción OCR — citable con salvedad:** si la nota del paper trae `fulltext_source: ocr` (el
+**Excepción OCR — índice con salvedad:** si la nota del paper trae `fulltext_source: ocr` (el
 contrato del frontmatter lo espeja — no hace falta abrir el `.txt` para saberlo) o el `.txt` abre
 con el header `# Almagesto — fulltext por OCR` (`source: ocr`), vino de tesseract (PDF escaneado
 o con fuentes sin ToUnicode que
-`pdftotext` no pudo leer; lo estampa `extract_fulltext.py`). Sigue siendo determinista y citable,
-pero el OCR puede errar **símbolos, ligaduras y notación matemática**: la verificación vale para
-**prosa**; ante una discrepancia puntual de símbolos/números en una ecuación, abrir el **PDF** para
-esa afirmación en vez de declararla `no-soportada`/`contradice`.
+`pdftotext` no pudo leer; lo estampa `extract_fulltext.py`). Sigue siendo determinista y sirve
+para ubicar, pero el OCR puede errar **símbolos, ligaduras y notación matemática**, y como toda
+capa de texto no se cita (#544): se cita del **PDF**; ante una discrepancia de símbolos/números,
+abrí el PDF en vez de declararla `no-soportada`/`contradice`.
 
 ⚠ **Excepción preprint — el `.txt` puede ser OTRA VERSIÓN del paper (#57).** Si la nota trae
 `pdf_source: eprint` (y, cuando se conoce, `eprint_version: v1`), el texto salió de **arXiv**, no

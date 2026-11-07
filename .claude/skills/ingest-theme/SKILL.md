@@ -553,7 +553,7 @@ Qué cambia respecto del flujo ADS de arriba:
 - **Fuente no-conseguible (fallback — paywall / escaneo / mojibake):** si una fuente no se puede
   obtener (sin copia libre) o su PDF no rinde texto usable (escaneo sin capa de texto, fuentes sin
   ToUnicode → `extract_fulltext` avisa "ILEGIBLE"; con `tesseract` instalado **cae solo a OCR** y el
-  `.txt` queda `source: ocr`, citable con salvedad — ver docs/operacion.md), **no frenar el ingest ni dejarla
+  `.txt` queda `source: ocr`, índice con salvedad — ver docs/operacion.md), **no frenar el ingest ni dejarla
   muda**: marcá el
   item de `sources:` con `pending: paywall|scan|unextractable|adquisicion` + `pending_motivo`
   obligatorio (#80: `adquisicion` es «no falló, el usuario la va a conseguir» — sin ese valor entraba

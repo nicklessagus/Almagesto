@@ -24,8 +24,9 @@ que la deuda real no quede mezclada con la que alguien ya cerró declarándola.
 
 ## El cierre: `--cierre` y `--cierre <slug>` (R-1, #121)
 
-Un solo detector, dos severidades: sin flag es la **pasada periódica** (las cuatro categorías
-`SEV_CIERRE` —`stale_pairs`, `unverified`, `verif_cabecera` y `cita_inventada`— reportan como
+Un solo detector, dos severidades: sin flag es la **pasada periódica** (las cinco categorías
+`SEV_CIERRE` —`stale_pairs`, `unverified`, `verif_cabecera`, `cita_inventada` y
+`par_tema_sin_decidir`— reportan como
 backlog); con `python scripts/lint.py --cierre` cuentan para
 el exit — es el paso de cierre de toda operación que tocó la nota, donde un par sin verificar
 significa que **no terminaste**. Los skills de cierre lo invocan con el flag; la pasada de higiene de
@@ -338,11 +339,6 @@ template en el tag»*, con el comando que ese tag trae.
   el único es otra sección de la misma página); el localizador se confirma en el PDF. Sin estructural para esa página (resúmenes, libros sin
   numeración) no se reporta. `contrast --cita` avisa lo mismo al emitir el fragmento, sin sustituir.
   Medido en una bóveda real: 337 de 822 paréntesis sólo-página pegados a un `[[bibcode]]`.
-- **Localizador ajeno** (#594, backlog): un par `soportada` cuya columna `Localizador` del hermano
-  dice `otro_lugar` o `sin_localizador`: el contenido está en la fuente, pero no donde la nota dice.
-  No bloquea (el dato es verdadero); se cierra corrigiendo el localizador en la nota, lo que vence
-  el ancla y la re-verificación vuelve con `ok`. Medido en una bóveda real: 7 de 40 pares
-  `soportada` con algún localizador equivocado.
 - **`.obsidian/` en la raíz del repo**: la bóveda se abrió mal (el grafo indexa el andamiaje);
   abrir `vault/` como vault y borrar ese directorio.
 - **Alias de más** (declarado en `stars.yaml` y que resuelve a otro objeto).
@@ -359,6 +355,11 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
 
 ## Backlog — verificación y garantías
 
+- **Localizador ajeno** (#594): un par `soportada` cuya columna `Localizador` del hermano
+  dice `otro_lugar` o `sin_localizador`: el contenido está en la fuente, pero no donde la nota dice.
+  No bloquea (el dato es verdadero); se cierra corrigiendo el localizador en la nota, lo que vence
+  el ancla y la re-verificación vuelve con `ok`. Medido en una bóveda real: 7 de 40 pares
+  `soportada` con algún localizador equivocado.
 - **Pares de verificación vencidos** (D-4/D-20), por **par** y no por archivo: *sin verificar*,
   *vencido por edición* (el ancla no coincide), *vencido por fuente* (el archivo leído cambió),
   *fila huérfana* (la afirmación se borró). Bloquean con `--cierre` (R-1).
@@ -392,10 +393,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   2026-09-22)`) y el detector compara contra esa fecha; el mensaje nombra las dos. Medido en
   `Almagesto-Tesis` (2026-09-22): **9 de 14** notas de entidad, 1499 pares, `--reanclar` moviendo
   **0 filas** en las nueve (el hermano ya estaba en sincronía: lo que faltaba era el declarante) →
-  categoría **9 → 0**, con la fecha de verificación intacta. ⚠ Cerrarla deja en su lugar el backlog
-  de **cabecera `> _Estado —_` desfasada** (7 de las 9: las dos `queries/` no llevan esa línea),
-  porque D-12 publica el arrastre al lado de la fecha de verificación — se cierra con el
-  `python scripts/make_notes.py <slug>` que la propia categoría imprime.
+  categoría **9 → 0**, con la fecha de verificación intacta. D-12 publica el arrastre al lado de
+  la fecha de verificación, y desde #550 el mismo `emit` re-estampa la cabecera `> _Estado —_`, así
+  que cerrar esta categoría ya no deja ese backlog detrás (también en `--dry-run`, AUD-589).
   ⛔ **Y el arrastre cubre la corrección todavía sin commitear (AUD-542).** El lint corre antes del
   commit, así que «el commit a la fecha del arrastre» es HEAD sin la corrección: si **pares y filas
   del hermano son el MISMO conjunto** `(bibcode, ancla)`, los bloques citados quedan certificados por
@@ -703,7 +703,7 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   `fetch_bibtex` estampa `bibtex_segunda_autoridad: {fuente: crossref, pages, fecha}` en la nota con
   `doi` cuyo bloque no es de Crossref (una vez; `--force` re-pregunta; la caída no estampa, #468), y
   el lint compara la **primera página** (`cfg.first_page`: Crossref puede dar el rango de un volumen
-  entero). Cuál gana es juicio —lo dice el PDF—: se firma con `metadata_revisada` `campo: pages`
+  entero). Cuál rige es juicio —con su evidencia, el PDF si lo hay—: se firma con `metadata_revisada` `campo: pages`
   (`fetch_bibtex.py --paper <bib> --firmar --campo pages --motivo`), y el bloque **no** se
   post-procesa (#471).
   ⛔ **Se pliega el MARKUP de los dos mundos antes de comparar** (#400): el frontmatter trae el HTML
@@ -786,6 +786,9 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   canónica de firmar es pegar lo que el reporte dice y el reporte lo trunca; un prefijo pelado
   («P») callaba toda fila del `ref` (`cfg.signed_text_matches`). El corte viejo, `_q[:80]` sin `…`
   (exactamente 80 caracteres, `cfg.LEGACY_CUT`), sigue valiendo como prefijo.
+  ⚠ Su hermana **`segunda_mano_verificada: [{ref, que, valor, localizador, motivo}]`** (#591, nota
+  de A) firma el valor **confirmado** en el PDF de B; no es categoría del lint sino firma de
+  `proposals.py` (#590), y el lint sólo le exige la forma dura: sin `localizador` es `fm_broken`.
 - **Hit de fuga/bloque/costura REVISADO y firmado con motivo** (#502, backlog): la escotilla de las
   WARN que decide una persona leyendo (`cfg.WARN_REVISABLE`: fuga de implementación, bloque con más
   de un hecho, costura de unidad, agregación sin `inferencia` #556, autor ajeno #594) — `warn_revisada: [{categoria, ancla, motivo}]` en el frontmatter de la nota.

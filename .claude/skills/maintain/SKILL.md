@@ -157,7 +157,7 @@ Y el lint tiene la red del otro lado: **capas colgadas** (registro / `raw/pdfs` 
 
 ## C. Renombrar un slug
 
-**Usá `python scripts/entity.py rename <viejo> <nuevo>`** (dry-run sin `--yes`): mueve las siete
+**Usá `python scripts/entity.py rename <viejo> <nuevo>`** (dry-run sin `--yes`): mueve las ocho
 capas, preserva el registro —si queda atrás, el triage re-propone todo lo descartado **sin el
 motivo**, que es el bug que #51 cerró— y **rehúsa** renombrar encima de artefactos existentes, que
 fusionaría dos entidades en silencio. Lleva el `slug:` del registro y los `[[<slug>]]` (en un

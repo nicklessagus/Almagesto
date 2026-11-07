@@ -73,7 +73,7 @@ safe_name = cfg.note_stem       # alias kept for callers/tests; ONE rule in lib_
 
 def _txt_provenance(path) -> str:
     """Provenance de un .txt por la marca de su primera línea: `ocr` (rescate tesseract —
-    citable con salvedad), `web` (snapshot defuddle) o `pdftotext` (extracción determinista,
+    índice con salvedad), `web` (snapshot defuddle) o `pdftotext` (extracción determinista,
     sin marca). Un solo lugar de verdad para leer el header."""
     # @inv INV-26
     with path.open(encoding="utf-8", errors="replace") as fh:
@@ -153,7 +153,7 @@ def signed_pdf_source(slug: str | None, stem: str) -> str | None:
 
 
 # Calidad de fulltext para desempatar entre copias del mismo paper bajo distintos slugs (#16):
-# `pdftotext`/`web` son extracción/snapshot limpios; `ocr` es rescate "citable con salvedad".
+# `pdftotext`/`web` son extracción/snapshot limpios; `ocr` es rescate "índice con salvedad".
 # Mayor = mejor; desconocido = 0.
 # ⛔ #478 — cubre `FULLTEXT_SOURCE_OK` ENTERO, y un test lo cruza. Hoy no falta ninguno, así que el
 # riesgo es futuro y silencioso: un valor nuevo valdría 0, o sea que una extracción de calidad
@@ -167,7 +167,7 @@ def fulltext_info(slug: str | None, stem: str) -> tuple[str | None, str | None]:
     """(ruta relativa, provenance) del fulltext `.txt` de un paper, por VERDAD DE DISCO —
     (None, None) si no hay extracción. `stem` es el nombre en disco (safe_name del bibcode /
     citekey). La provenance sale de la marca en la primera línea del .txt: `ocr` (rescate
-    tesseract — citable con salvedad), `web` (snapshot defuddle) o `pdftotext` (extracción
+    tesseract — índice con salvedad), `web` (snapshot defuddle) o `pdftotext` (extracción
     determinista, sin marca). Es el lado barato del contrato máquina-legible: el consumidor
     lee el .txt, no el PDF."""
     if not slug:
@@ -2071,8 +2071,9 @@ METODOS_HEADER = "## Métodos aplicados a esta estrella"
 INDICADORES_HEADER = "## Indicadores de actividad esperados"   # #250
 CONCEPT_ROLLUP_HEADER = "## Papers que tocan este tema (auto)"
 
-# Los cuatro estados posibles de un paper del universo de un sujeto. El orden es el del embudo:
-# cada uno es un paso menos recorrido que el anterior.
+# Los nueve estados posibles de un paper del universo de un sujeto. El embudo son cuatro
+# (`fuera del filtro` → `sin extraer` → `extraído, no sintetizado` → `sintetizado`); los otros
+# cinco son escalones declarados o curación al lado de uno de ellos.
 ESTADO_SINTETIZADO = "sintetizado"
 #: #574 · cited in the subject's prose but never READ through its lens (no dated
 #: `vistas[].sujeto` for it): the claims those blocks carry have no witness in the chain for this
@@ -2202,7 +2203,10 @@ def papers_universe(slug: str, kind: str, fms: dict | None = None) -> list:
 
     `estado` mide **cuán lejos llegó ese paper en el embudo**, que es la pregunta que la ficha no
     podía responder: `fuera del filtro` (no-core) → `sin extraer` → `extraído, no sintetizado`
-    (`methods` poblado pero su bibcode no aparece citado en ESTA ficha) → `sintetizado`.
+    (`methods` poblado pero su bibcode no aparece citado en ESTA ficha) → `sintetizado`. Al lado,
+    los escalones declarados y la curación: `sintetizado sin vista del sujeto` (#574), `sin vista
+    (declarado)` (#268), `no sintetizado (declarado)` (#553), `en cola del tema (declarado)` (#558)
+    y `excluido a mano` (#116) — nueve en total (`ESTADO_*`).
 
     `origen` es `manual` si el paper está en `extra_core` (el juicio del usuario pisa a la lente,
     #68) y `lente` si no; `via` trae el valor declarado en la config (D-58)."""
@@ -3350,14 +3354,15 @@ def stamp_ground_truth_line(slug: str, dest) -> bool:
 ESTADO_LINE_RE = re.compile(r"^> _Estado.*\n", re.M)
 
 
-def estado_line(slug: str, dest, fms: dict | None = None) -> str:
+def estado_line(slug: str, dest, fms: dict | None = None, texto: str | None = None) -> str:
     """La línea de estado de la cabecera: **búsqueda · síntesis · verificación** (INV-82). `""` si
     no hay ninguna.  @inv INV-82
 
     Las tres avanzan por separado y pueden divergir sin que ninguna mienta: refrescar el corpus
     mueve la de búsqueda y **no** la de síntesis, que es exactamente lo que hace legible que la
     prosa sea más vieja que el universo que la ficha declara. `fms` = the paper index, when the
-    caller already parsed it (the lint: `test_escala`)."""
+    caller already parsed it (the lint: `test_escala`); `texto` = the note's text when it is not
+    on disk yet (a dry-run, AUD-589)."""
     bs = cfg.load_busquedas(slug)
     b = bs[-1] if bs else {}
     partes = []
@@ -3408,7 +3413,8 @@ def estado_line(slug: str, dest, fms: dict | None = None) -> str:
         # y sin ella un refresh dejaba la ficha leyéndose como re-sintetizada.
         n = sint.get("n_papers")
         partes.append(f"síntesis {sint['fecha']}" + (f" ({n} papers)" if n else ""))
-    texto = dest.read_text(encoding="utf-8") if dest.exists() else ""
+    if texto is None:
+        texto = dest.read_text(encoding="utf-8") if dest.exists() else ""
     # AUD-136 — acá se buscaba el PRIMER encabezado con un regex propio, y el lint toma el MÁXIMO
     # (una nota acumula varios bloques: pasadas sucesivas sobre secciones distintas). Dos
     # implementaciones de la misma regla, contradictorias: la cabecera publicaba una fecha vieja
@@ -3444,18 +3450,25 @@ def stamp_estado(slug: str, dest) -> bool:
     stamper que re-fecha en cada corrida ensucia el diff y hace ilegible qué cambió de verdad."""
     if not dest.exists():
         return False
-    new = estado_line(slug, dest)
     text = dest.read_text(encoding="utf-8")
-    out = _sub_en_cabecera(text, ESTADO_LINE_RE)
-    if new:
-        i = out.find(GENERATOR_LINE)
-        if i < 0:
-            return False
-        out = out[:i] + new + out[i:]
+    out = estado_text(slug, dest, text)
     if out == text:
         return False
     cfg.write_text_atomic(dest, out)
     return True
+
+
+def estado_text(slug: str, dest, text: str) -> str:
+    """`text` with its `> _Estado — …_` line re-stamped (unchanged if the header is outside the
+    contract). Pure, so a dry-run shows the line the real run would write (AUD-589)."""
+    new = estado_line(slug, dest, texto=text)
+    out = _sub_en_cabecera(text, ESTADO_LINE_RE)
+    if new:
+        i = out.find(GENERATOR_LINE)
+        if i < 0:
+            return text
+        out = out[:i] + new + out[i:]
+    return out
 
 
 def write_star_note(slug: str, force: bool) -> None:
@@ -3806,7 +3819,7 @@ def write_paper_notes(slug: str, force: bool, theme: bool = False) -> None:
             "citation_count": r.get("citation_count", 0),
             "pdf": pdf_rel,
             "fulltext": txt_rel,           # el artefacto BARATO del contrato: leer/grep esto, no el PDF
-            "fulltext_source": txt_src,    # pdftotext | ocr (citable con salvedad) | web
+            "fulltext_source": txt_src,    # pdftotext | ocr (índice con salvedad) | web
             # de QUÉ documento salió (#57), distinto del método de extracción de arriba:
             # eprint (arXiv, puede ser un v1 pre-referato) | ads | publisher | web | null
             "pdf_source": pdf_src,
@@ -3994,7 +4007,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "citation_count": None,
         "pdf": pdf_rel,                      # off-ADS: null salvo PDF local ya copiado a raw/pdfs/<slug>/
         "fulltext": txt_rel,                 # el artefacto BARATO del contrato: leer/grep esto, no el PDF
-        "fulltext_source": txt_src,          # pdftotext | ocr (citable con salvedad) | web
+        "fulltext_source": txt_src,          # pdftotext | ocr (índice con salvedad) | web
         "pdf_source": pdf_src,               # de QUÉ documento salió (#57): web | eprint | … | null
         **({"eprint_version": pdf_ver} if pdf_ver else {}),
         # fuente aún no obtenida (paywall|scan|unextractable) → derivada al usuario; sólo si aplica

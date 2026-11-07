@@ -516,10 +516,10 @@ resuelve, no promedia. Vocabulario **cerrado** y bloqueante.
 
 #### Escotillas y metadata de estado
 
-- `no_sintetizado: [{sujeto, motivo}]` (#75, **por sujeto** #553 — el escalar bloquea):
-  este paper **ya extraído** legítimamente no se inlinea en la nota de
-  ese sujeto —típicamente por la **regla de poda**—. Motivo **obligatorio** (no curar en silencio);
-  sin ella, el lint lo reporta como *extraído pero no sintetizado*.
+- `no_sintetizado: [{sujeto, motivo}]` (#75, **por sujeto** #553 — el escalar bloquea): este
+  paper **ya extraído** legítimamente no se inlinea en la nota de ese sujeto —típicamente por la
+  **regla de poda**—. Motivo **obligatorio**; sin ella, el lint lo reporta como *extraído pero no
+  sintetizado*. Su par **pendiente** en un tema: `cola_tema: [{tema, fecha, motivo}]` (#558).
 - `retracted: true` + `retraction{type,notice_doi,date,source}`: lo estampa
   `scripts/check_retractions.py` (Crossref) y el lint lo surface como **bloqueante** (fuente no
   válida).
@@ -871,8 +871,9 @@ el `.txt`.
    régimen** en que la fuente lo afirma y —si la fuente lo atribuye a otro trabajo— la marca
    **segunda mano** con la cita a X. **El cruce que la síntesis levanta se acredita nombrando al
    dueño —o se firma revisado (#433)** en `segunda_mano_revisada: [{ref, que, motivo}]` del
-   frontmatter de la ficha o el concepto. **Nada de prosa comparativa en la nota de paper**:
-   comparar dos papers es `inferencia` y va al `## Inventario por eje` (2b).
+   frontmatter de la ficha o el concepto (el valor confirmado en el PDF de B: `segunda_mano_verificada`,
+   #591). **Nada de prosa comparativa en la nota de paper**: comparar es `inferencia` y va al
+   `## Inventario por eje` (2b).
 
 2b. **Contraste cross-paper (#72)** ⚠ *(**3b** en `ingest-star`, **3c** en `ingest-theme`)* — **entre
    leer los papers y escribir la síntesis**; el paso con más apalancamiento y el que más fácil se
@@ -993,7 +994,7 @@ Toda decisión de curación deja registro **versionado**, en los cuatro casos:
 | | Aceptar | Descartar |
 |---|---|---|
 | **con bibcode ADS** | `extra_core: {bibcode, via, motivo[, fecha]}` (D-58) | candidato del chaining: `triage --drop … --reason` (#51) · **core del sujeto: `triage --drop-core … --reason` (#112)** |
-| **fuente off-ADS** | `sources: {…, via, fecha, motivo}` (#111) | `triage --drop-source … --reason` (#81) |
+| **fuente off-ADS** | `sources: {…, via, fecha, motivo}` (#111) · de otro tema: `triage --accept-key` (#583) | `triage --drop-source … --reason` (#81) |
 
 **`extra_core` fuerza la entrada; `--drop-core` es su simétrico (#112).** Una decisión de curación
 que el clasificador ignora en silencio es peor que no tomarla. Propiedades del carril:
@@ -1071,8 +1072,8 @@ PDF** (obligatoria; sin cita ⇒ no-soportada: tiene que tocar el **contenido di
 vuelven.
 
 **La condición se clasifica, con vocabulario cerrado: `acota` | `contextualiza` (#221).** Test:
-***¿la afirmación queda falsa si se saca la condición?*** → **`acota`** (se resuelve sí o sí: fila de
-`## Régimen de validez`) / **`contextualiza`** (va al reporte). Es **columna, no prosa**.
+***¿la afirmación queda falsa si se saca la condición?*** → **`acota`** (se resuelve sí o sí, en uno de
+cinco destinos cerrados, #576) / **`contextualiza`** (va al reporte). Es **columna, no prosa**.
 **Clase una vez; la resolución la escribe `write_verif_sidecar --resolver
 <ancla>[:<bibcode>]=<dónde>` (#427)**. **Se direcciona por
 el par, no por el ancla (#434).** **La condición de una ronda posterior no se pierde (#451):** rige
@@ -1123,12 +1124,11 @@ archivo **leído**. Los calcula `lib_blocks.py`: **no se escriben a ojo**. **El 
 re-parsea antes de publicarse (#284):** `lib_blocks.render_verif_table` escapa cada celda y
 **rehúsa** un bloque cuya lectura no reproduce lo escrito.
 
-**Salvedades de fuente:** `.txt` con header `source: ocr` → citable con salvedad (ante discrepancia
-de símbolos, abrir el PDF). `pdf_source: eprint` → una discrepancia numérica contra un valor
-publicado es candidata a **diferencia de versión**, no se "corrige" la nota hacia el preprint. Si
-una afirmación no aparece en el `.txt` (ecuación, tabla, escaneo): abrir el PDF o marcar `no
-verificable por extracción`. Es **juicio de LLM**, no prueba: su tasa de error se mide con el
-**auto-benchmark** (`python scripts/bench_verify.py seed`; nada de eso entra al vault).
+**Salvedades de fuente:** `.txt` con `source: ocr` → índice (erra símbolos; se cita del PDF,
+#544). `pdf_source: eprint` → la discrepancia numérica es candidata a **diferencia de versión**
+(#57). Si una afirmación no aparece en el `.txt` (ecuación, tabla, escaneo): abrir el PDF; `no
+verificable por extracción` es sólo para la fuente sin PDF ni `.txt` (#223/#595). El verify es
+**juicio de LLM**: su tasa de error la mide `bench_verify.py` (fuera del vault).
 
 **Qué es una `inferencia` y cómo se escribe (D-42).** Una afirmación que la bóveda sostiene y que
 **ninguna fuente dice**: sale de combinar dos o más que sí. Se escribe **nombrando sus premisas**
@@ -1180,9 +1180,9 @@ re-verificación**. La extracción queda **marcada** `_paginacion` y se **re-pag
 nota, add-only, y avisa si el entrante tiene menos páginas (#437)** — avisa, no rehúsa.
 **Los slugs son la unión de PDF y `.txt` (#448).**
 **El reuso entre slugs (D-18) deja una pregunta hecha, no una respuesta (#297):** la línea del
-reuso declara `pdf_source`, fecha y que la antigüedad **no se chequeó** (preprint y publicado no
-colisionan por DOI, #216); el detector se corre acotado con `sweep_external.py --bibcodes b1,b2` (no
-registra la pasada), y el lint lo levanta como backlog, junto con *«`_red.yaml` no existe»*.
+reuso declara `pdf_source`, fecha y que la antigüedad **no se chequeó** (con bibcode de revista,
+la cubre #298, #549; preprint y publicado no colisionan por DOI, #216); el detector se corre
+acotado con `sweep_external.py --bibcodes b1,b2` (no registra la pasada), y el lint lo levanta como backlog, junto con *«`_red.yaml` no existe»*.
 **Reporta, no aplica solo — con una excepción nombrada** (AUD-206): **`retracciones`**
 (`check_retractions` estampa `retracted:` / `corrections:` **sin preguntar**: una fuente retractada
 citada rompe la frontera dura, y lo que escribe es metadata). Versiones y web proponen el comando,
@@ -1281,9 +1281,9 @@ receta dice *«re-ingestar, o migrar con el template en el tag vX»* (`cfg.retir
 a mano. No mira las `SECCIONES_ESTAMPADAS` (#214), y la exención no alcanza a `## Vista — <sujeto>`.
 
 **El cierre toma el SUJETO: `python scripts/lint.py --cierre <slug>` (R-1, #121).** Sin flag, las
-cuatro `SEV_CIERRE` —pares vencidos (D-4/D-20), cobertura y cabecera de verificación, `cita_inventada`
-(#318)— son **backlog** (el «stale» va por el conjunto de anclas de los bloques, #445); con `--cierre`
-**bloquean** — un par sin verificar significa que no terminaste (D-5). Con el slug, el alcance son
+cinco `SEV_CIERRE` —pares vencidos (D-4/D-20), cobertura y cabecera de verificación, `cita_inventada`
+(#318), `par_tema_sin_decidir` (#558)— son **backlog** (el «stale» va por el conjunto de anclas de
+los bloques, #445); con `--cierre` **bloquean** — un par sin verificar significa que no terminaste (D-5). Con el slug, el alcance son
 las notas del sujeto (ficha/concepto + papers, incluidos los retro-linkeados); ⚠ **el reporte no se
 acota** (la deuda ajena se lista, marcada *«no frena»*) y **el alcance acota sólo la severidad de
 cierre**. Slug inexistente → rehúsa (exit 2). Sin argumento, pasada de cierre global. Los skills de

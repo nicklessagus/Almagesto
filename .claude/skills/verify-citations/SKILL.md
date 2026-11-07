@@ -528,7 +528,7 @@ Chequeo afirmación↔fuente (skill `verify-citations`). N pares; X soportadas /
 
 > ⬇ La tabla —una fila por par, con su ancla y su hash de fuente— vive en el hermano [`<nota>.verif.md`](<nota>.verif.md) (#344).
 
-Inferencias declaradas (sin cita, por diseño) — 6 marcas en el cuerpo: <listar las 6>.
+Inferencias declaradas — 6 marcas en el cuerpo: <listar las 6, cada una con sus premisas `[[bibcode]]`, D-42>.
 
 Omisiones en transcripciones: <tabla/lista, qué faltaba, cómo se resolvió> — o "ninguna".
 
@@ -571,8 +571,8 @@ python scripts/write_verif_sidecar.py --restamp-section --todo           # toda 
 | # | Afirmación (extracto) | Fuente | Veredicto | Evidencia | Ancla | Hash fuente | Condición | Localizador |
 |---|---|---|---|---|---|---|---|---|
 | 1 | YZ CMi κ ≈ −2.6 | [[2018A&A...609A..12Z]] | soportada | "gradient of −2.6 Np−1 (±21%)" (L966) | 3f9c1e2ab4 | txt:7b40d8aa11 | — | ok |
-| 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | txt:55aa10ffe3 | — | — |
-| 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | txt:0ab77e2c41 | — | — |
+| 2 | activas −2.4/−2.6 | [[2025A&A...696A..27J]] | no-soportada→corregida | el paper da −2.65 a −3.70; el −2.6 es de Zechmeister | c17e0a9b22 | txt:55aa10ffe3 | — |  |
+| 3 | señal g confirmada | [[2016A&A...585A.134D]] | contradice→disputa | "is an artifact of... rotation" (L2101) → tagueada en disputes[] | 90bb4c1de7 | txt:0ab77e2c41 | — |  |
 | 4 | P_rot = 36,5 d | [[2017MNRAS.468.4772S]] | soportada | "36.5 ± 2.3" (L320) | 5c1de790bb | txt:41c0ab772e | contextualiza: promedio pesado de 4 proxies; el K de 0,50 m/s es de la señal a 35,0 d, no a 36,5 | ok |
 ```
 Convertir fechas relativas a absolutas. Notación `$...$` en archivos `vault/wiki/` (texto plano en chat).

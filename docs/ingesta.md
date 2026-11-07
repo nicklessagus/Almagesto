@@ -259,7 +259,7 @@ tema (ADS y off-ADS) escriben el mismo bloque.
 - **La extracción tiene que llegar (#75).** Un paper con `methods` poblado ya pagó el paso más caro
   de la cadena; si su bibcode no aparece citado en ninguna ficha ni concepto, esa extracción se
   perdió. El lint lo reporta como backlog. Se cierra sintetizándolo, o declarando `no_sintetizado:
-  <motivo>` en su nota cuando la regla de poda manda dejarlo fuera de la prosa.
+  [{sujeto, motivo}]` (por sujeto, #553; el escalar es schema retirado) en su nota cuando la regla de poda manda dejarlo fuera de la prosa.
 
 ## 5. Backlog abierto
 

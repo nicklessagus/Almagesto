@@ -27,9 +27,9 @@ ADS —el bibcode repetido por página—: pasa el mínimo global y antes se con
 
 Rescate por OCR (opt-in por instalación): si el texto de `pdftotext` NO es legible y hay
 `tesseract` (+ `pdftoppm`, de poppler) instalado, se cae SOLO a OCR (pdftoppm 300 dpi + tesseract
-por página) y el .txt queda marcado con un header `source: ocr` — **citable con salvedad**: el OCR
-puede errar símbolos/ligaduras/notación matemática; la cita textual vale para prosa (ver
-verify-citations). `--ocr` fuerza la vía OCR aunque la capa de texto pase el umbral (con --force
+por página) y el .txt queda marcado con un header `source: ocr` — **índice con salvedad**: el OCR
+puede errar símbolos/ligaduras/notación matemática, y como toda capa de texto sirve para ubicar,
+no para citar (#544: se cita del PDF). `--ocr` fuerza la vía OCR aunque la capa de texto pase el umbral (con --force
 re-extrae también los existentes). Un .txt viejo ilegible se re-extrae solo cuando aparece
 tesseract (upgrade automático; un .txt ya-OCR ilegible no se reintenta). Si el rescate por OCR
 RINDE ALGO (texto, aunque siga sin pasar `is_legible` — p. ej. mojibake u OCR de baja calidad), se
@@ -383,7 +383,7 @@ def main() -> int:
                     "`pending` en sources:.")
                 continue
             ok, _why2 = is_legible(ocr_text)
-            text = ocr_header(why) + ocr_text        # header source: ocr → citable con salvedad
+            text = ocr_header(why) + ocr_text        # header source: ocr → índice con salvedad (#544)
             why = _why2
         cfg.write_text_atomic(out, text)
         if ok:

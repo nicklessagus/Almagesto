@@ -515,17 +515,17 @@ def emit(note: Path, text: str, rows: list, fecha: str, *, dry_run: bool = False
     nuevo = text.replace(vieja, seccion, 1) if vieja else text.rstrip("\n") + "\n\n" + seccion
     hermano = None if solo_seccion else lb.render_verif_sidecar(
         note, lb.render_verif_table(rows))                     # #284: round-trip o rehúsa
+    # #550 — the verification date of `> _Estado — …_` is read from THIS section, so the step that
+    # writes it re-stamps the line; before, it waited for a `make_notes` nobody ran after verify.
+    # Computed before the dry-run return, so the preview shows it too (AUD-589).
+    if (slug := cfg.entity_slug(note)):
+        import make_notes                # noqa: E402 — heavy, loaded only for entity notes
+        nuevo = make_notes.estado_text(slug, note, nuevo)
     if dry_run:
         return nuevo
     if hermano is not None:
         cfg.write_text_atomic(cfg.verif_sidecar(note), hermano)
     cfg.write_text_atomic(note, nuevo)
-    # #550 — the verification date of `> _Estado — …_` is read from THIS section, so the step that
-    # writes it re-stamps the line; before, it waited for a `make_notes` nobody ran after verify.
-    if (slug := cfg.entity_slug(note)):
-        import make_notes                # noqa: E402 — heavy, and only the writing path needs it
-        make_notes.stamp_estado(slug, note)
-        nuevo = note.read_text(encoding="utf-8")
     return nuevo
 
 
@@ -1059,8 +1059,8 @@ def main(argv=None) -> int:
                     help="con --refutar-extraccion: por qué (obligatorio)")
     ap.add_argument("--fecha", default=None,
                     help="fecha del bloque. Default: hoy sólo con `--from` (una ronda de "
-                         "fan-out); con `--reanclar`, `--restamp-section`, `--resolver`, "
-                         "la que el bloque ya "
+                         "fan-out); con `--reanclar`, `--restamp-section`, `--resolver` y "
+                         "`--reclasificar`, la que el bloque ya "
                          "tiene (nada se verificó, #395) — pasarla re-fecha el bloque. Con "
                          "`--refutar-extraccion` rehúsa (AUD-535)")
     ap.add_argument("--dry-run", action="store_true", help="no escribe: dice qué haría")

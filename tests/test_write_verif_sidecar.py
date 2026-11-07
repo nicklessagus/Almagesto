@@ -1394,6 +1394,23 @@ def test_550_el_verify_re_estampa_la_linea_de_estado_con_su_fecha(toy_vault):
     assert len(estado) == 1 and "verificación 2026-03-01" in estado[0], estado
 
 
+def test_AUD589_el_dry_run_muestra_el_re_estampado_de_la_linea_de_estado(toy_vault):
+    """AUD-589 — `emit` re-estampaba `> _Estado — …_` sólo al escribir: el preview decía «sin
+    cambio» sobre una nota cuya única diferencia era esa línea, y la corrida real la cambiaba."""
+    _escena(toy_vault)
+    cuerpo = ("\n> ⚠ **Capa LLM — revisar antes de citar.**\n"
+              f"{cfg.GENERATOR_LINE}9.9.9._\n\n" + CUERPO)
+    nota = mk_note(cfg.STARS, "estrella", {"tags": ["star"]}, cuerpo)
+    ws.write(nota, _fanout(toy_vault, nota, {}), fecha="2026-03-01")
+    t = nota.read_text(encoding="utf-8")
+    nota.write_text(t.replace("verificación 2026-03-01", "verificación 2020-01-01"), encoding="utf-8")
+    antes = nota.read_bytes()
+    assert ws.restamp_section(nota, dry_run=True)["cambio"] is True
+    assert nota.read_bytes() == antes, "sin escribir"
+    ws.restamp_section(nota)
+    assert nota.read_text(encoding="utf-8") == t
+
+
 def test_577_el_triage_con_HARD_WRAP_se_conserva_entero_y_converge(toy_vault):
     """#577 — el escritor leía sólo la primera línea de la sub-sección: entre 1.239.0 y 1.249.x
     publicó el triage cortado («— 7 marcas en el cuerpo: la comparación»), y desde #430 rehusaba

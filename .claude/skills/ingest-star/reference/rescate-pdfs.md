@@ -62,7 +62,7 @@ vuelta con acceso institucional).
 **Lo maneja solo `extract_fulltext.py`.** Chequea si el PDF trae **capa de texto** legible (umbral
 determinista: chars no-espacio, **densidad por página** y fracción de ASCII imprimible) y, si no
 (escaneos-imagen puros, p. ej. Baliunas 1995, o fuentes sin ToUnicode), **cae solo a OCR** cuando hay
-`tesseract` instalado — el `.txt` queda con header `source: ocr`, **citable con salvedad** (ver
+`tesseract` instalado — el `.txt` queda con header `source: ocr`, **índice con salvedad** —se cita del PDF, #544— (ver
 `docs/operacion.md`); sin tesseract AVISA y el lint lo lista. Ojo con quirks de PostScript viejo en
 la extracción (p. ej. el signo `-` y `>` pueden salir ambos como `[`): los datos están, sólo hay que
 desambiguar por contexto.

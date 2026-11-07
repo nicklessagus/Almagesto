@@ -41,7 +41,7 @@ afirmaciones no chequeables; backlog), **cobertura de verificación** (query/con
 SIN bloque `## Verificación de citas` → nunca pasó por verify-citations; backlog ALCE-adjacent),
 **extraído pero no sintetizado** (#75: paper con `methods` poblado cuyo bibcode no aparece citado en
 ninguna ficha/concepto → la extracción, que es el paso más caro, nunca llegó a la síntesis; se cierra
-sintetizándolo o marcando `no_sintetizado: <motivo>` en la nota del paper; backlog),
+sintetizándolo o marcando `no_sintetizado: [{sujeto, motivo}]` en la nota del paper; backlog),
 **verificación stale** (la nota se editó DESPUÉS de la fecha de su bloque de verificación → las
 afirmaciones nuevas nunca pasaron por el fan-out pero quedan bajo un encabezado que se lee como
 vigente; backlog),
@@ -3144,7 +3144,7 @@ def check_unsynthesized(extracted, cited_in_entity) -> list:
     # cobertura del conjunto, así que una ficha sintetizada desde 3 papers de 40 vuelve 100%
     # soportada. La población son los papers YA extraídos, no todo el core: la regla de poda manda
     # dejar fuera de la prosa lo tangencial, pero eso normalmente ni se extrae. Escotilla explícita
-    # para el que sí se extrajo y legítimamente no se inlinea: `no_sintetizado: <motivo>` en la nota
+    # para el que sí se extrajo y legítimamente no se inlinea: `no_sintetizado: [{sujeto, motivo}]` en la nota
     # del paper — con motivo, como el `--reason` del triage: no curar en silencio.
     unsynthesized = []
     # ordenar por STEM, no por la tupla: dos notas con el mismo stem (una copia de trabajo
@@ -5126,11 +5126,11 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
             bibtex_drift.append(
                 (stem, f"`pages`: el `bibtex` ({fm.get('bibtex_source')}) dice «{_pb}» y "
                        f"{_fuente} «{_ps}» — una autoridad sola no se contradice (#593); cuál "
-                       f"imprime el PDF es juicio"
+                       f"rige es juicio"
                        + (f" y la firma `metadata_revisada` NO cubre este hallazgo ({_firma})"
                           if _estado in ("vencida", "rota") else "")
                        + f" → `python scripts/fetch_bibtex.py --paper {stem} --firmar --campo "
-                         f"pages --motivo \"<qué dice el PDF>\"`"))
+                         f"pages --motivo \"<cuál rige y con qué evidencia>\"`"))
     # AUD-472 — la firma de la nota se lee aunque ningún drift la consulte (sin `bibtex`, o los
     # campos coinciden): la rota o la que no cubre nada sale nombrada, no ignorada.
     bibtex_drift.extend((stem, m) for m in cfg.metadata_review_unused(fm, _consultados))
@@ -7977,10 +7977,10 @@ def main(argv=()) -> int:
     # era de otra estrella, y hubo que auditar las categorías a ojo, una por una, para verlo. Un
     # gate que se audita a mano dejó de ser un gate.
     ap.add_argument("--cierre", nargs="?", const="", default=None, metavar="SLUG",
-                    help="modo cierre de operación: las cuatro categorías SEV_CIERRE cuentan "
+                    help="modo cierre de operación: las cinco categorías SEV_CIERRE cuentan "
                          "para el exit —pares de verificación vencidos, cobertura de verificación "
-                         "(citas sin bloque), cabecera desincronizada de su hermano `.verif.md` y "
-                         "cita textual inventada (#318)— (sin el flag son backlog, la pasada "
+                         "(citas sin bloque), cabecera desincronizada de su hermano `.verif.md`, "
+                         "cita textual inventada (#318) y par (paper, tema) sin decidir (#558)— (sin el flag son backlog, la pasada "
                          "periódica). Con un SLUG, "
                          "sólo cuentan los de ese sujeto; la deuda ajena se reporta igual pero no "
                          "frena una operación que no la causó")

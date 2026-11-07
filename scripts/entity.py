@@ -449,8 +449,9 @@ def _rewrite_subject_layers(viejo: str, nuevo: str, *, theme: bool) -> tuple[lis
       · every note: `config/registro/<viejo>.yaml` (the Estado line) and the element `<viejo>` of an
         alcance `temas: […]` / `estrellas: […]` (D-34: the lint re-counts it against `raw/fulltext/`).
       · extractions: `vista.txt` (and for a theme `vista.sujeto`, `thesis_links`, `refuta` and
-        `temas[].tema`, the #558 decision that `theme_decision_proposals` re-proposes), rewritten only
-        when the file round-trips byte for byte through `json.dumps` — otherwise it is listed.
+        `temas[].tema`, the #558 decision that `theme_decision_proposals` re-proposes), rewritten by
+        TEXT surgery and written only when the result parses to the same edit done on the parsed
+        JSON — otherwise it is listed.
     A frontmatter that stops parsing is not written (#222)."""
     v = re.escape(viejo)
     claves = "sujeto|txt|tema" if theme else "txt"
@@ -697,10 +698,11 @@ def rename(viejo: str, nuevo: str, yes: bool) -> int:
         # `stars/<slug>.md`, so a `[[<slug>]]` IS a link to it and moves with it (measured: 63
         # broken wikilinks in a real vault when this branch skipped them).
         tocadas = _reescribir_wikilinks(viejo, nuevo)
+        n_links = len(tocadas)              # AUD-579: the moved ficha is not a rewritten wikilink
         _rewrite_note_pointers(cfg.STARS / f"{nuevo}.md", viejo, nuevo)      # #570: moved with its sidecar
         tocadas.append(cfg.STARS / f"{nuevo}.md")
         cfg.print_seguro(f"  → stars.yaml: {nombre!r} ahora tiene slug {nuevo!r} · "
-                         f"{len(tocadas)} nota(s) con wikilinks reescritos (los `stars:` llevan el NOMBRE, "
+                         f"{n_links} nota(s) con wikilinks reescritos (los `stars:` llevan el NOMBRE, "
                          f"que no cambió)")
     else:
         n_fm = sum(_renombrar_en_frontmatter(f, "thesis_links", viejo, nuevo)

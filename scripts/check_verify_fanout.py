@@ -13,11 +13,15 @@ entera y la forma sigue derivando. ⛔ Y el `KeyError` es el modo **benigno**: u
 paranoico lee **0 veredictos de un archivo que sí los tiene** y sigue —el falso limpio, sobre la
 capa que existe para no producirlos—.
 
-Este comando es la barrera de §2b del skill hecha máquina. Dos chequeos, los dos baratos:
+Este comando es la barrera de §2b del skill hecha máquina. Cuatro chequeos, todos baratos:
 
   · **forma** — cada `*.json` contra `lib_blocks.VERIF_FANOUT_SCHEMA`, **nombrando el archivo y la
     clave**. Con un directorio de sesenta archivos, «salida malformada» no dice cuál re-correr.
-  · **conteo** (`--esperados N`) — los pares del directorio contra los pares que se mandaron a
+  · **vocabulario** — `veredicto` y `localizador` fuera de lo que el fan-out puede emitir
+    (`verdict_errors`, AUD-480/#594/#595).
+  · **anclas** — las anclas que devolvió cada fuente contra las que el plan le mandó, como
+    multiconjuntos (`anchor_errors`, AUD-494).
+  · **conteo** (`--esperados N`, o el manifiesto del plan) — los pares del directorio contra los pares que se mandaron a
     juzgar; si no coinciden, **aborta**. Es la red barata de #222 (contar antes y después, como la
     guarda «los pares no bajaron» de `apply_fixes`) aplicada al otro extremo de la cadena: un
     subagente que devolvió la mitad de sus pares produce un archivo perfectamente válido.

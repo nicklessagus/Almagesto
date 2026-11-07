@@ -575,7 +575,11 @@ def apply(bibcode: str, resultado: Path, dry_run: bool = False) -> dict:
                          f"({len(filas)} contra {len(los)}): el paquete quedó viejo, re-emitilo")
     # ⛔ AUD-496 — `viejo` below comes from the extraction as it is NOW, so without this the
     # per-item guard compared the extraction with itself and a hand correction was overwritten
-    if str(res.get("localizadores_sha") or "") != locators_sha(data):
+    if not res.get("localizadores_sha"):              # AUD-595: absent is not a hand correction
+        raise ApplyError("el resultado no trae `localizadores_sha`: no se sabe contra qué "
+                         "localizadores se leyó — re-emití el paquete con `--out` y devolvé el "
+                         "resultado con ese campo")
+    if str(res.get("localizadores_sha")) != locators_sha(data):
         raise ApplyError("la extracción no tiene los localizadores que leyó el paquete "
                          "(`localizadores_sha` distinto): alguien corrigió alguno a mano después "
                          "de `--out` — re-emití el paquete; lo corregido queda como está")

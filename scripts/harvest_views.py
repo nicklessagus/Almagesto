@@ -1641,7 +1641,8 @@ def main() -> int:
     ap.add_argument("--theme", action="store_true", help="el slug es un tema, no una estrella")
     ap.add_argument("--force", action="store_true",
                     help="reescribe la sección de la vista aunque ya tenga prosa redactada, y "
-                         "reemplaza los valores que chocan en `vistas[]` (pedí --paper)")
+                         "reemplaza los valores que chocan en `vistas[]` (pedí --paper); con --paper "
+                         "reemplaza además `## Traducción …` y `## Conclusiones` (#569)")
     ap.add_argument("--paper", default=None, metavar="BIBCODE",
                     help="acota la cosecha a esa extracción — el alcance por unidad que `--force` "
                          "necesita para no re-estampar las vistas ya verificadas del slug (#420)")

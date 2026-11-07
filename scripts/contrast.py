@@ -961,7 +961,7 @@ def main(argv=()) -> int:
     """CLI: filtra las extracciones del sujeto, o valida una nota contra ellas (`--validar`)."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("slug", nargs="?", help="el sujeto (opcional con --validar)")
+    ap.add_argument("slug", nargs="?", help="el sujeto (no hace falta con --validar, --preflight ni --parafrasis)")
     ap.add_argument("--campo", choices=CAMPOS + ("que",), help="agrupar por ese campo")
     ap.add_argument("--grep", metavar="RE", help="filtrar por expresión regular")
     ap.add_argument("--paper", metavar="BIBCODE", help="sólo esa fuente")
@@ -1031,7 +1031,7 @@ def main(argv=()) -> int:
         return 1 if r["alteradas"] else 0
 
     if not args.slug:
-        cfg.print_seguro("⛔ falta el slug (sólo --validar puede ir sin él)")
+        cfg.print_seguro("⛔ falta el slug (sólo --validar, --preflight y --parafrasis van sin él)")
         return 2
     if not (cfg.EXTRACCION / args.slug).exists():
         cfg.print_seguro(f"⛔ no hay extracciones en {cfg.EXTRACCION / args.slug} — corré el "

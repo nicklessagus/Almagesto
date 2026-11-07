@@ -397,6 +397,11 @@ def run(slug: str, dry_run: bool = False) -> dict:
     return records
 
 
+#: The fields this check crosses and can sign; `pages` is in `cfg.METADATA_CAMPOS` only for
+#: `fetch_bibtex` (#593), which is the one that compares it (AUD-625).
+SIGNABLE = tuple(c for c in cfg.METADATA_CAMPOS if c != "pages")
+
+
 def firmar(slug: str, key: str, campo: str, motivo: str) -> int:
     """Print the `metadata_revisada` block for `key` — the fourth way out, when the CATALOGUE is
     the wrong one (#463).
@@ -406,8 +411,8 @@ def firmar(slug: str, key: str, campo: str, motivo: str) -> int:
     compared— and never from memory (#392): a signature typed by hand would cover a state nobody
     measured, and then it covers nothing the day the catalogue moves.
     """
-    if campo not in cfg.METADATA_CAMPOS:
-        cfg.print_seguro(f"⛔ `--campo {campo}` fuera del vocabulario ({', '.join(cfg.METADATA_CAMPOS)})")
+    if campo not in SIGNABLE:
+        cfg.print_seguro(f"⛔ `--campo {campo}` fuera del vocabulario ({', '.join(SIGNABLE)})")
         return 2
     if not str(motivo or "").strip():
         cfg.print_seguro("⛔ `--motivo` vacío: la firma sin motivo no es auditable (#463)")
@@ -458,7 +463,7 @@ def main(argv=None) -> int:
     ap.add_argument("--firmar", metavar="KEY",
                     help="firma que el equivocado es el CATÁLOGO para esa fuente (#463): imprime "
                          "el bloque `metadata_revisada` listo para pegar, no lo escribe")
-    ap.add_argument("--campo", choices=cfg.METADATA_CAMPOS, help="qué campo firma `--firmar`")
+    ap.add_argument("--campo", choices=SIGNABLE, help="qué campo firma `--firmar`")
     ap.add_argument("--motivo", help="por qué el catálogo se equivoca (obligatorio con `--firmar`)")
     args = ap.parse_args(argv)
     if args.firmar:

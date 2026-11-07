@@ -531,7 +531,9 @@ def query_ads(q: str, rows: int = 2000, quiet_truncate: bool = False,
             f"  {q}\n"
             "Si el sujeto existe en ADS es el cero espurio de #27 (intermitente): re-corré, la "
             "cadena es idempotente. Si se repite, revisá el nombre/alias del sujeto en "
-            "vault/config/stars.yaml (`ads_object`, `aliases`) o la `query` en themes.yaml.")
+            "vault/config/stars.yaml (`ads_object`, `aliases`) o la `query` en themes.yaml. Si "
+            "es una estrella que ningún paper nombra (cero verdadero), declaralo en stars.yaml: "
+            "`cero_verdadero: <motivo>` + `extra_core` con su corpus (#589).")
     # ⛔ #458 — el corte se mide contra lo que VOLVIÓ, no contra lo que se pidió, y el registro
     # guarda los dos: `rows` es la perilla y `traidos` el universo real sobre el que la ficha
     # afirma (#51/D-28). Con `--rows 3000` sobre 2000 traídos, el aviso decía «se trajeron 3000» y

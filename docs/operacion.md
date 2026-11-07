@@ -253,8 +253,9 @@ python scripts/contrast.py [<slug>] --validar
                                     #   daba 94 MAL, los 94 falsos)
 python scripts/proposals.py [<slug>]
                                     # las PROPUESTAS pendientes (#328): ampliar un `alcance`
-                                    #   (#241), un `refuta` (#212) y las celdas vacías del
-                                    #   inventario (#310), con su MOTIVO textual. No es la deuda
+                                    #   (#241), un `refuta` (#212), las celdas vacías del
+                                    #   inventario (#310) y las dos de segunda mano (dueño
+                                    #   ausente · valor sin confirmar, #590), con su MOTIVO. No es la deuda
                                     #   del lint: una propuesta espera una FIRMA, no una agenda.
                                     #   Declara población y lo no barrible; siempre sale 0
 python scripts/harvest_views.py <slug> [--theme] [--force]
@@ -398,9 +399,10 @@ expansión*): si el core recién clasificado se multiplicó respecto de las nota
 sujeto (default: ×1.5 y 50 papers nuevos o más), la cadena **frena** y muestra el conteo, cuántos
 vinieron por el grafo de citas y el puntero a `relevance.require`/`min_facets` por si el corte quedó
 flojo. `--yes` sigue a sabiendas. No es un error: es el punto donde conviene mirar antes de bajar
-cientos de PDFs. **Ojo: sólo aplica a re-ingestas.** En el **primer** ingest de un sujeto no hay
-notas previas con qué comparar, así que la cadena sigue derecho por más grande que sea el corte —
-ahí el control es el `--probe` del skill `setup` (previsualizar la lente antes de bajar nada).
+cientos de PDFs. **Y el primer ingest también frena (#529, INV-166):** sin `fetch_arxiv`/`fetch_pdf` en la `cadena`
+del sujeto ni PDF propio en disco, la cadena se detiene antes del primer paso que baja y lista lo que
+bajaría — pedir un sujeto no es aprobar su core; `--yes` sigue y deja traza. El `--probe` del skill
+`setup` sigue siendo la forma de previsualizar la lente antes.
 
 Para TEMAS (en vez de estrellas): definir el tema en `vault/config/themes.yaml` y correr
 `python scripts/ingest_theme.py <slug>`: el orquestador despacha según el campo `source` de la entrada:
@@ -810,7 +812,9 @@ quedan adentro** (#273: por par eran 369 filas sobre 291 métodos, el 30 % de un
 `## Papers` es una tabla materializada —`Bibcode | Año | Relevancia | Origen | Estado`— cuyo
 encabezado lleva **los dos números** (universo · sintetizados acá): evita prometer 155 arriba de una
 síntesis de 8. El **estado** dice cuán lejos llegó cada paper (`fuera del filtro` → `sin extraer` →
-`extraído, no sintetizado` → `sintetizado`). En un concepto el roll-up es la **unión** de `methods` y
+`extraído, no sintetizado` → `sintetizado`, o `sintetizado sin vista del sujeto` si lo cita la prosa
+sin una vista fechada para este sujeto, #574; al lado, los declarados `sin vista`, `no sintetizado`,
+`en cola del tema` y el `excluido a mano`). En un concepto el roll-up es la **unión** de `methods` y
 `thesis_links`, con la columna *Entró por* (D-24: esas dos llaves viven en papers distintos), y
 lleva **las mismas dos garantías** (#300): se habían aplicado sólo a `stars/` y el defecto seguía
 vivo acá (un concepto cerrado prometía 89 arriba de una síntesis de 30, 57 reclamados sin leer).
@@ -1889,7 +1893,9 @@ curación, por clave: `decision`/`motivo`/`fecha`). Las `decisiones` cubren los 
 para la **fuente declarada** de un tema off-ADS (#81 — clave sintética o url, con `origen:
 fuente-declarada` y un `fuente:` que la resuelva; sin `origen` = chaining), que existe porque en
 off-ADS `sources:` registra sólo lo aceptado. `ingest_theme` **avisa** —no frena— si un item de
-`sources:` lleva una clave ya descartada. Regla de
+`sources:` lleva una clave ya descartada. El **aceptar** también aterriza ahí cuando la clave off-ADS
+ya vive en el `sources:` de otro tema: `triage.py <slug> --accept-key <clave> --reason` escribe
+`aceptado` (carril `sujeto`, #583) sin re-declarar el item. Regla de
 oro: **`build/` guarda lo regenerable, el registro guarda lo que no lo es.** Un `ads.json` se
 recupera pidiéndoselo de nuevo a ADS; el juicio de por qué descartaste un candidato, no.
 `busquedas` responde la otra pregunta, la del consumidor: **sobre qué universo de papers afirma esta
@@ -1909,7 +1915,7 @@ ninguno mudo:
 | | Aceptar | Descartar |
 |---|---|---|
 | **con bibcode ADS** | `extra_core: {bibcode, via, motivo[, fecha]}` (D-58) | candidato del chaining: `triage --drop … --reason` (#51) · **core del sujeto: `triage --drop-core … --reason` (#112)** |
-| **fuente off-ADS** | `sources: {…, via, fecha, motivo}` (#111) | `triage --drop-source … --reason` (#81) |
+| **fuente off-ADS** | `sources: {…, via, fecha, motivo}` (#111) · ya declarada en otro tema: `triage --accept-key` (#583) | `triage --drop-source … --reason` (#81) |
 
 ⛔ **`extra_core` fuerza la ENTRADA; `--drop-core` es su simétrico y faltaba (#112).** Un paper que
 la lente dice core **no se podía sacar** (medido: 7 papers off-topic descartados con motivo seguían
@@ -1995,7 +2001,8 @@ pérdida en `soportada`+`condición` o `no-soportada`) y la **columna `Score` 0�
 ⛔ **La condición se CLASIFICA, con vocabulario cerrado: `acota` | `contextualiza` (#221).** El
 fan-out la puebla en casi todos los pares, así que *«resolvé cada condición»* sería la nota entera.
 Test operativo: ***¿la afirmación queda falsa si se saca la condición?*** → **`acota`** (se resuelve
-sí o sí: fila de `## Régimen de validez`) / **`contextualiza`** (va al reporte). Y es **columna, no
+sí o sí, en un destino de vocabulario cerrado —`bloque` · `siguiente` · `regimen` · `inventario` ·
+`huecos`, `lib_blocks.CONDITION_DESTINATIONS`, #576—) / **`contextualiza`** (va al reporte). Y es **columna, no
 prosa**: el juez es estable en el eje textual y no exhaustivo en el de régimen, así que absorberla
 sin rastro borra lo que hay que poder re-auditar. ⛔ **Clase UNA vez; la resolución la escribe
 `write_verif_sidecar --resolver <ancla>[:<bibcode>]=<dónde>` (#427):** duplicada, la fila es
@@ -2076,11 +2083,11 @@ hereda el del caption— y el **hash de fuente** hashea el archivo que se **ley�
 PDF), lo único que detecta que la fuente cambió sin que nadie tocara la nota. Los calcula
 `lib_blocks.py`, el mismo código que después los chequea: **no se escriben a ojo**. ⛔ **Y el bloque escrito se re-parsea antes de publicarse (#284):** `lib_blocks.render_verif_table` escapa cada celda y **rehúsa** devolver un bloque cuya lectura no reproduce lo que se le escribió — sin esa puerta, reescribir una fila leída parte la fila y el ancla se lee de la columna equivocada.
 
-**Salvedades de fuente:** `.txt` con header `source: ocr` → citable con salvedad (ante discrepancia
-de símbolos, abrir el PDF). `pdf_source: eprint` → una discrepancia numérica contra un valor
+**Salvedades de fuente:** `.txt` con header `source: ocr` → índice con salvedad (erra símbolos;
+se cita del PDF, #544). `pdf_source: eprint` → una discrepancia numérica contra un valor
 publicado es candidata a **diferencia de versión**, no se "corrige" la nota hacia el preprint. Si
-una afirmación no aparece en el `.txt` (ecuación, tabla, escaneo): abrir el PDF o marcar `no
-verificable por extracción`. Es **juicio de LLM**, robusto pero no prueba: su tasa de error se mide
+una afirmación no aparece en el `.txt` (ecuación, tabla, escaneo): abrir el PDF; `no verificable
+por extracción` es sólo para la fuente sin PDF ni `.txt` (#223/#595). Es **juicio de LLM**, robusto pero no prueba: su tasa de error se mide
 con el **auto-benchmark** (`python scripts/bench_verify.py seed` siembra citas falsas deterministas,
 el verificador las juzga a ciegas y `score` reporta el recall; nada de eso entra al vault).
 
@@ -2156,7 +2163,8 @@ bloqueante D-18/D-20 que existe para cerrar (3 de 31)—.
 artefacto que ya estaba bajo otro slug es correcto, pero importa a un sujeto nuevo un archivo cuya
 **antigüedad nadie chequeó** — y la salida natural («si hubiera versión nueva la búsqueda habría
 traído otro bibcode y D-19 los une») es falsa en el caso frecuente: el DOI del preprint identifica el
-**depósito**, así que preprint y publicado **no** colisionan (#216). La línea del reuso declara `pdf_source` y fecha y dice que **no se chequeó**; el
+**depósito**, así que preprint y publicado **no** colisionan (#216). La línea del reuso declara `pdf_source` y fecha y dice que **no se chequeó** —con bibcode de revista
+dice en cambio que la pregunta está contestada y lo cubre #298 / `acepta_preprint` (#549)—; el
 detector se puede correr acotado (`sweep_external.py --bibcodes b1,b2` — unidades, no el corpus, y
 **no** registra la pasada); y el lint lo levanta como backlog, junto con *«`_red.yaml` no existe»*
 —una bóveda donde `sweep_external` nunca corrió no tiene **ninguna** de las seis caducidades
@@ -2318,9 +2326,9 @@ o a la vez con `sin_bibtex` (#475) — la lista `SEV_BLOQUEANTE` de
 a mano. No mira las `SECCIONES_ESTAMPADAS` (#214), y la exención no alcanza a `## Vista — <sujeto>`.
 
 **El cierre toma el SUJETO: `python scripts/lint.py --cierre <slug>` (R-1, #121).** Un solo detector,
-dos severidades: sin flag, las cuatro categorías `SEV_CIERRE` —pares de verificación vencidos
-(D-4/D-20), cobertura (`unverified`), cabecera del bloque (`verif_cabecera`) y `cita_inventada`
-(#318)— reportan como **backlog** (pasada periódica — y la nota «stale» lo es por el **conjunto
+dos severidades: sin flag, las cinco categorías `SEV_CIERRE` —pares de verificación vencidos
+(D-4/D-20), cobertura (`unverified`), cabecera del bloque (`verif_cabecera`), `cita_inventada`
+(#318) y `par_tema_sin_decidir` (#558)— reportan como **backlog** (pasada periódica — y la nota «stale» lo es por el **conjunto
 de anclas** de sus bloques citables, #445: la línea en blanco que el propio lint pide no dispara);
 con `--cierre` **bloquean** — un par sin
 verificar significa que no terminaste (D-5: la nota nace 100% verificada, así que "citas sin bloque"
