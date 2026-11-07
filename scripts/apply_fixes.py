@@ -148,8 +148,11 @@ def load_fixes(fix_dir: Path) -> tuple[list, list]:
                 verb, old, new = "move", fx["mover"], fx.get("nuevo", MOVE)
             elif "viejo" not in fx and "despues_de" in fx:
                 verb, old, new = "insert", None, fx["nuevo"]
-            else:
+            elif "viejo" in fx:
                 verb, old, new = "replace", fx["viejo"], fx["nuevo"]
+            else:
+                # #619 · AUD-633 — ni `viejo` ni `despues_de` ni `mover`: `apply` lo falla nombrado
+                verb, old, new = "malformed", None, fx.get("nuevo")
             fixes.append((bib, fx["n"], old, new, fx.get("retira") or [], fx.get("despues_de"),
                           verb))
     return fixes, rejected
@@ -355,6 +358,10 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     #  @inv INV-137
     res = Result()
     pending, res.rejected = load_fixes(fix_dir)
+    res.failed += [(x[0], x[1], "el fix no dice qué toca: lleva `viejo` (reemplazar o, con "
+                                "`nuevo: null`, borrar), `despues_de` (insertar) o `mover` (#578, "
+                                "#619)") for x in pending if x[6] == "malformed"]
+    pending = [x for x in pending if x[6] != "malformed"]
 
     # A hand-merged fix wins over the originals it replaces — they targeted the same block.
     def key(x):
@@ -464,6 +471,15 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
                 planned.append((span, bib, n, new, "block", retira))
                 continue
             planned.append((span, bib, n, new, "exact", retira))
+            continue
+        if new is None and not any(b.first_line - 1 == span[0] and b.last_line == span[1]
+                                   for b in blocks):
+            # ⛔ #619 · AUD-576 — borrar es de BLOQUES (#222: la misma definición que produce los
+            # pares). Por la rama exacta, `viejo` podía ser un encabezado o un pedazo de bloque, y
+            # la red de pares no lo ve: no lleva cita.
+            res.failed.append((bib, n, "`nuevo: null` borra un BLOQUE entero de "
+                                       "`lib_blocks.split_blocks`, y `viejo` no lo es (un "
+                                       "encabezado, una línea suelta o parte de un bloque) (#619)"))
             continue
         if new is None:
             # ⛔ #568 — BORRAR un bloque es la otra cara de `retira` (#527): lo que sale se declara

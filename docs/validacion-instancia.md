@@ -2168,3 +2168,14 @@ trae la regla («El par `inferencia`»).
 ronda de `verify_fanout.py <nota> --out <dir>` sobre una de ellas, el prompt de cada premisa lleva
 la línea ⚠ debajo del par. **Devolver si** un `no-soportada` de un par `inferencia` se justifica en
 que la fuente no dice la conclusión.
+
+## §#619 · v1.415.19 — `apply_fixes` borra sólo bloques; el fix sin `viejo` falla nombrado
+
+Sin migración. `nuevo: null` exige que `viejo` sea un bloque ENTERO de `lib_blocks.split_blocks`
+(antes, por la rama exacta, borraba un encabezado). Un fix sin `viejo`, `despues_de` ni `mover`
+cae en `res.failed` con su motivo (antes: `KeyError` que tiraba la tanda).
+
+**Validar:** un fix `{"n":1,"viejo":"## Huecos","nuevo":null,"retira":[]}` sobre
+`vault/wiki/stars/61_vir.md` → «fallan: 1 … `viejo` no lo es» y «NO se escribió nada» (antes:
+«✂ BORRA el bloque entero»). `{"n":1,"nuevo":"x"}` → «el fix no dice qué toca» (antes:
+`KeyError: 'viejo'`). **Devolver si** un borrado de bloque legítimo (fila, párrafo, ítem) rehúsa.

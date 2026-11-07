@@ -802,8 +802,19 @@ def test_578_reemplazar_una_fila_heredera_no_es_un_cambio_de_ambito(tmp_path):
 
 
 def test_578_un_fix_sin_viejo_ni_despues_de_no_es_una_insercion(tmp_path):
-    with pytest.raises(KeyError):
-        _corre(tmp_path, [{"n": 1, "nuevo": "x"}])
+    """#619 · AUD-633 — falla en `res.failed`, nombrado, no con un `KeyError` que tira la tanda."""
+    res, nota = _corre(tmp_path, [{"n": 1, "nuevo": "x"}])
+    assert res.applied == 0 and "`viejo`" in res.failed[0][2], res.failed
+    assert nota.read_text(encoding="utf-8") == _NOTA578
+
+
+@pytest.mark.parametrize("viejo", ["## Stitching", "# C"])
+def test_619_nuevo_null_borra_SOLO_un_bloque_entero(tmp_path, viejo):
+    """#619 · AUD-576 — por la rama exacta, `nuevo: null` borraba una línea que no es bloque de
+    `split_blocks` (un encabezado): la red de pares no lo ve porque no lleva cita."""
+    res, nota = _corre(tmp_path, [{"n": 1, "viejo": viejo, "nuevo": None, "retira": []}])
+    assert res.applied == 0 and "bloque" in res.failed[0][2], res.failed
+    assert nota.read_text(encoding="utf-8") == _NOTA578
 
 
 def test_578_mover_una_fila_a_una_tabla_de_otro_ancho_se_rehusa(tmp_path):
