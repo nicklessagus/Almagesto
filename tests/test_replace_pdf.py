@@ -726,3 +726,13 @@ def test_AUD507_un_SEGUNDO_reemplazo_antes_de_repaginar_conserva_el_documento_le
     assert marca["pdf_sha_anterior"] == "A" * 10 and marca["motivo"] == "preprint→editor", marca
     assert marca["pdf_sha"] == "C" * 10, marca
     assert [i["pdf_sha"] for i in marca["intermedios"]] == ["B" * 10], marca
+
+
+def test_604_sign_note_no_poda_una_entrada_no_mapa_de_pdf_reemplazo(toy_vault):
+    # @inv INV-53
+    """#604 — el append de `pdf_reemplazo` (en la nota) filtraba lo que no es mapa: lo borraba."""
+    nota = mk_note(toy_vault.PAPERS, "2010S", {"bibcode": "2010S",
+                                               "pdf_reemplazo": ["nota a mano"]}, "# x\n")
+    rp.sign_note(nota, source="publisher", sha_anterior="a", sha="b", paginas="1", reason="m")
+    lista = cfg.split_fm(nota.read_text(encoding="utf-8"))["pdf_reemplazo"]
+    assert lista[0] == "nota a mano" and lista[1]["sha"] == "b"

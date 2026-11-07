@@ -291,10 +291,10 @@ def sign_note(nota: Path, *, source: str, sha_anterior: str, sha: str, paginas: 
     cfg.set_fm_scalar(nota, "pdf_source", source)
     if source != "eprint":
         cfg.set_fm_scalar(nota, "eprint_version", "null", crear=False)
-    previos = cfg.as_list((cfg.split_fm(nota.read_text(encoding="utf-8")) or {}).get("pdf_reemplazo"))
-    cfg.stamp_fm_fields(nota, {"pdf_reemplazo": [x for x in previos if isinstance(x, dict)] + [
-        {"fecha": _dt.date.today().isoformat(), "source": source, "sha_anterior": sha_anterior,
-         "sha": sha, "paginas": paginas, "motivo": reason}]})
+    previos = (cfg.split_fm(nota.read_text(encoding="utf-8")) or {}).get("pdf_reemplazo")
+    cfg.stamp_fm_fields(nota, {"pdf_reemplazo": cfg.append_entry(previos, {     # #604
+        "fecha": _dt.date.today().isoformat(), "source": source, "sha_anterior": sha_anterior,
+        "sha": sha, "paginas": paginas, "motivo": reason})})
 
 
 def backfill(bibcode: str, source: str, reason: str, sha_anterior: str = "auto",

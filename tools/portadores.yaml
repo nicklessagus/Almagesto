@@ -3754,3 +3754,17 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: "Define `drop_fm_keys`/`drop_fm_keys_from_block`, el borrado mecánico (#244); no decide qué escotilla se cierra."
+  - issue: 604
+    regla: >-
+      Un append a una lista acumulativa del registro (o de la nota) conserva lo que ya estaba:
+      nunca poda en silencio (INV-53 — el registro es el único artefacto no regenerable). Filtrar
+      `isinstance(x, dict)` para COMPUTAR está bien; escribir lo filtrado, no.
+    funcion: lib_config.append_entry
+    patron: 'isinstance\(\w+, dict\)\]\s*\+\s*\[|data\["\w+"\] = previ\w* \+ \['
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: usa
+        motivo: "`save_descubrimiento`, `save_probe`, `save_no_disputa`, `save_captura_web`, `save_barrido`, `save_busqueda` y `save_paso` escriben con `append_entry` (#604)."
+      - modulo: scripts/replace_pdf.py
+        estado: usa
+        motivo: "`sign_note` appendea a `pdf_reemplazo` de la nota con `cfg.append_entry` (#604)."

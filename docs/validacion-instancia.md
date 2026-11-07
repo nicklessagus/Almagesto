@@ -1977,3 +1977,15 @@ desapareció con el migrador en v1.412.0 (#624).
 un sujeto con extracción pendiente: `harvest_views.py <slug> [--theme] --paper <bib>` → la vista
 fechada lleva `previa_no_vista` con el motivo que tenía la escotilla y la `no_vista` ya no está.
 **Devolver si** la escotilla se saca y su motivo no queda en la nota.
+
+## §#604 · v1.415.4 — los append del registro no podan las entradas no-mapa (INV-53)
+
+Sin migración. Todo append a una lista acumulativa pasa por `cfg.append_entry`, que conserva lo
+que ya estaba: `descubrimientos`, `probes`, `no_disputas`, `capturas_web` y `pdf_reemplazo` (los
+cinco del issue) y además `barridos`, `busquedas` y `cadena`, que filtraban para computar y
+escribían lo filtrado. Filtrar para leer sigue igual.
+
+**Validar:** `python scripts/lint.py` idéntico antes y después. Una entrada a mano no-mapa en una
+de esas listas (p. ej. `cadena:` de un `registro/<slug>.yaml` de un worktree desechable) sobrevive
+a la próxima corrida que appendea (`make_notes.py <slug>` estampa su paso en `cadena`).
+**Devolver si** un append deja la lista con menos entradas que antes más una.

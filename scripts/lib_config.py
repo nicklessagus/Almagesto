@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.3"
+ALMAGESTO_VERSION = "1.415.4"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3162,6 +3162,14 @@ def _crossref_year(v) -> int | None:
     return int(m.group(1)) if m and 1500 <= int(m.group(1)) <= 2200 else None
 
 
+def append_entry(previas, entrada) -> list:
+    # @inv INV-53
+    """`previas` (as a list) plus `entrada`: the append to an accumulative list of the registro or
+    the note, keeping EVERY earlier entry (#604). Filtering `isinstance(x, dict)` on the way pruned
+    a hand-written entry in silence; what is odd stays visible where it was."""
+    return as_list(previas) + [entrada]
+
+
 def as_list(v) -> list:
     """`v` si es una lista; `[]` si no. Hermano de `as_map` para el otro lado del mismo defecto: un
     campo que el schema declara lista (`planets`, `thesis_links`, `posiciones`) pero que llega
@@ -5170,7 +5178,7 @@ def save_barrido(slug: str, barrido: dict) -> None:
     bibs = as_list(entrada.get("bibcodes"))
     entrada["n_nuevos"] = len([b for b in bibs if b not in conocidos])
     entrada["n_ya_estaban"] = len([b for b in bibs if b in conocidos])
-    data["barridos"] = previos + [entrada]
+    data["barridos"] = append_entry(data.get("barridos"), entrada)   # #604: no prune
     save_registro(slug, data)
 
 
@@ -5185,8 +5193,7 @@ def save_descubrimiento(slug: str, entrada: dict) -> None:
     Acumulativo, y no toca `decisiones` ni `busquedas`.  @inv INV-121"""
     data = load_registro(slug)
     data.setdefault("slug", slug)
-    data["descubrimientos"] = [d for d in as_list(data.get("descubrimientos"))
-                               if isinstance(d, dict)] + [entrada]
+    data["descubrimientos"] = append_entry(data.get("descubrimientos"), entrada)
     save_registro(slug, data)
 
 
@@ -5200,7 +5207,7 @@ def save_probe(slug: str, entrada: dict) -> None:
     it touches no other section."""
     data = load_registro(slug)
     data.setdefault("slug", slug)
-    data["probes"] = [p for p in as_list(data.get("probes")) if isinstance(p, dict)] + [entrada]
+    data["probes"] = append_entry(data.get("probes"), entrada)
     save_registro(slug, data)
 
 
@@ -5332,8 +5339,7 @@ def save_no_disputa(slug: str, entrada: dict) -> None:
 
     data = load_registro(slug)
     data.setdefault("slug", slug)
-    data["no_disputas"] = [d for d in as_list(data.get("no_disputas"))
-                           if isinstance(d, dict)] + [nueva]
+    data["no_disputas"] = append_entry(data.get("no_disputas"), nueva)
     save_registro(slug, data)
 
 
@@ -5354,8 +5360,7 @@ def save_captura_web(slug: str, entrada: dict) -> None:
     the old capture expires by itself when the file changes."""
     data = load_registro(slug)
     data.setdefault("slug", slug)
-    data["capturas_web"] = [c for c in as_list(data.get("capturas_web"))
-                            if isinstance(c, dict)] + [entrada]
+    data["capturas_web"] = append_entry(data.get("capturas_web"), entrada)
     save_registro(slug, data)
 
 
@@ -5372,7 +5377,8 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
     # @inv INV-51
     data = load_registro(slug)
     data.setdefault("slug", slug)
-    previas = [b for b in as_list(data.get("busquedas")) if isinstance(b, dict)]
+    crudas = as_list(data.get("busquedas"))          # #604: what is WRITTEN keeps every entry
+    previas = [b for b in crudas if isinstance(b, dict)]
     # D-28: la clave vieja `busqueda:` (mapa, UNA corrida) es el schema pre-1.26. El lector nuevo
     # no la entiende y el lint la bloquea — pero **borrarla destruye la única corrida que ese
     # registro documenta**, y el registro es el único artefacto no regenerable de la bóveda
@@ -5387,6 +5393,7 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
     if isinstance(vieja, dict) and not previas:
         vieja = {**vieja, "schema": "pre-D-28 (plegada al migrar; una sola corrida)"}
         previas = [vieja]
+        crudas = [vieja] + crudas
     conocidos: set = set()
     for b in previas:
         conocidos.update(as_list(b.get("bibcodes")))
@@ -5395,7 +5402,7 @@ def save_busqueda(slug: str, busqueda: dict) -> None:
     if bibs:
         entrada["n_nuevos"] = len([b for b in bibs if b not in conocidos])
         entrada["n_ya_estaban"] = len([b for b in bibs if b in conocidos])
-    data["busquedas"] = previas + [entrada]
+    data["busquedas"] = append_entry(crudas, entrada)
     save_registro(slug, data)
 
 
@@ -5954,7 +5961,7 @@ def save_paso(slug: str, paso: str, flags=()) -> None:
     }
     if any(p == entrada for p in previos):
         return                       # misma corrida, mismo día: sin ruido de diff
-    data["cadena"] = previos + [entrada]
+    data["cadena"] = append_entry(data.get("cadena"), entrada)   # #604: no prune
     save_registro(slug, data)
 
 

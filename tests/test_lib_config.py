@@ -4451,3 +4451,23 @@ def test_626_cada_snippet_pegado_en_su_lugar_re_parsea_al_valor(motivo):
         fm = yaml.safe_load(pegado)
         firma = (fm["sources"][0] if destino is None else fm)["metadata_revisada"][0]
         assert firma["motivo"] == motivo and firma["catalogo"] == cfg._metadata_val(motivo)
+
+
+@pytest.mark.parametrize("seccion, append", [
+    ("descubrimientos", lambda: cfg.save_descubrimiento("test_star", {"fecha": "f"})),
+    ("probes", lambda: cfg.save_probe("test_star", {"fecha": "f"})),
+    ("no_disputas", lambda: cfg.save_no_disputa("test_star", _no_disputa())),
+    ("capturas_web", lambda: cfg.save_captura_web("test_star", {"fecha": "f"})),
+    # los que filtran para COMPUTAR (`conocidos`, idempotencia) y escribían lo filtrado
+    ("barridos", lambda: cfg.save_barrido("test_star", {"fecha": "f", "bibcodes": ["b"]})),
+    ("busquedas", lambda: cfg.save_busqueda("test_star", {"fecha": "f", "bibcodes": ["b"]})),
+    ("cadena", lambda: cfg.save_paso("test_star", "query_ads")),
+])
+def test_604_el_append_del_registro_no_poda_una_entrada_no_mapa(toy_vault, seccion, append):
+    # @inv INV-53
+    """#604 — los append filtraban `isinstance(x, dict)`: una entrada escrita a mano (un string)
+    desaparecía al «appendear». El registro es el único artefacto no regenerable: append real."""
+    cfg.save_registro("test_star", {"slug": "test_star", seccion: ["nota a mano", {"fecha": "v"}]})
+    append()
+    lista = cfg.load_registro("test_star")[seccion]
+    assert lista[:2] == ["nota a mano", {"fecha": "v"}] and len(lista) == 3
