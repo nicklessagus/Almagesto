@@ -423,7 +423,7 @@ def test_el_bloque_que_CRECE_sin_ganar_citas_se_avisa(tmp_path, capsys):
     """#406 — el aviso de #389 sólo veía `[[bibcode]]` agregados, y la regla que la prosa enuncia
     («los defectos nacidos al corregir llegan con material agregado») es más ancha: un empalme que
     agregó ~90 caracteres de prosa y cero citas pasó mudo por `apply_fixes`, por
-    `contrast --validar-todo` y por `lint --cierre`. No bloquea: a veces agregar es el arreglo; lo
+    `contrast --validar` y por `lint --cierre`. No bloquea: a veces agregar es el arreglo; lo
     que hoy falta es que el operador se entere de que hay que releer el bloque."""
     viejo = "El período es de 34 días y la amplitud de 2.5 m/s [[2020X]]."
     nota = _note(tmp_path, f"# n\n\n{viejo}\n")

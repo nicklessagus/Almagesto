@@ -362,7 +362,6 @@ inventado. Y la condición `acota` ya resuelta se anota en su celda: `acota→re
 ```bash
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>=<dónde>            # repetible
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>:<bibcode>=<dónde>  # #434
-python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json               # {par: dónde}
 python scripts/write_verif_sidecar.py <nota.md> --refutar-extraccion <ancla>:<bib> --texto "<frag>" --reason "…"  # #526
 ```
 

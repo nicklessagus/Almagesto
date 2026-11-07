@@ -919,19 +919,14 @@ def _split_address(spec: str) -> tuple:
 
 
 def _parse_resoluciones(args) -> dict:
-    """`{ancla[:bibcode]: dónde}` from `--resolver A[:bib]=texto` and/or `--resoluciones <json>`.
+    """`{ancla[:bibcode]: dónde}` from `--resolver A[:bib]=texto`, repeatable (#629: the JSON batch
+    `--resoluciones` duplicated it and was removed).
 
     Refuses the malformed pair instead of guessing: an anchor with no `=` would silently resolve
     nothing, and this writes into the artefact the lint reads. The address travels as the STRING the
-    caller wrote and `resolve_conditions` splits it (#434): that keeps one spelling for the flag,
-    for the JSON file —whose keys can only be strings— and for the function's own signature."""
+    caller wrote and `resolve_conditions` splits it (#434): one spelling for the flag and for the
+    function's own signature."""
     out: dict = {}
-    if args.resoluciones:
-        datos = json.loads(Path(args.resoluciones).read_text(encoding="utf-8"))
-        if not isinstance(datos, dict):
-            raise SidecarError(f"{args.resoluciones}: se esperaba un objeto "
-                               f"`{{ancla[:bibcode]: dónde}}`")
-        out.update({str(k).strip(): str(v) for k, v in datos.items()})
     for item in args.resolver or []:
         if "=" not in item:
             raise SidecarError(f"`--resolver {item}`: falta el `=` — la forma es "
@@ -942,7 +937,7 @@ def _parse_resoluciones(args) -> dict:
 
 
 def _main_condiciones(args) -> int:
-    """`--resolver` / `--resoluciones` / `--reclasificar` (#580):
+    """`--resolver` / `--reclasificar` (#580):
     the `Condición` cell (#427).
 
     The two write through `_rewrite_rows`, so they get the round-trip guard, the generated header
@@ -1039,8 +1034,6 @@ def main(argv=None) -> int:
                     default=None,
                     help="#427: marca una condición `acota` como resuelta "
                          "(`acota→resuelta: <dónde>`); repetible")
-    ap.add_argument("--resoluciones", metavar="JSON", default=None,
-                    help="#427: archivo JSON `{ancla: dónde}` — el mismo trabajo en lote")
     ap.add_argument("--reclasificar", action="append", metavar="ANCLA[:BIBCODE]", default=None,
                     help="#580: la `contextualiza` vigente de ese par pasa a `acota` (encadenada, "
                          "no pisada) — la firma de una propuesta de `verify_fanout.py "
@@ -1066,8 +1059,8 @@ def main(argv=None) -> int:
                     help="con --refutar-extraccion: por qué (obligatorio)")
     ap.add_argument("--fecha", default=None,
                     help="fecha del bloque. Default: hoy sólo con `--from` (una ronda de "
-                         "fan-out); con `--reanclar`, `--restamp-section`, `--resolver`/"
-                         "`--resoluciones`, la que el bloque ya "
+                         "fan-out); con `--reanclar`, `--restamp-section`, `--resolver`, "
+                         "la que el bloque ya "
                          "tiene (nada se verificó, #395) — pasarla re-fecha el bloque. Con "
                          "`--refutar-extraccion` rehúsa (AUD-535)")
     ap.add_argument("--dry-run", action="store_true", help="no escribe: dice qué haría")
@@ -1082,8 +1075,7 @@ def main(argv=None) -> int:
     # cascada de abajo corría el primero e ignoraba el resto en silencio (INV-169, como AUD-535).
     modos = [m for m, v in (("--from", args.fanout), ("--restamp-section", args.restamp),
                             ("--reanclar", args.reanclar), ("--refutar-extraccion", args.refutar),
-                            ("--resolver/--resoluciones/--reclasificar",
-                             args.resolver or args.resoluciones or args.reclasificar)) if v]
+                            ("--resolver/--reclasificar", args.resolver or args.reclasificar)) if v]
     if len(modos) > 1:
         ap.error(f"{' y '.join(modos)} son modos distintos: uno por corrida (#616)")
     for flag, puesto, modo in (("--todo", args.todo, args.restamp),
@@ -1100,12 +1092,12 @@ def main(argv=None) -> int:
         return _main_restamp(args)
     if args.reanclar:
         return _main_reanclar(args)
-    if args.resolver or args.resoluciones or args.reclasificar:
+    if args.resolver or args.reclasificar:
         return _main_condiciones(args)
     if not args.nota or not args.fanout:
         # AUD-534 — el mensaje nombra TODOS los modos, no los dos que había cuando se escribió
         cfg.print_seguro("⛔ hace falta la nota y `--from <dir>`, o uno de los otros modos: "
-                         "`--restamp-section`, `--reanclar`, `--resolver`/`--resoluciones`, "
+                         "`--restamp-section`, `--reanclar`, `--resolver`, "
                          "`--reclasificar`, `--refutar-extraccion` (`--help` los "
                          "describe)")
         return 2

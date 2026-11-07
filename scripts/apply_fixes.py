@@ -579,7 +579,7 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
             res.added.append((bib, n, entran))
         # #406 — el aviso de #389 sólo veía `[[bibcode]]` AGREGADOS, y la regla que la prosa
         # enuncia («llegan con material agregado») es más ancha: un empalme que agrega ~90
-        # caracteres de prosa y cero citas pasaba mudo por acá, por `contrast --validar-todo` y por
+        # caracteres de prosa y cero citas pasaba mudo por acá, por `contrast --validar` y por
         # `lint --cierre`. Se mide el crecimiento NETO en texto normalizado; no bloquea.
         delta = len(normalise(nuevo_txt)) - len(normalise(viejo_txt))
         if delta >= CRECE_MIN_CHARS and not entran:

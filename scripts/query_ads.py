@@ -1,7 +1,7 @@
 """Consulta NASA ADS por estrella → metadata de papers + clasificación de relevancia.
 
 Uso:
-    python scripts/query_ads.py <slug> [--rows N] [--no-chain] [--no-glyph] [--sweep]
+    python scripts/query_ads.py <slug> [--rows N] [--sweep]
     python scripts/query_ads.py <slug> --theme            # tema (query cruda de themes.yaml)
     python scripts/query_ads.py <slug> --extra-only       # sólo los bibcodes de extra_core (tema mixto)
     python scripts/query_ads.py <slug> [--theme] --dry-run  # re-clasificar en memoria, sin red ni escritura
@@ -44,7 +44,7 @@ mega-citados genéricos del área, no papers del sujeto), clasifica los candidat
 `via`: `query` | `chain:references` | `chain:citations` | `manual`). Recupera papers que la query por
 título/abstract pierde (p. ej. surveys que tabulan la estrella sin nombrarla en el abstract).
 Sólo entran los core: los no-core encadenados no se agregan (inundarían el apéndice "Excluidos").
-Desactivar con --no-chain. `--probe` no encadena (es sólo preview; lista TODO el core del corte).
+`--probe` no encadena (es sólo preview; lista TODO el core del corte).
 
 **Compuerta de triage del chaining (#38, estrellas):** el chaining PROMOVÍA a core todo lo que el
 grafo traía y matcheaba la lente, pero la lente clasifica **tema** y lo que hay que filtrar acá es
@@ -86,7 +86,7 @@ agujero de recall sistemático — ADS unifica `epsilon`/`eps`/`ε`, pero **desc
 la constelación y `title:"epsilon Eridani"` no los ve nunca (medido en ε Eri: **121 core perdidos**,
 incluido el descubrimiento). Tras la query directa se trae el superset de la constelación y se filtra
 **client-side** por el glifo pegado al nombre (`via: glyph`); corre antes del chaining, así lo
-recuperado siembra el grafo. Sólo aplica si el nombre/alias es Bayer; se desactiva con `--no-glyph`.
+recuperado siembra el grafo. Sólo aplica si el nombre/alias es Bayer.
 Si el superset supera `--rows` el corte top-por-citas pasa **antes** del filtro por glifo — justo
 donde vive la señal—: el truncamiento queda marcado aparte (`truncated_glyph` en ads.json, distinto
 del `truncated` de la query directa) y el lint lo surface como rescate incompleto (#43).
@@ -1585,13 +1585,6 @@ def main() -> int:
                     help="tope de registros por query (default 2000 ≈ el máximo de una request ADS; "
                          "cubre la enorme mayoría de sujetos sin truncar). Si igual trunca, queda "
                          "marcado en build/<slug>/ads.json y el lint lo surface")
-    ap.add_argument("--no-chain", action="store_true",
-                    help="desactivar el citation chaining (references/citations de los papers core)")
-    ap.add_argument("--no-glyph", action="store_true",
-                    help="desactivar el rescate por glifo de nombres Bayer (ε/ϵ/∊ Eri): trae el "
-                         "superset de la constelación y filtra client-side. Sólo corre si el "
-                         "sujeto tiene nombre de letra griega; desactivarlo si el superset es "
-                         "demasiado grande y preferís curar a mano")
     ap.add_argument("--theme", action="store_true",
                     help="el slug es un TEMA de vault/config/themes.yaml (query Solr cruda), no una estrella")
     ap.add_argument("--extra-only", action="store_true",
@@ -1640,8 +1633,6 @@ def main() -> int:
         # #616 · AUD-570 — sin `--registrar` el criterio no va a ningún lado (INV-169)
         ap.error("--criterio va con --registrar: sin registro, el criterio no se guarda en ningún lado")
     if args.dry_run and (_ajenos := [f for f, v in (("--sweep", args.sweep),
-                                                     ("--no-chain", args.no_chain),
-                                                     ("--no-glyph", args.no_glyph),
                                                      ("--extra-only", args.extra_only),
                                                      ("--probe", args.probe is not None)) if v]):
         # #616 · AUD-570 — `--dry-run` es la re-clasificación OFFLINE de `build/`: no consulta ADS,
@@ -1649,8 +1640,6 @@ def main() -> int:
         ap.error(f"--dry-run (re-clasificación offline de build/) no honra {', '.join(_ajenos)}: "
                  f"rehúso en vez de ignorarlo")
     if args.probe is not None and (_ajenos := [f for f, v in (("--sweep", args.sweep),
-                                                               ("--no-chain", args.no_chain),
-                                                               ("--no-glyph", args.no_glyph),
                                                                ("--extra-only", args.extra_only)) if v]):
         # #616 — el preview corre la query cruda y retorna: tampoco honra los flags de la corrida
         ap.error(f"--probe (preview de la query) no honra {', '.join(_ajenos)}: rehúso en vez de "
@@ -1926,7 +1915,7 @@ def main() -> int:
     # rescate por glifo (#28) — ANTES del chaining, para que los recuperados (típicamente el paper
     # de descubrimiento) siembren también el grafo de citas.
     gmeta: dict = {}                # truncamiento del superset del rescate por glifo (#43)
-    if not args.no_glyph and star_names and greek_targets(star_names):
+    if star_names and greek_targets(star_names):
         seen = {r["bibcode"] for r in recs if r.get("bibcode")}
         rescued = []
         for g in glyph_rescue(star_names, args.rows, meta=gmeta):
@@ -1945,7 +1934,7 @@ def main() -> int:
         rel = [r for r in recs if r["relevant"]]
 
     candidatos: list[dict] = []      # chaining pendiente de triage (#38): NO son core, no se bajan
-    if not args.no_chain and rel and chain_filter:
+    if rel and chain_filter:
         seen = {r["bibcode"] for r in recs if r.get("bibcode")}
         core_bibs = [r["bibcode"] for r in rel if r.get("bibcode")]
         # La compuerta es de ESTRELLAS: en un tema la query ES la definición del tema, así que su

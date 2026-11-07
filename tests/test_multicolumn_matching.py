@@ -19,7 +19,7 @@ _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from measure_layout import CANALETA_MIN  # noqa: E402
+from lib_config import CANALETA_MIN  # noqa: E402
 
 # --- fixture: dos columnas, como las deja `pdftotext -layout` -----------------------------------
 FIXTURE = "\n".join([
@@ -36,7 +36,7 @@ CLAIM = "the temporal variance of the residual ACF is between 2.5 and 4.5 orders
 # Frase que el paper NUNCA escribió: cruza la canaleta de la L3 (fin col.1 + arranque col.2).
 SPLICE = "between 2.5 and 4.5 contrast, we take additive noise"
 
-# La canaleta se define UNA vez, en measure_layout (single source, #46). Acá se **parte** por ella,
+# La canaleta se define UNA vez, en `lib_quotes` (single source, #46). Acá se **parte** por ella,
 # allá se la **detecta**, así que las dos formas difieren a propósito (`\S…\S` exige contenido a los
 # lados). Lo que NO puede pasar es que difieran en QUÉ cuenta como canaleta: eso lo fija el test de
 # paridad de abajo (red #2 — un doble o deriva del real, o hay un test que fija que coinciden).
@@ -137,18 +137,17 @@ if __name__ == "__main__":
 
 
 def test_paridad_del_doble_con_la_regex_real():
-    """Red #2: el doble de test y `measure_layout.GUTTER` tienen que coincidir en qué es canaleta.
+    """Red #2: el doble de test y `cfg.GUTTER` tienen que coincidir en qué es canaleta.
 
     El doble se armaba sólo desde la constante, así que podía divergir del real sin que nada lo
     dijera — y el bug más caro de la Tanda 7 vivió exactamente en esa diferencia. Verificado en la
     pasada `/auditar` del 2026-08-28: cambiar `GUTTER` a algo que no matchea nada dejaba los 6 tests
     de este archivo en verde."""
-    import measure_layout
     import lib_config as cfg
     for n in range(CANALETA_MIN - 2, CANALETA_MIN + 3):
         linea = "a" + " " * n + "b"
         parte = len(GUTTER_SPLIT.split(linea)) > 1
-        detecta = bool(measure_layout.GUTTER.search(linea))
+        detecta = bool(cfg.GUTTER.search(linea))
         # AUD-297: y la tercera lectura de la misma línea —`_gutter_runs`, la de producción— tiene
         # que coincidir con las dos.
         assert bool(cfg._gutter_runs(linea)) == detecta, (n, cfg._gutter_runs(linea))

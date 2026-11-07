@@ -191,9 +191,9 @@ def _source_vocabulary(readings: tuple) -> frozenset:
 
 
 #: #46/#275 · la canaleta: el hueco de espacios que separa dos columnas en un `.txt` de
-#: `pdftotext -layout`. Se DEFINE una vez acá; `measure_layout` la **detecta** (con `\S…\S`, que
-#: exige contenido a los lados) y `deinterleave_columns` **parte** por ella. Lo que no puede pasar
-#: es que difieran en qué cuenta como canaleta — lo fija un test de paridad (regla de método 2).
+#: `pdftotext -layout`. Se DEFINE una vez acá: `GUTTER` la **detecta** (con `\S…\S`, que exige
+#: contenido a los lados) y `deinterleave_columns` **parte** por ella. Lo que no puede pasar es que
+#: difieran en qué cuenta como canaleta — lo fija un test de paridad (regla de método 2).
 CANALETA_MIN = 8
 GUTTER = re.compile(rf"\S {{{CANALETA_MIN},}}\S")
 
@@ -1234,7 +1234,7 @@ def with_own_bibcode(bibs, own: str) -> list:
     respect to the note's own subject still diverges against the subject's.
 
     ONE implementation for the two gates that judge the same quote (#324): the lint reported these
-    five as backlog while `contrast --validar-todo` cleared them, and two verdicts on one quote is
+    five as backlog while `contrast --validar` cleared them, and two verdicts on one quote is
     the divergence #324 declared forbidden."""
     bibs = list(bibs)
     return bibs if not own or own in bibs else [*bibs, own]
@@ -1314,7 +1314,7 @@ def quote_from_stamped_block(text: str, intro: str | None = None) -> bool:
     answers `txt_degradado` («the note is right, the index lost it») over a quote nobody ever
     checked. Measured: a quote the source does not say —«…it converges globally» where the paper
     says «…the convergence is proven globally», 1 occurrence of the note's in the `.txt` and 0 of
-    the JSON's— published with `lint` rc 0 and `contrast --validar-todo` rc 0.
+    the JSON's— published with `lint` rc 0 and `contrast --validar` rc 0.
 
     ⚠ The caveat block is the only stamped one INSIDE a section the fan-out has to contrast
     (`## Vista`); `SECCIONES_ESTAMPADAS` are already out of it (#214), and that asymmetry is the
@@ -1335,7 +1335,7 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
     it because it tests against the cited source's `.txt` **first**; `contrast` went straight to
     comparing extractions and called it a wrong attribution. It is the very shape of error #321 had
     just fixed —judging against an artefact that does not contain what is being asked of it—
-    displaced into the tool, and it hurts more there: since #323 `--validar-todo` is a mandatory
+    displaced into the tool, and it hurts more there: since #323 `--validar` is a mandatory
     closing step with exit ≠ 0, so a false positive **stops operations**.
 
     Order (each step is a different job, so it is not interchangeable):
@@ -1552,7 +1552,7 @@ def reviewed_quote(firmas: list, refs, cita: str) -> dict | None:
     """The `cita_revisada` entry that covers THIS quote under one of `refs`, or None (#516).
 
     ⛔ ONE function decides the match for both carriers of `quote_verdict` (lint #220/#333 and
-    `contrast --validar[-todo]`), or the two surfaces diverge (#324). Covered = same `ref`, the
+    `contrast --validar`), or the two surfaces diverge (#324). Covered = same `ref`, the
     signed `cita` is a prefix (≥ `QUOTE_MIN` chars, normalized) of the quote, and the PDF on disk
     still hashes to the signed `pdf_sha`."""
     norm = normalize_quote(cita)

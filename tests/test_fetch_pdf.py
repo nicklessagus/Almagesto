@@ -513,8 +513,8 @@ def test_sin_force_sigue_reusando_entre_slugs(toy_vault, monkeypatch, capsys):
     assert (cfg.PDFS / "test_star" / "2020A.pdf").read_bytes() == b"%PDF-1.4 copia"
 
 
-def test_all_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
-    """AUD-137 — `--all` significa «incluí los no-relevantes», no «ignorá la curación».
+def test_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
+    """AUD-137 — `build/` puede seguir marcando `relevant` un paper que el usuario sacó.
 
     Un paper que el usuario sacó con `triage --drop-core` queda en el registro justamente para que
     siga VISIBLE (`via: manual-drop`, con su motivo), y #112 le borra los artefactos de disco a
@@ -523,14 +523,15 @@ def test_all_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
     script deshace en silencio es peor que no haberla tomado."""
     ads_json(toy_vault.ROOT, "test_star", RECORDS)
     cfg.save_decisiones("test_star", {
-        "1990nonB...1..1B": {"decision": "descartado", "motivo": "off-topic", "fecha": "2026-08-28"},
+        "1978oldW...1..1W": {"decision": "descartado", "motivo": "off-topic", "fecha": "2026-08-28"},
         "2020newA...1..1A": {"decision": "anulada", "fecha": "2026-08-28",
                              "previa": {"decision": "descartado", "motivo": "viejo"}},
     })
     pedidos = []
     monkeypatch.setattr(fp, "esource_records", lambda bib, tok: pedidos.append(bib) or [])
-    assert run_main(monkeypatch, ["test_star", "--all"]) == 0
-    assert "1990nonB...1..1B" not in pedidos, "se re-pidió un descarte vigente"
+    assert run_main(monkeypatch, ["test_star"]) == 0
+    assert "1978oldW...1..1W" not in pedidos, "se re-pidió un descarte vigente"
+    assert "1990nonB...1..1B" not in pedidos, "#629: el no-core no se pide (no hay `--all`)"
     assert "2020newA...1..1A" in pedidos, "una decisión ANULADA ya no es un descarte (D-52)"
     assert "excluido(s) por decisión de curación" in capsys.readouterr().out
 

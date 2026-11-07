@@ -306,7 +306,7 @@ template en el tag»*, con el comando que ese tag trae.
   lista de bloques. No bloquea: una transcripción de tabla declarada es larga y está bien.
 - **Costura de unidad** (#406): una unidad (`m/s`, `km/s`, `pc`, `M⊕`…) que no sigue a un número —
   «2 puntos m/s» donde el `m/s` era del `1,70` de la frase anterior— es la firma mecánica de un
-  empalme mal hecho, y es exactamente lo que ninguna otra capa ve: `contrast --validar-todo`,
+  empalme mal hecho, y es exactamente lo que ninguna otra capa ve: `contrast --validar`,
   `lint --cierre` y el fan-out miran las CITAS, y la prosa entre ellas no la mira nadie. Tres
   filtros medidos (número, cuantificador y preposición antes; unidad-anotación seguida de coma):
   53 → 19 → **3** hits sobre 224 notas, los 3 falsos positivos revisables. Lo que se midió y
@@ -515,7 +515,7 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   #373 que `contrast` ya tenía): ahí el bibcode **es la nota**, no un `[[wikilink]]`, así que la
   transcripción de su `## Vista` se juzgaba contra el `.txt` del vecino —que en esa frase es una
   **mención**—. Medido: **5 de 19** hallazgos de esta categoría eran palabras del propio paper, 3
-  verbatim en su propio `.txt`, y la misma cita salía limpia en `contrast --validar-todo`: dos
+  verbatim en su propio `.txt`, y la misma cita salía limpia en `contrast --validar`: dos
   veredictos sobre una cita es la divergencia que #324 declaró prohibida, por eso la regla es **una
   función** (`cfg.note_own_bibcode`/`cfg.with_own_bibcode`) y no una copia. **Suma, nunca
   reemplaza**: con «el adyacente cede», la cita legítima del vecino queda juzgada contra el `.txt`
@@ -801,7 +801,7 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
 - **Cita CONFIRMADA en la página del PDF y firmada** (#516, backlog): la escotilla de #220
   (`cita_no_verbatim`) y #333 (`cita_txt_discrepa`), cuyo propio mensaje manda al PDF —
   `cita_revisada: [{ref, cita, pdf_sha, pagina, motivo, fecha}]` en el frontmatter de la nota. El
-  lint y `contrast --validar[-todo]` imprimen la entrada lista para pegar al lado del hallazgo
+  lint y `contrast --validar` imprimen la entrada lista para pegar al lado del hallazgo
   (sólo con UNA fuente candidata con PDF en disco: la atribución ambigua se arregla, no se firma). ⛔
   Cubre un ESTADO: la `cita` (normalizada, por prefijo) y el sha del PDF de `ref` al firmar; editar
   la cita o reemplazar el PDF (#436) la devuelve. Calla en los DOS portadores de `quote_verdict`

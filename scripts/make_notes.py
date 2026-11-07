@@ -1,8 +1,8 @@
 """Genera notas markdown de la bóveda a partir de lo bajado por los otros scripts.
 
 Uso:
-    python scripts/make_notes.py <slug> [--all] [--force]        # estrella
-    python scripts/make_notes.py --theme <slug> [--all] [--force]  # tema (concept + papers)
+    python scripts/make_notes.py <slug> [--force]        # estrella
+    python scripts/make_notes.py --theme <slug> [--force]  # tema (concept + papers)
     python scripts/make_notes.py --web <clave> --concept <c> [--url … | --pending …] [--slug-hint <s>]
     python scripts/make_notes.py --restamp-pdf-links             # backfill del link PDF, sin slug
     python scripts/make_notes.py --restamp-headers               # backfill de la cabecera, sin slug
@@ -3679,7 +3679,7 @@ _(se estampa determinista: `make_notes.py {slug} --theme` lo regenera. D-11/D-24
     cfg.print_seguro(f"  concept: {area}/{concept}.md escrito (stub)")
 
 
-def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = False) -> None:
+def write_paper_notes(slug: str, force: bool, theme: bool = False) -> None:
     if theme:
         _, tmeta = cfg.theme_by_slug(slug)
         name, link, seed_links = None, tmeta["concept"], [tmeta["concept"]]
@@ -3694,15 +3694,14 @@ def write_paper_notes(slug: str, include_all: bool, force: bool, theme: bool = F
     # #112 (cuarto consumidor): `--drop-core` vive en el registro VERSIONADO; `relevant` vive en
     # `build/`, que sólo `query_ads` reescribe. Sin este filtro, correr `make_notes` solo —lo que el
     # propio aviso del drop invita a hacer— RESUCITA el paper dropeado como stub, y encima encima de
-    # la extracción que el drop acababa de borrar: la nota vuelve a existir y vuelve vacía. Va antes
-    # que `include_all` a propósito: `--all` pide los no-core, no lo que el usuario sacó a mano.
+    # la extracción que el drop acababa de borrar: la nota vuelve a existir y vuelve vacía.
     dropeados = set(cfg.dropped_from_subject(slug))
     if dropeados and (n := sum(1 for r in recs if r.get("bibcode") in dropeados)):
         recs = [r for r in recs if r.get("bibcode") not in dropeados]
         cfg.print_seguro(f"  ({n} paper(s) excluidos del sujeto por `--drop-core`: no se les "
                          f"escribe nota)")
-    if not include_all:
-        recs = [r for r in recs if r["relevant"]]
+    # #629 — sólo los core: un no-core entra por `extra_core` (decisión registrada), no por flag
+    recs = [r for r in recs if r["relevant"]]
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
     # El SUJETO de esta corrida (#188): el mismo nombre con el que el paper lo declara en
     # `stars`/`thesis_links`, que es lo que hace comparables reclamo y lectura.
@@ -4057,7 +4056,6 @@ def main() -> int:
                     help="slug de estrella/tema; en --web es la CLAVE de cita (AAAA+Autor). "
                          "Opcional con los backfills que abajo dicen «sin slug» / "
                          "«no requiere slug».")
-    ap.add_argument("--all", action="store_true", help="incluir papers no-relevantes")
     ap.add_argument("--restamp-pdf-links", action="store_true", dest="restamp_pdf_links",
                     help="backfill #47: barre TODAS las notas de papers y re-estampa el link "
                          "[📄 PDF] de la cabecera desde el frontmatter `pdf` (agrega/corrige/quita). "
@@ -4230,7 +4228,7 @@ def main() -> int:
         write_concept_note(args.slug, args.force)
     else:
         write_star_note(args.slug, args.force)
-    write_paper_notes(args.slug, args.all, args.force, theme=args.theme)
+    write_paper_notes(args.slug, args.force, theme=args.theme)
     # Re-estampar DESPUÉS de crear las notas de paper: los roll-ups los estampa
     # `write_star_note`/`write_concept_note`, que corren ANTES, así que en una corrida limpia leían
     # un universo donde esas notas todavía no existían y la ficha quedaba diciendo «ninguna nota de

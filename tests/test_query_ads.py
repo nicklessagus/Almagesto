@@ -374,18 +374,6 @@ def test_main_persiste_truncado_glifo(toy_vault, toy_classifier, no_sleep, monke
     assert "rescate por glifo incompleto" in capsys.readouterr().out
 
 
-def test_main_no_glyph_desactiva(toy_vault, toy_classifier, no_sleep, monkeypatch):
-    stars = {"eps Eridani": {"slug": "test_star", "simbad": "s", "ads_object": "eps Eridani",
-                             "aliases": []}}
-    write_yaml(cfg.STARS_YAML, stars)
-    monkeypatch.setattr(qa, "query_ads",
-                        lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
-                        [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "glyph_rescue", lambda *a: pytest.fail("no debe rescatar"))
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
-    assert run_main(monkeypatch, ["test_star", "--no-glyph"]) == 0
-
-
 def test_main_sujeto_no_bayer_no_rescata(toy_vault, toy_classifier, no_sleep, monkeypatch):
     """toy_vault trae 'Test Star' (no Bayer): el rescate ni se dispara — sin query extra."""
     monkeypatch.setattr(qa, "query_ads",
@@ -674,14 +662,6 @@ def test_main_estrella_chaining_dedup_y_via(toy_vault, toy_classifier, no_sleep,
     assert data["n_relevant"] == 2
     # ordenado por citas desc
     assert [r["bibcode"] for r in data["records"]][:2] == ["2020dirB....1B", "2020dirA....1A"]
-
-
-def test_main_no_chain(toy_vault, toy_classifier, no_sleep, monkeypatch):
-    called = []
-    monkeypatch.setattr(qa, "query_ads", lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k: [rec("2020dirA....1A")])
-    monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: called.append(a) or [])
-    run_main(monkeypatch, ["test_star", "--no-chain"])
-    assert called == []
 
 
 def test_main_persiste_truncado(toy_vault, toy_classifier, no_sleep, monkeypatch):
@@ -1573,8 +1553,8 @@ def test_escotillas_quedan_en_el_registro(toy_vault, toy_classifier, no_sleep, m
                         lambda q, rows=2000, quiet_truncate=False, meta=None, expect_hits=False, **k:
                         [rec("2020dirA....1A")])
     monkeypatch.setattr(qa, "chain_candidates", lambda *a, **k: [])
-    assert run_main(monkeypatch, ["test_star", "--no-chain"]) == 0
-    assert "--no-chain" in cfg.load_busquedas("test_star")[-1]["escotillas"]
+    assert run_main(monkeypatch, ["test_star", "--rows", "400"]) == 0
+    assert "--rows" in str(cfg.load_busquedas("test_star")[-1]["escotillas"])
 
 
 def test_probe_reporta_el_costo_proyectado(capsys):
@@ -2914,19 +2894,17 @@ def test_507_probe_registrar_con_dry_run_REHUSA_sin_escribir_el_registro(toy_vau
 
 @pytest.mark.parametrize("argv", [
     ["hd_1", "--sweep", "--dry-run"],
-    ["hd_1", "--no-chain", "--dry-run"],
-    ["hd_1", "--no-glyph", "--dry-run"],
     ["hd_1", "--theme", "--extra-only", "--dry-run"],
     ["--probe", "abs:activity", "--dry-run"],
     ["--probe", "abs:activity", "--criterio", "x"],
     ["hd_1", "--criterio", "x"],
     ["--probe", "abs:activity", "--sweep"],
-    ["--probe", "abs:activity", "--no-chain"],
+    ["--probe", "abs:activity", "--extra-only"],
 ])
 def test_616_flag_que_el_modo_no_honra_se_REHUSA(toy_vault, monkeypatch, argv, capsys):
     # @inv INV-169
     """#616 · AUD-570 — `--dry-run` es la re-clasificación offline y retornaba antes de mirar
-    `--sweep`/`--no-chain`/…; `--criterio` sin `--registrar` no iba a ningún lado. Un flag que el
+    `--sweep`/`--extra-only`/…; `--criterio` sin `--registrar` no iba a ningún lado. Un flag que el
     modo no honra se rehúsa (exit 2), antes de consultar ADS."""
     monkeypatch.setattr(qa, "query_ads", lambda *a, **k: pytest.fail("consultó ADS"))
     monkeypatch.setattr(qa, "reclass_diff", lambda *a, **k: pytest.fail("ignoró el flag"))

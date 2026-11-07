@@ -64,7 +64,7 @@ División de tareas: **scripts** bajan (determinista, rate-limited); **LLM** pro
 y `python scripts/ingest_theme.py <slug>` (temas; despacha por el campo `source`, incluido el modo
 off-ADS) —
 cuyos headers son la **definición canónica del orden** (docs y skills apuntan ahí, no copian la
-lista). Las piezas, para correr sueltas cuando hace falta un flag fino (`--rows`, `--all`,
+lista). Las piezas, para correr sueltas cuando hace falta un flag fino (`--rows`,
 `--force` de un paso):
 
 ```bash
@@ -158,10 +158,6 @@ python scripts/entity.py rename <viejo> <nuevo> --yes
 python scripts/citation_index.py    # índice invertido obra→citadores (caro: ADS + OpenAlex)
 python scripts/trace_invariants.py [--check]        # regenera docs/trazabilidad.md desde las marcas
                                     #   `@inv` del código; `--check` sale 1 si quedó desactualizado
-python scripts/measure_layout.py [--json] [--por-slug] [--listar N]
-                                    # diagnóstico: cuánto del corpus de `.txt` es multi-columna
-                                    #   (#44/#45 — condiciona cómo se BUSCA una cita). No toca nada,
-                                    #   exit 0 siempre
 python scripts/search_arxiv.py "independent component analysis" --categories stat.ML --rows 25
                                     # preview de un backend no-ADS: qué trae y qué clasifica como
                                     # core con TU lente. No baja ni escribe nada. ⚠ El orquestador
@@ -223,7 +219,7 @@ python scripts/contrast.py [<slug>] --validar <nota>
                                     #   contra el `.txt` de SU fuente (#324): la cadena que está ahí
                                     #   prueba que la frase es de ese paper. Misma implementación
                                     #   que el lint (`cfg.quote_verdict`), no una copia
-python scripts/contrast.py [<slug>] --validar-todo
+python scripts/contrast.py [<slug>] --validar
                                     # ⛔ los dos --validar NO filtran por `--drop-core` (#329): un
                                     #   paper dropeado sigue siendo TESTIGO válido de a quién
                                     #   pertenece una frase, y filtrarlo bajaría la población del
@@ -325,8 +321,8 @@ mención fuera de su `--help` no tiene dónde declararse como escotilla, que es 
 bloque arregla. Las otras quedan cubiertas por los bloques de arriba (`--prioridad`, `--drop-core`,
 `--accept-source`, `--theme`/`--topics`/`--resolve` de `discover.py`,
 `extraction_prompt --out-dir`, `extract_fulltext --ocr`, `trace_invariants --check`) o son de
-conveniencia (`--max`, `--paper`, `--out`, `--limit`, `--accessed`, `--json`, `--por-slug`,
-`--listar`, `--no-chain`, `--root`): la lista completa está en el issue.
+conveniencia (`--max`, `--paper`, `--out`, `--limit`, `--accessed`, `--json`,
+`--root`): la lista completa está en el issue.
 ⚠ **Y la promesa se cumple sólo acá (re-medido el 2026-09-04):** `discover.py --seed <topic_id>`
 (el ranking por citas dentro de un topic de OpenAlex), `discover.py --min-citadores N` (el corte
 del descubrimiento anclado) y `make_notes.py --web … --pending
@@ -982,7 +978,7 @@ localizadores son del documento viejo.**
 es el PREPRINT»* es la salvedad más decidible que hay —la marca de arXiv del `.txt`, la firma
 `pdf_reemplazo` y `pdf_source` son **tres** testigos máquina-legibles— y quedó en prosa libre, así
 que sobrevivió al reemplazo que cambió los tres: medido, **43 salvedades en 31 notas** afirmando el
-preprint sobre la copia del editor, con `lint` rc 0, `contrast --validar-todo` rc 0 y 0 pares
+preprint sobre la copia del editor, con `lint` rc 0, `contrast --validar` rc 0 y 0 pares
 vencidos. Lo levanta el lint (backlog: cuál mitad está mal lo decide quien lea — en el caso 44 era
 el **campo**) y `replace_pdf` **avisa al firmar** cuántas líneas quedaron diciendo preprint, con el
 `grep` listo. ⚠ Avisa y **no reescribe**: la línea conserva el hecho verdadero (*«esta vista se
@@ -1640,7 +1636,7 @@ con `accessed`). Se lee, se cita por **línea**, y su fila de verificación llev
 De los tres chequeos de calidad quedan **dos**: `is_legible` dispara el OCR (un escaneo sin capa de
 texto deja un `.txt` vacío y el paper invisible al corpus) e `is_garbled` sigue porque la prosa
 garbleada degrada el índice. `symbols_lost` y `fulltext_layout` se retiraron (#193/#194);
-`measure_layout` **no** (`CANALETA_MIN` es el contrato para grepear un `.txt` entrelazado).
+`cfg.CANALETA_MIN` sigue siendo el contrato para grepear un `.txt` entrelazado.
 
 ⛔ **Los tres miden el TEXTO, así que ninguno ve el dato que vive en una IMAGEN (#195)** — casi la
 mitad del corpus (medido: 29/65 vistas). El prompt (`extraction_prompt._media_note`) trata los tres
@@ -1744,7 +1740,7 @@ re-extraer el `.txt`.
    copió de ella (#454):** el bloque de salvedades de una `## Vista` lo estampa `harvest_views`
    desde el JSON, así que ahí el testigo y el juzgado son el mismo archivo y el paso 2 la aprueba
    **siempre** —medido: una cita que la fuente no dice, publicada con `lint` rc 0 y `contrast
-   --validar-todo` rc 0—. Ahí el único testigo independiente es el `.txt`; si calla, sale **no
+   --validar` rc 0—. Ahí el único testigo independiente es el `.txt`; si calla, sale **no
    evaluable con su motivo** y con la marca `⚠verificar en el PDF`, nunca «pasa».
    ⛔ **La cita se verifica contra la EXTRACCIÓN, no contra el `.txt`** (#315/#317): es la
    transcripción hecha leyendo el PDF, y con el `.txt` de juez la señal era 2 de 17 y 0 de 35.
@@ -1782,7 +1778,7 @@ regla y esa función (#394), y el bibcode propio SUMA, nunca reemplaza** (`cfg.w
 con el vecino de único candidato, 5 de 19 hallazgos de #220 eran del propio paper; con «el adyacente
 cede», el falso positivo cambia de dirección.
 ⛔ **Y ese cruce es PASO DE CIERRE de toda operación que sintetice, ANTES del verify (#323):**
-   `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
+   `python scripts/contrast.py [<slug>] --validar` (sin slug, toda la bóveda; exit ≠ 0, declara
    población y no evaluables). Un `grep` de segundos contra N subagentes leyendo PDFs: verificar con
    LLM lo que el `grep` ya sabe alterado es pagar el caro por lo que el barato sabía. La capacidad
    existía y **no la corría nadie** — la nota que produjo la serie cerró con verify y `lint --cierre`

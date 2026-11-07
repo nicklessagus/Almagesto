@@ -259,7 +259,7 @@ Con los dos, el barrido sobre las mismas 255 fuentes da **0 páginas perdidas** 
 las únicas dos fuentes que de verdad paginan con prefijo: `2007A&A...469L..43U` (`L43`–`L47`) y
 `2006Vrabie` (GEOPHYSICS, `V133`–`V143` — una segunda familia que el issue no había visto).
 
-**El efecto en el chequeo** (`contrast --validar-todo`, misma bóveda, mismas notas):
+**El efecto en el chequeo** (`contrast --validar`, misma bóveda, mismas notas):
 
 | | antes | después |
 |---|---|---|
@@ -276,7 +276,7 @@ donde la hoja imprime `L45` y un `p. 2` donde imprime `L44`. **Ninguna categorí
 
 **Cómo apareció.** Cerrando la deuda de `_paginacion` en `Almagesto-Tesis` (285 notas, 10493 citas):
 repaginar por relectura las 68 extracciones marcadas y pasarlas a `_repaginado` llevó
-`contrast.py --validar-todo` de **0 citas alteradas a 4** (rc 0 → **rc 1**), en 3 notas de concepto,
+`contrast.py --validar` de **0 citas alteradas a 4** (rc 0 → **rc 1**), en 3 notas de concepto,
 **sin que ninguna de esas notas ni ninguna de esas citas cambiara** (verificado con `git log -S`
 sobre las notas y `git diff` sobre los JSON: las cadenas no se tocaron desde `5395ecc`).
 
@@ -298,7 +298,7 @@ bien.
 
 ⚠ **Re-medido el 2026-09-20 sobre el vault de ese día**, con el fix del template contra la bóveda
 real: **5** citas, no 4 (la bóveda siguió andando entre el reporte y el fix), y `contrast
---validar-todo` pasa de **rc 1 a rc 0** con las 285 notas sin tocar.
+--validar` pasa de **rc 1 a rc 0** con las 285 notas sin tocar.
 
 **Lo que entró.** `REPLACED_DOC_MARKS = ("_paginacion", "_repaginado", "_repaginado_parcial")` y la
 puerta mirando la familia. ⛔ **La marca de apertura sigue sola donde la pregunta es otra:** la
@@ -315,7 +315,7 @@ no sea un apagador.
 **Cómo apareció.** Escribiendo un informe desde la bóveda (`Almagesto-Tesis#8`): la taxonomía de
 Kairov 2017 estaba localizada en «p. 3» en `icasso.md` y el pasaje arranca en la p. 2. O sea, se
 detectó **aguas abajo de todas las capas**: la ficha había pasado `audit-note` dos días antes,
-`lint --cierre` rc 0, `contrast --validar-todo` rc 0 y **239/239** pares `soportada`.
+`lint --cierre` rc 0, `contrast --validar` rc 0 y **239/239** pares `soportada`.
 
 **Cómo se midió.** Cada cita `«…»` seguida de `(p. N)` se busca en el `.txt` de su fuente **partido
 por form feed** (`extract_fulltext` deja uno por página, AUD-165) y el número impreso se deriva del
@@ -328,7 +328,7 @@ entero de cabecera/pie que crece de a uno.
 
 ⚠ **Sólo `icasso` está revisado a mano.** Los 13 «mal» del resto pueden tener falsos positivos del
 script de scratch —atribución del bibcode en bloques con varias citas: en `icasso`, ~la mitad de los
-flags de la primera pasada eran eso—. Por eso la categoría **no mueve el rc**: `--validar-todo` es
+flags de la primera pasada eran eso—. Por eso la categoría **no mueve el rc**: `--validar` es
 paso de cierre obligatorio (#323) y su población es la más grande de la bóveda.
 
 **Las 44 no son un error de hecho.** Son **otra convención** —índice del PDF, no página impresa— y
@@ -392,7 +392,7 @@ prompt de cada subagente lo escribió el agente orquestador **a mano**, que es l
 permitía en ese momento.
 
 **Cómo re-medirlo.** Los 79 JSON de extracción quedaron fuera del repo (scratch). Lo reproducible es
-el detector de maqueta (`scripts/measure_layout.py`) y el conteo de campos sobre las notas de paper.
+el detector de maqueta (`measure_layout.py`, borrado en #629) y el conteo de campos sobre las notas de paper.
 
 | Qué se midió | Número | Salvedad |
 |---|---|---|
@@ -959,7 +959,7 @@ pero tomaba una nota por vez y **ningún skill lo nombraba**: la nota que produj
 cerró con `verify-citations` completo y `lint --cierre` en 0 **con las 12 citas adentro**. La
 comparación que las cazaba en segundos estaba escrita y no se corrió, porque nada decía que había
 que correrla — *una capacidad sin momento de ejecución no es un control*. Hoy hay barrido
-(`--validar-todo`, con población declarada, no-evaluables declarados y exit ≠ 0) y los cuatro skills
+(`--validar`, con población declarada, no-evaluables declarados y exit ≠ 0) y los cuatro skills
 que escriben prosa citada lo corren **antes** del fan-out: el `grep` cuesta segundos y el verify son
 N subagentes leyendo PDFs (#315).
 
@@ -989,7 +989,7 @@ fuente citada **primero**; `contrast` iba derecho a comparar extracciones.
 
 ⛔ Es **la misma forma de error que #321 acababa de arreglar** —juzgar contra un artefacto que no
 contiene lo que se le pregunta— desplazada del lint a la herramienta, y pega más fuerte ahí: desde
-#323 `--validar-todo` es paso de cierre obligatorio con exit ≠ 0, así que un falso positivo **frena
+#323 `--validar` es paso de cierre obligatorio con exit ≠ 0, así que un falso positivo **frena
 operaciones**. El boilerplate compartido (CDS, agradecimientos, descripción de instrumento) es
 justo donde más iba a pasar.
 
@@ -1026,7 +1026,7 @@ El caso claro es una fila cuya celda *Fuente* es `[[2015Voss]]` y cuya celda de 
 *«…atribuyendo ese paso a [[2013Voss]]»*: la nota atribuye **bien**, y la mención 131 caracteres
 después ganaba. Es el defecto que #316 se abrió para arreglar —*«un párrafo que contrasta dos
 fuentes queda marcado por decir la verdad»*— sobreviviendo dentro del mecanismo que lo arregló, y
-ahora con más peso: la categoría bloquea `--cierre` (#318) y `--validar-todo` es paso obligatorio de
+ahora con más peso: la categoría bloquea `--cierre` (#318) y `--validar` es paso obligatorio de
 cuatro skills (#323). ⚠ Y el arreglo aparente —reatribuir la cita al bibcode que el reporte nombra—
 **rompe la nota**: en L282 movería la cita al revés de lo que dice la fuente.
 
@@ -1129,7 +1129,7 @@ que fabrica un eje falso. El contraste que lo vuelve inequívoco: en la misma b�
 `Estado: excluido a mano` — la curación era visible en **todas** las superficies menos en la del 3b.
 
 **Los dos carriles no se tratan igual.** El de LECTURA (`--campo`/`--eje`/`--filas`/`--grep`/
-`--paper`) filtra; el de VALIDACIÓN (`--validar`, `--validar-todo`) **no**: un paper dropeado sigue
+`--paper`) filtra; el de VALIDACIÓN (`--validar`, `--validar`) **no**: un paper dropeado sigue
 siendo testigo válido de a quién pertenece una frase, y filtrarlo bajaría la población del detector
 de #323 fabricando falsos *«mal atribuido»* — la clase de falso positivo que #324/#325 acababan de
 sacar de un paso de cierre que **bloquea**. El test que lo fija muere con el arreglo equivocado: al
@@ -1292,7 +1292,7 @@ sí existe—. Reproducible con `python tools/mutar.py --dirigida --solo main sc
 
 ## 2026-08-31 · El `✅` que se apoyaba en un solo testigo (#341, parte 1)
 
-`contrast.py --validar` / `--validar-todo` cerraba con `0 cita(s) con evidencia POSITIVA de
+`contrast.py --validar` / `--validar` cerraba con `0 cita(s) con evidencia POSITIVA de
 alteración ✅` sobre **toda** la población que había mirado, sin distinguir que dentro de las que
 aprobó hay un subconjunto cuyo respaldo es **una sola lectura del PDF**: la del LLM que hizo la
 extracción. Es el paso 2 de `lib_quotes.quote_verdict` (`txt_degradado`) — la cita está en la
@@ -1328,7 +1328,7 @@ propio issue lo declaraba.
 **Cómo.** Mismo procedimiento y misma bóveda (`Almagesto-Tesis`, 163 notas), corriendo
 `lib_quotes.quote_verdict` de esta versión sobre cada cita `«…»` de ≥ 40 caracteres y clasificando
 la población que el paso 2 aprueba (`txt_degradado`, el único testigo). Reproducible con
-`python scripts/contrast.py --validar-todo` desde la raíz de esa bóveda.
+`python scripts/contrast.py --validar` desde la raíz de esa bóveda.
 
 | Población | Antes (#332 sin cerrar) | Hoy |
 |---|---|---|
@@ -2528,7 +2528,7 @@ Tras reemplazar 31 preprints con `replace_pdf` (#436), **43 salvedades en 31 not
 diciendo en su `## Vista`: *«El PDF en disco es el PREPRINT de arXiv (marca «arXiv:1208.4122v2 …»
 en el margen de la p. 1), coherente con `pdf_source: eprint` y `eprint_version: v2`»*. Las tres
 mitades falsas: el archivo es la copia del editor, el campo dice `publisher` y `eprint_version`
-está en `null` (#383). Ninguna capa lo vio — `lint` rc 0, `contrast --validar-todo` rc 0,
+está en `null` (#383). Ninguna capa lo vio — `lint` rc 0, `contrast --validar` rc 0,
 `verify-citations` con 0 pares vencidos. La 44ª es la simétrica: `2025A&A...696A.141H` con
 `pdf_source: eprint` y el cuerpo diciendo *«es la VERSIÓN PUBLICADA — NO el preprint»* (la copia del
 editor estaba en disco desde antes, así que `replace_pdf` la rechazó por byte-idéntica).
@@ -2763,7 +2763,7 @@ frena las 22.
 Sale del barrido de #453. En `1999ITNN...10..626H` el re-estampado escribió una cita que la fuente
 no dice —«…**it converges** globally» donde el paper dice «…the convergence is **proven**
 globally»—, y no la cazó nada: el `.txt` tiene la de la nota (**1** ocurrencia) y la del JSON
-(**0**), con `lint` rc 0 y `contrast --validar-todo` rc 0.
+(**0**), con `lint` rc 0 y `contrast --validar` rc 0.
 
 Las dos capas fallan por motivos distintos, y los dos son estructurales:
 
@@ -3632,7 +3632,7 @@ entra ahí también el caso que antes salía *no evaluable* por «coincide con e
 tiene numeración impresa derivable», porque ya no hay convención que decidir. `REGLA_LOCALIZADOR`
 manda **sección, figura, tabla o ecuación primero** —sobreviven al cambio preprint→editor— y la
 página como pista en la numeración que sea, con `[índice del PDF]` **opcional**; se conservan
-`L1234` (#80/#200) y `Fig. N, p. M` (#195). `contrast --validar-todo` pierde `pag_indice` y
+`L1234` (#80/#200) y `Fig. N, p. M` (#195). `contrast --validar` pierde `pag_indice` y
 `pag_declarado` (y sus claves `pagina_indice`/`pagina_indice_declarado` en `_citas.yaml`), y
 `repaginate._check_item` deja de rechazar la respuesta que coincide con el índice.
 
@@ -3670,7 +3670,7 @@ símbolo re-exportado (`lib_config.quote_page_verdict`), que sí los ve — **2 
 ## #501 — la ventana del localizador corta a mitad del número (v1.303.1)
 
 **Medido en Almagesto-Tesis (`bac5653`, v1.303.0):** 31 de 13 760 citas `«…»` con el localizador
-partido por la ventana de 80 caracteres fijos; 2 de los 62 `MAL` de `contrast --validar-todo` eran
+partido por la ventana de 80 caracteres fijos; 2 de los 62 `MAL` de `contrast --validar` eran
 sólo eso (`p. 2021` leído `p. 2`, `p. 11` leído `p. 1`); 3 localizadores corruptos (`p.
 20210210210213`, `p. 14111`, `p. 11110`) de un script de scratch que copiaba el mismo corte que el
 escritor de `repaginate`. Reproducido con el código del template: tres pasadas de
@@ -3682,7 +3682,7 @@ hasta el `«` siguiente— y la usan los cuatro portadores (`page_locators_after
 
 ## #504 — el localizador es el de AL LADO, no el de la afirmación vecina (v1.306.0)
 
-**Medido en Almagesto-Tesis (`9b3be08`, v1.305.0), `contrast --validar-todo` antes → después, con
+**Medido en Almagesto-Tesis (`9b3be08`, v1.305.0), `contrast --validar` antes → después, con
 el código del template sobre un worktree de la instancia:** MAL **65 → 14** · en la página que
 dicen 3968 → 3893 · localizadores mirados 6393 → 6244 · no evaluables 2360 → 2337 · rc 0.
 
@@ -3707,7 +3707,7 @@ dicen 3968 → 3893 · localizadores mirados 6393 → 6244 · no evaluables 2360
 
 ## AUD-474 / AUD-402 — el localizador que introduce la cita siguiente, y el número tras la coma (v1.309.0)
 
-**Medido en Almagesto-Tesis (`30b4b75`, v1.306.0), `contrast --validar-todo` antes → después, con
+**Medido en Almagesto-Tesis (`30b4b75`, v1.306.0), `contrast --validar` antes → después, con
 `lib_quotes`/`contrast` del template sobre un worktree de la instancia:** MAL **8 → 5** · en la
 página que dicen 3899 → 3900 · localizadores mirados 6244 → 6242 · fuera de alcance 12389 → 12375 ·
 no evaluables 2337 → 2337 · rc 0.
@@ -3893,7 +3893,7 @@ worktree desechable): cambian **3**, las tres que debían —`hd_40307` L870 `20
 a), `hd_40307` L518 `2016D` → `None` (b, 311 car.), `ica-ruido` L716 «the exact recovery…» `2024K` →
 `None` (c)—; las otras 197 conservan dueño, incluidas las 32 que resuelve la rama «antes» a ≤89
 caracteres (tope: 160). Lint: `cita_no_verbatim` **43 → 41** (salen L518 y L716; L870 sigue, ahora
-contra el `.txt` de `2016A&A...585A.134D`). `contrast --validar-todo`: rc 0 → 0, no evaluables
+contra el `.txt` de `2016A&A...585A.134D`). `contrast --validar`: rc 0 → 0, no evaluables
 191 → 189, el resto igual.
 
 **Dicho y no cerrado:** la segunda cita de `ica-ruido` L716 («the latent source S…», de `2015Voss`)
@@ -3936,7 +3936,7 @@ L816, dos fuentes, #316), que no se firma. Las otras 2 de `#220` son citas de `d
 frontmatter (`check_note_disputes`), que no pasan por `quote_verdict` y quedan fuera del alcance.
 **Firmando las 47 tal como las imprime el reporte** (página y motivo de relleno, sólo para medir
 el mecanismo): `#220` 41 → 3, `#333` 9 → 0, `cita_revisada` 47, huérfanas 0; `contrast
---validar-todo` rc 0, `discrepan` 576 → 567 y no evaluables 193 → 153, «resueltas» 13 → 60. **Ida y
+--validar` rc 0, `discrepan` 576 → 567 y no evaluables 193 → 153, «resueltas» 13 → 60. **Ida y
 vuelta:** cambiar dos bytes del PDF de `2021A&A...653A..43C` devuelve sus 3 citas y nombra las 3
 firmas («el PDF cambió», con los dos sha); editar una cita firmada la devuelve a `#220` y su firma
 queda huérfana. Primera pasada: 3 huérfanas falsas, la misma cita dos veces en una nota (dos
@@ -3968,7 +3968,7 @@ sale `en_su_txt` contra el `## Abstract`), `solo_abstract_ok` 0 → 2. Diff del 
 
 ## #521 — la reanudación del empalme se busca en las otras columnas (v1.331.0)
 
-**Copia de la instancia:** `contrast --validar-todo` rc 1 → 0; «`.txt` en contra» 535 → 460. Sin
+**Copia de la instancia:** `contrast --validar` rc 1 → 0; «`.txt` en contra» 535 → 460. Sin
 la guarda de sonda completa en las otras lecturas salían 79: las 4 de más eran colas cortas
 («uncertainty.», «9 solar radii», «shorter than ≈10 years», «present in our data») que aparecen en
 cualquier lado del documento, y siguen acusando. Lint: 4 `cita_revisada` quedan huérfanas (eran
@@ -4015,7 +4015,7 @@ rv-doppler --sintesis --n-papers 31` → 2.
 marcó 1 extracción en 2 campos; la segunda corrida, 0 (JSON idéntico, md5 igual). `contrast
 deteccion-estadistica --grep aleatori --filas`: 4 → **3** filas pegables, 1 rehusada con su
 refutación; `--cita` igual. `harvest_views --force --dry-run` del paper: 1 cosechada (+2/-2) → 0,
-rehusada. Lint y `contrast --validar-todo`: salida idéntica antes y después.
+rehusada. Lint y `contrast --validar`: salida idéntica antes y después.
 
 **Devuelto por el validador (v1.338.0):** en la instancia dio «1 cosechadas, +3/-1». El chequeo de
 `_refutado` corría DESPUÉS de `upsert_view`: la sección se rehusaba y `vistas[]` se re-fechaba igual
@@ -4597,7 +4597,7 @@ se tomó 2/3. Con las notas de paper y el `log` en la población eran 605 marcas
 eso quedan afuera. Los tres defectos del issue, en su estado previo a la corrección (HEAD de la
 instancia): los tres `ausente`; la cita correcta del PDF («the most inactive star is Gl 699»),
 `en_su_txt`. Con la extracción como testigo, dos de los tres pasaban (nacieron ahí). `rc` de
-`--validar-todo` sin cambio (0).
+`--validar` sin cambio (0).
 
 ## La firma de la cita corta, en los dos portadores (v1.396.0, #587)
 

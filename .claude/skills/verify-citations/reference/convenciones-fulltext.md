@@ -62,9 +62,8 @@ negativo de arriba). Y normalizar **por línea** tampoco alcanza (#46): colapsar
 la misma línea física fabrica la misma adyacencia col.1→col.2, sólo que dentro de la línea. La
 forma segura, si hace falta normalizar: **partir antes cada línea física en la canaleta** (un run
 de 8+ espacios es separador de columnas, no espacio — el umbral vive en
-`measure_layout.CANALETA_MIN`) y normalizar **por segmento de columna**. Los invariantes están
-pineados en `tests/test_multicolumn_matching.py`; la prevalencia en una bóveda concreta la mide
-`scripts/measure_layout.py`.
+`cfg.CANALETA_MIN`) y normalizar **por segmento de columna**. Los invariantes están
+pineados en `tests/test_multicolumn_matching.py`.
 
 ⚠ **Lo que el `.txt` pierde sin avisar — por eso no se cita de él (#205)**, ni de `pdftotext` corrido de nuevo
 sobre el PDF: es la misma capa (#544). `pdftotext` deja el

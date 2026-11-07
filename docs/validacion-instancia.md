@@ -645,7 +645,7 @@ python scripts/lint.py | grep -B2 -A6 "no es testigo"
 - una cita en **prosa** de una ficha o un concepto —re-tipeada por el sintetizador— tiene que
   seguir aprobándose por la extracción (#315): la regla es sobre quién escribió el bloque, no sobre
   la cita;
-- `contrast --validar-todo` no puede empezar a bloquear por esto (es marca, no bloqueante).
+- `contrast --validar` no puede empezar a bloquear por esto (es marca, no bloqueante).
 
 **Devolver si** una cita en prosa deja de aprobarse, si la de una salvedad sigue pasando en
 silencio, si la marca no sale, o si el gate de cierre pasa a bloquear por esta población.
@@ -971,7 +971,7 @@ si `--restamp-section`/`--resolver` lo borran.
 **Qué cambió.** `quote_page_verdict` pasa de cuatro estados a **`ok | mal | no_evaluable`**
 (`impresa` → `ok`) y acepta la página que el localizador nombra **por cualquiera de las dos
 numeraciones** (la impresa o el índice del PDF). Desaparecen las dos categorías de `contrast
---validar-todo` que reportaban la convención —«en el índice del PDF SIN decirlo» y «declarado(s)
+--validar` que reportaban la convención —«en el índice del PDF SIN decirlo» y «declarado(s)
 como índice»— y sus claves `pagina_indice` / `pagina_indice_declarado` de
 `vault/config/registro/_citas.yaml`. `REGLA_LOCALIZADOR` manda sección/figura/tabla/ecuación primero
 y la página como pista; `[índice del PDF]` queda opcional. ⛔ El `mal` **no se toca**.
@@ -979,9 +979,9 @@ y la página como pista; `[índice del PDF]` queda opcional. ⛔ El `mal` **no s
 **Correr:**
 
 ```bash
-python scripts/contrast.py --validar-todo          # ANTES (con el framework viejo), guardá la línea
+python scripts/contrast.py --validar          # ANTES (con el framework viejo), guardá la línea
 # … traer v1.303.0 …
-python scripts/contrast.py --validar-todo          # DESPUÉS
+python scripts/contrast.py --validar          # DESPUÉS
 python scripts/lint.py                             # sin categorías nuevas ni desaparecidas
 ```
 
@@ -1151,7 +1151,7 @@ cuenta en «N ya descartados antes» y no en la cola.
 
 ```bash
 python scripts/lint.py
-python scripts/contrast.py --validar-todo
+python scripts/contrast.py --validar
 ```
 
 **Esperado:** «Cita textual que no está en su fuente» baja de 43 a 41: salen `hd_40307` L518 y
@@ -1190,7 +1190,7 @@ salida la línea «la bloqueada es la copia del EDITOR» con `python scripts/rep
 
 ```bash
 python scripts/lint.py
-python scripts/contrast.py --validar-todo
+python scripts/contrast.py --validar
 ```
 
 Pegar, en la nota de cada cita releída verbatim en el PDF (las 36 de `#220` y las 9 de `#333` de
@@ -1242,11 +1242,11 @@ SIN fuente en disco 10 → 8 · cita NO EVALUABLE 13 → 12 (la de `ica` L480 se
 ## §#521 · v1.331.0 — el empalme de columnas reanuda en la OTRA columna
 
 ```bash
-python scripts/contrast.py --validar-todo
+python scripts/contrast.py --validar
 python scripts/lint.py
 ```
 
-**Esperado (medido en copia):** `contrast --validar-todo` rc 1 → **0** (sale el ⛔ de
+**Esperado (medido en copia):** `contrast --validar` rc 1 → **0** (sale el ⛔ de
 `2013A&A...557A..93F` L241). «con el `.txt` en contra» 535 → 460: los 75 que salen son empalmes
 (pies de página, cabeceras de revista, datos de figuras, referencias). En el lint, 4 firmas
 `cita_revisada` pasan a *no cubre ningún hallazgo* (38 → 42): `harps-drs` (2016A&A...585A.134D,
@@ -1346,7 +1346,7 @@ python scripts/contrast.py deteccion-estadistica --grep aleatori --filas
 4 filas pegables a **3** + la línea `⛔ … NO se sirve como pegable` y el cierre
 `1 fila(s) REFUTADA(s)`. `harvest_views deteccion-estadistica --theme --paper 2015MNRAS.446.1478B
 --force --dry-run` pasa de «1 cosechada, +2/-2» a «la vista NO se re-escribe». Lint y
-`contrast --validar-todo`: sin cambios.
+`contrast --validar`: sin cambios.
 
 **Devolver si** otra fila deja de salir, o si el lint cambia alguna categoría.
 
@@ -2023,7 +2023,7 @@ Sin migración. `short_quote_verdict`: una cita corta sin palabras («0.995», �
 no trae sale `ausente` (con su marca `⚠verificar en el PDF`), no `glosa`: sin palabras no hay test
 de idioma. Una sola función para `contrast --validar` y el lint (#587).
 
-**Validar:** `python scripts/contrast.py --validar-todo` → en la línea *citas cortas*, glosas
+**Validar:** `python scripts/contrast.py --validar` → en la línea *citas cortas*, glosas
 **−3** y «que el `.txt` no trae» **+3** (Tesis 2026-11-07: 96 → 93 y 41 → 44; las nuevas:
 «$D>3$» de 2019AJ....158..161D en icasso, «3.10^6» de 2014MNRAS.443.2517H en rv-doppler —el `.txt`
 dice «3.106», el exponente se perdió— y «P(χ2) = 0.0001» de 2012A&A...541A...9G en gj_581). rc igual.
@@ -2146,9 +2146,10 @@ rc 0 si los demás archivos cumplen. **Devolver si** `_clase.json` aparece nombr
 ## §#616 · v1.415.17 — flags que el modo no honra se rehúsan (INV-169)
 
 Sin migración. `query_ads`: `--criterio` sin `--registrar`, y `--dry-run` o `--probe` con
-`--sweep`/`--no-chain`/`--no-glyph`/`--extra-only` (y `--dry-run --probe`) salen con exit 2.
+`--sweep`/`--extra-only` (y `--dry-run --probe`) salen con exit 2 (los otros dos flags de la
+búsqueda que apagaban chaining y glifo se borraron en #629).
 `write_verif_sidecar`: un modo por corrida (`--from`, `--restamp-section`, `--reanclar`,
-`--refutar-extraccion`, `--resolver`/`--resoluciones`/`--reclasificar`); `--todo` sólo con
+`--refutar-extraccion`, `--resolver`/`--reclasificar`); `--todo` sólo con
 `--restamp-section` y sin nota; `--descartar-anclas-muertas` sólo con `--from`; `--texto`/`--reason`
 sólo con `--refutar-extraccion`.
 
@@ -2193,8 +2194,8 @@ de nota de paper (sin wikilink: el bibcode ES la nota) entra. El `log` conserva 
 **15201** citas chequeables; `cita_txt_degradado` 241 → **3278**, `cita_txt_discrepa` 9 → **436**,
 `cita_no_verbatim` 73 → **104**, `cita_log` 17 → **18** (la entrada que hereda el bibcode del
 encabezado, como en los pares); `cita_inventada` sin cambio y `lint` rc 0. `contrast
---validar-todo` idéntico antes y después. **Devolver si** una categoría bloqueante sube, o si
-`contrast --validar-todo` cambia.
+--validar` idéntico antes y después. **Devolver si** una categoría bloqueante sube, o si
+`contrast --validar` cambia.
 
 ## §#628 · v1.415.21 — lint: métodos por clave, supresión por clave, `via` en `cfg`, `refuta` único
 
@@ -2209,3 +2210,18 @@ reclamo (listada aparte, AUD-207); sin reclamo y sin firma = resuelta a mano.
 de grafías (antes 116), `reclamo_refutado_firmado` **2** (antes 1: faltaba `2012ApJS..200...15A` /
 GJ 581, firmado y con el reclamo quitado), y `proposals.py` sigue listando 2 firmadas, 0
 pendientes. Lint rc 0. **Devolver si** una grafía de un método sin nota no aparece en su ítem.
+
+## §#629 · v1.415.22 — flags y scripts que sobran
+
+Sin migración. Se borran: el flag que metía no-core en `fetch_pdf`, `fetch_arxiv` y `make_notes`
+(un no-core entra por `extra_core`, con decisión registrada); los flags de `query_ads` que apagaban
+el chaining y el rescate por glifo (0 usos); el script de diagnóstico de maqueta (nada lo
+importaba: `CANALETA_MIN`/`GUTTER` viven en `lib_quotes`); el lote JSON de `write_verif_sidecar`
+(duplicaba `--resolver` repetible).
+`contrast --validar` es UN modo: sin valor, la bóveda (gate, registra la pasada); con un slug, el
+sujeto; con la ruta de una nota (`….md`), esa nota con su listado por línea (el de `audit-note`).
+
+**Validar:** `python scripts/contrast.py --validar` → la misma salida que el viejo barrido global
+(15201… citas, rc 0 en la Tesis); `python scripts/contrast.py --validar vault/wiki/stars/61_vir.md`
+→ listado por línea con `· L…` de no evaluables; `make_notes.py <slug>` con el viejo flag de
+no-core → exit 2 (argparse). **Devolver si** un skill o doc nombra todavía un flag borrado.

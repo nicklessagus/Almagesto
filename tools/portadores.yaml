@@ -1110,7 +1110,7 @@ portadores:
       una `## Vista` lo estampa `harvest_views` DESDE el JSON, así que el testigo y el juzgado son
       el mismo archivo: el paso 2 la encuentra siempre y la aprueba como `txt_degradado` sobre una
       cita que nadie verificó. Medido: una cita que la fuente no dice, publicada con `lint` rc 0 y
-      `contrast --validar-todo` rc 0. Ahí el único testigo independiente es el `.txt`.
+      `contrast --validar` rc 0. Ahí el único testigo independiente es el `.txt`.
     funcion: lib_config.quote_verdict
     patron: 'quote_verdict\(|extraction_texts\(|SALVEDAD_MARCAS'
     consumidores:
@@ -2019,7 +2019,7 @@ portadores:
       tiene que sobrevivir al cierre de la deuda, porque repaginar actualiza los LOCALIZADORES y
       nunca la transcripción: la prosa sigue siendo la que el extractor leyó del PDF reemplazado.
       La puerta de la exención de #437 mira la FAMILIA (`REPLACED_DOC_MARKS`), no la marca de
-      apertura. Medido en una bóveda real: cerrar la deuda bien llevó `contrast --validar-todo` de
+      apertura. Medido en una bóveda real: cerrar la deuda bien llevó `contrast --validar` de
       0 a 4 citas alteradas (rc 0 → 1) en tres notas que nadie tocó, las cuatro copyedición
       preprint→publicado, o sea la población exacta que #437 existe para no acusar.
     funcion: lib_config.extraction_depaginated
@@ -3547,7 +3547,7 @@ portadores:
     consumidores:
       - modulo: scripts/contrast.py
         estado: usa
-        motivo: "`validar` corre el carril corto sobre las notas sin bibcode propio y fuera del `log`; la pasada `--validar-todo` y el pre-flight del diff lo heredan."
+        motivo: "`validar` corre el carril corto sobre las notas sin bibcode propio y fuera del `log`; la pasada `--validar` y el pre-flight del diff lo heredan."
       - modulo: scripts/lint.py
         estado: usa
         motivo: "#587 — corre el carril para dejar usada la `cita_revisada` que cubre una cita corta ausente del `.txt` (si no, salía huérfana); no reporta el hallazgo: la marca la emite `contrast` y no mueve severidad."
@@ -3673,7 +3673,7 @@ portadores:
         motivo: "`retired_schema` (las filas de `RETIRED_SCHEMAS`) y las recetas de las categorías hermanas (verif sin archivo, clase doble, veredicto pelado, vocabulario de fuente, plantilla de vista)."
       - modulo: scripts/contrast.py
         estado: usa
-        motivo: "El aviso de `--validar-todo` sin citas sobre una bóveda pre-#311."
+        motivo: "El aviso de `--validar` sin citas sobre una bóveda pre-#311."
       - modulo: scripts/make_notes.py
         estado: fuera-de-alcance
         motivo: "Sólo docstrings/comentarios que apuntan a `docs/lint.md` § *Schema retirado*; no emite recetas."

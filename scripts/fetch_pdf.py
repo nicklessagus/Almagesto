@@ -1,7 +1,7 @@
 """Baja el PDF de todo paper relevante que siga sin PDF (resolver de ADS + cascada abierta), editor primero.
 
 Uso:
-    python scripts/fetch_pdf.py <slug> [--all] [--limit N] [--force]
+    python scripts/fetch_pdf.py <slug> [--limit N] [--force]
 
 Lee build/<slug>/ads.json y, para cada paper relevante SIN PDF en disco — los sin arxiv_id
 (revistas viejas / sin e-print) y también los CON arXiv cuya bajada falló en fetch_arxiv
@@ -387,9 +387,9 @@ def print_residue(slug: str, missing: list) -> None:
 def drop_filter(recs: list, slug: str) -> tuple[list, list]:
     """Split `recs` into (fetchable, actively dropped by the user for this subject).
 
-    ⛔ AUD-137 — `--all` means «include the non-relevant ones», and a paper the user removed with
-    `triage --drop-core` is left in the record precisely so it stays VISIBLE (`via: manual-drop`,
-    with its motive). Neither fetcher consulted `load_decisiones`, so the escape hatch re-downloaded
+    ⛔ AUD-137 — a paper the user removed with `triage --drop-core` is left in the record (and in
+    `build/`, maybe still `relevant`) precisely so it stays VISIBLE (`via: manual-drop`,
+    with its motive). Neither fetcher consulted `load_decisiones`, so a re-run re-downloaded
     exactly what #112 deletes from disk on purpose: a curation decision that a script quietly
     undoes is worse than not having taken it.
 
@@ -418,7 +418,6 @@ def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug")
-    ap.add_argument("--all", action="store_true", help="incluir no-relevantes")
     ap.add_argument("--limit", type=int, default=0, help="máximo a intentar (0 = sin límite)")
     ap.add_argument("--force", action="store_true",
                     help="re-intentar incluso lo que ya tiene PDF en disco (p. ej. un PDF "
@@ -432,9 +431,9 @@ def main() -> int:
         return 1
     data = json.loads(adsfile.read_text(encoding="utf-8"))
     recs = data["records"]
-    if not args.all:
-        recs = [r for r in recs if r["relevant"]]
-    recs, dropeados = drop_filter(recs, args.slug)          # AUD-137: ni con `--all`
+    # #629 — sólo los core: un no-core entra por `extra_core` (decisión registrada), no por flag
+    recs = [r for r in recs if r["relevant"]]
+    recs, dropeados = drop_filter(recs, args.slug)          # AUD-137
     if dropeados:
         cfg.print_seguro(f"  · {len(dropeados)} excluido(s) por decisión de curación vigente "
                          f"(`triage --drop`/`--drop-core`): {', '.join(r['bibcode'] for r in dropeados[:5])}"

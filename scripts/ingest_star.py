@@ -29,7 +29,7 @@ drift asegurado cuando la cadena cambia.
 
 Todo idempotente: re-correr es seguro (nada se re-baja ni se pisa; `fetch_ground_truth` NO
 refresca un snapshot existente — refrescar NEA es decisión explícita, no side-effect). Sin
-`--force` acá, a propósito: los flags finos (`--rows`, `--all`, `--force` de un paso) se corren
+`--force` acá, a propósito: los flags finos (`--rows`, `--force` de un paso) se corren
 en el script puntual.
 
 `check_retractions --slug` cierra la cadena chequeando SÓLO los papers de este ingest (el

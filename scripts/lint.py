@@ -5324,8 +5324,8 @@ def check_paper_role(stem: str, fm: dict, relevancia: str, thesis_refs: dict, me
             bad_roles.append((stem, f"`role: {r}` no está en el vocabulario "
                                     f"({'/'.join(ROLES)}) → typo: el rol queda mudo para el "
                                     f"contraste cross-paper"))
-    # Mismo recorte que el de #75 tres líneas arriba: a una nota no-core (escrita con
-    # `--all`) no se le pide rol, igual que no se le pide que aterrice en una síntesis.
+    # Mismo recorte que el de #75 tres líneas arriba: a una nota no-core (las que dejó el viejo
+    # `--all`, #629) no se le pide rol, igual que no se le pide que aterrice en una síntesis.
     if fm.get("methods") and not roles and relevancia != "low":
         incomplete.append((stem, "paper extraído sin `role` (fundacional/aplicacion/arbitro) "
                                  "→ sin rol, contrastarlo contra otro no está definido"))

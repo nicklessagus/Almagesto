@@ -530,7 +530,7 @@ def test_paper_notes_estrella(toy_vault):
     pdf_dir = toy_vault.PDFS / "test_star"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     (pdf_dir / "2020conA...1..1A.pdf").write_bytes(b"%PDF")
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     assert not (toy_vault.PAPERS / "2020nonC....1..1C.md").exists()
     fm_a = read_fm(toy_vault.PAPERS / "2020conA...1..1A.md")
     assert fm_a["stars"] == ["Estrella Test"]
@@ -554,7 +554,7 @@ def test_paper_notes_pdf_es_verdad_de_disco(toy_vault):
     pdf_dir = toy_vault.PDFS / "test_star"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     (pdf_dir / "1978oldW...1..1W.pdf").write_bytes(b"%PDF")     # bajado por fetch_pdf
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     assert read_fm(toy_vault.PAPERS / "2020conA...1..1A.md")["pdf"] is None
     assert read_fm(toy_vault.PAPERS / "1978oldW...1..1W.md")["pdf"] \
         == "../../raw/pdfs/test_star/1978oldW...1..1W.pdf"
@@ -568,35 +568,30 @@ def test_paper_notes_link_pdf_clickeable(toy_vault):
     pdf_dir = toy_vault.PDFS / "test_star"
     pdf_dir.mkdir(parents=True, exist_ok=True)
     (pdf_dir / "2020conA...1..1A.pdf").write_bytes(b"%PDF")     # bibcode con puntos consecutivos
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     body_a = (toy_vault.PAPERS / "2020conA...1..1A.md").read_text(encoding="utf-8")
     assert "[📄 PDF](../../raw/pdfs/test_star/2020conA...1..1A.pdf)" in body_a
     body_b = (toy_vault.PAPERS / "1990preB....1..1B.md").read_text(encoding="utf-8")
     assert "📄 PDF" not in body_b                # sin PDF bajado → sin link
 
 
-def test_paper_notes_all_incluye_no_core(toy_vault):
+def test_629_el_no_core_no_tiene_nota_ni_hay_flag_para_meterlo(toy_vault, monkeypatch, capsys):
+    """#629 — `--all` metía no-core sin decisión registrada; el camino es `extra_core`. El paper
+    no-core no deja nota y el flag ya no existe (argparse: exit 2)."""
     ads_json([rec("2020nonC....1..1C", relevant=False)])
-    mn.write_paper_notes("test_star", include_all=True, force=False)
-    assert read_fm(toy_vault.PAPERS / "2020nonC....1..1C.md")["relevance"] == "low"
-
-
-def test_cli_all_incluye_no_relevantes(toy_vault, monkeypatch):
-    """`--all` es lo único que hace público `include_all=True` (la función ya está cubierta
-    directo arriba); falta el cableado del CLI. Con el `dest` roto `args.all` es siempre `False`
-    pase lo que pase en la línea de comandos: la nota del paper no-core nunca se escribe, sin
-    ningún aviso — un `make_notes.py <slug> --all` que se comporta como si no lo hubieran pasado."""
-    ads_json([rec("2020nonC....1..1C", relevant=False)])
-    assert run_main(monkeypatch, ["test_star", "--all"]) == 0
-    assert read_fm(toy_vault.PAPERS / "2020nonC....1..1C.md")["relevance"] == "low"
+    mn.write_paper_notes("test_star", force=False)
+    assert not (toy_vault.PAPERS / "2020nonC....1..1C.md").exists()
+    with pytest.raises(SystemExit) as e:
+        run_main(monkeypatch, ["test_star", "--all"])
+    assert e.value.code == 2
 
 
 def test_paper_notes_no_pisa_extraccion(toy_vault):
     ads_json([rec("2020conA...1..1A")])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     dest = toy_vault.PAPERS / "2020conA...1..1A.md"
     antes = dest.read_text(encoding="utf-8")
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     assert dest.read_text(encoding="utf-8") == antes
 
 
@@ -607,7 +602,7 @@ def test_paper_notes_retrolinkea_nota_preexistente(toy_vault):
     dest.write_text("---\nbibcode: 2020conA...1..1A\nstars: [Otra]\ntags:\n- paper\n---\n"
                     "# Nota\n\nExtracción LLM previa.\n", encoding="utf-8")
     ads_json([rec("2020conA...1..1A")])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     text = dest.read_text(encoding="utf-8")
     assert "Extracción LLM previa." in text
     assert read_fm(dest)["stars"] == ["Otra", "Estrella Test"]
@@ -616,7 +611,7 @@ def test_paper_notes_retrolinkea_nota_preexistente(toy_vault):
 def test_paper_notes_topic_siembra_thesis_links(toy_vault):
     seed_topic()
     ads_json([rec("2020gpsA...1..1A")], slug="gp")
-    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    mn.write_paper_notes("gp", force=False, theme=True)
     fm = read_fm(toy_vault.PAPERS / "2020gpsA...1..1A.md")
     assert fm["thesis_links"] == ["gaussian-processes"] and fm["stars"] == []
 
@@ -647,7 +642,7 @@ def test_el_stub_de_estrella_publica_una_LINEA_DE_ESTADO_y_no_el_prompt(toy_vaul
 
     @inv INV-152"""
     ads_json([rec("2020conA...1..1A")])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     body = (toy_vault.PAPERS / "2020conA...1..1A.md").read_text(encoding="utf-8")
     assert "_Reclamado por `Estrella Test`; sin leer desde este sujeto._" in body, body
     for instruccion in ("Ground-truth (planetas / parámetros)", "Ejes del objetivo",
@@ -661,7 +656,7 @@ def test_el_stub_de_tema_publica_la_misma_LINEA_y_ningun_bullet(toy_vault):
     que decir mientras la lectura no ocurrió."""
     seed_topic()
     ads_json([rec("2020gpsA...1..1A")], slug="gp")
-    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    mn.write_paper_notes("gp", force=False, theme=True)
     body = (toy_vault.PAPERS / "2020gpsA...1..1A.md").read_text(encoding="utf-8")
     assert "_Reclamado por `gaussian-processes`; sin leer desde este sujeto._" in body, body
     assert "planeta" not in body.lower() and "Aporte al tema" not in body
@@ -873,7 +868,7 @@ def test_paper_notes_fulltext_verdad_de_disco(toy_vault):
     (en el primer run de la cadena lo estampa extract_fulltext después, vía stamp_fulltext)."""
     ads_json([rec("2020conA...1..1A"), rec("1990preB....1..1B")])
     seed_txt(toy_vault, "test_star", "2020conA...1..1A")
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     fm_a = read_fm(toy_vault.PAPERS / "2020conA...1..1A.md")
     assert fm_a["fulltext"] == "../../raw/fulltext/test_star/2020conA...1..1A.txt"
     assert fm_a["fulltext_source"] == "pdftotext"
@@ -884,7 +879,7 @@ def test_paper_notes_fulltext_verdad_de_disco(toy_vault):
 def test_stamp_fulltext_quirurgico(toy_vault):
     """stamp_fulltext actualiza `fulltext: null` → ruta sin tocar la extracción LLM; idempotente."""
     ads_json([rec("2020conA...1..1A")])
-    mn.write_paper_notes("test_star", include_all=False, force=False)   # sin .txt → null
+    mn.write_paper_notes("test_star", force=False)   # sin .txt → null
     dest = toy_vault.PAPERS / "2020conA...1..1A.md"
     dest.write_text(dest.read_text(encoding="utf-8")
                     + "\n- **Métodos:** GP con kernel QP\n", encoding="utf-8")
@@ -1236,7 +1231,7 @@ def test_paper_notes_rerun_restamp_cabecera(toy_vault, capsys):
     rel = _pdf_en_disco(toy_vault, "test_star", "2020conA...1..1A")
     _nota_vieja(toy_vault, stem="2020conA...1..1A", pdf_rel=rel)
     ads_json([rec("2020conA...1..1A")])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     dest = toy_vault.PAPERS / "2020conA...1..1A.md"
     assert f"[📄 PDF]({rel})" in dest.read_text(encoding="utf-8")
     assert "re-estampado" in capsys.readouterr().out
@@ -1963,12 +1958,12 @@ def test_notas_pasan_por_el_helper(toy_vault, monkeypatch):
     # (línea 729) pasaba inadvertida. La cobertura de un test de comportamiento es exactamente
     # el conjunto de caminos que recorre — el barrido repo-wide lo da el test estático de
     # `test_lib_config.py::test_sin_escrituras_directas_a_vault`.
-    assert run_main(monkeypatch, ["test_star", "--all"]) == 0      # ficha + papers, notas NUEVAS
+    assert run_main(monkeypatch, ["test_star"]) == 0      # ficha + papers, notas NUEVAS
     # 2ª corrida: la ficha ya existe → entran las cirugías sobre nota existente (`stamp_excluded`,
     # `stamp_search_line`, cabecera), que son la mayoría de los 14 sitios de escritura y que la
     # primera corrida no toca. Auditado por mutación: sin esta línea, romper `stamp_excluded`
     # pasaba inadvertido.
-    assert run_main(monkeypatch, ["test_star", "--all"]) == 0
+    assert run_main(monkeypatch, ["test_star"]) == 0
     assert run_main(monkeypatch, ["gp", "--theme"]) == 0           # concept + papers de tema
     assert run_main(monkeypatch, ["gp", "--theme"]) == 0
     assert run_main(monkeypatch, ["--restamp-headers"]) == 0
@@ -2371,7 +2366,7 @@ def test_crear_segunda_nota_mismo_trabajo_rehusa(toy_vault, capsys):
     mk_note(cfg.PAPERS, "2020preX...1..1X",
             {"tags": ["paper"], "bibcode": "2020preX...1..1X", "arxiv_id": "2001.12345"}, "")
     ads_json([rec("2021pubY...1..1Y", arxiv="2001.12345")])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     assert not (cfg.PAPERS / "2021pubY...1..1Y.md").exists()
     assert "2001.12345" in capsys.readouterr().out
 
@@ -2385,7 +2380,7 @@ def test_keywords_llegan_al_frontmatter(toy_vault):
     veredicto distinto del que dio el ingest, o sea un diff inventado."""
     ads_json([dict(rec("2020kwA....1..1A"),
                    keyword=["stars: activity", "techniques: radial velocities"])])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     fm = read_fm(toy_vault.PAPERS / "2020kwA....1..1A.md")
     assert fm["keywords"] == ["stars: activity", "techniques: radial velocities"]
 
@@ -2393,11 +2388,11 @@ def test_keywords_llegan_al_frontmatter(toy_vault):
 def test_keywords_no_pisa_la_extraccion(toy_vault):
     """Add-only, como todo lo que `make_notes` mergea sobre una nota que ya existe."""
     ads_json([dict(rec("2020kwB....1..1B"), keyword=["una"])])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     p = toy_vault.PAPERS / "2020kwB....1..1B.md"
     p.write_text(p.read_text(encoding="utf-8").replace("keywords:\n- una", "keywords:\n- editada"),
                  encoding="utf-8")
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     assert read_fm(p)["keywords"] == ["editada"]
 
 
@@ -2485,7 +2480,7 @@ def test_la_nota_declara_su_version(toy_vault):
     (build / "ads.json").write_text(json.dumps({"slug": "test_star", "records": [
         {"bibcode": "2020A", "relevant": True, "title": "t", "authors": ["A"], "year": 2020,
          "keyword": [], "facets": ["rv"]}]}), encoding="utf-8")
-    mn.write_paper_notes("test_star", False, False)
+    mn.write_paper_notes("test_star", False)
     fm = cfg.split_fm((cfg.PAPERS / "2020A.md").read_text(encoding="utf-8"))
     assert fm["generator"] == f"Almagesto v{cfg.ALMAGESTO_VERSION}"
 
@@ -3329,7 +3324,7 @@ def test_stub_de_estrella_declara_su_vista_y_su_seccion(toy_vault):
 
     @inv INV-134"""
     ads_json([rec("2020ext....1E")])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     p = toy_vault.PAPERS / "2020ext....1E.md"
     fm = read_fm(p)
     assert fm["vistas"] == [{"sujeto": "Estrella Test", "tipo": "star"}]
@@ -3339,7 +3334,7 @@ def test_stub_de_estrella_declara_su_vista_y_su_seccion(toy_vault):
 def test_stub_de_tema_declara_la_vista_del_concept(toy_vault):
     seed_topic()
     ads_json([rec("2020gpsA...1..1A")], slug="gp")
-    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    mn.write_paper_notes("gp", force=False, theme=True)
     p = toy_vault.PAPERS / "2020gpsA...1..1A.md"
     assert read_fm(p)["vistas"] == [{"sujeto": "gaussian-processes", "tipo": "theme"}]
     assert "## Vista — gaussian-processes" in p.read_text(encoding="utf-8")
@@ -3361,13 +3356,13 @@ def test_el_retro_linkeo_NO_escribe_vistas(toy_vault):
     @inv INV-134"""
     seed_topic()
     ads_json([rec("2020gpsA...1..1A")], slug="gp")
-    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    mn.write_paper_notes("gp", force=False, theme=True)
     p = toy_vault.PAPERS / "2020gpsA...1..1A.md"
     antes = read_fm(p)["vistas"]
 
     # el MISMO paper llega ahora por el ingest de una estrella: seed add-only, sin leer nada
     ads_json([rec("2020gpsA...1..1A")])
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     fm = read_fm(p)
     assert fm["vistas"] == antes, "el retro-link no declara una lectura que nadie hizo"
     assert "Estrella Test" in fm["stars"], "pero sí mergea el RECLAMO"
@@ -3391,7 +3386,7 @@ def test_theme_restampa_la_tabla_papers_estilo_ficha(toy_vault):
     #  @inv INV-136
     seed_topic()
     ads_json([rec("2020gpsA...1..1A")], slug="gp")
-    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    mn.write_paper_notes("gp", force=False, theme=True)
     mn.write_concept_note("gp", force=False)
     dest = toy_vault.CONCEPTS / "methods" / "gaussian-processes.md"
     # la nota pasa a llevar el encabezado estilo FICHA, que es el caso que el bug no cubría
@@ -3400,7 +3395,7 @@ def test_theme_restampa_la_tabla_papers_estilo_ficha(toy_vault):
 
     nuevo = rec("2021gpsB...2..2B") | {"doi": "10.1/otro"}   # identidad propia: D-19 rechaza el clon
     ads_json([rec("2020gpsA...1..1A"), nuevo], slug="gp")
-    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    mn.write_paper_notes("gp", force=False, theme=True)
     mn.write_concept_note("gp", force=False)
 
     assert "2021gpsB...2..2B" in dest.read_text(encoding="utf-8"), \
@@ -3623,7 +3618,7 @@ def test_force_no_pisa_la_nota_de_OTRO_sujeto(toy_vault, capsys):
                          "## Vista — Otra Estrella\n\nExtracción cara del otro sujeto.\n")
     antes = compartida.read_text(encoding="utf-8")
 
-    mn.write_paper_notes("test_star", False, True)
+    mn.write_paper_notes("test_star", True)
 
     assert compartida.read_text(encoding="utf-8") == antes
     salida = capsys.readouterr().out
@@ -3667,22 +3662,10 @@ def test_paper_notes_no_resucita_el_dropeado(toy_vault, capsys):
     cfg.save_registro("test_star", {"decisiones": {
         "2020conA...1..1A": {"decision": "descartado", "origen": "sujeto",
                              "motivo": "falso positivo de polisemia", "fecha": "2026-08-29"}}})
-    mn.write_paper_notes("test_star", include_all=False, force=False)
+    mn.write_paper_notes("test_star", force=False)
     assert not (toy_vault.PAPERS / "2020conA...1..1A.md").exists()
     assert (toy_vault.PAPERS / "1990preB....1..1B.md").exists()
     assert "--drop-core" in capsys.readouterr().out
-
-
-def test_paper_notes_all_tampoco_resucita_el_dropeado(toy_vault):
-    """`--all` pide los papers NO-CORE, que es otra cosa que los que el usuario sacó a mano: por eso
-    el filtro va ANTES. Sin esto la escotilla de `--all` reabría en silencio la decisión de
-    curación."""
-    ads_json([rec("2020conA...1..1A", relevant=False)])
-    cfg.save_registro("test_star", {"decisiones": {
-        "2020conA...1..1A": {"decision": "descartado", "origen": "sujeto",
-                             "motivo": "off-topic", "fecha": "2026-08-29"}}})
-    mn.write_paper_notes("test_star", include_all=True, force=False)
-    assert not (toy_vault.PAPERS / "2020conA...1..1A.md").exists()
 
 
 # ── #217 · retarget_artifacts: verdad de disco después de un borrado ─────────
@@ -4411,7 +4394,7 @@ def test_extra_core_largo_estampa_alcance_en_el_stub_y_el_prompt_ramifica(toy_va
     seed_topic(extra_core=[{"bibcode": "2021PhDT.........6D", "via": "usuario", "motivo": "tesis",
                             "unidad_cita": "pagina", "alcance": "caps. 2-3"}])
     ads_json([rec("2021PhDT.........6D")], slug="gp")
-    mn.write_paper_notes("gp", include_all=False, force=False, theme=True)
+    mn.write_paper_notes("gp", force=False, theme=True)
     fm = read_fm(toy_vault.PAPERS / "2021PhDT.........6D.md")
     assert fm["unidad_cita"] == "pagina" and fm["alcance"] == "caps. 2-3"
     assert ep._long_document("2021PhDT.........6D") == ("pagina", "caps. 2-3")

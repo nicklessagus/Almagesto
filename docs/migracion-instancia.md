@@ -110,7 +110,7 @@ puesto lo tuyo.
 
 ## 1 · v1.173.0 (#386/#387) — el barrido global de citas
 
-**Qué cambió.** `contrast.py --validar-todo` ahora conoce las dos formas en que el `log` se corrige
+**Qué cambió.** `contrast.py --validar` ahora conoce las dos formas en que el `log` se corrige
 sin editarse: la marca `⚠ corregido <fecha> → <entrada nueva>` (#238) y la cita dentro de un
 **blockquote**, que es *mención* y no afirmación de la bóveda (#387). Antes las ignoraba, así que una
 entrada corregida **exactamente como el framework manda** bloqueaba el gate para siempre.
@@ -118,7 +118,7 @@ entrada corregida **exactamente como el framework manda** bloqueaba el gate para
 **Y es pasada periódica declarada**, no sólo paso de cierre:
 
 ```bash
-python scripts/contrast.py --validar-todo        # SIN slug: toda la bóveda
+python scripts/contrast.py --validar        # SIN slug: toda la bóveda
 ```
 
 ⚠ **Sin slug.** El paso de cierre de cada operación lo corre **con** el slug del sujeto, que mira
@@ -186,7 +186,7 @@ gate devolviendo `rc 0` — sobre citas que no había mirado.
 una regresión: es población que entra por primera vez.
 
 ```bash
-python scripts/contrast.py --validar-todo
+python scripts/contrast.py --validar
 ```
 
 Si aparecen hallazgos nuevos, se corrigen como siempre: **copiando la cadena del JSON de
@@ -256,7 +256,7 @@ propia extracción dice y su `.txt` no. Es el veredicto correcto —el `.txt` es
 **no** es un hallazgo: viaja en la línea de población para que no se lea como verde limpio.
 
 ```bash
-python scripts/contrast.py --validar-todo
+python scripts/contrast.py --validar
 ```
 
 > Medido en `Almagesto-Tesis` (2026-09-03): de **3** citas miradas se pasa a **5482**, y los
@@ -575,7 +575,6 @@ contra el banner del propio archivo y contra #403.
 ```bash
 # write_verif_sidecar.py <nota.md> --migrate-condition-prefix   ← en el tag v1.411.3 (#624)
 python scripts/write_verif_sidecar.py <nota.md> --resolver <ancla>[:<bibcode>]=<dónde se resolvió>
-python scripts/write_verif_sidecar.py <nota.md> --resoluciones res.json     # `{ancla[:bibcode]: dónde}`
 python scripts/lint.py                                                      # rc 0
 ```
 
@@ -880,7 +879,7 @@ merge.
 
 ```bash
 python scripts/lint.py                       # rc 0
-python scripts/contrast.py --validar-todo    # rc 0
+python scripts/contrast.py --validar    # rc 0
 git add vault/ && git commit
 ```
 

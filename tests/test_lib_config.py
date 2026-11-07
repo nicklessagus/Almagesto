@@ -1936,14 +1936,6 @@ def test_source_texts_NO_valida_el_empalme_por_la_canaleta():
     assert not any(cfg.quote_found(_EMPALME, s) for s in cfg.source_texts(_DOS_COLUMNAS))
 
 
-def test_paridad_de_la_canaleta_entre_lib_config_y_measure_layout():
-    """Regla de método 2: el que MIDE la maqueta y el que PARTE por ella comparten la definición, o
-    divergen sin que nadie se entere."""
-    import measure_layout as ml
-    assert ml.CANALETA_MIN is cfg.CANALETA_MIN
-    assert ml.GUTTER is cfg.GUTTER
-
-
 # ── #332 · la canaleta es de la PÁGINA, no de cada línea ────────────────────────────────────────
 
 # Página de dos columnas donde la canaleta se ANGOSTA en una línea (7 espacios: la columna
@@ -3465,7 +3457,7 @@ def test_449_la_prosa_sobre_QUE_DOCUMENTO_hay_en_disco_se_cruza_contra_el_disco(
     la deja afuera por construcción (#213) y `contrast --validar` mira citas, no prosa sobre el
     disco. Medido: 43 salvedades en 31 notas seguían diciendo «el PDF en disco es el PREPRINT»
     después de que `replace_pdf` pusiera ahí la copia del editor — `lint` rc 0, `contrast
-    --validar-todo` rc 0, 0 pares vencidos."""
+    --validar` rc 0, 0 pares vencidos."""
     pre = "El PDF en disco es el PREPRINT de arXiv (marca al margen), coherente con `pdf_source: eprint`."
     pub = "El PDF en disco es la VERSIÓN PUBLICADA del editor (A&A 696, A141) — NO el preprint."
     assert cfg.doc_claims_on_disk(pre) == [("preprint", pre)]

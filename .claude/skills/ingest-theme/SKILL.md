@@ -42,7 +42,7 @@ Progreso del ingest del tema <tema>:
 - [ ] 4  síntesis del concept durable (+ régimen de validez / disputes)
 - [ ] 5  auto-revisión de autosuficiencia
 - [ ] 6  bookkeeping (index, log, STATUS) + `triage.py <slug> --sintesis`
-- [ ] 6a `contrast.py <slug> --validar-todo` en 0 — **antes** del verify (#323)
+- [ ] 6a `contrast.py <slug> --validar` en 0 — **antes** del verify (#323)
 - [ ] 6b verify-citations sobre el concept + notas nuevas
 - [ ] 7  `lint.py --cierre <slug>` en 0 → commit → preguntar push
 ```
@@ -358,7 +358,7 @@ Progreso del ingest del tema <tema>:
    (El `lint` va **después** del verify del paso 6b: `CLAUDE.md` lo pide "antes de lint/commit",
    porque resolver una cita no-soportada suele cambiar la prosa.)
 
-6a. **Cruzar la nota contra las extracciones — `python scripts/contrast.py <slug> --validar-todo`
+6a. **Cruzar la nota contra las extracciones — `python scripts/contrast.py <slug> --validar`
    (#323).** Obligatorio, con vos todavía en contexto, y **antes** del fan-out: es un `grep` exacto
    que cuesta segundos, mientras el verify son N subagentes leyendo PDFs — mandar a verificar con
    LLM una cita que un `grep` ya sabe alterada es pagar el paso caro para llegar a lo que el barato

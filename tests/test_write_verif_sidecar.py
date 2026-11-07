@@ -771,23 +771,6 @@ def test_el_cli_de_condiciones_toma_una_nota_y_rehusa_el_par_MAL_FORMADO(toy_vau
     assert ws.main(["--resolver", f"{ancla}=bloque", str(cfg.verif_sidecar(nota))]) == 2
 
 
-def test_el_cli_de_condiciones_acepta_el_LOTE_por_json(toy_vault, capsys):
-    """#427 — `--resoluciones <json>`: el mismo trabajo para una nota con muchas `acota`, que es el
-    caso medido (20 en una nota real). Un JSON que no es un objeto se rehúsa."""
-    import json as _json
-    nota = _escena(toy_vault)
-    d = _fanout(toy_vault, nota, {}, condicion="SNR > 50", cond_tipo="acota")
-    ws.write(nota, d, fecha="2026-03-01")
-    anclas = [f.anchor for f in lb.verif_rows(nota)]
-    j = toy_vault.ROOT / "build" / "res.json"
-    j.write_text(_json.dumps({a: f"bloque — fila {i}" for i, a in enumerate(anclas)}), encoding="utf-8")
-    assert ws.main(["--resoluciones", str(j), str(nota)]) == 0
-    assert lb.verif_counts(lb.verif_rows(nota))["cond_acota_resueltas"] == len(anclas)
-    j.write_text(_json.dumps(["no", "es", "objeto"]), encoding="utf-8")
-    assert ws.main(["--resoluciones", str(j), str(nota)]) == 1
-    assert "objeto" in capsys.readouterr().out
-
-
 # ── #428 · un artefacto ya pagado tiene que poder consumirse ────────────────────────────────────
 
 def test_from_acepta_VARIAS_rondas_y_encadena(toy_vault):
@@ -1332,7 +1315,7 @@ def test_AUD534_sin_argumentos_el_mensaje_nombra_TODOS_los_modos(capsys):
     """AUD-534 — el mensaje nombraba 2 de los modos."""
     assert ws.main([]) == 2
     out = capsys.readouterr().out
-    for modo in ("--from", "--restamp-section", "--reanclar", "--resolver", "--resoluciones",
+    for modo in ("--from", "--restamp-section", "--reanclar", "--resolver",
                  "--reclasificar", "--refutar-extraccion"):
         assert modo in out, (modo, out)
 

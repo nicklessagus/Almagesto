@@ -1,7 +1,7 @@
 """Baja de export.arxiv.org el eprint de los papers relevantes SIN versión publicada o con `acepta_preprint`.
 
 Uso:
-    python scripts/fetch_arxiv.py <slug> [--all] [--limit N] [--force]
+    python scripts/fetch_arxiv.py <slug> [--limit N] [--force]
 
 Lee build/<slug>/ads.json y baja el PDF de cada paper relevante con arxiv_id a
 pdfs/<slug>/<bibcode>.pdf. Respeta el rate limit de arXiv: 1 request / 3 s.
@@ -101,7 +101,6 @@ def main() -> int:
     cfg.stdout_tolerante()  # Tolera encoding no-UTF8 en argparse --help
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("slug")
-    ap.add_argument("--all", action="store_true", help="incluir no-relevantes")
     ap.add_argument("--limit", type=int, default=0, help="máximo a bajar (0 = sin límite)")
     ap.add_argument("--force", action="store_true",
                     help="re-bajar incluso lo que ya tiene PDF en disco (p. ej. un PDF truncado "
@@ -115,9 +114,9 @@ def main() -> int:
         return 1
     data = json.loads(adsfile.read_text(encoding="utf-8"))
     recs = data["records"]
-    if not args.all:
-        recs = [r for r in recs if r["relevant"]]
-    recs, dropeados = drop_filter(recs, args.slug)          # AUD-137: ni con `--all`
+    # #629 — sólo los core: un no-core entra por `extra_core` (decisión registrada), no por flag
+    recs = [r for r in recs if r["relevant"]]
+    recs, dropeados = drop_filter(recs, args.slug)          # AUD-137
     if dropeados:
         cfg.print_seguro(f"  · {len(dropeados)} excluido(s) por decisión de curación vigente "
                          f"(`triage --drop`/`--drop-core`): {', '.join(r['bibcode'] for r in dropeados[:5])}"

@@ -29,7 +29,7 @@ Progreso del ingest de <estrella>:
 - [ ] 3c síntesis a la ficha (frontmatter propio + prosa + disputes)
 - [ ] 4  auto-revisión de autosuficiencia
 - [ ] 5  bookkeeping (index, log, matriz, STATUS) + `triage.py <slug> --sintesis`
-- [ ] 5a `contrast.py <slug> --validar-todo` en 0 — **antes** del verify (#323)
+- [ ] 5a `contrast.py <slug> --validar` en 0 — **antes** del verify (#323)
 - [ ] 5b verify-citations sobre la ficha + notas nuevas
 - [ ] 6  `lint.py --cierre <slug>` en 0 → commit → preguntar push
 ```
@@ -62,7 +62,7 @@ Progreso del ingest de <estrella>:
    fulltext → retracciones → BibTeX), abortando al primer fallo (un retractado no es fallo: el
    BibTeX corre igual y el rc sale al final, AUD-417). **El orden canónico vive en el header de
    `scripts/ingest_star.py`** — puntero, no copia: no lo repliques acá ni en otros docs. Para un
-   flag fino (`--rows`, `--all`, `--force` de un paso) corré el script puntual.
+   flag fino (`--rows`, `--force` de un paso) corré el script puntual.
 
    **La mecánica de la cadena se describe en un solo lugar (#67):**
    `.claude/skills/ingest-star/reference/cadena-ads.md`, que `ingest-theme` apunta también. Ahí
@@ -81,7 +81,7 @@ Progreso del ingest de <estrella>:
    refresca salvo `--force`: refrescar desde NEA es decisión explícita, no side-effect.
 
    **Rescate por glifo — sólo en nombres Bayer.** Si el nombre es letra griega + constelación corre
-   antes el rescate (`via: glyph`, se desactiva con `--no-glyph`): ADS unifica `epsilon`/`eps`/`ε`
+   antes el rescate (`via: glyph`): ADS unifica `epsilon`/`eps`/`ε`
    pero **descarta** los lookalikes `ϵ` (U+03F5) y `∊` (U+220A, el glifo de ApJ/AJ/MNRAS), así que
    esos papers quedan indexados sólo por la constelación e **invisibles** a la query canónica
    (medido en ε Eri: 121 core perdidos, incluido el descubrimiento). No hace falta listar las
@@ -372,7 +372,7 @@ Progreso del ingest de <estrella>:
    lee como re-sintetizada cuando la prosa es la de tres meses atrás. (El `lint` va **después** del verify del paso 5b: `CLAUDE.md` lo pide
    "antes de lint/commit", porque resolver una cita no-soportada suele cambiar la prosa.)
 
-5a. **Cruzar la ficha contra las extracciones — `python scripts/contrast.py <slug> --validar-todo`
+5a. **Cruzar la ficha contra las extracciones — `python scripts/contrast.py <slug> --validar`
    (#323).** Obligatorio y **antes** del fan-out: el `grep` exacto cuesta segundos y el verify son N
    subagentes leyendo PDFs, así que el chequeo barato corre primero (#315). Bloquea sólo con
    evidencia positiva —la frase verbatim bajo **otro** bibcode citado (atribución movida), o el

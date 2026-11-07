@@ -5970,7 +5970,7 @@ def test_la_cita_de_la_PROPIA_nota_no_se_juzga_contra_el_vecino(toy_vault, capsy
     En una nota de PAPER el bibcode **es la nota**, no un `[[wikilink]]`, así que la transcripción
     de su `## Vista` se juzgaba contra el `.txt` del vecino —que en esa frase es una MENCIÓN—.
     Medido en una bóveda real: 5 de 19 hallazgos de esta categoría eran palabras del propio paper,
-    3 verbatim en su propio `.txt`, y la misma cita salía limpia en `contrast --validar-todo`: dos
+    3 verbatim en su propio `.txt`, y la misma cita salía limpia en `contrast --validar`: dos
     veredictos sobre una cita es la divergencia que #324 declaró prohibida.
 
     ⚠ El bibcode propio se SUMA, no reemplaza: el test hermano de abajo cubre esa mitad."""

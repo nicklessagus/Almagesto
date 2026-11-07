@@ -278,7 +278,7 @@ def test_el_barrido_declara_su_POBLACION(toy_vault, capsys):
     caso pasa de verdad: sin `--migrate-extracciones` la población es cero."""
     _extraccion("ica_ruido", "2013Voss")
     _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     out = capsys.readouterr().out
     assert "nota(s) de toda la bóveda" in out and "1 cita(s)" in out
     assert "0 cita(s) con evidencia POSITIVA de alteración ✅" in out
@@ -289,7 +289,7 @@ def test_el_barrido_sin_UNA_cita_mirada_sale_NO_EVALUADO(toy_vault, capsys):
     nada. Un cero silencioso ahí se lee como veredicto: es el falso limpio que el framework
     persigue."""
     _nota_323("sin-citas", "Prosa sin ninguna cita textual.")
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     out = capsys.readouterr().out
     assert "NO EVALUADO" in out and "--migrate-extracciones" in out
 
@@ -301,7 +301,7 @@ def test_el_barrido_es_un_GATE(toy_vault, capsys):
         {"que": "otro", "valor": "algo distinto", "linea": "p. 9"}])
     _txt("ica_ruido", "2004Davies")
     _nota_323("ica-ruido", f"Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].")
-    assert ct.main(["--validar-todo"]) == 1
+    assert ct.main(["--validar"]) == 1
     assert "atribuida a la fuente equivocada" in capsys.readouterr().out
 
 
@@ -311,16 +311,16 @@ def test_el_barrido_por_SUJETO_acota_la_poblacion(toy_vault, capsys):
     _extraccion("ica_ruido", "2013Voss")
     _nota_323("ica_ruido", f"Dice «{LARGA}» [[2013Voss]].")
     _nota_323("otro-tema", "Prosa de otro tema.")
-    ct.main(["ica_ruido", "--validar-todo"])
+    ct.main(["ica_ruido", "--validar"])
     acotado = capsys.readouterr().out
-    ct.main(["--validar-todo"])
+    ct.main(["--validar"])
     entero = capsys.readouterr().out
     assert "notas de `ica_ruido`" in acotado
     assert int(acotado.split("> sobre ")[1].split(" ")[0]) < int(entero.split("> sobre ")[1].split(" ")[0])
 
 
 def test_la_cita_que_SU_txt_dice_no_es_atribucion_equivocada(toy_vault, capsys):
-    """#324 — el falso positivo medido, y el que más iba a doler: `--validar-todo` es paso de cierre
+    """#324 — el falso positivo medido, y el que más iba a doler: `--validar` es paso de cierre
     con exit ≠ 0 desde #323, así que un falso positivo **frena operaciones**.
 
     Boilerplate de A&A («only available in electronic form at the CDS») que está verbatim en el
@@ -443,7 +443,7 @@ def test_una_cita_de_la_VISTA_alterada_respecto_de_SU_extraccion_BLOQUEA(toy_vau
     _extraccion("ica_ruido", "2013Voss")
     _txt("ica_ruido", "2013Voss")
     _nota_paper("2013Voss", f"Dice «{LARGA[:80]} y de ahí sale todo lo demás».")
-    assert ct.main(["--validar-todo"]) == 1
+    assert ct.main(["--validar"]) == 1
     assert "la cola diverge" in capsys.readouterr().out
 
 
@@ -452,7 +452,7 @@ def test_la_cita_FIEL_de_la_vista_no_se_reporta(toy_vault, capsys):
     _extraccion("ica_ruido", "2013Voss")
     _txt("ica_ruido", "2013Voss")
     _nota_paper("2013Voss", f"Dice «{LARGA}».")
-    assert ct.main(["--validar-todo"]) == 0, capsys.readouterr().out
+    assert ct.main(["--validar"]) == 0, capsys.readouterr().out
 
 
 def test_el_SILENCIO_de_la_extraccion_sobre_la_vista_NO_bloquea(toy_vault, capsys):
@@ -461,7 +461,7 @@ def test_el_SILENCIO_de_la_extraccion_sobre_la_vista_NO_bloquea(toy_vault, capsy
     _extraccion("ica_ruido", "2013Voss")
     _txt("ica_ruido", "2013Voss")
     _nota_paper("2013Voss", "Dice «una frase que la extracción nunca transcribió, larga y distinta».")
-    assert ct.main(["--validar-todo"]) == 0, capsys.readouterr().out
+    assert ct.main(["--validar"]) == 0, capsys.readouterr().out
 
 
 def test_el_bibcode_de_la_nota_SE_SUMA_al_adyacente(toy_vault, capsys):
@@ -474,7 +474,7 @@ def test_el_bibcode_de_la_nota_SE_SUMA_al_adyacente(toy_vault, capsys):
         {"que": "otro", "valor": LARGA, "linea": "p. 9"}])
     _txt("ica_ruido", "2004Davies"); _txt("ica_ruido", "2013Voss")
     _nota_paper("2013Voss", f"Comparado con [[2004Davies]], que dice «{LARGA}».")
-    assert ct.main(["--validar-todo"]) == 0, capsys.readouterr().out
+    assert ct.main(["--validar"]) == 0, capsys.readouterr().out
 
 
 # ── #374 · la identidad de una extracción es su `bibcode`, no el nombre del archivo ──
@@ -501,7 +501,7 @@ def test_la_extraccion_se_identifica_por_su_BIBCODE(toy_vault):
 
 def test_la_segunda_lente_ENTRA_en_la_poblacion_del_gate(toy_vault, capsys):
     """El falso limpio que el defecto producía: las citas de la segunda lente caían **todas** en «no
-    evaluable» y `--validar-todo` daba `rc 0` sobre citas que no había mirado. Medido en una bóveda
+    evaluable» y `--validar` daba `rc 0` sobre citas que no había mirado. Medido en una bóveda
     real: 309 citas nuevas, 309 no evaluables, rc 0 (#374).
 
     Acá la nota altera la cola de una cita que la segunda lente sí tiene: tiene que BLOQUEAR."""
@@ -509,7 +509,7 @@ def test_la_segunda_lente_ENTRA_en_la_poblacion_del_gate(toy_vault, capsys):
     _txt("ica_ruido", "2013Voss")
     _nota_323("ica-ruido", f"Dice «{LARGA[:80]} y por eso el problema se vuelve trivial» "
                            f"[[2013Voss]].")
-    assert ct.main(["--validar-todo"]) == 1
+    assert ct.main(["--validar"]) == 1
     assert "la cola diverge" in capsys.readouterr().out
 
 
@@ -520,7 +520,7 @@ def test_un_bibcode_con_VARIAS_lentes_se_cruza_contra_TODAS(toy_vault, capsys):
     _segunda_lente("ica_ruido", "2013Voss", "el orden se elige por el criterio de estabilidad")
     _txt("ica_ruido", "2013Voss")
     _nota_323("ica-ruido", "Dice «el orden se elige por el criterio de estabilidad» [[2013Voss]].")
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     # ⛔ El `rc 0` no alcanza: con el defecto vivo también daba 0, por SILENCIO (la cita no estaba en
     # la extracción que el stem le hacía ver). La diferencia es que ahora la mira y la respalda.
     assert "0 no evaluable(s)" in capsys.readouterr().out
@@ -587,7 +587,7 @@ def test_la_marca_del_log_YA_NO_exime_en_contrast(toy_vault, capsys):
          f"- Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].\n"
          f"  ⚠ corregido 2026-09-01 → entrada «corrección» del 2026-09-01: la atribución va al "
          f"otro bibcode.")
-    assert ct.main(["--validar-todo"]) != 0, "con la marca puesta, la cita alterada SIGUE siendo un hallazgo"
+    assert ct.main(["--validar"]) != 0, "con la marca puesta, la cita alterada SIGUE siendo un hallazgo"
 
 
 def test_la_entrada_del_log_que_CITA_una_cita_defectuosa_es_MENCION(toy_vault, capsys):
@@ -603,7 +603,7 @@ def test_la_entrada_del_log_que_CITA_una_cita_defectuosa_es_MENCION(toy_vault, c
     _log("## 2026-09-01 — corrección de una cita del propio log (#238)\n\n"
          "La entrada vieja publicaba el bibcode del lado equivocado:\n\n"
          f"> Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].")
-    assert ct.main(["--validar-todo"]) == 0, capsys.readouterr().out
+    assert ct.main(["--validar"]) == 0, capsys.readouterr().out
 
 
 def test_la_marca_del_log_NO_exime_a_una_nota_normal(toy_vault, capsys):
@@ -616,7 +616,7 @@ def test_la_marca_del_log_NO_exime_a_una_nota_normal(toy_vault, capsys):
     _txt("ica_ruido", "2004Davies")
     _nota_323("ica-ruido", f"⚠ corregido 2026-09-01 → otra cosa. "
                            f"Dice «{LARGA}» [[2004Davies]], y lo discute [[2013Voss]].")
-    assert ct.main(["--validar-todo"]) == 1
+    assert ct.main(["--validar"]) == 1
 
 
 def test_PARIDAD_lint_contrast_sobre_la_MENCION_del_log(toy_vault, capsys):
@@ -649,7 +649,7 @@ def test_el_barrido_GLOBAL_registra_cuando_se_corrio(toy_vault, capsys):
     la máquina, así que viaja versionada."""
     _extraccion("ica_ruido", "2013Voss")
     _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     reg = cfg.REGISTRO / "_citas.yaml"
     assert reg.exists(), "la pasada global no dejó registro"
     import yaml
@@ -665,7 +665,7 @@ def test_el_barrido_ACOTADO_no_registra_la_pasada(toy_vault, capsys):
     la misma distinción que `sweep_external --bibcodes`, que tampoco registra la pasada."""
     _extraccion("ica_ruido", "2013Voss")
     _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
-    assert ct.main(["ica_ruido", "--validar-todo"]) == 0
+    assert ct.main(["ica_ruido", "--validar"]) == 0
     assert not (cfg.REGISTRO / "_citas.yaml").exists()
 
 
@@ -755,9 +755,9 @@ def test_el_carril_de_VALIDACION_sigue_viendo_al_dropeado(toy_vault, capsys):
     assert "1982MNRAS" in out, "el dropeado sigue siendo TESTIGO de a quién pertenece la frase"
     # y el barrido —que desde #323 es paso de cierre con exit ≠ 0— bloquea igual, entero y acotado
     # al sujeto: filtrar acá bajaría su población y el hallazgo real desaparecería.
-    assert ct.main(["--validar-todo"]) == 1
+    assert ct.main(["--validar"]) == 1
     assert "atribuida a la fuente equivocada" in capsys.readouterr().out
-    assert ct.main(["ica_ruido", "--validar-todo"]) == 1
+    assert ct.main(["ica_ruido", "--validar"]) == 1
     assert "notas de `ica_ruido`" in capsys.readouterr().out
 
 
@@ -857,7 +857,7 @@ def test_la_poblacion_declara_lo_aprobado_con_UN_SOLO_TESTIGO(toy_vault, capsys)
     assert ct.validar(nota, mostrar=False)["solo_extraccion"] == 1
     ct.main(["--validar", str(nota)])
     assert "1 sólo respaldada(s) por la extracción" in capsys.readouterr().out
-    ct.main(["--validar-todo"])
+    ct.main(["--validar"])
     barrido = capsys.readouterr().out
     assert "1 sólo respaldada(s) por la extracción" in barrido
     # y el barrido dice QUÉ significa el conteo: sin eso es un número sin doctrina y el lector no
@@ -874,7 +874,7 @@ def test_la_poblacion_de_un_solo_testigo_declara_el_CERO(toy_vault, capsys):
     nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
     ct.main(["--validar", str(nota)])
     assert "0 sólo respaldada(s) por la extracción" in capsys.readouterr().out
-    ct.main(["--validar-todo"])
+    ct.main(["--validar"])
     barrido = capsys.readouterr().out
     assert "0 sólo respaldada(s) por la extracción" in barrido
     # el cero se declara en la población, pero la advertencia NO se emite: no hay ninguna página que
@@ -897,7 +897,7 @@ def test_el_txt_que_CONTRADICE_al_unico_testigo_se_nombra(toy_vault, capsys):
     r = ct.validar(nota, mostrar=False)
     assert len(r["discrepan"]) == 1 and r["solo_extraccion"] == 1
     assert r["alteradas"] == [], "no es un hallazgo bloqueante: el `.txt` es índice degradado"
-    ct.main(["--validar-todo"])
+    ct.main(["--validar"])
     barrido = capsys.readouterr().out
     assert "1 de ellas con el `.txt` en contra" in barrido
     assert "el OTRO lector del mismo PDF dice otra cosa" in barrido
@@ -921,7 +921,7 @@ def test_la_divergencia_decidible_EMITE_la_marca_lista_para_pegar(toy_vault, cap
     assert nota.read_text(encoding="utf-8").count(cfg.VERIFICAR_PDF_MARK) == 0, "no la aplica"
     ct.main(["--validar", str(nota)])
     assert "pegá al final de la afirmación" in capsys.readouterr().out
-    ct.main(["--validar-todo"])
+    ct.main(["--validar"])
     assert cfg.VERIFICAR_PDF_MARK in capsys.readouterr().out, "y también en el barrido"
 
 
@@ -966,7 +966,7 @@ def test_el_txt_que_contradice_NO_mueve_el_rc(toy_vault, capsys):
          + "but the noise covariance has to be estimated first. más prosa.")
     nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
     assert ct.main(["--validar", str(nota)]) == 0
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     assert "0 cita(s) con evidencia POSITIVA de alteración ✅" in capsys.readouterr().out
 
 
@@ -977,7 +977,7 @@ def test_lo_aprobado_con_un_solo_testigo_NO_mueve_el_rc(toy_vault, capsys):
     _txt("ica_ruido", "2013Voss")
     nota = _nota_323("ica-ruido", f"Dice «{LARGA}» [[2013Voss]].")
     assert ct.main(["--validar", str(nota)]) == 0
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     assert "0 cita(s) con evidencia POSITIVA de alteración ✅" in capsys.readouterr().out
 
 
@@ -996,7 +996,7 @@ def test_el_barrido_NO_mira_los_hermanos_de_verificacion(toy_vault, capsys):
         encoding="utf-8")
     assert nota in ct._notes_of(None)
     assert cfg.verif_sidecar(nota) not in ct._notes_of(None)
-    ct.main(["--validar-todo"])
+    ct.main(["--validar"])
     assert "una cola que la extracción no tiene" not in capsys.readouterr().out
 
 
@@ -1007,7 +1007,7 @@ def test_454_la_cita_de_una_SALVEDAD_no_se_aprueba_contra_su_propia_extraccion(t
 
     Medido en `1999ITNN...10..626H` al cerrar #453: el JSON decía «…it converges globally» donde la
     fuente dice «…the convergence is proven globally» —0 ocurrencias en el `.txt` contra 1 de la de
-    la nota— y pasó con `lint` rc 0 y `contrast --validar-todo` rc 0."""
+    la nota— y pasó con `lint` rc 0 y `contrast --validar` rc 0."""
     _extraccion("ica_ruido", "2013Voss", salvedades=[f"el `.txt` dice «{LARGA}»"])
     _txt("ica_ruido", "2013Voss")
     nota = cfg.PAPERS / "2013Voss.md"
@@ -1295,7 +1295,7 @@ def test_492_el_localizador_CORRECTO_no_dice_nada_y_cuenta(toy_vault, capsys):
     _extraccion("ica_ruido", "2013Voss")
     _txt_paginas("ica_ruido", "2013Voss", ["intro sin nada", f"prosa. {LARGA}. fin", "cierre"])
     nota = _nota_492(f"Dice «{LARGA}» (p. 2) [[2013Voss]].\n")
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     out = capsys.readouterr().out
     assert "Corregí el localizador" not in out
     assert "localizadores de página: 1 · 1 en la página que dicen · 0 MAL" in out
@@ -1327,7 +1327,7 @@ def test_500_el_indice_del_PDF_NO_es_una_categoria_y_el_MAL_sigue(toy_vault, cap
         f"A&A proofs\n\n{cuerpo}\n\n{1208 + n}"
         for n, cuerpo in enumerate(["intro sin nada", f"prosa. {LARGA}. fin", "cierre", "refs"], 1)))
     _nota_492(f"Dice «{LARGA}» (p. 2) [[2013Voss]].\n")
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     out = capsys.readouterr().out
     assert "ÍNDICE del PDF" not in out and "declarado(s) como índice" not in out, out
     assert "1 en la página que dicen · 0 MAL" in out, out
@@ -1335,12 +1335,12 @@ def test_500_el_indice_del_PDF_NO_es_una_categoria_y_el_MAL_sigue(toy_vault, cap
 
     # …y la página impresa de la misma cita también, con la misma categoría
     _nota_492(f"Dice «{LARGA}» (p. 1210) [[2013Voss]].\n")
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     assert "1 en la página que dicen · 0 MAL" in capsys.readouterr().out
 
     # ⛔ el control: una página que la cita no ocupa sigue siendo MAL
     _nota_492(f"Dice «{LARGA}» (p. 7) [[2013Voss]].\n")
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     out3 = capsys.readouterr().out
     assert "0 en la página que dicen · 1 MAL" in out3, out3
 
@@ -1395,7 +1395,7 @@ def test_492_el_localizador_SIN_cita_textual_queda_fuera_de_alcance_y_se_DECLARA
     _txt_paginas("ica_ruido", "2013Voss", ["intro sin nada", f"prosa. {LARGA}. fin", "cierre"])
     nota = _nota_492(f"Dice «{LARGA}» (p. 2) [[2013Voss]].\n\n"
                      f"La taxonomía tiene cinco clases (p. 3) [[2013Voss]].\n")
-    assert ct.main(["--validar-todo"]) == 0
+    assert ct.main(["--validar"]) == 0
     out = capsys.readouterr().out
     assert "localizadores de página: 1 · 1 en la página que dicen" in out
     assert "1 FUERA DE ALCANCE" in out
@@ -1624,3 +1624,17 @@ def test_598_cita_avisa_el_localizador_estructural_de_esa_pagina_sin_sustituirlo
     assert "K = 2.5 m/s (p. 4) [[2013Voss]] · ⚠ sólo página; en esa página la extracción ubica: §3.2, p. 4" in out
     assert "P = 34 d (§3.2, p. 4) [[2013Voss]]\n" in out
     assert "e = 0.1 (p. 9) [[2013Voss]]\n" in out
+
+
+def test_629_validar_es_UN_modo_boveda_slug_o_nota(toy_vault, capsys, monkeypatch):
+    """#629 — `--validar-todo` y `--validar NOTA` eran dos flags para un recorrido: ahora `--validar`
+    sin valor barre la bóveda, con un slug el sujeto y con la ruta de una nota esa nota (con su
+    listado por línea, el que usa `audit-note`). Una ruta que no existe NO cae a slug: rc 2."""
+    llamadas = []
+    monkeypatch.setattr(ct, "validar_todo", lambda slug=None: llamadas.append(slug) or 0)
+    assert ct.main(["--validar"]) == 0 and ct.main(["ica_ruido", "--validar"]) == 0
+    assert ct.main(["--validar", "ica_ruido"]) == 0
+    assert llamadas == [None, "ica_ruido", "ica_ruido"]
+    assert ct.main(["--validar", "vault/wiki/no/existe.md"]) == 2
+    with pytest.raises(SystemExit):
+        ct.main(["--validar-todo"])

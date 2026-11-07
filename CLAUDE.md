@@ -822,8 +822,7 @@ null`) no tiene PDF **por diseño**: ahí el `.txt` **es la captura** (defuddle,
 con `accessed`). Se lee, se cita por **línea**, y su fila de verificación lleva `txt:<sha10>`.
 
 De los chequeos de calidad del `.txt` quedan `is_legible` (dispara el OCR) e `is_garbled` (la prosa
-garbleada degrada el índice); `measure_layout` sigue (`CANALETA_MIN` es el contrato para grepear un
-`.txt` entrelazado).
+garbleada degrada el índice); `cfg.CANALETA_MIN` es el contrato para grepear un `.txt` entrelazado.
 
 **Esos chequeos miden el texto, así que ninguno ve el dato que vive en una imagen (#195).** El
 prompt (`extraction_prompt._media_note`) trata los casos:
@@ -907,7 +906,7 @@ el `.txt`.
    **Alcanza `## Vista` sumando el bibcode de la nota a los adyacentes (#373); el lint usa esa regla
    y esa función (#394), y el bibcode propio suma, nunca reemplaza** (`cfg.with_own_bibcode`).
    **Ese cruce es paso de cierre de toda operación que sintetice, antes del verify (#323):**
-   `python scripts/contrast.py [<slug>] --validar-todo` (sin slug, toda la bóveda; exit ≠ 0, declara
+   `python scripts/contrast.py [<slug>] --validar` (sin slug, toda la bóveda; exit ≠ 0, declara
    población y no evaluables) — un `grep` de segundos antes que N subagentes. **Sin slug es además
    pasada periódica de `maintain` (#386)**, registrada en `_citas.yaml`.
 

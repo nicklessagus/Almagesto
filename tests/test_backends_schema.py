@@ -138,7 +138,7 @@ def _escenario(modulo: str, monkeypatch) -> list:
         monkeypatch.setattr(cr, "crossref_retraction", lambda doi, headers: (None, [], "ok"))
         return ["--slug", "test_star", "--force"]
     if modulo == "make_notes":
-        return ["test_star", "--all"]
+        return ["test_star", "--force"]
     if modulo == "query_ads":
         monkeypatch.setattr(qa, "sweep_star", lambda slug, rows: 0)
         return ["test_star", "--sweep"]

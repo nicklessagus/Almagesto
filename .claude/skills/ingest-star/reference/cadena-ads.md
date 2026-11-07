@@ -53,7 +53,7 @@ aceptado con motivo**, o **`pending_source` declarado**. Nunca un preprint por d
 
 `query_ads` pide a ADS references/citations de los core: trae surveys y catálogos conectados por el
 **grafo de citas** aunque no nombren al sujeto en el abstract. Quedan marcados `via: chain:*` en
-`build/<slug>/ads.json` y se desactiva con `--no-chain`.
+`build/<slug>/ads.json`.
 
 El **anclaje** es lo que cambia entre los dos skills, y es de cada uno: en una estrella va anclado al
 sujeto (`full:` sobre nombre+alias); en un tema, a la propia query del tema (recall extra sin traer

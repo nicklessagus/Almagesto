@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.21"
+ALMAGESTO_VERSION = "1.415.22"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -5962,7 +5962,7 @@ def lens_diff_offline(slug: str) -> tuple[list[str], list[str], list[str]]:
       `extra_core`, que son core por decisión del usuario y la regla no las toca (igual que el
       `via: manual` de `classify_record`).
     - `sin_nota`: bibcodes del universo acumulado del sujeto (`busquedas[].bibcodes`) que no tienen
-      nota en disco. Es el **techo declarado** del chequeo, no un descarte: sin `--all`, el no-core
+      nota en disco. Es el **techo declarado** del chequeo, no un descarte: el no-core (sin `--all` desde #629)
       no deja nota, así que `entran` sólo puede hablar de lo que alguien escribió. Publicarlo evita
       leer un `entran: 0` como 'no entra nada'.
 

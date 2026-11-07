@@ -712,7 +712,7 @@ def test_quote_verdict_495_la_exencion_SOBREVIVE_al_cierre_de_la_deuda(toy_vault
 def test_quote_verdict_495_la_nota_CORREGIDA_hacia_la_fuente_tampoco_bloquea(toy_vault, marca):
     """⛔ La segunda dirección, que el validador midió desde el otro lado: **corregir una nota HACIA
     la fuente sumaba un bloqueante**. En `1998Cardoso` la nota transcribía la redacción del preprint
-    y la copia del editor dice otra cosa; al corregir los tres bloques, `contrast --validar-todo`
+    y la copia del editor dice otra cosa; al corregir los tres bloques, `contrast --validar`
     pasó de 4 a 5 alteradas — la fila **correcta** bloqueaba y la incorrecta pasaba, porque coincide
     con el PDF en disco y diverge de la extracción, que conserva la redacción vieja. Un fix que sólo
     mirara la nota sin corregir dejaba viva justo la que castiga corregir."""
@@ -875,7 +875,7 @@ def test_454_la_cita_que_la_MAQUINA_copio_de_la_extraccion_no_se_juzga_contra_el
 
     Medido en `1999ITNN...10..626H` al cerrar #453: la nota decía «…the convergence is proven
     globally» (1 ocurrencia en el `.txt`) y el JSON «…it converges globally» (0), y pasó con `lint`
-    rc 0 y `contrast --validar-todo` rc 0."""
+    rc 0 y `contrast --validar` rc 0."""
     _txt_324("citado", "un `.txt` que no dice esa frase")
     _extr_324("citado", CITA_324)
     fuentes = {"citado": cfg.fulltext_readings("citado")}

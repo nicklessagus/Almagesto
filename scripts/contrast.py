@@ -45,9 +45,9 @@ Four guarantees, each closing one of the measured failure modes:
     python scripts/contrast.py <slug> --campo regimen        # sin lo que `--drop-core` sacó (#329)
     python scripts/contrast.py <slug> --grep 'Sigma|covarian'
     python scripts/contrast.py <slug> --eje identificabilidad --filas
-    python scripts/contrast.py --validar vault/wiki/concepts/methods/<x>.md
-    python scripts/contrast.py --validar-todo            # toda la bóveda (gate: exit ≠ 0)
-    python scripts/contrast.py <slug> --validar-todo     # sólo las notas del sujeto
+    python scripts/contrast.py --validar vault/wiki/concepts/methods/<x>.md   # una nota, línea a línea
+    python scripts/contrast.py --validar                 # toda la bóveda (gate: exit ≠ 0)
+    python scripts/contrast.py <slug> --validar          # sólo las notas del sujeto
 """
 from __future__ import annotations
 
@@ -961,7 +961,7 @@ def main(argv=()) -> int:
     """CLI: filtra las extracciones del sujeto, o valida una nota contra ellas (`--validar`)."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("slug", nargs="?", help="el sujeto (opcional con --validar/--validar-todo)")
+    ap.add_argument("slug", nargs="?", help="el sujeto (opcional con --validar)")
     ap.add_argument("--campo", choices=CAMPOS + ("que",), help="agrupar por ese campo")
     ap.add_argument("--grep", metavar="RE", help="filtrar por expresión regular")
     ap.add_argument("--paper", metavar="BIBCODE", help="sólo esa fuente")
@@ -976,9 +976,11 @@ def main(argv=()) -> int:
                     help="mostrar TAMBIÉN las extracciones de los papers que `--drop-core` sacó del "
                          "sujeto (#329). Por default no entran al 3b: son curación declarada, y "
                          "cada una sale con su banner para que no se mezclen con el material")
-    ap.add_argument("--validar", metavar="NOTA",
-                    help="cruza esa nota contra las extracciones: la cita que aparece bajo OTRO "
-                         "bibcode, o cuya cola diverge, se alteró al sintetizar (#317/#321)")
+    ap.add_argument("--validar", nargs="?", const="", metavar="SLUG|NOTA",
+                    help="cruza las citas contra las extracciones: la que aparece bajo OTRO "
+                         "bibcode, o cuya cola diverge, se alteró al sintetizar (#317/#321). Sin "
+                         "valor, toda la bóveda (gate, #323); con un slug, las notas del sujeto; "
+                         "con la ruta de una nota (`….md`), esa nota línea a línea (#629)")
     ap.add_argument("--preflight", nargs="?", const="HEAD", metavar="REF",
                     help="#490: chequea las líneas AGREGADAS bajo vault/wiki/ contra REF "
                          "(default HEAD), ANTES del fan-out")
@@ -986,8 +988,6 @@ def main(argv=()) -> int:
                     help="#555: por cada fuente que cita la NOTA, sus afirmaciones al lado de la "
                          "`## Vista` de la nota del paper para este sujeto — para ver la deriva de "
                          "la síntesis ANTES del fan-out; no da veredicto (con --paper, una fuente)")
-    ap.add_argument("--validar-todo", action="store_true",
-                    help="barrido: toda la bóveda, o las notas del sujeto si das el slug (#323)")
     args = ap.parse_args(list(argv) or None)
 
     if args.preflight:
@@ -1009,10 +1009,13 @@ def main(argv=()) -> int:
         cfg.print_seguro(f"\n  {len(filas)} fuente(s) · {sin} sin vista para este sujeto — sin "
                          f"veredicto: la deriva se lee acá, antes de pagar el fan-out (#555)")
         return 0
-    if args.validar_todo:
-        return 1 if validar_todo(args.slug) else 0
+    # #629 — UN modo: sin valor, la bóveda; un slug, el sujeto; la ruta de una nota, esa nota con
+    # su listado por línea (el que usa `audit-note`). Una ruta que no existe NO cae a slug.
+    es_nota = args.validar is not None and (args.validar.endswith(".md") or "/" in args.validar)
+    if args.validar is not None and not es_nota:
+        return 1 if validar_todo(args.validar or args.slug) else 0
 
-    if args.validar:
+    if es_nota:
         nota = pathlib.Path(args.validar)
         if not nota.exists():
             cfg.print_seguro(f"⛔ no existe {nota}")
@@ -1028,7 +1031,7 @@ def main(argv=()) -> int:
         return 1 if r["alteradas"] else 0
 
     if not args.slug:
-        cfg.print_seguro("⛔ falta el slug (sólo --validar/--validar-todo pueden ir sin él)")
+        cfg.print_seguro("⛔ falta el slug (sólo --validar puede ir sin él)")
         return 2
     if not (cfg.EXTRACCION / args.slug).exists():
         cfg.print_seguro(f"⛔ no hay extracciones en {cfg.EXTRACCION / args.slug} — corré el "

@@ -254,7 +254,7 @@ def test_unicode_no_muere_en_consola_ascii(toy_vault, monkeypatch):
     assert b"query_ads" in buf.getvalue()
 
 
-def test_all_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
+def test_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
     """AUD-137, el gemelo de `test_fetch_pdf.py`: los dos fetchers comparten la guarda.
 
     Se ejerce ACÁ y no sólo allá porque el patrón más caro de la auditoría es el arreglo aplicado a
@@ -265,9 +265,9 @@ def test_all_no_resucita_un_descarte_vigente(toy_vault, monkeypatch, capsys):
                              "fecha": "2026-08-28"}})
     pedidos = []
     monkeypatch.setattr(fa, "download_pdf", lambda aid, dest: pedidos.append(aid) or True)
-    run_main(monkeypatch, ["test_star", "--all"])
+    run_main(monkeypatch, ["test_star"])
     assert "2101.00001" not in pedidos, "se re-pidió a arXiv un descarte vigente"
-    assert "2101.00002" in pedidos, "el resto de `--all` sigue entrando"
+    assert "2101.00002" not in pedidos, "#629: el no-core no se pide (no hay `--all`)"
     assert "excluido(s) por decisión de curación" in capsys.readouterr().out
 
 
