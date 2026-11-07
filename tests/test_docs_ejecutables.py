@@ -504,13 +504,12 @@ def test_claude_md_declara_los_dos_vocabularios_de_via():
     documento en vez de esconderse.
     """
     import lib_config as cfg
-    import triage
     doc = (Path(__file__).resolve().parent.parent / "CLAUDE.md").read_text(encoding="utf-8")
-    assert cfg.EXTRA_CORE_VIA != triage.VIA_FUENTE, \
+    assert cfg.EXTRA_CORE_VIA != cfg.SOURCES_VIA, \
         "si los dos carriles convergieron, este test y el párrafo de CLAUDE.md sobran"
     for valor in cfg.EXTRA_CORE_VIA:
         assert f"`{valor}`" in doc, f"`CLAUDE.md` no nombra `{valor}` (vocabulario de `extra_core`)"
-    for valor in triage.VIA_FUENTE:
+    for valor in cfg.SOURCES_VIA:
         assert f"`{valor}`" in doc, f"`CLAUDE.md` no nombra `{valor}` (vocabulario de `sources:`)"
     assert "EXTRA_CORE_VIA" in doc, \
         "la doc tiene que apuntar a la constante: sin el puntero, el próximo valor nuevo la deja vieja"

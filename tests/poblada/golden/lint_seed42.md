@@ -180,9 +180,6 @@
 ## 🔤 Dos conceptos declaran el mismo alias: el roll-up resuelve al primero y nadie lo decidió (#245, backlog) (0)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 
-## 🔤 `methods` con varias grafías del mismo método: infla el backlog y partía el roll-up (#243, backlog) (0)
-> sobre 60 notas de `papers/`
-
 ## disputes: ref de una posición sin paper destino (2)
 > sobre 29 notas de entidad (fichas, conceptos, queries)
 - concepto-hypotheses-015 → disputa `eje-sintetico`: ref `__nota_inexistente_0015__` sin nota de paper

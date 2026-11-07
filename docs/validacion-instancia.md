@@ -2195,3 +2195,17 @@ de nota de paper (sin wikilink: el bibcode ES la nota) entra. El `log` conserva 
 encabezado, como en los pares); `cita_inventada` sin cambio y `lint` rc 0. `contrast
 --validar-todo` idéntico antes y después. **Devolver si** una categoría bloqueante sube, o si
 `contrast --validar-todo` cambia.
+
+## §#628 · v1.415.21 — lint: métodos por clave, supresión por clave, `via` en `cfg`, `refuta` único
+
+Sin migración. (a) `dangling_methods` lista UN ítem por `cfg.method_key`, con todas las grafías y
+la unión de los papers; `methods_colision` se borró (161 categorías). (b) Lo no evaluado se
+suprime por clave (`lint.suppressed_keys`), y `collect` rehúsa una clave suprimida sin categoría.
+(c) `cfg.SOURCES_VIA` es la única definición del `via` de `sources:` (lint y `triage`). (d)
+`proposals.refutation_states` es la única regla de `refuta`: pendiente · firmada · firmada sin
+reclamo (listada aparte, AUD-207); sin reclamo y sin firma = resuelta a mano.
+
+**Validar (Tesis):** `dangling_methods` **2079** (antes 2190 ítems por grafía), sin la categoría
+de grafías (antes 116), `reclamo_refutado_firmado` **2** (antes 1: faltaba `2012ApJS..200...15A` /
+GJ 581, firmado y con el reclamo quitado), y `proposals.py` sigue listando 2 firmadas, 0
+pendientes. Lint rc 0. **Devolver si** una grafía de un método sin nota no aparece en su ítem.

@@ -1120,7 +1120,6 @@ _print_seguro = cfg.print_seguro
 # artefacto que mide a la bóveda. Acá la severidad se declara **una vez**, en la tabla, y el exit se
 # deriva de ella.
 
-VIA_FUENTE_OK = {"usuario", "descubrimiento"}   # procedencia de una fuente off-ADS (#111, #206)
 VIA_FUENTE_RETIRADO = {"reporte": "`via: usuario` + el documento nombrado en `motivo`"}
 
 SEV_BLOQUEANTE = "bloqueante"      # viola el contrato: exit 1 siempre
@@ -2553,11 +2552,11 @@ def check_sources_provenance() -> list:
                 bad_sources.append(
                     (f"{_slug}/{_it.get('key') or '?'}",
                      f"`via: {_v}` es vocabulario RETIRADO (#206) — usá {VIA_FUENTE_RETIRADO[_v]}"))
-            elif _v not in VIA_FUENTE_OK:
+            elif _v not in cfg.SOURCES_VIA:
                 bad_sources.append(
                     (f"{_slug}/{_it.get('key') or '?'}",
                      f"`via: {_v}` fuera del vocabulario cerrado "
-                     f"({' | '.join(sorted(VIA_FUENTE_OK))}) — un typo deja el campo mudo para la "
+                     f"({' | '.join(cfg.SOURCES_VIA)}) — un typo deja el campo mudo para la "
                      f"única pregunta que existe para consumirlo"))
     return bad_sources
 
@@ -3469,11 +3468,24 @@ def check_dangling_methods(method_refs: dict, dangling) -> list:
     # el backlog contaba dos deudas donde hay una. Medido en una bóveda real: cierra 7 de 121 —
     # chico, y del tipo correcto: lo que vacía el backlog es que el extractor VEA la lista antes de
     # inventar la grafía.
+    # #628 · #243 — UN ítem por `cfg.method_key`, con TODAS sus grafías y la UNIÓN de los papers:
+    # el mismo método escrito de varias maneras es una sola deuda (absorbe a `methods_colision`,
+    # que existía para nombrar la inflación de listar cada grafía cruda). `dangling` resuelve por
+    # clave normalizada, así que las grafías de una clave comparten veredicto. ⛔ Los SINÓNIMOS
+    # (`gls` / `periodograma-gls`) tienen otra clave y no se juntan: eso es juicio.
+    _por_clave: dict = {}
+    for mt, refs in method_refs.items():
+        if dangling(mt):
+            _g, _p = _por_clave.setdefault(cfg.method_key(mt), (set(), set()))
+            _g.add(str(mt))
+            _p.update(refs)
     dangling_methods = sorted(
-        (mt, f"usado en {len(refs)} paper(s): {', '.join(sorted(refs)[:3])}"
-             + (" …" if len(refs) > 3 else "") + " → sin nota en `concepts/` (ni por `aliases`): "
-             "ingerí el tema, corregí el slug, o declaralo como alias del concepto que lo denota")
-        for mt, refs in method_refs.items() if dangling(mt))
+        (sorted(g)[0], f"usado en {len(ps)} paper(s): {', '.join(sorted(ps)[:3])}"
+                       + (" …" if len(ps) > 3 else "")
+                       + (f" — {len(g)} grafías: {', '.join(sorted(g))}" if len(g) > 1 else "")
+                       + " → sin nota en `concepts/` (ni por `aliases`): ingerí el tema, corregí "
+                         "el slug, o declaralo como alias del concepto que lo denota")
+        for g, ps in _por_clave.values())
     return dangling_methods
 
 
@@ -3490,30 +3502,6 @@ def check_alias_collisions() -> list:
                        f"alfabético; decidí cuál lo denota y sacalo del otro")
                       for alias, stems in cfg.alias_collisions()]
     return alias_colision
-
-
-def check_methods_spelling_collisions(method_refs: dict) -> list:
-    """`methods_colision` — the same method written two ways (#243, backlog).
-
-    Extracted from `lint.collect` by #396. The other side of the dangling defect: this is not an
-    ingest debt, it is noise that inflates the backlog and that up to 1.95.0 split the roll-up's own
-    universe. ⛔ What does NOT get merged on its own are SYNONYMS (`gls` / `periodograma-gls`): that
-    is judgement, and sometimes they are different things.
-    """
-    # #243 — y las COLISIONES de grafía, que son el otro lado del mismo defecto: el mismo método
-    # escrito de dos maneras no es una deuda de ingesta, es ruido que infla el backlog y que hasta
-    # 1.95.0 partía el universo del roll-up. Se reportan NOMBRANDO las grafías (no el conteo), y se
-    # cierran unificando la grafía en las notas o dejando que el roll-up las junte —que es lo que
-    # ahora hace—. ⛔ Lo que NO se junta solo son los SINÓNIMOS (`gls` / `periodograma-gls`,
-    # `lbl` / `line-by-line-rv`): eso es juicio, y a veces son cosas distintas.
-    _por_clave: dict = {}
-    for mt in method_refs:
-        _por_clave.setdefault(cfg.method_key(mt), set()).add(str(mt))
-    methods_colision = sorted(
-        (sorted(v)[0], f"el mismo método con {len(v)} grafías: {', '.join(sorted(v))} — el roll-up "
-                       f"ya las junta (#243); unificá la grafía en las notas para sacarlo del backlog")
-        for v in _por_clave.values() if len(v) > 1)
-    return methods_colision
 
 
 def check_dangling_disputes(dispute_refs, names, kinds: dict) -> list:
@@ -5722,25 +5710,24 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # mientras tanto. #543: la firma es el `--drop-core` en `decisiones` del sujeto (el
         # reclamo se queda a propósito, #116) — sin cruzarla, la deuda no se cerraba nunca. Se
         # cruza como en `proposals` (#435) y el par firmado se lista aparte (AUD-207).
+        # #628 — el estado sale de UNA función, la de `proposals` (antes divergían: el lint exigía
+        # el reclamo presente y callaba el par firmado cuyo reclamo se quitó, AUD-207).
         import proposals as _pr          # import local, como `make_notes` abajo
-        _reclamados = {str(x).strip() for x in
-                       cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))}
-        for v in vistas:
-            for suj in cfg.as_list(v.get("refuta")):
-                if str(suj).strip() in _reclamados:
-                    _s = cfg.subject_slug(str(suj))
-                    # @inv INV-160
-                    if _s and (_firma := _pr.dropped_signature(_s, stem)):
-                        reclamo_refutado_firmado.append(
-                            (stem, f"la vista de **{v.get('sujeto')}** refuta **{suj}** y "
-                                   f"`--drop-core` ya lo sacó de `{_s}`: {_firma}"))
-                        continue
-                    reclamo_refutado.append(
-                        (stem, f"la vista de **{v.get('sujeto')}** REFUTA el reclamo de "
-                               f"**{suj}**, que sigue en el frontmatter: el roll-up lo va a "
-                               f"seguir listando → `triage.py <slug> --drop-core {stem} "
-                               f"--reason \"…\"`, o quitá el reclamo a mano si el paper "
-                               f"pertenece a otro sujeto"))
+        # @inv INV-160
+        for v, suj, _s, _estado, _firma in _pr.refutation_states(stem, fm):
+            if _estado == _pr.REFUTA_PENDIENTE:
+                reclamo_refutado.append(
+                    (stem, f"la vista de **{v.get('sujeto')}** REFUTA el reclamo de "
+                           f"**{suj}**, que sigue en el frontmatter: el roll-up lo va a "
+                           f"seguir listando → `triage.py <slug> --drop-core {stem} "
+                           f"--reason \"…\"`, o quitá el reclamo a mano si el paper "
+                           f"pertenece a otro sujeto"))
+            else:
+                reclamo_refutado_firmado.append(
+                    (stem, f"la vista de **{v.get('sujeto')}** refuta **{suj}** y "
+                           f"`--drop-core` ya lo sacó de `{_s}`: {_firma}"
+                           + (" (el reclamo ya no está)" if _estado == _pr.REFUTA_SIN_RECLAMO
+                              else "")))
         # #398 — la sección de un sujeto declarado `no_vista` sigue publicando la
         # PLANTILLA del stub: las instrucciones al extractor, bajo un encabezado que la nota
         # presenta como síntesis (#247). Medido: 46 notas así durante seis días, invisibles
@@ -7373,22 +7360,22 @@ def check_stale_verification(verif_blocks: list) -> tuple:
     return check_stale_verif(verif_blocks, changed), not_evaluated, evaluable
 
 
-def suppressed_titles(stale_evaluable: bool) -> set:
-    """Title prefixes of the categories that could NOT be evaluated this run (D-43 / INV-87).
+def suppressed_keys(stale_evaluable: bool) -> set:
+    """Keys of the categories that could NOT be evaluated this run (D-43 / INV-87).
 
     A category computed from an UNREADABLE config is not worth 0: nobody measured it, and its `(0)`
     would read as a verdict — with `objective.yaml` broken, *Áreas de concepts/* claimed «does not
-    declare `concept_areas`» about a file that does. They are omitted instead."""
+    declare `concept_areas`» about a file that does. They are omitted instead. #628 — by KEY: the
+    key is what is stable (`Categoria`), a title prefix breaks with every rewording (one already
+    matched nothing), and `collect` refuses a key that names no category."""
     suprimidas = set()
     if not stale_evaluable:
-        suprimidas.add("Verificación stale")
+        suprimidas.add("stale_verif")
     if cfg.stars_error() or cfg.themes_error():
-        suprimidas |= {"Triage pendiente", "Recorte de lectura sin declarar",
-                       "Lista de papers desactualizada", "Cadena incompleta", "Corpus truncado",
-                       "Capas colgadas"}
+        suprimidas |= {"triage_pending", "extraccion_no_declarada", "papers_table_stale",
+                       "cadena_incompleta", "truncated_corpora", "artefactos_colgados"}
     if cfg.objective_error():
-        suprimidas |= {"Objetivo sin instanciar", "Áreas de `concepts/` no declaradas",
-                       "Áreas de concepts", "Lente desincronizada"}
+        suprimidas |= {"objective_warn", "undeclared_areas", "lente_desync"}
     return suprimidas
 
 
@@ -7471,7 +7458,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     pdf_on_disk = pdfs_on_disk()
     # ── "no evaluado" (D-43 / INV-87): un chequeo que NO PUDO correr no aporta un cero, reporta
     # error — la categoría CUENTA para el exit ≠ 0 y la normal correspondiente se SUPRIME del
-    # reporte (`suppressed_titles`) en vez de mostrar su cero. Cada poblador agrega (qué, por qué).
+    # reporte (`suppressed_keys`) en vez de mostrar su cero. Cada poblador agrega (qué, por qué).
     found: dict[str, list] = defaultdict(list)
     found["illegible_txt"] = illegible_txt
     found["pdf_con_caratula"] = check_repository_cover(_covers)                   # #531
@@ -7651,7 +7638,6 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["rol_regimen"] = check_regimen_roles()
     found["dangling_methods"] = check_dangling_methods(sweep.method_refs, _dangling)
     found["alias_colision"] = check_alias_collisions()
-    found["methods_colision"] = check_methods_spelling_collisions(sweep.method_refs)
     found["dangling_disputes"] = check_dangling_disputes(sweep.dispute_refs, names, sweep.kinds)
     if (obj_err := cfg.objective_error()):
         found["not_evaluated"].append(("clasificación de relevancia (la lente)", obj_err))
@@ -7689,7 +7675,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["fuente_metadata_falsa"] += _fmf
     found["fuente_metadata_dudosa"] += _fmd
     found["fuente_metadata_firmada"] += _fms
-    suprimidas = suppressed_titles(stale_evaluable)
+    suprimidas = suppressed_keys(stale_evaluable)
     found["faceta_sin_frontera"] = check_facet_boundary()                  # #236
     found["tema_fq_heredado"] = check_theme_inherited_fq()                 # #351
     found["tema_ejes_heredados"], _te_no_eval = check_theme_inherited_axes()   # #360
@@ -7760,8 +7746,6 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
                   SEV_BACKLOG, tuple(found['indicador_sin_destino']), poblacion='entidades'),
         Categoria('alias_colision', '🔤 Dos conceptos declaran el mismo alias: el roll-up resuelve al primero y nadie lo decidió (#245, backlog)',
                   SEV_BACKLOG, tuple(found['alias_colision']), poblacion='entidades'),
-        Categoria('methods_colision', '🔤 `methods` con varias grafías del mismo método: infla el backlog y partía el roll-up (#243, backlog)',
-                  SEV_BACKLOG, tuple(found['methods_colision']), poblacion='papers'),
         Categoria('dangling_disputes', 'disputes: ref de una posición sin paper destino', SEV_BLOQUEANTE, tuple(found['dangling_disputes']), poblacion='entidades'),
         Categoria('bad_disputes', 'disputes mal formadas (posiciones explícitas, #71)', SEV_BLOQUEANTE, tuple(found['bad_disputes']), poblacion='entidades'),
         Categoria('schema_retirado', '⛔ Schema retirado (sin lector, INV-13): cada hallazgo nombra su fila de `RETIRED_SCHEMAS`, su población y su salida — re-ingestar, o migrar con el template en el tag de git (#624)', SEV_BLOQUEANTE, tuple(found['schema_retirado']), poblacion='schema_retirado'),
@@ -7912,8 +7896,11 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     # Un productor que escribe una clave sin categoría la vaciaría en silencio (AUD-443).
     if (sin_categoria := set(found) - {c.clave for c in categorias}):
         raise RuntimeError(f"hallazgos sin categoría: {sorted(sin_categoria)}")
+    # #628 — una clave suprimida sin categoría sería un no-evaluado que nadie ve
+    if (sin_categoria := suprimidas - {c.clave for c in categorias}):
+        raise RuntimeError(f"claves suprimidas sin categoría: {sorted(sin_categoria)}")
     for i, c in enumerate(categorias):
-        if any(c.titulo.startswith(s) for s in suprimidas):
+        if c.clave in suprimidas:
             categorias[i] = replace(c, suprimida=True)
     poblaciones = lint_populations(files, paper_fms, anchor_bodies, fulltext_files, vistos_gt,
                                    _gt_marca, sweep, _dep_poblacion, _n_pares_sm, stars_slugs)

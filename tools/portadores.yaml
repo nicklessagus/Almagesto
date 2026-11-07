@@ -602,11 +602,10 @@ portadores:
           `refutations` resuelve el nombre del reclamo a slug y recién entonces lee el carril
           `sujeto` (`dropped_signature` → `cfg.dropped_from_subject`).
       - modulo: scripts/lint.py
-        estado: usa
+        estado: fuera-de-alcance
         motivo: >-
-          #543 — `reclamo_refutado` cruza la firma con `proposals.dropped_signature`; el patrón
-          viejo matcheaba a quien YA cruzaba, así que el lint (que lee `refuta` y no cruzaba)
-          nunca apareció.
+          #628 — `reclamo_refutado` toma el estado de `proposals.refutation_states`, que resuelve
+          el nombre a slug y cruza la firma (#543); el lint ya no lee `refuta` por su cuenta.
       - modulo: scripts/contrast.py
         estado: fuera-de-alcance
         motivo: >-

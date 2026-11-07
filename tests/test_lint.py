@@ -5586,6 +5586,13 @@ def test_refuta_FIRMADO_con_drop_core_sale_de_la_deuda(toy_vault, capsys):
     assert "2023A&A...674A..10H" not in _seccion(rep, "REFUTA un reclamo"), "firmado: no es deuda"
     firm = _seccion(rep, "ya FIRMADO")
     assert "2023A&A...674A..10H" in firm and "polisemia" in firm, "visible y aparte, con el motivo"
+    # #628 — con el reclamo quitado a mano la firma NO se silencia (la regla es la de `proposals`)
+    nota = cfg.PAPERS / "2023A&A...674A..10H.md"
+    nota.write_text(nota.read_text(encoding="utf-8").replace("stars:\n- HD 41248\n", "stars: []\n")
+                    .replace("stars: [HD 41248]", "stars: []"), encoding="utf-8")
+    assert "HD 41248" not in str(cfg.split_fm(nota.read_text(encoding="utf-8")).get("stars"))
+    _rc, rep = run_lint_reporte(capsys)
+    assert "2023A&A...674A..10H" in _seccion(rep, "ya FIRMADO"), rep
 
 
 def test_no_verificable_no_tiene_archivo_que_declarar(toy_vault, capsys):
@@ -6501,7 +6508,9 @@ def test_las_grafias_no_son_dos_deudas_distintas(toy_vault, capsys):
     _, rep = run_lint_reporte(capsys)
     assert "PCA" not in _seccion(rep, "sin página destino"), \
         "`concepts/methods/pca.md` ES el destino de `PCA`"
-    assert "PCA, pca" in _seccion(rep, "varias grafías"), rep
+    # #628 — con destino, la grafía no tiene consecuencia (roll-up y link juntan por clave) y la
+    # grafía del extractor es información: no hay categoría que pida unificarla
+    assert "varias grafías" not in rep, rep
 
 
 # ── #277 · los tres ⛔ del schema de nota de paper que no tenían detector ─────────────────────────
@@ -9436,17 +9445,17 @@ def test_check_alias_collisions_reporta_y_no_resuelve(toy_vault):
     assert len(filas) == 1 and "ica, pca" in filas[0][0] and "decidí cuál lo denota" in filas[0][1]
 
 
-def test_check_methods_spelling_collisions_nombra_las_grafias(toy_vault):
-    """#396/#243 — el mismo método escrito de dos maneras no es deuda de ingesta: es ruido que
-    infla el backlog. Se reporta NOMBRANDO las grafías, no el conteo. ⛔ Los SINÓNIMOS no se juntan:
-    eso es juicio, y a veces son cosas distintas."""
-    assert lint.check_methods_spelling_collisions({"PCA": {"2001X"}}) == []
-    assert lint.check_methods_spelling_collisions({"gls": {"a"}, "periodograma-gls": {"b"}}) == [], \
+def test_628_dangling_methods_es_UN_item_por_clave_con_sus_grafias(toy_vault):
+    """#628 · #243 — el mismo método escrito de varias maneras es UNA deuda: un ítem por
+    `cfg.method_key`, con TODAS las grafías y la UNIÓN de los papers (absorbe a `methods_colision`).
+    ⛔ Los SINÓNIMOS no se juntan: eso es juicio, y a veces son cosas distintas."""
+    todas = lambda _n: True          # noqa: E731
+    filas = lint.check_dangling_methods({"SysRem": {"a"}, "sysrem": {"b"}, "SYSREM": {"c"}}, todas)
+    assert len(filas) == 1 and "usado en 3 paper(s)" in filas[0][1], filas
+    assert all(g in filas[0][0] + filas[0][1] for g in ("SysRem", "sysrem", "SYSREM"))
+    assert len(lint.check_dangling_methods({"gls": {"a"}, "periodograma-gls": {"b"}}, todas)) == 2, \
         "sinónimos: distinta clave, y juntarlos sería juicio"
-    filas = lint.check_methods_spelling_collisions({"SysRem": {"a"}, "sysrem": {"b"},
-                                                   "SYSREM": {"c"}})
-    assert len(filas) == 1 and "3 grafías" in filas[0][1]
-    assert all(g in filas[0][1] for g in ("SysRem", "sysrem", "SYSREM"))
+    assert "methods_colision" not in {c.clave for c in lint.collect().categorias}
 
 
 def test_check_dangling_disputes_pide_que_el_ref_sea_una_NOTA_DE_PAPER(toy_vault):
@@ -11552,20 +11561,30 @@ def test_scan_fulltext_separa_el_ilegible_y_hashea_una_vez(toy_vault):
     assert [p for p, _why in illegible] == ["fulltext/s/2020V.txt"]
 
 
-def test_suppressed_titles_cada_config_ilegible_suprime_lo_suyo(monkeypatch):
+def test_suppressed_keys_cada_config_ilegible_suprime_lo_suyo(monkeypatch):
     """D-43/INV-87 — con una config ilegible, sus categorías no muestran un cero que nadie midió;
-    cada config suprime SÓLO las que dependen de ella."""
+    cada config suprime SÓLO las que dependen de ella. #628 — por CLAVE, no por prefijo de título:
+    un prefijo («Áreas de `concepts/` no declaradas») ya no matcheaba nada."""
     for f in ("stars_error", "themes_error", "objective_error"):
         monkeypatch.setattr(cfg, f, lambda: None)
-    assert lint.suppressed_titles(True) == set()
-    assert lint.suppressed_titles(False) == {"Verificación stale"}
+    assert lint.suppressed_keys(True) == set()
+    assert lint.suppressed_keys(False) == {"stale_verif"}
     monkeypatch.setattr(cfg, "themes_error", lambda: "roto")
-    assert "Cadena incompleta" in lint.suppressed_titles(True)
+    assert "cadena_incompleta" in lint.suppressed_keys(True)
     monkeypatch.setattr(cfg, "themes_error", lambda: None)
     monkeypatch.setattr(cfg, "objective_error", lambda: "roto")
-    assert lint.suppressed_titles(True) == {"Objetivo sin instanciar",
-                                            "Áreas de `concepts/` no declaradas",
-                                            "Áreas de concepts", "Lente desincronizada"}
+    assert lint.suppressed_keys(True) == {"objective_warn", "undeclared_areas", "lente_desync"}
+
+
+def test_628_toda_clave_suprimible_es_una_categoria(toy_vault, monkeypatch):
+    """#628 — una clave suprimida que no existe es un no-evaluado que nadie ve: `collect` rehúsa."""
+    for f in ("stars_error", "themes_error", "objective_error"):
+        monkeypatch.setattr(cfg, f, lambda: "roto")
+    claves = {c.clave for c in lint.collect().categorias}
+    assert lint.suppressed_keys(False) <= claves
+    monkeypatch.setattr(lint, "suppressed_keys", lambda _e: {"no_existe"})
+    with pytest.raises(RuntimeError, match="no_existe"):
+        lint.collect()
 
 
 def test_collect_rehusa_el_hallazgo_bajo_una_clave_sin_categoria(toy_vault, monkeypatch):

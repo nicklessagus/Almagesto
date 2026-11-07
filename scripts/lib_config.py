@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.20"
+ALMAGESTO_VERSION = "1.415.21"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -3882,6 +3882,10 @@ def metadata_revisada_snippet(key: str, campo: str, declarado, catalogo, motivo:
 # Cerrado por el mismo motivo que `role` (#73): un typo deja el campo mudo para el único consumidor
 # que existe —la columna Origen de la ficha—, y un campo mudo se lee como "no se sabe".
 EXTRA_CORE_VIA = ("usuario", "triage", "citado-por-corpus")
+# #206/#266 · y el de `sources[].via` (carril off-ADS): BINARIO, **quién decidió** — una persona o
+# la cascada de `discover`. Lo que un reporte agregaba (de qué documento salió) lo lleva `motivo`.
+# #628 — una sola definición, la que leen `triage` (choices, mensaje) y el lint; tupla, ordenada.
+SOURCES_VIA = ("usuario", "descubrimiento")
 
 
 #: Placeholder `motivo` of the pasted `extra_core:` block — the user rewrites it (D-58 makes it

@@ -108,7 +108,7 @@ def test_la_refutacion_se_PROPONE_con_el_comando_que_la_aplicaria(toy_vault):
     lo que el usuario firmó."""
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
     (cfg.PAPERS / "2010CJ.md").write_text(
-        "---\nbibcode: 2010CJ\nvistas:\n  - sujeto: ica\n    tipo: theme\n    refuta: [ica]\n"
+        "---\nbibcode: 2010CJ\nthesis_links: [ica]\nvistas:\n  - sujeto: ica\n    tipo: theme\n    refuta: [ica]\n"
         "    motivo: habla de componentes de un tensor, no de ICA\n---\n\n## Abstract\n\nx\n",
         encoding="utf-8")
     # ⚠ `vistas` en forma inválida (una lista de strings, D-58) no puede leerse como mapa: el lint
@@ -177,10 +177,12 @@ def test_la_celda_vacia_del_inventario_ES_la_proxima_query(toy_vault):
 
 # ── #435 · una propuesta FIRMADA tiene que dejar de estar pendiente ──────────────────────────────
 
-def _refuta(bib: str, sujeto: str, motivo: str = "polisemia — no habla de ese sujeto") -> None:
+def _refuta(bib: str, sujeto: str, motivo: str = "polisemia — no habla de ese sujeto",
+            reclamo: bool = True) -> None:
     cfg.PAPERS.mkdir(parents=True, exist_ok=True)
     (cfg.PAPERS / f"{bib}.md").write_text(
-        f"---\nbibcode: {bib}\nvistas:\n  - sujeto: {sujeto}\n    tipo: star\n"
+        f"---\nbibcode: {bib}\n" + (f"stars: [{sujeto}]\n" if reclamo else "")
+        + f"vistas:\n  - sujeto: {sujeto}\n    tipo: star\n"
         f"    refuta: [{sujeto}]\n    motivo: {motivo}\n---\n\n## Abstract\n\nx\n",
         encoding="utf-8")
 
@@ -217,6 +219,22 @@ def test_la_refutacion_FIRMADA_deja_de_estar_pendiente(toy_vault, capsys):
     salida = capsys.readouterr().out
     assert "ya FIRMADA" in salida and "segunda mano" in salida
     assert "firma: cruzada" in salida, "la categoría declara que su firma SÍ se cruza"
+
+
+def test_628_refuta_tres_estados_iguales_al_lint(toy_vault):
+    """#628 — `proposals.refutation_states` es la ÚNICA regla, la de las dos superficies: pendiente
+    (reclamo presente, sin firma) · firmada · firmada sin reclamo (la firma no se silencia aunque el
+    reclamo se haya quitado, AUD-207). Sin reclamo y sin firma está resuelta a mano: no se propone
+    para siempre (#435)."""
+    (cfg.CONFIG).mkdir(parents=True, exist_ok=True)
+    (cfg.CONFIG / "stars.yaml").write_text("GJ 581:\n  slug: gj_581\n", encoding="utf-8")
+    _refuta("2012ApJS", "GJ 581", reclamo=False)
+    assert pr.refutations() == ([], 1, []), "resuelta a mano: ni pendiente ni firmada"
+    _firmar_drop_core("gj_581", "2012ApJS", "segunda mano")
+    filas, _p, firmadas = pr.refutations()
+    assert filas == [] and len(firmadas) == 1 and "el reclamo ya no está" in firmadas[0][2], firmadas
+    fm = cfg.split_fm((cfg.PAPERS / "2012ApJS.md").read_text(encoding="utf-8"))
+    assert [e[3] for e in pr.refutation_states("2012ApJS", fm)] == [pr.REFUTA_SIN_RECLAMO]
 
 
 def test_acotar_por_slug_resuelve_el_NOMBRE_del_reclamo(toy_vault):

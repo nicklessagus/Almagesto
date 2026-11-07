@@ -508,8 +508,7 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
 # literatura, una review de terceros) o los PDFs no cambia quién decidió: lo trajo él. Partirlo
 # obligaba a sumar dos casilleros para contestar la única pregunta que el campo existe para
 # contestar. Lo que `reporte` agregaba —de qué documento salió— lo lleva `motivo`, que es
-# obligatorio y nombra CUÁL documento.
-VIA_FUENTE = ("usuario", "descubrimiento")
+# obligatorio y nombra CUÁL documento. #628 — la definición vive en `cfg.SOURCES_VIA`.
 
 
 def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
@@ -533,8 +532,8 @@ def accept_source(slug: str, idents: list, via: str, motivo: str) -> int:
     No escribe `themes.yaml`: imprime el bloque, igual que el snippet de `extra_core`. La config es
     curada y versionada, y un script que la edita solo convierte una decisión en un efecto
     colateral."""
-    if via not in VIA_FUENTE:
-        sys.exit(f"`--via {via}` no está en el vocabulario cerrado: {' | '.join(VIA_FUENTE)}")
+    if via not in cfg.SOURCES_VIA:
+        sys.exit(f"`--via {via}` no está en el vocabulario cerrado: {' | '.join(cfg.SOURCES_VIA)}")
     if not motivo:
         sys.exit("aceptar una fuente sin `--reason` deja el registro sin decir POR QUÉ entró — es "
                  "la asimetría que #51 cerró del lado del descarte. Poné el motivo.")
@@ -758,11 +757,11 @@ def main() -> int:
                          "real + archivo resuelto + procedencia) lista para pegar. Es la salida "
                          "que al carril off-ADS le faltaba: sin esto, el descubrimiento proponía "
                          "el paper y el trabajo de bajarlo quedaba a mano. Exige --reason y --via.")
-    ap.add_argument("--via", default="usuario", choices=VIA_FUENTE,
+    ap.add_argument("--via", default="usuario", choices=cfg.SOURCES_VIA,
                     # AUD-210: nombraba `reporte`, RETIRADO en #206 y ausente de `choices` —
                     # el help contradecía a su propio parser. Los dos vocabularios salen del código.
                     help=f"quién acepta la fuente OFF-ADS (vocabulario CERRADO): "
-                         f"{' | '.join(VIA_FUENTE)}. ⚠ NO es el de `extra_core` (carril ADS), que "
+                         f"{' | '.join(cfg.SOURCES_VIA)}. ⚠ NO es el de `extra_core` (carril ADS), que "
                          f"es {' | '.join(cfg.EXTRA_CORE_VIA)}")
     ap.add_argument("--promote-source", metavar="CLAVE", dest="promote_source",
                     help="#353 (T5b): migra la fuente declarada CLAVE a su identidad ADS (--bibcode), "

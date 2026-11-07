@@ -822,7 +822,10 @@ def test_reporte_ya_no_es_un_via_valido(monkeypatch):
     obligatorio y dice CUÁL."""
     with pytest.raises(SystemExit, match="vocabulario cerrado"):
         triage.accept_source("ica", ["10.1/x"], "reporte", "vino del reporte de Undermind")
-    assert triage.VIA_FUENTE == ("usuario", "descubrimiento")
+    # #628 — una sola definición, en `cfg`, junto a `EXTRA_CORE_VIA`; el lint lee la misma
+    assert cfg.SOURCES_VIA == ("usuario", "descubrimiento")
+    import lint
+    assert not hasattr(lint, "VIA_FUENTE_OK") and not hasattr(triage, "VIA_FUENTE")
 
 
 def test_drop_normaliza_como_su_gemelo_drop_source(toy_vault, monkeypatch, capsys):

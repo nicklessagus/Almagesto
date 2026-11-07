@@ -297,7 +297,7 @@ python scripts/make_notes.py --restamp-sources-meta
 ```
 ⚠ Los dos `via` son vocabularios cerrados **distintos** (#162/#266): `extra_core` (carril ADS) usa
 `usuario | triage | citado-por-corpus` (`lib_config.EXTRA_CORE_VIA`); `sources:` (carril off-ADS)
-es **binario**, `usuario | descubrimiento` (`triage.VIA_FUENTE`). Comparten sólo `usuario`.
+es **binario**, `usuario | descubrimiento` (`cfg.SOURCES_VIA`). Comparten sólo `usuario`.
 ⛔ `reporte` se **retiró** en 1.72.0 (#206) y el lint lo bloquea con mensaje propio: se traduce a
 `via: usuario` + el documento nombrado en `motivo`.
 

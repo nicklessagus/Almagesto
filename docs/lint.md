@@ -218,7 +218,7 @@ Deben quedar en **0**:
   entrante no lo salva (no es lo mismo que huérfana). La salida es **poblar el campo**, no borrar
   la nota: es extracción ya pagada.
 - **`sources:` sin procedencia** (#111, `bad_sources`): entrada de `sources:` sin `via` o sin
-  `motivo`, `via` fuera del vocabulario binario (`usuario | descubrimiento`, `lint.VIA_FUENTE_OK`)
+  `motivo`, `via` fuera del vocabulario binario (`usuario | descubrimiento`, `cfg.SOURCES_VIA`)
   o con el valor **retirado** `reporte` (#206 — mensaje propio: se traduce a `via: usuario` + el
   documento en `motivo`), `sources:` que no es lista o entrada que no es mapa (AUD-179: evadían el
   chequeo con cero hallazgos), y la **misma clave** declarando dos fuentes distintas (las dos
@@ -873,11 +873,6 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   backlog): una hipótesis `sostenida` con filas `desafía` en la tabla. El `status` se **deriva**
   de la tabla; con evidencia repartida es `disputada`. Es lo único que impide que `status` sea un
   campo que el agente elige.
-- **`methods` con varias grafías del mismo método** (#243, `methods_colision`, backlog): el
-  mismo método escrito de dos maneras (`PCA`/`pca`, `SysRem`/`sysrem`) se detecta por clave
-  normalizada (`cfg.method_key`); el roll-up **ya las junta**, así que no es deuda de ingesta sino
-  ruido que infla el backlog — se cierra unificando la grafía en las notas. ⛔ Los **sinónimos**
-  (`gls`/`periodograma-gls`) no se juntan solos: eso es juicio.
 - **`index.md` desactualizado contra la verdad de disco** (#237, `indice_viejo`, backlog): cada
   tabla estampada del índice se compara **entera** (#563) contra lo que `restamp_index` escribiría
   hoy (`make_notes.index_section`), y el hallazgo **nombra los stems** que faltan, que sobran y
@@ -899,7 +894,10 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
 ## Backlog — notas y schema
 
 - **`methods` sin página destino**: la versión no bloqueante de `thesis_links` (la nota destino la
-  crea otra operación, `ingest-theme`).
+  crea otra operación, `ingest-theme`). **Un ítem por clave normalizada** (`cfg.method_key`, #628):
+  las grafías del mismo método (`PCA`/`pca`) son UNA deuda, listada con todas sus grafías y la
+  unión de los papers; con destino, la grafía no tiene consecuencia (el roll-up junta por clave,
+  #243). ⛔ Los **sinónimos** (`gls`/`periodograma-gls`) no se juntan solos: eso es juicio.
 - **Reclamo sin vista** (#188): un sujeto reclama el paper y nadie lo leyó desde ahí. Un
   `methods` cuenta como reclamo **sólo si ese nombre denota un tema declarado**, y eso se evalúa por
   clave normalizada (#348): con el string crudo, `methods: [PCA]` no era el tema `pca` y la categoría

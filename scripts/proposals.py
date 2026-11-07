@@ -159,21 +159,52 @@ def refutations(slug: str | None = None) -> tuple:
     for f in cfg.note_paths(cfg.PAPERS):
         poblacion += 1
         fm = cfg.split_fm(f.read_text(encoding="utf-8")) or {}
-        for v in cfg.as_list(fm.get("vistas")):
-            if not isinstance(v, dict):
+        for v, suj, s_slug, estado, firma in refutation_states(f.stem, fm):
+            if slug and suj != slug and s_slug != slug:
                 continue
-            for suj in cfg.as_list(v.get("refuta")):
-                s_slug = cfg.subject_slug(str(suj))
-                if slug and suj != slug and s_slug != slug:
-                    continue
-                firma = dropped_signature(s_slug, f.stem) if s_slug else None
-                if firma is not None:
-                    firmadas.append((f.stem, str(suj),
-                                     f"ya descartado de `{s_slug}`: {firma}", ""))
-                else:
-                    out.append((f.stem, str(suj),
-                                str(v.get("motivo") or v.get("enfasis") or ""), ""))
+            if estado == REFUTA_PENDIENTE:
+                out.append((f.stem, suj, str(v.get("motivo") or v.get("enfasis") or ""), ""))
+            else:
+                firmadas.append((f.stem, suj, f"ya descartado de `{s_slug}`: {firma}"
+                                 + (" (el reclamo ya no está)" if estado == REFUTA_SIN_RECLAMO
+                                    else ""), ""))
     return out, poblacion, firmadas
+
+
+#: #628 · los estados de un `refuta` (#212), los MISMOS en las dos superficies (lint y propuestas).
+REFUTA_PENDIENTE = "pendiente"
+REFUTA_FIRMADA = "firmada"
+REFUTA_SIN_RECLAMO = "firmada sin reclamo"
+
+
+def refutation_states(stem: str, fm: dict) -> list:
+    """`[(vista, refutado, slug, estado, firma)]` for every `refuta` of a paper note — THE rule (#628).
+
+    Three states: **pendiente** (the claim is still in `stars`/`thesis_links` and nobody signed),
+    **firmada** (`--drop-core` signed it, #435/#543 — the claim stays on purpose, #116) and
+    **firmada sin reclamo** (signed and the claim also removed: still listed apart, AUD-207 — a
+    signature is never silenced). Unsigned with the claim gone is resolved BY HAND (the second exit
+    the lint offers) and is not returned: listing it would be the permanent proposal of #435.
+
+    The lint and `refutations` used to compute this twice and diverged on a real vault (the lint
+    required the claim, so the signed pair whose claim was removed vanished from it)."""
+    reclamados = {str(x).strip() for x in
+                  cfg.as_list(fm.get("stars")) + cfg.as_list(fm.get("thesis_links"))}
+    out = []
+    for v in cfg.as_list(fm.get("vistas")):
+        if not isinstance(v, dict):
+            continue
+        for suj in cfg.as_list(v.get("refuta")):
+            suj = str(suj)
+            s_slug = cfg.subject_slug(suj)
+            firma = dropped_signature(s_slug, stem) if s_slug else None
+            presente = suj.strip() in reclamados
+            if firma is not None:
+                out.append((v, suj, s_slug, REFUTA_FIRMADA if presente else REFUTA_SIN_RECLAMO,
+                            firma))
+            elif presente:
+                out.append((v, suj, s_slug, REFUTA_PENDIENTE, None))
+    return out
 
 
 def dropped_signature(slug: str, bibcode: str) -> str | None:
