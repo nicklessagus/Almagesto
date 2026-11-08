@@ -4631,3 +4631,42 @@ palabras de prosa adentro v1.396 256 · v1.397 94 · v1.398 76 · **v1.399 68**,
 tuviera; de los 87 spans que v1.397 dejaba como matemática y v1.399 escapa, los 87 son falsos (83
 del tipo `$1176 Å)/C III($`, 4 con prosa). Heurística de prosa: ≥3 palabras de 3+ letras fuera de
 comandos LaTeX; los 68 restantes no se revisaron uno por uno.
+
+## Narrativa de medición movida desde `make_notes.py` (v1.415.26, #630)
+
+Las mediciones que vivían sólo en docstrings y comentarios de `scripts/make_notes.py`; el
+código conserva la regla y su ancla. Por función, con el ancla del caso:
+
+- `pdf_source_info` (#446): 9 notas revertidas a `eprint` en una sesión, sin que nadie las tocara.
+- `stamp_pdf` (#304): en un ingest real, 4 de 4 PDFs rescatados quedaron `pdf: null`, con el lint imprimiendo la ruta exacta y ningún comando que la aplicara.
+- `stamp_pdf` (#383): el preprint y el publicado reemplazado diferían en RESULTADOS, no en redacción.
+- `stamp_scope` (#312): en dos libros, la re-lectura extrajo 37 valores nuevos de capítulos que la nota declaraba fuera de alcance.
+- `restamp_sources_meta` (#353): en la instancia, cuatro notas se corrigieron a mano.
+- `_extraction_of` (#509): 134 bullets y 24 lentes ajenos en 29 notas.
+- `_backfill_axes` (#395b): 48 pares cuyo JSON trae la clave vacía y cuya prosa no tiene línea para ella.
+- `index_tables` (#237): los tres commits que tocaban el `index.md` de una instancia real eran anteriores a su instanciación.
+- `index_tables` (test_escala): en el tier `poblada`, el ratio de `yaml.safe_load` por nota saltó de 2,0x a 3,2x sobre 900 notas cuando el lint no pasaba `fms`.
+- `restamp_headers / stamp_header` (#69): en una bóveda real, 22 de 25 notas sin el aviso de capa LLM, y las mismas 21 sin `GENERATOR_LINE`.
+- `clean_catalog_markup_notes` (#271): 249 ocurrencias de markup crudo en 42 notas de una bóveda real.
+- `restamp_abstracts` (#277): 39 de 138 notas sin `## Abstract` con el lint en rc 0.
+- `fill_abstracts` (#413): 29 notas con el placeholder, 15 con DOI, y OpenAlex tenía el abstract de 10 — incluidos los dos `pending_source`.
+- `merge_frontmatter_list` (#306): 1 de 31 cosechas perdió `weighted PCA`, alias del tema (el único `methods` con destino en el roll-up).
+- `vista_block` (#398): 47 notas con la plantilla del prompt en el cuerpo, 46 de ellas bajo un sujeto ya declarado `no_vista`.
+- `stamp_header` (#378): 60 de 169 notas con el orden invertido, 10 avanzadas a los pasos 3-4 y 6 con la cabecera ya borrada.
+- `theme_membership` (#347): `papers_universe('pca','theme')` → `set()` contra `concept_rollup_rows('pca')` → el paper.
+- `subject_note` (#338): 2 de 3 sujetos de una bóveda real son temas.
+- `concept_rollup_rows` (#243): un concepto `pca` alcanzaba 21 papers de 24 y callaba los 3 que escribieron `PCA`.
+- `concept_rollup_table` (#300): un concepto cerrado y verificado anunciaba 89 papers sobre una síntesis que citaba 30, con 57 reclamados sin leer.
+- `_titulo_corto` (#264): en una nota real, 31 de 49 filas de `## Papers` y 4 de 10 de `## Excluidos` cortadas sin marca.
+- `metodos_table` (#245): 106 wikilinks rotos sobre dos estrellas.
+- `metodos_table` (#273): en una ficha real, 369 filas sobre 291 métodos (374 de 1278 líneas, 30 % de la nota); agrupar por clave baja a 291 (21 %).
+- `metodos_table` (#262): 297 métodos publicados sobre 291 reales.
+- `_reemplazar_seccion` (#260): 3 de los 8 `##` de una ficha real desaparecían del outline.
+- `datos_table` (#424): 4 tablas de datos en una sola estrella, las cuatro de RV e índices de actividad.
+- `matrix_rows` (#429): con dos estrellas cerradas, 23 de 42 métodos declarados no casaban con ningún paper de su sujeto por `method_key`.
+- `stamp_touched_theme_rollups` (#558): 72 pares acumulados en silencio en 4 temas.
+- `identidad D-19` (D-19): en la instancia real, 2 trabajos con dos notas cada uno.
+- `_finish_rename` (#228): la nota que quedó fuera del alcance del cosechador era justo la que llevaba una salvedad falsa.
+- `estado_line` (#105): dos corridas idénticas de `ingest_theme.py ica` diferían sólo en esta línea (y en el registro, que sí debe crecer, D-28).
+- `write_paper_notes` (AUD-197): 141 de 908 notas reclamadas por 2+ sujetos.
+- `write_web_paper_note` (#106): la nota de Comon 1994 decía 0 citas y el trabajo tiene 8266.

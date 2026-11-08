@@ -101,8 +101,7 @@ def pdf_source_info(slug: str | None, stem: str) -> tuple[str | None, str | None
     ⛔ #446 — y entre la marca y lo declarado va la FIRMA del reemplazo (`pdf_reemplazo`, #437):
     lo que un comando firmó en un artefacto versionado no lo puede revertir un scratch gitignored.
     El registro de `build/` describe la descarga de la primera vez —el preprint— y nadie lo
-    actualiza, así que cada `extract_fulltext` re-estampaba `eprint` encima de `publisher`.
-    Medido: 9 notas revertidas en una sesión, sin que nadie las tocara."""
+    actualiza, así que cada `extract_fulltext` re-estampaba `eprint` encima de `publisher`."""
     if not slug:
         return None, None
     txt = cfg.FULLTEXT / slug / f"{stem}.txt"
@@ -221,15 +220,9 @@ def best_pdf(stem: str) -> str | None:
 def stamp_pdf(dest, stem: str) -> bool:
     """Stamp `pdf:` on an existing note, by TRUTH OF DISK — the twin of `stamp_fulltext` (#304).
 
-    ⛔ There was none, and the asymmetry had a measured cost: `pdf:` is written **only** when the
-    stub is created, so **a PDF that shows up on disk after the note exists is never linked**. That
-    is not an edge case, it is the flow the framework prescribes — the manual PDF rescue has its own
-    reference document, its own declared residue (`missing_pdf.json`) and its own mention in
-    `CLAUDE.md`, and it ends with the operator dropping a file into `vault/raw/pdfs/<slug>/` after
-    the note exists. Same for closing a `pending: paywall` when the user gets the source. Measured
-    on a real ingest: 4 of 4 rescued PDFs stayed `pdf: null`, with the lint printing the exact path
-    it should hold and no command applying it — a note asserting something false about the disk,
-    which is what #217 fixed in the other direction.
+    ⛔ `pdf:` was written only when the stub was created, so a PDF that shows up on disk after the
+    note exists —the manual rescue, or closing a `pending: paywall`— was never linked: the note
+    asserted something false about the disk (the other direction of #217).
 
     Like its twin: surgery on one frontmatter line, never the LLM extraction; it does **not**
     un-stamp when there is no PDF (the lint already surfaces that); and it keeps a value that still
@@ -269,8 +262,7 @@ def _stamp_pdf_field(dest, rel: str) -> bool:
         # ocurrió. Son dos casos y había un tercero: el archivo se REEMPLAZA por otro de distinta
         # procedencia (el preprint v1 por el publicado). Ahí la lectura vieja se descarta —hay que
         # re-extraer, cambió la paginación— y el valor que sobrevive MIENTE: `pdf_source: eprint`
-        # sobre el PDF del editor, con `eprint_version: v1` al lado. Medido: las dos versiones
-        # diferían en RESULTADOS, no en redacción. El hash es lo que distingue «se mantiene» de
+        # sobre el PDF del editor, con `eprint_version: v1` al lado. El hash es lo que distingue «se mantiene» de
         # «se reemplazó», y se guarda en `pdf_sha:` al estampar.
         # AUD-498: la comparación corre AUNQUE el `pdf:` vigente no resuelva (puntero muerto o
         # `null`, el publicado puesto bajo otro slug): si no, la estampa de abajo pisaba el
@@ -322,8 +314,7 @@ def stamp_scope(dest, alcance: str | None, unidad_cita: str | None) -> bool:
     ⛔ Same class as #304 —a field written when the note is created and never re-synced— with the
     authority reversed: here `themes.yaml` is the authority, not the disk. The two fields travel
     from `sources[]` into the stub and freeze there, so widening a book's `alcance` left the note
-    **asserting that the material does not enter while publishing it in its view**. Measured on two
-    books: the re-reading extracted 37 new values from chapters the note declared out of scope.
+    **asserting that the material does not enter while publishing it in its view**.
 
     It is not cosmetic: `CLAUDE.md` gives `alcance` a precise job — *without it the completeness
     check cannot tell a deliberate cut from an omission* — so a stale one does not leave the check
@@ -379,7 +370,7 @@ def restamp_sources_meta() -> int:
     """Re-sync the catalog-like fields an off-ADS stub took from its `sources:` item (#353
     follow-up): `title`, `author` to `first_author`, `year`, `doi`, `n_authors`. The stub is
     written once and never overwritten, so correcting the item, which is what `check_sources`
-    asks for, did not reach the note: measured on the instance, four notes were fixed by hand.
+    asks for, did not reach the note.
     Config is the authority (#312): only declared keys are written, by surgery; curation untouched."""
     n = 0
     for slug, meta in (cfg.load_themes() or {}).items():
@@ -423,8 +414,7 @@ def _extraction_of(bibcode: str, sujeto: str, enfasis: str = "") -> dict | None:
 
     ⛔ A reading is `(bibcode, sujeto, enfasis)`, never the bibcode alone (#509): a paper read for
     two subjects has two JSON with the same filename under two slugs, and taking the first one that
-    parses stamped the lens and axes of `gj_581` into the view of `hd_40307` (measured: 134 bullets
-    and 24 lenses in 29 notes). A JSON that does not declare `vista.sujeto` is not a match —
+    parses stamped the lens and axes of `gj_581` into the view of `hd_40307`. A JSON that does not declare `vista.sujeto` is not a match —
     the harvester rejects those, so there is no reading to fall back to."""
     import json
     nombre = cfg.lens_filename(bibcode, enfasis)
@@ -444,8 +434,7 @@ def _backfill_axes(text: str, sujeto: str, enfasis: str, ejes: dict) -> tuple:
 
     Returns `(text, [added axes])`. An axis answered BLANK is stamped `_(sin datos)_` — filtering it
     out is what made *"asked and there is nothing"* indistinguishable from *"never asked"*, which is
-    the false clean #270 exists to close. Measured: 48 pairs whose JSON has the key, empty, and
-    whose prose has no line for it (the harvester writes them since #270; the older views do not).
+    the false clean #270 exists to close (the harvester writes them since #270; older views do not).
 
     ⛔ ADD-ONLY: an axis the note already answers is never rewritten — the prose is the extractor's
     and this is a migrator, not an editor. Without an `**Ejes:**` block it does nothing and says so:
@@ -797,17 +786,14 @@ def index_tables(fms: dict | None = None) -> dict:
     itself, and `CLAUDE.md` names it as one of the four pieces of the in-repo memory. A ```dataview```
     block shows whoever opens the `.md` **the query, not its results**, and the plugin is not even
     versioned (`.obsidian/plugins/` is gitignored while `community-plugins.json` declares dataview).
-    On top of that the skill's bookkeeping step said «add the concept to `index.md`» and the file had
-    no static line to add it to, so the step could not be done as written — measured: the three
-    commits touching a real instance's `index.md` all predate its instantiation.
+    And the skill's step «add the concept to `index.md`» had no static line to add it to.
 
     Same rule as the roll-ups: read with `split_fm`, never grep the frontmatter (a list written in
     block style and one in flow style are both normal here).
     """
     # `fms` es el índice `{stem: frontmatter}` que el llamador YA parseó. Sin él esta función
     # re-lee y re-parsea la bóveda entera, y como el lint la llama en cada corrida eso duplicaba el
-    # parseo de todo el corpus — medido en el tier `poblada`: el ratio de `yaml.safe_load` por nota
-    # saltó de 2,0x a 3,2x sobre 900 notas. El default (None) mantiene el uso suelto del estampador.
+    # parseo de todo el corpus (presupuesto de `test_escala`). El default (None) mantiene el uso suelto del estampador.
     def _fm(f):
         """El frontmatter de esa nota: el que el llamador ya parseó, o uno recién leído."""
         if fms is not None and f.stem in fms:
@@ -1032,8 +1018,7 @@ def restamp_keywords() -> int:
 
 def restamp_headers() -> int:
     """Backfill #69: barre TODAS las fichas y conceptos y les estampa la cabecera si les falta.
-    Para el corpus creado antes de que la cabecera existiera (medido en una bóveda real: 22 de 25
-    notas sin el aviso de capa LLM). Regenerar con --force sí escribiría la cabecera, pero PISA la
+    Para el corpus creado antes de que la cabecera existiera. Regenerar con --force sí escribiría la cabecera, pero PISA la
     síntesis LLM, que es el trabajo caro: por eso esto es cirugía y no regeneración."""
     notes = cfg.note_paths(cfg.STARS)
     notes += cfg.note_paths(cfg.CONCEPTS, "*/*.md")
@@ -1132,8 +1117,7 @@ def clean_catalog_markup_notes() -> int:
     """Backfill #271: strips the catalog's raw markup from `## Abstract` in every paper note.
 
     `## Abstract` is **verbatim from catalog** and ADS returns live markup: `<SUB>`, `<SUP>`,
-    `<ASTROBJ>`, `<A href>`, `<P />`. Measured on a real vault: **249 occurrences in 42 notes**, and
-    what they do when rendered is not cosmetic — `<ASTROBJ>HD 40307</ASTROBJ>` leaves the object's
+    `<ASTROBJ>`, `<A href>`, `<P />`, and what they do when rendered is not cosmetic — `<ASTROBJ>HD 40307</ASTROBJ>` leaves the object's
     name **invisible** in a renderer that does not escape, `<A href>` turns a copy promised verbatim
     into a live link, and `<SUB>` silently drops the subscript. Worse, the result depends on the
     parser, so the layer the contract calls **auditable** says different things to different readers.
@@ -1167,9 +1151,8 @@ def restamp_abstracts() -> int:
     """Backfill #277: writes the `## Abstract` section into every paper note that lacks it.
 
     The section is the body's only **auditable** layer and `classify_offline` reads it to
-    re-classify without `build/` (D-49), yet nothing ever checked it was there: measured on a real
-    vault, **39 of 138** notes had no `## Abstract` with the lint at rc 0 — the off-ADS stub never
-    wrote it. The content is the placeholder, never invented: what is missing is the SECTION, and
+    re-classify without `build/` (D-49), yet nothing ever checked it was there — the off-ADS stub
+    never wrote it. The content is the placeholder, never invented: what is missing is the SECTION, and
     the harvester fills it from the PDF on the next extraction (it overwrites the placeholder,
     never a verbatim already in place).
 
@@ -1215,8 +1198,7 @@ def fill_abstracts(*, dry_run: bool = False) -> int:
     as the inverted index `openalex._abstract` rebuilds— and that it matters most exactly where
     there is no PDF: «in a `pending_source` the abstract is ALL the note has, and it can be
     enough». The implementation only ever filled it from the PDF, so in that population the
-    placeholder was permanent. Measured on a real vault: 29 notes with the placeholder, 15 with a
-    DOI, and OpenAlex had the abstract for 10 of them — including the two `pending_source`.
+    placeholder was permanent.
 
     ⛔ Verbatim from the catalogue or nothing: the placeholder is not replaced by a summary. A note
     whose section already holds a real abstract is not touched (same guard as the harvester)."""
@@ -1508,8 +1490,7 @@ def merge_frontmatter_list(dest, field: str, values: list) -> bool:
     # envuelve a los ~80 caracteres, así que la propia salida de esta función dejaba de ser entrada
     # válida para ella —el lector miraba una sola línea, `endswith("]")` daba False y caía en el
     # `else`, que encima reportaba «escalar con valor» sobre una lista flow perfectamente válida—.
-    # Medido: 1 de 31 cosechas, y lo perdido fue `weighted PCA`, alias del tema (o sea el único
-    # `methods` con destino en el roll-up). Se lee hasta el `]` de cierre, y se escribe **sin
+    # Se lee hasta el `]` de cierre, y se escribe **sin
     # envolver** (`width`) para no volver a producir la forma que costó este issue.
     fin_flow = idx
     if rest.startswith("[") and not rest.endswith("]"):
@@ -1882,8 +1863,7 @@ def vista_block(sujeto: str, theme: bool = False, motivo: str = "", fecha: str =
     that reads the paper gets its rules from `extraction_prompt`, and `harvest_views` overwrites the
     section with the resulting JSON. Meanwhile —the normal state of a claim seeded by retro-tag or
     `extra_core`— the note showed the reader a request as if it were content, under a heading the
-    note itself presents as «an LLM's synthesis» (#247). Measured on a real vault: **47 notes**, 46
-    of them under a subject already declared `no_vista`.
+    note itself presents as «an LLM's synthesis» (#247).
 
     Two lines, and which one is a fact about the note, not a style: the claim not yet read, and the
     claim declared unread with its reason. What used to be reconstructed by reading the `log`
@@ -1963,8 +1943,7 @@ def stamp_header(dest) -> bool:
 
     Por qué hace falta un estampador propio y no alcanza con la familia `stamp_*`: todas ellas
     anclan en `GENERATOR_LINE` y se niegan a actuar si falta (criterio de #48, "no inventamos"),
-    que es exactamente la población a arreglar — medido en una bóveda real: 22 de 25 notas sin el
-    aviso, y las mismas 21 sin el ancla. Un backfill anclado ahí sería no-op sobre el 100% de los
+    que es exactamente la población a arreglar. Un backfill anclado ahí sería no-op sobre el 100% de los
     casos. Éste ancla en el `# H1`, que toda nota tiene.
 
     La **versión no se inventa**: sale del `generator` del propio frontmatter, que es la versión con
@@ -1997,8 +1976,7 @@ def stamp_header(dest) -> bool:
         cfg.write_text_atomic(dest, text[:i] + LLM_DISCLAIMER[kind].strip() + "\n" + text[i:])
         return True
     gen = (cfg.split_fm(text) or {}).get("generator")
-    # La rama de fallback TIENE que llevar `GENERATOR_LINE`. Medido corriendo el ensayo de deploy
-    # sobre un corpus real: la línea vieja ("Cabecera normalizada por Almagesto; la nota no registra
+    # La rama de fallback TIENE que llevar `GENERATOR_LINE`: la línea vieja ("Cabecera normalizada por Almagesto; la nota no registra
     # con qué versión se creó") no la llevaba, y `GENERATOR_LINE` no es decorativa — es el **punto de
     # inserción** que `stamp_estado` busca (`if i < 0: return False`). O sea que la cabecera
     # "arreglada" no servía para lo único que la cabecera existe para habilitar: el lint seguía
@@ -2045,8 +2023,7 @@ def stamp_header(dest) -> bool:
     # EL MEDIO, y de ahí sale una cascada: `restamp_abstracts` ancla en `GENERATOR_LINE`, que con el
     # orden invertido está ARRIBA de la cabecera, así que inserta `## Abstract` sobre ella y la
     # cabecera queda DENTRO de esa sección — de donde se la lleva el reemplazo del cosechador
-    # (#379). Medido: 60 de 169 notas con el orden invertido, 10 avanzadas a los pasos 3-4 y 6 con
-    # la cabecera ya borrada. La precondición es la nota sin `## Abstract` (#124/#277): #378 sólo
+    # (#379). La precondición es la nota sin `## Abstract` (#124/#277): #378 sólo
     # hace daño donde #277 ya había fallado.
     #  @inv INV-62
     cab = find_header_line(text)
@@ -2059,8 +2036,8 @@ def stamp_header(dest) -> bool:
 
 # ── D-10/D-11/D-24: la lista de papers, MATERIALIZADA ────────────────────────────────────────────
 #
-# Qué problema cierra. Una ficha promete en su roll-up `## Papers` un universo (medido en la
-# instancia real: 155) y su prosa discute otra cosa (8). Y ese roll-up es un bloque ```dataview```:
+# Qué problema cierra. Una ficha promete en su roll-up `## Papers` un universo y su prosa discute
+# otra cosa (el «155 arriba de una síntesis de 8» de D-10). Y ese roll-up es un bloque ```dataview```:
 # un agente que abre el `.md` ve el CÓDIGO de la query, no sus resultados, y el plugin ni siquiera
 # está versionado. El contrato dice que la ficha sirve a una audiencia-modelo; una promesa que
 # depende de un plugin no la cumple (D-11). Acá la tabla se ESTAMPA, con el estado de cada paper.
@@ -2121,8 +2098,7 @@ def theme_membership(concept: str, fm: dict) -> tuple[bool, bool]:
     `## Papers` universe (`_papers_del_sujeto`) and the concept roll-up (`concept_rollup_rows`).
     The two answered it separately and had already diverged: the roll-up compared by normalised key
     (#243) and the universe by raw string, so a paper writing `PCA` for a concept named `pca` was
-    in one and not the other (measured: `papers_universe('pca','theme')` → `set()` against
-    `concept_rollup_rows('pca')` → the paper). That is the roll-up under-declaring its own universe
+    in one and not the other. That is the roll-up under-declaring its own universe
     in silence, which is what D-10 exists to prevent — and since #338 the stale-table detector
     compares a concept's `## Papers` against that universe, so it inherited the defect.
 
@@ -2282,7 +2258,7 @@ def subject_note(slug: str, kind: str):
 
     Public because the roll-up STAMPER and the roll-up DETECTOR both need it (#338): D-10 promises
     that the lint reports the stale table, and the detector only looked at stars, so the guarantee
-    held for one of the two kinds of subject (measured: 2 of 3 subjects of a real vault are themes).
+    held for one of the two kinds of subject.
     Two ways of answering «where does this subject's table live» is how the stamper and the checker
     end up disagreeing — the shape of #215/#324."""
     return (cfg.STARS / f"{slug}.md") if kind == "star" else _concept_dest(slug)
@@ -2333,8 +2309,7 @@ def concept_rollup_rows(slug: str, fms: dict | None = None) -> list:
     #  @inv INV-35
         # #243 — comparado por CLAVE NORMALIZADA, no por string exacto: `methods` lo puebla la
         # extracción sin vocabulario cerrado, y el mismo método llega escrito de varias maneras.
-        # Medido: un concepto `pca` alcanzaba 21 papers de 24 y no decía nada de los 3 que
-        # escribieron `PCA` — un roll-up subdeclarando su propio universo en silencio.
+        # Sin eso el roll-up subdeclaraba su propio universo en silencio.
         # #347 — y la regla es `theme_membership`, la MISMA que usa `_papers_del_sujeto`.
         por_m, por_t = theme_membership(concept, fm)
         if not (por_m or por_t):
@@ -2350,9 +2325,8 @@ def concept_rollup_table(rows: list) -> str:
 
     ⛔ D-10 gave the roll-up **both numbers** (universe · synthesised) and the `Estado` column with
     a stated reason —*"the defect it prevents is promising 155 above a synthesis of 8"*— and both
-    had been applied to `stars/` only. The defect was ALIVE in concepts: measured, a closed and
-    verified concept announced **89** papers above a synthesis citing 30, with 57 claimed and
-    unread. Those 57 are not all alike (`ESTADO_SIN_EXTRAER` vs `ESTADO_EXTRAIDO` vs
+    had been applied to `stars/` only, and the defect was alive in concepts. The unread ones are
+    not all alike (`ESTADO_SIN_EXTRAER` vs `ESTADO_EXTRAIDO` vs
     `ESTADO_SIN_VISTA`, #268) — exactly what a spoke needs to know about the hub whose corpus it
     inherits, and what previously required a script parsing every note."""
     n_sint = sum(1 for r in rows if r.get("estado") in ESTADOS_SINTETIZADOS)
@@ -2374,7 +2348,7 @@ def _titulo_corto(title, n: int) -> str:
 
     Both stamped roll-ups cut silently, so a title lost its tail with nothing to say so — and the
     declared audience of this vault is a model, which then cites the paper as *«…and Fe-group
-    element»*. Measured on a real note: 31 of 49 rows of `## Papers` and 4 of 10 of `## Excluidos`.
+    element»*.
     It was also incoherent inside the same artefact: `## Verificación de citas`, three sections
     below, does mark its truncations because #226 demands it.
 
@@ -2506,13 +2480,11 @@ def metodos_table(rows: list, names: set | None = None, tope: int = TOPE_METODOS
     de `ingest-star`) y las notas de `concepts/methods/` las crea `ingest-theme`, que es **otra
     operación**. Con el link incondicional, seguir `ingest-star` al pie de la letra dejaba el lint
     en decenas de *wikilinks rotos* —bloqueantes— que no se podían cerrar dentro de la operación que
-    los creó (medido: 106 sobre dos estrellas). La señal no se pierde: el lint la reporta como
+    los creó. La señal no se pierde: el lint la reporta como
     backlog.
 
-    #273 — **una fila por MÉTODO, no por par (método, paper)**. Medido en una ficha real: 369 filas
-    sobre 291 métodos, 374 de 1278 líneas, o sea el 30 % de la nota para una tabla que nadie puede
-    leer. Agrupar por clave normalizada sola baja a 291 (21 %) y **no alcanza** —está medido—, así
-    que además se colapsa la cola en un `<details>` cuyo `summary` **declara cuántos hay adentro**.
+    #273 — **una fila por MÉTODO, no por par (método, paper)**, y agrupar solo no alcanza: además
+    se colapsa la cola en un `<details>` cuyo `summary` **declara cuántos hay adentro**.
     ⛔ La grafía que eligió el extractor NO se reescribe: se agrupa, y las variantes se muestran.
     El detalle par a par sigue siendo recuperable con el one-liner determinista de `CLAUDE.md`.
     """
@@ -2520,7 +2492,7 @@ def metodos_table(rows: list, names: set | None = None, tope: int = TOPE_METODOS
     idx = cfg.concept_alias_index() if idx is None else idx
     # #262 — se cuenta por CLAVE NORMALIZADA, no por string crudo: `methods` lo puebla la extracción
     # con vocabulario abierto, así que el mismo método llega escrito de varias maneras y contar
-    # grafías **sobre**declara el universo (medido: 297 publicados sobre 291 reales).
+    # grafías **sobre**declara el universo.
     grupos: dict = {}
     for m, stem, year in rows:
         g = grupos.setdefault(cfg.method_key(m), {"variantes": [], "papers": set(), "anios": set()})
@@ -2583,8 +2555,7 @@ def _reemplazar_seccion(dest, header: str, nuevo: str) -> bool:
     # blanco que separaba las dos secciones cae dentro del tramo reemplazado; el `rstrip` borra
     # además la que el generador sí produce (las tres tablas terminan con `out.append("")`). Con un
     # solo `\n` el encabezado queda pegado a la última fila, y Python-Markdown —el parser de MkDocs
-    # y de media cadena de export— lo absorbe **como una celda más**: medido, 3 de los 8 `##` de una
-    # ficha real desaparecían del outline, y con ellos la población que D-10/INV-81 obligan a
+    # y de media cadena de export— lo absorbe **como una celda más**, y con él la población que D-10/INV-81 obligan a
     # publicar en el título. GFM (Obsidian) lo tolera, así que no se veía. `stamp_excluded` ya lo
     # hacía bien y lo documentaba: la comprensión estaba, no había llegado hasta acá.
     sep = "\n\n" if fin < len(text) else "\n"
@@ -2651,8 +2622,7 @@ def datos_table(rows: list) -> str:
     Why it exists: taking the VizieR catalogues out of the core (#421) —which is right: they are
     the data table, not a paper— removes the pointer from the corpus, and until then it was there
     BY ACCIDENT, because the `yCat` was core and its note carried the DOI. So fixing #421 opens
-    this hole. Measured on a real vault: 4 tables in a single star, all four RVs and activity
-    indices.
+    this hole.
 
     ⚠ The vault does NOT download or store the data (regla #0): what enters is the cited pointer."""
     out = [f"{DATOS_HEADER} ({len(rows)} publicación(es) de datos)", ""]
@@ -2706,9 +2676,8 @@ def matrix_rows(fms: dict | None = None) -> dict:
     ⛔ It is derived from the EXTRACTION (`methods` of each paper), never from
     `methods_applied.literature`: those two fields are populated by different people —the curating
     agent and one LLM per paper, open vocabulary (#243)— and there is no join key between them.
-    Measured on an instance with two closed stars: **23 of 42** declared methods match no paper of
-    their subject by `method_key`, and the row axis mixes languages across fichas
-    (`GLS periodogram` ↔ `periodograma GLS`). Filling the matrix from the ficha published FALSE
+    The row axis would also mix languages across fichas (`GLS periodogram` ↔ `periodograma GLS`).
+    Filling the matrix from the ficha published FALSE
     holes, and a false `—` is looked at by no verification layer.
 
     ⚠ `fms` is the `{stem: frontmatter}` cache the caller already parsed (same contract as
@@ -2915,7 +2884,7 @@ def stamp_touched_theme_rollups(star_slug: str) -> list:
 
     The theme's roll-up joins by `methods`/`thesis_links`, and nobody re-stamped it when a STAR
     was ingested: the paper reached the theme days later, as a stale-table backlog nobody's close
-    looks at (measured: 72 pairs accumulated silently in 4 themes). Idempotent surgery on the
+    looks at. Idempotent surgery on the
     stamped section only — no prose is written in the theme, which is another reading."""
     try:
         nombre = cfg.star_by_slug(star_slug)[0]
@@ -2942,7 +2911,7 @@ def stamp_concept_rollup(slug: str, dest) -> bool:
 # ── D-19 / INV-84: identidad del paper y renombre preprint → publicado ───────────────────────────
 #
 # La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el mismo paper tiene un bibcode
-# de preprint y otro de publicado. Medido en la instancia real: 2 trabajos con dos notas cada uno.
+# de preprint y otro de publicado.
 # Para todo lo que cuenta papers eso es doble conteo; para el consumidor son dos fuentes donde hay
 # una; y para #75 ("extraído no sintetizado") es un falso positivo permanente, porque la ficha cita
 # una de las dos.
@@ -3153,9 +3122,7 @@ def _finish_rename(nota, old_stem: str, new_bibcode: str) -> None:
     showed the PREPRINT's bibcode **in its header line** —derived metadata that `make_notes`
     re-stamps in every other context— and kept its `bibstem`. Worse, the extraction JSON stayed
     under the old bibcode: `harvest_views` maps JSON→note by `data["bibcode"]`, so the harvester
-    printed «no hay nota en `papers/`» and **skipped the note** on every later run. Measured on a
-    real vault, the note left out of the harvester's reach was exactly the one carrying a false
-    salvedad — a re-run to fix it would not have touched it.
+    printed «no hay nota en `papers/`» and **skipped the note** on every later run.
 
     ⚠ `build/` is regenerable scratch, but an EXTRACTION is not: it does not come back without
     paying the most expensive step of the chain again. That is why it moves.
@@ -3375,9 +3342,7 @@ def estado_line(slug: str, dest, fms: dict | None = None, texto: str | None = No
         # `acumulado`, NO `len(bs)` (#105). El conteo de CORRIDAS es bitácora, no contenido: crece
         # en cada re-run aunque no entre un solo paper nuevo, así que la nota cambiaba sin que
         # cambiara nada de lo que afirma — y el chequeo de idempotencia de la regla 6 ("corré dos
-        # veces y hasheá vault/") daba falsa alarma para TODA estrella y TODO tema. Medido: dos
-        # corridas idénticas de `ingest_theme.py ica` diferían sólo en esta línea (y en el
-        # registro, que es la bitácora y sí debe crecer, D-28). Lo que el lector necesita saber es
+        # veces y hasheá vault/") daba falsa alarma para TODA estrella y TODO tema. Lo que el lector necesita saber es
         # que el universo es la UNIÓN de varias búsquedas y no el embudo de la última — eso lo dice
         # la palabra; cuántas veces se miró y cuándo lo dice el registro, que la línea ya linkea.
         # AUD-173 / INV-81 — los dos números tienen ALCANCES distintos cuando hay varias corridas:
@@ -3738,8 +3703,7 @@ def write_paper_notes(slug: str, force: bool, theme: bool = False) -> None:
             duplicados += 1
             continue
         # AUD-197 — `--force` significa «pisá la nota de ESTE sujeto», no «pisá cualquier nota».
-        # Un paper compartido lleva la vista y la extracción de OTRO sujeto (#188: medido, 141 de
-        # 908 notas las reclaman 2+), y reescribirla desde el stub las borra: trabajo caro, ajeno a
+        # Un paper compartido lleva la vista y la extracción de OTRO sujeto (#188), y reescribirla desde el stub las borra: trabajo caro, ajeno a
         # la operación en curso y que nadie pidió tocar. Se saltea y se dice cómo seguir.
         if dest.exists() and force:
             _fm_prev = cfg.split_fm(dest.read_text(encoding="utf-8"))
@@ -3999,8 +3963,7 @@ def write_web_paper_note(citekey: str, *, url: str | None = None, slug: str | No
         "role": [],                          # fundacional | aplicacion | arbitro (#73) — extracción
         "relevance": "high",
         # `null`, NO 0 (#106). Off-ADS no hay catálogo que dé el conteo, así que el valor honesto es
-        # «no lo sé». Un 0 afirma «no lo cita nadie» sobre un dato que nadie miró — medido: la nota
-        # de Comon 1994 decía 0 y el trabajo tiene 8266 citas. No es cosmético: la **puerta 2** de
+        # «no lo sé». Un 0 afirma «no lo cita nadie» sobre un dato que nadie miró. No es cosmético: la **puerta 2** de
         # D-26 admite core por este número y su detector (INV-104) lo compara contra el umbral, así
         # que un 0 inventado se lee como «no llega, y lo verificamos». Es la misma doctrina que
         # `search_arxiv.to_record`, que ya pone None por esto mismo.
