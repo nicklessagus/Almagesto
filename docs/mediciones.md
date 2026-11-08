@@ -4670,3 +4670,101 @@ código conserva la regla y su ancla. Por función, con el ancla del caso:
 - `estado_line` (#105): dos corridas idénticas de `ingest_theme.py ica` diferían sólo en esta línea (y en el registro, que sí debe crecer, D-28).
 - `write_paper_notes` (AUD-197): 141 de 908 notas reclamadas por 2+ sujetos.
 - `write_web_paper_note` (#106): la nota de Comon 1994 decía 0 citas y el trabajo tiene 8266.
+
+## Narrativa de medición movida desde `lib_config.py` (v1.415.30, #630)
+
+Las mediciones que vivían sólo en comentarios y docstrings de `scripts/lib_config.py`; el
+código conserva la regla y su ancla. Por símbolo, con el ancla del caso:
+
+- `PDF_SOURCE_OK` (#296): sobre 138 notas, 85 `eprint`, 50 sin valor, 1 `ads` y 2 con prosa dentro del campo (una de ellas, información legítima de adquisición que terminó en el campo equivocado sin que nada lo dijera).
+- `HYP_STATUS` (D-37): el caso de la instancia real era `status: supuesto operativo con caveat conocido`.
+- `EXTRACCION` (#311): 33 extracciones ≈ 4,9 M tokens de subagente, 988 KB en disco, y `git ls-files build/` devolvía 0 — no viajaban a ninguna otra máquina.
+- `ARXIV_STAMP_RE` (#511): 134 de 135 marcas de una instancia llevan fecha; la que no, era el falso positivo.
+- `arxiv_stamp_id` (#426): de 176 notas con `pdf_source: eprint`, 14 no tenían `arxiv_id` y 13 eran recuperables de su propio `.txt`, sin red.
+- `SECCIONES_ESTAMPADAS` (clean-room 2026-08-25, red #2): sobre la ficha de HD 40307, `lib_blocks.pairs_of` devolvía 178 pares (afirmación, bibcode) contra 68 reales — 110 de metadata—, y entre ellos nueve bibcodes que no están en ninguna afirmación: los cuatro sin fulltext y los cinco declarados `no_sintetizado`. Correr `verify-citations` habría lanzado 110 subagentes sobre filas de tabla, cuatro contra un `.txt` inexistente.
+- `SECCIONES_ESTAMPADAS` / `## Datos públicos` (#425): `_estado_paper` reportaba `sintetizado` sin prosa en 1 de 4 notas, y en las 4 al cosecharlas.
+- `REGLA_LOCALIZADOR` (#500): en una bóveda real, 518 localizadores en el estado `indice`, 438 (85 %) en papers cuyo PDF nunca se reemplazó y 413 cobrados a mano con valor cero para el lector, mientras los 68 mal se ven igual con las dos reglas.
+- `split_table_rows` (#486): en una bóveda real, 17 filas en 2 notas de 287, con `lint` en rc 0; en una de ellas, dos condiciones `acota` marcadas resueltas apuntaban a filas que el lector no puede leer.
+- `ads_parcial` (#487): 963 registros / 52 core → 25 / 25, apéndice vacío, `lint` rc 0 antes y después.
+- `table_shape_issues` (#227): en una nota real, dos filas de `## Régimen de validez` fundidas en una línea física (10 pipes en una tabla de 4 columnas): una afirmación entera —su única precondición sobre calibrar PCA contra datos sintéticos— quedó invisible, y era un par verificado.
+- `headings_glued_to_table` (#260): en una ficha real, 3 de sus 8 `##` desaparecían así, y con ellos el `49 · 28 sintetizados` de D-10, el conteo de métodos y los cuatro conteos INV-81 de la cabecera de verificación.
+- `unclosed_markers` (#227): un `` ` `` abierto en la línea 104 cuyo siguiente backtick estaba en la 372 — 268 líneas dentro de un inline-code que nunca cierra, producido por una edición empalmada.
+- `unclosed_markers` (#227): contar por línea dio 5 falsos positivos en la primera nota probada.
+- `duplicate_paragraphs` (#227): un párrafo repetido verbatim a once líneas, con dos finales distintos, y entre las dos copias el párrafo introductorio de otra sección, que quedó publicada sin prosa.
+- `duplicate_paragraphs` (#349): en una bóveda real, 7 hallazgos y los 7 falsos; el corpus ya tenía una tercera forma estampada (`- PREPRINT: …`) que una lista de prefijos habría perdido.
+- `facet_tokens_without_boundary` (#236): en la faceta-eje `rv` de una bóveda real, `expres` (por el espectrógrafo EXPRES) matcheaba 21 registros vía `expressed`, `expressions`, *Venus Express* y *Mars Express*; `neid` matcheaba el apellido `Schneider`. 19 de los 193 registros con esa faceta la tenían sólo por ésos, y con `require: [rv]` la faceta era la única puerta: 4 de 32 papers vivos eran core por accidente.
+- `reuse_note` (#297): en una bóveda real, 85 de 138 notas eran `pdf_source: eprint` (62 %) y `_red.yaml` no existía — la pasada de red nunca había corrido.
+- `facet_dead_alternatives` (#291): en un tema real, `non-?gaussianity matrix` (casi seguro un `|` perdido) exigía la frase literal, que tienen 0 archivos, mientras 29 tienen `non-gaussianity` — un término que define el tema y alias declarado nunca clasificó a nadie.
+- `fm_key_span` (#327): el re-estampado de `alcance` rehusó escribir en 5 de 5 notas que llevan el campo — el 100 % de su población.
+- `fm_key_span` (#474): en una bóveda real, 19 de 259 notas —todo el carril Crossref— no podían sacar su `bibtex` sin romper el frontmatter; el quinto pago por tener «el bloque de una clave» implícito cayó en el sexto consumidor.
+- `previous_blob_sha10` (#441): en la instancia, 15 de 15 reemplazos hechos a mano se recuperaron así, ninguno `?`.
+- `pdf_page_count` (#437): una copia *Science Express* de 7 páginas sin los Supplementary Materials reemplazaba un preprint de 33 páginas que la nota cita por §S1.1; sin marca de arXiv y con otro sha, los dos rechazos la dejaban pasar.
+- `header_block` (#444): los 4 «stale» falsos de #444 sobrevivieron al primer fix exactamente por esto.
+- `header_block` (#431): `--restamp-headers` estampó la cabecera en 127 de 271 notas de paper de una instancia y 4 salieron «stale» sin que cambiara una sola afirmación.
+- markup de catálogo (#271): la lista original de seis etiquetas dejaba afuera 111 de las 249 ocurrencias medidas en una bóveda real.
+- `escape_cell` (#240): en una bóveda real, 19 filas en 13 notas de un tema.
+- `escape_dollars` (#457): la línea de copyright IEEE de una salvedad real (`1070-9908/04$20.00 © 2004 IEEE`) en una nota con 31 `$` más.
+- `_NOTATION_MASK_RE` (#525): la regla de pandoc dejaba afuera `H$\alpha$`: 5 falsos positivos en 10 en una bóveda real.
+- `RAW_NOTATION_RE` (#525): en una bóveda real, 5 de 5 filas de inventario y una muestra de 33 de los 288 hits en filas de tabla leídos a mano, todos verdaderos.
+- `method_key` (#243): sobre 30 notas de un tema, 64 métodos, 69 grafías y cinco colisiones (`PCA`/`pca`, `MCMC`/`mcmc`, `SVD`/`svd`, `SysRem`/`sysrem`, `wPCA`/`wpca`).
+- `lens_filename` (#371): en la bóveda donde se cazó, 13 prompts generados, los 13 apuntando al archivo de la primera lente, sobre un sujeto donde 33 citas tenían la extracción como único testigo.
+- `concept_alias_index` (#245): en una bóveda real, de 121 `methods` sin página destino el índice de alias cierra 7 (`ff-prime` → la nota de indicadores de actividad, `rv-color` → `crx`, `heteroscedastic-noise` → `ica-noise`…).
+- `looks_decidable` (#234): en una bóveda real, 0 de 43 extracciones emitían una salvedad estructurada, y una falsa volvió a colarse.
+- `LINK_RE` (AUD-277): el 2026-08-28, un target multilínea hizo que un wikilink real dejara de contar como entrante y su destino se reportara huérfano.
+- `view_axes` (#270): en una bóveda real, 257 huecos sobre 79 vistas que declaran lente.
+- `view_axes` (#395c): en una bóveda real, 13 vistas salían como *«no contesta NINGUNO de sus 7 ejes»* con los siete contestados ahí mismo.
+- `section_start` (#101): el 2026-08-25, `lint.inventario_sin_llenar` reportó una ficha cuyo inventario tenía 36 filas como *«el contraste cross-paper no dejó rastro»*.
+- `VERIF_SUFFIX` (#344): el 2026-08-31, en una bóveda real, una nota de entidad pesaba ~72-75 k tokens y el 71-77 % de esos bytes era el bloque `## Verificación de citas`; el contenido real (síntesis, inventario, régimen, huecos) eran 16-21 k.
+- `get_mailto` (INV-67): el 2026-08-28, doce llamadas vivas llevaban el `git config user.email` embebido en la URL.
+- `subject_refusal` (#343): re-medido sobre la bóveda real tras #331, `extraction_prompt.py ica <bib>` y `fetch_ground_truth.py ica` seguían reventando.
+- `theme_inherited_fq` (#351): en `ica`, con el `fq` heredado entran 0 papers por la puerta fundacional con `fundacional_min_citas: 2000` declarado; sin él, dos, entre ellos Comon 1994 (2297 citas, el paper fundacional del campo). El tema se ingestó, sintetizó y cerró sin su canon, y nada en el reporte lo dijo.
+- `theme_inherited_axes` (#307): en un tema real, 6 de 8 facetas heredadas volvieron vacías en casi todas las 12 extracciones.
+- `fold_tex` (#400): tres de los siete hallazgos de la categoría nueva de drift eran el mismo título escrito en dos markups, HTML del catálogo ADS contra TeX de la exportación.
+- `is_ads_bibcode` (#399): mandar las 19 claves sintéticas al export de ADS devolvía 404 para el lote entero.
+- `is_ads_bibcode` (#583): 442/442 bibcodes reales de una bóveda terminan en mayúscula o `.`; `1999HyvarinenSurvey`, la única que no.
+- `BIBTEX_VENUES` (#485): los cuatro `bibstem` de una bóveda real decían `JMLR`/`AISTATS`/`NIPS (…)` a secas, sin volumen. `desde_anio` medido índice por índice el 2026-09-17: JMLR v1-v5 dan 0 links `.bib`, v6 (2005) da 73; NeurIPS contesta desde 1987; PMLR desde su v1 (2007).
+- `BIBTEX_VENUE_ESTADOS` (#485): cerrando #484, sobre 6 notas la tabla acertó 4, afirmó de más 1 (`2003Sarela`, JMLR vol. 4, mandado a una página que no lo tiene) y calló 1 (`2001Vollgraf`, `bibstem` vacío).
+- `bibtex_no_pegable` (#473): compilando el `.bib` de una bóveda real (259 entradas, `plain.bst`), tras #471 quedaban 0 `Undefined control sequence` y todavía 13 warnings y 2 errores, todos del carril Crossref/DataCite.
+- `bibtex_citekey` (#473): en una bóveda real, 257 `\bibitem` de 259 entradas, por dos pares de notas de Hyvärinen.
+- `_bibtex_chunks` (#418): en una bóveda real, 30 de 30 entradas Crossref volvían sin `year`, `doi` ni `title`.
+- `bibtex_fields` (#460): el título quedaba «Comment on  activity masquerading», y los tres hallazgos de codificación que #459/#460 tenían que cerrar seguían abiertos.
+- `split_fm` (INV-36): el 2026-08-28, una sola nota con YAML válido no-mapa tumbaba `lint.main()` entero con `AttributeError` en `normalize_lists` —22 llamadores—, sin reporte, sin nombre de archivo y sin escribir ningún output.
+- `verification_date` (AUD-136): hasta 11 bloques de verificación en una nota de una bóveda real.
+- `reanchor_date` (#499): en una bóveda real, 9 de 14 notas de entidad stale, 1499 pares, y `--reanclar` reportando `0` filas a mover en las nueve.
+- `SIMBAD_TYPE_PREFIXES` (#422): contra ADS el 2026-09-06, `AU Mic` → 406 resultados, `V* AU Mic` → 0.
+- `norm_simbad_id` (#422): de 9 targets RV típicos, 7 llevan al menos un identificador con prefijo, entre ellos AU Mic y eps Eri.
+- `crossref_years` (#414): en `2008Yang` (Human Brain Mapping 29, 2008), `issued` y `published-online` dicen 2007-06-27 y `published-print` dice 2008-06.
+- `write_text_atomic` (D-53/INV-90): con `ulimit -f` sobre el writer que más escribe, el `write_text` directo dejaba una nota de 16.071 B en 8.192 B, con 198 de 400 ocurrencias de la extracción LLM desaparecidas sin aviso.
+- `write_bytes_atomic` (H-07/INV-90): un `write_bytes` directo cortado dejó un PDF truncado de 35 B en el destino final.
+- `save_registro` (#51/#64): con un registro de 111 KB, 17 de 46 lecturas concurrentes vieron el archivo cortado.
+- `config_items` (#479): 22 de las 59 notas con PDF y `pdf_source: null` entraron por `extra_core`, sin lugar donde declararlo.
+- `declared_pdf_sources` (#415): en una bóveda real, 38 de las 57 notas con PDF y sin procedencia entraron por el carril `sources:`.
+- `load_discarded_aliases` (#252): en `hd_40307`, con la curación hecha y documentada identificador por identificador en un comentario YAML, se reportaban igual 18 identificadores.
+- `VISTA_TIPOS` (#188): en una bóveda real, 141 de 908 notas reclamadas por 2+ sujetos y ninguna con una segunda sección de extracción.
+- `SALVEDAD_TIPOS` (#213): un extractor afirmó una degradación del `.txt` que no existía, invocando #205 para darse autoridad, y lo cazó un duplicado accidental de la extracción.
+- `NO_EVALUABLE_MARCA` (#453): 2 de 44 salvedades al cobrar #452.
+- `SALVEDAD_TIPOS['pdf_leido']` (#452): sobre prosa, el detector de #449 midió 5 hallazgos con precisión 0/5 sobre 268 notas.
+- `SALVEDAD_TIPOS['nota_estado']` (#497): `2011Remes` afirma un bloque de pendiente y un `## Abstract` vacío que hace rato no tiene.
+- `SALVEDAD_CAMPO_LEIDO` (#456): 27 salvedades cuyo campo diría `publisher` y cuya propia evidencia dice *preprint*.
+- `vista_fecha_str` (#481): 1 de 336 vistas de una bóveda real tenía la `fecha` como `date`.
+- `alias_bibcodes` (D-19): en una bóveda real, el par sobrante estaba fechado un día DESPUÉS de la consolidación.
+- `load_no_vista` (#256): en un corpus real, 0 de 138 notas podían alcanzar la escotilla.
+- `load_no_sintetizado` (#553): 15 de 52 notas con la escotilla tenían ≥2 sujetos.
+- `load_reviewed_second_hand` (#433): de 66 hallazgos, 48 seguían listados después de mirarlos uno por uno; 40 eran colisiones numéricas («6,3» de eta_Earth contra 6,3 pc de distancia; 4000 K contra 4000 líneas CCD).
+- `load_verified_second_hand` (#591): en #435, 60 de 62 propuestas eran permanentes; en la validación de #590, 7 de 10 filas chequeadas a mano eran falsas alarmas y ninguna podía salir de la lista.
+- `load_reviewed_warn` (#502): 25 de 25 hits de fuga de implementación eran el parámetro del propio paper, citado con página.
+- `signed_text_matches` (#481): 5 firmas vivas de una bóveda real llevan el corte pre-#481.
+- `theme_axes` (#307): sobre 32 extracciones de un tema de método, `rv`, `activity`, `planet` y `discovery` volvieron pobladas en 7 de 32 (las mismas 7: sus únicas fuentes astro), mientras los ejes que el tema necesitaba —identificabilidad, heterocedasticidad por época y por canal, qué garantiza el blanqueo— nunca se preguntaron.
+- `pdf_slug` (#305): en un tema real, 7 de 31 —el núcleo fundacional—, dos de ellos libros de 500+ páginas cuyo `alcance` manda leer por índice y citar por página.
+- `_NO_PUBLICADO_RE` / `_clause_class` (#452): sin la negación del lado publicado se perdían 47 de 51 salvedades de la forma más común («es el PREPRINT de arXiv …, no la versión publicada en A&A»).
+- `_CLAUSULA_SEP` (#452): la clase de una salvedad la decidía una mención de la paginación de la revista 300 caracteres más adelante.
+- `deciding_clause` (#462): 10 de 37 propuestas correctas se leían contradictorias porque la cláusula que decidía la clase («el PDF en disco es hoy la copia del editor») estaba 400 caracteres después de la apertura («esta vista se leyó del preprint de arXiv»), y el extracto cortaba a ~110.
+- `doc_claims_on_disk` (#449): 43 salvedades en 31 notas seguían diciendo que el PDF en disco era el preprint después de que `replace_pdf` puso la copia del editor.
+- `doc_claims_on_disk` / `_DOC_EN_DISCO_RE` (#449): la primera versión dio 5 hallazgos sobre 268 notas en la instancia, precisión 0/5.
+- `bibcode_slugs` (#448): 3 de 31 reemplazos de una corrida dejaban un `.txt` describiendo el preprint mientras el PDF describía la copia publicada.
+- `artefacto_en_otro_slug` (D-18): 33 copias duplicadas en la instancia real.
+- `save_barrido` (#251): en `hd_40307`, tres entradas idénticas —misma fecha, misma query, los mismos 83 bibcodes— declaraban las tres `n_nuevos: 83`, o sea 249 hallazgos donde hubo 83.
+- regla de combinación de facetas (#15): sobre el pool del chaining, exigir la faceta del eje recorta 928→254.
+- `refuse_dry_run` (#507): un «preview» de cosecha dejó 5 archivos, +177 líneas.
+- `theme_core` (#447): en una bóveda real, el dry-run proponía sacar 9 de 9 `extra_core` de un tema y el canon de otros dos (−45, −20), todos core por su propia faceta o por la puerta 2.
+- `txt_slug` (#405): en una bóveda real, 26 de 208 reclamos de tema, a través de cinco temas.

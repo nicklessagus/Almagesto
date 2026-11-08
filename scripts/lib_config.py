@@ -71,16 +71,13 @@ UNIDAD_CITA_OK = ("linea", "pagina", "seccion")
 # citas son contra el preprint, así que una discrepancia numérica es candidata a diferencia de
 # versión— y un valor fuera de vocabulario cae por el `else` de todo `== "eprint"` en silencio.
 # ⚠ #363: hasta 1.111.0 ese `else` eximía además del chequeo de cita textual; #275 la sacó y nueve
-# lugares (éste incluido) siguieron afirmándola 59 versiones menores. Medido sobre 138 notas: 85 `eprint`, 50 sin valor, 1
-# `ads` y **2 con prosa dentro del campo** (una de ellas, información legítima de adquisición que
-# terminó en el campo equivocado sin que nada lo dijera).
+# lugares (éste incluido) siguieron afirmándola 59 versiones menores.
 # ⚠ `null`/ausente es el valor legítimo para **desconocido**, que NO es «publicado» (#57).
 PDF_SOURCE_OK = ("eprint", "ads", "publisher", "web")
 FULLTEXT_SOURCE_OK = ("pdftotext", "ocr", "web")
 
 # D-37 · en qué quedó una hipótesis. Vocabulario CERRADO: `status` es lo ÚNICO que un consumidor lee
-# para decidir si se apoya en ella, y en prosa libre no dice nada (el caso medido en la instancia
-# real: `supuesto operativo con caveat conocido`).
+# para decidir si se apoya en ella, y en prosa libre no dice nada.
 #
 # ⚠ Vive acá, no en `lint.py`, desde #175: el GENERADOR (`make_notes.write_concept_note`) escribía
 # `active` mientras el VALIDADOR tenía la lista, así que toda hipótesis nueva nacía con un
@@ -105,8 +102,7 @@ FULLTEXT = RAW / "fulltext"
 #: #311 · las EXTRACCIONES del fan-out. Viven en `raw/` —versionadas, viajan— y no en `build/`,
 #: porque la regla de oro del scratch es «`build/` guarda lo REGENERABLE» y una extracción no lo es
 #: en ese sentido: un `ads.json` se recupera con una llamada HTTP, una extracción cuesta volver a
-#: leer el PDF con un LLM (medido: 33 extracciones ≈ 4,9 M tokens de subagente, 988 KB en disco, y
-#: `git ls-files build/` devolvía 0 — o sea que no viajaban a ninguna otra máquina). Convive con
+#: leer el PDF con un LLM. Convive con
 #: `fulltext/`, que también lo produce esta cadena y también es inmutable una vez escrito.
 EXTRACCION = RAW / "extraccion"
 GROUND_TRUTH = RAW / "ground_truth"
@@ -128,7 +124,6 @@ FULLTEXT_WEB_MARK = "# Almagesto — snapshot web"
 # 2013`; los viejos `astro-ph/0209466 … 23 Sep 2002`, sin categoría); una cita de la bibliografía
 # (`2013, arXiv:1111.5019v2`) no. En un documento de ≤2 páginas el alcance es el documento entero y
 # la primera cita se leía como sello: `pdf_source: eprint` falso y el `arxiv_id` de OTRO paper.
-# Medido: 134 de 135 marcas de una instancia llevan fecha; la que no, era ese falso positivo.
 ARXIV_STAMP_RE = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(v\d+)?"
                             r"(?=\s*(?:\[[^\]]+\])?\s*\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4})",
                             re.I)
@@ -164,9 +159,7 @@ def arxiv_stamp_id(text: str) -> str | None:
 
     ⛔ The regex captured two groups and the reader returned only the second, so the very disk read
     that stamps `pdf_source: eprint` + `eprint_version` had the `arxiv_id` in hand and threw it
-    away. Measured on a real vault: of 176 notes with `pdf_source: eprint`, **14 had no
-    `arxiv_id`** and **13 were recoverable from their own `.txt`** — no network, nothing to
-    download.
+    away; the id is recoverable from the note's own `.txt`, with no network.
 
     What makes the id as trustworthy as the version is that they come from the same match: the
     two-page scope (AUD-164 / INV-29) exists precisely so the `arXiv:` ids of the bibliography —
@@ -223,11 +216,8 @@ def snapshot_retrieved(path) -> str | None:
 # prometen la misma forma, se declara una vez.
 #
 # El modo de falla que cierran: un artefacto que se mide a sí mismo siempre da el resultado que su
-# propia existencia produce. Medido en el clean-room del 2026-08-25 sobre la ficha de HD 40307,
-# `lib_blocks.pairs_of` devolvía **178** pares (afirmación, bibcode) contra **68** reales — 110 de
-# metadata—, y entre ellos nueve bibcodes que NO están en ninguna afirmación: los cuatro sin
-# fulltext y los cinco declarados `no_sintetizado`. Correr `verify-citations` según el skill habría
-# lanzado 110 subagentes a verificar filas de tabla, cuatro de ellos contra un `.txt` inexistente.
+# propia existencia produce: sin el recorte, `lib_blocks.pairs_of` cuenta las filas de tabla como
+# pares (afirmación, bibcode) y `verify-citations` lanza subagentes sobre metadata.
 SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a esta estrella",
                         # #250 — la sección de indicadores es ESTAMPADA: sin esto `solo_prosa` no
                         # la descuenta, sus `[[links]]` cuentan como citas de prosa y contaminan el
@@ -240,8 +230,8 @@ SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a est
                         # la que su propio contrato ya declaraba: el hecho se afirma —y se
                         # verifica— en la nota del PAPER, contra su PDF; acá sólo se agrega. Fuera
                         # de la tupla, el `[[bibcode]]` que el propio estampado escribe hacía que
-                        # `_estado_paper` reportara `sintetizado` sin una línea de prosa (medido: 1
-                        # de 4 hoy, los 4 al cosecharlos) y **silenciaba la red de #75** en esa
+                        # `_estado_paper` reportara `sintetizado` sin una línea de prosa y
+                        # **silenciaba la red de #75** en esa
                         # población; además cada fila pedía verificación propia en la ficha, con un
                         # ancla que se vence en cada re-estampado.
                         "## Datos públicos",
@@ -260,7 +250,7 @@ SECCIONES_ESTAMPADAS = ("## Planetas", "## Papers", "## Métodos aplicados a est
                         # ⚠ Las traducciones se llaman `## Traducción …` y NO `## Abstract (es)`:
                         # ese nombre volvía a `## Abstract` un **prefijo** del suyo, y
                         # `section_start` tolera a propósito un sufijo que arranca con puntuación
-                        # (lo necesita para `## Vista — X (2026-08-27)`). Medido el 2026-08-28: con
+                        # (lo necesita para `## Vista — X (2026-08-27)`). Con
                         # sólo la traducción presente, el guard del verbatim la daba por el original
                         # y no lo estampaba **nunca** — dejando a `note_lens_text` sin abstract para
                         # siempre. Es la trampa de prefijo de #176, instanciada en el vocabulario
@@ -281,7 +271,7 @@ def _es_estampada(linea: str) -> bool:
 
     ⛔ **Misma regla de sufijo que `section_start`, no un `startswith` pelado.** Ésta era una copia
     con la regla vieja: `## Papers` es prefijo de `## Papers relevantes para el método`, así que una
-    sección PROPIA con ese nombre se saltaba entera. Medido el 2026-08-28: la nota perdía toda su
+    sección PROPIA con ese nombre se saltaba entera: la nota perdía toda su
     prosa, lo que (a) apagaba en silencio el gate R-1 —`unverified` mira si hay citas en prosa— y
     (b) además reportaba algo **falso**: *«concepto sin citas `[[bibcode]]`»* sobre una nota que sí
     las tiene. Es la trampa de #176, que se arregló dentro de `section_start` y no llegó acá.
@@ -328,10 +318,8 @@ def _es_estampada(linea: str) -> bool:
 #: afirmación la ENCUENTRE en el PDF que hay en disco. #492 lo fijó en la página **impresa**
 #: razonando sobre un consumidor que copia el número a su `\citep[p.~N]` — ese consumidor no
 #: existe en el campo de la bóveda (en astronomía se cita el paper, y a lo sumo la sección o la
-#: figura), y la convención cobró deuda sobre el uso que sí ocurre: medido en una bóveda real, 518
-#: localizadores en el estado `indice`, **438 (85 %) en papers cuyo PDF nunca se reemplazó** y 413
-#: cobrados a mano con valor cero para el lector, mientras los 68 MAL —la mitad que sí vale— se ven
-#: igual con las dos reglas. Por eso manda lo que sobrevive al cambio preprint→editor —sección,
+#: figura), y la convención cobró deuda sobre el uso que sí ocurre. Por eso manda lo que
+#: sobrevive al cambio preprint→editor —sección,
 #: figura, tabla, ecuación— y la página queda como pista, en la numeración que sea.
 REGLA_LOCALIZADOR = (
     "el **localizador** es lo que hace **encontrable** la afirmación en el PDF que hay en disco — "
@@ -398,9 +386,8 @@ def split_table_rows(body: str) -> list:
     without one, so they stop rendering: the reader sees a paragraph with literal pipes. And no
     layer saw it, because every table check compares each row **against its header** (#227) and
     there is none — `split_blocks` still labels them `kind='fila'`, so the anchor, `verif_rows` and
-    the blocking check of #227 all take them for good rows. Measured on a real vault: **17 rows in
-    2 notes of 287**, with `lint` at rc 0 — and in one of them **two `acota` conditions were marked
-    RESOLVED pointing at rows the reader cannot read**.
+    the blocking check of #227 all take them for good rows — an `acota` can be marked RESOLVED
+    pointing at rows the reader cannot read.
 
     Fenced blocks are skipped: a pipe table inside ``` is an example, not an artefact.
 
@@ -437,8 +424,7 @@ def ads_parcial(data) -> str:
     ⛔ A PARTIAL run cannot erase the snapshot of a complete one. `--extra-only` re-fetches only the
     bibcodes of `extra_core`, so its `ads.json` is legitimate and its universe is **not** the
     theme's: the next `make_notes` re-stamped `## Excluidos por el filtro` **empty** and the note
-    lost the only in-note channel for catching a false negative of the lens. Measured: 963 records
-    / 52 core → 25 / 25, empty appendix, `lint` rc 0 before and after.
+    lost the only in-note channel for catching a false negative of the lens.
 
     The guard of #481 cannot see it, and that is not a bug of its own: it compares
     `busquedas[-1].n_total` against the file's records, i.e. it catches *«this `ads.json` is from
@@ -460,10 +446,8 @@ def table_shape_issues(body: str) -> list:
 
     ⛔ **The artefact is what travels.** A row with more cells than its header does not render —
     GFM drops the excess— so the content is lost *in the reader's view* while still being there
-    for every tool that parses the file. Measured on a real note: two rows of `## Régimen de
-    validez` fused into one physical line (10 pipes in a 4-column table), so an entire claim —its
-    only precondition on calibrating PCA against synthetic data— became invisible… and it was a
-    **verified pair**: the note certified as checked a claim its own artefact does not show.
+    for every tool that parses the file — a verified pair can certify a claim its own artefact
+    does not show.
 
     Nothing looked at this. The lint parsed table cells in exactly two places, both counting
     content, never shape; `verify-citations` checked the fused row's text without noticing the row
@@ -510,10 +494,9 @@ def headings_glued_to_table(body: str) -> list:
     Python-Markdown + `tables` —MkDocs and much of the static-export chain— does NOT: the `## …`
     line becomes **one more row of the table above**, and the heading vanishes from the outline.
 
-    Measured on a real star note: 3 of its 8 `##` disappeared that way, and with them the very
-    metadata this framework added so a roll-up cannot under-declare its universe in silence — the
-    `49 · 28 sintetizados` D-10 mandates, the method count, and the four INV-81 counts in the
-    verification block's header.
+    What disappears with the heading is the very metadata this framework added so a roll-up cannot
+    under-declare its universe in silence — the D-10 counts, the method count, and the four INV-81
+    counts in the verification block's header.
 
     Backlog and not blocking, deliberately: unlike a fused row, GFM does not drop anything here, so
     the damage is renderer-dependent. The producer was `_reemplazar_seccion`, fixed in the same
@@ -557,14 +540,13 @@ def _drop_escaped(texto: str) -> str:
 def unclosed_markers(body: str) -> list:
     """Inline markers left open in a paragraph: `[(line_no, marker, line_no del impar)]` (#227).
 
-    Backtick and `$…$` are the two that swallow the rest of the note when left open. Measured: a
-    `` ` `` opened on line 104 whose next backtick was on line **372** — 268 lines inside an
-    inline-code that never closes, produced by a spliced edit and invisible to every check.
+    Backtick and `$…$` are the two that swallow the rest of the note when left open; a spliced edit
+    produces them and no other check sees it.
 
     ⛔ Counted per **paragraph** (contiguous non-empty lines), never per line: notes here are
     hard-wrapped at ~100 columns, so a formula or an inline-code legitimately straddles a line
-    break. Per-line counting fires in false on every wrapped `$…$` — measured, 5 false positives
-    on the first note tried — and a high-signal category that cries wolf is one that stops being
+    break. Per-line counting fires in false on every wrapped `$…$`, and a high-signal category that
+    cries wolf is one that stops being
     read. Fenced code blocks are skipped whole.
 
     Line numbers are 1-based over the WHOLE file, the `grep -n` convention of this repo (#29).
@@ -615,9 +597,8 @@ def unclosed_markers(body: str) -> list:
 def duplicate_paragraphs(body: str) -> list:
     """Paragraphs that appear more than once in the same note: `[(line_no, first_line)]` (#227).
 
-    A spliced edit duplicates a paragraph and nothing notices: measured, one repeated verbatim
-    eleven lines apart, with two different endings, and between the two copies the introductory
-    paragraph of a DIFFERENT section — which left that section published with no prose at all.
+    A spliced edit duplicates a paragraph and nothing notices — possibly with two different endings
+    and another section's intro in between, leaving that section with no prose at all.
 
     Only paragraphs long enough to identify themselves (`_DUP_MIN`): a short line repeated is
     normal (a table separator, a `—`, a heading-like bullet), and reporting those would drown the
@@ -626,10 +607,10 @@ def duplicate_paragraphs(body: str) -> list:
     ⛔ Each **view** is its own scope (#349). A note with several views (#239) has every view write
     the same structural line —`- **<axis>:** _(sin datos)_` for an axis its lens asked and the
     source did not answer, `- ⚙ verificada: …` for its checked salvedad— and those are identical BY
-    CONSTRUCTION: measured on a real vault, 7 findings and all 7 false. Counting inside
+    CONSTRUCTION. Counting inside
     `## Vista — <subject>` (and each of its `### Lente — <emphasis>`) kills them without a list of
-    exempt prefixes to maintain — and the measured corpus already had a third stamped shape
-    (`- PREPRINT: …`) that such a list would have missed. A paragraph repeated **inside** one view
+    exempt prefixes to maintain, which would miss the next stamped shape (`- PREPRINT: …`). A
+    paragraph repeated **inside** one view
     is still the finding, and so is one repeated across ordinary prose sections: the note-level
     scope is unchanged, which is what keeps the #227 case (two copies with a different section's
     intro between them) alive.
@@ -701,8 +682,8 @@ _SALVEDAD_DECIDIBLE = re.compile(
 
 
 #: #236 · largo hasta el cual un token alfabético de una faceta necesita frontera de palabra. Por
-#: encima, la probabilidad de que caiga dentro de otra palabra es despreciable; por debajo es alta y
-#: está medida (`expres` → *Venus Express*, `neid` → *Schneider*).
+#: encima, la probabilidad de que caiga dentro de otra palabra es despreciable; por debajo es alta
+#: (`expres` → *Venus Express*, `neid` → *Schneider*).
 FACETA_TOKEN_CORTO = 8
 
 
@@ -710,11 +691,8 @@ def facet_tokens_without_boundary(patron: str) -> list:
     """Alternatives of a facet regex that are short, alphabetic and carry **no word boundary** (#236).
 
     A facet is a regex over title + abstract + keywords, so a short acronym without `\b` matches
-    **inside** another word. Measured on a real vault's `rv` axis-facet: `expres` (for the EXPRES
-    spectrograph) matched **21** records via `expressed`, `expressions`, *Venus **Expres**s* and
-    *Mars **Expres**s*; `neid` matched the surname `Sch**neid**er`. **19 of the 193 records with
-    that facet had it only through those**, and since the vault declared `require: [rv]`, that
-    facet was the only gate: **4 of 32 live papers were core by accident**.
+    **inside** another word (`expres` → *Venus Express*, `neid` → *Schneider*); under a
+    `require:` that facet is the only gate, so the leak makes papers core by accident.
 
     ⛔ Why this needs a detector and not just care: a facet's **false positive leaves no trace** —
     the paper enters, is downloaded, read and synthesised. It is the mirror of the false negative
@@ -745,8 +723,7 @@ def reuse_note(bibcode: str, origen) -> str:
     reuse is exactly when an old artefact enters a new subject. And the answer one would expect
     («if there were a newer version the search would have returned ANOTHER bibcode, and D-19 joins
     them») is false in the frequent case: the preprint's DOI identifies the *deposit*, so #216
-    **guarantees** preprint and published never collide. Measured on a real vault: 85 of 138 notes
-    are `pdf_source: eprint` (62 %) and `_red.yaml` did not exist — the network pass had never run.
+    **guarantees** preprint and published never collide.
 
     So the line declares the two facts the operator needs and stops there (INV-87: what was NOT
     looked at is stated). It does not go to the network: the reuse must stay cheap."""
@@ -775,7 +752,7 @@ def reuse_note(bibcode: str, origen) -> str:
 def facet_alternatives(patron: str) -> list:
     """A facet regex → its **level-0** alternatives, groups kept whole (#291).
 
-    ⚠ This is NOT `patron.split("|")`, and the difference is measured. A naive split cuts INSIDE
+    ⚠ This is NOT `patron.split("|")`. A naive split cuts INSIDE
     groups: with it, `line-by-line` shows up twice — it lives in two different `(...)` groups — and
     reads as a duplicate; deduping on that breaks `(telluric|line-by-line|stellar activity)` and
     the reclassification diff comes out **−1** (one real paper leaves the core). A check that
@@ -823,10 +800,8 @@ def facet_dead_alternatives(patron: str, textos) -> list:
     prints a plausible number, the registry stores the lens as current, and the term simply does
     not participate — indistinguishable from "that term does not appear in the literature".
 
-    Measured on a real theme: `non-?gaussianity matrix` (almost certainly a lost `|`) required the
-    literal phrase, which **0** files hold, while 29 hold `non-gaussianity` — so non-Gaussianity,
-    one of the two or three terms that DEFINE the theme and a declared alias of it, never
-    classified anybody, and no net said so.
+    A dead alternative can be a term that DEFINES the theme (a lost `|` turns two terms into one
+    literal phrase), and then it never classifies anybody.
 
     The caller must declare the population: over 0 notes this is **not evaluable**, not "all dead"
     (D-43). An alternative that does not compile on its own is reported as such rather than
@@ -905,9 +880,8 @@ def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
     line, so touching only the first one leaves the continuation orphaned under the NEXT key, the
     frontmatter stops parsing, and the note then evades every check of its type.
 
-    Measured for #327: the `alcance` re-stamp refused to write on **5 of 5** notes that carry the
-    field — 100 % of its population, and not by chance: an `alcance` says which chapters of a book
-    are in, so it is long **by definition**, so it always wraps. The guard of #244 held (nothing was
+    #327: an `alcance` says which chapters of a book are in, so it is long **by definition** and
+    always wraps — the re-stamp refused it every time. The guard of #244 held (nothing was
     corrupted); what did not work was the operation, and the note kept asserting that material does
     not enter while its view published it.
 
@@ -916,10 +890,9 @@ def fm_key_span(lines: list, field: str, desde: int = 0) -> tuple | None:
     was cut there)—. ⛔ And, **inside a
     QUOTED scalar, also an empty one** (#474): `yaml.safe_dump` of a value that ends in `\n` emits
     `clave: '…\n\n  '`, so the blank line is part of the value and the rule «indented non-empty»
-    stopped one line short of the closing quote. Measured on a real vault: **19 of 259** notes —the
-    whole Crossref rail, whose BibTeX export arrives as one line with a trailing newline— could not
-    have their `bibtex` removed without breaking the frontmatter, and the fifth payment for having
-    «the block of a key» implicit landed on the sixth consumer. The quote is followed to its close;
+    stopped one line short of the closing quote — the Crossref rail, whose BibTeX export arrives as
+    one line with a trailing newline, could not have its `bibtex` removed without breaking the
+    frontmatter. The quote is followed to its close;
     an unterminated one falls back to the conservative span rather than swallowing the rest of the
     frontmatter, because a file that is already broken must not be made worse.
 
@@ -1006,7 +979,7 @@ def previous_blob_sha10(path) -> tuple:
     there before» is in the repo and is not asked of the operator. With git-lfs the blob is a
     pointer and the framework's `sha10` is the **prefix of its `oid`** —both are sha256 of the
     content—, so the pointer alone answers, even when the LFS object is not local; a plain blob is
-    hashed. Measured on the instance: 15 of 15 hand-made replacements recovered this way, none `?`.
+    hashed.
 
     The three `None`s are distinct and say so: no modification history (the file was ADDED as it
     is now — that is not a replacement, and the caller must not sign one), `git` unavailable or
@@ -1081,9 +1054,8 @@ def pdf_page_count(pdf) -> tuple:
 
     ONE implementation (#437): the `pdf_paginas` salvedad of the harvester counted pages inline, and
     the PDF replacement needs the same number for the other side of the same question — the
-    incoming copy can be WORSE than the one it replaces (measured: a *Science Express* copy of
-    **7** pages without the Supplementary Materials, replacing a 33-page preprint that the note
-    cites by §S1.1; no arXiv stamp, different sha, so both refusals let it through).
+    incoming copy can be WORSE than the one it replaces (fewer pages, e.g. without the
+    Supplementary Materials the note cites; no arXiv stamp and a different sha let it through).
 
     `pdfinfo` (poppler) and not a new library: the same system dependency `requirements.txt`
     already declares for `pdftotext`, so the check adds no failure mode of its own. `None` is
@@ -1122,14 +1094,12 @@ def header_block(text: str) -> tuple | None:
     backfill carries the LLM-layer warning and no generator line, and a recogniser that needs the
     generator says «no header» on that side. `prose_changed_since` then exempts the new header and
     not the old one, and the diff it sees is the whole blockquote — the shape of #440 (a mark that
-    exists after the command that stamps it, used over a version from before). Measured: the 4
-    false «stale» of #444 survived the first fix for exactly this.
+    exists after the command that stamps it, used over a version from before).
 
     ONE definition of «this is the stamped header» for its two consumers: the header surgeries of
     `make_notes` (`stamp_estado`, `stamp_ground_truth_line`, INV-15) and `lint.prose_changed_since`
-    (#431), which used to count the header as prose: `--restamp-headers` stamped it on 127 of 271
-    paper notes of an instance and 4 notes came out «stale» —re-verify!— without a single claim
-    having changed. The header is a blockquote with no `[[bibcode]]`: surgery on it cannot move any
+    (#431), which used to count the header as prose: `--restamp-headers` turned notes «stale»
+    without a single claim having changed. The header is a blockquote with no `[[bibcode]]`: surgery on it cannot move any
     claim or any anchor, so it is exactly what `SECCIONES_ESTAMPADAS` exempts, only that it is not a
     section. The block is the run of contiguous `>` lines around the anchor."""
     lineas = text.split("\n")
@@ -1204,7 +1174,7 @@ def set_fm_scalar(path, field: str, value: str, *, crear: bool = True) -> bool:
 
 
 # #271 — el markup que los catálogos meten en título y abstract. La lista original cubría seis
-# etiquetas y dejaba afuera 111 de las 249 ocurrencias medidas en una bóveda real: `<ASTROBJ>` deja
+# etiquetas y dejaba afuera buena parte de las ocurrencias reales: `<ASTROBJ>` deja
 # el nombre del objeto INVISIBLE en un renderer que no escapa, `<A href>` convierte una copia
 # verbatim en un link vivo, y `<P />`/`<BR />` parten el párrafo, así que la estructura publicada no
 # es la del abstract de catálogo. Y el comportamiento depende del parser —markdown-it y pandoc
@@ -1244,11 +1214,11 @@ def escape_cell(texto: str) -> str:
     The extractor writes prose into the cells of the view table —an equation, the transcribed
     columns of a table in the paper, a `grep` alternation— and a raw `|` there SPLITS THE ROW: the
     extra cells do not render, so a cited and verified claim becomes invisible to the reader while
-    the lint still counts its row. Measured on a real vault: **19 rows in 13 notes of one theme**.
+    the lint still counts its row.
     The rule existed (INV-99) and lived only in the `verify-citations` skill, for the other table.
 
     ⛔ Inside `$…$` the escape is ``\\vert``, NOT ``\\|``: in LaTeX ``\\|`` is the DOUBLE bar ‖, so escaping
-    blindly would silently change the formula — 19 invisible rows turned into 19 wrong equations,
+    blindly would silently change the formula — invisible rows turned into wrong equations,
     which is worse (the invisible row is noticed; the altered formula is not).
     """
     if "|" not in str(texto or ""):
@@ -1281,8 +1251,7 @@ def escape_dollars(texto: str) -> str:
 
     Sibling of `escape_cell` (#240) one character over, and the same failure: Obsidian reads `$` as
     the opening of inline math, so a lone one pairs up with the next `$` in the note and drags
-    everything in between into math mode. Measured: the IEEE copyright line of a real caveat
-    (`1070-9908/04$20.00 © 2004 IEEE`) in a note carrying **31** more `$`.
+    everything in between into math mode (e.g. an IEEE copyright line, `…/04$20.00 © 2004 IEEE`).
 
     ⛔ A well-formed `$…$` span is NOT touched —that one IS math, and escaping it would silently
     change the formula, the same argument `escape_cell` makes for `\vert`— and neither is a `$`
@@ -1326,14 +1295,13 @@ def _escape_dollar_run(trozo: str) -> str:
 #: #525 · what is NOT notation to render: math spans, «quotes» (verbatim from the source), inline
 #: code, wikilinks and URLs. ⚠ The math span pairs each `$` with the NEXT one, glued or not:
 #: `H$\alpha$` renders in Obsidian, and `_DOLLAR_MATH_RE` (pandoc's stricter rule, built to protect
-#: currency) left it out — measured, 5 false positives in 10 on a real vault.
+#: currency) left it out.
 #: ⛔ AUD-510 · an escaped `\$` (what `escape_dollars` writes, #457) is a literal, never a delimiter.
 _NOTATION_MASK_RE = re.compile(r"(?<!\\)\$\$.*?(?<!\\)\$\$|(?<!\\)\$[^$\n]+(?<!\\)\$"
                                r"|«[^»]*»|`[^`]*`|\[\[[^\]]*\]\]|https?://\S+")
 #: #525 · raw math outside `$…$`, only the unambiguous forms: a superscript (`10^-3`, `y^3`), a braced
-#: subscript (`sum_{i=1}`) or a LaTeX command. Measured on a real vault: 5 of 5 inventory rows and a
-#: sample of 33 of the 288 table-row hits read by hand, all true; `sigma`, `<=` or `A_b` alone were
-#: left out because they are prose too.
+#: subscript (`sum_{i=1}`) or a LaTeX command; `sigma`, `<=` or `A_b` alone are left out because
+#: they are prose too.
 RAW_NOTATION_RE = re.compile(
     r"[\w)\]]\^[-−+\w{(]|\w_\{"
     r"|\\(?:sigma|alpha|beta|frac|sqrt|lambda|Delta|delta|sum|pm|times|approx|sim|leq|geq)\b")
@@ -1370,11 +1338,9 @@ def method_key(nombre) -> str:
     r"""A method name reduced to its comparison key: casefold, NFKD, non-alphanumerics to `-` (#243).
 
     `methods` is populated by the EXTRACTION —one LLM per paper— with an open vocabulary and no
-    normalisation, so the same method arrives spelled several ways. Measured over 30 notes of one
-    theme: 64 methods, 69 spellings, five collisions (`PCA`/`pca`, `MCMC`/`mcmc`, `SVD`/`svd`,
-    `SysRem`/`sysrem`, `wPCA`/`wpca`). The roll-up compared the raw string, so a concept named `pca`
-    reached **21 papers out of 24** and said nothing about the three it missed — a roll-up
-    under-declaring its own universe in silence, which is what D-10 exists to prevent.
+    normalisation, so the same method arrives spelled several ways (`PCA`/`pca`). Comparing the raw
+    string, a roll-up under-declares its own universe in silence, which is what D-10 exists to
+    prevent.
 
     ⛔ Normalising at COMPARISON time, never at write time: the spelling the extractor chose is
     information about how the paper names it, and rewriting it would destroy that.
@@ -1402,9 +1368,8 @@ def lens_filename(bibcode: str, enfasis: str = "") -> str:
     which #311 declares versioned and not regenerable: overwriting it throws away the reading of the
     paper. And it fails silently — valid JSON at a valid path, harvested without complaint.
 
-    Measured on the vault where it was caught: 13 prompts generated, all 13 pointing at the first
-    lens's file, over a subject where **33 quotes rested on the extraction as their only witness**
-    — so overwriting would have left them unverifiable while the gate of #323 kept saying ✅.
+    Overwriting leaves the quotes that rest on the extraction unverifiable while the gate of #323
+    keeps saying ✅.
 
     ⚠ Ordering matters: this can only ship after #374 (identity by the `bibcode` INSIDE the file),
     or every second lens falls out of that gate's population and `--filas` emits wikilinks that do
@@ -1417,11 +1382,8 @@ def concept_alias_index() -> dict:
 
     The canonical name of a method IS the stem of its note, and `aliases` is the synonym table the
     schema already asks for — and nobody read it: the roll-up and the lint compared only against the
-    stem, so `bisector span` and `bis` were two different methods. Measured on a real vault: of 121
-    `methods` without a destination page, the alias index closes 7 (`ff-prime` → the activity
-    indicators note, `rv-color` → `crx`, `heteroscedastic-noise` → `ica-noise`…). Small, and the
-    right kind of small: what fills that backlog is the extractor SEEING the list before inventing
-    a spelling, not the index alone.
+    stem, so `bisector span` and `bis` were two different methods. What fills that backlog is the
+    extractor SEEING the list before inventing a spelling, not the index alone.
 
     ⛔ The stem wins over a foreign alias: if `pca.md` exists and another note claims `pca` as an
     alias, the destination is `pca`. An index that picked by glob order would not be deterministic.
@@ -1531,8 +1493,7 @@ def looks_decidable(salvedad: str) -> bool:
     The measured failure of #213 is a caveat that **invents** a defect of the artefact — «the
     `.txt` lost this symbol» — published under the very heading a consumer reads to decide how much
     to trust the extraction. #213 gave that claim a structured form and a `grep`; what it did not
-    give is anything that makes the extractor USE it. Measured on a real vault: **0 of 43**
-    extractions emitted a structured caveat, and one false one slipped through again.
+    give is anything that makes the extractor USE it.
 
     High-signal heuristic, same contract as the implementation-leak detector: it points at caveats
     worth restating as `SALVEDAD_TIPOS`, it does not judge them.
@@ -1566,7 +1527,7 @@ def stamped_scope(line: str, dentro: bool) -> bool:
     `pairs_of` would emit a pair from inside the very block that judges it, the self-referential
     loop this module's docstring says it avoids, and a pair nobody can resolve.
 
-    Latent when measured (the #344 template writes the three sub-sections as paragraphs, not
+    Latent (the #344 template writes the three sub-sections as paragraphs, not
     `###`), and nothing forbids titling one with `###`: the failure mode is phantom pairs inside
     the block that audits them. Same family as #214 — one rule, one function."""
     s = line.strip()
@@ -1580,8 +1541,7 @@ def stamped_scope(line: str, dentro: bool) -> bool:
 # `fetch_web`; those modules keep their historical names as aliases of the constants below.
 #
 # `[[target]]` — demands a delimiter (`]`, `|` or `#`) after the target and stops at the newline:
-# without that, an unclosed `[[` swallowed the NEXT link (measured 2026-08-28: one multiline
-# target, a real wikilink no longer counted as incoming, its destination reported orphan).
+# without that, an unclosed `[[` swallowed the NEXT link and its destination was reported orphan.
 LINK_RE = re.compile(r"\[\[([^\]\|#\n]+)(?=[\]\|#])")
 #: "looks like a bibcode / citekey": 4 digits + letter. Decides which link targets count as
 #: citations (coverage, orphans, bench) and which citekeys `fetch_web` accepts (INV-27).
@@ -1606,8 +1566,7 @@ def view_axes(text: str) -> dict:
     """`{(subject, emphasis): {axes answered}}` — the bullets of each view's `**Ejes:**` block (#270).
 
     #254 made the prompt derive its axes from `relevance.facets` and left no net: nothing compares
-    the axes a view **answers** against the lens it **declares**. Measured on a real vault: 257 gaps
-    over 79 views that declare a lens.
+    the axes a view **answers** against the lens it **declares**.
 
     ⚠ Only bullets INSIDE the `**Ejes:**` block count: `- **Aporte:**`, `- **Métodos:**` and
     `- **Hueco:**` are not axes, and a plain bold-bullet regex would count them. Headings inside a
@@ -1616,8 +1575,7 @@ def view_axes(text: str) -> dict:
     ⛔ The key is the PAIR `(subject, emphasis)`, and each `### Lente — <emphasis>` sub-section is
     read on its own (#395c). Keyed by subject alone, and taking only the FIRST `**Ejes:**` of the
     section, a second reading of the same subject (#239) was compared against the first lens's
-    answers: measured on a real vault, 13 views came out as *"answers NONE of its 7 axes"* with the
-    seven answered right there. It is the shape of #373 in another consumer — the parser not going
+    answers, and came out as *"answers NONE of its axes"* with them answered right there. It is the shape of #373 in another consumer — the parser not going
     in where the content lives. The base view (no emphasis) keys on `""`."""
     dentro = _offsets_en_fence(text)
     encabezados = [(m.start(), m.group(1).strip()) for m in _VISTA_HEAD.finditer(text)
@@ -1759,9 +1717,9 @@ def section_start(text: str, header: str) -> int:
     eje` ``. The bare find takes that mention, the caller slices up to the real header, and the
     section comes back empty.
 
-    Measured (2026-08-25): `lint.inventario_sin_llenar` reported a ficha whose inventory had **36
-    rows** as *"the cross-paper contrast left no trace"* — the #101 detector accusing the very step
-    that did run. A map that misattributes is worse than an empty one.
+    With the bare find, the #101 detector accused a filled inventory of *"the cross-paper contrast
+    left no trace"* — the very step that did run. A map that misattributes is worse than an empty
+    one.
 
     Trailing text after the header is allowed on purpose: real headers carry suffixes
     (`## Papers (25 · 16 sintetizados…)`, `## Verificación de citas (2026-08-25)`). What is NOT
@@ -1775,8 +1733,8 @@ def section_start(text: str, header: str) -> int:
 
     ⛔ And the suffix never CONTINUES the name (#506): a subject name may itself carry
     punctuation, so `## Vista — ica` matched `## Vista — ica-ruido` (the stripped rest `-ruido`
-    starts with punctuation). Measured on a real vault: the harvester refused to write the `ica`
-    view because it saw the `ica-ruido` prose, and `--force` would have overwritten it. A glued
+    starts with punctuation): the harvester refused to write the `ica` view because it saw the
+    `ica-ruido` prose, and `--force` would have overwritten it. A glued
     alphanumeric, `-` or `_` continues a slug; the tolerated suffix is the one that does not.
     """
     #  @inv INV-98
@@ -1838,9 +1796,8 @@ STATUS = VAULT / "STATUS.md"        # #302: estado vigente de la instancia (se R
 
 # ── #344 · el hermano de auditoría: `<nota>.verif.md` ────────────────────────────────────────────
 #
-# Medido el 2026-08-31 sobre una bóveda real: una nota de entidad pesa ~72-75 k tokens y el 71-77 %
-# de esos bytes es el bloque `## Verificación de citas`, que **no es para el lector** —es para el
-# lint y para re-auditar—. El contenido real (síntesis, inventario, régimen, huecos) son 16-21 k.
+# El bloque `## Verificación de citas` es la mayor parte de una nota de entidad y **no es para el
+# lector** —es para el lint y para re-auditar—.
 # La tabla se va al hermano; la nota conserva la línea de cabecera (que es la afirmación), las tres
 # sub-secciones de hallazgos y un puntero.
 #
@@ -1885,8 +1842,8 @@ def get_mailto() -> str:
 
     ⛔ It is NOT taken from `git config user.email` any more. That address is the operator's personal
     data, offered to git for authorship — not for egress to three third parties on every run, with
-    no opt-in and no way to turn it off. Measured on 2026-08-28: twelve live calls carried it,
-    embedded in the URL and therefore in any `raise_for_status` message and any proxy log. Sending
+    no opt-in and no way to turn it off, embedded in the URL and therefore in any
+    `raise_for_status` message and any proxy log. Sending
     a personal identifier is a decision that belongs to whoever owns the address, so it is declared
     once, in a gitignored file, exactly like the ADS token.
     """
@@ -2043,7 +2000,7 @@ def make_notes_cmd(slug: str) -> str:
 
     Two scripts printed this command with the slug interpolated and no flag, so on a theme they
     told the operator to run something that died with a raw `KeyError` blaming `stars.yaml` for a
-    slug correctly defined in `themes.yaml` (measured: 2 of 3 subjects of a real vault). A slug
+    slug correctly defined in `themes.yaml`. A slug
     defined in both configs, or in neither, gets the bare form: that is the invocation `make_notes`
     resolves (or refuses) — never a flag guessed on its behalf."""
     theme_only = subject_kinds(slug) == ("theme",)
@@ -2057,8 +2014,7 @@ def subject_refusal(slug: str, expected: str, consequence: str,
     Three scripts resolve their subject through `star_by_slug`/`theme_by_slug` on the way in, so a
     theme slug without `--theme` died with a raw `KeyError` telling the operator to define in
     `stars.yaml` a slug that is correctly defined in `themes.yaml` — following that instruction
-    adds a fake star to the config. #331 fixed it in `make_notes` only; measured again on the real
-    vault, `extraction_prompt.py ica <bib>` and `fetch_ground_truth.py ica` still blew up.
+    adds a fake star to the config. #331 fixed it in `make_notes` only.
 
     D-43: a step that cannot run **declares it**. It neither degrades (the `--theme` is not guessed
     on the operator's behalf: a concept is a different operation) nor blows up halfway, and the
@@ -2163,10 +2119,8 @@ def theme_inherited_fq(meta: dict | None) -> str | None:
     lens is *«activamente dañina»* there). If it also leaves `search_fq` undeclared it inherits the
     objective's — `database:astronomy` in an astro vault — which excludes its own literature
     **server-side, before anything is fetched**, and no `facet:` can recover it: the facet
-    classifies what was already brought in. Measured on `ica`: with the inherited `fq` **zero**
-    papers enter through the fundacional gate, with `fundacional_min_citas: 2000` declared; without
-    it, two, Comon 1994 (2297 citations, the field's founding paper) among them. That theme was
-    ingested, synthesised and **closed** without its canon, and nothing in the report said so.
+    classifies what was already brought in — with `database:astronomy` the fundacional gate never
+    opens, and a theme can close without its canon.
 
     Returns the inherited `fq` when it is worth a warning, `None` otherwise. Three ways to stay
     silent, each a real case: no `facet:` of its own (not a method theme); `search_fq` declared —
@@ -2247,10 +2201,9 @@ def theme_inherited_axes(meta: dict | None) -> list | None:
     """The global reading axes a METHOD theme silently inherits by not declaring `ejes:` (#360).
 
     The literal mirror of `theme_inherited_fq` (#351): same signal of "method theme" (its own
-    `facet:`), same three states (D-43). #307 measured what the inheritance costs — a statistics
-    theme asked the axes of an astro vault: on one real theme **6 of 8** inherited facets came back
-    empty in nearly all 12 extractions, and the axes the theme needed were never asked, scattered
-    across `aporte` with no key to compare by. `search_fq` got its warning; `ejes:` got none, and
+    `facet:`), same three states (D-43). #307: a statistics theme asked the axes of an astro vault
+    gets them back empty, and the axes it needs are never asked, scattered across `aporte` with no
+    key to compare by. `search_fq` got its warning; `ejes:` got none, and
     a theme closed with every gate green without ever proposing its axes.
 
     Returns the inherited axis names when worth a warning, `None` otherwise: no `facet:` of its own
@@ -2391,7 +2344,7 @@ _TEX_SIMBOLOS = {
 }
 # ⚠ `(?![a-zA-Z])` y no `\b`: TeX termina un comando en el primer NO-LETRA, así que
 # `\textasciitilde581` es el comando seguido de `581` — y entre `e` y `5` no hay borde de palabra,
-# por lo que `\b` no matcheaba justo el caso medido (`Gl\raisebox{-0.5ex}\textasciitilde581`).
+# por lo que `\b` no matcheaba justo el caso real (`Gl\raisebox{-0.5ex}\textasciitilde581`).
 _TEX_SIMBOLO_RE = re.compile(
     r"\\(" + "|".join(sorted(_TEX_SIMBOLOS, key=len, reverse=True)) + r")(?![a-zA-Z])")
 #: #460 · el comando con ARGUMENTO DE LAYOUT: se come el nombre **y su argumento**. `\raisebox`
@@ -2415,8 +2368,8 @@ def fold_tex(s: str) -> str:
 
     Not a TeX renderer: it drops the sub/superscript delimiters keeping the digit —the same choice
     `clean_catalog_markup` makes for ADS's `<SUB>`— and unescapes the characters BibTeX escapes.
-    Measured: three of the seven findings of the new drift category were the same title written in
-    two markups, HTML from the ADS catalog against TeX from the export, so **every** title with a
+    Without it, the same title written in two markups —HTML from the ADS catalog against TeX from
+    the export— is a finding, so **every** title with a
     subscript or an `&` was a permanent finding.
 
     ⚠ Symmetry is the point: the two sides get folded, so neither markup wins. What it cannot
@@ -2453,12 +2406,11 @@ def is_ads_bibcode(clave) -> bool:
 
     Un bibcode de ADS son **19 caracteres exactos**; una clave sintética `AAAA+Autor` —la que el
     framework le da a una fuente off-ADS— pasa la heurística laxa de `BIBCODE_LIKE_RE` pero no esto.
-    Medido: mandar las 19 sintéticas al export de ADS devuelve 404 para el lote entero, y la corrida
-    lo anunciaba como caída de red sobre papers que sí se habían evaluado bien.
+    Mandar una sintética al export de ADS devuelve 404 para el lote entero, y la corrida lo
+    anunciaba como caída de red sobre papers que sí se habían evaluado bien.
 
     #583: el largo tampoco alcanza — `1999HyvarinenSurvey` tiene 19. El último carácter de un
-    bibcode es la inicial del primer autor en mayúscula, o `.` (medido: 442/442 bibcodes reales de
-    una bóveda; esa sintética, la única que no)."""
+    bibcode es la inicial del primer autor en mayúscula, o `.`."""
     clave = str(clave or "").strip()
     return (len(clave) == ADS_BIBCODE_LEN and bool(BIBCODE_LIKE_RE.match(clave))
             and (clave[-1].isupper() or clave[-1] == "."))
@@ -2482,11 +2434,9 @@ BIBTEX_PEGADO_A_MANO = ("venue", "institucional")
 #:
 #: ⛔ #485 — `(nombre, regex sobre bibstem, dónde, desde_anio)`. La COBERTURA se declara y se compara
 #: contra el `year` de la nota, **nunca contra el volumen**: un `bibstem` es texto libre de catálogo
-#: y casi nunca lo trae (medido: los cuatro de una bóveda real dicen `JMLR`/`AISTATS`/`NIPS (…)` a
-#: secas), mientras que el año está siempre en el frontmatter. `desde_anio` es lo MEDIDO índice por
-#: índice el 2026-09-17, no lo estimado —JMLR: v1-v5 dan 0 links `.bib`, v6 (2005) da 73; NeurIPS
-#: contesta desde 1987; PMLR desde su v1 (2007)—: si mañana un venue retro-publica, el campo miente
-#: hacia el lado seguro (manda a mirar de más, no de menos).
+#: y casi nunca lo trae, mientras que el año está siempre en el frontmatter. `desde_anio` es lo
+#: MEDIDO índice por índice, no lo estimado (ver `docs/mediciones.md`): si mañana un venue
+#: retro-publica, el campo miente hacia el lado seguro (manda a mirar de más, no de menos).
 BIBTEX_VENUES = (
     ("JMLR", r"(?i)\bjmlr\b|journal of machine learning research", "jmlr.org/papers", 2005),
     ("NeurIPS", r"(?i)\bn(eur)?ips\b|neural information processing", "proceedings.neurips.cc", 1987),
@@ -2494,10 +2444,8 @@ BIBTEX_VENUES = (
 )
 
 #: #485 — los CUATRO estados del aviso, vocabulario cerrado. No son grados: son cuatro cosas
-#: distintas que el motivo tenía colapsadas de a dos en cada extremo (medido cerrando #484: sobre 6
-#: notas la tabla acertó 4, **afirmó de más 1** —`2003Sarela`, JMLR vol. 4, mandado a una página que
-#: no lo tiene— y **calló 1** —`2001Vollgraf`, `bibstem` vacío, cuyo silencio salía idéntico a «ese
-#: venue no lo publica»—).
+#: distintas que el motivo tenía colapsadas de a dos en cada extremo: afirmar de más (mandar a una
+#: página que no lo tiene) y callar (un `bibstem` vacío salía idéntico a «ese venue no lo publica»).
 BIBTEX_VENUE_ESTADOS = ("publica", "fuera_de_cobertura", "no_evaluado", "no_consta")
 
 
@@ -2512,7 +2460,7 @@ def bibtex_venue(bibstem, year=None) -> tuple:
       an empty page: they spend the trip and come back unsure whether they searched wrong.
     * `no_evaluado` — an input is missing (`bibstem`, or the `year` that decides coverage): it
       COULD NOT BE LOOKED AT, which is not a verdict. Without this state the silence reads as «does
-      not publish» — measured in `2001Vollgraf`, whose venue does publish.
+      not publish».
     * `no_consta` — `bibstem` declared and no entry matches. ⛔ The table is the list of venues this
       framework KNOWS, **not** the list of those that publish: `Kybernetika`, `ICA'99` or
       `MIT Press` are not in it, and that says nothing about them. Staying silent here turns *I do
@@ -2572,7 +2520,7 @@ BIBTEX_MONTH_RE = re.compile(r"(?i)(?:^|[,{])\s*month\s*=\s*([A-Za-z]+)\s*(?=[,}
 #:
 #: ⛔ Llamar `pendiente` a un residuo fabrica una deuda que ninguna corrida puede cerrar: la nota se
 #: re-baja en cada pasada, vuelve idéntica, y su línea queda en pantalla para siempre — la forma de
-#: ruido que #435 midió (60 de 62 propuestas eran permanentes) dentro del chequeo que #471 creó
+#: ruido de #435 (propuestas permanentes) dentro del chequeo que #471 creó
 #: para que el backlog se cerrara re-corriendo. Y llamar `descartable` a un `pendiente` borra un
 #: bloque bueno por un campo roto, que es el barrido que #453 pagó cuatro devoluciones.
 BIBTEX_NO_PEGABLE = {"macro_revista": "pendiente",
@@ -2616,9 +2564,7 @@ def bibtex_no_pegable(entry: str) -> list:
     because the rule is a single one: **the export is requested in the form in which it is PASTED,
     and a block that does not paste is not closed** (#471). #471 implemented it against ONE symptom
     —the journal macro of the ADS rail— and therefore treated the Crossref rail as closed, which
-    arrives unpasteable in two other ways. Measured by compiling a real vault's `.bib` (259
-    entries, `plain.bst`): after #471, **0** `Undefined control sequence` and still **13 warnings**
-    and **2 errors**, all of them from the Crossref/DataCite rail.
+    arrives unpasteable in two other ways.
 
     The three classes, and what `bibtex` prints for each:
 
@@ -2661,8 +2607,7 @@ def bibtex_citekey(entry: str) -> str:
 
     It exists because in a `.bib` the key IS the identifier and **two entries cannot share one**:
     `bibtex` reports `Repeated entry … I'm skipping whatever remains of this entry` and the second
-    one **disappears in silence** (measured on a real vault: 257 `\bibitem` out of 259 entries,
-    from two pairs of Hyvärinen notes). The contract already says a block is pasteable «changing
+    one **disappears in silence**. The contract already says a block is pasteable «changing
     only the key», so this does not block: it NAMES it, which is the difference between a silent
     loss and a decision by whoever pastes."""
     cabeza = str(entry or "").strip().split("{", 1)
@@ -2687,9 +2632,8 @@ def _bibtex_chunks(body: str) -> list:
     ⛔ Not line-anchored, which is what the first implementation was: ADS and DataCite export one
     field per line and **Crossref exports the whole entry on ONE line**, so the regex returned `{}`
     for every Crossref entry — and `check_paper_bibtex` reads an empty parse as agreement («what
-    one of the two does not say is not a discrepancy»). Measured on a real vault: **30 of 30**
-    Crossref entries came back with no `year`, `doi` or `title`, so the drift check of #397 was
-    blind on that whole population — the falso limpio of D-43 inside the check created to avoid
+    one of the two does not say is not a discrepancy»), so the drift check of #397 was blind on the
+    whole Crossref population — the falso limpio of D-43 inside the check created to avoid
     producing one. The `}` that closes the entry ends the scan; quotes are honoured so a `,` inside
     `"…"` does not split."""
     out, buf, depth, quoted = [], [], 0, False
@@ -2721,8 +2665,7 @@ def bibtex_fields(entry: str) -> dict:
     agrupamiento interno intacto**. ⛔ #460 — las llaves de protección (`author = {{Mayor}, Michel}`)
     las sacaba ACÁ, y eso le destruía el markup a `fold_tex`, que las necesita para saber dónde
     termina un comando: sin `}`, `\textquotedblleftStellar` es un comando de 25 letras y el borrado
-    genérico se lleva `Stellar` con él (medido: «Comment on  activity masquerading», y los tres
-    hallazgos de codificación que #459/#460 tenían que cerrar seguían abiertos). **Un plegador de
+    genérico se lleva `Stellar` con él. **Un plegador de
     markup se aplica sobre el markup INTACTO; el normalizado que borra delimitadores va después,
     nunca antes** — y hoy ese pelado es el último paso de `fold_tex`, que es el único que lo hace.
 
@@ -2795,9 +2738,8 @@ def split_fm(text: str) -> dict:
         return {}
     # ⛔ La firma dice `-> dict` y el docstring promete «dict vacío si no hay o no parsea». Un YAML
     # **válido pero no-mapa** —`---\n- a\n- b\n---`, `---\nuna frase suelta\n---`, `---\n42\n---`—
-    # devolvía la lista/str/int tal cual y reventaba a los 22 llamadores: medido el 2026-08-28, una
-    # sola nota así tumbaba `lint.main()` entero con `AttributeError` en `normalize_lists`, sin
-    # reporte, sin nombre de archivo y sin escribir ningún output. `isinstance`, no `or {}`: un
+    # devolvía la lista/str/int tal cual y reventaba a los llamadores: una sola nota así tumbaba
+    # `lint.main()` entero, sin reporte ni nombre de archivo. `isinstance`, no `or {}`: un
     # escalar truthy no cae en el `or` (el mismo argumento que `as_map` documenta al lado).
     # La otra mitad —que la nota GRITE en vez de evadir— la pone `lint.fm_error`.
     return fm if isinstance(fm, dict) else {}
@@ -2844,8 +2786,8 @@ def verification_date(text: str) -> tuple[bool, str | None]:
 
     The date lives in the heading by the skill's convention (`## Verificación de citas
     (AAAA-MM-DD)`): it is the only thing that says whether what was verified is still current or
-    fell behind a later edit. A note can accumulate **several** blocks — up to 11 measured in a
-    real vault, successive passes over different sections — so currency is the **maximum** date,
+    fell behind a later edit. A note can accumulate **several** blocks — successive passes over
+    different sections — so currency is the **maximum** date,
     not the first one: keeping the first leaves the note stale forever no matter how often it is
     re-verified.
 
@@ -2868,9 +2810,8 @@ def reanchor_date(text: str) -> str | None:
     recalculated and **keeps** the verification date on purpose (#395: re-anchoring is not
     re-verifying), so `lint.check_stale_verif` —which decides by DATE, comparing the note's prose
     against the committed version at the block's date— kept firing forever on exactly the case #480
-    exists to support: the correction DERIVED from the verification itself (#282/#257). Measured on
-    a real vault: 9 of 14 entity notes stale, 1499 pairs, and `--reanclar` reporting `0` rows to
-    move on all nine — the sibling was already in sync and what was missing was the signature.
+    exists to support: the correction DERIVED from the verification itself (#282/#257) — the
+    sibling was already in sync and what was missing was the signature.
 
     Re-dating the block would have swapped a false backlog for a false date in the artefact that
     travels (D-12/INV-82), so the two dates are kept apart: `verification_date` still reads the
@@ -3013,9 +2954,8 @@ def theme_core(facet_ok: bool, core_global: bool, citas, umbral) -> bool:
     ⛔ ONE implementation (#447). `query_ads.classify_theme` had it, and the two OFFLINE readers of
     a theme's cut —`lens_diff_offline` (what the lint prints as *Lente desincronizada*) and
     `query_ads.reclass_diff` (the `--dry-run` screen of `maintain` sub-mode D)— applied the GLOBAL
-    lens instead: on a real vault the dry-run proposed dropping 9 of 9 `extra_core` of one theme
-    and the canon of two others (−45, −20), all core by their own facet or by gate 2, and the lint
-    category was a permanent false positive on every method theme. The facet match and the global
+    lens instead: the dry-run proposed dropping papers that are core by their own facet or by
+    gate 2, and the lint category was a permanent false positive on every method theme. The facet match and the global
     verdict are computed by the caller (each has its own text pipeline); the COMBINATION lives
     here, so it cannot drift again."""
     return bool(facet_ok) and (bool(core_global) or gate2_open(citas, umbral))
@@ -3118,7 +3058,7 @@ def print_seguro(texto: str, file=None) -> None:
 
 #: #422 · prefijos de TIPO que SIMBAD antepone a un identificador. No son parte del nombre: los
 #: papers escriben `AU Mic`, `eps Eri`, `Proxima Cen`, y SIMBAD `V* AU Mic`, `V* eps Eri`,
-#: `NAME Proxima Cen`. Medido contra ADS el 2026-09-06: `AU Mic` → 406 resultados, `V* AU Mic` → 0.
+#: `NAME Proxima Cen`; con el prefijo, la query de ADS no matchea nada.
 SIMBAD_TYPE_PREFIXES = ("NAME-IAU", "NAME", "V*", "*", "**", "Cl*", "Ass*", "Cl", "EM*")
 
 
@@ -3131,11 +3071,10 @@ def norm_simbad_id(x) -> str:
     Each fed one side of the SAME check (#82), so the same identifier came out at once as MISSING
     (backlog: «SIMBAD knows it and `stars.yaml` does not declare it») and as FOREIGN (WARN: «SIMBAD
     does not list it — it may pull another object's papers»), with no declaration able to silence
-    both. Measured on 9 typical RV targets: **7** carry at least one prefixed identifier, and two
-    of them —AU Mic and eps Eri— are the examples this framework documents itself with.
+    both — and AU Mic and eps Eri, the examples this framework documents itself with, carry one.
 
     And the action the backlog proposed made things worse: `aliases:` feeds `build_query`, so
-    adding `V* AU Mic` writes a clause that matches nothing in ADS (406 → 0)."""
+    adding `V* AU Mic` writes a clause that matches nothing in ADS."""
     t = str(x or "").strip()
     for pref in SIMBAD_TYPE_PREFIXES:
         if t.upper().startswith(pref.upper() + " ") or (
@@ -3151,9 +3090,7 @@ def crossref_years(msg: dict) -> list:
 
     ⛔ `issued` is not the citation year: Crossref sets it to the EARLIER of print and online, so
     for any online-first article it hands back the online year while the citation —and the
-    journal's own volume— carry the print one. Measured on `2008Yang` (Human Brain Mapping 29,
-    2008): `issued` and `published-online` say 2007-06-27, `published-print` says 2008-06. The
-    rail was calling the correct declaration false.
+    journal's own volume— carry the print one, and the rail called the correct declaration false.
 
     All of them are returned, not just the preferred one, because a declaration matching ANY of
     them is right: which of the two a citation uses is the editor's convention, not something this
@@ -3327,9 +3264,8 @@ def write_text_atomic(path: Path, text: str) -> None:
     disco lleno a mitad de esa escritura dejaba un `.tmp<pid>` huérfano en `vault/config/`. El
     archivo real nunca se corrompía; era basura de disco, pero basura que se commitea.
 
-    Medido con `ulimit -f` sobre el writer que más escribe: el `write_text` directo dejaba una nota
-    de 16.071 B en 8.192 B, con 198 de 400 ocurrencias de la extracción LLM —lo MENOS regenerable
-    de la bóveda— desaparecidas sin aviso.
+    Un `write_text` directo cortado deja la nota truncada, con parte de la extracción LLM —lo
+    MENOS regenerable de la bóveda— desaparecida sin aviso.
 
     `os.replace` se llama como atributo del módulo `os` para que un test pueda interceptarlo."""
     _publicar(path, lambda tmp: tmp.write_text(text, encoding="utf-8"))
@@ -3339,7 +3275,7 @@ def write_bytes_atomic(path: Path, data: bytes) -> None:
     """Gemela binaria de `write_text_atomic` (PDFs).  @inv INV-90
 
     H-07: un `dest.write_bytes(...)` directo cortado a la mitad deja un PDF TRUNCADO en el destino
-    FINAL (medido: 35 B), y el único chequeo de idempotencia de la cadena es `dest.exists()`: ese
+    FINAL, y el único chequeo de idempotencia de la cadena es `dest.exists()`: ese
     PDF roto cuenta como "ya bajado" para siempre, sin forma de reintentarlo salvo borrarlo a mano."""
     _publicar(path, lambda tmp: tmp.write_bytes(data))
 
@@ -3507,8 +3443,7 @@ def save_registro(slug: str, data: dict) -> None:
     perder curación que nadie puede reconstruir.
 
     **Escritura atómica.** `write_text` directo deja el archivo torn si el proceso muere a mitad de
-    la escritura (medido: con un registro de 111 KB, 17 de 46 lecturas concurrentes vieron el
-    archivo cortado). Se escribe a un temporal en el MISMO directorio (mismo filesystem, para que
+    la escritura. Se escribe a un temporal en el MISMO directorio (mismo filesystem, para que
     el rename sea atómico en POSIX) y se publica con `os.replace`, que sustituye el archivo de una
     sola vez — un fallo antes del `replace` deja el original intacto."""
     REGISTRO.mkdir(parents=True, exist_ok=True)
@@ -4150,8 +4085,8 @@ def config_items() -> list:
     ONE enumeration of the two rails a source enters the vault by: the `sources[]` of a theme
     (off-ADS, keyed by `key`) and the `extra_core[]` of themes and stars (ADS bibcode, hard form
     D-58). #415 gave `pdf_source` to the first rail only and left the second —the PDF the user
-    drops in `raw/pdfs/` because the fetcher could not get it— with no place to declare it:
-    measured, 22 of the 59 notes with a PDF and `pdf_source: null`. Any reader of «what does the
+    drops in `raw/pdfs/` because the fetcher could not get it— with no place to declare it. Any
+    reader of «what does the
     config say about this source» enumerates through here, so the two rails cannot disagree."""
     out: list = []
     themes = load_themes() or {}
@@ -4182,9 +4117,8 @@ def declared_pdf_sources() -> dict:
     is a candidate version difference, not an error of the note— and the `sources:` rail was the
     one lane that could not declare it: no fetcher runs for a PDF the user brought, and there is no
     arXiv stamp on a publisher's copy, so `pdf_source_info` returned `None` (= UNKNOWN) forever.
-    Measured on a real vault: 38 of the 57 notes with a PDF and no provenance came in through this
-    rail, and the value is not re-derivable for them — nobody can recover it except by opening the
-    file and looking at the cover.
+    The value is not re-derivable for them — nobody can recover it except by opening the file and
+    looking at the cover.
 
     It is the versioned half of the rule, which is why it lives in the config and not in `build/`:
     «`build/` holds what is regenerable, the registry holds what is not». Values off
@@ -4227,8 +4161,8 @@ def load_discarded_aliases(meta: dict, *, entry: str = "?") -> list:
     The #82 check compares what SIMBAD knows against what `stars.yaml` declares, and its own
     message tells you to leave the machine-catalogue identifiers (`Gaia DR3`, `2MASS J`) out — so
     it **instructs you to discard and then reports the discard as debt**, forever.
-    Measured on `hd_40307` with the curation done and documented one identifier at a time in a YAML
-    comment: 18 identifiers reported anyway. Not a rare case — SIMBAD returns machine-catalogue ids
+    Even with the curation done and documented identifier by identifier, they are reported anyway.
+    Not a rare case — SIMBAD returns machine-catalogue ids
     for every star — so the category stayed permanently red, and a category that cries wolf stops
     being read: precisely the one whose own text says that a missing alias is a paper that never
     shows up, silently.
@@ -4267,8 +4201,7 @@ def _discarded_alias_error(entry: str, ids: list, motivo: str) -> str:
 # that says nothing about an axis is indistinguishable from "somebody looked and there is nothing".
 # That is the same false clean D-34 chases in hypotheses (*"no evidence" is not "no evidence
 # exists"*) and the one `discover`'s coverage report solves by telling "ran with N" from "DID NOT
-# RUN". Measured in a real vault: 141 of 908 notes are claimed by 2+ subjects and NOT ONE has a
-# second extraction section.
+# RUN" — and a paper claimed by 2+ subjects is the frequent case, not the exception.
 #
 # `vistas[]` are READINGS; `stars` / `thesis_links` / `methods` stay CLAIMS (`make_notes` merges
 # those add-only without reading anything). Only the extraction writes a view — never the retro-link.
@@ -4284,14 +4217,13 @@ VISTA_FUENTES = ("pdf", "abstract")
 #: Existe porque una salvedad inventada no la miraba nadie: `verify-citations` descompone la nota en
 #: pares (afirmación, `[[bibcode]]`) y una salvedad del tipo *«el `.txt` perdió este símbolo»* no
 #: lleva bibcode —es una afirmación sobre el ARTEFACTO, no sobre el paper— así que se cae del
-#: fan-out por construcción. Medido: un extractor afirmó una degradación del `.txt` que no existía,
-#: invocando #205 para darse autoridad, y lo cazó un duplicado ACCIDENTAL de la extracción.
+#: fan-out por construcción: una degradación del `.txt` inventada por el extractor no la ve nadie.
 #: ⚠ Cerrado y chico a propósito: lo que no es decidible por un script no entra acá — se escribe
 #: como salvedad de prosa y la nota la marca **NO VERIFICADA**, que es la otra mitad del arreglo.
 #: #453 · la marca con la que el cosechador publica una salvedad YA ESTRUCTURADA cuyo chequeo no
 #: pudo correr (D-43). La escribe `harvest_views.split_salvedades` y la lee el lint para NO contarla
 #: como deuda: estructurarla es exactamente lo que la categoría pide, y listarla igual deja un
-#: backlog que ninguna acción cierra (medido: 2 de 44 al cobrar #452).
+#: backlog que ninguna acción cierra.
 NO_EVALUABLE_MARCA = "(no evaluable:"
 
 SALVEDAD_TIPOS = {
@@ -4301,7 +4233,7 @@ SALVEDAD_TIPOS = {
     # `bibcode` opcional cuando la salvedad habla del PDF de OTRA fuente. Lo deciden los tres
     # testigos de `doc_on_disk`, así que es la más decidible que escribe el extractor — y era la
     # única que quedaba en prosa libre: sobre prosa, el detector de #449 tiene que ADIVINAR de
-    # quién habla la oración, y midió 5 hallazgos con precisión 0/5 sobre 268 notas. Estructurada,
+    # quién habla la oración. Estructurada,
     # el bibcode va adentro y no hay nada que adivinar.
     "pdf_leido": "documento",
     # #497 · la CUARTA clase de artefacto sobre el que un extractor escribe salvedades: la bóveda
@@ -4311,17 +4243,15 @@ SALVEDAD_TIPOS = {
     # y `check_salvedad` sólo evaluaba los tres de arriba. ⛔ Y envejece por construcción, que es lo
     # que la distingue: el extractor anota «la nota todavía publica X» PORQUE X está mal, la
     # operación siguiente lo arregla, y la extracción es inmutable y versionada (#311) — así que la
-    # nota queda estampando para siempre una afirmación falsa SOBRE SÍ MISMA (medido: `2011Remes`
-    # afirma un bloque de pendiente y un `## Abstract` vacío que hace rato no tiene).
+    # nota queda estampando para siempre una afirmación falsa SOBRE SÍ MISMA.
     "nota_estado": "literal",
 }
 
 #: #456 · el SEGUNDO eje de `pdf_leido`, opcional: de qué documento se construyó la VISTA. No lo
 #: decide el disco —lo declara la lectura— y su testigo es la firma del reemplazo
 #: (`pdf_reemplazo.sha_anterior`/`fecha`, #441). Existe porque en un PDF reemplazado las dos cosas
-#: NO coinciden y entonces el tipo de una sola pregunta no tiene valor correcto: medido, **27
-#: salvedades** cuyo campo diría `publisher` (lo que hay en disco) y cuya propia evidencia dice
-#: *preprint* (lo que se leyó). Las dos mitades son ciertas sobre cosas distintas.
+#: NO coinciden y entonces el tipo de una sola pregunta no tiene valor correcto: el campo diría
+#: `publisher` (lo que hay en disco) y la evidencia dice *preprint* (lo que se leyó). Las dos mitades son ciertas sobre cosas distintas.
 SALVEDAD_CAMPO_LEIDO = "leido"
 
 
@@ -4339,8 +4269,7 @@ def vista_fecha_str(vista: dict) -> dict:
     """The view with `fecha` (and `previa.fecha`) as an ISO **string** (#481).
 
     YAML parses an unquoted `fecha: 2026-08-30` as a `date`, and every writer that round-trips the
-    block through `yaml.safe_dump` keeps it unquoted; measured: 1 of 336 views of a real vault, so
-    any `== '2026-08-30'` (the offline lens diff, D-49) left it out. ONE normaliser, applied by the
+    block through `yaml.safe_dump` keeps it unquoted, so any `== '2026-08-30'` (the offline lens diff, D-49) left it out. ONE normaliser, applied by the
     reader (`load_vistas`) and by the writer (`harvest_views.upsert_view`)."""
     out = dict(vista)
     if isinstance(out.get("previa"), dict):
@@ -4429,7 +4358,6 @@ def alias_bibcodes() -> set:
     `--rename-paper` the next run of the chain **re-downloaded the preprint under its old bibcode** —
     a byte-identical copy of a PDF already on disk, which the lint then reports as a hanging
     artefact **for ever** (it has no note, and it cannot have one: #229 blocks the second note).
-    Measured in a real vault: the leftover pair was dated a day AFTER the consolidation.
 
     ⚠ A bibcode that HAS its own note is not returned: that case is the blocking one of #229 and
     must not be silently skipped by a fetcher."""
@@ -4473,7 +4401,7 @@ def load_no_vista(meta: dict, *, entry: str = "?") -> list:
 
     ⛔ #256 — this field was parsed and its result consumed by nobody: the lint read it inside the
     `reclamos - declaradas` branch, which the stub seeding of #188 leaves ALWAYS empty (one
-    `vistas[]` entry per claim). Measured on a real corpus: 0 of 138 notes could reach it. The hatch
+    `vistas[]` entry per claim), so no note could reach it. The hatch
     now decides over the DATELESS view, which is where a pending claim actually lives.
 
     @inv INV-145"""
@@ -4500,7 +4428,7 @@ def load_no_sintetizado(meta: dict, *, entry: str = "?") -> list:
     """`no_sintetizado: [{sujeto, motivo}]` — the paper extracted and deliberately not synthesised,
     PER SUBJECT (#553). Same form and reason as `no_vista`: the hatch belongs to the pair (paper,
     subject), and the scalar of #75 let the motive one subject wrote («HD 40307 is a row…») rule
-    over every other subject sharing the paper — measured, 15 of 52 hatched notes had ≥2 subjects.
+    over every other subject sharing the paper.
 
     ⛔ No tolerant reader: the scalar raises and the lint blocks it (`schema_retirado`); its
     one-use migrator lives in the git tag (#624)."""
@@ -4528,11 +4456,10 @@ def load_reviewed_second_hand(meta: dict, *, entry: str = "?") -> list:
     """`segunda_mano_revisada: [{ref, que, motivo}]` — a second-hand crossing REVIEWED AND REJECTED.
 
     WHY IT EXISTS (#433). The second-hand detector (#279/#350) is recall-only on purpose, and that
-    was fine until someone read a whole category one by one: of **66 findings, 48 stayed listed**
-    after every single one had been looked at. 40 of those are numeric collisions — the block does
-    not take its value from anybody, so **there is nothing anyone can write to close them** («6,3»
-    of eta_Earth against 6,3 pc of distance; 4000 K against 4000 CCD lines) — and the note had no
-    way to record that someone had checked. A category that cannot reach zero measures the firing
+    was fine until someone read a whole category one by one: numeric collisions —the block does
+    not take its value from anybody— leave **nothing anyone can write to close them**, and the note
+    had no way to record that someone had checked. A category that cannot reach zero measures the
+    firing
     rate of the detector, not the debt of the vault, and the first time it cries wolf the whole
     category stops being read.
 
@@ -4563,9 +4490,8 @@ def load_verified_second_hand(meta: dict, *, entry: str = "?") -> list:
     `proposals.unconfirmed_second_hand` (#590) proposes *open B's PDF* for every value whose number
     B's `.txt` does not show, and the silence does not accuse: the `.txt` loses tables-as-image, B
     may give the value in another unit (3846 d for A's 10.5 yr), the owner may be a calibration.
-    Without a place to sign the check, the row came back on every run — the shape of #435, where 60
-    of 62 proposals were permanent and the category stopped being read. Measured in the validation
-    of #590: 7 of 10 rows checked by hand were false alarms, and none of them could leave the list.
+    Without a place to sign the check, the row came back on every run — the shape of #435, where
+    permanent proposals made the category stop being read.
 
     Sibling of `segunda_mano_revisada` (#433): identity `(ref, que)` matched by
     `reviewed_second_hand`, scoped to the note of A, HARD FORM (D-58). `localizador` is required
@@ -4602,8 +4528,7 @@ def load_reviewed_warn(meta: dict, *, entry: str = "?") -> list:
     The sibling of `segunda_mano_revisada` (#433) and `metadata_revisada` (#463) for the three WARN
     that are «reviewed by hand»: without a place to sign the review, the hit somebody read and
     discarded is listed exactly like the one nobody looked at, and the category measures its firing
-    rate (measured: 25 of 25 implementation-leak hits were the paper's own parameter, cited with a
-    page). ⛔ The identity is `(categoria, ancla)` and the anchor hashes the BLOCK the hit lives in
+    rate. ⛔ The identity is `(categoria, ancla)` and the anchor hashes the BLOCK the hit lives in
     (`lib_blocks.warn_anchor`): the signature covers a STATE, so if the prose changes the hit comes
     back — unlike #433, whose `(ref, que)` survives a reflow, here the thing judged IS the prose.
     Same hard form as its siblings (D-58): no motive or a category outside `WARN_REVISABLE` aborts."""
@@ -4662,7 +4587,7 @@ def signed_text_matches(declared, actual) -> bool:
     ends in the `…` the report's cut leaves (#481): a bare prefix with no floor let a short `que`
     («P») silence every row of its `ref` and never come out orphan (AUD-604). Empty never matches.
     A bare text of exactly `LEGACY_CUT` chars is the pre-#481 cut (`_q[:80]`, no `…`) and still
-    matches as a prefix: measured, 5 live signatures of a real vault are that cut."""
+    matches as a prefix: live signatures carry that cut."""
     def _norm(t) -> str:
         """Whitespace collapsed and casefolded."""
         return " ".join(str(t or "").split()).casefold()
@@ -4745,10 +4670,8 @@ def theme_axes(meta) -> list | None:
     ⛔ D-26 made a method theme classify with its **own facet** because the global lens is
     *"actively harmful"* there; #254 then derived the extractor's reading axes from the lens — the
     **global** one. Nobody did the symmetric half, so a statistics theme was asked the axes of an
-    astronomy vault. Measured over 32 extractions of one method theme: `rv`, `activity`, `planet`
-    and `discovery` came back populated in **7 of 32** (the same 7: its only astro sources), while
-    the axes the theme actually needed —identifiability, heteroscedasticity per epoch and per
-    channel, what whitening guarantees— were **never asked**, so they came back scattered across
+    astronomy vault: the global axes come back empty outside its astro sources, while the axes the
+    theme actually needs are **never asked**, so they come back scattered across
     `aporte` with no key to compare them by. That is #254's own argument one level down: a key the
     view does not carry is indistinguishable from *"somebody looked and there is nothing"*.
 
@@ -4777,9 +4700,8 @@ def pdf_slug(stem: str, prefiere: str | None = None) -> str | None:
     inverted — instead of catching a degraded reading, the framework produced one.
 
     It bites exactly the retro-tagged population, which is by definition the paper that was already
-    in the corpus under **another** subject. Measured on a real theme: 7 of 31, the founding core,
-    two of them 500+ page books whose `alcance` says to read by index and cite by page — unreadable
-    from an abstract.
+    in the corpus under **another** subject — often the founding core, including books whose
+    `alcance` says to read by index and cite by page, unreadable from an abstract.
 
     Declared precedence, same as `artefacto_en_otro_slug`: the preferred slug first (that is where
     the chain put it), then the lexicographically smallest, so the answer does not depend on ingest
@@ -4796,7 +4718,7 @@ def txt_slug(stem: str, prefiere: str | None = None) -> str | None:
     The twin of `pdf_slug`, for the same population and the same reason: #305 fixed the PDF
     resolution across slugs and left the `.txt` resolved under the SUBJECT's slug only, so the
     extraction prompt said «there is no index, no grep to run» about a paper whose `.txt` sat under
-    another slug — measured on a real vault, 26 of 208 theme claims, across five themes. The
+    another slug. The
     extractor still reads the PDF (#205), but loses the index it uses to LOCATE, and in a long paper
     that is the difference between grepping a term and walking 30 pages.
 
@@ -4818,7 +4740,7 @@ def txt_slug(stem: str, prefiere: str | None = None) -> str | None:
 #: población que en una bóveda astro es de dominio —disco de debris, disco delgado/grueso de la
 #: Galaxia, disco circunestelar— y `publicad[oa]` pelado es ubicuo en prosa científica («valores
 #: publicados», «su disco ya estaba publicado»). El cruce de las dos no dice nada sobre qué archivo
-#: hay en disco: medido en la instancia, **5 hallazgos sobre 268 notas, precisión 0/5**. Lo que
+#: hay en disco. Lo que
 #: distingue a los verdaderos es que la frase **predica sobre el archivo**: un sustantivo de
 #: documento, `en disco`, y una cópula. «(en disco desde el 2026-09-12)» no la tiene.
 _DOC_NOMBRE = r"(?:pdf|documento|copia|archivo|fuente|versi[oó]n)"
@@ -4834,10 +4756,10 @@ _PREPRINT_RE = re.compile(r"(?i)\b(?:pre-?print|e-?print)\b")
 _PUBLICADO_RE = re.compile(r"(?i)(?:versi[oó]n\s+publicada|copia\s+del\s+editor|del\s+editor|"
                            r"publicad[oa]|tipografiad[oa])")
 #: #452 · la NEGACIÓN del lado *publicado*, que faltaba. Existía sólo `_NO_PREPRINT_RE`, y la
-#: asimetría tenía dos efectos medidos y opuestos sobre el mismo corpus: **invertía** la salvedad
-#: que dice «es la versión de los autores para la web …, NO el tipografiado del editor» (clasificada
-#: *publicado*), y **perdía 47 de 51** de la forma más común —«es el PREPRINT de arXiv …, no la
-#: versión publicada en A&A»—, que nombra las dos y por eso salía ambigua.
+#: asimetría tenía dos efectos opuestos sobre el mismo corpus: **invertía** la salvedad que dice
+#: «es la versión de los autores para la web …, NO el tipografiado del editor» (clasificada
+#: *publicado*), y **perdía** la forma más común —«es el PREPRINT de arXiv …, no la versión
+#: publicada en A&A»—, que nombra las dos y por eso salía ambigua.
 _NO_PUBLICADO_RE = re.compile(
     r"(?i)\bno\s+(?:es\s+)?(?:el|la|lo)?\s*(?:versi[oó]n\s+|copia\s+)?"
     r"(?:publicad[oa]|tipografiad[oa]|del\s+editor)(?:\s+del\s+editor)?"
@@ -4851,20 +4773,19 @@ _WEB_RE = re.compile(
     r"author(?:\u2019s|\'s)?\s+manuscript)")
 #: #452 · la CLÁUSULA: la clase se decide sobre la oración que el ancla matcheó, no sobre el bloque.
 #: El bloque sigue siendo la unidad de la **negación vecina** (#224) —por eso se une antes de
-#: partir: un hard-wrap no es un límite de oración—, pero no del vocabulario: medido, la clase de
-#: una salvedad la decidía una mención de la paginación de la revista **300 caracteres más
-#: adelante**, sobre una cláusula que dice literalmente lo contrario.
+#: partir: un hard-wrap no es un límite de oración—, pero no del vocabulario: la clase de una
+#: salvedad la decidía una mención lejana, sobre una cláusula que dice literalmente lo contrario.
 _CLAUSULA_SEP = re.compile(r"(?<=[.;])\s+")
 
 
 def _clause_class(clausula: str) -> str | None:
     """`«preprint» | «publicado» | «web» | None` for ONE clause (#452).
 
-    ⛔ The negation is applied on BOTH sides, and that asymmetry was measured twice over on the same
-    corpus, in opposite directions: with only the preprint half, «it is the authors' web version …,
+    ⛔ The negation is applied on BOTH sides; the asymmetry failed twice on the same corpus, in
+    opposite directions: with only the preprint half, «it is the authors' web version …,
     NOT the publisher's typeset one» came out *publicado* —the caveat inverted— and the corpus's
     most common shape, «it is the arXiv PREPRINT …, not the version published in A&A», named both
-    and was dropped as ambiguous: **47 of 51**.
+    and was dropped as ambiguous.
 
     ⚠ `web` is checked first and on purpose: an author's manuscript is neither of the other two, no
     witness on disk decides it (`pdf_source: web` is a snapshot), and calling it *publicado* is how
@@ -4883,9 +4804,8 @@ def deciding_clause(linea: str, clase: str) -> str:
 
     ⛔ The screen where something gets signed shows the evidence that produced the decision, not the
     start of the text. `doc_claims_on_disk` emits the LINE, and a caveat's bullet is one long line:
-    measured, **10 of 37** correct proposals read as contradictory because the clause that decided
-    the class («the PDF on disk is today the publisher's copy») sits 400 characters after the
-    opening («this view was read from the arXiv preprint»), and the extract cut at ~110. It is #289
+    correct proposals read as contradictory because the clause that decided the class sits far
+    after the opening, past where the extract is cut. It is #289
     on another surface: the operator could not tell «the clause decided it» from «the detector got
     it wrong» without opening the JSON.
 
@@ -4905,12 +4825,11 @@ def doc_claims_on_disk(text: str, stem: str = "") -> list:
     construction (#213) and `contrast --validar` looks at quotes, not at prose about the disk. It
     is also the most decidable claim a note makes —`pdf_source`, `pdf_reemplazo` and the arXiv mark
     in the `.txt` are three machine-readable witnesses— and it survived a replacement that changed
-    all three: measured, 43 caveats in 31 notes still saying the PDF on disk was the preprint after
-    `replace_pdf` put the publisher's copy there.
+    all three, still saying the PDF on disk was the preprint after `replace_pdf` put the
+    publisher's copy there.
 
-    ⛔ **Four narrowings, one per false positive the instance measured** — the first version scored
-    **0/5 over 268 notes**, and the condition to return it was literally «it fires on a coherent
-    note»:
+    ⛔ **Four narrowings, one per false positive the instance showed** — the condition to return
+    the first version was literally «it fires on a coherent note»:
 
     - the **frontmatter** and the `SECCIONES_ESTAMPADAS` are not prose of the vault (#214): the
       worst of the five was a YAML comment, and another lived in a stamped translation;
@@ -5043,8 +4962,7 @@ def bibcode_slugs(stem: str) -> dict:
     paper can have its PDF under one slug and its `.txt` under two. `replace_pdf` enumerated the
     slugs from the PDFs and re-extracted only there, leaving the other `.txt` describing the
     preprint while the PDF described the published copy — the exact invariant D-18/D-20 makes
-    BLOCKING, produced by the command that exists to close that backlog (measured: 3 of 31
-    replacements in one run). `pdf_slug`/`txt_slug`/`best_pdf` resolve ONE copy for READING and
+    BLOCKING, produced by the command that exists to close that backlog. `pdf_slug`/`txt_slug`/`best_pdf` resolve ONE copy for READING and
     are right to; this is the enumeration for WRITING."""
     return {"pdf": ({c.parent.name for c in PDFS.glob(f"*/{stem}.pdf")} if PDFS.exists() else set()),
             "txt": ({c.parent.name for c in FULLTEXT.glob(f"*/{stem}.txt")} if FULLTEXT.exists()
@@ -5054,8 +4972,7 @@ def bibcode_slugs(stem: str) -> dict:
 def artefacto_en_otro_slug(base: Path, slug: str, stem: str, sufijo: str):
     """El mismo artefacto (`<stem><sufijo>`) ya bajado bajo OTRO slug, o `None` (D-18).
 
-    Un paper relevante para dos sujetos se bajaba dos veces — medido: 33 copias en la instancia
-    real. El archivo es idéntico (mismo bibcode), y la red es a la vez el recurso caro y el que
+    Un paper relevante para dos sujetos se bajaba dos veces. El archivo es idéntico (mismo bibcode), y la red es a la vez el recurso caro y el que
     puede fallar: re-bajarlo no agrega nada y agrega un modo de falla. Se devuelve la ruta para
     que el llamador copie (no symlink: `raw/` viaja en git-lfs y un enlace roto es peor que una
     copia).
@@ -5232,9 +5149,8 @@ def save_barrido(slug: str, barrido: dict) -> None:
 
     ⛔ #251 — «acumulativo como `busquedas`» era, hasta 1.97.0, sólo la parte de appendear: la
     entrada se guardaba **tal cual**, sin el `n_nuevos`/`n_ya_estaban` que ES D-28 («traje 40» vs
-    «traje 40 y 38 ya estaban»). Medido en `hd_40307`: tres entradas idénticas —misma fecha, misma
-    query, los mismos 83 bibcodes— declarando las tres `n_nuevos: 83`, o sea 249 hallazgos donde
-    hubo 83. El `n_nuevos` que escribía el llamador era además **redundante con `len(bibcodes)`**,
+    «traje 40 y 38 ya estaban»): entradas idénticas sumaban hallazgos donde no los hubo. El
+    `n_nuevos` que escribía el llamador era además **redundante con `len(bibcodes)`**,
     así que redefinirlo con la semántica de D-28 no pierde información.
 
     @inv INV-118"""
@@ -5545,7 +5461,7 @@ def flags_usados(args, ap=None) -> list:
 # Regla de COMBINACIÓN de facetas — declarativa (objective.yaml), no hardcodeada (#15). El default
 # histórico es OR (≥1 faceta cualquiera), calibrado para el pool chico de la query directa; el
 # citation chaining amplía el pool a "todo lo que el grafo conecta y menciona al sujeto", mucho más
-# ruidoso, y ahí una faceta laxa deja de discriminar (medido: exigir la faceta del eje recorta 928→254).
+# ruidoso, y ahí una faceta laxa deja de discriminar.
 # La palanca es la OBLIGATORIEDAD, no podar regex. Cada instancia declara cuáles de SUS facetas son
 # load-bearing sin tocar el framework:
 #   relevance.require:    [faceta, ...]  → AND: TODAS deben matchear
@@ -5741,7 +5657,7 @@ def lens_current(slug: str | None = None) -> dict:
     Con `slug` de un TEMA suma su `regla_tema` (#106), y hace falta para que la comparación sea
     entre iguales: el registro de un tema **sí** la guarda, así que sin esto `lens_delta` veía
     "estaba y ya no" y reportaba `facet` cambiada y `fundacional_min_citas → sin declarar` sobre un
-    tema que las declara las dos. Medido en una bóveda real, y **los tests unitarios no lo vieron**
+    tema que las declara las dos. **Los tests unitarios no lo vieron**
     porque cubrían "ninguno de los dos lados la trae", no "sólo uno"."""
     lente = lens_shape(as_map(load_objective().get("relevance")))
     if slug:
@@ -6167,5 +6083,5 @@ def refuse_dry_run(ap, modo: str) -> None:
 
     A script that declares `--dry-run` promises it writes nothing IN EVERY MODE. A mode either
     threads the flag through its writers or calls this; ignoring it reads as «nothing was written»
-    over a run that wrote (measured: a harvest «preview» left 5 files, +177 lines)."""
+    over a run that wrote."""
     ap.error(f"`--dry-run` no está soportado en este modo ({modo}): rehúso en vez de escribir (#507)")
