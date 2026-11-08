@@ -299,7 +299,7 @@
 ## ❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
-## ❝ Las DOS lecturas del mismo PDF no coinciden: `pdftotext` dice una cosa y la extracción otra — andá a la página (#333, backlog) (0)
+## ❝ Cita que sólo la extracción atestigua y el `.txt` no confirma: las dos lecturas del mismo PDF no coinciden, o la máquina la copió de la extracción (`## Vista`) y no tiene testigo propio — andá a la página (#333/#454/#634, backlog) (0)
 > sobre 0 citas «…» de ≥40 caracteres con fuente chequeable
 
 ## ❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra) (0)

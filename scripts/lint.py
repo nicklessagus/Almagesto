@@ -4603,11 +4603,11 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                         continue
                     _amb += cfg.reviewed_quote_entry(_bibs_c, _c)
                 if _ver == "sin_testigo_propio":
-                    # ⛔ #454 — la cita la copió la MÁQUINA de la extracción (el bloque de
-                    # salvedades de una `## Vista`), así que juzgarla contra esa extracción es
+                    # ⛔ #454/#634 — la cita la copió la MÁQUINA de la extracción (toda la
+                    # `## Vista` de una nota de paper), así que juzgarla contra esa extracción es
                     # compararla consigo misma: el paso 2 la aprobaría SIEMPRE como
-                    # `txt_degradado`. Su único testigo independiente es el `.txt`, y no la dice.
-                    # Medido: una cita que la fuente no dice, publicada con `lint` rc 0.
+                    # `txt_degradado`. Su único testigo independiente es el `.txt`, y no la dice:
+                    # no evaluable con su motivo (D-43), visible acá como backlog.
                     cita_txt_discrepa.append(
                         (stem, f"L{_ln}: «{_corte}» — la escribió la máquina DESDE la extracción "
                                f"de {', '.join(_bibs_c) or 'su fuente'}, así que esa extracción no "
@@ -7788,7 +7788,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('cola_tema', '⏳ Par (paper, tema) EN COLA del tema, declarado y fechado — deuda con dueño (#558, backlog)', SEV_BACKLOG, tuple(found['cola_tema']), poblacion='papers'),
         Categoria('cita_no_verbatim', '❝ Cita textual que no está en su fuente: no es verbatim, o es de otra (#220, backlog)', SEV_BACKLOG, tuple(found['cita_no_verbatim']), poblacion='citas'),
         Categoria('cita_txt_degradado', '❝ Cita que la fuente SÍ dice y el `.txt` parte: el defecto es de la EXTRACCIÓN, no de la nota (#288, backlog)', SEV_BACKLOG, tuple(found['cita_txt_degradado']), poblacion='citas'),
-        Categoria('cita_txt_discrepa', '❝ Las DOS lecturas del mismo PDF no coinciden: `pdftotext` dice una cosa y la extracción otra — andá a la página (#333, backlog)', SEV_BACKLOG, tuple(found['cita_txt_discrepa']), poblacion='citas'),
+        Categoria('cita_txt_discrepa', '❝ Cita que sólo la extracción atestigua y el `.txt` no confirma: las dos lecturas del mismo PDF no coinciden, o la máquina la copió de la extracción (`## Vista`) y no tiene testigo propio — andá a la página (#333/#454/#634, backlog)', SEV_BACKLOG, tuple(found['cita_txt_discrepa']), poblacion='citas'),
         Categoria('cita_opaca', '❝ Cita textual NO EVALUABLE: sin `.txt` o con OCR (#220, se declara, no cuenta en contra)', SEV_BACKLOG, tuple(found['cita_opaca']), poblacion='citas'),
         Categoria('verificar_pdf', '🔎 Marcada para chequear contra el PDF: una auditoría no pudo cerrarla (#225, backlog)', SEV_BACKLOG, tuple(found['verificar_pdf']), poblacion='notas'),
         Categoria('forma_rota', '⛔ Forma del artefacto: fila de tabla que NO renderiza (contenido invisible para el lector)', SEV_BLOQUEANTE, tuple(found['forma_rota']), poblacion='notas'),

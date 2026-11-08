@@ -560,7 +560,8 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   Medido abriendo cinco hallazgos uno por uno: **cuatro eran el artefacto, uno era la nota**.
   ⛔ Y desde #267 se chequean también las citas del **frontmatter**: `disputes[].posiciones[].value`
   contra **su propia** `ref` —juntar los refs de la nota fabricaría una atribución cruzada— y
-  `disputes[].note` contra cualquiera de las fuentes de esa disputa (misma regla que el cuerpo).
+  `disputes[].note` contra cualquiera de las fuentes de esa disputa (misma regla que el cuerpo),
+  y la firma `cita_revisada` las exime igual que en el cuerpo (#633).
   Quedaban fuera de todo, porque `pairs_of` opera sobre el cuerpo: medido, 23 posiciones con `ref:`
   y 6 citas textuales sin mirar en una ficha real, y una corrección de la verificación que aterrizó
   sólo en la prosa y dejó el frontmatter —la capa que el contrato llama auditable— con el número
@@ -568,7 +569,11 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   (`«A … B»`) se chequea por fragmentos; la **página** no se puede chequear así y se dice (media red
   declarada vale más que ninguna). Existe porque el eje *¿la fuente dice esto?* es **ortogonal** a
   *¿la cita es verbatim?*: seis citas no-verbatim volvieron `soportada`, correctamente.
-- **Las DOS lecturas del mismo PDF no coinciden** (#333, backlog): la extracción aprueba la cita
+- **Cita que sólo la extracción atestigua** (#333/#454/#634, backlog). ⛔ **Sin testigo propio
+  (#454/#634):** toda la `## Vista` de una nota de paper (con sus `### Lente`) la copia la máquina
+  del JSON, así que ahí la extracción no es testigo; si el `.txt` calla, la cita cae acá, no
+  evaluable con su motivo (D-43) y con la marca `⚠verificar en el PDF`, nunca como `txt_degradado`.
+  **Las DOS lecturas del mismo PDF no coinciden** (#333): la extracción aprueba la cita
   —o sea que el detector de arriba dice `✅`— y el `.txt` de **esa misma fuente** trae un prefijo
   largo de la cita y **sigue distinto**. ⛔ La discrepancia **no** es «PDF vs `.txt`»: el PDF es la
   fuente y siempre tiene razón; lo que difiere es **quién lo leyó** —`pdftotext`, determinista, y un

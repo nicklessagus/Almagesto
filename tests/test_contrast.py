@@ -1028,17 +1028,39 @@ def test_454_la_cita_de_una_SALVEDAD_no_se_aprueba_contra_su_propia_extraccion(t
     assert not r["alteradas"], "no bloquea: la evidencia es la AUSENCIA de testigo (#205)"
 
 
-def test_454_la_misma_cita_en_PROSA_de_la_nota_sigue_aprobandose(toy_vault, capsys):
+def test_454_la_misma_cita_en_PROSA_de_una_ficha_sigue_aprobandose(toy_vault, capsys):
     """#454 — la regla es sobre QUIÉN escribió el bloque, no sobre la cita: la que el sintetizador
-    re-tipeó tiene a la extracción de testigo real (#315), y eso no se toca."""
+    re-tipeó en una ficha o concepto tiene a la extracción de testigo real (#315), y eso no se toca.
+    (#634: dentro de la `## Vista` de una nota de paper NO — esa sección la copió la máquina.)"""
+    _extraccion("ica_ruido", "2013Voss")
+    _txt("ica_ruido", "2013Voss")
+    nota = _nota_323("ica-ruido", f"El paper dice «{LARGA}» [[2013Voss]].")
+    r = ct.validar(nota, mostrar=True)
+    assert r["copiadas"] == 0 and not r["discrepan"] and not r["alteradas"]
+
+
+def test_634_toda_la_VISTA_de_una_nota_de_paper_no_tiene_testigo_en_su_extraccion(toy_vault, capsys):
+    """⛔ #634 — #454 cubría sólo el bloque de salvedades, pero TODO el cuerpo de `## Vista — <sujeto>`
+    (y sus `### Lente — …`) lo escribe `harvest_views` copiando el JSON: testigo y juzgado son el
+    mismo archivo en toda la sección. Tesis: 3 047 de 3 278 `txt_degradado` estaban en vistas, y
+    7 citas no verbatim contra el PDF caían todas ahí. La cita cuyo `.txt` calla sale sin testigo
+    propio (D-43), con la marca, y no bloquea."""
+    import lint as lt
     _extraccion("ica_ruido", "2013Voss")
     _txt("ica_ruido", "2013Voss")
     nota = cfg.PAPERS / "2013Voss.md"
     nota.parent.mkdir(parents=True, exist_ok=True)
     nota.write_text("---\ntags: [paper]\nbibcode: 2013Voss\n---\n\n# 2013Voss\n\n"
-                    f"## Vista — ICA ruidosa\n\nEl paper dice «{LARGA}».\n", encoding="utf-8")
+                    "## Vista — ICA ruidosa\n\n| Qué | Valor | Localizador |\n|---|---|---|\n"
+                    f"| blanqueo | «{LARGA}» | p. 4 |\n\n### Lente — identificabilidad\n\n"
+                    f"- dice «{LARGA}»\n", encoding="utf-8")
     r = ct.validar(nota, mostrar=True)
-    assert r["copiadas"] == 0 and not r["discrepan"] and not r["alteradas"]
+    assert r["copiadas"] == 2 and len(r["discrepan"]) == 2 and not r["alteradas"], r
+    assert cfg.VERIFICAR_PDF_MARK in capsys.readouterr().out
+    rep = lt.collect()
+    assert not [m for s, m in rep.por_clave("cita_txt_degradado").items if s == "2013Voss"]
+    assert len([m for s, m in rep.por_clave("cita_txt_discrepa").items
+                if s == "2013Voss" and "no es testigo" in m]) == 2
 
 
 # ── #490 · pre-flight sobre el DIFF de la corrección ────────────────────────────────────────────

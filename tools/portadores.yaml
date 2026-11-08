@@ -1102,6 +1102,22 @@ portadores:
           Hospeda `theme_core` —la combinación de la regla, UNA implementación (#447)— que
           `classify_theme` llama; no clasifica ningún corpus ni recorre caminos de descubrimiento.
 
+  - issue: 634
+    regla: >-
+      Toda la `## Vista — <sujeto>` de una nota de paper (con sus `### Lente`) la copia la máquina
+      del JSON, no sólo el bloque de salvedades: ahí la extracción no aprueba una cita. Si el `.txt`
+      calla, la cita sale `sin_testigo_propio` —no evaluable con su motivo (D-43), visible como
+      backlog con la marca—, nunca `txt_degradado`; la evidencia POSITIVA (cola divergente, otra
+      fuente) sigue bloqueando (#373). Tesis: 3 047 de 3 278 `txt_degradado` estaban en vistas.
+    funcion: lib_quotes.quote_from_stamped_block
+    patron: 'sin_testigo_propio|copiada='
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "Recorre `cfg.walk_quotes` (que decide `copiada` con el predicado) y rutea `sin_testigo_propio` a `cita_txt_discrepa` (backlog, con la marca); no tiene un predicado paralelo."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "`validar` recorre el mismo `cfg.walk_quotes` y cuenta `copiadas` + `discrepan` con la marca; no tiene un predicado paralelo."
   - issue: 454
     regla: >-
       La extracción es testigo de la prosa que el SINTETIZADOR volvió a tipear, nunca de la que la
@@ -2423,6 +2439,9 @@ portadores:
     funcion: lib_config.section_start
     patron: 'Vista — '
     consumidores:
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "#634 — `walk_quotes` sólo pregunta si un bloque está DENTRO de alguna `## Vista` (`cfg.VISTA_RE` sobre el encabezado `## ` que lo contiene), sin buscar la sección de un sujeto por nombre."
       - modulo: scripts/entity.py
         estado: fuera-de-alcance
         motivo: "#570 — `rename` reescribe el ENCABEZADO `## Vista — <slug>` con el slug exacto (borde `[ (]`/fin, la misma frontera); no busca ni corta la sección."

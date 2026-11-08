@@ -8,6 +8,7 @@ it reaches through `cfg.` at call time. `lib_config` re-exports every public nam
 """
 from __future__ import annotations
 
+import bisect
 import collections
 import datetime as _dt
 import functools
@@ -1264,13 +1265,21 @@ def walk_quotes(stem: str, text: str, own: str = "", readings=None):
     note_bibs = set(lb._bibcodes(text))
     if own:
         note_bibs.add(own)
+    # the `## ` section each block sits in (#634): 1-indexed lines, same as `Block.first_line`
+    heads, titles = [], []
+    for i, ln in enumerate(text.split("\n"), 1):
+        if ln.startswith("## "):
+            heads.append(i)
+            titles.append(ln)
     for b in lb.split_blocks(text):
         exempt = log_quote_exempt(stem, b.text, b.kind)
         if exempt:
             yield b, [], exempt, []
             continue
         bibs = with_own_bibcode(lb._bibcodes(b.text) or lb._bibcodes(b.intro or ""), own)
-        copied = quote_from_stamped_block(b.text, b.intro)
+        h = bisect.bisect_left(heads, b.first_line) - 1
+        copied = quote_from_stamped_block(b.text, b.intro,
+                                          section=titles[h] if own and h >= 0 else "")
         hits = []
         for quote in quotes_in(b.text):
             owner = lb.quote_owner(b.text, quote, bibs)          # #316
@@ -1304,8 +1313,12 @@ SALVEDAD_MARCA_LEGACY = "**Salvedades:**"
 SALVEDAD_MARCAS_LEIDAS = (*SALVEDAD_MARCAS, SALVEDAD_MARCA_LEGACY)
 
 
-def quote_from_stamped_block(text: str, intro: str | None = None) -> bool:
-    """Did the MACHINE copy this block out of the extraction? (#454)
+def quote_from_stamped_block(text: str, intro: str | None = None, *, section: str = "") -> bool:
+    """Did the MACHINE copy this block out of the extraction? (#454, #634)
+
+    `section` is the `## ` heading the block sits in, passed only for a PAPER note: the whole
+    `## Vista — <sujeto>` (its `### Lente — …` included) is what `harvest_views` copies out of the
+    JSON, not only the caveat block (#634: 3 047 of 3 278 `txt_degradado` of a real vault).
 
     ⛔ The one predicate both quote gates use (#324). It matters because `quote_verdict` treats the
     extraction as a WITNESS —«the transcription made while reading the PDF»— and that is true of a
@@ -1319,8 +1332,8 @@ def quote_from_stamped_block(text: str, intro: str | None = None) -> bool:
     ⚠ The caveat block is the only stamped one INSIDE a section the fan-out has to contrast
     (`## Vista`); `SECCIONES_ESTAMPADAS` are already out of it (#214), and that asymmetry is the
     whole case."""
-    return any(str(intro or "").lstrip().startswith(m) or m in (text or "")
-               for m in SALVEDAD_MARCAS_LEIDAS)
+    return bool(cfg.VISTA_RE.match(section or "")) or any(
+        str(intro or "").lstrip().startswith(m) or m in (text or "") for m in SALVEDAD_MARCAS_LEIDAS)
 
 
 def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: bool = False,
@@ -1344,6 +1357,7 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
          extractions hold. #205 makes the `.txt` a degraded INDEX, not a bad witness: finding the
          string there proves the sentence is in THAT paper.
       2. an extraction of its source has it → `txt_degradado`: the note is right, the index lost it
+         (copied there BY THE MACHINE → `sin_testigo_propio`, #454/#634)
          — unless the `.txt` of that SAME source carries the opening and continues differently in
          prose, and then it is `txt_acusa` (#333): two readings of one PDF disagree, go to the page.
          It does not block, on purpose — the `.txt` is a degraded index, and since #323 this gate
@@ -1364,12 +1378,6 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
     fuentes = {b: ts for b, ts in (txt_texts or {}).items() if ts}
     if any(quote_found(quote, t) for ts in fuentes.values() for t in ts):
         return "en_su_txt", {}
-    # ⛔ #454 — la cita que la MÁQUINA copió de la extracción no se juzga contra la extracción: ahí
-    # el testigo y el juzgado son el mismo archivo, y el paso 2 la aprobaría siempre. Su único
-    # testigo independiente es el `.txt` (paso 1, arriba); si calla, es **no evaluable con su
-    # motivo** (D-43), nunca `txt_degradado`.
-    if copiada:
-        return "sin_testigo_propio", {}
     extracciones = {b: extraction_texts(b) for b in (cited or [])}
     en_extraccion = sorted(b for b, ts in extracciones.items()
                            if any(quote_found(quote, t) for t in ts))
@@ -1381,6 +1389,13 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
             acusa = txt_accuses(quote, fuentes.get(b) or [])
             if acusa:
                 return "txt_acusa", {"en_extraccion": en_extraccion, "bib": b, **acusa}
+        # ⛔ #454/#634 — la cita que la MÁQUINA copió de la extracción no se APRUEBA contra la
+        # extracción: testigo y juzgado son el mismo archivo. Su único testigo independiente es el
+        # `.txt` (paso 1); si calla, es **no evaluable con su motivo** (D-43), nunca
+        # `txt_degradado`. Lo que sí sigue valiendo es la evidencia POSITIVA de abajo (#373: la
+        # cita que diverge de la extracción de la que se copió bloquea).
+        if copiada:
+            return "sin_testigo_propio", {"en_extraccion": en_extraccion}
         return "txt_degradado", {"en_extraccion": en_extraccion}
     if any(quote_found_degraded(quote, t) for ts in fuentes.values() for t in ts):
         return "txt_parte", {}

@@ -502,12 +502,12 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                                    f"{quienes} y la cola diverge: la cita se completó al copiar (el "
                                    f"patrón de #314)"))
             elif ver == "sin_testigo_propio":
-                # ⛔ #454 — la cita vive en el bloque que la máquina copió de la extracción, así que
+                # ⛔ #454/#634 — la cita vive en la `## Vista` que la máquina copió de la extracción, así que
                 # la extracción NO es testigo: la aprobaría siempre. Su único testigo independiente
                 # es el `.txt`, y no la tiene. Sale con la marca de #225/#341, que no destruye la
                 # afirmación, es visible y se saca con evidencia.
                 out["copiadas"] += 1
-                # ⚠ Acá el dueño es LA NOTA, no un candidato adyacente: el bloque de salvedades
+                # ⚠ Acá el dueño es LA NOTA, no un candidato adyacente: la vista
                 # no lleva `[[bibcode]]`, así que `quienes` caía en su literal por defecto y el
                 # mensaje decía «la extracción de sin fuente adyacente».
                 out["discrepan"].append(
@@ -515,7 +515,7 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                      f"{corte} — la escribió la máquina DESDE la extracción de "
                      f"{propio or quienes}, así que esa extracción no es testigo (#454), y el "
                      f"`.txt` no la dice: nadie la verificó nunca{firmala}",
-                     cfg.verificar_pdf_mark("la cita de una salvedad, sin testigo independiente")))
+                     cfg.verificar_pdf_mark("cita copiada de la extracción, sin testigo independiente")))
             elif ver == "no_evaluable":
                 out["no_evaluables"].append(
                     (b.first_line, f"{corte} — {quienes} sin `.txt` ni extracción en disco: no "
@@ -839,7 +839,7 @@ def validar_todo(slug: str | None = None) -> int:
     verdict. Returns the number of blocking findings, so it works as a gate: none of the three extra
     counts moves it."""
     notas = _notes_of(slug)
-    alteradas = no_eval = citas = solo_ext = resueltas = 0
+    alteradas = no_eval = citas = solo_ext = resueltas = copiadas = 0
     pag = {"pag_total": 0, "pag_ok": 0, "pag_no_eval": 0, "pag_sin_cita": 0}
     pag_mal: list = []
     discrepan: list = []
@@ -853,6 +853,7 @@ def validar_todo(slug: str | None = None) -> int:
         citas += r["citas"]
         no_eval += len(r["no_evaluables"])
         solo_ext += r["solo_extraccion"]
+        copiadas += r["copiadas"]
         resueltas += len(r["resueltas"])
         discrepan += [(f, ln, m, k) for ln, m, k in r["discrepan"]]
         cortas += [(f, ln, m, k) for ln, m, k in r["cortas"]]
@@ -873,7 +874,9 @@ def validar_todo(slug: str | None = None) -> int:
     cfg.print_seguro(f"\n> sobre {len(notas)} nota(s) de {ambito} · {citas} cita(s) «…» · "
                      f"{no_eval} no evaluable(s) (sin extracción en disco, o la extracción calla) · "
                      f"{solo_ext} sólo respaldada(s) por la extracción, "
-                     f"{len(discrepan)} de ellas con el `.txt` en contra"
+                     f"{len(discrepan) - copiadas} de ellas con el `.txt` en contra · "
+                     f"{copiadas} copiada(s) por la máquina de la extracción y sin testigo propio "
+                     f"(#454/#634)"
                      + (f" · {resueltas} declarada(s) y resuelta(s): en el `log` (#386/#387) o "
                         f"firmada(s) `cita_revisada` (#516)"
                         if resueltas else ""))
@@ -917,8 +920,13 @@ def validar_todo(slug: str | None = None) -> int:
                          f"extracción de su fuente las dice y el `.txt` de esa misma fuente no. Es "
                          f"el veredicto correcto (el `.txt` es un índice degradado, #205) y "
                          f"**no** es un hallazgo: ante la duda, la página del PDF (#341)")
-    if discrepan:
-        cfg.print_seguro(f"  ⚠ y en {len(discrepan)} de ésas el OTRO lector del mismo PDF dice "
+    if copiadas:
+        # #634 — no son «el `.txt` en contra»: la extracción no es testigo de lo que se copió de ella
+        cfg.print_seguro(f"  ⚠ {copiadas} cita(s) de una `## Vista` que la máquina copió de la "
+                         f"extracción y el `.txt` no dice: NO EVALUABLES con su motivo (D-43), con "
+                         f"la marca arriba. No mueve el rc; se cierran en la página del PDF")
+    if len(discrepan) > copiadas:
+        cfg.print_seguro(f"  ⚠ y en {len(discrepan) - copiadas} de ésas el OTRO lector del mismo PDF dice "
                          f"otra cosa (arriba, con su cola y su marca lista para pegar). No mueve el "
                          f"rc —el `.txt` es índice degradado— y tampoco es silencio: andá a la "
                          f"página, y lo que no puedas cerrar queda MARCADO en la nota (#333/#341)")
