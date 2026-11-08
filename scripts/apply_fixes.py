@@ -664,8 +664,10 @@ def main(argv=None) -> int:
         for who, key in res.collisions:
             print(f"   {who}\n     {key[:120]}…")
         return 1
-    print(f"exactos: {res.exact}   por bloque: {res.by_block}   fallan: {len(res.failed)}"
-          + (f"   pares: {res.pairs_before} → {res.pairs_after}" if res.pairs_before else ""))
+    # #622 — with a failure nothing is written: the «after» count is of a text that does not exist
+    pares = ("" if not res.pairs_before else f"   pares: {res.pairs_before} (sin escribir)"
+             if res.failed else f"   pares: {res.pairs_before} → {res.pairs_after}")
+    print(f"exactos: {res.exact}   por bloque: {res.by_block}   fallan: {len(res.failed)}" + pares)
     for bib, n, motivo in res.failed:
         print(f"  ⛔ {bib} par {n}: {motivo}")
     for bib, n, entran in res.added:

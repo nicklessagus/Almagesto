@@ -3618,7 +3618,7 @@ def test_588_escape_dollars_NO_toca_la_matematica_pegada_a_una_palabra(toy_vault
 
 
 def test_588_el_cierre_rechazado_por_el_digito_NO_reabre(toy_vault):
-    """#588 (regresión de v1.397.0) — sin el borde de palabra, el `$` de `$\lambda$1176` (cierre
+    r"""#588 (regresión de v1.397.0) — sin el borde de palabra, el `$` de `$\lambda$1176` (cierre
     rechazado por el dígito) abría y se emparejaba con el `$` siguiente. Casos de Almagesto-Tesis."""
     import lib_config as cfg
     assert cfg.escape_dollars(r"C III($\lambda$1176 Å)/C III($\lambda$977 Å), lo que") == \

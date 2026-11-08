@@ -12009,6 +12009,8 @@ def test_594_el_anio_que_paso_al_renglon_siguiente_sigue_siendo_segunda_mano():
     assert hits(f"El valor [[{b}]] según Donati et al.\n(1997), es alto.") == []
     assert hits(f"El valor [[{b}]] según Donati et al.\n1997 es alto.") == []
     assert len(hits(f"El valor [[{b}]] según Donati et al.\n\n(1997) es otro bloque.")) == 1
+    # AUD-632 — the other block WITHOUT a blank line between: only `b.last_line` keeps it out
+    assert len(hits(f"El valor [[{b}]] según Donati et al.\n1997. Un ítem de lista.")) == 1
     h = hits(f"Al Moulla et al. atribuyen su valor\na 53,0° (Sec. 4.3, p. 8) [[{b}]].")
     assert h == []  # ponytail: autores por renglón — mención y [[bibcode]] en renglones distintos no se ven
     assert len(hits(f"Al Moulla et al. atribuyen 53,0° [[{b}]]\ny sigue la prosa.")) == 1

@@ -190,7 +190,14 @@ def test_580_la_fila_sin_bloque_se_CUENTA_y_la_muestra_es_reproducible(tmp_path)
     c = vf.write_class_round(nota, tmp_path / "c1")
     assert c["sin_bloque"] == 2 and c["items"] == 1, c
     nota.write_text(NOTA, encoding="utf-8")
+    # AUD-631 — the global RNG is seeded to two states whose 2-of-3 samples DIFFER, so a sample
+    # drawn without the note's seed gives two different prompts every time, not 2 of 3 times.
+    import random
+    x, y = 0, next(k for k in range(1, 100) if set(random.Random(k).sample(range(3), 2))
+                   != set(random.Random(0).sample(range(3), 2)))
+    random.seed(x)
     a = vf.write_class_round(nota, tmp_path / "a", muestra=2)
+    random.seed(y)
     b = vf.write_class_round(nota, tmp_path / "b", muestra=2)
     assert a["items"] == 2 and a["contextualiza"] == 3
     leer = lambda d: (d / vf.CLASS_PROMPT).read_text(encoding="utf-8").replace(str(d), "")

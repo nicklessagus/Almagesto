@@ -111,17 +111,20 @@ def simbad_caido(monkeypatch):
 def fake_nea(monkeypatch):
     """Inyecta astroquery falso en sys.modules; setear .rows antes de llamar. `.calls` cuenta
     las consultas query_object (regresión #31: main debe consultar UNA sola vez)."""
-    holder = types.SimpleNamespace(rows=[], calls=0, aliases=[], names=[])
+    holder = types.SimpleNamespace(rows=[], calls=0, aliases=[], names=[], regularize=[])
 
     class FakeNEA:
         @staticmethod
         def query_aliases(host):
+            if holder.aliases is None:          # AUD-630: the alias service has no entry
+                raise KeyError(host)
             return list(holder.aliases)
 
         @staticmethod
         def query_object(host, table=None, regularize=True):
             holder.calls += 1
             holder.names.append(host)
+            holder.regularize.append(regularize)   # AUD-629: the double no longer swallows it
             return list(holder.rows)
 
     leaf = types.ModuleType("astroquery.ipac.nexsci.nasa_exoplanet_archive")
@@ -638,9 +641,18 @@ def test_hostname_con_apostrofo_viaja_escapado(fake_nea):
     fake_nea.aliases = ["Barnard's star", "GJ 699"]
     gt.fetch_pscomppars("GJ 699")
     assert fake_nea.names == ["Barnard''s star"]
+    assert fake_nea.regularize == [False], "astroquery no vuelve a regularizar (y a des-escapar)"
 
 
 def test_sin_alias_consulta_el_nombre_tal_cual(fake_nea):
     """Misma regla que `_regularize_object_name` de astroquery: sin alias, el nombre dado."""
     gt.fetch_pscomppars("HD 33793")
     assert fake_nea.names == ["HD 33793"]
+
+
+def test_sin_entrada_en_el_servicio_de_alias_consulta_el_nombre_tal_cual(fake_nea):
+    """AUD-630 — `query_aliases` levanta `KeyError` cuando NEA no conoce el nombre: la rama
+    tiene que caer al nombre dado, escapado, en vez de reventar."""
+    fake_nea.aliases = None
+    gt.fetch_pscomppars("Barnard's star")
+    assert fake_nea.names == ["Barnard''s star"] and fake_nea.regularize == [False]

@@ -330,6 +330,17 @@ def test_si_los_pares_bajan_no_se_escribe(tmp_path):
     assert "2021bbbb" in nota.read_text(encoding="utf-8"), "no se escribió nada"
 
 
+def test_622_la_CLI_con_un_fix_que_falla_no_publica_un_conteo_de_pares_inexistente(tmp_path, capsys):
+    """#622 — con un fallo no se escribe nada, y la salida decía «pares: 2 → 1» (o «59 → 0» con el
+    fix que no localiza su bloque): el conteo de un texto que no existe."""
+    nota = _nota222(tmp_path, "un párrafo con dos citas ([[2020aaaa]], [[2021bbbb]])\n")
+    d = _fixes222(tmp_path, ("un párrafo con dos citas ([[2020aaaa]], [[2021bbbb]])",
+                          "un párrafo con una sola ([[2020aaaa]])"))
+    assert af.main([str(nota), str(d), "--write"]) == 1
+    out = capsys.readouterr().out
+    assert "pares: 2 (sin escribir)" in out and "→" not in out.split("pares:")[1].split("\n")[0]
+
+
 def test_dos_fixes_disjuntos_en_orden_INVERSO_no_se_solapan(tmp_path):
     """#222 — el detector de solape es `i1 < j2 and i2 < j1`, y hacen falta las DOS cláusulas: con
     los fixes en orden de archivo sólo se ejercita la segunda. Acá el primer fix del JSON está
