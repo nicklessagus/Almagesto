@@ -429,7 +429,7 @@ def _nota_paper(bib: str, cuerpo: str):
     return f
 
 
-def test_una_cita_de_la_VISTA_alterada_respecto_de_SU_extraccion_BLOQUEA(toy_vault, capsys):
+def test_una_cita_de_la_VISTA_distinta_de_SU_extraccion_se_reporta_y_NO_bloquea(toy_vault, capsys):
     """#373 — el 99,7 % de las transcripciones directas del PDF no las contrastaba nadie: medido en
     una bóveda real, **3838** citas de ≥40 caracteres en las `## Vista` de 159 notas de paper, de
     las cuales el fan-out de verify veía **11**.
@@ -439,12 +439,16 @@ def test_una_cita_de_la_VISTA_alterada_respecto_de_SU_extraccion_BLOQUEA(toy_vau
     extracción como *no evaluable* (#318, correcto) — pero acá la extracción **es el original de la
     cita**, así que una divergencia nota↔extracción es justo el caso que debe acusar.
 
-    Prueba controlada del issue: alterar la cola de una cita que la extracción SÍ tiene."""
+    ⛔ #634 corrige la mitad que acusaba: la extracción es el ORIGINAL de la copia, así que no es
+    testigo ni para aprobarla ni para acusarla — corregir la vista contra el PDF la deja distinta de
+    su JSON a propósito, y bloqueaba (1995BellSejnowski, en una bóveda viva). En `contrast` sale
+    contada como no evaluable (el lint la lista como la que el `.txt` no confirma), nunca `alterada`."""
     _extraccion("ica_ruido", "2013Voss")
     _txt("ica_ruido", "2013Voss")
     _nota_paper("2013Voss", f"Dice «{LARGA[:80]} y de ahí sale todo lo demás».")
-    assert ct.main(["--validar"]) == 1
-    assert "la cola diverge" in capsys.readouterr().out
+    assert ct.main(["--validar"]) == 0
+    out = capsys.readouterr().out
+    assert "la cola diverge" not in out and "1 no evaluable(s)" in out, out
 
 
 def test_la_cita_FIEL_de_la_vista_no_se_reporta(toy_vault, capsys):

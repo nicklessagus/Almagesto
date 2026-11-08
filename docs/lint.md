@@ -578,6 +578,11 @@ página — existe pero no sirve para grep ni verify; rescate: PDF sano, OCR, o 
   (#454/#634):** toda la `## Vista` de una nota de paper (con sus `### Lente`) la copia la máquina
   del JSON, así que ahí la extracción no es testigo; si el `.txt` calla, la cita cae acá, no
   evaluable con su motivo (D-43) y con la marca `⚠verificar en el PDF`, nunca como `txt_degradado`.
+  **Tampoco acusa** (v1.415.32): ni la cola divergente (#373/#314), ni el prefijo de un PDF
+  reemplazado (#437), ni el `txt_acusa` que arrancaba en ella — una vista **corregida contra el
+  PDF** difiere de su JSON a propósito y bloqueaba. La extracción sólo **enruta**: si todavía trae
+  la cita, cae acá; si no (la vista se editó), en *«Cita textual que no está en su fuente»*, firmable.
+  El único juez de una cita copiada es el `.txt` de su fuente (acusa con #333, absuelve con #288).
   **Las DOS lecturas del mismo PDF no coinciden** (#333): la extracción aprueba la cita
   —o sea que el detector de arriba dice `✅`— y el `.txt` de **esa misma fuente** trae un prefijo
   largo de la cita y **sigue distinto**. ⛔ La discrepancia **no** es «PDF vs `.txt`»: el PDF es la

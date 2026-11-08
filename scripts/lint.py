@@ -4588,10 +4588,10 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                     # `txt_degradado`. Su único testigo independiente es el `.txt`, y no la dice:
                     # no evaluable con su motivo (D-43), visible acá como backlog.
                     cita_txt_discrepa.append(
-                        (stem, f"L{_ln}: «{_corte}» — la escribió la máquina DESDE la extracción "
-                               f"de {', '.join(_bibs_c) or 'su fuente'}, así que esa extracción no "
-                               f"es testigo (#454), y el `.txt` no la dice: nadie la verificó "
-                               f"nunca. Confirmala en el PDF y, si no podés, marcala "
+                        (stem, f"L{_ln}: «{_corte}» — vive en una `## Vista`, que la máquina copia "
+                               f"de la extracción de {', '.join(_bibs_c) or 'su fuente'}, así que "
+                               f"esa extracción no es testigo ni para aprobarla ni para acusarla "
+                               f"(#454/#634), y el `.txt` no la dice: nadie la verificó nunca. Confirmala en el PDF y, si no podés, marcala "
                                f"`{VERIFICAR_PDF_MARK}`{_amb}"))
                     continue
                 if _ver == "txt_degradado":

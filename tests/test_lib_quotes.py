@@ -892,6 +892,31 @@ def test_454_la_cita_que_la_MAQUINA_copio_de_la_extraccion_no_se_juzga_contra_el
                              copiada=True)[0] == "en_su_txt"
 
 
+def test_634_la_extraccion_tampoco_ACUSA_a_la_cita_copiada(toy_vault):
+    """⛔ #634 — corregir una `## Vista` contra el PDF la deja distinta de su JSON a propósito: el
+    JSON, del que se copió, no es testigo ni para aprobarla ni para acusarla. Antes, el prefijo
+    presente y la cola distinta en la extracción la daban `alterada` (bloqueante) y frenaban
+    `contrast --validar` sobre una cita CORRECTA (medido en una bóveda viva: 1995BellSejnowski)."""
+    base = "the separation matrix is identifiable only up to permutation and scaling of the rows"
+    corregida = base + " and that is what the page says"
+    _txt_324("corr", "un `.txt` que no dice esa frase")
+    _extr_324("corr", base + " with a tail the extractor invented")
+    _extr_324("ocr", corregida)   # antes del primer veredicto: el índice de extracciones se memoiza
+    fuentes = {"corr": cfg.fulltext_readings("corr")}
+    assert cfg.quote_verdict(corregida, ["corr"], {"corr"}, fuentes)[0] == "alterada", \
+        "re-tipeada por el sintetizador, la extracción SÍ acusa (#314)"
+    assert cfg.quote_verdict(corregida, ["corr"], {"corr"}, fuentes,
+                             copiada=True)[0] == "no_verbatim", "backlog firmable, nunca bloqueante"
+    # el `.txt` sí puede acusarla: trae el arranque y sigue distinto en prosa (#333)
+    _txt_324("acusa", f"prosa. {base} but the page goes on differently here. más.")
+    assert cfg.quote_verdict(corregida, ["acusa"], {"acusa"},
+                             {"acusa": cfg.fulltext_readings("acusa")},
+                             copiada=True)[0] == "txt_acusa"
+    # sin `.txt` (o con OCR) y todavía en su extracción: la copia, firmable (#516)
+    assert cfg.quote_verdict(corregida, ["ocr"], {"ocr"}, {}, copiada=True)[0] == "sin_testigo_propio"
+    assert cfg.quote_verdict(corregida, ["nadie"], {"nadie"}, {}, copiada=True)[0] == "no_evaluable"
+
+
 def test_454_el_predicado_del_bloque_estampado_es_UNO_SOLO():
     """#454/#324 — los dos gates de citas deciden «este bloque lo copió la máquina» con la misma
     función: con código separado ya divergieron una vez (13 contra 12 sobre el mismo corpus)."""

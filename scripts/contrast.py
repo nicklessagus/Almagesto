@@ -512,8 +512,9 @@ def validar(nota: pathlib.Path, *, mostrar: bool = True) -> dict:
                 # mensaje decía «la extracción de sin fuente adyacente».
                 out["discrepan"].append(
                     (b.first_line,
-                     f"{corte} — la escribió la máquina DESDE la extracción de "
-                     f"{propio or quienes}, así que esa extracción no es testigo (#454), y el "
+                     f"{corte} — vive en una `## Vista`, que la máquina copia de la extracción de "
+                     f"{propio or quienes}, así que esa extracción no es testigo ni para aprobarla "
+                     f"ni para acusarla (#454/#634), y el "
                      f"`.txt` no la dice: nadie la verificó nunca{firmala}",
                      cfg.verificar_pdf_mark("cita copiada de la extracción, sin testigo independiente")))
             elif ver == "no_evaluable":

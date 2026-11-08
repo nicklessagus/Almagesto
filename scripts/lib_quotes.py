@@ -1350,7 +1350,9 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
          extractions hold. #205 makes the `.txt` a degraded INDEX, not a bad witness: finding the
          string there proves the sentence is in THAT paper.
       2. an extraction of its source has it → `txt_degradado`: the note is right, the index lost it
-         (copied there BY THE MACHINE → `sin_testigo_propio`, #454/#634)
+         (copied there BY THE MACHINE: the extraction is no witness at all, neither to pass nor to
+         accuse; it only ROUTES: still in it → `sin_testigo_propio`, edited away → `no_verbatim`,
+         #454/#634)
          — unless the `.txt` of that SAME source carries the opening and continues differently in
          prose, and then it is `txt_acusa` (#333): two readings of one PDF disagree, go to the page.
          It does not block, on purpose — the `.txt` is a degraded index, and since #323 this gate
@@ -1371,6 +1373,25 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
     fuentes = {b: ts for b, ts in (txt_texts or {}).items() if ts}
     if any(quote_found(quote, t) for ts in fuentes.values() for t in ts):
         return "en_su_txt", {}
+    if copiada:
+        # ⛔ #634 — la cita que la MÁQUINA copió de la extracción no tiene a la extracción de
+        # testigo en NINGÚN sentido: ni para aprobarla (paso 2) ni para acusarla (#333, 4, 4b). La
+        # vista corregida contra el PDF difiere de su JSON a propósito, y ese JSON la acusaba de
+        # alterada. Sólo el `.txt` de su fuente juzga.
+        for b in cited or []:
+            acusa = txt_accuses(quote, fuentes.get(b) or [])
+            if acusa:
+                return "txt_acusa", {"en_extraccion": [], "bib": b, **acusa}
+        if any(quote_found_degraded(quote, t) for ts in fuentes.values() for t in ts):
+            return "txt_parte", {}
+        # la extracción ENRUTA, no juzga: si todavía la trae, la cita es la copia y nadie la
+        # verificó (se firma, #516, también con `.txt` OCR o sin él); si no la trae, la vista se
+        # editó —p. ej. corregida contra el PDF— y es la cita que el `.txt` no confirma.
+        en_extraccion = sorted(b for b in cited or []
+                               if any(quote_found(quote, t) for t in extraction_texts(b)))
+        if en_extraccion:
+            return "sin_testigo_propio", {"en_extraccion": en_extraccion}
+        return ("no_verbatim", {}) if fuentes else ("no_evaluable", {})
     extracciones = {b: extraction_texts(b) for b in (cited or [])}
     en_extraccion = sorted(b for b, ts in extracciones.items()
                            if any(quote_found(quote, t) for t in ts))
@@ -1382,13 +1403,6 @@ def quote_verdict(quote: str, cited, note_bibs, txt_texts: dict, *, ambiguo: boo
             acusa = txt_accuses(quote, fuentes.get(b) or [])
             if acusa:
                 return "txt_acusa", {"en_extraccion": en_extraccion, "bib": b, **acusa}
-        # ⛔ #454/#634 — la cita que la MÁQUINA copió de la extracción no se APRUEBA contra la
-        # extracción: testigo y juzgado son el mismo archivo. Su único testigo independiente es el
-        # `.txt` (paso 1); si calla, es **no evaluable con su motivo** (D-43), nunca
-        # `txt_degradado`. Lo que sí sigue valiendo es la evidencia POSITIVA de abajo (#373: la
-        # cita que diverge de la extracción de la que se copió bloquea).
-        if copiada:
-            return "sin_testigo_propio", {"en_extraccion": en_extraccion}
         return "txt_degradado", {"en_extraccion": en_extraccion}
     if any(quote_found_degraded(quote, t) for ts in fuentes.values() for t in ts):
         return "txt_parte", {}
