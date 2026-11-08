@@ -12190,3 +12190,12 @@ def test_627_la_cita_de_una_VISTA_sin_wikilink_se_mira(toy_vault, capsys):
     link_from_log(toy_vault, "nota", bib)
     _rc, rep = run_lint_reporte(capsys)
     assert "2012embc" in _seccion(rep, "no está en su fuente"), rep
+
+
+def test_635_la_nota_de_paper_con_VISTA_y_sin_verificar_debe_verificacion(toy_vault):
+    """#635 — la vista cita a la nota sin `[[bibcode]]`, así que la nota «no tenía citas» y nunca
+    debía verificación: sus pares con el bibcode propio cuentan para `unverified`."""
+    bib = "2019Own"
+    mk_note(cfg.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "stars": ["tau Cet"]},
+            "# p\n\n## Vista — tau Cet\n\nEl período es de 34 días según la Tabla 2.\n")
+    assert any(s == bib for s, _m in lint.collect().por_clave("unverified").items)

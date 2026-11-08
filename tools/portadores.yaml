@@ -1102,6 +1102,33 @@ portadores:
           Hospeda `theme_core` —la combinación de la regla, UNA implementación (#447)— que
           `classify_theme` llama; no clasifica ningún corpus ni recorre caminos de descubrimiento.
 
+  - issue: 635
+    regla: >-
+      Todo constructor de pares (afirmación, `[[bibcode]]`) de una nota en disco suma, dentro de la
+      `## Vista` de una nota de paper, el bibcode que la nota ES (`cfg.note_own_bibcode` +
+      `cfg.with_own_bibcode`: suma, nunca reemplaza, #373/#394). Sin él la sección que el contrato
+      manda verificar daba 0 pares y la nota no debía verificación.
+    funcion: lib_blocks.note_pairs
+    patron: 'pairs_of\('
+    consumidores:
+      - modulo: scripts/verify_fanout.py
+        estado: usa
+        motivo: "`write_round` y `class_items` arman el reparto por fuente con los pares de la nota."
+      - modulo: scripts/reverify_subset.py
+        estado: usa
+        motivo: "`classify` empareja filas y pares: sin el bibcode propio las filas de la vista salían huérfanas."
+      - modulo: scripts/write_verif_sidecar.py
+        estado: usa
+        motivo: "`build_rows`, `write` (conteo `pares_cuerpo`) y `reanchor` cruzan filas contra los pares."
+      - modulo: scripts/apply_fixes.py
+        estado: usa
+        motivo: "La red de #222 cuenta pares antes y después con la misma regla: si no, una corrección en la vista no movía el conteo."
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "`paraphrase_pairs` agrupa los bloques por fuente citada (#555)."
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_verification_pairs` (pares vencidos / sin verificar) y `_certified_anchors` pasan por `note_pairs`; la cobertura (`unverified`) cuenta `pairs_of(text, own)` con el `fm` ya parseado. `check_second_hand_lifted` sigue con `pairs_of(texto)`: recorre sólo fichas y conceptos, sin bibcode propio."
   - issue: 634
     regla: >-
       Toda la `## Vista — <sujeto>` de una nota de paper (con sus `### Lente`) la copia la máquina
@@ -2939,6 +2966,9 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: "Cuenta `pairs_of` para el hermano `.verif.md`; no re-emite prosa de la nota."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "#635 — cuenta los pares de la `## Vista` de una nota de paper para la cobertura de verificación (`unverified`); no re-emite prosa."
   - issue: 536
     regla: >-
       Todo consumidor que AGREGA papers de un sujeto respeta la curación declarada del par

@@ -8,7 +8,6 @@ it reaches through `cfg.` at call time. `lib_config` re-exports every public nam
 """
 from __future__ import annotations
 
-import bisect
 import collections
 import datetime as _dt
 import functools
@@ -1265,21 +1264,15 @@ def walk_quotes(stem: str, text: str, own: str = "", readings=None):
     note_bibs = set(lb._bibcodes(text))
     if own:
         note_bibs.add(own)
-    # the `## ` section each block sits in (#634): 1-indexed lines, same as `Block.first_line`
-    heads, titles = [], []
-    for i, ln in enumerate(text.split("\n"), 1):
-        if ln.startswith("## "):
-            heads.append(i)
-            titles.append(ln)
+    dentro = lb.in_view(text) if own else None    # #634: only a PAPER note's view was copied
     for b in lb.split_blocks(text):
         exempt = log_quote_exempt(stem, b.text, b.kind)
         if exempt:
             yield b, [], exempt, []
             continue
         bibs = with_own_bibcode(lb._bibcodes(b.text) or lb._bibcodes(b.intro or ""), own)
-        h = bisect.bisect_left(heads, b.first_line) - 1
         copied = quote_from_stamped_block(b.text, b.intro,
-                                          section=titles[h] if own and h >= 0 else "")
+                                          in_view=bool(dentro and dentro(b.first_line)))
         hits = []
         for quote in quotes_in(b.text):
             owner = lb.quote_owner(b.text, quote, bibs)          # #316
@@ -1313,10 +1306,10 @@ SALVEDAD_MARCA_LEGACY = "**Salvedades:**"
 SALVEDAD_MARCAS_LEIDAS = (*SALVEDAD_MARCAS, SALVEDAD_MARCA_LEGACY)
 
 
-def quote_from_stamped_block(text: str, intro: str | None = None, *, section: str = "") -> bool:
+def quote_from_stamped_block(text: str, intro: str | None = None, *, in_view: bool = False) -> bool:
     """Did the MACHINE copy this block out of the extraction? (#454, #634)
 
-    `section` is the `## ` heading the block sits in, passed only for a PAPER note: the whole
+    `in_view` says the block sits in a PAPER note's view (`lib_blocks.in_view`): the whole
     `## Vista — <sujeto>` (its `### Lente — …` included) is what `harvest_views` copies out of the
     JSON, not only the caveat block (#634: 3 047 of 3 278 `txt_degradado` of a real vault).
 
@@ -1332,7 +1325,7 @@ def quote_from_stamped_block(text: str, intro: str | None = None, *, section: st
     ⚠ The caveat block is the only stamped one INSIDE a section the fan-out has to contrast
     (`## Vista`); `SECCIONES_ESTAMPADAS` are already out of it (#214), and that asymmetry is the
     whole case."""
-    return bool(cfg.VISTA_RE.match(section or "")) or any(
+    return in_view or any(
         str(intro or "").lstrip().startswith(m) or m in (text or "") for m in SALVEDAD_MARCAS_LEIDAS)
 
 

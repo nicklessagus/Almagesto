@@ -45,7 +45,7 @@ def classify(nota: Path, text: str, umbral: float) -> dict:
     "zero expired pairs", it is a block nobody can evaluate, and reporting it as clean would be the
     invented zero D-43 exists to forbid. Since #344 «no evaluable» also covers *the sibling is not
     there*, and `lb.verif_rows` is the single place that knows where to look."""
-    pares = lb.pairs_of(text)
+    pares = lb.note_pairs(nota, text)
     filas = lb.verif_rows(nota)
     if filas is None:
         # D-43: a note with no block (or with the pre-1.54.0 template) is NOT "zero expired pairs".

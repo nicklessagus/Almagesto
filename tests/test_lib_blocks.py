@@ -2037,3 +2037,19 @@ def test_577_subsection_free_text_lee_el_PARRAFO_no_la_linea():
     assert lb.subsection_free_text(sec, "Omisiones en transcripciones") == "ninguna."
     assert lb.subsection_free_text(sec, "Condiciones perdidas") == "ninguna."
     assert lb.subsection_free_text("## Verificación de citas\n", "Condiciones perdidas") is None
+
+
+def test_635_los_pares_de_la_VISTA_de_un_paper_suman_el_bibcode_propio():
+    """#635 — la `## Vista` de una nota de paper es lo que `verify-citations` contrasta, y ahí el
+    paper citado es la NOTA, no un `[[bibcode]]`: sin el bibcode propio daba 0 pares. Se SUMA
+    (`cfg.with_own_bibcode`, #373/#394), nunca reemplaza, y sólo dentro de la vista."""
+    texto = ("---\ntags: [paper]\nbibcode: 2019Own\n---\n\n# p\n\n## Notas\n\nprosa sin cita.\n\n"
+             "## Vista — ica\n\n| Qué | Valor |\n|---|---|\n| P | 34 d |\n\n"
+             "### Lente — x\n\n- se construye sobre [[2020X]]\n")
+    por_bloque = {}
+    for p in lb.pairs_of(texto, own="2019Own"):
+        por_bloque.setdefault(p.block.text, set()).add(p.bibcode)
+    assert por_bloque == {"| P | 34 d |": {"2019Own"},
+                          "- se construye sobre [[2020X]]": {"2020X", "2019Own"}}
+    # sin bibcode propio (ficha, concepto) nada cambia
+    assert {p.bibcode for p in lb.pairs_of(texto)} == {"2020X"}

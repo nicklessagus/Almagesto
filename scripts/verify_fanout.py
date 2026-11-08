@@ -118,7 +118,7 @@ def write_round(nota: Path, out_dir: Path, fuentes: list | None = None,
     chosen and `nota_total` what the note holds, so a scoped round reads as scoped, never as a
     full round that came back short (#407)."""
     text = nota.read_text(encoding="utf-8")
-    todos = by_source(lb.pairs_of(text))
+    todos = by_source(lb.note_pairs(nota, text))
     modo, grupos = scoped_sources(nota, text, todos, fuentes, solo_nuevos, anclas)
     (out_dir / "prompts").mkdir(parents=True, exist_ok=True)
     sin_archivo = []
@@ -162,7 +162,7 @@ def class_items(nota: Path, text: str) -> tuple[list, int]:
     second opinion exists to apply the #221 test WITHOUT the first judge's call in view. A row whose
     pair is no longer in the body cannot be shown its claim; it is counted, not dropped in silence
     (D-43) — the lint already reports it as stale."""
-    bloques = {(p.bibcode, p.anchor): p.block.text.strip() for p in lb.pairs_of(text)}
+    bloques = {(p.bibcode, p.anchor): p.block.text.strip() for p in lb.note_pairs(nota, text)}
     items, sin_bloque = [], 0
     for r in lb.verif_rows(nota) or []:
         if lb.condition_kind(r.condition) != "contextualiza":

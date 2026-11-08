@@ -950,7 +950,7 @@ def paraphrase_pairs(nota: pathlib.Path, paper: str | None = None) -> list:
         except KeyError:
             nombres.insert(0, cfg.star_by_slug(slug)[0])
     por_bib: dict = {}
-    for par in lb.pairs_of(nota.read_text(encoding="utf-8")):
+    for par in lb.note_pairs(nota, nota.read_text(encoding="utf-8")):
         if paper and par.bibcode != paper:
             continue
         bloques = por_bib.setdefault(par.bibcode, [])

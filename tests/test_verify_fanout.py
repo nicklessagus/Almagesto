@@ -289,3 +289,14 @@ def test_618_el_par_inferencia_le_dice_al_juez_que_chequea_SOLO_la_premisa(tmp_p
     assert "premisa" not in par_llano.split("## Salida")[0], "el par sin marca no lleva el aviso"
     juez = (Path(__file__).resolve().parent.parent / vf.JUEZ).read_text(encoding="utf-8")
     assert "**El par `inferencia`" in juez
+
+
+def test_635_la_VISTA_de_una_nota_de_paper_da_pares_de_su_propio_bibcode(toy_vault, tmp_path):
+    """#635 — sin el bibcode propio el fan-out daba 0 pares sobre la sección que el contrato manda
+    verificar."""
+    nota = vf.cfg.PAPERS / "2019Own.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [paper]\nbibcode: 2019Own\n---\n\n# p\n\n## Vista — ica\n\n"
+                    "El período es de 34 días según la Tabla 2.\n", encoding="utf-8")
+    m = vf.write_round(nota, tmp_path / "r1")
+    assert m["pares"] == 1 and m["fuentes"] == {"2019Own": 1}, m

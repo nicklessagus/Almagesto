@@ -778,19 +778,48 @@ def _prose_owner(text: str, pos: int, fin: int, bibs: list) -> str | None:
     return None
 
 
-def pairs_of(body: str) -> list[Pair]:
+def in_view(body: str):
+    """`line -> bool`: is this 1-indexed line of `body` inside a `## Vista — <sujeto>` section (its
+    `### Lente — …` included)? The section runs to the next `## ` heading (#634/#635)."""
+    import bisect
+    heads, vista = [], []
+    for i, ln in enumerate(body.split("\n"), 1):
+        if ln.startswith("## "):
+            heads.append(i)
+            vista.append(bool(cfg.VISTA_RE.match(ln)))
+    return lambda line: (h := bisect.bisect_left(heads, line) - 1) >= 0 and vista[h]
+
+
+def pairs_of(body: str, own: str = "") -> list[Pair]:
     """Un par por cada (cita, bloque). Un bloque con 3 citas da 3 pares con la MISMA ancla.
 
     Un bloque que hereda aporta los bibcodes de su ámbito: es la fila de tabla que dice "34 d" bajo
     un caption que dice quién lo midió — sin la herencia, esa fila se caía del fan-out por no
     llevar `[[bibcode]]` propio, que es justo la afirmación que hay que verificar.
+
+    ⛔ #635 — `own` es el bibcode que la nota de paper ES (`cfg.note_own_bibcode`): dentro de su
+    `## Vista` se SUMA a los del bloque (`cfg.with_own_bibcode`, #373/#394), nunca los reemplaza.
+    Sin él la sección que `verify-citations` contrasta daba 0 pares. Desde una ruta, `note_pairs`.
     """
+    dentro = in_view(body) if own else None
     out: list[Pair] = []
     for b in split_blocks(body):
         fuente = b.text if _bibcodes(b.text) else (b.intro or "")
-        for bib in _bibcodes(fuente):
+        bibs = _bibcodes(fuente)
+        if dentro and dentro(b.first_line):
+            bibs = cfg.with_own_bibcode(bibs, own)
+        for bib in bibs:
             out.append(Pair(bib, b, block_anchor(b.text, b.intro)))
     return out
+
+
+def note_pairs(note: Path, text: str, fm: dict | None = None) -> list[Pair]:
+    """`pairs_of` of a note ON DISK, with its own bibcode when it is a paper note (#635). `fm` is
+    the already-parsed frontmatter when the caller has it (the lint parses each note once)."""
+    note = Path(note)
+    if note.parent != cfg.PAPERS:
+        return pairs_of(text)
+    return pairs_of(text, cfg.note_own_bibcode(note, cfg.split_fm(text) if fm is None else fm))
 
 
 # ── el bloque de verificación ────────────────────────────────────────────────────────────────────

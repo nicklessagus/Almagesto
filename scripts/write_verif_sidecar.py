@@ -270,7 +270,7 @@ def build_rows(note: Path, text: str, fanout: dict, previous: list | None,
 
     `judged` (#617) collects the `(bibcode, anchor)` of the body pairs this fan-out judged, so the
     caller can tell a round over every pair from a PARTIAL one."""
-    pares = lb.pairs_of(text)
+    pares = lb.note_pairs(note, text)
     por_clave = {(p.bibcode, p.anchor): p for p in pares}
     # #407/#282 — la fila previa de cada par se resuelve como `reverify_subset`: ancla exacta
     # primero, cobertura del extracto después, NUNCA cruzando `bibcode`. Es lo que permite que una
@@ -831,7 +831,7 @@ def write(note: Path, fanout_dir, fecha: str | None = None, dry_run: bool = Fals
     else:
         emit(note, text, rows, ronda, dry_run=dry_run)
     c = lb.verif_counts(rows)
-    return {"filas": len(rows), "pares_cuerpo": len(lb.pairs_of(text)), "juzgadas": juzgados,
+    return {"filas": len(rows), "pares_cuerpo": len(lb.note_pairs(note, text)), "juzgadas": juzgados,
             "arrastradas": max(0, len(rows) - juzgados), "rondas": len(dirs), "parcial": parcial,
             "descartadas": descartadas, "cond_fuera": cond_fuera, "pag_fuera": pag_fuera,
             "encadenadas": c["cadenas"], "hermano": cfg.verif_sidecar(note).name}
@@ -863,7 +863,7 @@ def reanchor(note: Path, fecha: str | None = None, dry_run: bool = False) -> dic
     if not d:
         raise SidecarError(f"{note.name}: el bloque no declara fecha en su encabezado y no se pasó "
                            f"`--fecha`: re-fechar es una decisión, no un default")
-    pares = lb.pairs_of(text)
+    pares = lb.note_pairs(note, text)
     asignado, sin_fila, huerfanas = lb.match_rows_to_pairs(pares, rows)
     sin_fila += [p for p, (fila, _s) in asignado.items() if lb.carry_needs_reverify(p, fila)]  # #539
     if sin_fila:

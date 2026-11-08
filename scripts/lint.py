@@ -3653,7 +3653,7 @@ def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
     return verif_estructura, verif_cabecera
 
 
-def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tuple:
+def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de, pares=None) -> tuple:
     """The seven verdicts that are decided ROW BY ROW of the verification table (#396).
 
     Returns `(stale_pairs, verif_sin_archivo, verif_localizador, verif_sin_resolver,
@@ -3671,7 +3671,8 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tu
     verif_sin_localizador: list = []
     verif_truncada: list = []
     cond_sin_clasificar: list = []
-    pendientes = lb.pairs_of(texto)
+    # #635 — los de una nota de paper llevan su bibcode propio en la `## Vista` (`lb.note_pairs`)
+    pendientes = lb.pairs_of(texto) if pares is None else list(pares)
     for fila in filas:
         # #91: el lint miraba el bloque SÓLO por su encabezado (¿existe? ¿está fresco?) y nunca
         # su contenido, así que una fila `no-soportada` pasaba limpia — sentada bajo un
@@ -3824,7 +3825,7 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de) -> tu
     return stale_pairs, verif_sin_archivo, verif_localizador, verif_sin_resolver, verif_sin_localizador, verif_truncada, cond_sin_clasificar
 
 
-def check_verification_pairs(anchor_notes, evidencia_hash_de) -> tuple:
+def check_verification_pairs(anchor_notes, evidencia_hash_de, fms: dict | None = None) -> tuple:
     """The whole `## Verificación de citas` sweep, one note at a time (#396).
 
     Returns `(stale_pairs, schema_retirado, verif_sin_archivo, verif_localizador,
@@ -3868,7 +3869,9 @@ def check_verification_pairs(anchor_notes, evidencia_hash_de) -> tuple:
         verif_estructura += _est
         verif_cabecera += _cab
         (_stale, _sin_arch, _loc, _sin_res,
-         _sin_loc, _trunc, _cond) = check_verif_row_pairs(stem, texto, filas, evidencia_hash_de)
+         _sin_loc, _trunc, _cond) = check_verif_row_pairs(
+            stem, texto, filas, evidencia_hash_de,
+            lb.note_pairs(ruta, texto, None if fms is None else fms.get(stem) or {}))   # #635
         stale_pairs += _stale
         verif_sin_archivo += _sin_arch
         verif_localizador += _loc
@@ -6348,7 +6351,7 @@ def _certified_anchors(f: str) -> set | None:
     except OSError:
         return None
     filas = lb.verif_rows(Path(f)) or []
-    pares = {(p.bibcode, p.anchor) for p in lb.pairs_of(text)}
+    pares = {(p.bibcode, p.anchor) for p in lb.note_pairs(Path(f), text)}   # #635
     if not (filas and pares) or pares != {(x.bibcode, x.anchor) for x in filas}:
         return None
     return {a for _, a in pares}
@@ -7261,7 +7264,11 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     add("broken", _bk)
     add("unverifiable", _uv)
     coverage: list = []
-    _un, _vb = check_verification_coverage(stem, f, text, nbib, in_verifiable_note,
+    # #635 — la `## Vista` de una nota de paper cita a la NOTA sin `[[bibcode]]`: sus pares (con el
+    # bibcode propio) también cuentan para deberle verificación
+    _propio = cfg.note_own_bibcode(Path(f), fm)
+    _n_cit = nbib or (len(lb.pairs_of(text, _propio)) if _propio else 0)
+    _un, _vb = check_verification_coverage(stem, f, text, _n_cit, in_verifiable_note,
                                            sweep.anchor_notes, coverage)
     add("unverified", _un)
     add("coverage", coverage)
@@ -7548,7 +7555,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
      found["verif_localizador"], found["verif_sin_resolver"], found["verif_estructura"],
      found["verif_sin_hermano"], found["verif_cabecera"],
      found["verif_sin_localizador"], found["verif_truncada"],
-     found["cond_sin_clasificar"]) = check_verification_pairs(sweep.anchor_notes, evidencia_hash_de)
+     found["cond_sin_clasificar"]) = check_verification_pairs(sweep.anchor_notes, evidencia_hash_de, todos_fm)
     found["cond_destino"] = check_condition_destinations(sweep.anchor_notes)
     found["localizador_ajeno"] = check_wrong_locator(sweep.anchor_notes)       # #594
     found["extraccion_despaginada"], _dep_poblacion = check_depaginated_extractions()

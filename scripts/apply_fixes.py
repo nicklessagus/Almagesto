@@ -380,7 +380,7 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     text = note.read_text(encoding="utf-8")
     lines = text.split("\n")
     blocks = lb.split_blocks(text)
-    res.pairs_before = len(lb.pairs_of(text))
+    res.pairs_before = len(lb.note_pairs(note, text))
 
     # #222 — EVERYTHING is located against the ORIGINAL text, and nothing is mutated until every
     # fix has a span. Until 1.87.0 step 1 replaced exact single-line matches by mutating `lines`
@@ -388,7 +388,7 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # had touched stopped resolving. It happened whenever a table got one ROW fix (exact) and one
     # TABLE fix (block) — no collision was declared, it simply failed and aborted all of them.
     planned = []                      # (span, bib, n, new, kind, retira)
-    pares = lb.pairs_of(text)
+    pares = lb.note_pairs(note, text)
     # #572 — rows deleted by this same batch do not count as orphaned by their caption's deletion.
     borradas = {k + 1 for _, _, o, nw, *_ in pending if nw is None
                 for k, l in enumerate(lines) if l == o}
@@ -603,7 +603,7 @@ def apply(note: Path, fix_dir: Path, *, write: bool = False) -> Result:
     # Es el mismo principio que el ancla —lo que la nota afirma tiene que seguir siendo contable—
     # y es lo único que habría cazado los siete pares perdidos sin que nadie los contara a mano.
     nuevo_texto = "\n".join(lines)
-    pares_despues = lb.pairs_of(nuevo_texto)
+    pares_despues = lb.note_pairs(note, nuevo_texto)
     res.pairs_after = len(pares_despues)
     # ⛔ #578 — una inserción declarada SUBE los pares de los bloques que agrega (una fila sin cita
     # propia, los que hereda de su caption): ésos se suman al piso, así que la inserción no puede
