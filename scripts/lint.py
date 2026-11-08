@@ -116,7 +116,7 @@ def _lines_with_section(body: str) -> list:
 _entity_slug = cfg.entity_slug                  # ONE definition (#550)
 # @inv INV-02
 # ⛔ Exige que después del target venga un delimitador (`]`, `|` o `#`) y **corta en el salto de
-# línea**. Sin eso, un `[[` sin cerrar se tragaba el link SIGUIENTE: medido el 2026-08-28,
+# línea**. Sin eso, un `[[` sin cerrar se tragaba el link SIGUIENTE:
 # `"[[ y sigo.\nEl radio vive en [[gp-kernels]]"` devolvía UN solo target multilínea, así que un
 # wikilink real dejaba de contar como entrante y su destino se reportaba **huérfano** — categoría
 # BLOQUEANTE — con un mensaje que nombraba un target inservible.
@@ -204,7 +204,7 @@ def fm_error(text: str) -> str | None:
         return f"YAML inválido: {first[:80]}"
     # YAML **válido pero no-mapa**: `split_fm` lo devuelve como `{}` (honra su firma), así que sin
     # este renglón la nota evade en silencio todos los chequeos de su tipo — que es exactamente el
-    # modo de falla que esta función existe para cerrar. Medido el 2026-08-28.
+    # modo de falla que esta función existe para cerrar.
     if fm is not None and not isinstance(fm, dict):
         return (f"el frontmatter parsea pero NO es un mapa (es {type(fm).__name__}): sin pares "
                 f"`clave: valor` la nota evade todos los chequeos de su tipo")
@@ -333,9 +333,7 @@ def scope_wikilinks(text: str) -> list[str]:
 
     The scope (D-34) is by design a statement about the CORPUS —which themes, how many papers, as
     of when— and `## Huecos` is not a stamped section, so a `[[bibcode]]` there enters the fan-out
-    as a pair: one that **no PDF can support**, because the claim is not about the paper. Measured:
-    3 links → 3 pairs → 2 blocking `no-soportada` and two full PDF reads to find out the question
-    made no sense. The rule is «do not put a link there», not «do not look there»: exempting the
+    as a pair: one that **no PDF can support**, because the claim is not about the paper. The rule is «do not put a link there», not «do not look there»: exempting the
     whole blockquote would let a real claim in that nobody checks."""
     sb = _scope_block(text)
     return re.findall(r"\[\[([^\]|#]+)", sb[1]) if sb else []
@@ -419,8 +417,7 @@ def gaps_bullets(section: str) -> list:
 
     They are what nothing else checks: `verify-citations` goes claim↔its own source and
     `find-contradictions` claim↔claim, and both start from a `[[bibcode]]` — a gap has none **by
-    construction**. Measured 2026-08-31: 2 false gaps in one theme and 4 in another, all six
-    claiming the vault cannot answer something it does answer, and all six caught by accident."""
+    construction**: a false gap claims the vault cannot answer something it does answer."""
     return [ln.strip() for ln in (section or "").split("\n")[1:]
             if _BULLET_RE.match(ln.strip())]
 
@@ -469,8 +466,8 @@ def merge_ours_driver_risk() -> tuple[list[str], str | None]:
     —`git config merge.ours.driver true`— porque `merge=ours` sin él no hace nada; el argumento era
     correcto y miraba **un solo eje**. `merge=ours` es una regla por **path** y git no puede
     condicionarla por remoto: contra `upstream` (el template) protege, y contra `origin` (la otra
-    máquina del mismo usuario) **descarta en silencio lo que trae el remoto**. Medido en repos
-    sintéticos el 2026-09-03 — dos clones del mismo `origin` tocando un archivo `merge=ours`:
+    máquina del mismo usuario) **descarta en silencio lo que trae el remoto** — dos clones del mismo
+    `origin` tocando un archivo `merge=ours`:
 
     | configuración | resultado |
     |---|---|
@@ -517,7 +514,7 @@ CITA_PREFIJO = cfg.CITA_PREFIJO
 # append-only por contrato y lo cumple. Los dos números son el umbral por encima del cual el archivo
 # dejó de ser un estado — están declarados acá (y no en `tools/doc-size-ratchet.yaml`) porque el
 # STATUS es de la INSTANCIA (`merge=ours`), así que un ratchet versionado del template no lo
-# describiría. Medido en una bóveda real: 537 líneas con 12 encabezados fechados.
+# describiría.
 STATUS_MAX_FECHADOS = 3
 STATUS_MAX_LINEAS = 300
 
@@ -543,7 +540,7 @@ def _field_is_marked(lineas_marcadas: list[str], campo: str, viejo) -> bool:
     cualquier campo: el nombre corto de `<letra>.e` es `"e"`, y **"desactualizado" contiene una `e`**
     — así que una sola marca en cualquier lado silenciaba toda excentricidad que NEA hubiera
     cambiado. Ídem el valor: `mass_earth = 4` quedaba "marcado" por una línea que dice `Teff = 5344`.
-    Los tres casos están medidos (2026-08-28) y son falsos limpios sobre prosa que sigue citando un
+    Los tres casos son falsos limpios sobre prosa que sigue citando un
     valor retirado — justo lo que INV-128 existe para que **no** pase, y su enunciado ya decía «se
     evalúa por ocurrencia»."""
     corto = str(campo).rsplit(".", 1)[-1]
@@ -582,8 +579,8 @@ def vistas_en_cuerpo(text: str) -> set:
     """Los sujetos que tienen su sección `## Vista — <sujeto>` en el cuerpo de la nota.
 
     La sección NO va a `SECCIONES_ESTAMPADAS`: es exactamente lo que `verify-citations` tiene que
-    contrastar contra el `.txt` — la extracción es el paso más caro de la cadena y hoy es el menos
-    chequeado (6 de 908 notas de paper con bloque de verificación).
+    contrastar contra el `.txt` — la extracción es el paso más caro de la cadena y el menos
+    chequeado.
 
     ⛔ AUD-178 / INV-134 — dos recortes que faltaban, y los dos producían **hallazgos bloqueantes
     sobre una nota bien leída**, que es el peor tipo de falso positivo (obliga a "arreglar" trabajo
@@ -636,10 +633,9 @@ def inventario_sin_llenar(text: str) -> bool:
     disputa, borrar la sección y decirlo en el log»*. O sea que **ausencia = declarado** y
     **presente-y-vacío = saltado**. No hace falta un campo nuevo, ni adivinar qué ejes existían.
 
-    Por qué importa (medido, 2026-08-25): el contraste cazó un `K_d` copiado de la Tabla 2 de
-    Mayor+2009 que la **prosa del mismo paper** contradice, y `verify-citations` **no lo puede ver**
-    —«la Tabla 2 dice 4,55» es literalmente cierto—. La pasada encontró cinco inconsistencias
-    internas de fuentes por esta vía, ninguna visible para el chequeo claim↔fuente."""
+    Por qué importa (#72): el contraste caza la inconsistencia interna de una fuente —un valor de
+    tabla que la prosa del mismo paper contradice— que `verify-citations` **no puede ver**: «la
+    Tabla N dice X» es literalmente cierto."""
     seccion = cfg.section_text(text, INVENTARIO_HEADER)
     if not seccion:
         return False                      # sección borrada: la escotilla declarada, no un hallazgo
@@ -653,7 +649,7 @@ def inventario_sin_llenar(text: str) -> bool:
 #: (`_(no disponible)_`), un título repetido o un resumen de dos líneas que dos trabajos distintos
 #: del mismo grupo pueden compartir. El piso convierte la señal en «coincide el texto largo».
 ABSTRACT_MIN = 200
-#: Se compara el ARRANQUE, no el texto entero: el caso medido es «el mismo texto palabra por
+#: Se compara el ARRANQUE, no el texto entero: el caso es «el mismo texto palabra por
 #: palabra, en otro congreso, y TRUNCADO», así que exigir igualdad exacta lo perdería justo donde
 #: el duplicado es más probable.
 ABSTRACT_CLAVE = 300
@@ -663,9 +659,8 @@ def _abstract_norm(text: str) -> str:
     """A paper note's verbatim `## Abstract`, normalized for comparison (#216).
 
     Lowercased with collapsed whitespace: it is a catalogue copy, so two notes of the same work
-    carry it identically except for wrapping. The TITLE is deliberately not compared (measured in
-    `openalex.py`: title matching resolved 18 of 25 cases and **2 pointed at a different work**) —
-    the verbatim abstract is guaranteed in every note since #124 and is far more specific."""
+    carry it identically except for wrapping. The TITLE is deliberately not compared (title
+    matching points at a different work, see `openalex.py`) — the verbatim abstract is guaranteed in every note since #124 and is far more specific."""
     span = cfg.section_span(text, "## Abstract")
     if span is None:
         return ""
@@ -689,9 +684,7 @@ def note_files() -> list:
 
     ⛔ `glob` returns **filesystem** order, which differs between machines: since every category
     accumulates its findings in sweep order, the same corpus produced reports with the same lines in
-    a different order. Measured: the golden (`test_lint_golden_semilla_fija`) passed locally and
-    failed in CI with a diff where **not one finding changed**, only its position — a gate that
-    cannot tell a regression from a filesystem. And without this, diffing two lint reports is noise.
+    a different order — a golden gate that cannot tell a regression from a filesystem. And without this, diffing two lint reports is noise.
 
     Includes `index.md`/`log.md` (they contribute incoming links); orphanhood excludes them by name.
 
@@ -805,7 +798,7 @@ def normalize_lists(fm: dict) -> list:
     defenderse por su cuenta: el lint es la compuerta de CI y ante un frontmatter raro tiene que
     **reportar**, no morirse — un escalar donde va una lista lo volteaba con un `TypeError`, y un
     escalar iterable (un string) se recorría **carácter por carácter**, inventando un hallazgo por
-    letra. Medido con un fuzz de tipos sobre los campos documentados: 32 combinaciones lo volteaban.
+    letra.
 
     La nota no se "arregla": los elementos inservibles se sacan de la vista del lint y se reportan,
     que es la misma política que el resto de los chequeos de forma (#71)."""
@@ -881,7 +874,7 @@ MIRROR_HOST = (("spectral_type", "spectral_type"), ("teff_K", "teff_K"),
 MIRROR_PLANET = ("P_days", "K_ms", "e", "mass_earth", "status")
 # P_rot documentado en la PROSA (que es donde va cuando NEA no lo tiene). Heurística deliberada,
 # como la de fuga de implementación: barata y de alta señal. Tres decisiones, cada una por un modo
-# de falla medido:
+# de falla:
 #   · la clase entre `P` y `rot` cubre la notación que el propio CLAUDE.md pide en `vault/wiki/`
 #     (`$P_{\rm rot}$`, `P$_{\rm rot}$`, `$P_\mathrm{rot}$`); `(?![a-z])` evita que "Protostellar"
 #     cuente como mención;
@@ -914,7 +907,7 @@ PROT_NEG = re.compile(r"(?i)no se conoce|no se sabe|sin medir|desconocid|no hay 
 #
 # ⛔ Ancla al **PRINCIPIO del paréntesis**, no en la palabra suelta en cualquier posición. La marca
 # abre con `inferencia`; la prosa del dominio la lleva precedida de artículo («la inferencia…»).
-# La forma vieja tenía los dos errores a la vez, medidos el 2026-08-28 en una bóveda cuyo dominio
+# La forma vieja tenía los dos errores a la vez, en una bóveda cuyo dominio
 # **incluye** inferencia bayesiana y procesos gaussianos:
 #   · falso POSITIVO bloqueante — `"Usamos GP (la inferencia bayesiana es cara) para el ajuste."`
 #     y `"(inferencia de hiperparámetros por MCMC)"` se reportaban como marca pelada;
@@ -928,9 +921,8 @@ PROT_NEG = re.compile(r"(?i)no se conoce|no se sabe|sin medir|desconocid|no hay 
 # #276 — el `[`*_~]*` NO es cosmético: sin él el bloqueante es ciego al énfasis markdown, y
 # `CLAUDE.md` **induce** la forma que no ve (escribe `(inferencia de [[b1]])` en la sección de
 # las marcas en línea y ``marcado **`inferencia`**`` en la cascada de ingest y en el espejo #70).
-# Medido sobre una ficha real: de sus 5 marcas de prosa, 3 llevan backticks y el detector veía
-# **2 de 5** — un ⛔ que existe para que ninguna afirmación sin respaldo se disfrace de
-# inferencia, sin mirar el 60 % de su población. Es #168 otra vez: `lib_blocks._ADORNO` existe
+# Un ⛔ que existe para que ninguna afirmación sin respaldo se disfrace de inferencia no puede
+# dejar afuera la forma con backticks. Es #168 otra vez: `lib_blocks._ADORNO` existe
 # exactamente por esto («no cambian NADA de lo que la fila dice, pero con la comparación
 # literal cualquiera de los tres apagaba el bloqueante») y la comprensión no había llegado acá.
 INFER_MARK = lb.INFER_MARK      # #280: una sola definición, en `lib_blocks` (la cuentan dos consumidores)
@@ -1014,7 +1006,7 @@ def prot_documentado(body: str) -> bool:
         if not (m_mencion and m_cita):
             continue
         # el negador sólo cuenta hasta acá: lo que viene después de que la mención Y la cita ya
-        # cerraron es, en la práctica medida, una cláusula distinta ("y no hay señal en el
+        # cerraron es, en la práctica, una cláusula distinta ("y no hay señal en el
         # bisector.", "aunque no se conoce la inclinación.") que niega otra cosa.
         limite = max(m_mencion.end(), m_cita.end())
         if not PROT_NEG.search(oracion[:limite]):
@@ -1289,8 +1281,7 @@ def check_second_hand_lifted(anchor_bodies: dict, segunda_mano: dict,
     INV-40 stops being a side effect.
 
     ⛔ #433 — three outputs instead of one, and that is the whole fix. The category was recall-only
-    with **no way out**: measured on a whole category read one by one, 48 of 66 findings stayed
-    listed after every one had been looked at. So a review can now be SIGNED in the note's
+    with **no way out**: a finding stayed listed after it had been looked at. So a review can now be SIGNED in the note's
     frontmatter (`segunda_mano_revisada`, `cfg.load_reviewed_second_hand`) and it comes back in its
     own list —*«considerado y rechazado: visible, no es deuda»*, never mixed with real debt
     (AUD-207)— while a declaration that matches no finding comes back in a third one, because a
@@ -1308,9 +1299,8 @@ def check_second_hand_lifted(anchor_bodies: dict, segunda_mano: dict,
     # una categoría que no se puede cerrar se deja de mirar.
     # ⛔ #350 — y se cruza el VALOR, no el paper. La pregunta era *«¿este paper tiene ALGUNA segunda
     # mano?»*, que sobre un survey o un handbook —llenos de atribuciones a terceros por
-    # construcción— la contesta que sí siempre: medido, 398 de 462 pares, el 86 %. Es la forma de
-    # #198 (*«un reporte donde 2 de 3 avisos no son accionables se deja de mirar»*), acá con 6 de
-    # cada 7. La pregunta accionable es *«¿el valor que ESTA línea toma es uno de ellos?»* y la
+    # construcción— la contesta que sí siempre. Es la forma de
+    # #198 (*«un reporte donde la mayoría de los avisos no son accionables se deja de mirar»*). La pregunta accionable es *«¿el valor que ESTA línea toma es uno de ellos?»* y la
     # contesta `second_hand_lifted` por el literal compartido; el hallazgo lo NOMBRA, que es lo que
     # lo vuelve triage y no lectura.
     #
@@ -1427,7 +1417,7 @@ def check_identidad_duplicada(paper_fms: dict, ft_hash: dict, illegible_txt: lis
     # the stems this check already reported, and re-reporting them there would be noise.
     #
     # La identidad de un trabajo es su `doi`/`arxiv_id`, no su bibcode: el preprint y el publicado
-    # son bibcodes distintos del MISMO paper. Medido en la instancia real: 2 trabajos con dos notas.
+    # son bibcodes distintos del MISMO paper.
     # Bloqueante porque el daño es silencioso y se acumula: doble conteo en todo lo que cuenta
     # papers, dos fuentes donde hay una, y un falso positivo permanente de #75 (la ficha cita una).
     # Un alias en `versions[]` NO es un duplicado: es el registro de que el trabajo tuvo otro
@@ -1441,10 +1431,9 @@ def check_identidad_duplicada(paper_fms: dict, ft_hash: dict, illegible_txt: lis
     alias = {str(v.get("bibcode")) for fm_p in paper_fms.values()
              for v in cfg.as_list(fm_p.get("versions")) if isinstance(v, dict) and v.get("bibcode")}
     # #229 — la exención por alias es incondicional, y eso APAGA los dos detectores de identidad
-    # sobre una nota viva. Medido: una nota usó `versions[]` para decir «no son duplicados, se
-    # conservan los dos» —lo contrario de lo que el campo significa en D-19— y con eso dejó a una
-    # de las 4 notas SIN `doi` ni `arxiv_id` (justo la población que #216 existe para cubrir) fuera
-    # de los dos chequeos, para siempre. El lint seguía declarando «sobre 32 notas» mirando 31.
+    # sobre una nota viva: usar `versions[]` para decir «no son duplicados, se conservan los dos»
+    # —lo contrario de lo que el campo significa en D-19— deja a la nota fuera de los dos chequeos,
+    # para siempre, y la población declarada miente.
     # O es un alias (y entonces NO debe haber nota) o es un trabajo distinto (y entonces NO va en
     # `versions[]`): la contradicción de schema es lo que bloquea, no la exención.
     for _a in sorted(alias & set(paper_fms)):
@@ -1488,14 +1477,13 @@ def check_identidad_duplicada(paper_fms: dict, ft_hash: dict, illegible_txt: lis
                                    f"--rename-paper {stems[0]} {stems[1]}`"))
     # #114 · segunda señal, y la que caza el caso REAL: dos notas cuyo `.txt` tiene los MISMOS BYTES
     # son el mismo trabajo — eso no es heurística, es certeza. Hace falta porque la metadata a veces
-    # no los liga en absoluto: medido, el registro publicado traía `arxiv_id: null` y el del preprint
-    # el DOI DataCite, así que NINGÚN campo coincidía y el detector callaba sobre un duplicado real.
+    # no los liga en absoluto (el publicado sin `arxiv_id`, el preprint con el DOI DataCite): NINGÚN
+    # campo coincide y el detector calla sobre un duplicado real.
     # ⚠ Sólo sobre `.txt` **legibles**. Dos extracciones FALLIDAS (escaneo sin capa de texto,
     # mojibake, `.txt` casi vacío) tienen los mismos bytes y no son el mismo trabajo: son dos
     # fracasos idénticos. Sin este recorte, la señal de bytes convierte a cada par de extracciones
     # rotas en un hallazgo BLOQUEANTE que manda a fusionar dos papers ajenos — o sea a destruir una
-    # nota. Medido sobre el corpus sintético: dos `.txt` ilegibles sembrados a propósito daban un
-    # tercer duplicado que nadie sembró. El umbral no es nuevo: es el mismo `is_legible` con el que
+    # nota. El umbral no es nuevo: es el mismo `is_legible` con el que
     # el lint ya reporta esos `.txt` en su propia categoría, y que dice justamente «esto no sirve
     # para grep ni para verify» — un texto que no sirve para leerlo tampoco identifica a nadie.
     # @inv INV-106
@@ -1541,8 +1529,7 @@ def stamped_section_diff(visto: str, esperado: str) -> str | None:
     """`None` when a stamped section equals its re-render; else WHAT changed (#563).
 
     ⛔ The WHOLE section is compared, like `check_matrix_stale`: comparing only the set of links
-    missed the row whose `Estado` moved and the header whose «N · M sintetizados» lied (measured:
-    1 of 17 roll-ups of a real vault, lint at 0). The detail names the rows that are missing, that
+    missed the row whose `Estado` moved and the header whose «N · M sintetizados» lied. The detail names the rows that are missing, that
     are left over and that CHANGED, plus the header old → new — never a bare «stale»."""
     v, e = str(visto or "").strip().split("\n"), str(esperado or "").strip().split("\n")
     if v == e:
@@ -1568,7 +1555,7 @@ def check_papers_table_stale(paper_fms: dict, todos_fm: dict | None = None,
     whose table is up to date.
     """
     # La tabla materializada de `## Papers` es un snapshot, y un snapshot que nadie re-estampa
-    # miente igual que el roll-up Dataview que reemplazó (medido: 155 prometidos, 8 discutidos).
+    # miente igual que el roll-up Dataview que reemplazó (#60).
     # Backlog —es "re-estampar", no una violación del vault— pero NOMBRA los stems que faltan o
     # sobran, no la diferencia de conteos: dos listas del mismo largo pueden no ser los mismos
     # papers (la lección de #70).
@@ -1576,17 +1563,14 @@ def check_papers_table_stale(paper_fms: dict, todos_fm: dict | None = None,
     no_evaluados: list = []
     papers_table_stale: list = []
     _star_ctx = None
-    # UNA sola pasada de parseo de `papers/`, compartida por todas las estrellas: sin esto el lint
-    # saltaba de ~2,0 a 5,9 parseos YAML por nota (medido por `tests/poblada/test_escala.py`, techo
-    # 2,3) — el costo crece con el producto notas × estrellas.
+    # UNA sola pasada de parseo de `papers/`, compartida por todas las estrellas: sin esto el costo
+    # crece con el producto notas × estrellas (techo de `tests/poblada/test_escala.py`).
     # `paper_fms` se llena en el LOOP principal (ver más arriba), que ya parsea cada nota: una
-    # pasada extra acá subía el ratio a ~3,0 (el techo del test de escala es 2,3), y el hotspot
-    # conocido —el doble parseo de split_fm+fm_error— ya se come 2,0.
+    # pasada extra acá rompe ese techo.
     # ⛔ #338 — y los CONCEPTOS, que estaban afuera. #300 llevó las dos garantías de D-10 al
     # ESTAMPADOR de un concepto y el detector se quedó en `stars/`, así que la promesa «el lint
-    # reporta la tabla desactualizada» valía para la mitad del vault: medido, 2 de 3 sujetos de una
-    # bóveda real son temas, y un paper que reclama una estrella Y un tema con las dos tablas
-    # vacías se reportaba 1 de 2. Un tema estampa su roll-up bajo UNO de los dos encabezados
+    # reporta la tabla desactualizada» valía para la mitad del vault: un paper que reclama una
+    # estrella Y un tema con las dos tablas vacías se reportaba una sola vez. Un tema estampa su roll-up bajo UNO de los dos encabezados
     # —`## Papers` estilo ficha o `## Papers que tocan este tema (auto)` (D-24)—, y cada uno tiene
     # su propio universo, así que se compara el que la nota trae contra el suyo: exigir el ausente
     # inventaría un hueco en la nota que eligió el otro. La nota que no trae NINGUNO no puede
@@ -1684,8 +1668,7 @@ def check_sintesis_no_declarada(paper_fms: dict) -> tuple:
     Twin of `check_extraccion_no_declarada`. The synthesis date is the third date of the
     `> _Estado — …_` header (D-12/INV-82) and it cannot be derived, only declared
     (`triage.py --sintesis`). `make_notes.estado_line` omits the part silently when the registro
-    lacks it, and `estado_desfasado` compares against that same line, so nothing ever disagreed:
-    measured, 3 of 10 subjects of a real vault published a synthesised note without its date.
+    lacks it, and `estado_desfasado` compares against that same line, so nothing ever disagreed.
     The universe is `mn.papers_universe`, the SAME one the `## Papers` table stamps.
 
     @inv INV-82
@@ -1727,9 +1710,7 @@ def check_duplicate_without_id(paper_fms: dict, paper_abstracts: dict,
     """
     # D-19 identifica un trabajo por `doi`/`arxiv_id`, y la clase de fuentes donde el duplicado es
     # MÁS probable es justamente la que no tiene ninguno de los dos: resúmenes de congreso (el mismo
-    # trabajo presentado en EAS, COSPAR y SPIE), tesis, material pre-DOI. Medido en `ica`: de 52
-    # core, 6 sin ningún identificador —el 12 % del corpus invisible para el chequeo— y ahí apareció
-    # un duplicado real, con el mismo texto palabra por palabra. Y a diferencia del par
+    # trabajo presentado en EAS, COSPAR y SPIE), tesis, material pre-DOI. Y a diferencia del par
     # preprint↔publicado, éste NO tiene señal alternativa: el bibcode no comparte prefijo, los años
     # difieren y los autores se abrevian distinto.
     # ⛔ REPORTA, no fusiona, y por eso es BACKLOG: la distinción «mismo trabajo en dos congresos»
@@ -1737,8 +1718,8 @@ def check_duplicate_without_id(paper_fms: dict, paper_abstracts: dict,
     # mismo corpus (un registro de 2022 reporta NO-detección y el de 2023 detección tentativa: no
     # son duplicados y se conservaron los dos). Sólo quien conoce el trabajo puede decidirlo, y un
     # dedup automático que fusiona dos trabajos distintos destruye más de lo que arregla.
-    # ⛔ Y NO se compara por TÍTULO: está medido en `openalex.py` y es peor que el problema (18 de
-    # 25 resueltos, **2 apuntando a otro trabajo**). El `## Abstract` verbatim está garantizado en
+    # ⛔ Y NO se compara por TÍTULO: en `openalex.py` es peor que el problema (apunta a otro
+    # trabajo). El `## Abstract` verbatim está garantizado en
     # toda nota desde #124, así que el dato está y es mucho más específico.
     abstract_dup: list = []
     por_abstract: dict = {}
@@ -1771,9 +1752,8 @@ def check_ground_truth_movido() -> tuple:
     The first block extracted from `lint.collect` (#396), chosen for being SELF-CONTAINED: it reads
     no local of the note sweep —only `cfg`, the disk and `_field_is_marked`— so the extraction is a
     move of text and not a change of semantics, which is the condition the issue sets for touching
-    the gate. Measured on the way in: the golden comes back **byte-identical** and the directed
-    mutation now kills this check on its own, which was consequence (1) of the issue — until now
-    mutating it meant mutating all of `collect`.
+    the gate: the directed mutation kills this check on its own, which was consequence (1) of the
+    issue — until then mutating it meant mutating all of `collect`.
 
     @inv INV-128
     """
@@ -2004,9 +1984,8 @@ def check_status_stacked() -> list:
     # #302 — `STATUS.md` se volvió APPEND-ONLY, que es el trabajo del `log`. Es la única de las
     # cuatro piezas de memoria in-repo cuya política de escritura no estaba declarada (del `log` se
     # dice que es append-only, del `index.md` que se estampa, de `CLAUDE.md` que lleva regla +
-    # ancla con techo), y el resultado medido: 537 líneas, 12 encabezados fechados apilados y
-    # **cuatro** listas de próximos pasos, una de las cuales contradice un estado posterior del
-    # mismo archivo. El daño no es cosmético: es el primer archivo que un agente lee al iniciar
+    # ancla con techo), y el resultado: encabezados fechados apilados y varias listas de próximos
+    # pasos que se contradicen. El daño no es cosmético: es el primer archivo que un agente lee al iniciar
     # sesión, y arranca por la lista equivocada.
     if cfg.STATUS.exists():
         try:
@@ -2044,7 +2023,7 @@ def check_scope_desync(paper_fms: dict) -> list:
     alcance_desfasado: list = []
     # #312 — `alcance`/`unidad_cita` viajan de `sources[]` al stub y se congelan ahí: ampliar el
     # alcance de un libro dejaba la nota **afirmando que ese material no entra mientras lo publica
-    # en su vista** (medido: 2 libros, 37 valores nuevos). Y no deja al chequeo de completitud sin
+    # en su vista**. Y no deja al chequeo de completitud sin
     # información: lo deja con información FALSA, que es peor.
     if not cfg.themes_error():
         for _slug, _tmeta in (cfg.load_themes() or {}).items():
@@ -2072,8 +2051,7 @@ def check_depaginated_extractions() -> tuple:
 
     `replace_pdf` stamps `_paginacion` on the extraction when a PDF is swapped (the preprint for the
     published version, the most common case of #298) because `raw/extraccion/**` is versioned and
-    not regenerable (#311): the quoted text stays right —measured, `contrast --validar` gave 0
-    alterations over the five notes touched— while **every locator points at a document that is no
+    not regenerable (#311): the quoted text stays right while **every locator points at a document that is no
     longer on disk**, since the publisher's copy paginates by volume (Cardoso 1998 starts at 2009).
 
     ⛔ No other layer sees it, and that is the whole reason this exists: `verify-citations` checks
@@ -2162,7 +2140,6 @@ def check_reused_artifact_unchecked(paper_fms: dict) -> list:
     # versión nueva, la búsqueda habría traído otro bibcode y D-19 los une») es falsa justo en el
     # caso frecuente: el DOI del preprint identifica el DEPÓSITO, así que #216 garantiza que
     # preprint y publicado no colisionen — queda el detector de abstract verbatim, que es backlog.
-    # Medido en una bóveda real: 62 % del corpus es `eprint` y `_red.yaml` NO EXISTÍA.
     # Se detecta por verdad de disco: el mismo bibcode con PDF bajo ≥2 slugs.
     _por_stem: dict = {}
     for _pdf in cfg.PDFS.glob("*/*.pdf"):
@@ -2195,8 +2172,7 @@ def check_fulltext_without_note() -> list:
     # Fulltext SIN nota de paper (#108). Hermano simétrico de la «cita no verificable» (bibcode
     # citado sin `.txt`) y del `ground_truth` sin ficha: acá el `.txt` **existe** y la nota no, así
     # que es extracción ya pagada —descarga, PDF, pdftotext— que **no la alcanza ningún roll-up ni
-    # ninguna síntesis**, y ningún detector la miraba. Medido en una bóveda real: 10 de 30 `.txt`
-    # de un tema quedaron así. El mecanismo es alcanzable sin salirse de lo documentado: al
+    # ninguna síntesis**, y ningún detector la miraba. El mecanismo es alcanzable sin salirse de lo documentado: al
     # **angostar la `query` de un tema**, sus registros salen de `build/<slug>/ads.json`,
     # `make_notes` deja de escribirles nota, y el PDF y el `.txt` quedan en disco. Es la misma
     # familia que INV-94 (paper sin entidad) un escalón más abajo: allá la nota existe y no la
@@ -2257,8 +2233,7 @@ def check_index_stale(todos_fm: dict) -> list:
     # #237 — el ÍNDICE desactualizado, análogo al detector de `## Papers` (D-10) y por el mismo
     # motivo: `index.md` es lo primero que un agente abre para orientarse y una de las cuatro piezas
     # de la memoria in-repo, y era el único artefacto que quedó 100 % Dataview — o sea que le muestra
-    # al que abre el `.md` la query, no sus resultados, con el plugin sin versionar. Medido en una
-    # bóveda real: los tres commits de su `index.md` son anteriores a la instanciación, y no tenía
+    # al que abre el `.md` la query, no sus resultados, con el plugin sin versionar, y no tenía
     # cómo actualizarse (el paso de bookkeeping manda «agregar el concepto» a un archivo sin una
     # sola línea estática). Nombra los stems, no la diferencia de conteos.
     _idx = cfg.WIKI / "index.md"
@@ -2330,7 +2305,7 @@ def check_lens_broken(obj_err) -> list:
     """
     lente_rota: list = []
     # ── LENTE VACÍA: el objetivo parsea, tiene nombre propio, y no clasifica NADA (AUD-56) ────────
-    # Medido en un clon limpio con el `objective.yaml` de una instancia en 1.11.0: `relevance` usa
+    # Un `objective.yaml` de schema viejo: `relevance` usa
     # `topics:` (schema pre-R-5, hoy `facets:`), así que `lens_current()` da `facets: {}` mientras
     # `require: [rv]` exige una faceta que no existe — ninguna cosa podría ser core. `objective_error`
     # dice `None` (el YAML está sano), el WARN del placeholder no dispara (el nombre es real), el
@@ -2510,9 +2485,7 @@ def check_sources_provenance() -> list:
     # y el de una fuente declarada desde #81 — pero una fuente off-ADS ACEPTADA no decía nada. Y es
     # el cuadrante que más lo necesita: en off-ADS **todo** entra por decisión de alguien (no hay
     # query que descubra), así que sin el campo la pregunta «¿qué entró porque lo pediste vos, qué
-    # lo propuso el descubrimiento y qué salió de un reporte externo?» no tiene respuesta. Medido
-    # sobre una bóveda real: los 40 papers que tenía y la nueva no entraron los 40 a mano, y no hay
-    # forma de saber cuáles pidió el usuario. BLOQUEANTE, como la forma dura de `extra_core`: un
+    # lo propuso el descubrimiento y qué salió de un reporte externo?» no tiene respuesta. BLOQUEANTE, como la forma dura de `extra_core`: un
     # campo opcional no se llena. El snippet lo arma `triage.py --accept-source`.
     # `themes_error()` primero: con el YAML roto, `load_themes` levanta y tumbaría el lint entero —
     # el chequeo no puede volverse él mismo un falso rojo (misma doctrina que INV-80).
@@ -2575,11 +2548,9 @@ def check_sources_metadata() -> tuple:
     fuente_metadata_firmada: list = []
     # #353 — lo que un item de `sources:` DECLARA contra lo que su `doi` o su PDF dicen. El cruce
     # lo hace `check_sources` (red; corre al declarar y a pedido) y deja el veredicto en el
-    # registro versionado con un snapshot de lo declarado: acá se lee, offline. Medido en una bóveda
-    # real (52 fuentes): 1 autor falso por Crossref (la atribución que #353 cazó, derivada del
-    # nombre del archivo), 1 año a ±1 (online-first: NO es falso), 3 títulos con variantes, y la
-    # primera página del PDF sin el apellido o el año en 14 —capítulos, preprints, `Hyv¨arinen`—:
-    # por eso SÓLO bloquea autor por Crossref y año por Crossref con diferencia ≥ 2; lo demás es
+    # registro versionado con un snapshot de lo declarado: acá se lee, offline. Un año a ±1 es
+    # online-first (NO es falso) y la primera página de capítulos y preprints suele no traer el
+    # apellido o el año: por eso SÓLO bloquea autor por Crossref y año por Crossref con diferencia ≥ 2; lo demás es
     # backlog con su motivo (D-43: el no evaluable se dice, no es verde).
     for _slug, _meta in ({} if cfg.themes_error() else (cfg.load_themes() or {})).items():
         _chequeadas = cfg.as_map(cfg.load_registro(_slug).get("fuentes_chequeadas"))
@@ -2620,8 +2591,7 @@ def check_sources_metadata() -> tuple:
                 _v == "autor" or (_v == "anio" and abs(int(_decl_hoy["year"] or 0)
                                                     - int(cfg.as_map(_rec.get("encontrado")).get("year") or 0)) >= 2))
             # #463 — la CUARTA salida: cuando el equivocado es el CATÁLOGO, las tres que prescribe
-            # el mensaje piden publicar una atribución falsa (medido: `2012Naik`, cuyo registro de
-            # Crossref trae `given: Ganesh, family: R.` y perdió «Naik»). La firma versionada por
+            # el mensaje piden publicar una atribución falsa. La firma versionada por
             # caso baja el hallazgo a backlog DECLARADO; la firma vieja o rota vuelve a bloquear.
             _campo = {"autor": "author", "anio": "year", "titulo": "title"}.get(_v, _v)
             _hallado = cfg.as_map(_rec.get("encontrado"))
@@ -3181,10 +3151,10 @@ def check_unsynthesized_by_subject(paper_fms: dict, ya: set, sujetos=None) -> tu
 
     `check_unsynthesized` measures by NOTE (cited in no entity at all), and the hatch is by PAIR
     since #553: a paper cited in ficha A and claimed by ficha B —which neither cites nor declares
-    it— was debt in B's roll-up and invisible here (measured on an instance: 12 such pairs, lint 0).
+    it— was debt in B's roll-up and invisible here.
     The universe is `mn.papers_universe`, the SAME one `## Papers` stamps. ⚠ A theme's membership
     through `methods` alone stays out, on purpose: that is a paper of ANOTHER subject using the
-    method, whose destination is the concept's roll-up, not its prose (91 of 103 pairs measured).
+    method, whose destination is the concept's roll-up, not its prose.
     `ya` = stems the per-note check already reports, so a paper is not listed twice."""
     filas: list = []
     no_evaluados: list = []
@@ -3230,7 +3200,7 @@ def check_no_sintetizado_citado(paper_fms: dict, sujetos=None) -> list:
     A pair hatch is a claim about the subject's note («this note does not synthesise this paper»);
     if the note cites it in prose (`cfg.solo_prosa`), the hatch lies. The roll-up resolves the
     contradiction in favour of the citation (`make_notes._estado_paper`), so without this category
-    it was settled in silence (measured on an instance: 9 pairs). Which half is wrong —the hatch or
+    it was settled in silence. Which half is wrong —the hatch or
     the citation— is a reader's call: backlog. `no_vista[X]` + citation is NOT a contradiction (the
     note may cite a paper it never read through X's lens); the roll-up publishes that pair as
     `sintetizado sin vista del sujeto`."""
@@ -3262,8 +3232,7 @@ def check_theme_pairs(paper_fms: dict, sujetos=None) -> tuple:
     alone, i.e. from ANOTHER subject's ingest (#558).
 
     Nothing asked for a decision on it: the retro-tag of `ingest-theme` covers «new theme → old
-    papers», and «new paper → old themes» had no step (measured: 72 pairs accumulated in 4 themes,
-    29 of them from the last two star ingests). Two destinations close it: `no_sintetizado` for the
+    papers», and «new paper → old themes» had no step. Two destinations close it: `no_sintetizado` for the
     theme (does not contribute) or `cola_tema` (pending, dated). `sin_decidir` is SEV_CIERRE: the
     item is the PAPER, so `lint --cierre <star>` stops on the pairs its own papers created. `cola`
     is the declared queue, listed with its date — debt with an owner, not silence. Same universe as
@@ -3465,8 +3434,7 @@ def check_dangling_methods(method_refs: dict, dangling) -> list:
     # #245 — el destino se resuelve también por los `aliases` del concepto (dentro de `_is_dangling`):
     # el nombre canónico de un método es el stem de su nota y `aliases` es la tabla de sinónimos que
     # el schema ya pide. Nadie la leía, así que `bisector span` y `bis` eran dos métodos distintos y
-    # el backlog contaba dos deudas donde hay una. Medido en una bóveda real: cierra 7 de 121 —
-    # chico, y del tipo correcto: lo que vacía el backlog es que el extractor VEA la lista antes de
+    # el backlog contaba dos deudas donde hay una. Cierra poco, y del tipo correcto: lo que vacía el backlog es que el extractor VEA la lista antes de
     # inventar la grafía.
     # #628 · #243 — UN ítem por `cfg.method_key`, con TODAS sus grafías y la UNIÓN de los papers:
     # el mismo método escrito de varias maneras es una sola deuda (absorbe a `methods_colision`,
@@ -3582,8 +3550,7 @@ def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
     verif_cabecera: list = []
     # #232 — la ESTRUCTURA del bloque, que nadie miraba más allá de la tabla. Las tres
     # sub-secciones que la plantilla cierra son el único lugar donde queda escrito el triage de
-    # la corrida: medido, de 91 condiciones pobladas 28 declaraban una omisión de la nota y
-    # nada decía cuáles se juzgaron no vinculantes — el razonamiento se hizo, vivió en `build/`
+    # la corrida: sin ellas nada dice qué condiciones se juzgaron no vinculantes — el razonamiento se hizo, vivió en `build/`
     # (scratch) y no llegó al artefacto que viaja. Se exigen aunque digan «ninguna»: la
     # diferencia entre «no hubo» y «nadie miró» es exactamente lo que este framework persigue.
     _falt = [x for x in lb.VERIF_SUBSECCIONES if x not in texto]
@@ -3617,13 +3584,11 @@ def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
 
     # #280 — y el conteo de cada SUB-SECCIÓN, por el mismo argumento (INV-81) un nivel abajo.
     # Se compara por FRAGMENTO verbatim, como el `N pares` de arriba: parsear el primer entero
-    # de la prosa erraría justo en el caso medido, donde la frase tiene dos números y el malo es
-    # el segundo. Sólo se chequea la sub-sección PRESENTE: la ausente ya la reporta `_falt`, y
+    # de la prosa erraría cuando la frase tiene dos números y el malo es el segundo. Sólo se chequea la sub-sección PRESENTE: la ausente ya la reporta `_falt`, y
     # duplicar el hallazgo manda a hacer dos veces el mismo trabajo.
     # ⛔ #337 — la prosa sale de ESTA nota. Hasta 1.144.0 se pasaba `body_full`, que lo asigna
     # el barrido principal —otro loop, ya terminado—, así que las tres notas de un `--cierre`
-    # recibían el conteo de marcas `inferencia` de la ÚLTIMA nota barrida (medido: 1, 7 y 19
-    # marcas reales, «19» para las tres). Es INV-81 violado en el chequeo que lo mecaniza: la
+    # recibían el conteo de marcas `inferencia` de la ÚLTIMA nota barrida. Es INV-81 violado en el chequeo que lo mecaniza: la
     # nota que publicaba SU número correcto quedaba reportada como deuda para siempre.
     _fm_v = cfg.frontmatter_span(texto)
     _frags = lb.verif_subsection_lines(filas, cfg.solo_prosa(_fm_v[1] if _fm_v else texto))
@@ -3640,8 +3605,8 @@ def check_verif_structure(stem: str, texto: str, ruta, filas) -> tuple:
                 (stem, f"la sub-sección «{_sub}» no publica el conteo que su propia tabla da → "
                        f"línea canónica: «{_sub} {_frag}: …»"))
     # #577 — #430 garantiza que el triage no se PIERDA entre corridas, no que lo que queda esté
-    # ENTERO. Medido: cuatro sub-secciones publicadas cortadas a mitad de frase durante un mes
-    # (el escritor leía sólo la primera línea del párrafo), con lint y `--cierre` en 0. Se lee el
+    # ENTERO: el escritor que lee sólo la primera línea del párrafo publica sub-secciones cortadas a
+    # mitad de frase. Se lee el
     # párrafo con el mismo lector que el escritor (`subsection_free_text`) y se mira su cierre.
     _sec = lb.verif_section(texto)
     for _sub in lb.VERIF_SUBSECCIONES:
@@ -3730,10 +3695,8 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de, pares
             # es la salida que el mensaje tiene que nombrar. Una fuente `unidad_cita: pagina`
             # leída del `.txt` cae acá **siempre** —#80 manda citar por página, #117 que el
             # prefijo case— y las dos salidas obvias empeoran la fila: poner `pdf:` miente sobre
-            # qué archivo se abrió, y citar por línea rompe #80. Medido: 6 de 8 filas marcadas
-            # de un concepto real eran ese caso, todas correctas.
-            # #226 — la celda TRUNCADA. Medido sobre las 99 filas de una nota real: 81
-            # `Evidencia` y 79 `Condición` cortadas con `…` a exactamente 191 caracteres. El
+            # qué archivo se abrió, y citar por línea rompe #80.
+            # #226 — la celda TRUNCADA (`Evidencia` o `Condición` cortadas con `…`). El
             # docstring de `lib_blocks` dice que sin `condición` el bloque «tiraba lo que la
             # corrida había encontrado sobre el régimen — el output más valioso del fan-out»;
             # truncar hace la mitad de eso, y lo cortado NO se recupera desde la nota (una fila
@@ -3745,10 +3708,9 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de, pares
                         (stem, f"[[{fila.bibcode}]] par {fila.n}: `{_col}` quedó cortada con "
                                f"`…` — lo que el fan-out encontró y no entró no se recupera "
                                f"desde la nota; sólo `Afirmación (extracto)` es truncable"))
-            # #221 — la condición sin CLASIFICAR. El fan-out la puebla al 89 % de los pares,
+            # #221 — la condición sin CLASIFICAR. El fan-out la puebla en casi todos los pares,
             # así que la instrucción «resolvé cada condición no vacía» es inaplicable tal cual
-            # —86 filas de `## Régimen de validez` sobre una nota de 413 líneas, contra la regla
-            # de poda— y se deja de cumplir en silencio. El vocabulario cerrado separa la que
+            # —contra la regla de poda— y se deja de cumplir en silencio. El vocabulario cerrado separa la que
             # obliga a editar (`acota`: la afirmación es FALSA fuera de esa condición) de la que
             # sólo agrega procedencia (`contextualiza`). Es el diagnóstico de #198 un eje más
             # allá: acotar la pregunta, no eliminarla.
@@ -3763,7 +3725,7 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de, pares
             # categoría, y por el mismo motivo: para `condition_resolved` esa celda es igual de
             # muda —lee el token que sigue al PRIMER separador y ahí encuentra la clase, no la
             # resolución—, así que la fila se resuelve, la celda lo dice, y el conteo la sigue
-            # contando como pendiente para siempre. Medido: 41 de 957 celdas, 7 de ellas `acota`.
+            # contando como pendiente para siempre.
             elif _clase is not None and lb.condition_split(_resto)[0] == _clase:
                 cond_sin_clasificar.append(
                     (stem, f"[[{fila.bibcode}]] par {fila.n}: la condición escribe su clase "
@@ -3772,10 +3734,8 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de, pares
                            f"{cfg.retired_migrator_recipe('write_verif_sidecar.py <nota> --migrate-condition-prefix')}"))
             _locs = lb.locator_kinds(fila.evidence)
             # #226 — `_locs` vacío NO puede ser silencio: es NO EVALUABLE, y acá eso se declara
-            # (D-43) en vez de resolverse a favor. Medido: al truncar `Evidencia` se va el `p. N`
-            # del final, así que 62 de 90 filas con `pdf:` no tenían localizador legible y el
-            # chequeo de #122 devolvía 0 — un cero que se lee como verde sobre el 69 % de la
-            # nota. Sub-disparo silencioso, la dirección de error que `lib_blocks` prohíbe.
+            # (D-43) en vez de resolverse a favor: al truncar `Evidencia` se va el `p. N` del final
+            # y el chequeo de #122 devolvía un cero que se lee como verde. Sub-disparo silencioso, la dirección de error que `lib_blocks` prohíbe.
             if not _locs:
                 verif_sin_localizador.append(
                     (stem, f"[[{fila.bibcode}]] par {fila.n}: la evidencia no trae localizador "
@@ -3965,13 +3925,13 @@ def check_extraccion_no_declarada(sin_extraer_por_sujeto: dict) -> list:
     # El contrato dice que el ingest lee TODOS los core. La reconciliación anticipa que el
     # subconjunto va a ser el caso normal (≈6M tokens por estrella si no), así que el problema no es
     # recortar: es recortar **en silencio**. Una ficha se presenta como snapshot de su universo, y
-    # un lector no tiene forma de saber que la síntesis salió de 8 de 42 papers.
+    # un lector no tiene forma de saber que la síntesis salió de una fracción de los papers.
     # Dos severidades sobre el mismo hecho: sin `extraccion.criterio` declarado, hallazgo con señal
     # (el ingest no leyó todo y no dijo por qué); con criterio, backlog normal — la cola visible de
     # D-15, que el skill `maintain` consume.
     # ⛔ #346 — el barrido es `cfg.all_subjects()`, el MISMO que el roll-up de arriba. Acá se le
     # pedía `slug` también a la entrada de un tema, donde el slug es la CLAVE del YAML: `None`
-    # para todo tema, `continue`, y el detector apagado para 2 de los 3 sujetos de una bóveda real.
+    # para todo tema, `continue`, y el detector apagado para todos los temas.
     extraccion_no_declarada: list = []      # @inv INV-83
     for _kind_s, slug_s, nombre_s, meta_s in cfg.all_subjects():
         # Cómo lo NOMBRA un paper: el canónico del YAML (`stars`/`thesis_links`) y, en un tema, el
@@ -4312,7 +4272,7 @@ def check_gaps_scope(stem: str, f, text: str, n_huecos: list) -> tuple:
     Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
     accumulates. A gap is a NEGATIVE claim and by construction carries no `[[bibcode]]`, so no layer
     looks at it: `verify-citations` goes claim↔its source and `find-contradictions` claim↔claim, and
-    both start from a citation. Measured: 6 false gaps in two themes, all six caught by chance.
+    both start from a citation.
 
     `n_huecos` comes in as the one-element list that counts the population (INV-40): the category
     declares how many notes actually have a `## Huecos` written, and a `(0)` over a population
@@ -4393,8 +4353,7 @@ def check_table_shape(stem: str, body_full: str, offset: int) -> tuple:
         # encabezado, así que dejan de renderizar y **ningún chequeo de tabla las ve** (todos
         # comparan contra un encabezado que ahí no existe). Misma familia que #227 y mismo efecto
         # —contenido citado y verificado que el lector no ve—, otra salida: borrar la línea en
-        # blanco. Medido: 17 filas en 2 notas de 287, con el lint en rc 0, y dos condiciones
-        # `acota` dadas por resueltas apuntando a filas ilegibles.
+        # blanco.
         for _ln, _n in cfg.split_table_rows(body_full):
             forma_rota.append(
                 (stem, f"L{_ln + offset}: {_n} fila(s) de tabla SIN encabezado —una línea en "
@@ -4456,9 +4415,8 @@ def check_paper_salvedades(stem: str, f, text: str) -> tuple:
         # población que #234 describe: juicio del extractor que podría haberse mecanizado. El
         # bloque «verificadas contra el archivo» lo escribe el COSECHADOR, y sus líneas dicen,
         # literalmente, que la salvedad se emitió estructurada y se chequeó — marcarlas es
-        # pedir que se estructure lo que ya está estructurado. Medido en `hd_40307` tras una
-        # tanda de extracción bien hecha: 12 de 17 hallazgos eran líneas del propio cosechador,
-        # y el número CRECE con cada salvedad correctamente estructurada. Misma exención y
+        # pedir que se estructure lo que ya está estructurado, y el ruido CRECE con cada salvedad
+        # correctamente estructurada. Misma exención y
         # mismo argumento que #214 para las `SECCIONES_ESTAMPADAS`: un detector no mira lo que
         # la máquina escribe, porque si no la categoría de alta señal se vuelve ruido.
         _en_juicio = False
@@ -4488,8 +4446,8 @@ def check_log_quotes(stem: str, body_full: str, sources_for) -> list:
 
     Extracted from the main note sweep of `lint.collect` by #396; the block computes and the caller
     accumulates. The bitácora is the ONLY place in `vault/wiki/` no verification layer audits —
-    `verify-citations` goes note by note and does not read it— and measured, one entry published as
-    a verbatim quote WITH a page a sentence that INVERTS what the paper says.
+    `verify-citations` goes note by note and does not read it— so a verbatim quote WITH a page
+    there can INVERT what the paper says and nothing catches it.
 
     The blockquote exemption is STRUCTURAL (`Block.kind`, never sniffing a string) and one single
     function decides it (`lib_quotes.log_quote_exempt`), shared with the other check (INV-141).
@@ -4570,14 +4528,13 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
     except cfg.VistasError as e:
         _firmas, cita_revisada_huerfana = [], [(stem, str(e).replace("\n", " "))]
     # por CONTENIDO, no por identidad: la misma cita dos veces en la nota da dos hallazgos y dos
-    # entradas pegadas iguales, y la segunda no es una firma huérfana (medido: 3 de 47).
+    # entradas pegadas iguales, y la segunda no es una firma huérfana.
     _usadas: set = set()
     _clave_firma = lambda f: (f["ref"], cfg.normalize_quote(f["cita"]), f["pdf_sha"])  # noqa: E731
     if stem not in NON_ORPHAN:
         # #627 — THE walk is `contrast`'s (`lib_quotes.walk_quotes`): every block, not only the
         # PAIRS. Over `pairs_of` a `## Vista` transcription —no wikilink: the bibcode IS the note,
-        # #394— was never looked at here (measured on a real vault: 2 215 quotes against
-        # `contrast`'s 15 773). The owner (#316), the own bibcode that ADDS (#394), the
+        # #394— was never looked at here. The owner (#316), the own bibcode that ADDS (#394), the
         # stamped-block witness (#454) and the verdict (#324) are decided inside, once.
         _propio = cfg.note_own_bibcode(Path(f), fm)   # el fm YA parseado: una sola pasada de YAML
         # el `.txt` OCR no es testigo acá (#220, D-43): se declara no evaluable, nunca en contra
@@ -4621,8 +4578,7 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                 if _ver == "txt_degradado":
                     # #315/#317 — la EXTRACCIÓN es la transcripción hecha leyendo el PDF, así
                     # que si la cita está ahí la nota es fiel y lo que falló es el `.txt` (#205
-                    # lo declara índice degradado). Medido: con el `.txt` de único juez la señal
-                    # era 2 de 17 en un concepto y 0 de 35 en otro.
+                    # lo declara índice degradado).
                     cita_txt_degradado.append(
                         (stem, f"L{_ln}: «{_corte}» está en la EXTRACCIÓN de "
                                f"{', '.join(_det['en_extraccion'])} (que se hizo leyendo el "
@@ -4651,7 +4607,6 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                     # #288 — la fuente SÍ la dice: lo que la rompió es la EXTRACCIÓN del `.txt`
                     # (números de línea de un preprint a dos columnas metidos en medio de la
                     # frase, una columna vecina empalmada). Es otro trabajo y otra severidad.
-                    # Medido sobre cinco hallazgos abiertos uno por uno, CUATRO eran esto.
                     cita_txt_degradado.append(
                         (stem, f"L{_ln}: «{_corte}» está en la fuente pero el `.txt` la parte "
                                f"({', '.join(sorted(_fuentes))}): números de línea o columnas "
@@ -4661,9 +4616,7 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                     # #318/#321 — el GATE, con la premisa corregida: bloquea sólo la EVIDENCIA
                     # POSITIVA (la frase bajo otro bibcode, o el prefijo largo con la cola
                     # divergente). El silencio de una transcripción selectiva (#188) sobre un
-                    # corpus que se cita del PDF (#205) no prueba fabricación — medido sobre 32
-                    # hits: 6 de atribución, 6 de alteración, y entre los otros 20 una cita que
-                    # #315 usa como ejemplo de cita CORRECTA.
+                    # corpus que se cita del PDF (#205) no prueba fabricación.
                     _porque = (f"la frase está verbatim en la extracción de "
                                f"**{', '.join(_det['otro_bib'])}**, no en la de "
                                f"{', '.join(sorted(_fuentes))}: la cita está atribuida a la "
@@ -4692,7 +4645,7 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
             # #587 — el carril corto de #586, por la MISMA función que `contrast`: acá no reporta
             # (la marca la emite `contrast`, y no mueve severidad), sólo deja usada la firma que
             # cubre una cita corta que el `.txt` no trae. Sin esto, cada `cita_revisada` que la
-            # marca pide salía huérfana (medido: 34 de 34).
+            # marca pide salía huérfana.
             for _c, _bibs_c, _ver in cfg.short_quote_verdicts(stem, _propio, _btxt, _bibs):
                 _firma = cfg.reviewed_quote(_firmas, _bibs_c, _c) if _ver == "ausente" else None
                 if _firma:
@@ -4797,8 +4750,7 @@ def check_state_header(stem: str, f, text: str, slug_ent, fms: dict | None = Non
         # ⚠ Sólo la nota que YA publica una línea de estado: el hallazgo es el DESFASE, no la
         # ausencia. Una nota que nunca la tuvo es el caso de #69 (cabecera no estampable) y
         # marcarla acá duplicaría ese hallazgo en dos categorías con severidades distintas —
-        # que es cómo una de las dos se deja de mirar. Medido: sin este recorte el corpus
-        # sintético limpio reportaba 4 fichas que nunca habían pasado por el estampador.
+        # que es cómo una de las dos se deja de mirar.
         if _quiere and _hay:
             if _hay.strip() != _quiere.strip():
                 # #334 — el comando sale de `make_notes_cmd`, no del slug pelado: `_entity_slug`
@@ -5011,8 +4963,8 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
     bibtex_drift_firmado: list = []
     _btx = str(fm.get("bibtex") or "").strip()
     # #467 — las dos categorías que FALTABAN: las de abajo miran notas que YA tienen `bibtex`, así
-    # que la nota SIN entrada no aparecía en ningún reporte y el lint daba rc 0 con ella adentro
-    # (medido: 17 de 272, y `bibtex_accessed` poblado en 0 de las 17). El hueco declarado va
+    # que la nota SIN entrada no aparecía en ningún reporte y el lint daba rc 0 con ella adentro.
+    # El hueco declarado va
     # APARTE del mudo (AUD-207): uno es una decisión registrada, el otro es «nadie preguntó».
     # #545 — the motive through the one reader; PRESENCE (for the contradiction) is the key itself.
     _motivo_hueco = cfg.declared_motive(fm.get("sin_bibtex"))
@@ -5064,9 +5016,8 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                 continue          # lo que una de las dos no dice no es una discrepancia
             # #400 — se pliega el MARKUP de los dos mundos antes de comparar: el
             # frontmatter trae el HTML del catálogo ADS (`H<SUB>2</SUB>O`, `&amp;`) y la
-            # exportación el TeX (`H$_2$O`, `\&`). Medido: 3 de los 7 primeros hallazgos de
-            # esta categoría eran el MISMO título en dos marcados, o sea que todo título
-            # con un subíndice o un `&` era un hallazgo permanente. Debajo sigue
+            # exportación el TeX (`H$_2$O`, `\&`): sin plegar, todo título con un subíndice o
+            # un `&` era un hallazgo permanente. Debajo sigue
             # `method_key`, que es lo que hace que `10.1038/378355A0` no sea una
             # discrepancia.
             _kn, _ko = cfg.catalog_compare_key(_nota), cfg.catalog_compare_key(_oficial)
@@ -5074,8 +5025,7 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                 continue
             # #400 — cuál de los dos está mal SÍ se puede decidir en un caso, y es el
             # frecuente: si el del frontmatter es **prefijo estricto** del oficial, está
-            # truncado (medido: 3 de 7, cortados en 84, 80 y 71 caracteres — no es un
-            # `[:N]`). Decir «uno de los dos está mal» ahí es no decir nada.
+            # truncado (no es un `[:N]`). Decir «uno de los dos está mal» ahí es no decir nada.
             if _c == "title" and _ko.startswith(_kn):
                 bibtex_drift.append(
                     (stem, f"`title` del frontmatter está TRUNCADO: termina en «…"
@@ -5083,15 +5033,12 @@ def check_paper_bibtex(stem: str, fm: dict) -> tuple:
                            f"{_oficial[len(_nota):][:60]}» → re-estampalo desde el catálogo "
                            f"(#400)"))
                 continue
-            # ⚠ #459 — el `title` se SIGUE comparando, y es una decisión: 9 de los 10 hallazgos
-            # medidos eran la misma cadena en dos codificaciones (y los cierra el plegado de
-            # `fold_tex`, no una exención), pero el único acierto duro que tuvo esta categoría fue
+            # ⚠ #459 — el `title` se SIGUE comparando, y es una decisión: el ruido de la misma
+            # cadena en dos codificaciones lo cierra el plegado de `fold_tex`, no una exención, pero el único acierto duro que tuvo esta categoría fue
             # un paper con el título de OTRO (#392, declarado de memoria). Saltear el título para
             # bajar el ruido costaría justo ese hallazgo.
             # #483 — la MISMA regla de #463: cuando el equivocado es el CATÁLOGO se firma, no se
-            # corrige el dato correcto. Medido: 2 de 2 drifts eran del catálogo (`2008Yang`:
-            # Crossref da el año online-first; `2006Tichavsky`: residuo SGML en el título) y no
-            # había dónde escribirlo. La firma vive en la NOTA (el drift es de la nota, no de un
+            # corrige el dato correcto, y no había dónde escribirlo. La firma vive en la NOTA (el drift es de la nota, no de un
             # item de config) y cubre un ESTADO: si el `bibtex` se re-baja y cambia, vuelve.
             if _c in cfg.METADATA_CAMPOS:
                 _consultados.add(_c)
@@ -5165,7 +5112,7 @@ def check_bibtex_no_pegable(stem: str, fm: dict) -> tuple:
     ⛔ **Two categories, because the two close in opposite ways.** `pendiente` is closed by
     re-running the idempotent chain (the export can be asked for again in a pasteable form);
     `residuo` is what the official export gives, so re-fetching it is a no-op and its line would
-    stay on screen forever — the permanent-backlog noise #435 measured (60 of 62), inside the check
+    stay on screen forever — the permanent-backlog noise of #435, inside the check
     #471 created precisely so the debt would close by re-running. Which class is which is the table
     `cfg.BIBTEX_NO_PEGABLE`, not a list enumerated here, so a fourth class lands in the right
     category on its own (#455).
@@ -5194,8 +5141,7 @@ def check_bibtex_claves_repetidas(por_clave: dict) -> list:
 
     In a `.bib` the key is the identifier and two entries cannot share one: `bibtex` reports
     `Repeated entry … I'm skipping whatever remains of this entry` and the second one **disappears
-    in silence**. Measured on a real vault: 257 `\\bibitem` printed out of 259 entries, from two
-    pairs of Hyvärinen notes whose exports both came back as `Hyv_rinen_1998` / `Hyv_rinen_2001`.
+    in silence**.
 
     ⛔ Backlog and not blocking, and nothing is rewritten: the contract already says a block is
     pasteable «changing only the key», so the key is the consumer's to choose. What was missing is
@@ -5366,26 +5312,22 @@ def check_paper_pdf_link(stem: str, fm: dict, text: str, pdf_on_disk: dict, head
         slug_dir = Path(on_disk).parent.name
         pdf_issues.append((stem, f"PDF en disco sin linkear → poné `pdf: ../../raw/pdfs/{slug_dir}/{stem}.pdf`"))
     # CUERPO ↔ frontmatter (higiene; WARN, #48): el chequeo de arriba mira frontmatter vs
-    # disco y no ve el cuerpo — en una instancia real el frontmatter estaba sano mientras 351/621
-    # notas no tenían el link `[📄 PDF]`, y el modo de falla sobrevivió invisible hasta que
+    # disco y no ve el cuerpo — el frontmatter puede estar sano sin el link `[📄 PDF]`, y el modo de falla sobrevivió invisible hasta que
     # un humano abrió una nota. La cabecera es metadata DERIVADA: debe llevar el link sii
     # `pdf` apunta a un PDF que existe. Se distingue "sin link" (lo arregla el backfill
     # `make_notes.py --restamp-pdf-links`) de "cabecera fuera del contrato" (hay que
     # normalizarla a mano primero: el re-estampado la saltea, por eso quedaba muda).
     # #380 — TRES estados, no dos. El reporte de «fuera del contrato» estaba condicionado a
     # `not has_link`, y `has_link` es un `in` sobre el texto ENTERO: una cabecera desplazada
-    # sigue conteniendo su `[📄 PDF]`, así que la conjunción apagaba el detector. Medido: de
-    # 10 notas fuera de contrato el lint reportaba 7 y callaba sobre 3 —los tres LIBROS del
-    # corpus, donde perder la cabecera es más caro, a una corrida del cosechador de
-    # perderla—, y lo que decidía si hablaba era un accidente. Desplazada y ausente piden
+    # sigue conteniendo su `[📄 PDF]`, así que la conjunción apagaba el detector, y lo que
+    # decidía si hablaba era un accidente. Desplazada y ausente piden
     # acciones OPUESTAS: mover no es reconstruir, y `--restamp-pdf-links` no puede reparar
     # la ausente (`stamp_pdf_link` necesita la cabecera que ya no está, así que se saltea:
     # el patrón de #69, el comando que el mensaje receta y no-opea).
     cab_ok = header_line(text) is not None
     # ⚠ Sigue atado a `pdf_ok`, como antes: la categoría es «PDF ↔ disco / cuerpo» y el
-    # defecto medido son notas CON PDF cuya cabecera el re-estampado no puede tocar. Soltar
-    # también esa condición pasaría la categoría de 0 a 60 sobre el corpus sintético del
-    # golden —notas que nunca tuvieron cabecera y tampoco PDF—, o sea ensanchar la población
+    # defecto son notas CON PDF cuya cabecera el re-estampado no puede tocar. Soltar
+    # también esa condición sumaría notas que nunca tuvieron cabecera y tampoco PDF, o sea ensanchar la población
     # más allá de lo que el hallazgo justifica. Lo que se saca es la conjunción con
     # `has_link`, que es la que apagaba el detector por un accidente.
     if pdf_ok and not cab_ok:
@@ -5428,9 +5370,7 @@ def check_paper_coverage(stem: str, fm: dict, relevancia: str, pdf_on_disk: dict
     incomplete: list = []
     # #268 — `no_vista` se parsea ACÁ porque tres redes que corren antes lo necesitaban y
     # ninguna lo miraba: la escotilla que #256 hizo alcanzable decidía sobre UNA sola
-    # categoría, y las otras contaban la misma nota como deuda. Medido: una nota con
-    # `no_vista` declarado y motivo seguía recibiendo *«conseguir el PDF»* sobre una tabla
-    # VizieR, que no es un paper. La forma inválida se reporta más abajo, en su bloque.
+    # categoría, y las otras contaban la misma nota como deuda. La forma inválida se reporta más abajo, en su bloque.
     try:
         no_vista, nv_error = (
             {v["sujeto"]: v["motivo"] for v in cfg.load_no_vista(fm, entry=stem)}, None)
@@ -5463,7 +5403,7 @@ def check_paper_coverage(stem: str, fm: dict, relevancia: str, pdf_on_disk: dict
         # ⛔ #348 — se indexa por CLAVE NORMALIZADA (`method_key`, #243) y el consumidor
         # busca con la misma clave: con el string crudo, un paper con `thesis_links: [PCA]`
         # no caía en el balde del tema `pca` y el recorte se reportaba o no según la grafía
-        # que eligió el extractor (medido: 0 con `PCA`, 1 con `pca`).
+        # que eligió el extractor.
         # Qué campos entran: `stars` para estrellas y `thesis_links` para temas — la
         # pertenencia de un paper a un tema NO vive en las facetas (otro eje). `methods` no
         # se recorre, y **no es la mitad que falta** de la unión de
@@ -5560,7 +5500,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         if nv_error is not None:
             raise nv_error
         # #481 — la fecha sin comillas la parsea YAML como `date`, y toda comparación con la str
-        # que escribe el cosechador la deja afuera (medido: 1 de 336). `load_vistas` la normaliza
+        # que escribe el cosechador la deja afuera. `load_vistas` la normaliza
         # para los lectores; acá se mira el tipo CRUDO, que es lo que está en disco.
         for _raw in fm.get("vistas") or []:
             if isinstance(_raw, dict) and cfg.vista_fecha_str(_raw) != _raw:
@@ -5581,8 +5521,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
     else:
         # #270 — #254 hizo que el prompt derive sus ejes de `relevance.facets` y no dejó
         # red: nada compara los ejes que la vista CONTESTA contra la `lente` que DECLARA, y
-        # una faceta que la vista no menciona se lee como «se miró y no hay nada». Medido:
-        # 257 huecos sobre 79 vistas con lente declarada. Backlog: una vista puede
+        # una faceta que la vista no menciona se lee como «se miró y no hay nada». Backlog: una vista puede
         # legítimamente no tener nada que decir sobre un eje — lo que no puede es callarlo.
         _ejes_por_sujeto = cfg.view_axes(text)
         for _suj, _otro in no_vista_missing_readings(fm, vistas, no_vista):
@@ -5609,8 +5548,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                 continue
             # #395c — la clave es el PAR `(sujeto, énfasis)`: una segunda lectura del
             # mismo sujeto (#239) contesta SUS ejes en su `### Lente — …`, y con la clave
-            # por sujeto se la comparaba contra los de la primera. Medido: 13 vistas
-            # reportadas como «no contesta NINGUNO de sus 7 ejes» con los siete ahí mismo.
+            # por sujeto se la comparaba contra los de la primera.
             _clave = (_v["sujeto"], str(_v.get("enfasis") or "").strip())
             _faltan = [e for e in _lente if e not in _ejes_por_sujeto.get(_clave, set())]
             if _faltan:
@@ -5645,9 +5583,8 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # ⛔ #256 — la escotilla `no_vista` decide ACÁ, sobre la vista sin fecha, y no
         # sobre `reclamos - declaradas`, que el propio sembrado de arriba deja SIEMPRE
         # vacío: `make_notes` pone una entrada de `vistas[]` por cada reclamo, así que ni
-        # la deuda ni la escotilla podían dispararse desde esa rama. Medido: **0 de 138**
-        # notas de una bóveda real la alcanzaban, o sea que `load_no_vista` se parseaba y
-        # su resultado no lo consumía nadie. Sin esto, «falta leerlo» y «no hay nada que
+        # la deuda ni la escotilla podían dispararse desde esa rama: `load_no_vista` se
+        # parseaba y su resultado no lo consumía nadie. Sin esto, «falta leerlo» y «no hay nada que
         # leer, y está dicho por qué» caen en el mismo bolsón — que es justo lo que la
         # categoría DECLARADA existe para separar. ⚠ `no_vista` NO borra la entrada de
         # `vistas[]`: la nota sigue diciendo que ese sujeto la reclama; lo que declara es
@@ -5704,8 +5641,8 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # #449 — la prosa afirma QUÉ DOCUMENTO hay en disco y los testigos la desmienten. La
         # salvedad sobre el artefacto no lleva `[[bibcode]]`, así que `verify-citations` la deja
         # afuera por construcción (#213) y `contrast --validar` mira citas, no prosa sobre el
-        # disco: medido, 43 salvedades en 31 notas seguían diciendo «el PDF en disco es el
-        # PREPRINT» después de que `replace_pdf` pusiera ahí la copia del editor, con `lint` rc 0.
+        # disco: la salvedad sigue diciendo «el PDF en disco es el PREPRINT» después de que
+        # `replace_pdf` ponga ahí la copia del editor.
         if (_conf := cfg.disk_doc_conflict(text, fm, stem)):
             doc_en_disco.append((stem, _conf))
         # #212 — la lectura REFUTÓ el reclamo y el reclamo sigue en el frontmatter. Es el
@@ -5738,8 +5675,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
                               else "")))
         # #398 — la sección de un sujeto declarado `no_vista` sigue publicando la
         # PLANTILLA del stub: las instrucciones al extractor, bajo un encabezado que la nota
-        # presenta como síntesis (#247). Medido: 46 notas así durante seis días, invisibles
-        # porque el lint miraba la coherencia `vistas[] ↔ sección` y la escotilla decide
+        # presenta como síntesis (#247), invisible porque el lint miraba la coherencia `vistas[] ↔ sección` y la escotilla decide
         # sobre el frontmatter. Backlog con su migrador: la decisión ya está tomada, lo que
         # falta es que el cuerpo la diga.
         import make_notes as _mn          # import local: `make_notes` no importa al lint
@@ -5770,8 +5706,7 @@ def check_paper_views(stem: str, fm: dict, text: str, no_vista: dict, nv_error, 
         # ⛔ #398 — la condición es «la nota DECLARA el campo», no «tiene alguna vista».
         # Con `if vistas:`, una nota con `vistas: []` —el estado que deja el operador que
         # saca la entrada y la sección— salía del chequeo de reclamos ENTERO: ni deuda ni
-        # declarada. Medido: la categoría de reclamos declarados cayó de 66 a 30 sin que las
-        # 36 restantes aparecieran en ninguna otra. Es el falso limpio de D-43 dentro de la
+        # declarada. Es el falso limpio de D-43 dentro de la
         # categoría que #188 existe para sostener. Lo que el recorte protege sigue en pie:
         # la nota de schema VIEJO (sin la clave) la reporta la categoría de arriba, y
         # pedirle además una vista por sujeto duplicaría el hallazgo en cada nota del corpus.
@@ -6061,8 +5996,7 @@ def check_note_links(stem: str, f, text: str, names, fulltext: dict, incoming: d
     """
     broken: list = []
     unverifiable: list = []
-    # de pares imposibles (medido en el clean-room del 2026-08-25: 117 "citas" en tau_ceti, 0 de
-    # ellas en prosa) y encima reportando como "no verificable" cada paper del universo sin
+    # de pares imposibles y encima reportando como "no verificable" cada paper del universo sin
     # fulltext. Es el mismo lazo que ya cierra `solo_prosa` para los otros proxies: un artefacto
     # que se mide a sí mismo siempre da el resultado que su propia existencia produce.
     links_prosa = [t.strip() for t in LINK_RE.findall(solo_prosa(text))]
@@ -6246,12 +6180,12 @@ def prose_changed_since(f: str, date: str, detail: list | None = None,
 
     `check_stale_verif` compared the date of the FILE, and `## Verificación de citas` is one of
     `cfg.SECCIONES_ESTAMPADAS`: `pairs_of` never looks at it, so editing it cannot change a single
-    claim or a single anchor — and yet it changed the file and fired the category. Measured on an
-    instance: **4 of 8** findings were that, all of them left by the maintenance the framework
-    itself prescribes (writing the round's triage, marking an `acota` resolved, re-anchoring).
+    claim or a single anchor — and yet it changed the file and fired the category, after the very
+    maintenance the framework prescribes (writing the round's triage, marking an `acota` resolved,
+    re-anchoring).
 
     The committed version at `date` is compared against the **working tree**, so the uncommitted
-    migration that only touched the stamped block is exonerated too — which is the measured case,
+    migration that only touched the stamped block is exonerated too — which is the common case,
     because the lint runs as a closing step, BEFORE the commit.
 
     The **body** is what follows the frontmatter (`cfg.frontmatter_span`): `make_notes` re-stamps
@@ -6281,7 +6215,7 @@ def prose_changed_since(f: str, date: str, detail: list | None = None,
 
         #444 — the header blockquote (LLM-layer warning, `_Generado con…_`, `_Estado —_`) is stamped
         by `make_notes` too, and it is not a section, so `solo_prosa` kept it: the #247 backfill
-        (`--restamp-headers`, 127 of 271 notes) fired 4 false «stale». ONE recogniser,
+        (`--restamp-headers`) fired false «stale». ONE recogniser,
         `cfg.header_block`, shared with the header surgeries of `make_notes`."""
         partes = cfg.frontmatter_span(text)
         cuerpo = partes[1] if partes else text
@@ -6372,8 +6306,7 @@ def check_stale_verif(verif_blocks, changed: dict) -> list:
     (#480) carries every row with its anchor recalculated and KEEPS the block's date on purpose
     (#395), so comparing against `d` alone left this category on forever over the correction
     DERIVED from the verification itself — the case #282/#257 say is re-anchored, not re-asked, and
-    the one the framework's own command exists to close (measured: 9 of 14 entity notes, 1499
-    pairs, `0` rows to move on all nine). The declarant is read from the heading
+    the one the framework's own command exists to close. The declarant is read from the heading
     (`cfg.reanchor_date`), so a note that was never re-anchored behaves exactly as before, and an
     edit made AFTER the carry still fires: the comparison moved, it did not disappear.
     """
@@ -6418,10 +6351,9 @@ def check_facet_boundary() -> list:
     """
     faceta_sin_frontera: list = []
     # #236 — un token alfabético corto SIN `\b` en una faceta matchea DENTRO de otra palabra.
-    # Medido: `expres` (por el espectrógrafo EXPRES) entraba por «Venus Express», «Mars Express» y
-    # «expressed», y `neid` por el apellido «Schneider»; 19 de 193 registros tenían esa faceta sólo
-    # por ahí, y como la bóveda declaraba `require: [rv]` eso la volvía la única puerta: **4 de 32
-    # papers vivos eran core por accidente**. El falso positivo de una faceta NO DEJA RASTRO —el
+    # `expres` (por el espectrógrafo EXPRES) entraba por «Venus Express» y «expressed», y `neid`
+    # por el apellido «Schneider»; con `require:` eso puede volver core por accidente a un paper
+    # vivo. El falso positivo de una faceta NO DEJA RASTRO —el
     # paper entra, se baja, se lee y se sintetiza—, así que sólo se ve corriendo la regex contra el
     # corpus y mirando QUÉ matcheó. Con `build/<slug>/ads.json` a mano se nombran las palabras.
     if not cfg.objective_error():
@@ -6449,8 +6381,8 @@ def check_theme_inherited_fq() -> list:
     """`tema_fq_heredado` — a method theme that does not declare `search_fq` (#351).
 
     Extracted from `lint.collect` by #396; the block computes and the caller accumulates. Inheriting
-    `database:astronomy` means gate 2 NEVER opens: measured on `ica`, 0 papers with the inherited
-    `fq` against 2 without it — the theme closed without its canon and had to be re-synthesised.
+    `database:astronomy` means gate 2 NEVER opens: the theme closes without its canon and has to be
+    re-synthesised.
     A DECLARED `null` silences it, because a declared null is a decision.
     """
     tema_fq_heredado: list = []
@@ -6487,8 +6419,7 @@ def check_theme_inherited_axes() -> tuple:
     tema_ejes_heredados: list = []
     not_evaluated: list = []
     # #360 — el simétrico literal de #351 sobre el otro eje de #307: sin `ejes:` un tema de método
-    # LEE con los ejes de una bóveda astro (medido: 6 de 8 facetas vacías en 12 extracciones, y
-    # los ejes del tema desparramados en `aporte`). Backlog: heredar puede ser correcto; lo que
+    # LEE con los ejes de una bóveda astro y los del tema quedan desparramados. Backlog: heredar puede ser correcto; lo que
     # no puede es ser invisible. `ejes: []` es decisión y calla.
     if not cfg.themes_error():
         for _slug, _tmeta in (cfg.load_themes() or {}).items():
@@ -6619,9 +6550,7 @@ def check_dead_facets(paper_lens_text: dict) -> list:
     return faceta_muerta
 
 
-#: #408 · «un bloque, un hecho». Medido sobre 672 bloques con cita de una bóveda real: mediana 390
-#: caracteres y 2 hechos citados, p90 968 y 5, máximo 2621 y 19 — y los tres bloques donde nacieron
-#: los defectos al CORREGIR estaban en el p90 o arriba (el peor era el más largo de toda la bóveda).
+#: #408 · «un bloque, un hecho»: los defectos al CORREGIR nacen en los bloques más largos.
 #: Un bloque largo tiene costuras, y las costuras es donde el empalme rompe (#406). Son los p90; se
 #: declaran acá con nombre y motivo, no como literales adentro de un `if`.
 BLOQUE_MAX_CHARS = 1000
@@ -6632,22 +6561,17 @@ BLOQUE_MAX_HECHOS = 5
 _HECHO_RE = re.compile(r"«[^»]{8,}»|\(\s*p\.\s*\d+|\(\s*L\d+")
 
 #: #406 · la firma mecánica de un empalme mal hecho: una UNIDAD separada de su número («2 puntos
-#: m/s» donde el `m/s` pertenecía al `1,70` de la frase anterior). Medido sobre 224 notas de una
-#: bóveda real: 53 hits sin filtro, 19 sacando los cuantificadores, **3** sacando además las
-#: preposiciones y la unidad-anotación (token que termina en coma) — los 3 residuales, falsos
-#: positivos revisables. Misma doctrina que la fuga de implementación: WARN, cada hit se mira. Lo
-#: que se midió y DESCARTÓ para esto: el shingle repetido (74 falsos, 0 verdaderos sobre el defecto).
+#: m/s» donde el `m/s` pertenecía al `1,70` de la frase anterior). Filtra cuantificadores,
+#: preposiciones y la unidad-anotación (token que termina en coma). Misma doctrina que la fuga de
+#: implementación: WARN, cada hit se mira. El shingle repetido se descartó para esto.
 #:
-#: ⛔ El vocabulario shippeado en 1.241.0 se había ido del prototipo MEDIDO por tres lados, y la
-#: categoría pasó de 3 a **533 hits, 407 de ellos ruido** (#411, medido en la bóveda real). Los
-#: tres, cerrados acá: (a) **`mas` no es una unidad en esta bóveda** —la prosa va en castellano
-#: (`CLAUDE.md`) y `mas` sin tilde es palabra corriente: 339 hits, el 64 % de la categoría, con
-#: milliarcsecond apareciendo CERO veces en el corpus—; (b) **`K` tampoco** —en astronomía es tipo
-#: espectral y nombre de línea (Ca II H&K) mucho más seguido que Kelvin: 33 hits—; (c) el token
+#: ⛔ #411 — el vocabulario shippeado en 1.241.0 se había ido del prototipo por tres lados, cerrados
+#: acá: (a) **`mas` no es una unidad en esta bóveda** —la prosa va en castellano (`CLAUDE.md`) y
+#: `mas` sin tilde es palabra corriente—; (b) **`K` tampoco** —en astronomía es tipo espectral y
+#: nombre de línea (Ca II H&K) mucho más seguido que Kelvin—; (c) el token
 #: previo puede **cerrar matemática o adorno** (`$83$ m/s`, `**1,70** m/s`), y ahí el número SÍ
 #: está: el prototipo lo excluía y la versión shippeada exigía que el dígito fuera el último
-#: carácter. `mas/yr` se queda: no es ambiguo. **Medido sobre la bóveda real (215 notas): 570 → 3**,
-#: y los 3 son los falsos positivos que el propio #406 midió y aceptó.
+#: carácter. `mas/yr` se queda: no es ambiguo.
 _UNIDADES = (r"m/s|km/s|cm/s|m\s?s\^?-1|km\s?s\^?-1|mas/yr|ppm|M⊕|M_?J|R⊕|R_?J|"
              r"M_?sun|M☉|pc|kpc|nm|Å|d[ií]as|days")
 _COSTURA_RE = re.compile(r"(?<![\w.,])([^\s]+)\s+(" + _UNIDADES + r")(?=[\s.,;:)\]»]|$)")
@@ -6730,8 +6654,8 @@ def warn_hits(stem: str, body_full: str, offset: int, impl_leaks: list, f=None) 
 WARN_EN_NOTA = tuple(c for c in cfg.WARN_REVISABLE if c != "autor_ajeno")
 
 #: #594 — «Surname et al.» WITHOUT a year right after it. With a year it is almost always legitimate
-#: second hand («the source takes it from X et al. 2012»): measured on a real vault, the year filter
-#: is what takes the category from 351 hits to 31 over 659 mentions.
+#: second hand («the source takes it from X et al. 2012»), so the year filter is what keeps the
+#: category readable.
 _ET_AL_RE = re.compile(r"((?:(?:de|del|van|von|der|den|da|dos|di|du|le|la|al)\s+)*"
                        r"[A-ZÁÉÍÓÚÑÄÖÜÅØ][\w'’\-]+(?:\s+[A-ZÁÉÍÓÚÑÄÖÜÅØ][\w'’\-]+)?)\s+et\s+al\b"
                        r"(?!\.?,?\s*\(?\s*(?:1[6-9]|20)\d\d)\.?")
@@ -6773,8 +6697,8 @@ def check_page_only_locator(stem: str, body_full: str, offset: int, index: dict)
             propuestas = sorted({x for lo, hi in lq.page_locators(loc) if lo == hi
                                  for x in (index.get(bib.strip()) or {}).get(lo, ())})
             if propuestas:
-                # a HINT, not a proposal: measured 13/20 right, and a single candidate was wrong
-                # several times (another section/figure/equation of the same page)
+                # a HINT, not a proposal (#598): even a single candidate can be wrong (another
+                # section/figure/equation of the same page)
                 vistos = " · ".join(propuestas[:3]) + (f" (y {len(propuestas) - 3} más)"
                                                        if len(propuestas) > 3 else "")
                 out.append((stem, f"L{i + 1 + offset}: «({loc.strip()})» sobre [[{bib.strip()}]] — sólo "
@@ -6788,9 +6712,8 @@ def check_foreign_author(stem: str, body_full: str, offset: int, paper_fms: dict
     first author (#594, WARN, signable).
 
     No layer checked the author the prose pins on a citation: «Al Moulla et al.» over a paper by
-    Artigau passed verify (the judge looks at CONTENT) and `lint --cierre`. Per LINE, as measured:
-    on the note before the fix it flags exactly that mention; on a whole vault, 31 of 659 mentions,
-    all legitimate second hand → WARN, signed with `warn_revisada`. A line whose bibcodes carry no
+    Artigau passed verify (the judge looks at CONTENT) and `lint --cierre`. Per LINE; the residue is
+    legitimate second hand → WARN, signed with `warn_revisada`. A line whose bibcodes carry no
     `first_author` is not evaluable and stays out. Stamped sections never reach here."""
     out: list = []
     lineas = body_full.split("\n")
@@ -6821,10 +6744,9 @@ def check_foreign_author(stem: str, body_full: str, offset: int, paper_fms: dict
 
 
 #: #556 — a sentence that quantifies over the CORPUS or over several SOURCES aggregates them, and an
-#: aggregation is an `inferencia` (D-42). ⚠ Measured on a real vault (28 entity notes, 1097 prose
-#: blocks): the wider pattern the issue suggested («ningún», «todas», ranges «de X a Y») gave 136
-#: hits, mostly single-paper statements; this one, per sentence and without a citation of its own,
-#: gave 45, mostly real unmarked aggregations. Not widened without measuring again.
+#: aggregation is an `inferencia` (D-42). ⚠ Per sentence and without a citation of its own; the
+#: wider pattern («ningún», «todas», ranges «de X a Y») catches mostly single-paper statements.
+#: Not widened without measuring again.
 AGREGACION_RE = re.compile(r"(?i)\b(?:el|del) corpus\b|\b(?:las|dos|tres|ambas) (?:\w+ )?fuentes\b"
                            r"|\bcasi tod[oa]s\b|\bla mayoría de\b|\bfuentes independientes\b")
 AGREGACION_FUERTE_RE = re.compile(r"(?i)\bindependientes\b|\bcasi tod[oa]s\b|\bla mayoría de\b")
@@ -7019,8 +6941,7 @@ def source_lookup(paper_fms: dict):
     checkable sources and the ones that are not (#220/#275).
 
     ⛔ The only exemptions are «no `.txt` on disk» and `fulltext_source: ocr`. `pdf_source:
-    eprint` was one until 1.110.x and covered 45 of 49 papers of a real star, leaving the check
-    with population **zero**: since #205 the `.txt` is derived from the very PDF the extractor
+    eprint` was one until 1.110.x and left the check with population near **zero**: since #205 the `.txt` is derived from the very PDF the extractor
     read, and #220 does not ask «does this value match the published one?» but «is this string in
     the file that was read?», which is just as decidable over a preprint.
 
@@ -7154,8 +7075,7 @@ def check_paper_note(stem: str, f: str, fm: dict, text: str, body_full: str, swe
     _r1, _r2 = check_paper_retractions(stem, fm)
     add("retracted", _r1)
     add("corrections", _r2)
-    # #277 — los tres ⛔ del schema de nota de paper que no tenía ningún detector (medido: 39 de
-    # 138 notas reales sin `## Abstract`, con el lint en rc 0).
+    # #277 — los tres ⛔ del schema de nota de paper que no tenía ningún detector.
     for key, items in zip(("sin_abstract", "sin_conclusiones", "sin_conclusiones_ok",
                            "sin_aviso_llm", "vista_solo_abstract", "solo_abstract_ok"),
                           check_paper_reading_aids(stem, fm, text, body_full, sweep.pdf_on_disk)):
@@ -7238,7 +7158,7 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     sweep.kinds[stem] = fm.get("tags", []) or []
     # `fm` is `split_fm(text)` over the same span: non-empty means the YAML parsed as a mapping, so
     # `fm_error` has nothing to report. Only the empty case pays the second parse (the known double
-    # parse that `test_lint_una_pasada_de_yaml` was ratcheting, 2130 of 2132).
+    # parse that `test_lint_una_pasada_de_yaml` was ratcheting).
     err = None if fm else fm_error(text)
     if err:
         add("fm_broken", [(stem, err)])
@@ -7983,9 +7903,8 @@ def main(argv=()) -> int:
     # deliberada sobre toda la bóveda). Con él, sólo los hallazgos de cierre de ESE sujeto cuentan
     # para el exit — el razonamiento de R-1 («un par sin verificar significa que no terminaste»)
     # es sobre lo que la operación TOCÓ, y aplicado a la bóveda entera hacía que una deuda vieja en
-    # otro sujeto dejara el gate en rojo permanente. Medido al cerrar un tema: el único bloqueante
-    # era de otra estrella, y hubo que auditar las categorías a ojo, una por una, para verlo. Un
-    # gate que se audita a mano dejó de ser un gate.
+    # otro sujeto dejara el gate en rojo permanente. Un gate que se audita a mano dejó de ser un
+    # gate.
     ap.add_argument("--cierre", nargs="?", const="", default=None, metavar="SLUG",
                     help="modo cierre de operación: las cinco categorías SEV_CIERRE cuentan "
                          "para el exit —pares de verificación vencidos, cobertura de verificación "

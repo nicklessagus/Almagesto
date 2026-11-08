@@ -4820,3 +4820,105 @@ código conserva la regla y su ancla. Por símbolo, con el ancla del caso:
 - `carry_needs_reverify` (#554): una corrección que cambió el objeto con cobertura 0.938, y un juez ciego aprobó el objeto equivocado.
 - schema del fan-out de verify (#259): al cerrar `hd_40307` (2026-08-29: 8 rondas, ~60 subagentes, el mismo prompt salvo el bibcode), la clave de la lista llegó en tres formas —`pares` (la mayoría), `veredictos` (ronda 1), `resultados` (2 archivos de la ronda 3)— y el identificador del par en dos —`ancla` (la mayoría), `n` (5 archivos de la ronda 7)—; el consumidor falló dos veces con `KeyError` antes de terminar en un lector tolerante.
 - `verify_fanout_json_block` (#365): 2 incidentes de clave de más en 10 rondas, uno rebotado por la barrera DESPUÉS de pagar la lectura entera del PDF (107 290 tokens, 13 tool uses) para re-emitir el mismo veredicto.
+
+## Narrativa de medición movida desde `lint.py` (v1.415.30, #630)
+
+Las mediciones que vivían sólo en comentarios y docstrings de `scripts/lint.py`; el código
+conserva la regla y su ancla. Por símbolo, con el ancla del caso:
+
+- `LINK_RE` (INV-02): el 2026-08-28, `"[[ y sigo.\nEl radio vive en [[gp-kernels]]"` devolvía UN solo target multilínea y el destino real salía huérfano (bloqueante).
+- `fm_error` (YAML válido no-mapa): medido el 2026-08-28; la nota evadía en silencio todos los chequeos de su tipo.
+- `scope_wikilinks` (#368): 3 links en el blockquote de alcance → 3 pares → 2 `no-soportada` bloqueantes y dos lecturas completas de PDF para descubrir que la pregunta no tenía sentido.
+- `gaps_bullets` (#342): medido el 2026-08-31, 2 huecos falsos en un tema y 4 en otro; los seis afirmaban que la bóveda no contestaba algo que sí contestaba, y los seis se cazaron por accidente.
+- `merge_ours_driver_risk` (#390): medido en repos sintéticos el 2026-09-03 (dos clones del mismo `origin` tocando un archivo `merge=ours`).
+- `STATUS_MAX_FECHADOS` / `STATUS_MAX_LINEAS` (#302): en una bóveda real, un `STATUS.md` de 537 líneas con 12 encabezados fechados.
+- `_field_is_marked` (INV-128): los tres falsos limpios por substring (`e` dentro de «desactualizado», `4` dentro de `5344`) medidos el 2026-08-28.
+- `vistas_en_cuerpo` (AUD-178): 6 de 908 notas de paper con bloque de verificación.
+- `inventario_sin_llenar` (#72): medido el 2026-08-25, el contraste cazó un `K_d` copiado de la Tabla 2 de Mayor+2009 que la prosa del mismo paper contradice («la Tabla 2 dice 4,55»); la pasada encontró cinco inconsistencias internas de fuentes por esta vía, ninguna visible para el chequeo claim↔fuente.
+- `ABSTRACT_CLAVE` (#216): el caso es el mismo abstract palabra por palabra, en otro congreso y truncado.
+- `_abstract_norm` (#216): en `openalex.py` el matcheo por título resolvió 18 de 25 casos y 2 apuntaban a otro trabajo.
+- `note_files` (orden estable): el golden `test_lint_golden_semilla_fija` pasaba local y fallaba en CI con un diff donde ningún hallazgo cambió, sólo su posición.
+- `normalize_lists` (#71): un fuzz de tipos sobre los campos documentados encontró 32 combinaciones que volteaban el lint.
+- `INFER_MARK` (INV-86): las dos fallas de la forma vieja (falso positivo bloqueante y falso negativo por paréntesis anidado) medidas el 2026-08-28 en una bóveda cuyo dominio incluye inferencia bayesiana.
+- `INFER_MARK` (#276): en una ficha real, de 5 marcas de prosa 3 llevaban backticks y el detector veía 2 de 5 (no miraba el 60 % de su población).
+- `check_second_hand_lifted` (#433): leída la categoría entera de a uno, 48 de 66 hallazgos seguían listados después de mirarlos todos.
+- `check_second_hand_lifted` (#350): preguntar «¿este paper tiene alguna segunda mano?» daba sí en 398 de 462 pares (86 %); 6 de cada 7 avisos no accionables (la forma de #198, «2 de 3 avisos no accionables»).
+- `check_identidad_duplicada` (D-19): en la instancia real, 2 trabajos con dos notas cada uno.
+- `check_identidad_duplicada` (#229): una nota usó `versions[]` para decir «no son duplicados» y dejó a una de las 4 notas sin `doi` ni `arxiv_id` fuera de los dos chequeos; el lint declaraba «sobre 32 notas» mirando 31.
+- `check_identidad_duplicada` (#114): el registro publicado traía `arxiv_id: null` y el del preprint el DOI DataCite, ningún campo coincidía; y en el corpus sintético dos `.txt` ilegibles sembrados daban un tercer duplicado que nadie sembró (INV-106).
+- `stamped_section_diff` (#563): 1 de 17 roll-ups de una bóveda real con la fila de `Estado` movida o el encabezado mintiendo, con el lint en 0.
+- `check_papers_table_stale` (#60): el roll-up Dataview reemplazado prometía 155 papers y discutía 8.
+- `check_papers_table_stale` (test_escala): sin la pasada única el lint saltaba de ~2,0 a 5,9 parseos YAML por nota (techo 2,3); una pasada extra subía el ratio a ~3,0, y el doble parseo split_fm+fm_error ya se come 2,0.
+- `check_papers_table_stale` (#338): 2 de 3 sujetos de una bóveda real son temas, y un paper que reclama estrella y tema con las dos tablas vacías se reportaba 1 de 2.
+- `check_sintesis_no_declarada` (INV-82): 3 de 10 sujetos de una bóveda real publicaban una nota sintetizada sin su fecha.
+- `check_duplicate_without_id` (#216): en `ica`, de 52 core 6 sin ningún identificador (12 % del corpus invisible para el chequeo), y ahí apareció un duplicado real con el mismo texto palabra por palabra.
+- `check_ground_truth_movido` (#396): al extraerlo, el golden volvió byte-idéntico.
+- `check_status_stacked` (#302): en una bóveda real, `STATUS.md` con 537 líneas, 12 encabezados fechados apilados y cuatro listas de próximos pasos, una de las cuales contradecía un estado posterior del mismo archivo.
+- `check_scope_desync` (#312): 2 libros, 37 valores nuevos extraídos de capítulos que la nota declaraba fuera de alcance.
+- `check_depaginated_extractions` (#436): `contrast --validar` dio 0 alteraciones sobre las cinco notas tocadas por el reemplazo.
+- `check_reused_artifact_unchecked` (#297): en una bóveda real, 62 % del corpus era `eprint` y `_red.yaml` no existía.
+- `check_fulltext_without_note` (#108): en una bóveda real, 10 de 30 `.txt` de un tema quedaron sin nota.
+- `check_index_stale` (#237): los tres commits del `index.md` de una bóveda real eran anteriores a su instanciación.
+- `check_lens_broken` (AUD-56): medido en un clon limpio con el `objective.yaml` de una instancia en 1.11.0 (`topics:` en vez de `facets:`), el lint cerraba en exit 0.
+- `check_sources_provenance` (#111): en una bóveda real, los 40 papers que tenía la nueva no entraron los 40 a mano, y no había forma de saber cuáles pidió el usuario.
+- `check_sources_metadata` (#353): en una bóveda real (52 fuentes), 1 autor falso por Crossref (derivado del nombre del archivo), 1 año a ±1 (online-first), 3 títulos con variantes y la primera página del PDF sin apellido o año en 14 (capítulos, preprints, `Hyv¨arinen`).
+- `check_sources_metadata` (#463): `2012Naik`, cuyo registro de Crossref trae `given: Ganesh, family: R.` y perdió «Naik».
+- `check_unsynthesized_by_subject` (#559): en una instancia, 12 pares (paper citado en la ficha A y reclamado por B sin cita ni escotilla) con el lint en 0; la membresía de tema sólo por `methods` era 91 de 103 pares.
+- `check_no_sintetizado_citado` (#553): en una instancia, 9 pares resueltos en silencio a favor de la cita.
+- `check_theme_pairs` (#558): 72 pares acumulados en 4 temas, 29 de ellos de los dos últimos ingests de estrella.
+- `check_dangling_methods` (#245): resolver por `aliases` cerró 7 de 121 en una bóveda real.
+- `check_verif_structure` (#232): de 91 condiciones pobladas, 28 declaraban una omisión de la nota y nada decía cuáles se juzgaron no vinculantes.
+- `check_verif_structure` (#337): las tres notas de un `--cierre` con 1, 7 y 19 marcas reales recibían «19» las tres.
+- `check_verif_structure` (#577): cuatro sub-secciones publicadas cortadas a mitad de frase durante un mes, con lint y `--cierre` en 0.
+- `check_verif_row_pairs` (#200): 6 de 8 filas marcadas de un concepto real eran el caso del doble localizador, todas correctas.
+- `check_verif_row_pairs` (#226): sobre las 99 filas de una nota real, 81 `Evidencia` y 79 `Condición` cortadas con `…` a exactamente 191 caracteres; al truncar se iba el `p. N`, así que 62 de 90 filas con `pdf:` no tenían localizador legible y el chequeo de #122 devolvía 0 (69 % de la nota).
+- `check_verif_row_pairs` (#221): el fan-out puebla la condición en el 89 % de los pares; resolverlas todas daba 86 filas de `## Régimen de validez` sobre una nota de 413 líneas.
+- `check_verif_row_pairs` (#427): la clase escrita dos veces en 41 de 957 celdas, 7 de ellas `acota`.
+- `check_extraccion_no_declarada` (INV-83): una síntesis que salió de 8 de 42 papers sin declararlo.
+- `check_gaps_scope` (#342): 6 huecos falsos en dos temas, los seis cazados por casualidad.
+- `check_table_shape` (#486): 17 filas en 2 notas de 287 con la tabla partida, con el lint en rc 0, y dos condiciones `acota` dadas por resueltas apuntando a filas ilegibles.
+- `check_paper_salvedades` (#253): en `hd_40307`, tras una tanda de extracción bien hecha, 12 de 17 hallazgos eran líneas del propio cosechador.
+- `check_log_quotes` (#391): una entrada del `log` publicó como cita verbatim con página una frase que invierte lo que dice el paper.
+- `check_note_quotes` (#516): la misma cita dos veces en la nota daba dos firmas iguales en 3 de 47 casos.
+- `check_note_quotes` (#627): sobre `pairs_of` el lint miraba 2 215 citas de una bóveda real contra las 15 773 de `contrast`.
+- `check_note_quotes` (#454): una cita que la fuente no dice, publicada con `lint` rc 0.
+- `check_note_quotes` (#315/#317): con el `.txt` de único juez la señal era 2 de 17 en un concepto y 0 de 35 en otro.
+- `check_note_quotes` (#288): de cinco hallazgos abiertos uno por uno, cuatro eran el `.txt` partiendo la cita.
+- `check_note_quotes` (#318/#321): sobre 32 hits, 6 de atribución, 6 de alteración, y entre los otros 20 una cita que #315 usa como ejemplo de cita correcta.
+- `check_note_quotes` (#587): cada `cita_revisada` del carril corto salía huérfana (34 de 34).
+- `check_state_header` (#69): sin el recorte, el corpus sintético limpio reportaba 4 fichas que nunca habían pasado por el estampador.
+- `check_paper_bibtex` (#467): 17 de 272 notas sin `bibtex`, con `bibtex_accessed` poblado en 0 de las 17.
+- `check_paper_bibtex` (#400): 3 de los 7 primeros hallazgos eran el mismo título en dos marcados; otros 3 de 7 eran títulos truncados, cortados en 84, 80 y 71 caracteres.
+- `check_paper_bibtex` (#459): 9 de los 10 hallazgos de `title` eran la misma cadena en dos codificaciones.
+- `check_paper_bibtex` (#483): 2 de 2 drifts eran del catálogo (`2008Yang`: Crossref da el año online-first; `2006Tichavsky`: residuo SGML en el título).
+- `check_bibtex_no_pegable` (#435): 60 de 62 propuestas permanentes.
+- `check_bibtex_claves_repetidas` (#473): en una bóveda real, 257 `\bibitem` impresos de 259 entradas, por dos pares de notas de Hyvärinen cuyas exportaciones volvieron como `Hyv_rinen_1998` / `Hyv_rinen_2001`.
+- `check_paper_pdf_link` (#380): de 10 notas fuera de contrato el lint reportaba 7 y callaba sobre 3, los tres libros del corpus; soltar también la condición `pdf_ok` pasaría la categoría de 0 a 60 sobre el corpus sintético del golden.
+- `check_paper_coverage` (#268): una nota con `no_vista` declarado y motivo seguía recibiendo «conseguir el PDF» sobre una tabla VizieR, que no es un paper.
+- `check_paper_coverage` (#348): el recorte se reportaba 0 veces con `thesis_links: [PCA]` y 1 con `pca`.
+- `check_paper_views` (#481): la fecha sin comillas parseada como `date` en 1 de 336 vistas.
+- `check_paper_views` (#270): 257 huecos sobre 79 vistas con lente declarada.
+- `check_paper_views` (#395c): 13 vistas reportadas como «no contesta NINGUNO de sus 7 ejes» con los siete ahí mismo.
+- `check_paper_views` (#256): 0 de 138 notas de una bóveda real alcanzaban la escotilla `no_vista`.
+- `check_paper_views` (#449): 43 salvedades en 31 notas seguían diciendo «el PDF en disco es el PREPRINT» después de `replace_pdf`, con `lint` rc 0.
+- `check_paper_views` (#398): 46 notas con la plantilla del stub bajo un sujeto `no_vista` durante seis días; con `if vistas:` la categoría de reclamos declarados cayó de 66 a 30 sin que las 36 restantes aparecieran en ninguna otra (INV-153).
+- `check_note_links` (INV-02): en el clean-room del 2026-08-25, 117 «citas» en tau_ceti contadas sobre el texto entero, 0 de ellas en prosa.
+- `prose_changed_since` (#431): en una instancia, 4 de 8 hallazgos de `check_stale_verif` eran ediciones de la sección estampada, todas del mantenimiento que el framework prescribe.
+- `prose_changed_since` (#444): el backfill de #247 (`--restamp-headers`, 127 de 271 notas) disparó 4 «stale» falsos.
+- `check_stale_verif` (#499): 9 de 14 notas de entidad, 1499 pares, `0` filas a mover en las nueve.
+- `check_facet_boundary` (#236): `expres` entraba por «Venus Express», «Mars Express» y «expressed», `neid` por «Schneider»; 19 de 193 registros tenían la faceta sólo por ahí y, con `require: [rv]`, 4 de 32 papers vivos eran core por accidente.
+- `check_theme_inherited_fq` (#351): en `ica`, 0 papers por la puerta fundacional con el `fq` heredado contra 2 sin él (incl. Comon 1994).
+- `check_theme_inherited_axes` (#360): 6 de 8 facetas vacías en 12 extracciones, con los ejes del tema desparramados en `aporte`.
+- `BLOQUE_MAX_CHARS` / `BLOQUE_MAX_HECHOS` (#408): sobre 672 bloques con cita de una bóveda real, mediana 390 caracteres y 2 hechos citados, p90 968 y 5, máximo 2621 y 19; los tres bloques donde nacieron los defectos al corregir estaban en el p90 o arriba (el peor, el más largo de la bóveda).
+- `_COSTURA_RE` (#406): sobre 224 notas de una bóveda real, 53 hits sin filtro, 19 sacando cuantificadores, 3 sacando además preposiciones y unidad-anotación (los 3, falsos positivos revisables); el shingle repetido dio 74 falsos y 0 verdaderos.
+- `_UNIDADES` (#411): el vocabulario de 1.241.0 llevó la categoría de 3 a 533 hits, 407 de ellos ruido; `mas` daba 339 hits (64 %) con milliarcsecond cero veces en el corpus, `K` 33 hits; corregido, 570 → 3 sobre 215 notas, los 3 falsos positivos que #406 aceptó.
+- `_ET_AL_RE` (#594): el filtro por año lleva la categoría de 351 hits a 31 sobre 659 menciones.
+- `check_page_only_locator` (#598): la pista acertó 13 de 20, y un candidato único se equivocó varias veces.
+- `check_foreign_author` (#594): en la nota previa al fix marca exactamente la mención «Al Moulla et al.»; en una bóveda entera, 31 de 659 menciones, todas segunda mano legítima.
+- `AGREGACION_RE` (#556): sobre 28 notas de entidad (1097 bloques de prosa), el patrón amplio dio 136 hits, mayormente afirmaciones de un solo paper; éste dio 45, mayormente agregaciones reales sin marcar.
+- `source_lookup` (#220): la exención `pdf_source: eprint` cubría 45 de 49 papers de una estrella real.
+- `check_paper_note` (#277): 39 de 138 notas reales sin `## Abstract`, con el lint en rc 0.
+- `check_note` (test_lint_una_pasada_de_yaml): el doble parseo que el test ratcheaba, 2130 de 2132.
+- `main --cierre` (#121): al cerrar un tema, el único bloqueante era de otra estrella, y hubo que auditar las categorías a ojo, una por una, para verlo.
+- `check_extraccion_no_declarada` (#346): el detector apagado para 2 de los 3 sujetos de una bóveda real (los temas).
+- `check_paper_pdf_link` (#48): en una instancia real el frontmatter estaba sano mientras 351 de 621 notas no tenían el link `[📄 PDF]`.
