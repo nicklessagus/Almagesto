@@ -3089,17 +3089,17 @@
   {
    "number": 620,
    "title": "Barrido doc/help: lo que la doc y los mensajes dicen vs lo que hace el código (auditorías 10-08 y 11-02)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 621,
    "title": "Barrido de contrato: comportamientos garantizados sin invariante (auditorías 10-08 y 11-02)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 622,
    "title": "Tests que no fallan cuando la lógica se rompe (auditoría 11-02, F)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 623,
@@ -3164,6 +3164,11 @@
   {
    "number": 635,
    "title": "verify no arma pares en la ## Vista de una nota de paper (0 pares: falta el bibcode propio)",
+   "state": "OPEN"
+  },
+  {
+   "number": 636,
+   "title": "decisiones[].decision del registro no se valida como vocabulario cerrado",
    "state": "OPEN"
   }
  ]

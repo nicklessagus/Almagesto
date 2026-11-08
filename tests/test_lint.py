@@ -12199,3 +12199,28 @@ def test_635_la_nota_de_paper_con_VISTA_y_sin_verificar_debe_verificacion(toy_va
     mk_note(cfg.PAPERS, bib, {"bibcode": bib, "tags": ["paper"], "stars": ["tau Cet"]},
             "# p\n\n## Vista — tau Cet\n\nEl período es de 34 días según la Tabla 2.\n")
     assert any(s == bib for s, _m in lint.collect().por_clave("unverified").items)
+
+
+# ── #636 · `decisiones[].decision` es vocabulario cerrado ────────────────────────────────────────
+
+def test_636_decision_fuera_de_vocabulario_bloquea_y_nombra_slug_y_clave(toy_vault):
+    """Un `decision: descartada` (typo) lo ignoran en silencio los lectores que comparan contra
+    `descartado`: el paper vuelve a ser core sin que nada lo diga. Los tres valores de D-52 pasan."""
+    cfg.REGISTRO.mkdir(parents=True, exist_ok=True)
+    cfg.registro_path("test_star").write_text(yaml.safe_dump({"slug": "test_star", "decisiones": {
+        "2020ok.....1A": {"decision": "descartado", "motivo": "ruido", "fecha": "2026-01-01"},
+        "2020ok.....1B": {"decision": "aceptado", "motivo": "x", "fecha": "2026-01-01"},
+        "2020ok.....1C": {"decision": "anulada", "fecha": "2026-01-01"},
+        "2020typo...1D": {"decision": "descartada", "motivo": "ruido", "fecha": "2026-01-01"}}}),
+        encoding="utf-8")
+    cat = lint.collect().por_clave("bad_decision_value")
+    assert cat.severidad == lint.SEV_BLOQUEANTE
+    assert [s for s, _m in cat.items] == ["test_star"], cat.items
+    assert "2020typo...1D" in cat.items[0][1] and "descartada" in cat.items[0][1]
+    assert lint.check_decision_vocabulary() == list(cat.items)
+
+
+def test_636_save_decisiones_rehusa_un_valor_fuera_de_vocabulario(toy_vault):
+    """El escritor comparte la lista con el lint: un typo no llega al registro."""
+    with pytest.raises(ValueError, match="descartada"):
+        cfg.save_decisiones("test_star", {"2020x......1A": {"decision": "descartada"}})

@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.30"
+ALMAGESTO_VERSION = "1.415.31"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -88,6 +88,12 @@ HYP_STATUS_INICIAL = HYP_STATUS[0]      # una hipótesis recién planteada no es
 # #73 · qué TIPO de aporte es el paper. Chico y cerrado a propósito: el rol define QUÉ OPERACIÓN de
 # contraste corresponde entre dos papers, y un valor libre no la determina.
 ROLES = ("fundacional", "aplicacion", "arbitro")
+
+# #636 · `decisiones[].decision` del registro (D-52). Cerrado: los lectores comparan contra
+# `descartado`, así que un typo (`descartada`) deja la curación muda y el paper vuelve a ser core.
+# La escribe `save_decisiones` (rehúsa el valor fuera de lista) y la valida el lint (bloquea).
+DECISIONES = ("descartado", "aceptado", "anulada")
+DESCARTADO, _ACEPTADO, ANULADA = DECISIONES
 
 REGISTRO = CONFIG / "registro"
 
@@ -5061,10 +5067,10 @@ def anular_decision(slug: str, clave: str, *, por: str, carril: str = "chaining"
     declarada no toca el del chaining con la misma clave. Devuelve `True` si anuló algo."""
     decisiones = load_decisiones(slug)
     d = decisiones.get(clave)
-    if not d or d.get("decision") != "descartado" or not es_del_carril(d, carril):
+    if not d or d.get("decision") != DESCARTADO or not es_del_carril(d, carril):
         return False
     decisiones[clave] = {
-        "decision": "anulada",
+        "decision": ANULADA,
         "fecha": _dt.date.today().isoformat(),
         "anulada_por": por,
         "origen": d.get("origen") or "chaining",
@@ -5075,7 +5081,13 @@ def anular_decision(slug: str, clave: str, *, por: str, carril: str = "chaining"
 
 
 def save_decisiones(slug: str, decisiones: dict) -> None:
-    """Persiste las decisiones preservando `busqueda` (la escribe query_ads, no el triage)."""
+    """Persiste las decisiones preservando `busqueda` (la escribe query_ads, no el triage).
+
+    Rehúsa un `decision` fuera de `DECISIONES` (#636): el typo no llega al registro."""
+    for clave, d in decisiones.items():
+        if isinstance(d, dict) and d.get("decision") not in DECISIONES:
+            raise ValueError(f"decisión `{clave}`: `decision: {d.get('decision')}` fuera del "
+                             f"vocabulario ({' | '.join(DECISIONES)})")
     data = load_registro(slug)
     data.setdefault("slug", slug)
     data["decisiones"] = decisiones

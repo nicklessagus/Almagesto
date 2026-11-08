@@ -218,6 +218,9 @@
 ## ⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué (0)
 > sobre 0 temas de `themes.yaml`
 
+## ⛔ `decisiones[].decision` del registro fuera del vocabulario cerrado (#636): la curación queda muda (0)
+> sobre 3 registros de sujeto
+
 ## ⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`) (0)
 > sobre 60 notas de `papers/`
 

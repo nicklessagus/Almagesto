@@ -77,6 +77,9 @@ import make_notes                       # #217: la limpieza de `pdf:`/`fulltext:
 
 ADS_URL = "https://ui.adsabs.harvard.edu/abs/"
 
+# #636 · los valores que escribe salen de la lista que el lint valida.
+DESCARTADO, ACEPTADO, _ANULADA = cfg.DECISIONES
+
 
 def load_ads(slug: str) -> dict:
     f = cfg.ROOT / "build" / slug / "ads.json"
@@ -179,7 +182,7 @@ def drop(slug: str, bibcodes: list[str], reason: str) -> int:
             cfg.print_seguro(f"  ⚠ {b} ya tenía decisión ({previa.get('decision', '?')}, "
                   f"{previa.get('origen') or 'chaining'}, {previa.get('fecha', 's/f')}): "
                   f"{previa.get('motivo') or '(sin motivo)'} — la piso con ésta")
-        decisiones[b] = {"decision": "descartado", "motivo": reason, "fecha": hoy}
+        decisiones[b] = {"decision": DESCARTADO, "motivo": reason, "fecha": hoy}
     cfg.save_decisiones(slug, decisiones)
     cfg.print_seguro(f"  {len(bibcodes)} candidato(s) descartados en {triage_file(slug)} — motivo: {reason}")
     cfg.print_seguro("  (versionado: se commitea y viaja entre máquinas, como `extra_core` — los dos lados "
@@ -214,12 +217,12 @@ def accept_key(slug: str, claves: list[str], reason: str) -> int:
             malas.append(f"{k}: es un bibcode de ADS → `extra_core` (el carril que además lo trae)")
         elif not (cfg.PAPERS / f"{cfg.note_stem(k)}.md").exists():
             malas.append(f"{k}: no hay nota `papers/{cfg.note_stem(k)}.md` (¿typo?)")
-        elif (previa := decisiones.get(k)) and previa.get("decision") == "descartado":
+        elif (previa := decisiones.get(k)) and previa.get("decision") == DESCARTADO:
             malas.append(f"{k}: tiene un descarte ({previa.get('origen') or 'chaining'}, "
                          f"{previa.get('fecha', 's/f')}: {previa.get('motivo') or 's/m'}) — "
                          f"revertirlo es anularlo (D-52), no pisarlo")
         else:
-            nueva = {"decision": "aceptado", "origen": "sujeto", "motivo": reason,
+            nueva = {"decision": ACEPTADO, "origen": "sujeto", "motivo": reason,
                      "fecha": dt.date.today().isoformat()}
             if previa:   # AUD-612: an `anulada` keeps its `previa` (D-52); nothing is overwritten silently
                 cfg.print_seguro(f"  ⚠ {k} ya tenía decisión ({previa.get('decision', '?')}, "
@@ -268,7 +271,7 @@ def drop_source(slug: str, claves: list[str], reason: str, pointer: str | None) 
             cfg.print_seguro(f"  ⚠ {k} ya tenía decisión ({previa.get('decision', '?')}, "
                   f"{previa.get('origen') or 'chaining'}, {previa.get('fecha', 's/f')}): "
                   f"{previa.get('motivo') or '(sin motivo)'} — la piso con ésta")
-        decisiones[k] = {"decision": "descartado", "motivo": reason, "fecha": hoy,
+        decisiones[k] = {"decision": DESCARTADO, "motivo": reason, "fecha": hoy,
                          "origen": "fuente-declarada",
                          **({"fuente": pointer.strip()} if pointer and pointer.strip() else {})}
     cfg.save_decisiones(slug, decisiones)
@@ -431,7 +434,7 @@ def drop_core(slug: str, bibcodes: list, motivo: str) -> int:
     dec = data.setdefault("decisiones", {}) if isinstance(data.get("decisiones"), dict) or         "decisiones" not in data else data["decisiones"]
     borrados, colgados = 0, []
     for b in bibcodes:
-        dec[b] = {"decision": "descartado", "origen": "sujeto", "motivo": motivo, "fecha": hoy}
+        dec[b] = {"decision": DESCARTADO, "origen": "sujeto", "motivo": motivo, "fecha": hoy}
         for ruta in (cfg.PDFS / slug / f"{b}.pdf", cfg.FULLTEXT / slug / f"{b}.txt"):
             if ruta.exists():
                 ruta.unlink()

@@ -3926,3 +3926,26 @@ portadores:
       - modulo: scripts/lib_quotes.py
         estado: fuera-de-alcance
         motivo: "Define `quotes_in` y el propio `walk_quotes`; `short_quote_verdicts` mira la cita CORTA, otro carril (#586)."
+  - issue: 636
+    regla: >-
+      `decisiones[].decision` del registro es vocabulario CERRADO (`descartado | aceptado |
+      anulada`, D-52): los lectores comparan contra `descartado`, así que un typo deja la curación
+      muda y el paper vuelve a ser core. Quien escribe y el lint leen la misma lista.
+    funcion: lib_config.DECISIONES
+    patron: '[''"](descartado|aceptado|anulada)[''"]'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_decision_vocabulary` bloquea el valor fuera de lista nombrando slug y clave."
+      - modulo: scripts/triage.py
+        estado: usa
+        motivo: "Escribe `descartado`/`aceptado` desde la lista; `save_decisiones` rehúsa cualquier otro valor."
+      - modulo: scripts/fetch_pdf.py
+        estado: fuera-de-alcance
+        motivo: "Lector: compara `== \"descartado\"`; el valor está garantizado por `save_decisiones` (escritor) y el lint (registro editado a mano)."
+      - modulo: scripts/ingest_theme.py
+        estado: fuera-de-alcance
+        motivo: "Lector: compara `== \"descartado\"`; el valor está garantizado por `save_decisiones` (escritor) y el lint (registro editado a mano)."
+      - modulo: scripts/query_ads.py
+        estado: fuera-de-alcance
+        motivo: "Lector: compara `== \"descartado\"`; el valor está garantizado por `save_decisiones` (escritor) y el lint (registro editado a mano)."

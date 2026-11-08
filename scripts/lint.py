@@ -2815,6 +2815,25 @@ def check_decisions_shape(slug: str, reg: dict) -> list:
     return bad_decisions
 
 
+def check_decision_vocabulary() -> list:
+    """`bad_decision_value` — a `decisiones[].decision` outside `cfg.DECISIONES` (#636, BLOQUEANTE).
+
+    Readers compare against `descartado`, so a typo silently reverts the curation. Unreadable
+    registros and non-map entries have their own categories and are skipped here.  @inv INV-46"""
+    out: list = []
+    for rf in sorted(glob.glob(str(cfg.REGISTRO / "*.yaml"))):
+        slug = Path(rf).stem
+        dec = cfg.load_registro(slug).get("decisiones")
+        if slug.startswith("_") or not isinstance(dec, dict):
+            continue
+        for clave, v in dec.items():
+            if isinstance(v, dict) and v.get("decision") not in cfg.DECISIONES:
+                out.append((slug, f"decisión `{clave}`: `decision: {v.get('decision')}` fuera del "
+                                  f"vocabulario ({' | '.join(cfg.DECISIONES)}) → los lectores la "
+                                  f"ignoran en silencio; corregí el valor a mano en el registro"))
+    return out
+
+
 def check_lens_desync(slug: str) -> list:
     """`lente_desync` — the corpus classified with a lens that is no longer the current one (D-49).
 
@@ -7586,6 +7605,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
     found["schema_retirado"] += _reg_old
     found["cadena_incompleta"] += _reg_cad
     found["bad_decisions"] += _reg_bd
+    found["bad_decision_value"] = check_decision_vocabulary()            # #636
     found["lente_desync"] += _reg_lente
     found["triage_pending"] += _reg_tp
     found["truncated_corpora"] += _reg_tc
@@ -7688,6 +7708,7 @@ def collect(cierre: bool = False, slug: str | None = None) -> LintResult:
         Categoria('alias_con_nota', '⛔ Bibcode listado en `versions[]` que TIENE su propia nota: apaga los dos chequeos de identidad (#229)', SEV_BLOQUEANTE, tuple(found['alias_con_nota']), poblacion='papers'),
         Categoria('abstract_dup', '👯 Posible duplicado SIN doi ni arxiv_id: mismo abstract verbatim (backlog — decidís vos)', SEV_BACKLOG, tuple(found['abstract_dup']), poblacion='papers'),
         Categoria('bad_sources', '⛔ `sources:` sin procedencia (#111): no consta quién declaró la fuente ni por qué', SEV_BLOQUEANTE, tuple(found['bad_sources']), poblacion='temas'),
+        Categoria('bad_decision_value', '⛔ `decisiones[].decision` del registro fuera del vocabulario cerrado (#636): la curación queda muda', SEV_BLOQUEANTE, tuple(found['bad_decision_value']), poblacion='registros'),
         Categoria('bad_roles', '⛔ `role` fuera del vocabulario — y todo campo con vocabulario CERRADO (`unidad_cita`, `pending_source`)', SEV_BLOQUEANTE, tuple(found['bad_roles']), poblacion='papers'),
         Categoria('impl_leaks', '⚠ Fuga de implementación (código no bibliográfico) → frontera dura (WARN, revisar a mano)', SEV_WARN, tuple(found['impl_leaks']), poblacion='notas'),
         Categoria('bloque_con_varios_hechos', '⚠ Bloque con más de un hecho: arriba del p90 en largo o en hechos citados — partilo (#408, WARN)', SEV_WARN, tuple(found['bloque_con_varios_hechos']), poblacion='notas'),

@@ -214,6 +214,11 @@ Deben quedar en **0**:
   sostenida | disputada | refutada`, `lint.HYP_STATUS`): el consumidor lee ese campo para decidir
   si se apoya en la hipótesis, y la prosa libre lo deja mudo. Se cierra escribiendo el valor que
   la tabla de evidencia deriva (su hermano backlog, `status_vs_evidencia`, vigila esa derivación).
+- **`decisiones[].decision` del registro fuera del vocabulario cerrado** (#636,
+  `bad_decision_value`: `descartado | aceptado | anulada`, `cfg.DECISIONES`, D-52): los lectores
+  comparan contra `descartado`, así que un typo (`descartada`) deja la curación muda y el paper
+  vuelve a ser core. Nombra slug y clave; se cierra corrigiendo el valor a mano en
+  `vault/config/registro/<slug>.yaml`. El escritor (`save_decisiones`) rehúsa el mismo valor.
 - **Nota de paper sin destino** (D-23/INV-94, `sin_destino`): ninguno de `stars`, `thesis_links`
   ni `methods` poblado → el paper no entra en ningún roll-up y ninguna síntesis lo alcanza; un link
   entrante no lo salva (no es lo mismo que huérfana). La salida es **poblar el campo**, no borrar
