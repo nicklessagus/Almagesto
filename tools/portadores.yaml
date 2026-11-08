@@ -1134,8 +1134,9 @@ portadores:
       Toda la `## Vista — <sujeto>` de una nota de paper (con sus `### Lente`) la copia la máquina
       del JSON, no sólo el bloque de salvedades: ahí la extracción no aprueba una cita. Si el `.txt`
       calla, la cita sale `sin_testigo_propio` —no evaluable con su motivo (D-43), visible como
-      backlog con la marca—, nunca `txt_degradado`; la evidencia POSITIVA (cola divergente, otra
-      fuente) sigue bloqueando (#373). Tesis: 3 047 de 3 278 `txt_degradado` estaban en vistas.
+      backlog con la marca—, nunca `txt_degradado`. Desde v1.415.32 tampoco la ACUSA (cola
+      divergente #373, prefijo #437): sólo enruta, y la vista editada sale `no_verbatim`, firmable.
+      Tesis: 3 047 de 3 278 `txt_degradado` estaban en vistas.
     funcion: lib_quotes.quote_from_stamped_block
     patron: 'sin_testigo_propio|copiada='
     consumidores:
@@ -1145,6 +1146,18 @@ portadores:
       - modulo: scripts/contrast.py
         estado: fuera-de-alcance
         motivo: "`validar` recorre el mismo `cfg.walk_quotes` y cuenta `copiadas` + `discrepan` con la marca; no tiene un predicado paralelo."
+  - issue: 635
+    regla: >-
+      «¿Esta ruta es una nota de `papers/`?» se decide con UN predicado sobre rutas RESUELTAS
+      (`cfg.is_paper_note`): los CLI pasan `Path(args.nota)` tal como se tipeó, y la ruta relativa
+      comparada contra `cfg.PAPERS` daba 0 pares (34 con la absoluta, Tesis). Los demás usos de
+      `cfg.PAPERS` son globs (rutas absolutas), no comparaciones de identidad.
+    funcion: lib_quotes.is_paper_note
+    patron: 'parent *[!=]= *cfg\.PAPERS'
+    consumidores:
+      - modulo: scripts/lib_blocks.py
+        estado: usa
+        motivo: "`note_pairs` decide con el predicado si suma el bibcode propio."
   - issue: 454
     regla: >-
       La extracción es testigo de la prosa que el SINTETIZADOR volvió a tipear, nunca de la que la

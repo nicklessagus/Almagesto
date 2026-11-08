@@ -788,7 +788,7 @@ def note_pairs(note: Path, text: str, fm: dict | None = None) -> list[Pair]:
     """`pairs_of` of a note ON DISK, with its own bibcode when it is a paper note (#635). `fm` is
     the already-parsed frontmatter when the caller has it (the lint parses each note once)."""
     note = Path(note)
-    if note.parent != cfg.PAPERS:
+    if not cfg.is_paper_note(note):
         return pairs_of(text)
     return pairs_of(text, cfg.note_own_bibcode(note, cfg.split_fm(text) if fm is None else fm))
 

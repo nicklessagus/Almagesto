@@ -1218,9 +1218,16 @@ def note_own_bibcode(note: Path, fm) -> str:
     `tests/poblada/test_escala.py::test_lint_una_pasada_de_yaml` ratchets that (a re-parse in here
     took the corpus from ~2.0 to over 2.3 `yaml.safe_load` per note — caught by the poblada tier,
     green in tier 0)."""
-    if note.parent != cfg.PAPERS:
+    if not is_paper_note(note):
         return ""
-    return str((fm or {}).get("bibcode") or "").strip() or note.stem
+    return str((fm or {}).get("bibcode") or "").strip() or Path(note).stem
+
+
+def is_paper_note(note) -> bool:
+    """Is this file a note of `papers/`? ⛔ ONE predicate, over RESOLVED paths (#635): the CLIs
+    pass `Path(args.nota)` as typed, and a relative path never equals `cfg.PAPERS`, so
+    `verify_fanout` with the relative path of the issue built 0 pairs where the absolute gave 34."""
+    return Path(note).resolve().parent == cfg.PAPERS.resolve()
 
 
 def with_own_bibcode(bibs, own: str) -> list:

@@ -300,3 +300,16 @@ def test_635_la_VISTA_de_una_nota_de_paper_da_pares_de_su_propio_bibcode(toy_vau
                     "El período es de 34 días según la Tabla 2.\n", encoding="utf-8")
     m = vf.write_round(nota, tmp_path / "r1")
     assert m["pares"] == 1 and m["fuentes"] == {"2019Own": 1}, m
+
+
+def test_635_con_la_ruta_RELATIVA_de_la_nota_tambien(toy_vault, tmp_path, monkeypatch):
+    """#635 — los CLI pasan `Path(args.nota)` tal como se tipeó: comparada sin resolver contra
+    `cfg.PAPERS`, la ruta relativa no era nunca una nota de paper y daba 0 pares (34 con la absoluta,
+    medido en una bóveda viva)."""
+    nota = vf.cfg.PAPERS / "2019Own.md"
+    nota.parent.mkdir(parents=True, exist_ok=True)
+    nota.write_text("---\ntags: [paper]\nbibcode: 2019Own\n---\n\n# p\n\n## Vista — ica\n\n"
+                    "El período es de 34 días según la Tabla 2.\n", encoding="utf-8")
+    monkeypatch.chdir(vf.cfg.WIKI)
+    m = vf.write_round(Path("papers/2019Own.md"), tmp_path / "r1")
+    assert m["pares"] == 1 and m["fuentes"] == {"2019Own": 1}, m
