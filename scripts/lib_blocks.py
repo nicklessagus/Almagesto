@@ -21,21 +21,8 @@ LA GRANULARIDAD ES EL BLOQUE, y las otras dos se descartaron midiendo:
 Unidad = el bloque más chico que contiene la cita: **párrafo / fila de tabla / ítem de lista /
 blockquote**.
 
-Medido con ESTE módulo sobre una instancia real, población **notas de entidad** (28 archivos:
-`stars/` + `concepts/` + `queries/`; se excluyen `papers/`, y `log.md`/`index.md`, que son bitácora
-y navegación —no afirman, y `log.md` solo aporta 361 pares espurios—): **840 pares** — 395 en
-ítems, 260 en párrafos, 176 en filas, 9 en blockquotes. De esos, **745 citan por su cuenta y 95
-heredan** (11%): la herencia no es el caso dominante. El derrame máximo de un ámbito es de 30 hijos
-(una tabla de keywords bajo un caption con una sola fuente): legítimo, y el caso para el que la
-herencia existe.
-
-⚠ El plan de implementación cita **761 / 560 párrafos / 141 listas / 54 tablas / 6 blockquotes**
-para este mismo corpus. El **total** es compatible (761 citas crudas ↔ 840 pares: la diferencia la
-explican la herencia, +95, y la deduplicación dentro de un bloque). Lo que **no** se reproduce es el
-**reparto por tipo**: ahí las listas dominan (395) y los párrafos quedan segundos (260), al revés de
-lo que dice el plan. La causa más probable es que aquella medición contara una lista entera como un
-bloque (dice "141 en listas (24 bloques)"). Vale el número de acá, que es el que produce el código
-que corre; el del plan queda como referencia histórica.
+El reparto de pares por tipo de bloque, y su discrepancia con el plan, está en `docs/mediciones.md`
+(D-4/D-20).
 
 **SOBRE-DISPARAR ES CORRECTO, SUB-DISPARAR NO.** Un párrafo con 3 citas da 3 pares con la misma
 ancla: tocás una frase y se re-verifican las tres. El error tiene que caer siempre del lado caro
@@ -147,10 +134,8 @@ def source_hash(path: Path) -> str:
 
     ⛔ Refuses a `.pdf` (#403). The contract above lived in prose and nothing enforced it:
     `errors="replace"` makes reading binary as UTF-8 succeed, so a PDF went through and produced a
-    hash that could never match the one the lint computes from bytes. Measured writing a
-    `.verif.md` by hand: **117 pairs «vencidos por fuente»** over PDFs nobody had touched, and the
-    message pointed at the wrong place («el PDF cambió desde la verificación»). The error has to
-    fire where the hash is WRITTEN, not 117 findings later.
+    hash that could never match the one the lint computes from bytes. The error has to fire where
+    the hash is WRITTEN, not findings later.
     @inv INV-78"""
     if Path(path).suffix.lower() == ".pdf":
         raise ValueError(f"source_hash lee TEXTO y recibió un PDF ({Path(path).name}): para el "
@@ -183,10 +168,9 @@ def split_source_ref(cell: str) -> tuple[str | None, str]:
 _LOC_LINEA = re.compile(r"\bL\s?\d+\b")                  # `L320`, `L 320`
 
 
-#: #221 · vocabulario CERRADO de la condición. El fan-out la puebla al 89 % de los pares (medido
-#: sobre 96), así que «resolvé cada condición» no es una lista de trabajo: es la nota entera. Lo que
-#: faltaba no era señal —ninguna de las condiciones medidas era descartable— sino el criterio para
-#: separar la que cambia lo que el consumidor haría de la que sólo agrega procedencia.
+#: #221 · vocabulario CERRADO de la condición. El fan-out la puebla en casi todos los pares, así
+#: que «resolvé cada condición» no es una lista de trabajo: es la nota entera. Lo que faltaba no era
+#: señal sino el criterio para separar la que cambia lo que el consumidor haría de la que sólo agrega procedencia.
 #:
 #: `acota`         — la afirmación es FALSA fuera de esa condición (el umbral es de otra estrella;
 #:                   la medición no es sobre RVs). Se resuelve sí o sí: fila de `## Régimen de
@@ -201,7 +185,7 @@ _LOC_LINEA = re.compile(r"\bL\s?\d+\b")                  # `L320`, `L 320`
 #: #276/#280 · la marca `(inferencia de [[b1]], [[b2]])` en prosa. Vive acá porque la cuentan DOS
 #: consumidores: el bloqueante del lint (`inferencias_sin_premisas`, INV-86) y el conteo que la
 #: sub-sección del bloque publica. El `[`*_~]*` no es cosmético: sin él la marca es ciega al énfasis
-#: markdown y el detector veía 2 de 5 (#276).
+#: markdown (#276).
 INFER_MARK = re.compile(r"\(\s*[`*_~]*\s*inferencia(?![^\W_])(?:[^()]|\([^()]*\))*\)", re.I)
 
 
@@ -240,8 +224,7 @@ def current_condition(condicion: str) -> str:
     ⛔ Sibling of `current_verdict`, and for the same measured reason one column over: a round that
     finds a NEW `acota` on a row whose previous one was already resolved used to be dropped —
     `chained_condition` compared by CLASS, so any `acota` over a resolved `acota` was discarded.
-    Measured on an instance: 55 conditions of a 425-pair round never reached their row, one of them
-    saying «the note contradicts itself». Every reader of the cell —kind, resolved, resolution—
+    Every reader of the cell —kind, resolved, resolution—
     asks about the link in force, so the chain is unwound here, once."""
     enlaces = condition_links(condicion)
     return enlaces[-1] if enlaces else ""
@@ -255,14 +238,12 @@ def condition_split(condicion: str) -> tuple:
     matters: the producer prefixed `cond_tipo` without looking at whether the text already started
     with its class, so a fan-out that wrote the class inside `condicion` too —which the prompt did
     not forbid— yielded `acota: acota→resuelta: …`, and from there `condition_resolved` reads the
-    cell as UNRESOLVED forever. Measured on a real vault: 41 of 957 cells doubled, 7 of them
-    `acota`, i.e. rows that are resolved, say so, and the header keeps counting as pending.
+    cell as UNRESOLVED forever, and the header keeps counting a resolved row as pending.
 
     #283 — the head is read **normalised**: markdown emphasis and the separator that follows it are
     dropped, the same way `_bare_verdict` reads the cell next door. Comparing the raw string made
-    `**contextualiza** — …` unclassifiable: measured on a real note, 74 of 88 cells were reported as
-    «condition without a kind» purely because of the adornment, i.e. 84 % false positives in a
-    category whose whole job is to separate the condition that forces an edit (`acota`) from the one
+    `**contextualiza** — …` unclassifiable: reported as «condition without a kind» purely because of
+    the adornment, in a category whose whole job is to separate the condition that forces an edit (`acota`) from the one
     that only goes to the report. Third time this repo pays for adornment blindness (cf. #168, #276).
     """
     # (#221 no tiene invariante propio: la clase de la condición es una categoría de backlog del
@@ -376,8 +357,7 @@ def replace_current_condition(condicion: str, nuevo: str) -> str:
 
     ⛔ An EMPTY link is never written (#510): a round with no condition (`""`/`—`) over a chain
     whose link in force is pending DROPS that link — the fan-out's recount rules — instead of
-    chaining `… ⟂ —`, which the lint read as an unclassified condition on a resolved row (6 of 6 of
-    that category in an instance). Without a chain the cell is just `nuevo`, as for a new row."""
+    chaining `… ⟂ —`, which the lint read as an unclassified condition on a resolved row. Without a chain the cell is just `nuevo`, as for a new row."""
     enlaces = condition_links(condicion)
     if len(enlaces) > 1 and str(nuevo or "").strip() in ("", "—", "-", "–"):
         return COND_CHAIN_SEP.join(enlaces[:-1])
@@ -402,7 +382,7 @@ def locator_kinds(evidencia: str) -> set:
     #122 — `Evidencia` y `Hash fuente` dicen lo mismo desde ángulos distintos: uno cita `p. 628` o
     `L320`, el otro declara `pdf:` o `txt:`. Nada los cruzaba, así que una fila podía citar una
     PÁGINA y vigilar el `.txt`: el hash cuida un archivo del que esa cita no salió. Es el modo de
-    falla de #117 sobrevivido a #117 — medido, **11 de 114** filas de un concepto real.
+    falla de #117 sobrevivido a #117.
 
     ⚠ El falso positivo obvio: una cita textual puede contener `p. 12` como parte de la prosa del
     paper. Por eso esto **no** decide nada solo — el lint lo reporta como backlog para mirar, no
@@ -497,11 +477,10 @@ def split_blocks(body: str) -> list[Block]:
 
     ⚠ Lo de los roll-ups llegó en 1.38.2 y no es cosmético: una fila de `## Papers` **no es una
     afirmación**, es metadata que estampó `make_notes`, y no hay nada que contrastar contra la
-    fuente. Medido sobre la ficha de HD 40307 recién sintetizada: 178 pares contra **68** reales
-    —110 de metadata—, con nueve bibcodes que no aparecen en ninguna afirmación, cuatro de ellos
-    **sin `.txt`**. El fan-out habría lanzado 110 subagentes a verificar filas de tabla. Los dos últimos heredarían la cita del caption y ensuciarían el
-    bloque de verificación con pares permanentes que nadie puede resolver — sobre-disparar es
-    correcto cuando hay algo que verificar, no cuando no lo hay.
+    fuente: el fan-out lanzaría subagentes a verificar filas de tabla, y las filas sin cita propia
+    heredarían la del caption y ensuciarían el bloque de verificación con pares permanentes que
+    nadie puede resolver — sobre-disparar es correcto cuando hay algo que verificar, no cuando no
+    lo hay.
     """
     body, offset = _cuerpo(body)
     lineas = body.split("\n")
@@ -568,9 +547,7 @@ def split_blocks(body: str) -> list[Block]:
             # ⛔ #224 — un blockquote se ACUMULA como un párrafo, no se emite por línea. Las notas
             # van hard-wrapped a ~100 columnas, así que una cita textual larga vive partida en
             # varias líneas y **sólo la última lleva el `[[bibcode]]`**: emitiendo por línea, el
-            # único par que nace ancla la última línea y las demás no las cubre nadie. Medido: una
-            # cita de 5 líneas donde invertir el sentido de la línea 67 (`uncorrelatedness is
-            # equivalent` → `is NOT equivalent`) dejaba el ancla IDÉNTICA — o sea que se podía
+            # único par que nace ancla la última línea y las demás no las cubre nadie: se podía
             # reescribir el contenido de una cita sin que el par se venciera.
             # Es sub-disparo, la única dirección de error que el docstring de este módulo declara
             # prohibida, y por el motivo exacto que ahí se usa para descartar la granularidad por
@@ -640,16 +617,15 @@ def _solo_separadores(gap: str) -> bool:
 #: localizador —`(p. 4)`, `(Fig. 3, p. 7)`—, que es la forma que la bóveda escribe de verdad.
 #: #488 — the link may also OPEN a short parenthesis: `«…» ([[bib]], p. 4)`, which is what somebody
 #: writes when the locator and the source travel together (natural in Spanish prose, and the shape
-#: the vault itself uses: 46 occurrences in 4 files). Without the second optional group those 46
-#: were reported AMBIGUOUS —«probada contra TODAS las fuentes del bloque»—, which is exactly the
-#: noise #316/#325 opened this check to avoid: a real attribution finding drowned among forms that
-#: attribute correctly (measured: 3 of the 11 ambiguous ones in a single note).
+#: the vault itself uses). Without the second optional group those were reported AMBIGUOUS
+#: —«probada contra TODAS las fuentes del bloque»—, which is exactly the noise #316/#325 opened
+#: this check to avoid: a real attribution finding drowned among forms that attribute correctly.
 #: ⛔ It does NOT loosen #325: prose in the gap still has no adjacent owner, because letters are in
-#: neither character class (`', y más prosa '` stays False — the measured 131-character case).
+#: neither character class (`', y más prosa '` stays False).
 #: #515 — the locator may also come BEFORE a link that opens its own parenthesis, with a space or a
 #: dash between them: `«…» (p. 4) ([[bib]])`, `«…» (p. 4)— ([[bib]])` (#488 with the order flipped).
-#: Without `[\s—–-]*` there, the one such form in a real vault fell to the «before» branch and was
-#: owned by a link 264 characters back. Still no letters: #325 is not loosened.
+#: Without `[\s—–-]*` there, that form fell to the «before» branch and was owned by a distant
+#: link. Still no letters: #325 is not loosened.
 _ADYACENTE = re.compile(r"^[\s*_`»”\"'.,;:—–-]*(?:\([^()]{0,40}\))?[\s—–-]*(?:\(\s*)?[\s*_`.,;:—–-]*$")
 
 
@@ -663,10 +639,9 @@ _CORTE_ANTES = re.compile(r"[«»\n|]|\.\s")
 
 #: #515 · y la rama «antes» tiene TOPE: sin él, el link de una cláusula anterior —separado de la
 #: cita por una coordinada entera («…([[A]]) y un cuarto no la encuentra … —«cita»— … ([[B]])»)—
-#: era dueño a cualquier distancia. Medido en una bóveda real (v1.322.0): de las 34 citas que
-#: resolvía esta rama, las correctas quedan a ≤89 caracteres del link y las 2 equivocadas a 264 y
-#: 311. ⚠ Es UNA bóveda: el tope se pone en el medio, y pasarlo da ambigüedad (`None`, #316), el
-#: lado seguro — un dato que falta, no un dueño equivocado.
+#: era dueño a cualquier distancia. El tope cae entre las distancias correctas y las equivocadas
+#: medidas (⚠ en UNA bóveda), y pasarlo da ambigüedad (`None`, #316), el lado seguro — un dato que
+#: falta, no un dueño equivocado.
 _TOPE_ANTES = 160
 
 
@@ -683,11 +658,10 @@ def _pegado(gap: str) -> bool:
     """Is the `[[bibcode]]` ADJACENT to the quote, as the convention declares? (#325)
 
     ⛔ `quote_owner` documented the convention `«…» [[bibcode]]` and never enforced it: it took the
-    first link **after** the quote at any distance. Measured over the six «wrong attribution»
-    findings of a real vault: **131, 247, 436 and 657 characters**, crossing prose. The clear case
-    is a table row whose *Fuente* cell is `[[2015Voss]]` and whose prose cell ends *«…attributing
-    that step to [[2013Voss]]»*: the note attributes CORRECTLY, the mention 131 characters later
-    won, and the check reported the note for telling the truth — the very defect #316 was opened to
+    first link **after** the quote at any distance, crossing prose. The clear case is a table row
+    whose *Fuente* cell is `[[2015Voss]]` and whose prose cell ends *«…attributing that step to
+    [[2013Voss]]»*: the note attributes CORRECTLY, the later mention won, and the check reported
+    the note for telling the truth — the very defect #316 was opened to
     fix, surviving inside the mechanism that fixed it. With prose in between there is **no adjacent
     owner**, and the existing exit is the right one: `None` → ambiguity → the finding does not
     block and says so."""
@@ -716,18 +690,15 @@ def quote_owner(text: str, quote: str, bibs: list) -> str | None:
     """Which of the block's bibcodes OWNS this quote, or `None` when the block does not say (#316).
 
     ⛔ A block that cites two or three sources is the normal shape of a paragraph that CONTRASTS
-    them, and testing every quote against every bibcode marks the note **for telling the truth**.
-    Measured on a real hub: 12 of 12 "hard" findings of that category were this, concentrated in
-    four lines that attribute each quote correctly in prose — and a verifier warned that "fixing"
-    them by re-attributing the quote to the bibcode it was tested against **destroys the inference
+    them, and testing every quote against every bibcode marks the note **for telling the truth** —
+    and "fixing" such a finding by re-attributing the quote to the bibcode it was tested against **destroys the inference
     the note is making**.
 
     The convention this vault writes by is `«…» [[bibcode]]`: the owner is the citation ADJACENT to
     the closing quote, and failing that the adjacent one before it. ⛔ **Adjacency is REQUIRED, not
-    just documented** (#325): until 1.135.0 it took the first link after the quote at any distance
-    —measured at 131, 247, 436 and 657 characters, across prose— so a mention in the same paragraph
-    («…attributing that step to [[X]]») outvoted the declared source and the check reported notes
-    that attribute correctly: 6 of 12 blocking findings of a real vault. In a table row the *Fuente*
+    just documented** (#325): until 1.135.0 it took the first link after the quote at any distance,
+    so a mention in the same paragraph («…attributing that step to [[X]]») outvoted the declared
+    source and the check reported notes that attribute correctly. In a table row the *Fuente*
     cell wins over a mention (`_cell_source`), but not over the prose's own owner: then `None`
     (#515). When the block has several and none is adjacent, this returns
     `None` — ambiguity is a MISSING DATUM, not a finding, and it used to be resolved against the
@@ -827,13 +798,7 @@ def note_pairs(note: Path, text: str, fm: dict | None = None) -> list[Pair]:
 # Vocabulario CERRADO del veredicto. `parcial` se ELIMINÓ en 1.39.0 y no es un recorte cosmético:
 # ese valor fusionaba dos preguntas ortogonales —«¿la fuente respalda esto?» (textual, decidible
 # contra el `.txt`) y «¿la afirmación está completa?» (juicio de grado)— y la fusión hacía que la
-# parte dura arrastrara a la blanda.
-#
-# Medido el 2026-08-25 sobre la ficha de HD 40307: dos corridas independientes del fan-out, jueces
-# nuevos y ciegos, 60 pares comparados → **95 % de coincidencia (57/60)**, y las TRES divergencias
-# vivían exactamente en el borde `soportada`↔`parcial`, todas en la misma dirección. `contradice`
-# reprodujo 2/2. O sea: el eje textual es estable y el de grado no lo es — y el skill nunca definió
-# ese umbral.
+# parte dura arrastrara a la blanda: el eje textual es estable y el de grado no lo es.
 #
 # Lo que era `parcial` se descompone sin pérdida: o la fuente respalda la afirmación pero bajo
 # condiciones que la nota no dice (→ `soportada` + `condicion` poblada), o la cita NO toca el
@@ -852,8 +817,7 @@ VERDICTS_SIN_RESOLVER = ("no-soportada", "contradice")
 #: de un `fuente: abstract` (#207) o de un paper cuyos artefactos borró `--drop-core`—, así que su
 #: fila no puede llevar `txt:`/`pdf:` en `Hash fuente`: no hay qué hashear. El chequeo de #117
 #: bloqueaba igual, o sea que el contrato exigía declarar un archivo justo en las filas que existen
-#: para decir que no lo hay. Medido: 9 filas de un concepto real, todas correctas, bloqueando el
-#: cierre. Es el mismo criterio con que este veredicto ya está fuera de `VERDICTS_SIN_RESOLVER`.
+#: para decir que no lo hay. Es el mismo criterio con que este veredicto ya está fuera de `VERDICTS_SIN_RESOLVER`.
 VERDICTS_WITHOUT_SOURCE = ("no verificable por extracción",)
 
 
@@ -901,8 +865,7 @@ def current_verdict(verdict: str) -> str:
     ⛔ The partition of `verif_counts` used to key on the FIRST link («what the note got wrong»,
     #274c) and `resueltos` read anything after the separator as a resolution, so
     `soportada→contradice` —round 2 finding a contradiction the note still carries— was filed as
-    *soportada* AND counted as resolved: measured, 5 open verdicts in 4 notes sitting under headers
-    reading «209 soportadas / 0 contradicen», with `lint --cierre` at rc 0. The verdict that
+    *soportada* AND counted as resolved, with `lint --cierre` at rc 0. The verdict that
     demands action is the last one."""
     cadena = verdict_chain(verdict)
     return cadena[-1] if cadena else ""
@@ -923,8 +886,7 @@ def resueltos(verdict: str) -> bool:
     la resolución tiene que venir DESPUÉS de él. *Cualquier cosa* tras el separador contaba como
     resolución, y el mismo separador encadena rondas (#232), así que `soportada→contradice` —una
     contradicción que la ronda 2 encontró y nadie resolvió— pasaba limpia y apagaba el bloqueante
-    de #91. Medido: 5 filas abiertas en 4 notas, dos de ellas de sesiones anteriores, con
-    `lint --cierre` en rc 0. Las tres formas y su lectura:
+    de #91, con `lint --cierre` en rc 0. Las tres formas y su lectura:
 
     - `soportada→contradice` → ABIERTA (la ronda 2 contradice y nadie la resolvió);
     - `no-soportada→corregida` → resuelta (la anotación va después del último veredicto);
@@ -936,9 +898,8 @@ def resueltos(verdict: str) -> bool:
     # @inv INV-117
     partes = _cell_parts(verdict)
     idx = [i for i, x in enumerate(partes) if x in VERDICTS]
-    # ⛔ Un veredicto FUERA del vocabulario cerrado no puede contar como resuelto. Medido el
-    # 2026-08-28: `'contradise'`, `''` y `'no soportada'` (con espacio) devolvían `True`, o sea que
-    # el bloqueante que INV-117 sostiene **se apagaba con una letra** — y la fila quedaba bajo un
+    # ⛔ Un veredicto FUERA del vocabulario cerrado no puede contar como resuelto: el bloqueante
+    # que INV-117 sostiene **se apagaba con una letra** — y la fila quedaba bajo un
     # encabezado que se lee como garantía. Una celda que no se puede leer no certifica nada; el
     # lint la reporta aparte con el motivo correcto (typo, no «sin resolver»).
     if not idx:
@@ -979,9 +940,8 @@ def split_row(line: str) -> list[str]:
 
 
 #: #232 · las tres sub-secciones que la plantilla del bloque cierra, obligatorias aunque digan
-#: «ninguna». Es el ÚNICO lugar donde queda escrito el triage de la corrida: medido, de 91
-#: condiciones pobladas 28 declaraban una omisión de la nota, y nada en la nota decía cuáles se
-#: juzgaron no vinculantes — el razonamiento se hizo, vivió en `build/` (scratch) y no llegó al
+#: «ninguna». Es el ÚNICO lugar donde queda escrito el triage de la corrida: sin ellas nada en la
+#: nota decía qué condiciones se juzgaron no vinculantes — el razonamiento se hizo, vivió en `build/` (scratch) y no llegó al
 #: artefacto que viaja.
 VERIF_SUBSECCIONES = ("Inferencias declaradas", "Omisiones en transcripciones",
                       "Condiciones perdidas")
@@ -1024,8 +984,8 @@ def _plain_with_map(s: str) -> tuple:
 #: #280/#430 · el fragmento de conteo de cada sub-sección, como PLANTILLA: se renderiza desde acá
 #: (`verif_subsection_lines`) y se reconoce desde acá (`subsection_fragment_re`). Escrito dos veces
 #: —una para producir, otra como lista de cierres literales— el lector se quedó atrás del productor
-#: y dejó de reconocer el fragmento que él mismo había escrito: medido, dos notas reales publican
-#: DOS conteos contradictorios en la misma línea, el segundo todo ceros.
+#: y dejó de reconocer el fragmento que él mismo había escrito, y la línea publicaba DOS conteos
+#: contradictorios.
 #: `Omisiones en transcripciones` no tiene fragmento a propósito (la completitud no está en la
 #: tabla y un número ahí sería el cero inventado que D-43 prohíbe).
 _SUBSECTION_TEMPLATES = {
@@ -1066,7 +1026,7 @@ def subsection_split(line: str, sub: str) -> tuple:
     The free text is the round's **triage** —the only place that records what was decided— and the
     caller rewrites the line around it. Reading it wrong loses it silently, which is what happened:
     `startswith` on the RAW line missed `**Inferencias declaradas (sin cita, por diseño)** — …`, and
-    the placeholder was written on top. Measured on a real vault: 10 sub-sections in 4 notes.
+    the placeholder was written on top.
 
     Three things this reads that the raw comparison did not (regla de método nº 4, fifth time —
     #168, #276, #283, #309): markdown **adornment** around the name, a parenthetical after it, and a
@@ -1114,8 +1074,7 @@ def _subsection_prose_start(line: str, sub: str) -> int | None:
     orig = idx[min(fin, len(idx) - 1)]
     # ⛔ #430 (tercera vuelta) — el mapa apunta al primer carácter PLANO de la prosa, y la
     # normalización se comió el adorno que lo precede en el ORIGINAL: en `cuerpo: \`(inferencia …)\`.`
-    # el offset caía en `(` y el corte dejaba el backtick de apertura afuera. Medido en vivo: la
-    # línea quedó `(inferencia de …)\`.` con el fix de v1.250.0 adentro, dos veces. Se retrocede
+    # el offset caía en `(` y el corte dejaba el backtick de apertura afuera. Se retrocede
     # sobre los caracteres de adorno pegados al arranque — el cierre de un token anterior no entra
     # porque entre medio siempre hay un separador o un espacio.
     while orig > 0 and _ADORNO_MD.match(line[orig - 1]):
@@ -1133,9 +1092,7 @@ def subsection_free_text(section: str, sub: str) -> str | None:
     """The free text of one sub-section's PARAGRAPH, or `None` when the sub-section is absent (#577).
 
     ⛔ The paragraph, not the line. The triage is hard-wrapped prose like any other paragraph of a
-    note, and reading only the line that carries the name kept its first line and dropped the rest:
-    measured in a real vault (writer 1.239.0–1.249.x), «Inferencias declaradas — 7 marcas en el
-    cuerpo: la comparación» and three more sub-sections published cut mid-sentence for a month.
+    note, and reading only the line that carries the name kept its first line and dropped the rest.
     Continuation lines run up to the blank line, a heading, or the next sub-section; they come back
     joined by `\\n`, so the writer re-emits the wrap as it was."""
     lineas = section.split("\n")
@@ -1164,13 +1121,12 @@ def subsection_cut(free: str) -> str:
     """`""` when a sub-section's free text closes like a sentence; else its last words (#577).
 
     The shape net #430 lacked: it guarantees the triage is not LOST between runs, never that what
-    is left is WHOLE. A cut paragraph ends in `,` `;` `:` or in a bare word (measured: a bibcode
-    list ending in a comma, and two sentences ending mid-phrase). Exempt: the empty text (a missing
+    is left is WHOLE. A cut paragraph ends in `,` `;` `:` or in a bare word. Exempt: the empty text (a missing
     sub-section is #232's finding), the pending placeholder, and a ONE-word answer, which the
     skill's own template allows.
 
     ⚠ It reads the END only. A paragraph spliced in the middle and closed by a later sentence has a
-    well-formed end and passes (measured: one of the five cases); that needs a reader, not a shape."""
+    well-formed end and passes; that needs a reader, not a shape."""
     s = free.strip()
     if not s or s == SUBSECTION_PENDING or len(s.split()) == 1:
         return ""
@@ -1232,10 +1188,9 @@ def verif_counts(rows: list) -> dict:
             "soportadas": sum(1 for v in vs if v == "soportada"),
             "no_soportadas": sum(1 for v in vs if v == "no-soportada"),
             "contradicen": sum(1 for v in vs if v == "contradice"),
-            # #263 — el cuarto veredicto del vocabulario. Sin él los conteos NO PARTICIONAN: medido
-            # en una ficha real, 73 + 6 + 5 = 84 sobre 88 pares, y las 4 que faltaban eran
-            # `no verificable por extracción` correctas (#223: la fuente no está en disco). El
-            # lector que suma queda con filas sin explicar, y las dos lecturas naturales —«la tabla
+            # #263 — el cuarto veredicto del vocabulario. Sin él los conteos NO PARTICIONAN: las
+            # filas `no verificable por extracción` (#223: la fuente no está en disco) quedaban
+            # afuera de la suma. El lector que suma queda con filas sin explicar, y las dos lecturas naturales —«la tabla
             # está cortada», «el conteo está mal»— son las dos falsas. Es D-43 sin aplicar a la
             # cabecera del propio bloque: lo no evaluable se declara, no se omite — y acá es lo que
             # dice que N afirmaciones de la nota no se pudieron contrastar contra nada.
@@ -1262,12 +1217,10 @@ def verif_counts(rows: list) -> dict:
             # #274c — filas cuya celda registra MÁS DE UNA ronda (`no-soportada→contradice→
             # corregida`). La partición sigue siendo por el PRIMER veredicto —el que dice qué hizo
             # mal la nota—; esto dice cuántas filas pelearon más de una vuelta, que es lo que la
-            # notación de una sola flecha no podía registrar. Medido: una nota de 8 rondas emitió 13
-            # veredictos malos y publicó 11.
+            # notación de una sola flecha no podía registrar.
             "cadenas": sum(1 for r in rows if len(verdict_chain(r.verdict)) > 1),
             # #280 — la condición, desglosada por CLASE. Los tres particionan `con_condicion`, que
-            # es lo que hace chequeable el conteo que la sub-sección publica: escrito a mano deriva
-            # (medido: «las 20 marcadas `acota`» sobre una tabla que tenía 3).
+            # es lo que hace chequeable el conteo que la sub-sección publica: escrito a mano deriva.
             "cond_acota": sum(1 for r in rows if condition_kind(r.condition) == "acota"),
             "cond_acota_resueltas": sum(1 for r in rows if condition_kind(r.condition) == "acota"
                                         and condition_resolved(r.condition)),
@@ -1287,7 +1240,7 @@ def verif_summary(rows: list) -> str:
     # #286 — los dos veredictos con resolución publican cuántas de las suyas están resueltas. El
     # `(resueltas)` fijo del texto viejo lo decía de uno solo y sin número, justo en la categoría
     # donde un valor PELADO bloquea el cierre (#91): el número más alarmante de la línea era el peor
-    # etiquetado. Medido: «9 no-soportadas» con las 9 resueltas y `lint --cierre` en 0.
+    # etiquetado.
     return (f"{c['pares']} pares; {c['soportadas']} soportadas "
             f"/ {c['no_soportadas']} no-soportadas ({c['no_soportadas_resueltas']} resueltas) "
             f"/ {c['contradicen']} contradicen ({c['contradicen_resueltas']} resueltas) "
@@ -1301,9 +1254,7 @@ def verif_subsection_lines(rows: list, prose: str) -> dict:
     """The generated count fragment for each of the three sub-sections, or `None` (#280).
 
     INV-81 one level down: the header's numbers come from the same code that reads the table, and
-    the three sub-sections were left as free prose — so they drifted. Measured on a real note:
-    «las 20 marcadas `acota`» over a table holding **3**, and «cinco inferencias» over **six** marks
-    in the body, with one item too many and one missing.
+    the three sub-sections were left as free prose — so they drifted.
 
     ⛔ `Omisiones en transcripciones` maps to `None` on purpose: completeness is the judgement half
     of the fan-out and nothing in the table encodes it. Emitting a number there would be the
@@ -1357,9 +1308,9 @@ def row_key(row) -> tuple:
 
     ⛔ The unit of resolution is the PAIR, the same one the unit of verification is: the fan-out
     answers per pair and the `Condición` cell is per row. An ANCHOR is not that unit — it hashes a
-    BLOCK, so a block citing N sources produces N rows with the same anchor (see `Pair`). Measured
-    on a real vault while closing a blind round: of 20 `acota`, **5 shared their anchor with a
-    `contextualiza`** and could not be marked resolved by any tool, so their count lied forever.
+    BLOCK, so a block citing N sources produces N rows with the same anchor (see `Pair`): an `acota`
+    sharing its anchor with a `contextualiza` could not be marked resolved by any tool, so its count
+    lied forever.
 
     One function because both writers of the sibling address rows this way, and addressing by anchor
     in one of them is what produced the bug."""
@@ -1473,14 +1424,13 @@ def parse_verif_table(text: str) -> list[Row] | None:
         # dejaba de disparar el bloqueante de INV-117 y quedaba registrado bajo un encabezado que
         # se lee como garantía. Es **el mismo defecto que #128 arregló para la dirección opuesta**
         # (más celdas ⇒ se recupera por contenido) y con el mismo argumento escrito abajo:
-        # descartar la fila es peor que leerla a medias. Medido el 2026-08-28.
+        # descartar la fila es peor que leerla a medias.
         corrida = len(celdas) != len(cols)
         if corrida:
             # Celdas de MÁS ⇒ hay un `|` sin escapar y las columnas de la DERECHA (ancla, hash,
             # condición) están corridas. Celdas de MENOS ⇒ falta alguna de la derecha. En los dos
             # casos lo que no se puede leer son las posicionales, no la fila. Indexar por posición leería el
-            # ancla de otra celda y el par volvería "vencido por edición" sin que nadie editara nada
-            # (medido: 18 pares, 2026-08-25).
+            # ancla de otra celda y el par volvería "vencido por edición" sin que nadie editara nada.
             #
             # ⚠ Hasta #128 esto era un `continue` y la fila se perdía ENTERA — con ella el
             # `Veredicto`, así que un `no-soportada` dejaba de disparar el bloqueante de INV-117 y
@@ -1510,9 +1460,8 @@ def parse_verif_table(text: str) -> list[Row] | None:
 # `_split_row` **des-escapa** los `\|` al leer, y hasta 1.106.x no había ninguna puerta del lado de
 # la escritura. Quien lee filas para reescribirlas —el flujo que #282 creó— recibía pipes crudos y,
 # al escribirlos, **partía la fila**: la fila queda con más celdas que el encabezado, `Ancla` se lee
-# de la columna equivocada y el par se cuenta vencido contra una fuente que nadie tocó. Medido en la
-# reconstrucción de una ficha real: **73 de 131** filas volvieron con `anchor == ""`, todas ellas
-# filas acarreadas cuya `Evidencia` transcribe una tabla del paper — el caso normal, no el raro.
+# de la columna equivocada y el par se cuenta vencido contra una fuente que nadie tocó. Las filas
+# cuya `Evidencia` transcribe una tabla del paper son el caso normal, no el raro.
 #
 # Es la cuarta vez que este repo paga por tener la regla de escape en un solo lado (#240, #214,
 # INV-98, #222). La salida es la de #222: **re-parsear lo escrito y exigir que devuelva lo que se le
@@ -1541,12 +1490,10 @@ def _hash_cell(row) -> str:
 #: #226 · el largo con que se trunca `Afirmación (extracto)`, la ÚNICA columna truncable.
 TRUNCADO_CLAIM = 180
 
-# Aperturas que un corte no puede dejar sin cerrar. `$…$` es el caso medido (10 de 88 filas de una
-# ficha real cortadas a media fórmula, las únicas 10 con `$` impar de toda la nota: en Obsidian un
-# `$` huérfano se traga texto hasta el próximo `$`); `[[…]]` es peor todavía, porque un wikilink
-# partido es un **bloqueante** del lint (#257c). `«…»` (#566): la cita textual cortada en el carácter del
-# corte es lo que un lector-modelo tiende a completar (#314) — medido, 543 de 2996 extractos de una
-# instancia terminaban con una `«` abierta.
+# Aperturas que un corte no puede dejar sin cerrar. `$…$` (#274b): en Obsidian un `$` huérfano se
+# traga texto hasta el próximo `$`; `[[…]]` es peor todavía, porque un wikilink partido es un
+# **bloqueante** del lint (#257c). `«…»` (#566): la cita textual cortada en el carácter del corte es
+# lo que un lector-modelo tiende a completar (#314).
 _SPANS_ABIERTOS = (("$", "$"), ("`", "`"), ("[[", "]]"), ("«", "»"))
 
 
@@ -1567,11 +1514,10 @@ def truncate_claim(texto: str, limite: int = TRUNCADO_CLAIM) -> str:
 
     Truncating is legal here and only here (#226: the extract's anchor lives in the note, not in the
     cell), but the cut must not fall inside `$…$`, a backtick span, a `[[wikilink]]` or a verbatim
-    quote `«…»` (#566): measured on a real note, 10 of 88 rows were cut mid-formula and left an odd
-    `$`, a split `[[` is a lint blocker, and a quote cut mid-sentence invites the reader to complete
+    quote `«…»` (#566): a cut mid-formula leaves an odd `$`, a split `[[` is a lint blocker, and a quote cut mid-sentence invites the reader to complete
     it (#314). The cut retreats to the last safe word boundary —so a quote that starts before the
     limit is dropped from the extract, never closed with an invented `»`—; if there is none —the
-    whole prefix is one long span, e.g. an extract that OPENS with `«` (2 of 3004 rows measured)— the
+    whole prefix is one long span, e.g. an extract that OPENS with `«`— the
     text is returned **whole**, because a broken cell is worse than a long one, and a `…»` would
     print a quote the source never ended there."""
     t = str(texto or "").strip()
@@ -1588,8 +1534,7 @@ def verdict_chain(verdict: str) -> list:
     """The verdicts a cell records, in order — `no-soportada→contradice→corregida` gives two (#274c).
 
     The notation carries one arrow per round. With a single arrow the cell cannot tell «one round
-    corrected it» from «three rounds fought over it»: measured on a note that ran **eight** rounds,
-    13 bad verdicts were issued and 11 reached the block. Reading the chain is what lets a consumer
+    corrected it» from «three rounds fought over it». Reading the chain is what lets a consumer
     count rounds; the partition of `verif_counts` still keys on the **first** verdict, which is the
     one that says what the note actually did wrong."""
     return [x for x in _cell_parts(verdict) if x in VERDICTS]
@@ -1601,8 +1546,7 @@ def chained_verdict(previous: str, current: str) -> str:
     ⛔ The chain of #232 only formed when the anchor survived. A `contradice` resolved by correcting
     what the claim says changes the block, hence the anchor (D-4), and the next round verified a new
     anchor that had never carried a `contradice`: the old one became an orphan and vanished from
-    the count. Measured on a note of 10 rounds: 1 `contradice` in round 1 → the final block said
-    **0 contradicen**, over 62 orphaned pairs accumulated by the same mechanism.
+    the count, and the final block said **0 contradicen**.
 
     So the row carries the history: `<previous>→corregida` when the verdict in force demanded
     action and the current one is clean. `verif_counts` partitions by the verdict in force (#450),
@@ -1614,8 +1558,7 @@ def chained_verdict(previous: str, current: str) -> str:
 
     ⛔ #522 — the writer of every round goes through here (`write_verif_sidecar.append_round_verdict`).
     It had no caller since #480 and the writer concatenated `contradice→soportada` bare, which
-    `verif_counts` files under *soportadas*: measured, 47 rows in 9 notes of an instance, seven of
-    them publishing «0 contradicen». The WHOLE previous chain is kept (`soportada→contradice→
+    `verif_counts` files under *soportadas*. The WHOLE previous chain is kept (`soportada→contradice→
     corregida`), and a previous chain already resolved is returned as is: a third round that
     confirms `soportada` does not un-resolve it."""
     # ⛔ #450 — se mira el veredicto VIGENTE del previo (el último eslabón), no el primero: con
@@ -1638,8 +1581,8 @@ def second_hand_rows(text: str) -> list:
     """`(qué, valor, a quién)` for every view row whose *Segunda mano* cell is populated (#279).
 
     #103 asks the extraction to mark a value the source attributes to someone else — it is the #1
-    measured error mechanism — and nothing checked the mark survived into the star note. Measured on
-    a real note: 4 values lost it, one of them used as **independent corroboration** of itself.
+    measured error mechanism — and nothing checked the mark survived into the star note: a value
+    that lost it can be used as **independent corroboration** of itself.
 
     Indexed by column NAME, never by position: an older note may carry the pre-#195 `Línea` header,
     and a row with an unescaped pipe shifts every column to its right."""
@@ -1672,7 +1615,7 @@ def second_hand_rows(text: str) -> list:
 #: Lo que en un texto NO es una cantidad afirmada: la referencia (`[27]`), el tag de ecuación
 #: (`(3.14)`), el localizador (`p. 4`, `Fig. 3`, `Prop. 3.11`, `Sect. 2.3`) y el año de una cita.
 #: Se saca ANTES de leer números — si no, «Darmois [27]» y «ec. (10)» cruzan contra cualquier
-#: bloque que hable de otra cosa, que es de dónde salía la mitad del ruido medido en #350.
+#: bloque que hable de otra cosa (#350).
 _REF_BRACKET_RE = re.compile(r"\[[^\]]*\]")
 _EQ_TAG_RE = re.compile(r"\(\s*\d+(?:\.\d+)*\s*\)")
 _LOCATOR_RE = re.compile(
@@ -1683,7 +1626,7 @@ _LOCATOR_RE = re.compile(
 _YEAR_RE = re.compile(r"\b(?:19|20)\d\d[a-z]?\b")
 #: Una designación de catálogo (`Gl 725`, `HD 40307`, `GJ 581`, `K2 18`) es un NOMBRE, no una
 #: cantidad. Es regla de FORMA, no una lista de catálogos que mantener: sigla corta capitalizada +
-#: número. Medido en #350: `Gl 725 B` producía 6 de los 9 falsos positivos que quedaban.
+#: número (#350).
 _DESIGNACION_RE = re.compile(r"\b[A-Z][A-Za-z]{0,2}\s?\d+\b")
 _NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
 #: ⛔ La bóveda escribe el decimal castellano DENTRO de la matemática: `$P = 4{,}3115$`, `$0{,}85$`
@@ -1706,16 +1649,14 @@ def quantities(text: str) -> set:
     """The numbers a text actually ASSERTS — locators, references and years stripped first (#350).
 
     A view's *Valor* cell is full of numbers that are not values: `[27]` is a reference of the
-    source, `(6.18)` an equation tag, `Sect. 2.3` a locator, `(2013a)` a year. Measured on a real
-    vault, those were most of what crossed against a citing block, so the crossing said nothing.
+    source, `(6.18)` an equation tag, `Sect. 2.3` a locator, `(2013a)` a year: crossing on them
+    says nothing.
 
-    A catalogue designation (`Gl 725`, `HD 40307`) goes too: it is a NAME, and it produced 6 of the
-    9 false positives left after the rest of the filter.
+    A catalogue designation (`Gl 725`, `HD 40307`) goes too: it is a NAME.
 
     Kept: a number with a decimal separator, or with four digits or more — a value specific enough
     to be the same value. A bare two- or three-digit integer is dropped on purpose: it is a count as
-    often as a measurement, and measured on a real vault every one of those crossings was a
-    collision (`135 RV` against `135 min`, `200 exposiciones` against a period of 200 d). Declared
+    often as a measurement, and those crossings were collisions. Declared
     blind spot: a round value (`198 d`) does not cross by itself — the quoted fragment still does."""
     plano = _TEX_ESPACIO_RE.sub("", _TEX_DECIMAL_RE.sub(r"\1", str(text or "")))
     limpio = _DESIGNACION_RE.sub(" ", _YEAR_RE.sub(" ", _EQ_TAG_RE.sub(
@@ -1743,9 +1684,8 @@ _NOMBRE_PROPIO_RE = re.compile(
 def attribution_terms(text: str) -> set:
     """The terms by which a *Segunda mano* cell NAMES the owner of its value (#433).
 
-    Superset of `cited_names`, and the difference is what #433 measured: after fixing the 20 real
-    findings of a whole category read one by one, **8 stayed listed** because the owner is not a
-    `surname + year`. It is a compilation (`compilación PASTEL`), a document (`HARPS detector final
+    Superset of `cited_names`, and the difference is #433: findings whose owner is not a
+    `surname + year` stayed listed. It is a compilation (`compilación PASTEL`), a document (`HARPS detector final
     design review (ESO)`), or people quoted without a year (`Dean, Kowalski y Pell`) — for all of
     those `cited_names` returns the empty set, so the credit branch was structurally unreachable
     and the block had **nothing it could write** to close the finding.
@@ -1794,8 +1734,7 @@ def second_hand_lifted(block: str, rows: list, *, atribuido: set | None = None) 
     """Of `rows`, the ones whose VALUE this block appears to lift: `[(qué, valor, de, evidencia)]`.
 
     #350 — the finding used to fire on «this paper has SOME second-hand value», so a note citing a
-    survey (full of attributions by construction) fired on every line: measured, 398 of 462 pairs,
-    86 %. The question the detector has to answer is the other one — *does the value THIS line takes
+    survey (full of attributions by construction) fired on almost every line. The question the detector has to answer is the other one — *does the value THIS line takes
     happen to be one of them?* — and it is decidable: the block and the value share a **literal**,
     either an asserted quantity (`quantities`) or a verbatim quoted fragment.
 
@@ -1822,8 +1761,7 @@ def second_hand_lifted(block: str, rows: list, *, atribuido: set | None = None) 
         if terminos_celda & (nombres | terminos_bloque):
             continue
         # ⛔ UNA cifra de dos dígitos significativos (`4,5`, `0,85`) es una coincidencia tanto como
-        # un valor: medida en una bóveda real, la mitad de esos cruces era colisión («4,5 años» de
-        # baseline contra «4,5 Gyr» de edad). Se pide **una específica** (tres significativas o
+        # un valor (#350). Se pide **una específica** (tres significativas o
         # más) o **dos de la misma fila**, que es lo que ya no pasa por casualidad.
         nums = quantities(valor) & cantidades
         evidencia = (sorted(nums) if len(nums) >= 2 or any(_significativas(t) >= 3 for t in nums)
@@ -1845,8 +1783,8 @@ def render_verif_row(row) -> str:
               getattr(row, "locator", "") or "—")
     for c in celdas:
         # #274a — la salida estructurada del fan-out serializada con `repr()` en vez de convertida a
-        # prosa: al lector le llegan los corchetes, los `', '` y los apóstrofos escapados. Medido en
-        # dos filas de una ficha real, y el daño no es sólo estético: `\'` NO es un escape de
+        # prosa: al lector le llegan los corchetes, los `', '` y los apóstrofos escapados. El daño
+        # no es sólo estético: `\'` NO es un escape de
         # markdown, así que Python-Markdown imprime la barra y markdown-it se la come — la misma
         # celda se lee distinto según el parser. La red es la de #240: un `assert` en el punto que
         # arma la fila, que es el único lugar por donde pasa toda celda.
@@ -1902,14 +1840,13 @@ def render_verif_table(rows: list) -> str:
 #
 # El ciclo de #203 —corregir → re-verificar— **no converge** con el ancla a nivel de bloque: tocar
 # una cláusula vence TODOS los pares de su párrafo, así que cada ronda produce un subconjunto del
-# tamaño de la anterior. Medido sobre una ficha real en un `audit-note` completo: **63 → 76 → 78**.
+# tamaño de la anterior.
 #
 # Lo que faltaba no era otra ronda: era distinguir dos cosas que hoy vencen igual.
 #   · la corrección que **cambia lo que la afirmación dice** → el veredicto no vale más, se re-verifica;
 #   · la corrección **derivada de la propia verificación** —el texto nuevo son las palabras que el
 #     verificador sacó de la fuente, con su página— → el texto quedó MÁS anclado que antes, y
 #     re-preguntarle al juez si confirma su propio dictamen no es verificación.
-# Medido en la misma pasada: de 78 pares vencidos, **72 eran del segundo tipo**.
 #
 # ⛔ Esto NO afloja el ancla (#224: emitir por línea deja reescribir el medio de una cita sin que el
 # par se venza, y el sub-disparo es la única dirección de error que el módulo prohíbe). El ancla
@@ -1999,8 +1936,7 @@ def _claim_tokens(text: str, hasta: int | None = None) -> set:
 
 
 #: #573 — a number that only says WHERE in the source (page, section, figure, table, equation,
-#: theorem…): none is what a claim asserts, and together they were most of the noise measured on an
-#: instance. ⛔ #606 — ONE definition for the whole claim (window and tail), and it names the place
+#: theorem…): none is what a claim asserts. ⛔ #606 — ONE definition for the whole claim (window and tail), and it names the place
 #: with a word: «ejemplo»/«example» («por ejemplo 0,3»), a bare `(0.3)` and a bare year are DATA
 #: (a value, an epoch) — eating them re-anchored a `soportada` nobody judged. Ante la duda, dato.
 #: Not shared with `lib_quotes.STRUCTURAL_RE` (#598): that one asks whether a `linea` names a
@@ -2046,17 +1982,14 @@ def carry_needs_reverify(pair, row) -> bool:
     Only a pairing by COVERAGE (the anchor moved: the block was edited) whose row demanded action —
     verdict in force `no-soportada`/`contradice` (#450), or an `acota` in force not `→resuelta`
     (#451). That block was corrected precisely because the claim was wrong, so carrying the old
-    verdict over the new wording publishes a judgement nobody made (#282/#203). Measured on an
-    instance: `--solo-nuevos` sent 1 pair where the corrected sources held 38, and the blind round
-    over those found a new `acota`. The untouched pair (identical anchor) keeps its row: nothing
+    verdict over the new wording publishes a judgement nobody made (#282/#203). The untouched pair (identical anchor) keeps its row: nothing
     changed, and the pending state stays visible where it was."""
     if row is None or row.anchor == pair.anchor:
         return False
     return (current_verdict(row.verdict) in VERDICTS_SIN_RESOLVER
             or (condition_kind(row.condition) == "acota" and not condition_resolved(row.condition))
             # #554 — a correction that changes the object, the author or a number changes what the
-            # claim says, whatever the coverage score: re-verify (measured: 0.938, and a blind
-            # judge approved the wrong object).
+            # claim says, whatever the coverage score: re-verify.
             or claim_objects_changed(row.claim or "", pair.block.text,
                                      f"{row.evidence or ''} {row.condition or ''}"))
 
@@ -2064,12 +1997,8 @@ def carry_needs_reverify(pair, row) -> bool:
 # ── #259 · el SCHEMA de la salida del fan-out de `verify-citations` ─────────────────────────────
 #
 # QUÉ PROBLEMA CIERRA. El skill le dice al verificador **qué campos** devolver y nunca fijó **la
-# forma del archivo**. Medido al cerrar `hd_40307` (2026-08-29: 8 rondas, ~60 subagentes, el mismo
-# prompt salvo el bibcode): la clave de la lista llegó en **tres** formas —`pares` (la mayoría),
-# `veredictos` (ronda 1), `resultados` (2 archivos de la ronda 3)— y el identificador del par en
-# **dos** —`ancla` (la mayoría), `n` (5 archivos de la ronda 7)—. El consumidor falló **dos veces
-# con `KeyError`** antes de terminar en un lector tolerante
-# (`data.get('pares') or data.get('veredictos') or data.get('resultados') or []`).
+# forma del archivo**: con el mismo prompt la clave de la lista y el identificador del par llegaron
+# en formas distintas, y el consumidor terminó en un lector tolerante.
 #
 # ⛔ Ese lector tolerante es la salida PROHIBIDA (política de «sin capa de retrocompatibilidad»):
 # el productor no se entera de nada y la forma sigue derivando. Y lo peor no es el `KeyError`, que
@@ -2201,9 +2130,8 @@ def verify_fanout_json_block(bibcode: str | None = None) -> str:
     if bibcode:
         top["bibcode"] = bibcode
     # #365 — the fence showed the keys and never said the list is CLOSED. That rule lived in
-    # `CLAUDE.md`, prose the subagent never sees (rules fall off in the fan-out): measured, 2
-    # incidents in 10 rounds, one bounced by the barrier AFTER paying the full PDF read (107 290
-    # tokens, 13 tool uses) to re-emit the same verdict. The line is built HERE, by the function
+    # `CLAUDE.md`, prose the subagent never sees (rules fall off in the fan-out), and an extra key
+    # bounces the file at the barrier AFTER paying the full PDF read. The line is built HERE, by the function
     # that builds the block, so prompt and validator cannot drift; and it goes OUTSIDE the ```json,
     # so the fence stays the JSON the validator reads.
     n = len(s["par"]) + len(s["par_opt"])

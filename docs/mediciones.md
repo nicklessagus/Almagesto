@@ -4768,3 +4768,55 @@ código conserva la regla y su ancla. Por símbolo, con el ancla del caso:
 - `refuse_dry_run` (#507): un «preview» de cosecha dejó 5 archivos, +177 líneas.
 - `theme_core` (#447): en una bóveda real, el dry-run proponía sacar 9 de 9 `extra_core` de un tema y el canon de otros dos (−45, −20), todos core por su propia faceta o por la puerta 2.
 - `txt_slug` (#405): en una bóveda real, 26 de 208 reclamos de tema, a través de cinco temas.
+
+## Narrativa de medición movida desde `lib_blocks.py` (v1.415.30, #630)
+
+Las mediciones que vivían sólo en comentarios y docstrings de `scripts/lib_blocks.py`; el
+código conserva la regla y su ancla. Por símbolo, con el ancla del caso:
+
+- docstring del módulo (D-4/D-20): medido con ESTE módulo sobre una instancia real, población notas de entidad (28 archivos: `stars/` + `concepts/` + `queries/`; se excluyen `papers/`, y `log.md`/`index.md`, que no afirman — `log.md` solo aporta 361 pares espurios): 840 pares — 395 en ítems, 260 en párrafos, 176 en filas, 9 en blockquotes; 745 citan por su cuenta y 95 heredan (11 %). El derrame máximo de un ámbito es de 30 hijos (una tabla de keywords bajo un caption con una sola fuente). ⚠ El plan de implementación citaba 761 / 560 párrafos / 141 listas / 54 tablas / 6 blockquotes para el mismo corpus: el total es compatible (761 citas crudas ↔ 840 pares, por herencia +95 y deduplicación dentro de un bloque), el reparto por tipo no (la causa probable: aquella medición contaba una lista entera como un bloque — «141 en listas (24 bloques)»). Vale el número del código.
+- `source_hash` (#403): escribiendo un `.verif.md` a mano, 117 pares «vencidos por fuente» sobre PDFs que nadie había tocado, con el mensaje apuntando al lugar equivocado («el PDF cambió desde la verificación»).
+- `CONDITION_KINDS` (#221): el fan-out puebla la condición en el 89 % de los pares (medido sobre 96); ninguna de las condiciones medidas era descartable.
+- `INFER_MARK` (#276): sin `[`*_~]*` la marca era ciega al énfasis markdown y el detector veía 2 de 5.
+- `current_condition` (#451): en una instancia, 55 condiciones de una ronda de 425 pares nunca llegaron a su fila, una de ellas diciendo «the note contradicts itself».
+- `condition_split` (#427): en una bóveda real, 41 de 957 celdas con la clase duplicada, 7 de ellas `acota` (filas resueltas que el encabezado seguía contando como pendientes).
+- `condition_split` (#283): en una nota real, 74 de 88 celdas reportadas como «condición sin clase» sólo por el adorno (84 % falsos positivos).
+- `replace_current_condition` (#510): el `… ⟂ —` era 6 de 6 de los hallazgos de esa categoría en una instancia.
+- `locator_kinds` (#122): 11 de 114 filas de un concepto real citaban una página y vigilaban el `.txt`.
+- `split_blocks` (1.38.2): sobre la ficha de HD 40307 recién sintetizada, 178 pares contra 68 reales —110 de metadata de roll-ups—, con nueve bibcodes que no aparecen en ninguna afirmación, cuatro de ellos sin `.txt`; el fan-out habría lanzado 110 subagentes a verificar filas de tabla.
+- `split_blocks` (#224): una cita de 5 líneas donde invertir el sentido de la línea 67 (`uncorrelatedness is equivalent` → `is NOT equivalent`) dejaba el ancla IDÉNTICA.
+- `_ADYACENTE` (#488): la forma `«…» ([[bib]], p. 4)` tenía 46 ocurrencias en 4 archivos de la bóveda, todas reportadas ambiguas; eran 3 de los 11 ambiguos de una sola nota. El caso de prosa en el hueco es el medido de 131 caracteres.
+- `_ADYACENTE` (#515): sin `[\s—–-]*`, la única forma `(p. 4) ([[bib]])` de una bóveda real caía a la rama «antes» y la adueñaba un link 264 caracteres atrás.
+- `_TOPE_ANTES` (#515): en una bóveda real (v1.322.0), de las 34 citas que resolvía la rama «antes», las correctas quedan a ≤89 caracteres del link y las 2 equivocadas a 264 y 311; el tope (160) se puso en el medio.
+- `_pegado` (#325): sobre los seis hallazgos de «atribución equivocada» de una bóveda real, el link ganador estaba a 131, 247, 436 y 657 caracteres, cruzando prosa; eran 6 de 12 hallazgos bloqueantes.
+- `quote_owner` (#316): en un hub real, 12 de 12 hallazgos «duros» de la categoría eran citas correctamente atribuidas en prosa, concentradas en cuatro líneas; un verificador advirtió que re-atribuirlas destruía la inferencia de la nota.
+- `VERDICTS` (1.39.0, eliminación de `parcial`): el 2026-08-25, sobre la ficha de HD 40307, dos corridas independientes del fan-out (jueces nuevos y ciegos, 60 pares) coincidieron en el 95 % (57/60); las tres divergencias vivían en el borde `soportada`↔`parcial`, todas en la misma dirección, y `contradice` reprodujo 2/2.
+- `VERDICTS_WITHOUT_SOURCE` (#223): 9 filas de un concepto real, todas correctas, bloqueaban el cierre por no declarar archivo.
+- `current_verdict` / `resueltos` (#450): 5 veredictos abiertos (`soportada→contradice`) en 4 notas, dos de ellas de sesiones anteriores, bajo encabezados que decían «209 soportadas / 0 contradicen», con `lint --cierre` en rc 0.
+- `resueltos` (INV-117): el 2026-08-28, `'contradise'`, `''` y `'no soportada'` (con espacio) devolvían `True`.
+- `VERIF_SUBSECCIONES` (#232): de 91 condiciones pobladas, 28 declaraban una omisión de la nota, y nada en la nota decía cuáles se juzgaron no vinculantes.
+- `_SUBSECTION_TEMPLATES` (#430): dos notas reales publicaban DOS conteos contradictorios en la misma línea, el segundo todo ceros.
+- `subsection_split` (#430): en una bóveda real, 10 sub-secciones en 4 notas con el placeholder escrito encima del triage.
+- `_subsection_prose_start` (#430, tercera vuelta): medido en vivo, la línea quedó `(inferencia de …)\`.` con el fix de v1.250.0 adentro, dos veces.
+- `verif_counts` (#263): en una ficha real, 73 + 6 + 5 = 84 sobre 88 pares; las 4 que faltaban eran `no verificable por extracción` correctas.
+- `verif_counts` (#274c): una nota de 8 rondas emitió 13 veredictos malos y publicó 11.
+- `verif_counts` / `verif_subsection_lines` (#280): en una nota real, «las 20 marcadas `acota`» sobre una tabla que tenía 3, y «cinco inferencias» sobre seis marcas en el cuerpo (un ítem de más y uno faltante).
+- `verif_summary` (#286): «9 no-soportadas» con las 9 resueltas y `lint --cierre` en 0.
+- `row_key` (#434): en una bóveda real, cerrando una ronda ciega, de 20 `acota` 5 compartían el ancla con una `contextualiza` y ninguna herramienta podía marcarlas resueltas.
+- `parse_verif_table` (#128/INV-117): la fila con menos celdas que el encabezado se perdía entera (medido el 2026-08-28); indexar por posición una fila corrida volvía «vencidos por edición» 18 pares (medido el 2026-08-25).
+- `render_verif_table` (#284): en la reconstrucción de una ficha real, 73 de 131 filas volvieron con `anchor == ""`, todas filas acarreadas cuya `Evidencia` transcribe una tabla del paper.
+- `_SPANS_ABIERTOS` / `truncate_claim` (#274b): 10 de 88 filas de una ficha real cortadas a media fórmula, las únicas 10 con `$` impar de toda la nota.
+- `_SPANS_ABIERTOS` / `truncate_claim` (#566): 543 de 2996 extractos de una instancia terminaban con una `«` abierta; un extracto que ABRE con `«` (todo el prefijo un solo span) es 2 de 3004 filas medidas.
+- `verdict_chain` (#274c): en una nota que corrió ocho rondas se emitieron 13 veredictos malos y 11 llegaron al bloque (mismo caso que `verif_counts`).
+- `chained_verdict` (#366): en una nota de 10 rondas, 1 `contradice` en la ronda 1 → el bloque final decía 0 contradicen, sobre 62 pares huérfanos acumulados por el mismo mecanismo.
+- `chained_verdict` (#522): 47 filas en 9 notas de una instancia (ya en § #522 de este archivo), siete de ellas publicando «0 contradicen».
+- `second_hand_rows` (#279): en una nota real, 4 valores perdieron la marca de segunda mano, uno de ellos usado como corroboración independiente de sí mismo.
+- `_REF_BRACKET_RE` / `_DESIGNACION_RE` / `quantities` (#350): referencias, tags y localizadores eran la mitad del ruido; `Gl 725 B` producía 6 de los 9 falsos positivos que quedaban tras el resto del filtro; todo cruce de un entero de dos o tres cifras fue colisión (`135 RV` contra `135 min`, `200 exposiciones` contra un período de 200 d).
+- `second_hand_lifted` (#350): el disparo por paper era 398 de 462 pares, 86 % (ya en § #350 de este archivo: 399 hallazgos sobre 463 pares); con una cifra de dos significativas, la mitad de los cruces medidos en una bóveda real era colisión («4,5 años» de baseline contra «4,5 Gyr» de edad).
+- `render_verif_row` (#274a): la celda con un `repr()` de lista de Python, medida en dos filas de una ficha real.
+- re-anclaje (#282): sobre una ficha real en un `audit-note` completo, el subconjunto a re-verificar creció 63 → 76 → 78; en la misma pasada, de 78 pares vencidos 72 eran correcciones derivadas de la propia verificación.
+- `_LOCALIZADOR_RE` (#573): los números que sólo dicen dónde (página, sección, figura…) eran la mayor parte del ruido medido en una instancia.
+- `carry_needs_reverify` (#539): en una instancia, `--solo-nuevos` mandó 1 par donde las fuentes corregidas tenían 38, y la ronda ciega sobre ésas encontró una `acota` nueva.
+- `carry_needs_reverify` (#554): una corrección que cambió el objeto con cobertura 0.938, y un juez ciego aprobó el objeto equivocado.
+- schema del fan-out de verify (#259): al cerrar `hd_40307` (2026-08-29: 8 rondas, ~60 subagentes, el mismo prompt salvo el bibcode), la clave de la lista llegó en tres formas —`pares` (la mayoría), `veredictos` (ronda 1), `resultados` (2 archivos de la ronda 3)— y el identificador del par en dos —`ancla` (la mayoría), `n` (5 archivos de la ronda 7)—; el consumidor falló dos veces con `KeyError` antes de terminar en un lector tolerante.
+- `verify_fanout_json_block` (#365): 2 incidentes de clave de más en 10 rondas, uno rebotado por la barrera DESPUÉS de pagar la lectura entera del PDF (107 290 tokens, 13 tool uses) para re-emitir el mismo veredicto.
