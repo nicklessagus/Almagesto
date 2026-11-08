@@ -243,7 +243,11 @@ python scripts/contrast.py [<slug>] --validar
                                     #   El localizador es el ADYACENTE a la cita (#504): el que la
                                     #   sigue sin prosa en el medio, o si no el que la introduce;
                                     #   con prosa entre medio es de otra afirmación → no
-                                    #   evaluable, nunca MAL. Tampoco mueve el rc: la
+                                    #   evaluable, nunca MAL. Y el de ESA cita en SU
+                                    #   numeración (#637): no el de otra oración, del `;`
+                                    #   siguiente ni de una lista de citas; `L14-3` y
+                                    #   `page 4 of 11` son la hoja; `MAL` sólo si toda hoja
+                                    #   donde cae la cita lleva número. Tampoco mueve el rc: la
                                     #   población es la más grande de la bóveda. Medido: 104 de 893
                                     #   apuntaban al PDF REEMPLAZADO (#436), o sea que la deuda
                                     #   global de `_paginacion` sale acá con su página nueva. El

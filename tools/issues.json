@@ -1,5 +1,5 @@
 {
- "fetched": "2026-11-07",
+ "fetched": "2026-11-08",
  "issues": [
   {
    "number": 2,
@@ -3139,7 +3139,7 @@
   {
    "number": 630,
    "title": "Simplificación: mover y recortar la narrativa de medición de los docstrings",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 631,
@@ -3154,21 +3154,26 @@
   {
    "number": 633,
    "title": "cita_revisada no exime las citas de disputes en el frontmatter",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 634,
    "title": "Las citas de ## Vista se aprueban contra la misma extracción de la que se copiaron (#454 cubre sólo salvedades)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 635,
    "title": "verify no arma pares en la ## Vista de una nota de paper (0 pares: falta el bibcode propio)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 636,
    "title": "decisiones[].decision del registro no se valida como vocabulario cerrado",
+   "state": "CLOSED"
+  },
+  {
+   "number": 637,
+   "title": "contrast --validar: el detector de localizadores compara localizadores ajenos o en otra numeración (26 de 54 «MAL» falsos)",
    "state": "OPEN"
   }
  ]

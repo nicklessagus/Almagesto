@@ -2295,6 +2295,33 @@ portadores:
         estado: fuera-de-alcance
         motivo: "Vive ahí la implementación; `page_locators_after` (el lector de `contrast`) delega en ella."
 
+  - issue: 637
+    regla: >-
+      El localizador que se juzga o se reescribe es el pegado a ESA cita, en la numeración que usa
+      la nota: la cita se busca como `«cita`, no como subcadena de otra; un número que abre otra
+      oración, cierra el ítem con `;` o vive en la celda que re-cita un trozo es de otra afirmación;
+      el de la misma celda gana al de la vecina, y de la vecina valen todos sus números; el que
+      introduce la cita gana al de la celda vecina; y repartidos entre una lista de citas, ninguno.
+      Medido sobre la Tesis: 26 de 32 `MAL` eran localizadores ajenos o leídos en otra numeración.
+    funcion: lib_config.adjacent_locators
+    patron: 'adjacent_locators|page_locators_after'
+    consumidores:
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "No la llama: `_page_check` lee con `page_locators_after`, que vive en `lib_quotes` y delega en ésta, así que la regla le llega sin código propio."
+      - modulo: scripts/repaginate.py
+        estado: usa
+        motivo: "`_loc_token` y `_replace_locator`: el escritor sólo reescribe lo que el gate le atribuye a la cita; con la atribución ambigua (lista de citas) no reescribe nada."
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`restamp_view_locators` re-estampa la celda adyacente a la cita con la misma regla."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Sólo la re-exporta (AUD-306)."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Vive ahí la implementación; `page_locators_after` delega en ella."
+
   - issue: 502
     regla: >-
       Una categoría WARN «se revisa a mano» tiene que tener dónde FIRMARSE la revisión, o el hit

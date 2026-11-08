@@ -4922,3 +4922,14 @@ conserva la regla y su ancla. Por símbolo, con el ancla del caso:
 - `main --cierre` (#121): al cerrar un tema, el único bloqueante era de otra estrella, y hubo que auditar las categorías a ojo, una por una, para verlo.
 - `check_extraccion_no_declarada` (#346): el detector apagado para 2 de los 3 sujetos de una bóveda real (los temas).
 - `check_paper_pdf_link` (#48): en una instancia real el frontmatter estaba sano mientras 351 de 621 notas no tenían el link `[📄 PDF]`.
+
+## #637 — el localizador de ESA cita, en SU numeración (v1.415.34)
+
+Sobre la Tesis (657 notas, commit `7f97dea3`), `contrast --validar`: **32 → 11 `MAL`**, y los 26
+que el validador confirmó falsos contra el PDF salen todos (18 pasan a `ok`, 8 a sin localizador o
+no evaluable). De los 11 que quedan, 6 son del `log.md`, 2 piden el PDF (SPIE, desfasaje de una
+hoja) y 4 son localizadores equivocados que antes aprobaba una página impresa mal leída (`p. 1996`
+en Wentzell, `p. 11` en un abstract de Zhao). Población 9977 → 9972 localizadores con cita; `ok`
+7586 → 7620. La numeración impresa cambia en 29 de 603 `.txt`, siempre de un número imposible
+(`-6`, `0`, `29`, `1996`) o de un hueco a la hoja que imprime la página.
+

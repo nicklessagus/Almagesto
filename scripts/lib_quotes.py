@@ -763,9 +763,11 @@ def _page_loc_re(first: str, bare: str) -> str:
             r"|,\s*p{1,2}\.\s*" + _PAGE_NUM + r"|,\s*" + bare + _PAGE_BORDER + r"))*")
 
 
+# ⛔ #637 · el `p.` es MINÚSCULA aun bajo `re.I`: `B. P. 1992` es la inicial de un autor y su año
+# (medido: los 3 `P. N` de una bóveda real eran eso).
 # ⛔ AUD-402 · con cuatro cifras en la primera página (`pp. 2056, 2061`, paginación por volumen) un
 # `20xx` tras la coma ES una página; con menos (`p. 4, 2012`) es el año de la referencia.
-PAGE_LOC_RE = re.compile(r"\bp{1,2}\.\s*(?:"
+PAGE_LOC_RE = re.compile(r"\b(?-i:p{1,2})\.\s*(?:"
                          + _page_loc_re(r"(?:(?-i:[A-Z]-)|[A-Z])?\d{4}(?!\d)", _PAGE_NUM) + "|"
                          + _page_loc_re(r"(?:(?-i:[A-Z]-)|[A-Z])?\d{1,3}(?!\d)", r"(?!(?:19|20)\d\d(?!\d))" + _PAGE_NUM)
                          + ")", re.I)
@@ -820,6 +822,17 @@ PAGE_EDGE_LINES = 2
 PAGE_OFFSET_MIN = 3
 
 _PAGE_EDGE_RE = re.compile(r"(?i)(?<!\S)(" + PAGE_LABEL + r")(?!\S)")
+#: #637 · Nature imprime el folio con las cifras ESPACIADAS (`N AT U R E | 2 0 7`): leído cifra por
+#: cifra, el borde ofrece `0`, `2`, `7` y la numeración derivada salía `p. 0` y `p. -6`.
+_SPACED_DIGITS_RE = re.compile(r"(?<!\S)\d(?: \d){1,3}(?!\S)")
+
+
+def _edge_lines(pag) -> list:
+    """The first and last `PAGE_EDGE_LINES` non-empty lines of a page, letter-spaced digits joined
+    (`2 0 7` → `207`, #637) — the ONE reading of «the edge» for its two readers."""
+    lineas = [l for l in str(pag or "").split("\n") if l.strip()]
+    return [_SPACED_DIGITS_RE.sub(lambda m: m.group(0).replace(" ", ""), l)
+            for l in lineas[:PAGE_EDGE_LINES] + lineas[-PAGE_EDGE_LINES:]]
 
 
 def page_locators(texto: str) -> list:
@@ -834,6 +847,10 @@ def page_locators(texto: str) -> list:
                                   _PAGE_LABEL_IN.findall(_PAGE_LOC_PREFIX.sub(" ", parte))) if x]
             if partes:
                 a, b = partes[0], partes[-1]
+                # #637 — `L14-3` es la hoja 3 del artículo L14 (A&A Letters), no un rango: el
+                # segundo número, sin prefijo y menor, es la página
+                if a[0] and not b[0] and b[1] < a[1]:
+                    a = b
                 out.append((page_label(a),
                             page_label(b if b[0] == a[0] and b[1] >= a[1] else a)))
     return out
@@ -852,9 +869,15 @@ _LOC_WORD = (r"(?:§\s*[\w.]+|(?:Sect?|Secci[oó]n|Section|Conclusi(?:on|ones|ó
 _GAP_AFTER_RE = re.compile(r"^»?[*_\s,;:.—–-]*"
                            r"(?:" + _LOC_WORD + r"[\s,;:]*|en\s+(?:el\s+margen(?:\s+\w+)?\s+de\s+)?la\s+)*"
                            r"(?:\([^()«»]*)?$|^»?[^«»|]*(?:\|[^|«»]*)+$", re.I)
-_INTRO_VERB = (r"(?:dice|dicen|afirma|afirman|escribe|lee|says|states|reads|writes|notes)"
-               r"(?:\s+que)?")
+_INTRO_VERB = (r"(?:dice|dicen|afirma|afirman|escribe|lee|agrega|agregan|añade|añaden|says|states|"
+               r"reads|writes|notes|adds)(?:\s+que)?")
 _GAP_BEFORE_RE = re.compile(r"^\s*\)?\s*:?\s*(?:" + _INTRO_VERB + r")?\s*[(:]?\s*$", re.I)
+#: #637 · el localizador que ABRE el paréntesis donde vive la cita: `(p. 286, comparación con «…»`
+_GAP_BEFORE_PAREN_RE = re.compile(r"^\s*,[^()«»|]*$")
+#: #637 · un punto y seguido entre la cita y el número: el número abre OTRA oración, que es de otra
+#: afirmación (`«…». En la Fig. 7 (p. 8) los puntos…`). Ídem el `;` que cierra el ítem de la cita.
+_SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+[A-ZÁÉÍÓÚÑ¿]|;")
+_MATH_RE = re.compile(r"\$[^$]*\$")
 #: AUD-474 · el localizador que va DESPUÉS de una cita pero INTRODUCE la siguiente: pegado a ella
 #: con `):` / `: «`, o —tras un `;` que separa afirmaciones— con un verbo que la presenta
 #: («; §4.5 (p. 11), sobre…, dice «…»»). Es de la cita siguiente, no de la anterior.
@@ -889,27 +912,72 @@ def adjacent_locators(texto: str, ini: int, fin: int, ventana: int = 80) -> list
     texto = str(texto or "")
     cola = texto[fin:].split("«")[0]
     hay_siguiente = len(cola) < len(texto) - fin
+    siguiente = texto[fin + len(cola) + 1:].split("»")[0].strip() if hay_siguiente else ""
+
+    def _limpio(t: str) -> str:
+        """The gap as the reader sees it: a `[[bibcode]]` or an inline `$…$` between quote and
+        number is not prose (#637: `«…:» $X = AS$ (p. 4)`)."""
+        return _MATH_RE.sub("", _WIKILINK_RE.sub("", t))
 
     def _introduces_next(m) -> bool:
         """Whether the locator `m` after this quote is the prefix of the NEXT one (AUD-474)."""
-        resto = _WIKILINK_RE.sub("", cola[m.end():])
+        resto = _limpio(cola[m.end():])
+        if hay_siguiente and "|" not in resto and "|" in cola[:m.start()] and siguiente \
+                and siguiente in texto[ini:fin]:
+            # #637 — la celda vecina que RE-CITA un trozo de esta cita habla de dónde está ese
+            # trozo, no esta fila: `| «A…B» | p. 578 (la cita «B» está en p. 577) |`
+            return True
         # un borde de celda en el medio: la cita siguiente vive en OTRA celda y no la presenta
         # este número (medido en la instancia, la fila `p. 13 (…); p. 15 (…) | … excepción: «…»`)
         return hay_siguiente and "|" not in resto and bool(_INTRODUCES_TIGHT_RE.match(resto) or (
             ";" in cola[:m.start()] and _INTRODUCES_LOOSE_RE.search(resto)))
 
-    despues = [(fin + m.start(), fin + m.end()) for m in PAGE_LOC_RE.finditer(cola)
-               if m.start() < ventana and _GAP_AFTER_RE.match(_WIKILINK_RE.sub("", cola[:m.start()]))
-               and not _introduces_next(m)]
+    despues = []
+    for m in PAGE_LOC_RE.finditer(cola):
+        gap = _limpio(cola[:m.start()])
+        if m.start() >= ventana and not (despues and "|" in gap):
+            continue
+        if not _GAP_AFTER_RE.match(gap) or _introduces_next(m):
+            continue
+        # …fuera de un paréntesis: `(Sección 3.1, p. 2601; Sección 5, p. 2609)` es UN localizador
+        if "|" not in gap and _SENTENCE_BREAK_RE.search(gap.split("(")[0]):
+            continue
+        despues.append((fin + m.start(), fin + m.end(), "|" in gap))
+    # #637 — el número de la MISMA celda gana al de la celda vecina, y de la celda vecina valen
+    # TODOS sus números (`| p. 14 (…); Fig. 5, p. 15 (…) |`: la ventana cortaba el segundo)
+    misma = [(a, b) for a, b, celda in despues if not celda]
+    if misma:
+        return misma
     if despues:
-        return despues
+        primera = texto[:despues[0][0]].count("|")
+        despues = [(a, b) for a, b, _ in despues if texto[:a].count("|") == primera]
     pre = texto[:ini]
     pre = pre[:-1] if pre.endswith("«") else pre
     base = max(pre.rfind("»") + 1, len(pre) - LOCATOR_BEFORE_MAX)
     trozo = pre[base:]
-    antes = [(base + m.start(), base + m.end()) for m in PAGE_LOC_RE.finditer(trozo)
-             if _GAP_BEFORE_RE.match(_WIKILINK_RE.sub("", trozo[m.end():]))]
-    return antes[-1:]
+    hallados = list(PAGE_LOC_RE.finditer(trozo))
+    antes = [(base + m.start(), base + m.end()) for m in hallados
+             if _GAP_BEFORE_RE.match(_limpio(trozo[m.end():]))
+             or (trozo[:m.start()].rstrip().endswith("(")
+                 and _GAP_BEFORE_PAREN_RE.match(_limpio(trozo[m.end():])))]
+    # #637 — el que INTRODUCE la cita gana al de la celda vecina (`(p. 13) agregan: «…» | p. 14 |`)
+    if despues and not antes:
+        return despues
+    if not antes:
+        return []
+    # #637 — varios números delante, sin cita en el medio (`el cuerpo (p. 8) y las conclusiones
+    # (p. 9) dicen «A» y «B»`): el reparto no se adivina — la cita queda SIN localizador (no
+    # evaluable), porque un `mal` sería elegir una atribución (#316/#325) y los escritores
+    # (`repaginate`) reescribirían el número de otra cita
+    # #637 — …sólo cuando la cita es un ítem de una LISTA de citas (`dicen «A» y «B»`): ahí los
+    # números delante se reparten y el reparto no se adivina
+    celda = trozo.rfind("|")
+    paginas = {loc for m in hallados if m.start() > celda for loc in page_locators(m.group(0))}
+    en_lista = hay_siguiente and re.fullmatch(r"»?\s*(?:,|y|e|and)\s*", cola)
+    return [] if en_lista and len(paginas) > 1 else antes[-1:]
+
+
+_PAGE_OF_AFTER_RE = re.compile(r"\s*,\s*page\s+(\d{1,4})(?:\s*[-–]\s*(\d{1,4}))?\s+of\s+\d", re.I)
 
 
 def page_locators_after(texto: str, cita: str, ventana: int = 80) -> list | None:
@@ -931,11 +999,20 @@ def page_locators_after(texto: str, cita: str, ventana: int = 80) -> list | None
     ⚠ It does NOT report which numbering the locator says it uses: since #500 the verdict accepts
     either one, so `[índice del PDF]` is a courtesy to the reader and no longer a branch.
     """
-    pos = str(texto or "").find(cita)
+    texto = str(texto or "")
+    # #637 — la cita como CITA primero: buscada pelada, una cita que es cola de otra anterior
+    # («the LS periodogram does not take…» y luego «does not take…») tomaba la posición ajena
+    pos = texto.find("«" + cita)
+    pos = pos + 1 if pos >= 0 else texto.find(cita)
     if pos < 0:
         return None
-    return [loc for a, b in adjacent_locators(texto, pos, pos + len(cita), ventana)
-            for loc in page_locators(texto[a:b])] or None
+    out = []
+    for a, b in adjacent_locators(texto, pos, pos + len(cita), ventana):
+        out += page_locators(texto[a:b])
+        # #637 — A&A imprime `L1, page 4 of 11`: el `p. L1` es el artículo y la página es la X
+        if m := _PAGE_OF_AFTER_RE.match(texto, b):
+            out.append((m.group(1), m.group(2) or m.group(1)))
+    return out or None
 
 
 def page_number_candidates(paginas: list) -> list:
@@ -947,9 +1024,8 @@ def page_number_candidates(paginas: list) -> list:
     """
     out = []
     for pag in paginas:
-        lineas = [l for l in str(pag or "").split("\n") if l.strip()]
         cand: set = set()
-        for linea in lineas[:PAGE_EDGE_LINES] + lineas[-PAGE_EDGE_LINES:]:
+        for linea in _edge_lines(pag):
             cand |= {page_label(x) for x in map(page_parts, _PAGE_EDGE_RE.findall(linea)) if x}
         out.append(cand)
     return out
@@ -976,9 +1052,8 @@ def page_number_evidence(paginas: list) -> list:
     """
     out = []
     for pag in paginas:
-        lineas = [l for l in str(pag or "").split("\n") if l.strip()]
         ev: set = set()
-        for linea in lineas[:PAGE_EDGE_LINES] + lineas[-PAGE_EDGE_LINES:]:
+        for linea in _edge_lines(pag):
             ev |= {page_label(x) for x in map(page_parts, _PAGE_OF_RE.findall(linea)) if x}
             # el descarte del AÑO vale para el entero pelado: `L1998` no es un año, es una página
             # de Letters (#496)
@@ -1051,27 +1126,43 @@ def printed_pages(paginas: list) -> list:
     """
     cands = [{x for x in map(page_parts, c) if x} for c in page_number_candidates(paginas)]
     off = printed_page_offset(paginas)
+    locales = _local_pages(cands, off, [None] * len(cands))
+    # #637 — segunda pasada: la vecina que YA tiene número elegido sólo confirma ése. Si no, el
+    # `29` de la fecha del encabezado de la hoja 1 se apoyaba en el `30` de una figura de la hoja 2,
+    # que imprime `4773`.
+    locales = _local_pages(cands, off, locales)
+    contradice = off is not None and any(
+        n is not None and n != (off[0], i + off[1]) for i, n in enumerate(locales, 1))
+    return [page_label(n) if n is not None else
+            (page_label((off[0], i + off[1])) if off is not None and not contradice else None)
+            for i, n in enumerate(locales, 1)]
+
+
+def _local_pages(cands: list, off, elegidas: list) -> list:
+    """One pass of `printed_pages`' local reading: per page, the ONE candidate consecutive with a
+    neighbour — the neighbour's chosen number when it has one, any of its candidates otherwise."""
     locales = []
     for i, c in enumerate(cands, 1):
         vecinos: set = set()
         if i >= 2:
-            vecinos |= {(pref, n + 1) for pref, n in cands[i - 2]}
+            vecinos |= {(pref, n + 1) for pref, n in
+                        ([elegidas[i - 2]] if elegidas[i - 2] else cands[i - 2])}
         if i < len(cands):
-            vecinos |= {(pref, n - 1) for pref, n in cands[i]}
+            vecinos |= {(pref, n - 1) for pref, n in
+                        ([elegidas[i]] if elegidas[i] else cands[i])}
         consecutivos = sorted(c & vecinos)
         # #496 — un documento tiene UNA numeración, así que entre dos candidatos consecutivos gana
         # el que está en la del documento (el prefijo del offset). Sin este desempate, el par
         # `J1`/`J2` de una fórmula —o `G1`/`G2`— hace ambigua la página que la cabecera imprime al
         # lado: medido sobre una bóveda real, 6 páginas de dos libros perdían su número. Si el
         # documento no tiene numeración dominante, la ambigüedad NO se adivina (D-43).
+        # #637 — y dentro de esa numeración, el que el offset predice: el `29` de una fecha del
+        # encabezado y el `30` de una figura son consecutivos, pero la hoja imprime `4773`.
         if off is not None:
-            consecutivos = [x for x in consecutivos if x[0] == off[0]] or consecutivos
+            consecutivos = ([x for x in consecutivos if x == (off[0], i + off[1])]
+                            or [x for x in consecutivos if x[0] == off[0]] or consecutivos)
         locales.append(consecutivos[0] if len(consecutivos) == 1 else None)
-    contradice = off is not None and any(
-        n is not None and n != (off[0], i + off[1]) for i, n in enumerate(locales, 1))
-    return [page_label(n) if n is not None else
-            (page_label((off[0], i + off[1])) if off is not None and not contradice else None)
-            for i, n in enumerate(locales, 1)]
+    return locales
 
 
 def fulltext_pagination(bibcode: str) -> dict:
@@ -1195,9 +1286,12 @@ def quote_page_verdict(quote: str, bibcode: str, rangos: list) -> tuple:
             or any(_en_rango(n) for n in con_numero)
             or any(_en_rango(i) for i in halladas)):
         return "ok", det
-    if not con_numero:
+    # ⛔ #637 — `mal` exige que TODA hoja donde cae la cita tenga número: con una muda, la cita
+    # puede estar justo ahí (medido: el título de un apéndice, hallado también en la línea del
+    # índice del libro, que sí lleva número). El silencio no acusa (#321).
+    if len(con_numero) < len(halladas):
         det["motivo"] = (f"la cita está en la(s) página(s) {', '.join(map(str, halladas))} del PDF "
-                         f"de {bibcode} y ese `.txt` no tiene numeración impresa derivable: el "
+                         f"de {bibcode} y no todas tienen numeración impresa derivable: el "
                          f"localizador no se puede decidir")
         return "no_evaluable", det
     return "mal", det

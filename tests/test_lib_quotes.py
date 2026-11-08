@@ -1359,3 +1359,70 @@ def test_598_structural_index_un_segmento_un_lugar():
         {"linea": "p. 945 (texto); Fig. 3b, p. 940"}, {"linea": "Tabla 1, p. 209 [PDF p. 3]"},
         {"linea": "§3.2, pp. 4-5"}]}])
     assert idx == {"B": {"940": {"Fig. 3b, p. 940"}, "209": {"Tabla 1, p. 209"}}}, idx
+
+
+def test_637_el_folio_de_cifras_ESPACIADAS_y_la_vecina_ya_elegida(toy_vault):
+    """⛔ #637 — dos lecturas de la numeración impresa que daban `mal` a localizadores correctos
+    (medido sobre la Tesis): Nature imprime el folio con las cifras espaciadas (`N AT U R E | 2 0 7`)
+    y la numeración derivada salía `p. 0` y `p. -6`; y en MNRAS el `29` de una fecha de la cabecera
+    se apoyaba en el `30` de una figura de la hoja siguiente, que imprime `4773`."""
+    nature = [f"LETTER\nprosa\n\nprosa\n2 5 AUG U S T 2 0 1 6 | VO L 5 3 6 | NAT U R E | {' '.join(str(436 + i))}"
+              for i in range(1, 5)]
+    assert cfg.printed_pages(nature) == ["437", "438", "439", "440"]
+    mnras = (["MNRAS 468, 4772-4781 (2017)\nAdvance Access publication 2017 March 29\n\nprosa\n\nfin"]
+             + [f"Título corrido   {4771 + i}\n    30   2.2 Photometry\n\nprosa\n\nfin" if i == 2 else
+                f"{4771 + i}   A. Autor et al.\nprosa\n\nprosa\n\nfin" for i in range(2, 7)])
+    assert cfg.printed_pages(mnras)[:2] == ["4772", "4773"]
+
+
+def test_637_mal_exige_numero_en_TODA_hoja_donde_cae_la_cita(toy_vault):
+    """⛔ #637 — el título de un apéndice aparece también en la línea del índice del libro: la cita
+    cae en dos hojas, la del índice lleva número y la del apéndice no. Acusar con la que tiene
+    número es acusar en silencio de la otra (#321): sale no evaluable."""
+    # el capítulo nuevo (hoja 4) desmiente el offset, así que la hoja 6, muda, queda sin número
+    impresas = {1: 101, 2: 102, 3: 103, 4: 50, 5: 51, 7: 53}
+    pags = [_pagina(i, f"índice ... {CITA_492} ... 163" if i == 2 else
+                    (CITA_492 if i == 6 else _sin_digitos(i)), impresa=impresas.get(i))
+            for i in range(1, 8)]
+    assert cfg.printed_pages(pags)[5] is None
+    _txt_paginado("2004Libro", pags)
+    assert cfg.quote_page_verdict(CITA_492, "2004Libro", [("163", "163")])[0] == "no_evaluable"
+
+
+def test_637_el_localizador_es_el_de_ESA_cita_en_su_numeracion(toy_vault):
+    """⛔ #637 — la regla de #504 aplicada a las formas que la Tesis midió como falsos `mal`."""
+    c, otra = CITA_492, "another quotation long enough to be a quote of its own right"
+    casos = (
+        # `p.` es minúscula: `B. P. 1992` es la inicial de un autor y su año
+        (f"«{c}». | Press, W. H., & Flannery, B. P. 1992 |", None),
+        # identificador de artículo: `L14-3` es la hoja 3; `L1, page 4 of 11` es la hoja 4
+        (f"«{c}» (Sect. 3, p. L14-3)", [("3", "3")]),
+        (f"«{c}» (Sect. 6, p. L1, page 4 of 11)", [("L1", "L1"), ("4", "4")]),
+        # una matemática en línea entre la cita y su número no es prosa
+        # el número que abre OTRA oración es de otra afirmación
+        (f"«{c}». En la Fig. 7 (p. 8) los puntos se apartan", None),
+        (f"«{c}»; p. 288, resumen)", None),
+        # …pero el `;` dentro del paréntesis separa localizadores de la MISMA cita
+        (f"«{c}» (Sección 3.1, p. 2601; Sección 5, p. 2609)", [("2601", "2601"), ("2609", "2609")]),
+        # de la celda vecina valen TODOS sus números, no sólo los de la ventana
+        (f"| «{c}» — (a) habla, (b) música rock, (c) ruido blanco gaussiano. | p. 14 (revista 1142); "
+         f"Fig. 5, p. 15 (revista 1143) |", [("14", "14"), ("15", "15")]),
+        # el que abre el paréntesis donde vive la cita
+        (f"cap. 14 (p. 286, comparación con datos reales «{c}»; p. 288, resumen)", [("286", "286")]),
+    )
+    for texto, esperado in casos:
+        assert cfg.page_locators_after(texto, c) == esperado, texto
+    assert cfg.page_locators_after(f"| «{c}:» $X = AS$ (p. 4) | ídem (p. 2) |", c + ":") == [("4", "4")]
+    # el que INTRODUCE la cita gana al de la celda vecina, y la anterior no se lo lleva
+    fila = f"| «{otra}». En la Sección 2.3 (p. 13) agregan: «{c}» | p. 14 |"
+    assert cfg.page_locators_after(fila, c) == [("13", "13")]
+    assert cfg.page_locators_after(fila, otra) is None
+    # números delante repartidos entre una LISTA de citas: el reparto no se adivina
+    lista = f"el cuerpo (p. 8) y las conclusiones (p. 9) dicen «{c}» y «{otra}»"
+    assert cfg.page_locators_after(lista, c) is None
+    # la cita se busca como CITA: la cola de otra anterior no le presta la posición; y la celda que
+    # RE-CITA un trozo habla de ese trozo, no de la fila
+    cola = c.split(" ", 2)[2]
+    rec = f"| «{c}» | p. 578 (la cita «{cola}» está en p. 577, Sect. 1) |"
+    assert cfg.page_locators_after(rec, c) is None
+    assert cfg.page_locators_after(rec, cola) is None
