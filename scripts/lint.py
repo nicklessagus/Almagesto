@@ -4516,6 +4516,29 @@ def check_log_quotes(stem: str, body_full: str, sources_for) -> list:
     return cita_log
 
 
+def dispute_quote_misses(fm: dict, sources_for):
+    """Every «…» of `disputes[]` that its sources' `.txt` does not carry (#267).
+
+    Yields `(where, quote, refs, readable, opaque)`. The `note` speaks for the whole dispute (ANY
+    of its refs will do); a position's `value` only against ITS OWN `ref` — pooling the refs would
+    fabricate the cross attribution this framework hunts. The caller routes them with the body's
+    quotes so one `cita_revisada` decides both (#633)."""
+    for campo, posiciones, _motivos, nota in note_disputes(fm):
+        refs = [str(p["ref"]).strip() for p in posiciones
+                if isinstance(p, dict) and str(p.get("ref") or "").strip()]
+        for c in cfg.quotes_in(nota):
+            f, o = sources_for(refs)
+            if not any(cfg.quote_found(c, t) for ts in f.values() for t in ts):
+                yield f"`disputes[{campo}].note`", c, sorted(f) or refs, f, o
+        for p in posiciones:
+            ref = str(p.get("ref") or "").strip() if isinstance(p, dict) else ""
+            if ref:
+                for c in cfg.quotes_in(str(p.get("value") or "")):   # `value` puede ser numérico
+                    f, o = sources_for([ref])
+                    if not any(cfg.quote_found(c, t) for t in f.get(ref, [])):
+                        yield f"`disputes[{campo}].posiciones[].value`", c, [ref], f, o
+
+
 def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluadas: list) -> tuple:
     """The five verdicts about a VERBATIM QUOTE in a note's prose (#220/#316/#324/#333).
 
@@ -4674,6 +4697,28 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
                     cita_revisada.append(
                         (stem, f"L{_ln}: «{_c}» [cita corta, #586] — confirmada en el PDF de "
                                f"{_firma['ref']}, p. {_firma['pagina']}: {_firma['motivo']}"))
+    # #267/#633 — las citas de `disputes[]` (el frontmatter no es prosa) pasan por la MISMA firma
+    # que las del cuerpo: si no, la confirmada en la página seguía abierta y su firma, huérfana.
+    for _donde, _c, _refs, _fuentes, _opacas in dispute_quote_misses(fm or {}, sources_for):
+        _corte = _c if len(_c) <= 70 else _c[:70] + "…"
+        if _fuentes:
+            _firma = cfg.reviewed_quote(_firmas, _refs, _c)
+            if _firma:
+                _usadas.add(_clave_firma(_firma))
+                cita_revisada.append(
+                    (stem, f"frontmatter {_donde}: «{_corte}» — confirmada en el PDF de "
+                           f"{_firma['ref']}, p. {_firma['pagina']}: {_firma['motivo']}"))
+                continue
+            cita_no_verbatim.append(
+                (stem, f"frontmatter {_donde}: «{_corte}» no está en el `.txt` de "
+                       f"{', '.join(_refs)}"
+                       + (" — misma regla que el cuerpo: alcanza con que UNA de las fuentes de "
+                          "la disputa la tenga" if _donde.endswith(".note`") else "")
+                       + cfg.reviewed_quote_entry(_refs, _c)))
+        elif _opacas:
+            cita_opaca.append(
+                (stem, f"frontmatter {_donde}: «{_corte}» no se puede chequear — "
+                       + "; ".join(f"{b}: {m}" for b, m in _opacas)))
     for _f in _firmas:
         if _clave_firma(_f) not in _usadas:
             _sha = cfg.quote_pdf_sha(_f["ref"])
@@ -4688,8 +4733,9 @@ def check_note_quotes(stem: str, f, fm: dict, text: str, sources_for, n_evaluada
             cita_revisada, cita_revisada_huerfana)
 
 
-def check_note_disputes(stem: str, fm: dict, sources_for) -> tuple:
-    """`disputes[]` — shape, `ref` with a destination, and the quote each position carries (#71).
+def check_note_disputes(stem: str, fm: dict) -> tuple:
+    """`disputes[]` — shape and `ref` with a destination (#71); its quotes go with the body's
+    (`dispute_quote_misses`, #633).
 
     Extracted from the main note sweep of `lint.collect` by #396; the blocks compute and the caller
     accumulates. A disagreement is tagged, never overwritten, and each position says WHO holds it —
@@ -4700,9 +4746,6 @@ def check_note_disputes(stem: str, fm: dict, sources_for) -> tuple:
     """
     bad_disputes: list = []
     dispute_refs: list = []
-    cita_no_verbatim: list = []
-    cita_opaca: list = []
-    _refs_disputa: list = []
     for campo, posiciones, motivos_forma, _nota_disputa in note_disputes(fm):
         for motivo in motivos_forma:
             bad_disputes.append((stem, motivo))
@@ -4712,24 +4755,6 @@ def check_note_disputes(stem: str, fm: dict, sources_for) -> tuple:
             bad_disputes.append((stem, f"disputa `{campo or '?'}` con {len(posiciones)} "
                                        f"posición(es): un desacuerdo necesita al menos dos — con "
                                        f"una sola es una afirmación, y va a la prosa citada"))
-        _refs_campo: list = []
-        for pos in posiciones:
-            if isinstance(pos, dict) and str(pos.get("ref") or "").strip():
-                _refs_campo.append(str(pos["ref"]).strip())
-        for _c in cfg.quotes_in(_nota_disputa):
-            _f, _o = sources_for(_refs_campo)
-            _corte = _c if len(_c) <= 70 else _c[:70] + "…"
-            if any(cfg.quote_found(_c, _t) for _ts in _f.values() for _t in _ts):
-                continue
-            if _f:
-                cita_no_verbatim.append(
-                    (stem, f"frontmatter `disputes[{campo}].note`: «{_corte}» no está en el "
-                           f"`.txt` de {', '.join(sorted(_f))} — misma regla que el cuerpo: "
-                           f"alcanza con que UNA de las fuentes de la disputa la tenga"))
-            elif _o:
-                cita_opaca.append(
-                    (stem, f"frontmatter `disputes[{campo}].note`: «{_corte}» no se puede "
-                           f"chequear — " + "; ".join(f"{b}: {m}" for b, m in _o)))
         for pos in posiciones:
             if not isinstance(pos, dict):
                 bad_disputes.append((stem, f"disputa `{campo or '?'}`: posición que no es un mapa "
@@ -4746,30 +4771,10 @@ def check_note_disputes(stem: str, fm: dict, sources_for) -> tuple:
                                            f"→ una posición la sostiene UNA fuente"))
             if ref:
                 dispute_refs.append((stem, campo, ref))
-                _refs_disputa.append(ref)
-                # El `value` se chequea contra SU PROPIA `ref`: juntar los refs de la nota
-                # fabricaría la atribución cruzada que este framework persigue como modo de
-                # falla dominante. `str()` defensivo: `value` puede ser numérico.
-                _citas_pos = cfg.quotes_in(str(pos.get("value") or ""))
-                if _citas_pos:
-                    _f, _o = sources_for([ref])
-                    for _c in _citas_pos:
-                        _corte = _c if len(_c) <= 70 else _c[:70] + "…"
-                        if any(cfg.quote_found(_c, _t) for _t in _f.get(ref, [])):
-                            continue
-                        if _f:
-                            cita_no_verbatim.append(
-                                (stem, f"frontmatter `disputes[{campo}].posiciones[].value`: "
-                                       f"«{_corte}» no está en el `.txt` de {ref}"))
-                        elif _o:
-                            cita_opaca.append(
-                                (stem, f"frontmatter `disputes[{campo}].posiciones[].value`: "
-                                       f"«{_corte}» no se puede chequear — "
-                                       + "; ".join(f"{b}: {m}" for b, m in _o)))
             elif not src:
                 bad_disputes.append((stem, f"disputa `{campo}`: posición sin `ref` ni `source` "
                                            f"→ no se sabe quién la sostiene"))
-    return bad_disputes, dispute_refs, cita_no_verbatim, cita_opaca
+    return bad_disputes, dispute_refs
 
 
 def check_state_header(stem: str, f, text: str, slug_ent, fms: dict | None = None) -> list:
@@ -7305,11 +7310,9 @@ def check_note(stem: str, f: str, text: str, fm: dict, sweep: NoteSweep) -> dict
     add("headerless", check_headerless(stem, f, text))
     add("schema_retirado", retired_schema("nota", stem, fm=fm))     # #624 · INV-13
     # #267 — las citas textuales de `disputes[]` quedaban fuera de TODO (el frontmatter no es prosa).
-    _d1, _d2, _d3, _d4 = check_note_disputes(stem, fm, sweep.sources_for)
+    _d1, _d2 = check_note_disputes(stem, fm)
     add("bad_disputes", _d1)
     sweep.dispute_refs += _d2
-    add("cita_no_verbatim", _d3)
-    add("cita_opaca", _d4)
     # chequeos de completitud por tipo
     tags = fm.get("tags", []) or []
     # Una nota en `papers/` sin `tags: [paper]` queda invisible para TODOS los chequeos de su

@@ -6694,6 +6694,35 @@ def test_la_note_de_la_disputa_usa_cualquiera_de_sus_refs(toy_vault, capsys):
     assert "disputes[P_rot].note" not in _seccion(rep, "no está en su fuente"), rep
 
 
+def test_633_la_firma_cita_revisada_exime_la_cita_de_disputes_y_no_queda_huerfana(toy_vault):
+    """#633 — la rama de `disputes[]` agregaba a `cita_no_verbatim` sin consultar `cita_revisada`:
+    la cita confirmada en la página seguía abierta Y su firma salía huérfana (Tesis: hd_40307, 2 de
+    2). La firma la decide la misma función que el cuerpo (`cfg.reviewed_quote`, #516)."""
+    bib = "2023A&A...675A.187O"
+    _paper_con_txt(bib, "el paper dice una cosa completamente distinta\n")
+    pdf = cfg.PDFS / "tau-cet" / f"{bib}.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"%PDF-1.4 uno")
+    cita = "a phrase long enough to be worth checking here"
+    firma = {"ref": bib, "cita": cita, "pdf_sha": cfg.quote_pdf_sha(bib), "pagina": 7,
+             "motivo": "verbatim en la hoja"}
+    mk_note(cfg.STARS, "test_star", {"name": "Test", "slug": "test_star", "tags": ["star"],
+                                     "planets": [], "cita_revisada": [firma],
+                                     "disputes": [{"field": "P_rot", "posiciones": [
+                                         {"ref": bib, "value": f"«{cita}»"},
+                                         {"source": "ground_truth", "value": 34.0}]}]}, "# f\n")
+    link_from_log(toy_vault, "test_star", bib)
+    rep = lint.collect()
+    assert not [m for s, m in rep.por_clave("cita_no_verbatim").items if s == "test_star"]
+    assert not rep.por_clave("cita_revisada_huerfana").items
+    assert any("p. 7" in m for s, m in rep.por_clave("cita_revisada").items if s == "test_star")
+    # el PDF cambia → la firma deja de cubrir: el hallazgo vuelve y la firma se nombra
+    pdf.write_bytes(b"%PDF-1.4 dos")
+    rep = lint.collect()
+    assert [m for s, m in rep.por_clave("cita_no_verbatim").items if s == "test_star"]
+    assert rep.por_clave("cita_revisada_huerfana").items
+
+
 def test_un_value_numerico_no_voltea_el_lint(toy_vault, capsys):
     """`value` puede ser un número: sin el `str()` defensivo, `quotes_in(47.2)` revienta y el lint
     entero se cae — sobre el schema NORMAL de una disputa de valores."""
@@ -9947,18 +9976,13 @@ def test_check_note_disputes_cubre_forma_ref_y_las_citas_del_frontmatter(toy_vau
     """#396/#71/INV-12 — un desacuerdo se taguea, no se sobreescribe, y cada posición dice QUIÉN la
     sostiene: eso es lo que distingue «hay autoridad y dice X» de «la bóveda no sabe». Las cuatro
     guardas que sobrevivían son las de FORMA, y cada una deja la disputa muda de otra manera.
-
-    ⚠ `if _citas_pos:` sobrevive a `mutar --guardas` y **se queda**: no cambia el resultado, pero
-    evita una llamada a `sources_for` —que globea el disco— por cada posición sin cita. Es un
-    atajo con costo real detrás, no un condicional que no decide (red 8 mira lo segundo).
     @inv INV-12"""
-    sin_txt = lambda _b: ({}, [])       # noqa: E731
     def _d(disputes):
-        return lint.check_note_disputes("n", {"disputes": disputes}, sin_txt)
+        return lint.check_note_disputes("n", {"disputes": disputes})
 
     ok = [{"field": "P_rot", "posiciones": [{"ref": "2020X", "value": 34},
                                             {"source": "ground_truth", "value": 35}]}]
-    bad, refs, _nv, _op = _d(ok)
+    bad, refs = _d(ok)
     assert bad == [] and refs == [("n", "P_rot", "2020X")]
 
     assert any("al menos dos" in m for _s, m in
@@ -9974,31 +9998,35 @@ def test_check_note_disputes_cubre_forma_ref_y_las_citas_del_frontmatter(toy_vau
     assert any("sin `ref` ni `source`" in m for _s, m in
                _d([{"field": "P_rot", "posiciones": [{"value": 1}, {"ref": "2020X"}]}])[0])
 
-    # la cita del `note` y la del `value` se chequean contra SU fuente, no contra las de la nota
-    _b, _r, nov, _o = lint.check_note_disputes(
-        "n", {"disputes": [{"field": "P_rot", "note": "«una cita bien larga y distintiva que no está en ningún texto»",
+    # #633 — las citas van con las del cuerpo (`check_note_quotes`, una sola firma): acá se mira
+    # el generador. La del `note` y la del `value` se chequean contra SU fuente.
+    def _m(fm, fuentes):
+        return list(lint.dispute_quote_misses(fm, fuentes))
+
+    nov = _m(
+        {"disputes": [{"field": "P_rot", "note": "«una cita bien larga y distintiva que no está en ningún texto»",
                             "posiciones": [{"ref": "2020X"}, {"ref": "2019Y"}]}]},
         lambda _bs: ({b: ["otra cosa"] for b in _bs}, []))
-    assert len(nov) == 1 and "disputes[P_rot].note" in nov[0][1]
+    assert len(nov) == 1 and nov[0][0] == "`disputes[P_rot].note`" and nov[0][3]
 
     # sin `.txt` en disco la misma cita no es «no verbatim»: es OPACA, que pide otra cosa
-    _b, _r, nov, opa = lint.check_note_disputes(
-        "n", {"disputes": [{"field": "P_rot", "note": "«una cita bien larga y distintiva que no "
+    [(_w, _c, _rs, leg, opa)] = _m(
+        {"disputes": [{"field": "P_rot", "note": "«una cita bien larga y distintiva que no "
                             "está en ningún texto»",
                             "posiciones": [{"ref": "2020X"}, {"ref": "2019Y"}]}]},
         lambda _bs: ({}, [(b, "sin `.txt` en disco") for b in _bs]))
-    assert nov == [] and len(opa) == 1 and "no se puede chequear" in opa[0][1]
+    assert leg == {} and len(opa) == 2
 
     # y el `value` de una posición se chequea contra SU PROPIA `ref`: juntar los refs de la nota
     # fabricaría la atribución cruzada que este framework persigue como modo de falla dominante
-    _b, _r, nov, _o = lint.check_note_disputes(
-        "n", {"disputes": [{"field": "P_rot", "posiciones": [
+    nov = _m(
+        {"disputes": [{"field": "P_rot", "posiciones": [
             {"ref": "2020X", "value": "«una cita bien larga y distintiva del valor declarado»"},
             {"ref": "2019Y", "value": 35}]}]},
         lambda _bs: ({b: ["otra cosa"] for b in _bs}, []))
-    assert len(nov) == 1 and "posiciones[].value" in nov[0][1]
-    _b, _r, nov, _o = lint.check_note_disputes(
-        "n", {"disputes": [{"field": "P_rot", "posiciones": [{"ref": "2020X", "value": 34},
+    assert len(nov) == 1 and "posiciones[].value" in nov[0][0] and nov[0][2] == ["2020X"]
+    nov = _m(
+        {"disputes": [{"field": "P_rot", "posiciones": [{"ref": "2020X", "value": 34},
                                                              {"ref": "2019Y", "value": 35}]}]},
         lambda _bs: ({b: ["otra cosa"] for b in _bs}, []))
     assert nov == [], "un `value` numérico no tiene cita que chequear"

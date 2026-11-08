@@ -3029,12 +3029,12 @@
   {
    "number": 608,
    "title": "Firmas de segunda mano y autor_ajeno: callan de más o no se vencen (INV-167)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 609,
    "title": "PDFs instalados sin las compuertas de fetch_pdf: carátula HAL y versión desconocida",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 610,
@@ -3044,12 +3044,12 @@
   {
    "number": 611,
    "title": "conclusions_hatch_proposal copia mal la regla del lint de sin_conclusiones",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 612,
    "title": "Autor de un bibcode: autor_ajeno falso con «Nombre Apellido» y et al./año inventados",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 613,
@@ -3059,17 +3059,17 @@
   {
    "number": 614,
    "title": "proposals.py cuenta mal la población y el total",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 615,
    "title": "verify_fanout --segunda-clase deja _clase.json y la barrera rechaza la ronda",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 616,
    "title": "Flags aceptados e ignorados en query_ads y write_verif_sidecar (INV-169)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 617,
@@ -3079,12 +3079,12 @@
   {
    "number": 618,
    "title": "El juez no sabe que en un par inferencia chequea sólo la premisa",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 619,
    "title": "apply_fixes: nuevo: null borra líneas que no son bloque; fix sin viejo tira KeyError",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 620,
@@ -3124,17 +3124,17 @@
   {
    "number": 627,
    "title": "El lint no mira las citas de las ## Vista; unificar el recorrido de citas sobre el de contrast",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 628,
    "title": "Simplificación del lint: métodos por clave, suprimir por clave, via en cfg, estado de refuta único",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 629,
    "title": "Simplificación: flags y scripts que sobran (--all, --no-chain/--no-glyph, measure_layout, --validar, --resoluciones)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 630,
@@ -3144,11 +3144,26 @@
   {
    "number": 631,
    "title": "check_headerless no mira las notas de paper (353 sin cabecera en la Tesis)",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 632,
    "title": "Snippet de propuesta sin la indentación de la lista; --restamp-alcance re-cita valores iguales",
+   "state": "CLOSED"
+  },
+  {
+   "number": 633,
+   "title": "cita_revisada no exime las citas de disputes en el frontmatter",
+   "state": "OPEN"
+  },
+  {
+   "number": 634,
+   "title": "Las citas de ## Vista se aprueban contra la misma extracción de la que se copiaron (#454 cubre sólo salvedades)",
+   "state": "OPEN"
+  },
+  {
+   "number": 635,
+   "title": "verify no arma pares en la ## Vista de una nota de paper (0 pares: falta el bibcode propio)",
    "state": "OPEN"
   }
  ]

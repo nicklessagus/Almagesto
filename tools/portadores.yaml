@@ -2681,6 +2681,21 @@ portadores:
     funcion: fetch_pdf.fetch_free_copy
     patron: 'copias_libres'
     consumidores: []
+  - issue: 633
+    regla: >-
+      Todo punto que agrega a `cita_no_verbatim` consulta la firma `cita_revisada` con la misma
+      función que el cuerpo: si no, la cita confirmada en la página sigue abierta y su firma sale
+      huérfana. Las citas de `disputes[]` (frontmatter) se rutean junto con las del cuerpo en
+      `check_note_quotes` (Tesis: hd_40307, 2 de 2).
+    funcion: lib_quotes.reviewed_quote
+    patron: 'cita_no_verbatim'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "`check_note_quotes` es el único que agrega a `cita_no_verbatim`: cuerpo (`walk_quotes`) y `disputes[]` (`dispute_quote_misses`) pasan por `cfg.reviewed_quote` antes de reportar y marcan la firma usada."
+      - modulo: scripts/contrast.py
+        estado: usa
+        motivo: "`validar` consulta la firma para las citas del cuerpo; no barre `disputes[]` (el frontmatter no es prosa) y no escribe `cita_no_verbatim`."
   - issue: 516
     regla: >-
       Todo veredicto que una persona cierra ABRIENDO LA FUENTE tiene dónde quedar firmado, y la
