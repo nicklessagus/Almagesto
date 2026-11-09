@@ -99,11 +99,25 @@ def unresolved_aliases(host: str, aliases: list) -> list | None:
     return [a for a in cfg.as_list(aliases) if _norm_id(a) not in conocidos]
 
 
-def _val(row, key):
-    """Valor escalar limpio (float/int/str), sin unidades, o None si enmascarado/nan."""
-    import numpy as np
+def _val(row, key, cotas=None):
+    """Valor escalar limpio (float/int/str), sin unidades, o None si enmascarado/nan.
+
+    #638 — NEA publica junto a muchas columnas su bandera `<col>lim` (1 = cota superior, -1 =
+    inferior). Con bandera ≠ 0 el número NO es una medición: se devuelve None (el espejo #70 no
+    adopta lo que la autoridad no afirma) y, si se pasa `cotas`, la cota se registra ahí como
+    `{col: {"valor": v, "lim": ±1}}` para publicarla como lo que es.  @inv INV-06"""
     if key not in row.colnames:
         return None
+    if f"{key}lim" in row.colnames and (lim := _crudo(row, f"{key}lim")):
+        if cotas is not None and (v := _crudo(row, key)) is not None:
+            cotas[key] = {"valor": v, "lim": int(lim)}
+        return None
+    return _crudo(row, key)
+
+
+def _crudo(row, key):
+    """`_val` sin mirar la bandera de límite (el número tal como lo publica NEA)."""
+    import numpy as np
     v = row[key]
     try:
         if v is None or (hasattr(v, "mask") and bool(v.mask)):
@@ -179,9 +193,10 @@ def fetch_planets(tab, mstar_msun=None) -> list[dict]:
     for row in tab:
         name = _val(row, "pl_name") or ""
         letter = name.split()[-1] if name else None
-        K, P, e = _val(row, "pl_rvamp"), _val(row, "pl_orbper"), _val(row, "pl_orbeccen")
-        msini = _val(row, "pl_msinie")          # columna m·sin i de NEA
-        bmass = _val(row, "pl_bmasse")          # best-mass de NEA (provenance variable)
+        cotas: dict = {}                        # #638: lo que NEA publica como límite, no medición
+        K, P, e = (_val(row, c, cotas) for c in ("pl_rvamp", "pl_orbper", "pl_orbeccen"))
+        msini = _val(row, "pl_msinie", cotas)   # columna m·sin i de NEA
+        bmass = _val(row, "pl_bmasse", cotas)   # best-mass de NEA (provenance variable)
         check = msini_earth(K, P, e, mstar_msun)   # m·sin i implícita por K,P,e,M*
         # elegir, entre los valores reportados, el consistente con la física (NEA es inconsistente:
         # a veces el bueno está en pl_msinie, a veces en pl_bmasse). No se inventa nada.
@@ -215,6 +230,8 @@ def fetch_planets(tab, mstar_msun=None) -> list[dict]:
             "disc_year": _val(row, "disc_year"),
             "disc_refname": _val(row, "disc_refname"),
             "status": "confirmed",
+            # sólo si hay: la clave ausente en los snapshots previos no es un diff (`nea_diff`)
+            **({"cotas": cotas} if cotas else {}),
         })
     # ordenar por período
     planets.sort(key=lambda p: (p["P_days"] is None, p["P_days"] or 0))
@@ -250,15 +267,18 @@ def fetch_host(host: str, tab=None) -> dict:
             # lo trae, se guarda aparte como discrepancia potencial en vez de tirarse (D-2).
             if (sp_nea := _val(r, "st_spectype")) not in (None, ""):
                 otras["spectral_type"] = {"nea": sp_nea}
+            cotas: dict = {}                    # #638
             out.update({
-                "teff_K": _val(r, "st_teff"),
-                "mass_msun": _val(r, "st_mass"),
-                "st_rotp_days": _val(r, "st_rotp"),
+                "teff_K": _val(r, "st_teff", cotas),
+                "mass_msun": _val(r, "st_mass", cotas),
+                "st_rotp_days": _val(r, "st_rotp", cotas),
                 "dist_pc": _val(r, "sy_dist"),
                 "Vmag": _val(r, "sy_vmag"),
                 "ra_deg": _val(r, "ra"),
                 "dec_deg": _val(r, "dec"),
             })
+            if cotas:
+                out["cotas"] = cotas
     except Exception as e:
         out.setdefault(AUTORIDAD_CAIDA, []).append("nea")
         cfg.print_seguro(f"  ⚠ NEA (columnas de host) no respondió para {host!r}: {e} — los "

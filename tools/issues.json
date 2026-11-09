@@ -1,5 +1,5 @@
 {
- "fetched": "2026-11-08",
+ "fetched": "2026-11-09",
  "issues": [
   {
    "number": 2,
@@ -3174,6 +3174,11 @@
   {
    "number": 637,
    "title": "contrast --validar: el detector de localizadores compara localizadores ajenos o en otra numeración (26 de 54 «MAL» falsos)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 638,
+   "title": "El espejo de NEA descarta la bandera de límite (`<col>lim`): una cota superior entra a la ficha como masa medida (DS Tuc A b: <413 M⊕ publicado como 413)",
    "state": "OPEN"
   }
  ]

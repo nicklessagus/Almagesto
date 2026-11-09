@@ -3287,6 +3287,17 @@ def ground_truth_line(slug: str) -> str:
     sin_dato = sorted(visible(c) for c in cfg.AUTORIDAD_CAMPO
                       if c in host and host.get(c) in (None, "") and c not in autoridad)
     vacios = f" · sin dato: {', '.join(sin_dato)}" if sin_dato else ""
+    # #638 — lo que NEA publica como LÍMITE no entra al frontmatter (no es una medición); se
+    # publica acá, como cota, con la columna NEA de la que sale.
+    def cota_txt(pref: str, cotas) -> list:
+        return [f"{pref}`{col}` {'<' if c.get('lim') == 1 else '>'} {c.get('valor')}"
+                for col, c in sorted(cfg.as_map(cotas).items()) if isinstance(c, dict)]
+    lista_cotas = cota_txt("", host.get("cotas"))
+    for pl in cfg.as_list(gt.get("planets")):
+        if isinstance(pl, dict):
+            lista_cotas += cota_txt(f"{pl.get('letter')} ", pl.get("cotas"))
+    vacios += (f" · cota (NEA la publica como límite, no como medición; el campo queda `null`): "
+               f"{', '.join(lista_cotas)}") if lista_cotas else ""
     cuando = gt.get("consultado")
     fecha = f", consultado {cuando}" if cuando else ""
     return ("> _Ground-truth — " + " · ".join(partes) + fecha + vacios +

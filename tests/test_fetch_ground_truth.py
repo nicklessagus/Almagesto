@@ -656,3 +656,20 @@ def test_sin_entrada_en_el_servicio_de_alias_consulta_el_nombre_tal_cual(fake_ne
     fake_nea.aliases = None
     gt.fetch_pscomppars("Barnard's star")
     assert fake_nea.names == ["Barnard''s star"] and fake_nea.regularize == [False]
+
+
+def test_cota_nea_no_entra_como_medicion():
+    """#638 — DS Tuc A b: `pl_bmasse=413.179, pl_bmasselim=1` es M_p < 413 M⊕, no una masa.
+    El espejo no adopta la cota (queda null) y la registra en `cotas` con su bandera.  @inv INV-06"""
+    row = Row(pl_name="DS Tuc A b", pl_rvamp=None, pl_orbper=8.138, pl_orbeccen=0.0,
+              pl_orbeccenlim=1, pl_msinie=None, pl_bmasse=413.179, pl_bmasselim=1,
+              pl_orbperlim=0)
+    (p,) = gt.fetch_planets([row])
+    assert p["mass_earth"] is None and p["bmass_earth"] is None
+    assert p["e"] is None                                   # e < 0 también es cota
+    assert p["P_days"] == 8.138                             # lim=0 → medición
+    assert p["cotas"] == {"pl_bmasse": {"valor": 413.179, "lim": 1},
+                          "pl_orbeccen": {"valor": 0.0, "lim": 1}}
+    # sin cota no se agrega la clave (los snapshots previos no cambian en `nea_diff`)
+    (q,) = gt.fetch_planets([Row(pl_name="X b", pl_bmasse=10.0, pl_bmasselim=0)])
+    assert q["mass_earth"] == 10.0 and "cotas" not in q

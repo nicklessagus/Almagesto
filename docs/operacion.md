@@ -773,6 +773,11 @@ del de NEA y borra la distinción auditable↔síntesis que el consumidor usa; a
 cuando las fuentes discrepan es decidir por quien consume (regla #0). El valor de literatura va **al
 cuerpo, citado `[[bibcode]]`**; si discrepa de NEA es una `disputes[]`; si es lectura propia va
 marcado **`inferencia`**. Lo vigila el lint, campo por campo.
+**Una cota de NEA no es un valor (#638):** con la bandera `<col>lim` ≠ 0 (1 = cota superior, −1 =
+inferior) el número no se adopta —el campo queda `null`, también fuera de la elección por
+consistencia de `mass_earth`— y se registra en `cotas: {<col>: {valor, lim}}` del planeta o del
+host; la cabecera la publica como cota y `nea_diff` ve aparecer o desaparecer la bandera. Lo hace
+`_val`, la única lectura de columnas NEA.
 
 **La ficha lo publica arriba**, en el blockquote de cabecera: una línea `> _Ground-truth — …_` con
 qué autoridad respondió cada campo, la fecha del snapshot, **qué campos volvieron vacíos** (distinto

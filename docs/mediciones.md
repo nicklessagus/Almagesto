@@ -4933,3 +4933,12 @@ en Wentzell, `p. 11` en un abstract de Zhao). Población 9977 → 9972 localizad
 7586 → 7620. La numeración impresa cambia en 29 de 603 `.txt`, siempre de un número imposible
 (`-6`, `0`, `29`, `1996`) o de un hueco a la hoja que imprime la página.
 
+
+## #638 — una cota de NEA no entra al espejo como medición (v1.415.35)
+
+Contra `pscomppars` en vivo (2026-11-09), los cinco casos del issue: DS Tuc A b pasa de
+`mass_earth: 413.179` a `null` con `cotas: {pl_bmasse: {valor: 413.179, lim: 1}}`; AU Mic b
+(`pl_msinielim=1`) y HD 40307 b/c/d (`pl_bmasselim=1`) conservan la masa elegida (8.99, 4.0, 6.6,
+9.5 M⊕) y la cota queda registrada, ya fuera de la elección por consistencia. Los otros 8
+planetas de esas tres estrellas, sin cambios y sin clave `cotas`. Las columnas con gemela `lim` en
+`pscomppars` cubren todos los campos espejados salvo `dist_pc`.

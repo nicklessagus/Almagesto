@@ -3989,3 +3989,17 @@ portadores:
       - modulo: scripts/query_ads.py
         estado: fuera-de-alcance
         motivo: "Lector: compara `== \"descartado\"`; el valor está garantizado por `save_decisiones` (escritor) y el lint (registro editado a mano)."
+
+  - issue: 638
+    regla: >-
+      Una columna de NEA con bandera `<col>lim` ≠ 0 es una COTA, no una medición: el espejo no la
+      adopta (el campo queda null y sale de la elección por consistencia de `mass_earth`) y la
+      registra en `cotas`. Toda lectura de columnas NEA pasa por `_val`, que es donde vive la regla.
+      Medido sobre la Tesis: DS Tuc A b publicaba la cota < 413 M⊕ como masa; AU Mic b y HD 40307
+      b/c/d tenían la cota en la columna no elegida.
+    funcion: fetch_ground_truth._val
+    patron: '_val\('
+    consumidores:
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "El match es `_metadata_val(`, otra función (firma de metadata de `check_sources`); no lee NEA."

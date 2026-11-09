@@ -2286,6 +2286,20 @@ def test_la_cabecera_marca_el_campo_que_la_ficha_no_publica(toy_vault):
     assert "`mass_msun` (sólo en el JSON)" not in linea, "#272: mass_msun entró al frontmatter"
 
 
+def test_la_cabecera_publica_la_cota_que_el_frontmatter_no_adopta(toy_vault):
+    """#638 — la cota de NEA no entra a `planets[].mass_earth`; la cabecera la publica como cota."""
+    (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
+        "slug": "test_star", "host": {"teff_K": 5344.0, "_autoridad": {"teff_K": "nea"}},
+        "planets": [{"letter": "b", "P_days": 8.138, "K_ms": None, "e": None,
+                     "mass_earth": None, "status": "confirmed",
+                     "cotas": {"pl_bmasse": {"valor": 413.179, "lim": 1}}}]}), encoding="utf-8")
+    mn.write_star_note("test_star", force=True)
+    texto = (cfg.STARS / "test_star.md").read_text(encoding="utf-8")
+    linea = [l for l in texto.splitlines() if l.startswith("> _Ground-truth")][0]
+    assert "b `pl_bmasse` < 413.179" in linea, linea
+    assert cfg.split_fm(texto)["planets"][0]["mass_earth"] is None
+
+
 def test_la_masa_estelar_se_espeja_al_crear_la_ficha(toy_vault):
     """#272 — espejo puro (#70): lo copia el script del JSON, `null` si NEA calla."""
     (cfg.GROUND_TRUTH / "test_star.json").write_text(json.dumps({
