@@ -4003,3 +4003,19 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: "El match es `_metadata_val(`, otra función (firma de metadata de `check_sources`); no lee NEA."
+
+  - issue: 639
+    regla: >-
+      La copia de catálogo del `## Abstract` que llega a una nota que declara `sin_abstract: true`
+      (historia, AUD-203) lleva al lado la línea que explica por qué conviven, después del abstract
+      (#216 deduplica por el arranque). Medido en la Tesis: 6 notas llenadas por `--fill-abstracts`
+      se leían contradictorias.
+    funcion: lib_config.catalog_abstract
+    patron: 'ABSTRACT_PLACEHOLDER'
+    consumidores:
+      - modulo: scripts/make_notes.py
+        estado: usa
+        motivo: "`fill_abstracts` escribe la copia de OpenAlex por `catalog_abstract`; los demás usos crean la nota o el placeholder, no llenan uno existente."
+      - modulo: scripts/triage.py
+        estado: usa
+        motivo: "`--promote-source` re-estampa el abstract de ADS sobre el placeholder por `catalog_abstract`."

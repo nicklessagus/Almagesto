@@ -4860,6 +4860,22 @@ def test_fill_abstracts_completa_desde_el_CATALOGO_no_desde_el_PDF(toy_vault, mo
     assert mn.fill_abstracts() == 0, "idempotente"
 
 
+def test_639_fill_abstracts_explica_el_sin_abstract_que_se_queda(toy_vault, monkeypatch):
+    """#639 — `sin_abstract` es historia (AUD-203) y no se toca; la copia de catálogo que llega
+    después lo explica, DESPUÉS del abstract (#216 deduplica por el arranque de la sección)."""
+    d = cfg.PAPERS / "2020Sin.md"
+    d.write_text(f"---\ntags: [paper]\nbibcode: 2020Sin\ndoi: 10.1/s\nsin_abstract: true\n---\n\n"
+                 f"## Abstract\n{cfg.ABSTRACT_PLACEHOLDER}\n", encoding="utf-8")
+    import openalex
+    monkeypatch.setattr(openalex, "entity_by_doi",
+                        lambda doi: {"abstract_inverted_index": {"MLPCA": [0], "estima": [1]}})
+    assert mn.fill_abstracts() == 0
+    t = d.read_text(encoding="utf-8")
+    assert cfg.split_fm(t)["sin_abstract"] is True, "la historia no se toca"
+    i = cfg.section_start(t, "## Abstract")
+    assert t.index("MLPCA estima", i) < t.index(cfg.CATALOGO_SIN_ABSTRACT, i)
+
+
 def test_fill_abstracts_no_confunde_la_RED_CAIDA_con_no_lo_tiene(toy_vault, monkeypatch, capsys):
     """D-43 — «OpenAlex no contestó» y «OpenAlex no lo tiene» piden lo contrario: volver a correr,
     o aceptar que el placeholder es correcto. Salían iguales."""

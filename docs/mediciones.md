@@ -4942,3 +4942,11 @@ Contra `pscomppars` en vivo (2026-11-09), los cinco casos del issue: DS Tuc A b 
 9.5 M⊕) y la cota queda registrada, ya fuera de la elección por consistencia. Los otros 8
 planetas de esas tres estrellas, sin cambios y sin clave `cotas`. Las columnas con gemela `lim` en
 `pscomppars` cubren todos los campos espejados salvo `dist_pc`.
+
+## #639 — la copia de catálogo explica el `sin_abstract` que se queda (v1.415.36)
+
+En la Tesis, 6 notas con `sin_abstract: true` y abstract verbatim llenado por `--fill-abstracts`
+(2020AstL...46..177S, 2000NN.....13..411H, 2016Natur.536..437A, 2018Natur.563..365R,
+2009JASA..104..682J, 2017EPJP..132..364C); un extractor lo emitió como salvedad `nota_estado`.
+Desde v1.415.36 la copia de catálogo sale con la línea `CATALOGO_SIN_ABSTRACT` después del abstract.
+Las 6 ya llenadas no tienen placeholder, así que el flag no las re-escribe: la línea se pega a mano.

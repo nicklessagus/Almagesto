@@ -1241,7 +1241,8 @@ def fill_abstracts(*, dry_run: bool = False) -> int:
         # el lint por «paper sin `## Abstract`» (#124), con el lint en 0 antes de correr el flag.
         # Es lo que el cosechador ya hacía bien y esta rama no copió.
         i = cfg.section_start(text, "## Abstract")
-        nuevo = text[:i] + text[i:].replace(cfg.ABSTRACT_PLACEHOLDER, abstract, 1)
+        nuevo = text[:i] + text[i:].replace(cfg.ABSTRACT_PLACEHOLDER,
+                                            cfg.catalog_abstract(abstract, fm), 1)
         # La red de #222: se re-parsea y no se escribe si la escritura rompió lo que prometía.
         if cfg.section_start(nuevo, "## Abstract") < 0 or cfg.abstract_pending(nuevo):
             cfg.print_seguro(f"  ⚠ {dest.stem}: el reemplazo no dejó un `## Abstract` legible — "

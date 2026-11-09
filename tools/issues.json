@@ -3179,6 +3179,11 @@
   {
    "number": 638,
    "title": "El espejo de NEA descarta la bandera de límite (`<col>lim`): una cota superior entra a la ficha como masa medida (DS Tuc A b: <413 M⊕ publicado como 413)",
+   "state": "CLOSED"
+  },
+  {
+   "number": 639,
+   "title": "`--fill-abstracts` llena el abstract y la nota sigue declarando `sin_abstract` sin decir por qué",
    "state": "OPEN"
   }
  ]

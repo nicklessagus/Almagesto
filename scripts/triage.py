@@ -679,7 +679,8 @@ def promote_source(slug: str, key: str, bibcode: str) -> int:
         if r.get("abstract"):
             texto = new_note.read_text(encoding="utf-8")
             nuevo = re.sub(r"(## Abstract\s*\n)\s*" + re.escape(cfg.ABSTRACT_PLACEHOLDER),
-                           lambda m: m.group(1) + "\n" + r["abstract"].strip(), texto, count=1)
+                           lambda m: m.group(1) + "\n" + cfg.catalog_abstract(
+                               r["abstract"].strip(), cfg.split_fm(texto) or {}), texto, count=1)
             if nuevo != texto:
                 cfg.write_text_atomic(new_note, nuevo)
         cfg.print_seguro(f"  metadata de catálogo re-estampada desde ADS ({r.get('title')!r}, "

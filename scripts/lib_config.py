@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.35"
+ALMAGESTO_VERSION = "1.415.36"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -337,6 +337,17 @@ REGLA_LOCALIZADOR = (
     "sirve para **ubicar** dónde mirar, no para citar")
 
 ABSTRACT_PLACEHOLDER = "_(no disponible)_"
+#: #639 — the catalogue copy that arrives AFTER classification, in a note declaring `sin_abstract`
+#: (history, AUD-203: never removed). Same explanation as the harvester's #416 line, for the
+#: catalogue lane. Goes AFTER the abstract: #216 deduplicates by the section's opening.
+CATALOGO_SIN_ABSTRACT = (
+    "_(copia de catálogo llegada después de clasificar: el frontmatter sigue declarando "
+    "`sin_abstract` porque así se **clasificó** el paper.)_")
+
+
+def catalog_abstract(abstract: str, fm: dict) -> str:
+    """The catalogue abstract to write into an existing note, explained if it declares `sin_abstract` (#639)."""
+    return f"{abstract}\n\n{CATALOGO_SIN_ABSTRACT}" if fm.get("sin_abstract") else abstract
 
 SCHEMA_NOTA = {
     # #272 — `mass_msun` es el campo con más consecuencias aguas abajo después de `planets[]`:

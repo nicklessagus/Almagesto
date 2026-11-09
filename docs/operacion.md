@@ -1234,7 +1234,9 @@ la población donde el abstract es todo lo que hay (medido: 29 con placeholder, 
 ⛔ Reemplaza **el placeholder, nunca el encabezado** (#417: 9 de 9 notas llenadas pasaron a violar el
 bloqueante de arriba), y respeta **`sin_abstract_motivo`** —el simétrico de `sin_conclusiones`: un
 capítulo que arranca en «1. Introduction» **no tiene** abstract, y el catálogo devuelve igual el
-arranque de la introducción para ese DOI—.
+arranque de la introducción para ese DOI—. Con `sin_abstract: true` (historia: así se
+**clasificó**, AUD-203, no se toca) la copia lleva **después** la línea que lo explica
+(`cfg.catalog_abstract`, #639; también `triage.py --promote-source`).
 
 ⛔ **Y la nota lleva tres AYUDAS DE LECTURA (#124): `## Traducción del abstract`, `## Conclusiones` y
 `## Traducción de las conclusiones`.** La **vista** es lenteada —dice qué aporta el paper *a ese

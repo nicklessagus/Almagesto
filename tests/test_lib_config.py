@@ -4477,3 +4477,9 @@ def test_604_el_append_del_registro_no_poda_una_entrada_no_mapa(toy_vault, secci
     append()
     lista = cfg.load_registro("test_star")[seccion]
     assert lista[:2] == ["nota a mano", {"fecha": "v"}] and len(lista) == 3
+
+
+def test_639_catalog_abstract_explica_solo_si_la_nota_declara_sin_abstract():
+    """#639 — la línea va DESPUÉS del abstract (#216 deduplica por el arranque) y sólo con el campo."""
+    assert cfg.catalog_abstract("x", {}) == "x"
+    assert cfg.catalog_abstract("x", {"sin_abstract": True}) == f"x\n\n{cfg.CATALOGO_SIN_ABSTRACT}"
