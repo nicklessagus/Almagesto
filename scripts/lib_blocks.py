@@ -761,6 +761,12 @@ def in_view(body: str):
     return lambda line: (h := bisect.bisect_left(heads, line) - 1) >= 0 and vista[h]
 
 
+#: #640 — inside a `## Vista`, what asserts nothing a quote could back: a bold label alone
+#: (`**Ejes:**`, the two caveat headings) or an axis answered empty (`cfg.SIN_DATOS`, #270 — a
+#: negative whose scope `vistas[]` declares). No quote supports them, so judges disagreed.
+_NO_CLAIM_RE = re.compile(r"\*\*[^*\n]+:\*\*$|- \*\*[^*\n]+:\*\* " + re.escape(cfg.SIN_DATOS) + "$")
+
+
 def pairs_of(body: str, own: str = "") -> list[Pair]:
     """Un par por cada (cita, bloque). Un bloque con 3 citas da 3 pares con la MISMA ancla.
 
@@ -778,6 +784,8 @@ def pairs_of(body: str, own: str = "") -> list[Pair]:
         fuente = b.text if _bibcodes(b.text) else (b.intro or "")
         bibs = _bibcodes(fuente)
         if dentro and dentro(b.first_line):
+            if not bibs and _NO_CLAIM_RE.match(b.text.strip()):
+                continue                  # #640: structure the harvester stamps, not a claim
             bibs = cfg.with_own_bibcode(bibs, own)
         for bib in bibs:
             out.append(Pair(bib, b, block_anchor(b.text, b.intro)))

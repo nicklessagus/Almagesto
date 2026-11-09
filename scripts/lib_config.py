@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.36"
+ALMAGESTO_VERSION = "1.415.37"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -1669,6 +1669,10 @@ def axes_block_end(trozo: str):
             arranco = True
         pos += len(linea) + 1
     return min(pos, len(trozo))
+
+
+#: #270 · what is stamped on an axis the extraction answered EMPTY (lives here: `lib_blocks` reads it, #640).
+SIN_DATOS = "_(sin datos)_"
 
 
 def axis_bullet(eje: str, valor: str) -> str:

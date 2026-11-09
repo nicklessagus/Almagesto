@@ -4950,3 +4950,13 @@ En la Tesis, 6 notas con `sin_abstract: true` y abstract verbatim llenado por `-
 2009JASA..104..682J, 2017EPJP..132..364C); un extractor lo emitió como salvedad `nota_estado`.
 Desde v1.415.36 la copia de catálogo sale con la línea `CATALOGO_SIN_ABSTRACT` después del abstract.
 Las 6 ya llenadas no tienen placeholder, así que el flag no las re-escribe: la línea se pega a mano.
+
+## #640 — lo que la `## Vista` estampa y no afirma no es un par (v1.415.37)
+
+Sobre la Tesis (worktree desechable de `9ca146c3`, scripts del template): 72 filas de verificación en
+13 notas de paper eran de esos bloques (14 `**Ejes:**`, 14 + 14 rótulos de salvedades, 30 ejes
+`_(sin datos)_`). Sólo el fix: los pares sin verificar bajan 1446 → 1236, pero las 72 filas sin
+par disparan 72 huérfanas + 377 «por edición» falsas en cascada (el emparejador del lint consume
+pares ajenos). Con `write_verif_sidecar --reanclar` sobre las 13 notas (13/13 ok; descarta
+exactamente esas 72 y las declara): huérfanas 2 (las previas), «por edición» 0; pares vencidos
+9537 → 9263, sin localizador propio 110 → 56. Lint rc 0 en los tres estados.

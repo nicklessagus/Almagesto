@@ -68,7 +68,7 @@ def _safe_links(texto: str) -> str:
 
 
 #: #270 · lo que se estampa en un eje que la extracción contestó vacío.
-SIN_DATOS = "_(sin datos)_"
+SIN_DATOS = cfg.SIN_DATOS
 
 
 def pdf_on_disk(bibcode: str) -> bool:

@@ -439,7 +439,6 @@ def _backfill_axes(text: str, sujeto: str, enfasis: str, ejes: dict) -> tuple:
     ⛔ ADD-ONLY: an axis the note already answers is never rewritten — the prose is the extractor's
     and this is a migrator, not an editor. Without an `**Ejes:**` block it does nothing and says so:
     creating the section would be inventing the shape of a reading nobody rendered."""
-    from harvest_views import SIN_DATOS       # import local: `harvest_views` importa este módulo
     for suj, enf, ini, fin in cfg.view_lens_spans(text):
         if suj != sujeto or enf != (enfasis or ""):
             continue
@@ -450,7 +449,7 @@ def _backfill_axes(text: str, sujeto: str, enfasis: str, ejes: dict) -> tuple:
         faltan = [k for k in ejes if k not in ya]
         # Se inserta al final del bloque —la MISMA frontera que lee `view_axes` (#565)—, no al
         # final de la sección, que es donde viven `**Aporte:**` y la tabla de ground-truth.
-        add = "".join(cfg.axis_bullet(k, str(ejes[k]).strip() or SIN_DATOS) + "\n"
+        add = "".join(cfg.axis_bullet(k, str(ejes[k]).strip() or cfg.SIN_DATOS) + "\n"
                       for k in faltan)
         return text[:ini + pos] + add + text[ini + pos:], faltan
     return text, []

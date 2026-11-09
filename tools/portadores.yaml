@@ -4019,3 +4019,25 @@ portadores:
       - modulo: scripts/triage.py
         estado: usa
         motivo: "`--promote-source` re-estampa el abstract de ADS sobre el placeholder por `catalog_abstract`."
+
+  - issue: 640
+    regla: >-
+      Dentro de una `## Vista`, lo que el cosechador estampa y no afirma nada sobre la fuente —un
+      rótulo en negrita solo (`**Ejes:**`, las `SALVEDAD_MARCAS`) o un eje `_(sin datos)_`— no es un
+      par: ninguna cita lo respalda y los jueces lo juzgaban distinto. Todo el que arma pares pasa
+      por `pairs_of`. Medido en la Tesis: 72 filas en 13 notas.
+    funcion: lib_blocks.pairs_of
+    patron: 'SIN_DATOS'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Pares vencidos y cobertura leen `note_pairs` → `pairs_of`; la regla le llega sin código propio."
+      - modulo: scripts/harvest_views.py
+        estado: fuera-de-alcance
+        motivo: "Escribe el eje vacío con `cfg.SIN_DATOS` (alias local); no arma pares."
+      - modulo: scripts/make_notes.py
+        estado: fuera-de-alcance
+        motivo: "Escribe el eje vacío con `cfg.SIN_DATOS` al migrar ejes; no arma pares."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Define `SIN_DATOS`; no arma pares."

@@ -2053,3 +2053,16 @@ def test_635_los_pares_de_la_VISTA_de_un_paper_suman_el_bibcode_propio():
                           "- se construye sobre [[2020X]]": {"2020X", "2019Own"}}
     # sin bibcode propio (ficha, concepto) nada cambia
     assert {p.bibcode for p in lb.pairs_of(texto)} == {"2020X"}
+
+
+def test_640_lo_que_la_VISTA_estampa_y_no_afirma_no_es_un_par():
+    """#640 — los rótulos (`**Ejes:**`, las `SALVEDAD_MARCAS`) y el eje vacío (`_(sin datos)_`,
+    #270) no afirman nada que una cita respalde; los jueces los juzgaban distinto y bloqueaban."""
+    import lib_config as cfg
+    import lib_quotes
+    texto = ("---\ntags: [paper]\nbibcode: 2019Own\n---\n\n# p\n\n## Vista — ica\n\n**Ejes:**\n\n"
+             f"- **ml:** {cfg.SIN_DATOS}\n\n- **gp:** usa un kernel QP\n\n"
+             f"{lib_quotes.SALVEDAD_MARCAS[0]}\n\n- el PDF tiene 12 páginas\n\n"
+             f"{lib_quotes.SALVEDAD_MARCAS[1]}\n\n**Nota:** P = 34 d\n")
+    assert {p.block.text for p in lb.pairs_of(texto, own="2019Own")} == {
+        "- **gp:** usa un kernel QP", "- el PDF tiene 12 páginas", "**Nota:** P = 34 d"}
