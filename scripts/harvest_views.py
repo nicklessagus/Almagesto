@@ -1398,6 +1398,7 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
     exactly as always (`check_salvedad`) — the false one still is not published. Idempotent (red 6),
     declares its population, and `--dry-run` writes nothing."""
     tocadas, sin_bloque, rehusadas, perdidas, agregadas, revisadas = [], [], [], [], [], 0
+    solo_ok: list = []
     d = cfg.EXTRACCION / slug
     for j in sorted(d.glob("*.json")) if d.exists() else []:
         try:
@@ -1501,10 +1502,28 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
         # @inv INV-162
         if se_van:
             verbo = "REESCRIBIRÍA" if nuevos - viejos else "BORRARÍA"
-            rehusadas.append((bib, f"el re-estampado {verbo} {len(se_van)} salvedad(es) en prosa "
-                                   f"ya escritas → agregar pasa, perderlas no: si el texto es de la "
-                                   f"nota, pasalo al JSON (o a `evidencia` de su estructurada)"))
-            continue
+            # ⛔ #642 — the prose block is the note's and stays VERBATIM; the `⚙` block is re-derived
+            # from disk and nobody's edit, so it is refreshed alone. Refusing both left a `⚙
+            # verificada` stating a page count the replaced PDF no longer has, with no way out.
+            vieja = seccion[dentro[0]:]
+            corte = min(i for i in (vieja.find(m) for m in (SALVEDAD_MARCAS[1],
+                                                            cfg.SALVEDAD_MARCA_LEGACY)) if i >= 0)
+            suya = "\n".join(ln for ln in vieja[corte:].rstrip("\n").splitlines()
+                             if not (ln.strip().startswith("- ")
+                                     and _estructurada(ln.strip(), data)))
+            mixto = "\n\n".join(x for x in (bloque.split(SALVEDAD_MARCAS[1])[0].rstrip("\n"),
+                                            suya) if x)
+            nueva = seccion[:dentro[0]].rstrip("\n") + "\n\n" + mixto + "\n"
+            texto_nuevo = (text[:ini] + text[ini:ini + off] + nueva.rstrip("\n") + cola
+                           + text[ini + off + len(seccion):])
+            if texto_nuevo == text:
+                rehusadas.append((bib, f"el re-estampado {verbo} {len(se_van)} salvedad(es) en "
+                                       f"prosa ya escritas → agregar pasa, perderlas no: si el "
+                                       f"texto es de la nota, pasalo al JSON (o a `evidencia` de "
+                                       f"su estructurada)"))
+                continue
+            solo_ok.append((bib, len(se_van)))
+            nuevos = viejos                       # nothing was added to the prose block
         fm = cfg.split_fm(text)
         if (conf := cfg.disk_doc_conflict(texto_nuevo, fm, mn.safe_name(bib))):
             previo = cfg.disk_doc_conflict(text, fm, mn.safe_name(bib))
@@ -1525,7 +1544,8 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
         if not dry_run:
             cfg.write_text_atomic(nota, texto_nuevo)
     return {"revisadas": revisadas, "tocadas": tocadas, "sin_bloque": sin_bloque,
-            "rehusadas": rehusadas, "perdidas": perdidas, "agregadas": agregadas}
+            "rehusadas": rehusadas, "perdidas": perdidas, "agregadas": agregadas,
+            "solo_verificadas": solo_ok}
 
 
 def print_restamp_salvedades(r: dict, slug: str, dry_run: bool) -> None:
@@ -1540,6 +1560,9 @@ def print_restamp_salvedades(r: dict, slug: str, dry_run: bool) -> None:
     for bib, n in r.get("perdidas") or []:
         cfg.print_seguro(f"  ⚠ {bib}: {n} salvedad(es) `⚙ verificada` DEJARON de estarlo — "
                          f"¿cambió el archivo? (un reemplazo de PDF cambia el conteo de páginas)")
+    for bib, n in r.get("solo_verificadas") or []:
+        cfg.print_seguro(f"  ⚠ {bib}: sólo el bloque `⚙` (se re-deriva del disco); la prosa NO se "
+                         f"tocó — {n} salvedad(es) de la nota difieren del JSON (#642)")
     for bib, n in r.get("agregadas") or []:
         cfg.print_seguro(f"  ⚠ {bib}: {n} salvedad(es) en prosa AGREGADA(S) desde el JSON — si una "
                          f"corrección de la nota la había borrado, sacala del JSON")

@@ -4984,3 +4984,13 @@ Tesis midió 3101 sobre su merge) → 1452 con las exactas primero = 308 huérfa
 verificar, 0 «por edición». Las 308 son las que `--reanclar` descarta. El lint pasa a usar
 `lb.match_rows_to_pairs` (el emparejador de `--reanclar`), con `umbral=0` y un par sobrante del
 mismo bibcode para la fila que quedó sola: mismo conteo.
+
+## #642 — la `⚙ verificada` se re-deriva aunque la prosa difiera (v1.415.40)
+
+Copia de la Tesis (árbol del 2026-11-20). `1994SigPr..36..287C` (decía 29 páginas, el PDF tiene 28)
+y `2009Icar..201..504M` (64 / 63): `--restamp-salvedades --paper` rehusaba por 3 y 1 salvedades en
+prosa que difieren del JSON; ahora saca la línea vieja (1 línea menos en cada nota, avisada como
+«DEJARON de estarlo») y deja la prosa verbatim. Barrido de todos los slugs, v1.415.39 → v1.415.40:
+notas tocadas 61 → 98, rehusadas 151 → 114; en 38 se refrescó sólo el bloque `⚙`. El diff entre
+los dos barridos (32 archivos, +41/−28) es sólo de líneas `- ⚙ verificada`, un rótulo de bloque y
+dos líneas en blanco: ninguna línea de prosa.

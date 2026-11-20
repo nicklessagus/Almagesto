@@ -544,6 +544,9 @@ def test_449_avisa_que_la_PROSA_sigue_diciendo_preprint(toy_vault, tmp_path, mon
     rp.print_report(r, "publisher", "la copia del editor")
     out = capsys.readouterr().out
     assert "PROSA: 1 línea(s)" in out and "grep -n 'disco'" in out
+    # #642 — y las `⚙ verificada`, que se chequearon contra el archivo saliente, con su comando
+    rp.print_report({**r, "extracciones": ["vault/raw/extraccion/gj_581/2010D.json"]}, "publisher", "m")
+    assert "harvest_views.py gj_581 --restamp-salvedades --paper 2010D" in capsys.readouterr().out
     assert "PREPRINT de arXiv" in nota.read_text(encoding="utf-8"), "avisa, NO reescribe"
     # y el lint lo levanta como backlog, con los testigos ya firmados
     fm = cfg.split_fm(nota.read_text(encoding="utf-8"))

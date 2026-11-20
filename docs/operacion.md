@@ -1033,7 +1033,7 @@ la chequeada que dejó de serlo y **migra** el bloque pelado pre-#213 en vez de 
 abajo (medido: **25 notas duplicadas**, con el lint en lockstep — *«sin la marca»* 25→0 y *«párrafo
 duplicado»* 0→25). ⛔ **Y la regla que de verdad la protege es ESTRUCTURAL y SIMÉTRICA: una
 salvedad en prosa ya escrita NO SE PIERDE** —agregar pasa; reescribirla y **borrarla** se rehúsan;
-borrar una `⚙ verificada` pasa avisando. La escotilla que mantiene vivo el cobro de #452: el bullet
+borrar una `⚙ verificada` pasa avisando. **Y lo rehusado es sólo la prosa (#642):** el bloque `⚙` se re-deriva del disco y se refresca igual, con la prosa de la nota verbatim (lo declara: *«sólo el bloque `⚙`»*); `replace_pdf` imprime el comando al firmar. La escotilla que mantiene vivo el cobro de #452: el bullet
 que se va porque se **estructuró** no es un borrado (su texto sigue en la nota, en `evidencia`)—, porque aquel cruce comparte **ancla** con el detector de #449 y por lo tanto sólo
 mira las frases que ese detector sabe mirar: la corrección real se redacta *«esta vista se leyó
 del…»*, que no ancla, así que pasaba limpia y el texto falso quedaba **invisible**. Medido: **28

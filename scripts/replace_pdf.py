@@ -566,6 +566,12 @@ def print_report(r: dict, source: str, reason: str) -> None:
             f"`verify-citations` NO la mira — corregila a mano conservando el hecho verdadero "
             f"(«esta vista se leyó del preprint …»):")
         cfg.print_seguro(f"      grep -n 'disco' vault/wiki/papers/{cfg.note_stem(r['bibcode'])}.md")
+    # #642 — the `⚙ verificada` lines were checked against the OUTGOING file (page count, arXiv
+    # mark): they are re-derived from disk, and this is the moment they go stale.
+    for slug in sorted({Path(e).parent.name for e in r["extracciones"]}):
+        cfg.print_seguro(f"  · re-derivar las `⚙ verificada` de la nota (#642): python "
+                         f"scripts/harvest_views.py {slug} --restamp-salvedades "
+                         f"--paper {r['bibcode']}")
     cfg.print_seguro(f"  · extracciones marcadas `_paginacion`: {len(r['extracciones'])} — sus "
                      f"localizadores son del documento ANTERIOR (#311: no se reescriben)")
     cfg.print_seguro(f"\n  ⚠ ALCANCE DE LA RE-VERIFICACIÓN: {r['pares']} par(es) en "

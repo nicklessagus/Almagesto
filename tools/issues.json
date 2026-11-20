@@ -3194,7 +3194,7 @@
   {
    "number": 641,
    "title": "verify sobre notas de paper arma pares con líneas que predican sobre la NOTA (⚙ verificada, estado no_vista, salvedades del .txt): #91 bloquea sin salida",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 642,
@@ -3205,6 +3205,11 @@
    "number": 643,
    "title": "`_CLAUSULA_SEP` corta la cláusula en el punto de una abreviatura: la `evidencia` propuesta sale trunca",
    "state": "OPEN"
+  },
+  {
+   "number": 644,
+   "title": "`--reanclar` pisa el `· ronda parcial` de la cabecera con su `· re-anclado`: se pierde que hubo una ronda parcial",
+   "state": "CLOSED"
   }
  ]
 }

@@ -1258,6 +1258,9 @@ portadores:
       - modulo: scripts/lib_blocks.py
         estado: fuera-de-alcance
         motivo: "Lee `SALVEDAD_MARCAS_LEIDAS` para saber qué línea es un bullet de salvedad (`in_caveats`, #641); no re-estampa nada."
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "Imprime el comando `--restamp-salvedades` al firmar un reemplazo (#642); no re-estampa nada."
 
   - issue: 452
     regla: >-
@@ -4079,3 +4082,17 @@ portadores:
       - modulo: scripts/contrast.py
         estado: fuera-de-alcance
         motivo: "`--validar` es el mismo gate de citas textuales por `walk_quotes`; no arma pares del verify."
+
+  - issue: 642
+    regla: >-
+      Lo que el cosechador re-deriva del disco se puede re-derivar siempre, aunque la prosa vecina
+      no se pueda tocar: `--restamp-salvedades` refresca el bloque `⚙ verificada` y deja VERBATIM la
+      prosa de la nota que difiere del JSON (antes rehusaba los dos y la `⚙` quedaba afirmando el
+      conteo de páginas del PDF reemplazado). `replace_pdf` imprime el comando al firmar.
+    funcion: harvest_views.restamp_salvedades
+    patron: 'solo_verificadas|restamp-salvedades'
+    consumidores:
+      - modulo: scripts/replace_pdf.py
+        estado: fuera-de-alcance
+        motivo: "`print_report` IMPRIME el comando `--restamp-salvedades --paper` por cada slug con extracción del bibcode; no re-estampa (avisa y no reescribe, como #449)."
+

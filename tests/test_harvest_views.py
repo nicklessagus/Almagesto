@@ -1798,6 +1798,27 @@ def test_453c_el_restamp_REHUSA_reescribir_una_salvedad_en_prosa(toy_vault):
     assert "REESCRIBIRÍA 1 salvedad(es)" in r["rehusadas"][0][1]
 
 
+def test_642_la_prosa_corregida_no_frena_el_refresco_del_bloque_verificado(toy_vault):
+    """#642 — el bloque `⚙` se re-deriva del disco y no es edición de nadie: se refresca aunque la
+    prosa de la nota difiera del JSON, y esa prosa queda VERBATIM. Rehusar los dos dejaba una
+    `⚙ verificada` afirmando un conteo de páginas que el PDF reemplazado ya no tiene, sin salida."""
+    _con_txt(toy_vault, "sin los simbolos")
+    d = extraccion()
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}, "la Fig. 3 es difícil de leer"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    dest.write_text(dest.read_text(encoding="utf-8").replace(
+        "- la Fig. 3 es difícil de leer", "- la Fig. 3 se lee mal (corregido a mano)"),
+        encoding="utf-8")
+    _con_txt(toy_vault, "ahora el texto trae ζ")           # el archivo cambió bajo la `⚙`
+    r = hv.restamp_salvedades("test_star")
+    body = dest.read_text(encoding="utf-8")
+    assert r["tocadas"] == [BIB] and r["solo_verificadas"] == [(BIB, 1)] and r["rehusadas"] == []
+    assert r["perdidas"] == [(BIB, 1)] and "⚙ verificada" not in body
+    assert "- la Fig. 3 se lee mal (corregido a mano)" in body and "difícil de leer" not in body
+    assert hv.restamp_salvedades("test_star")["tocadas"] == [], "idempotente: ahora sí rehúsa"
+
+
 def test_453c_agregar_pasa_y_PERDER_una_prosa_se_rehusa(toy_vault):
     # @inv INV-162
     """⛔ #453, cuarta devolución — la regla es simétrica: agregar pasa, **reescribir y BORRAR se
