@@ -9840,6 +9840,10 @@ def test_check_paper_salvedades_separa_la_chequeada_de_la_que_es_juicio(toy_vaul
     _d, sin = lint.check_paper_salvedades("2020X", pap, "**Salvedades:**\n- el .txt perdió √\n")
     assert len(sin) == 1 and "sin la marca de #213" in sin[0][1]
     _d, sin = lint.check_paper_salvedades(
+        "2020X", pap, "**Salvedades:**\n- x\n\n## Vista — b\n\n"
+                      "**Salvedades (⚠ NO VERIFICADAS — juicio del extractor):**\n- x\n")
+    assert len(sin) == 1, "#641 — la marca de OTRA vista no tapa el bloque pelado de ésta"
+    _d, sin = lint.check_paper_salvedades(
         "2020X", pap, "**Salvedades:** verificadas contra el archivo\n- ok\n")
     assert sin == [], "con la marca de chequeadas, no falta nada"
     _d, sin = lint.check_paper_salvedades(

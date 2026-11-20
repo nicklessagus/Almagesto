@@ -766,6 +766,38 @@ def in_view(body: str):
 #: negative whose scope `vistas[]` declares). No quote supports them, so judges disagreed.
 _NO_CLAIM_RE = re.compile(r"\*\*[^*\n]+:\*\*$|- \*\*[^*\n]+:\*\* " + re.escape(cfg.SIN_DATOS) + "$")
 
+#: #641 — the status line of a view nobody read (`make_notes.vista_block`, #398): it says what the
+#: NOTE lacks, not what the paper says. Recognised by its opening, the only part the stamper writes.
+_VIEW_STATUS_RE = re.compile(r"_(?:No leído desde|Reclamado por) `")
+
+
+def in_caveats(body: str):
+    """`line -> bool`: is this 1-indexed line of `body` a bullet of a view's CAVEAT blocks (#641)?
+    Same shape `harvest_views._note_without_caveats` cuts: a marker, then bullets (with their
+    indented continuation) or blank lines."""
+    dentro, lineas = False, set()
+    for i, ln in enumerate(body.split("\n"), 1):
+        b = ln.strip()
+        if b in cfg.SALVEDAD_MARCAS_LEIDAS:
+            dentro = True
+        elif dentro and (not b or b.startswith("- ") or ln[:1].isspace()):
+            lineas.add(i)
+        else:
+            dentro = False
+    return lineas.__contains__
+
+
+def _about_the_note(b: Block, salvedad) -> bool:
+    """#641 — does this block of a view predicate on the NOTE instead of the paper? Decided by who
+    wrote it, never by reading the prose: the status line of an unread view, and a STRUCTURED
+    caveat —`⚙ verificada`, or published not evaluable (D-43)—, which is about a file by vocabulary
+    (the closed caveat types) and re-derived from disk. The PDF backs none of them and nobody can edit
+    them, so as pairs they blocked with no way out (#91). ⚠ A PROSE caveat stays a pair: it may be
+    a finding about the source (measured: 628 of 664 such rows `soportada`)."""
+    t = b.text.strip()
+    return bool(_VIEW_STATUS_RE.match(t)) or (salvedad(b.first_line) and (
+        t.startswith("- ⚙ verificada") or cfg.NO_EVALUABLE_MARCA in t))
+
 
 def pairs_of(body: str, own: str = "") -> list[Pair]:
     """Un par por cada (cita, bloque). Un bloque con 3 citas da 3 pares con la MISMA ancla.
@@ -779,13 +811,14 @@ def pairs_of(body: str, own: str = "") -> list[Pair]:
     Sin él la sección que `verify-citations` contrasta daba 0 pares. Desde una ruta, `note_pairs`.
     """
     dentro = in_view(body) if own else None
+    salvedad = in_caveats(body) if own else None
     out: list[Pair] = []
     for b in split_blocks(body):
         fuente = b.text if _bibcodes(b.text) else (b.intro or "")
         bibs = _bibcodes(fuente)
         if dentro and dentro(b.first_line):
-            if not bibs and _NO_CLAIM_RE.match(b.text.strip()):
-                continue                  # #640: structure the harvester stamps, not a claim
+            if not bibs and (_NO_CLAIM_RE.match(b.text.strip()) or _about_the_note(b, salvedad)):
+                continue                  # #640/#641: what the harvester stamps, not a claim
             bibs = cfg.with_own_bibcode(bibs, own)
         for bib in bibs:
             out.append(Pair(bib, b, block_anchor(b.text, b.intro)))

@@ -1,5 +1,5 @@
 {
- "fetched": "2026-11-09",
+ "fetched": "2026-11-20",
  "issues": [
   {
    "number": 2,
@@ -3189,6 +3189,21 @@
   {
    "number": 640,
    "title": "El verify arma pares con los rótulos y los ejes vacíos de la `## Vista`, que no afirman nada",
+   "state": "CLOSED"
+  },
+  {
+   "number": 641,
+   "title": "verify sobre notas de paper arma pares con líneas que predican sobre la NOTA (⚙ verificada, estado no_vista, salvedades del .txt): #91 bloquea sin salida",
+   "state": "OPEN"
+  },
+  {
+   "number": 642,
+   "title": "Una `⚙ verificada` queda vieja tras `replace_pdf` y el re-estampado no puede refrescarla si la prosa vecina fue corregida a mano",
+   "state": "OPEN"
+  },
+  {
+   "number": 643,
+   "title": "`_CLAUSULA_SEP` corta la cláusula en el punto de una abreviatura: la `evidencia` propuesta sale trunca",
    "state": "OPEN"
   }
  ]

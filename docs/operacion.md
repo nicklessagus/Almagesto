@@ -1999,7 +1999,10 @@ en el skill; acá va el contrato del artefacto.
 ítems de lista **heredan la cita del ámbito que los introduce**; las `SECCIONES_ESTAMPADAS` quedan
 afuera, y en una `## Vista` también lo que el cosechador estampa sin afirmar nada (los rótulos
 `**Ejes:**`/salvedades y el eje `_(sin datos)_`, #640: ninguna cita los respalda; las filas viejas
-las descarta `write_verif_sidecar --reanclar`)— y lanza **un subagente por FUENTE (#100)** que lee SÓLO ese PDF, juzga todos los pares que
+las descarta `write_verif_sidecar --reanclar`) y lo que predica sobre la NOTA y no sobre el paper
+(#641: la línea de estado de la vista sin leer y la salvedad estructurada —`⚙ verificada` o
+`(no evaluable: …)`—; la salvedad en PROSA sigue siendo par, y si habla del artefacto su salida es
+estructurarla, #452)— y lanza **un subagente por FUENTE (#100)** que lee SÓLO ese PDF, juzga todos los pares que
 la citan (grounding-first, prohibido de memoria) y devuelve **dos ejes separados** (D-59): un
 `veredicto` de RESPALDO —`soportada|no-soportada|contradice`— y, aparte, la `condición` bajo la que
 la fuente lo afirma. Más

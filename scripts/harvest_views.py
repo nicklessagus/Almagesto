@@ -42,6 +42,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 
 import extraction_prompt as ep
@@ -240,7 +241,11 @@ def check_salvedad(bibcode: str, item: dict, data: dict | None = None) -> tuple[
         txts = sorted(cfg.FULLTEXT.glob(f"*/{stem}.txt")) if cfg.FULLTEXT.exists() else []
         if not txts:
             return None, "no hay `.txt` en disco contra el cual chequear"
-        presente = any(cadena in t.read_text(encoding="utf-8", errors="replace") for t in txts)
+        # #641 — NFC on both sides: `pdftotext` writes `ŝ` as `s` + U+0302 and the byte compare
+        # called the symbol lost with 32 occurrences in the file.
+        nfc = lambda x: unicodedata.normalize("NFC", x)                      # noqa: E731
+        presente = any(nfc(cadena) in nfc(t.read_text(encoding="utf-8", errors="replace"))
+                       for t in txts)
         return (not presente,
                 (f"el `.txt` NO contiene `{cadena}`" if not presente
                  else f"el `.txt` SÍ contiene `{cadena}` — la salvedad es FALSA"))
@@ -1448,7 +1453,10 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
             s_i, s_f = dentro
             nueva = seccion[:s_i].rstrip("\n") + ("\n\n" + bloque + "\n" if bloque else "\n") \
                 + seccion[s_f:]
-        texto_nuevo = (text[:ini] + text[ini:ini + off] + nueva.rstrip("\n") + "\n"
+        # #641 — the blank line(s) that closed the section are kept: `rstrip` + one `\n` glued the
+        # last bullet to the next `## ` heading.
+        cola = seccion[len(seccion.rstrip("\n")):] or "\n"
+        texto_nuevo = (text[:ini] + text[ini:ini + off] + nueva.rstrip("\n") + cola
                        + text[ini + off + len(seccion):])
         if texto_nuevo == text:
             continue

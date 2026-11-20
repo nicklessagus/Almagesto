@@ -4425,7 +4425,9 @@ def check_paper_salvedades(stem: str, f, text: str) -> tuple:
     salv_decidible: list = []
     salv_sin_marca: list = []
     if in_dir(f, "papers") and "**Salvedades" in text:
-        if "NO VERIFICADAS" not in text and "verificadas contra el archivo" not in text:
+        # #641 — por LÍNEA, no por nota: el bloque pelado de una vista quedaba tapado por las
+        # marcas de otra vista de la misma nota (medido: 3 notas con el bloque duplicado).
+        if any(ln.strip() == cfg.SALVEDAD_MARCA_LEGACY for ln in text.split("\n")):
             salv_sin_marca.append(
                 (stem, "publica `**Salvedades:**` sin la marca de #213: no se distingue la "
                        "chequeada contra el archivo de la que es juicio del extractor → "

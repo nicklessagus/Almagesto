@@ -1201,6 +1201,10 @@ portadores:
         motivo: >-
           Matchea por el docstring de `existe`, que cita esta regla al explicar por qué el
           re-export cuenta como símbolo expuesto (#454); no juzga ninguna cita.
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "Lee `SALVEDAD_MARCAS_LEIDAS` para saber qué línea es un bullet de salvedad (`in_caveats`, #641); no juzga citas."
+
   - issue: 453
     regla: >-
       Toda sección que un script ESTAMPA desde un artefacto tiene su re-estampado ACOTADO, que
@@ -1251,6 +1255,9 @@ portadores:
       - modulo: scripts/repaginate.py
         estado: fuera-de-alcance
         motivo: "NO puede usar el re-estampado: cambiar el localizador dentro de una salvedad ES reescribir prosa ya escrita, que es lo que esta regla rehúsa por diseño (medido en la repaginación real: rehusó, y las 90 salvedades de 35 notas hubo que sustituirlas por fuera). Por eso sustituye el texto viejo EXACTO (`restamp_exact_text`), que no renderiza nada del JSON y sólo toca lo que aparece una vez."
+      - modulo: scripts/lib_blocks.py
+        estado: fuera-de-alcance
+        motivo: "Lee `SALVEDAD_MARCAS_LEIDAS` para saber qué línea es un bullet de salvedad (`in_caveats`, #641); no re-estampa nada."
 
   - issue: 452
     regla: >-
@@ -4041,3 +4048,26 @@ portadores:
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: "Define `SIN_DATOS`; no arma pares."
+
+  - issue: 641
+    regla: >-
+      Un par del verify es (afirmación sobre la FUENTE, `[[bibcode]]`). Dentro de una `## Vista`, lo
+      que predica sobre la NOTA no es un par, y se decide por quién lo escribió, nunca leyendo la
+      prosa: la línea de estado de la vista sin leer (#398) y la salvedad ESTRUCTURADA —`⚙
+      verificada` o `(no evaluable: …)`—. La salvedad en prosa sigue siendo par (628 de 664 filas
+      `soportada` en la Tesis); si habla del artefacto, su salida es estructurarla (#452).
+    funcion: lib_blocks.pairs_of
+    patron: '_about_the_note|in_caveats|with_own_bibcode'
+    consumidores:
+      - modulo: scripts/lint.py
+        estado: usa
+        motivo: "Pares vencidos y cobertura leen `note_pairs` → `pairs_of`; la regla le llega sin código propio."
+      - modulo: scripts/lib_config.py
+        estado: fuera-de-alcance
+        motivo: "Re-exporta `with_own_bibcode`; no arma pares."
+      - modulo: scripts/lib_quotes.py
+        estado: fuera-de-alcance
+        motivo: "Define `with_own_bibcode` y lo usa en el gate de CITAS textuales (de quién puede ser una cita); no arma pares del verify, y en una vista la cita ya sale `sin_testigo_propio` (#634)."
+      - modulo: scripts/contrast.py
+        estado: fuera-de-alcance
+        motivo: "`--validar` es el mismo gate de citas textuales por `walk_quotes`; no arma pares del verify."

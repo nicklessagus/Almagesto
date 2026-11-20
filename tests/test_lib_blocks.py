@@ -2066,3 +2066,26 @@ def test_640_lo_que_la_VISTA_estampa_y_no_afirma_no_es_un_par():
              f"{lib_quotes.SALVEDAD_MARCAS[1]}\n\n**Nota:** P = 34 d\n")
     assert {p.block.text for p in lb.pairs_of(texto, own="2019Own")} == {
         "- **gp:** usa un kernel QP", "- el PDF tiene 12 páginas", "**Nota:** P = 34 d"}
+
+
+def test_641_lo_que_predica_sobre_la_NOTA_no_es_un_par():
+    """#641 — la línea de estado (#398) y la salvedad ESTRUCTURADA (`⚙ verificada` o no evaluable,
+    #213/D-43) hablan del artefacto: el PDF no las respalda y #91 bloqueaba sin salida. La salvedad
+    en PROSA sigue siendo par (puede ser un hallazgo sobre la fuente), y la marca fuera del bloque
+    de salvedades no exime nada."""
+    import lib_config as cfg
+    import lib_quotes
+    m0, m1 = lib_quotes.SALVEDAD_MARCAS
+    for estado in ("_No leído desde `ica` (2026-08-30): leído bajo [[ica-ruido]]._",
+                   "_Reclamado por `ica`; sin leer desde este sujeto._"):
+        texto = ("---\ntags: [paper]\nbibcode: 2019Own\n---\n\n# p\n\n"
+                 f"## Vista — ica\n\n{estado}\n\n## Vista — ica-ruido\n\n"
+                 "**Aporte:** ⚙ verificada no es salvedad acá\n\n"
+                 f"{m0}\n\n- ⚙ verificada: el `.txt` NO contiene `σ`\n\n"
+                 f"{m1}\n\n- las conclusiones afirman de más\n  que el cuerpo\n"
+                 f"- el PDF {cfg.NO_EVALUABLE_MARCA} no hay PDF en disco)\n\n"
+                 "**Hueco:** no mide el SNR\n")
+        assert {p.block.text for p in lb.pairs_of(texto, own="2019Own")} == {
+            "**Aporte:** ⚙ verificada no es salvedad acá",
+            "- las conclusiones afirman de más que el cuerpo",
+            "**Hueco:** no mide el SNR"}

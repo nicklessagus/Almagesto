@@ -891,6 +891,14 @@ def test_salvedad_estructurada_FALSA_no_se_publica_y_se_grita(toy_vault, capsys)
     assert "salvedad FALSA" in out and "la salvedad es FALSA" in out
 
 
+def test_641_txt_pierde_compara_en_NFC(toy_vault):
+    """#641 — `pdftotext` escribe `ŝ` como `s` + U+0302: comparando bytes, «el `.txt` NO contiene
+    `ŝ`» salía `⚙ verificada` con el símbolo 32 veces en el archivo."""
+    _con_txt(toy_vault, "la estimación s\u0302 de la fuente")
+    ok, detalle = hv.check_salvedad(BIB, {"tipo": "txt_pierde", "cadena": "\u015d"}, {})
+    assert ok is False and "FALSA" in detalle
+
+
 def test_salvedad_falsa_no_tira_la_extraccion(toy_vault):
     """#213 — NO se rechaza la extracción entera (a diferencia de `fuente: pdf` sin PDF, #207):
     aquello es una contradicción sobre QUÉ se abrió y esto un campo secundario que se descarta sin
@@ -1579,6 +1587,19 @@ def test_453_restamp_salvedades_NO_refecha_la_lectura(toy_vault):
     assert "la Fig. 3 es difícil de leer" in body, "la prosa restante sigue publicada, marcada"
     assert cfg.split_fm(body)["vistas"][0] == antes_fm, \
         "⛔ la lectura no volvió a ocurrir: `fecha` y `lente` NO se tocan (INV-146)"
+
+
+def test_641_el_restamp_conserva_la_linea_en_blanco_que_cierra_la_vista(toy_vault):
+    """#641 — el re-estampado pegaba el último bullet al `## ` siguiente (`rstrip` + un `\\n`)."""
+    _con_txt(toy_vault, "sin el simbolo")
+    d = extraccion()
+    d["salvedades"] = ["la Fig. 3 es difícil de leer"]
+    dest = sembrar(toy_vault, d)
+    hv.harvest("test_star")
+    d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}, "la Fig. 3 es difícil de leer"]
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    assert hv.restamp_salvedades("test_star")["tocadas"] == [BIB]
+    assert "difícil de leer\n\n## Abstract" in dest.read_text(encoding="utf-8")
 
 
 def test_453_restamp_salvedades_es_IDEMPOTENTE_y_declara_su_poblacion(toy_vault, capsys):

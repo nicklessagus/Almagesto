@@ -4960,3 +4960,18 @@ par disparan 72 huérfanas + 377 «por edición» falsas en cascada (el empareja
 pares ajenos). Con `write_verif_sidecar --reanclar` sobre las 13 notas (13/13 ok; descarta
 exactamente esas 72 y las declara): huérfanas 2 (las previas), «por edición» 0; pares vencidos
 9537 → 9263, sin localizador propio 110 → 56. Lint rc 0 en los tres estados.
+
+## #641 — lo que predica sobre la nota no es un par (v1.415.38)
+
+Sobre una copia de la Tesis (árbol de trabajo del 2026-11-20, sin `.git`: `stale_verif` no evaluado
+en los dos estados). Filas de verificación sobre líneas de salvedades o de estado: 305 estampadas
+(`⚙ verificada` 301 en 90 notas: 294 `soportada`, 3 `contradice`, 3 `no-soportada`, 1 no
+verificable; línea de estado 5 en 5 notas) y 664 de salvedad en prosa en 102 notas, de las que 628
+`soportada` y 9 corregidas: la prosa SÍ habla de la fuente, por eso sigue siendo par (sacar el
+bloque entero descartaba 964 filas). Con el fix + `write_verif_sidecar --reanclar` (98 de 116
+hermanos; 18 rehúsan por pares sin fila, estado previo): 308 filas descartadas y declaradas,
+`verif_sin_resolver` 14 → 5 (las 5 de prosa), pares vencidos 1236 → 1144, notas sin verificar
+536 → 500. Salida de la prosa medida en `1998Cichocki`: 2 bullets pasados a `evidencia` de una
+`txt_pierde` y una `nota_estado` + `--restamp-salvedades` → 2 líneas `⚙`, fuera de los pares.
+«Salvedades sin la marca de #213», decidido por línea: 3 → 9 notas (las 3 con el bloque duplicado
+del barrido de v1.265.2 y 3 más que la marca de otra vista tapaba).
