@@ -9582,6 +9582,19 @@ def test_check_verif_structure_pide_las_tres_subsecciones_y_la_cabecera(toy_vaul
     assert est == [] and cab == [], (est, cab)
 
 
+def test_641_una_fila_huerfana_no_le_roba_el_par_a_las_que_siguen():
+    """#641 — emparejando en UNA pasada, la fila sin par exacto consumía como «movido» el par
+    exacto de la fila siguiente, que robaba el de la otra: en una nota de paper (todos los pares con
+    el bibcode propio, #635) una huérfana daba N «por edición». Medido: 308 filas sin par → 1957
+    avisos."""
+    bloques = [f"afirmación {i} [[2020X]]" for i in range(4)]
+    filas = [lb.Row(str(i), p.block.text, p.bibcode, "soportada", p.anchor, "abc", source_kind="pdf",
+                    evidence="p. 1")
+             for i, p in enumerate(lb.pairs_of("\n\n".join(bloques)), 1)]
+    stale = lint.check_verif_row_pairs("n", "\n\n".join(bloques[1:]), filas, lambda b, k: "abc")[0]
+    assert len(stale) == 1 and "huérfana" in stale[0][1], stale
+
+
 def test_check_verif_row_pairs_no_inventa_hallazgos_sobre_la_fila_correcta(toy_vault):
     """#396 — las tres guardas del bucle de filas que ningún test distinguía, y las tres apagan un
     falso positivo sobre una fila que está BIEN:

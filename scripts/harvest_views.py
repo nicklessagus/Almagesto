@@ -1397,7 +1397,7 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
     So: it does NOT touch `vistas[]`, does NOT touch the view's prose, and the caveats are checked
     exactly as always (`check_salvedad`) — the false one still is not published. Idempotent (red 6),
     declares its population, and `--dry-run` writes nothing."""
-    tocadas, sin_bloque, rehusadas, perdidas, revisadas = [], [], [], [], 0
+    tocadas, sin_bloque, rehusadas, perdidas, agregadas, revisadas = [], [], [], [], [], 0
     d = cfg.EXTRACCION / slug
     for j in sorted(d.glob("*.json")) if d.exists() else []:
         try:
@@ -1517,11 +1517,15 @@ def restamp_salvedades(slug: str, *, paper: str | None = None, dry_run: bool = F
         antes_ok, ahora_ok = _n_verificadas(seccion), _n_verificadas(nueva)
         if ahora_ok < antes_ok:
             perdidas.append((bib, antes_ok - ahora_ok))
+        # #641 — «agregar pasa», pero se DICE: el JSON puede ser más viejo que la nota, y lo que
+        # una corrección borró a mano vuelve como agregado.
+        if (n_mas := len(nuevos - viejos)):
+            agregadas.append((bib, n_mas))
         tocadas.append(bib)
         if not dry_run:
             cfg.write_text_atomic(nota, texto_nuevo)
     return {"revisadas": revisadas, "tocadas": tocadas, "sin_bloque": sin_bloque,
-            "rehusadas": rehusadas, "perdidas": perdidas}
+            "rehusadas": rehusadas, "perdidas": perdidas, "agregadas": agregadas}
 
 
 def print_restamp_salvedades(r: dict, slug: str, dry_run: bool) -> None:
@@ -1536,6 +1540,9 @@ def print_restamp_salvedades(r: dict, slug: str, dry_run: bool) -> None:
     for bib, n in r.get("perdidas") or []:
         cfg.print_seguro(f"  ⚠ {bib}: {n} salvedad(es) `⚙ verificada` DEJARON de estarlo — "
                          f"¿cambió el archivo? (un reemplazo de PDF cambia el conteo de páginas)")
+    for bib, n in r.get("agregadas") or []:
+        cfg.print_seguro(f"  ⚠ {bib}: {n} salvedad(es) en prosa AGREGADA(S) desde el JSON — si una "
+                         f"corrección de la nota la había borrado, sacala del JSON")
     for bib, motivo in r["sin_bloque"]:
         cfg.print_seguro(f"  — {bib}: {motivo}")
     cfg.print_seguro("⚠ NO toca `vistas[]` ni la prosa de la vista: la lectura no volvió a "

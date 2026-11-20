@@ -4975,3 +4975,12 @@ hermanos; 18 rehúsan por pares sin fila, estado previo): 308 filas descartadas 
 `txt_pierde` y una `nota_estado` + `--restamp-salvedades` → 2 líneas `⚙`, fuera de los pares.
 «Salvedades sin la marca de #213», decidido por línea: 3 → 9 notas (las 3 con el bloque duplicado
 del barrido de v1.265.2 y 3 más que la marca de otra vista tapaba).
+
+**v1.415.39 — el emparejador fila↔par del lint.** `check_verif_row_pairs` emparejaba en una
+pasada: la fila sin par exacto consumía como «movido» el par exacto de una fila posterior, y en una
+nota de paper (todos los pares con el bibcode propio, #635) una huérfana arrastraba a las de atrás.
+Sobre la misma copia, con el fix de pares y SIN migrar: pares vencidos 3229 con una pasada (la
+Tesis midió 3101 sobre su merge) → 1452 con las exactas primero = 308 huérfanas + 1144 sin
+verificar, 0 «por edición». Las 308 son las que `--reanclar` descarta. El lint pasa a usar
+`lb.match_rows_to_pairs` (el emparejador de `--reanclar`), con `umbral=0` y un par sobrante del
+mismo bibcode para la fila que quedó sola: mismo conteo.

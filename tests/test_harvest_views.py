@@ -1598,8 +1598,13 @@ def test_641_el_restamp_conserva_la_linea_en_blanco_que_cierra_la_vista(toy_vaul
     hv.harvest("test_star")
     d["salvedades"] = [{"tipo": "txt_pierde", "cadena": "ζ"}, "la Fig. 3 es difícil de leer"]
     (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
-    assert hv.restamp_salvedades("test_star")["tocadas"] == [BIB]
+    r = hv.restamp_salvedades("test_star")
+    assert r["tocadas"] == [BIB] and r["agregadas"] == []
     assert "difícil de leer\n\n## Abstract" in dest.read_text(encoding="utf-8")
+    # y la prosa que el JSON AGREGA se declara: puede ser lo que una corrección había borrado
+    d["salvedades"].append("un bullet que la nota no tenía")
+    (cfg.EXTRACCION / "test_star" / f"{BIB}.json").write_text(json.dumps(d), encoding="utf-8")
+    assert hv.restamp_salvedades("test_star")["agregadas"] == [(BIB, 1)]
 
 
 def test_453_restamp_salvedades_es_IDEMPOTENTE_y_declara_su_poblacion(toy_vault, capsys):

@@ -1930,6 +1930,10 @@ portadores:
       - modulo: scripts/reverify_subset.py
         estado: fuera-de-alcance
         motivo: "PROPONE la partición (re-anclables / a re-verificar) y nombra el comando; no escribe (#257)."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "`check_verif_row_pairs` usa `match_rows_to_pairs` para REPORTAR qué fila quedó vencida o huérfana (#641); no re-ancla ni escribe."
+
   - issue: 484
     regla: >-
       `bibtex_source` es vocabulario CERRADO (#296) y lo escriben dos lados: el lint que lo juzga y
@@ -3467,6 +3471,10 @@ portadores:
       - modulo: scripts/write_verif_sidecar.py
         estado: fuera-de-alcance
         motivo: "`build_rows`, `reanchor` y `--reanclar` pasan por `carry_needs_reverify` (#539); no llama a `claim_objects_changed` directo."
+      - modulo: scripts/lint.py
+        estado: fuera-de-alcance
+        motivo: "`check_verif_row_pairs` usa `match_rows_to_pairs` para REPORTAR (#641): una fila emparejada con ancla distinta sale «vencida por edición», nunca llevada, así que no hay arrastre que chequear."
+
   - issue: 574
     regla: >-
       Una escotilla por par (`no_sintetizado[X]`, `no_vista[X]`) es una afirmación sobre la nota de
@@ -4061,7 +4069,7 @@ portadores:
     consumidores:
       - modulo: scripts/lint.py
         estado: usa
-        motivo: "Pares vencidos y cobertura leen `note_pairs` → `pairs_of`; la regla le llega sin código propio."
+        motivo: "Pares vencidos y cobertura leen `note_pairs` → `pairs_of`; la regla le llega sin código propio. `check_verif_row_pairs` empareja con `lb.match_rows_to_pairs` (v1.415.39), la misma definición que `--reanclar`: la fila que quedó sin par no le roba el suyo a las siguientes."
       - modulo: scripts/lib_config.py
         estado: fuera-de-alcance
         motivo: "Re-exporta `with_own_bibcode`; no arma pares."

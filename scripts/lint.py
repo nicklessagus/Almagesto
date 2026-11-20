@@ -3656,7 +3656,20 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de, pares
     verif_truncada: list = []
     cond_sin_clasificar: list = []
     # #635 — los de una nota de paper llevan su bibcode propio en la `## Vista` (`lb.note_pairs`)
-    pendientes = lb.pairs_of(texto) if pares is None else list(pares)
+    # #641 — UNA definición de «qué fila es de qué par»: `lb.match_rows_to_pairs`, la de
+    # `--reanclar` y `reverify_subset` (ancla idéntica primero, después la fila que mejor cubre el
+    # bloque, dentro de un bibcode). El emparejador propio, de una pasada, le daba a la fila sin par
+    # exacto el par exacto de una fila POSTERIOR: en una nota de paper —todos los pares comparten
+    # el bibcode propio, #635— una huérfana arrastraba a todas las de atrás. `umbral=0`, y a la
+    # fila que quedó sin par se le da un par SOBRANTE de su bibcode: acá un bloque reescrito es UN
+    # evento («por edición»), no huérfana + sin verificar.
+    asignado, pendientes, huerfanas = lb.match_rows_to_pairs(
+        lb.pairs_of(texto) if pares is None else list(pares), filas, umbral=0.0)
+    par_de = {id(r): p for p, (r, _s) in asignado.items()}
+    for fila in huerfanas:
+        if (sobra := next((p for p in pendientes if p.bibcode == fila.bibcode), None)) is not None:
+            pendientes.remove(sobra)
+            par_de[id(fila)] = sobra
     for fila in filas:
         # #91: el lint miraba el bloque SÓLO por su encabezado (¿existe? ¿está fresco?) y nunca
         # su contenido, así que una fila `no-soportada` pasaba limpia — sentada bajo un
@@ -3682,10 +3695,8 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de, pares
                 (stem, f"[[{fila.bibcode}]] quedó {detalle} en el bloque: la nota afirma "
                        f"algo que su propia fuente no respalda → bajala a lo que dice la fuente, "
                        f"reasigná la cita, marcala `inferencia`, o tagueá la disputa"))
-        exacto = next((p for p in pendientes
-                       if p.bibcode == fila.bibcode and p.anchor == fila.anchor), None)
-        if exacto is not None:
-            pendientes.remove(exacto)
+        movido = par_de.get(id(fila))
+        if movido is not None and movido.anchor == fila.anchor:
             # #113/B-2: si la fuente perdió el cuerpo de sus ecuaciones, la evidencia de sus
             # pares es una PÁGINA del PDF y el archivo a vigilar es el PDF. Hashear el `.txt`
             # ahí se dispara en falso al re-extraerlo (la fuente real no se movió) y no vigila
@@ -3784,12 +3795,9 @@ def check_verif_row_pairs(stem: str, texto: str, filas, evidencia_hash_de, pares
                     (stem, f"[[{fila.bibcode}]] vencido **por fuente**: {que} cambió desde "
                            f"la verificación ({fila.source_hash} → {vigente}) — re-verificar"))
             continue
-        # sin coincidencia exacta: ¿la nota sigue citando esa fuente en algún bloque? Entonces
-        # la afirmación se EDITÓ. Si ya no la cita, la fila quedó huérfana. Se consume el par
-        # para no reportar el mismo evento dos veces (como edición Y como sin-verificar).
-        movido = next((p for p in pendientes if p.bibcode == fila.bibcode), None)
+        # sin coincidencia exacta: si la fila tiene par, la afirmación se EDITÓ (y el par quedó
+        # consumido: el evento no se reporta dos veces). Si no, la fila quedó huérfana.
         if movido is not None:
-            pendientes.remove(movido)
             stale_pairs.append(
                 (stem, f"[[{fila.bibcode}]] vencido **por edición**: el bloque que lo cita "
                        f"cambió desde la verificación ({fila.anchor} → {movido.anchor})"))
