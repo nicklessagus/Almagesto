@@ -3199,17 +3199,22 @@
   {
    "number": 642,
    "title": "Una `⚙ verificada` queda vieja tras `replace_pdf` y el re-estampado no puede refrescarla si la prosa vecina fue corregida a mano",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 643,
    "title": "`_CLAUSULA_SEP` corta la cláusula en el punto de una abreviatura: la `evidencia` propuesta sale trunca",
-   "state": "OPEN"
+   "state": "CLOSED"
   },
   {
    "number": 644,
    "title": "`--reanclar` pisa el `· ronda parcial` de la cabecera con su `· re-anclado`: se pierde que hubo una ronda parcial",
    "state": "CLOSED"
+  },
+  {
+   "number": 645,
+   "title": "`pdf_leido` sale «⚙ verificada: en disco está el publicado» sin PDF en disco",
+   "state": "OPEN"
   }
  ]
 }

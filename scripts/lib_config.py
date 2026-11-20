@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.41"
+ALMAGESTO_VERSION = "1.415.42"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4934,7 +4934,14 @@ def doc_on_disk(fm: dict, stem: str) -> tuple:
 
     Precedence, and it is the one `pdf_source` already declares: the **arXiv mark** in the `.txt`
     (truth of the artefact, #57), then the signature of the replacement (`pdf_reemplazo`, #446),
-    then the field. `None` is «nobody can tell», and then there is nothing to contrast."""
+    then the field. `None` is «nobody can tell», and then there is nothing to contrast.
+
+    ⛔ #645 — the witnesses describe a FILE, so without the file they describe nothing: `pdf_source`
+    outlives the PDF on purpose (#230, provenance of the reading that happened), and after a
+    `--drop-core` it made `pdf_leido` come out «verified: the published copy is on disk» next to a
+    `pdf_paginas` that said «no PDF on disk». A check that cannot run is not evaluable (D-43)."""
+    if pdf_slug(stem) is None:
+        return None, "no hay PDF en disco"
     for t in sorted(FULLTEXT.glob(f"*/{stem}.txt")) if FULLTEXT.exists() else []:
         if arxiv_stamp(t.read_text(encoding="utf-8", errors="replace")) is not None:
             return "preprint", f"la marca de arXiv está en `{t.parent.name}/{t.name}`"

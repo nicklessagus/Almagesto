@@ -943,6 +943,7 @@ def test_452_pdf_leido_se_chequea_contra_LOS_TRES_TESTIGOS(toy_vault):
     ADIVINAR de quién habla la oración: midió 5 hallazgos con precisión 0/5 sobre 268 notas.
     Estructurada la deciden los tres testigos de `doc_on_disk`, en su precedencia."""
     _con_txt(toy_vault, "arXiv:2001.00001v2 [astro-ph.EP] 1 Jan 2020\nel cuerpo del paper\n")
+    _con_pdf(toy_vault)
     d = extraccion()
     d["salvedades"] = [{"tipo": "pdf_leido", "documento": "eprint"}]
     dest = sembrar(toy_vault, d)
@@ -956,6 +957,7 @@ def test_452_pdf_leido_FALSA_no_se_publica_y_se_grita(toy_vault, capsys):
     """#452 — el caso que produjo el issue: `replace_pdf` cambia los tres testigos y la salvedad
     sigue diciendo preprint. Medido al cerrar #436: 43 salvedades en 31 notas, con `lint` rc 0."""
     _con_txt(toy_vault, "el cuerpo del paper, sin marca de arXiv\n")
+    _con_pdf(toy_vault)
     d = extraccion()
     d["salvedades"] = [{"tipo": "pdf_leido", "documento": "eprint"}]
     dest = sembrar(toy_vault, d, fm_extra={"pdf_source": "publisher"})
@@ -973,6 +975,8 @@ def test_452_pdf_leido_declara_el_bibcode_de_OTRA_fuente(toy_vault):
     otra.write_text("---\nbibcode: 2007otro....1U\npdf_source: publisher\ntags: [paper]\n---\n\n"
                     "## Abstract\n\nx\n", encoding="utf-8")
     assert mn_nota.safe_name("2007otro....1U")
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "test_star" / "2007otro....1U.pdf").write_bytes(b"%PDF")   # #645: sin PDF no hay testigos
     d = extraccion()
     d["salvedades"] = [{"tipo": "pdf_leido", "documento": "publisher",
                         "bibcode": "2007otro....1U"}]
@@ -993,6 +997,12 @@ def test_452_documento_fuera_del_vocabulario_o_sin_testigo_es_NO_EVALUABLE(toy_v
     assert hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": ""})[0] is None
     assert hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "eprint"})[0] is None, \
         "sin testigos no hay contra qué cruzar"
+    # #645 — sin PDF en disco los testigos no describen nada, y el motivo lo dice (D-43)
+    _con_txt(toy_vault, "arXiv:2001.00001v2 [astro-ph.EP] 1 Jan 2020\n")
+    ok, det = hv.check_salvedad(BIB, {"tipo": "pdf_leido", "documento": "eprint"})
+    assert ok is None and "no hay PDF en disco" in det, \
+        "`pdf_source` y el `.txt` sobreviven al PDF (#230): solos no verifican qué hay en disco"
+    _con_pdf(toy_vault)
     # con testigo Y `web`: el no-evaluable es del VALOR, no de la falta de testigos — los dos
     # caminos llegan a `None` y hay que poder distinguirlos (D-43)
     _con_txt(toy_vault, "arXiv:2001.00001v2 [astro-ph.EP] 1 Jan 2020\n")

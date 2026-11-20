@@ -5006,3 +5006,12 @@ abreviatura («Figs.», «pp.», «p.», «Ann.», «Annu.»): 8 → 0. Afirmaci
 separaba las dos mitades; enteras nombran las dos clases y salen ambiguas. Coinciden con el disco y
 las re-deriva el cosechador (#642). Probado y descartado: anclar también «en disco está el …» las
 recupera pero sube las afirmaciones a 737 (todas las líneas `⚙` de `pdf_leido`).
+
+## #645 — sin PDF en disco, `pdf_leido` no se verifica (v1.415.42)
+
+Reportado por la Tesis (2026-11-20): 1 de 437 notas con la línea `⚙ verificada: en disco está el …`
+no tiene PDF bajo ningún slug (`2023A&A...674A..10H`, `--drop-core` del 2026-09-25); `pdf_source`
+sobrevive al archivo (#230) y `doc_on_disk` lo tomaba por testigo. Copia de la Tesis, con el fix:
+`--restamp-salvedades --paper` deja la línea en «no evaluable: … no hay PDF en disco», al lado de
+la de `pdf_paginas`; el lint entero sale idéntico con y sin el fix, y `--propose-pdf-leido` no
+cambia (ya salteaba la nota sin PDF).

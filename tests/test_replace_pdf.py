@@ -560,6 +560,8 @@ def test_AUD447_el_comando_que_sugiere_el_lint_para_el_documento_en_disco_se_peg
     le da al parser: un rechazo de argparse es `SystemExit`, un rehúse del comando es rc 2."""
     import re
     import shlex
+    (cfg.PDFS / "x").mkdir(parents=True, exist_ok=True)
+    (cfg.PDFS / "x" / "2099Y.pdf").write_bytes(b"%PDF")        # #645: sin PDF no hay testigos
     msg = cfg.disk_doc_conflict("El PDF en disco es el PREPRINT de arXiv.",
                                 {"pdf_source": "publisher"}, "2099Y")
     cmd = re.search(r"`replace_pdf\.py ([^`]*)`", msg).group(1)

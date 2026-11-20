@@ -11277,6 +11277,9 @@ def test_449_la_categoria_levanta_la_prosa_que_los_testigos_desmienten(toy_vault
     mk_note(cfg.PAPERS, "2010Coherente",
             {"bibcode": "2010Coherente", "tags": ["paper"], "stars": ["Estrella Test"],
              "pdf_source": "eprint"}, cuerpo)
+    (cfg.PDFS / "test_star").mkdir(parents=True, exist_ok=True)
+    for stem in ("2010Reemplazado", "2010Coherente"):          # #645: sin PDF no hay testigos
+        (cfg.PDFS / "test_star" / f"{stem}.pdf").write_bytes(b"%PDF")
     _rc, out = run_lint(capsys)
     assert "2010Reemplazado" in out and "los testigos" in out
     assert "2010Coherente" not in out.split("QUÉ DOCUMENTO")[-1].split("\n\n")[0]

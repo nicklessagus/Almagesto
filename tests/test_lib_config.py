@@ -3522,7 +3522,12 @@ def test_449_la_prosa_sobre_QUE_DOCUMENTO_hay_en_disco_se_cruza_contra_el_disco(
         "arXiv:2001.00001v2 [astro-ph.EP] 1 Jan 2020\n", encoding="utf-8")
     assert cfg.doc_on_disk({"pdf_source": "publisher", "pdf_reemplazo": firma}, "2020X")[0] == "preprint", \
         "la marca de arXiv es verdad del artefacto y manda sobre las dos (#57)"
+    # #645 — sin el archivo los testigos no describen nada: `pdf_source` sobrevive al PDF (#230)
+    (cfg.PDFS / "ica" / "2020X.pdf").unlink()
+    assert cfg.doc_on_disk({"pdf_source": "publisher"}, "2020X") == (None, "no hay PDF en disco")
+    (cfg.PDFS / "ica" / "2020X.pdf").write_bytes(b"%PDF editor")
     # el cruce
+    (cfg.PDFS / "ica" / "2099Y.pdf").write_bytes(b"%PDF")
     assert cfg.disk_doc_conflict(pre, {"pdf_source": "publisher"}, "2099Y") is not None
     assert "publisher" in cfg.disk_doc_conflict(pre, {"pdf_source": "publisher"}, "2099Y")
     assert cfg.disk_doc_conflict(pub, {"pdf_source": "eprint"}, "2099Y") is not None, "el simétrico"

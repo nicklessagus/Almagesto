@@ -4109,3 +4109,15 @@ portadores:
         estado: usa
         motivo: "`propose_pdf_leido` muestra como evidencia la cláusula de `cfg.deciding_clause`; la partición le llega sin código propio."
 
+
+  - issue: 645
+    regla: >-
+      Los testigos de «qué documento hay en disco» describen un archivo: sin PDF bajo ningún slug,
+      `doc_on_disk` devuelve `None` («no hay PDF en disco») aunque `pdf_source` o el `.txt` sigan
+      ahí (#230), y quien la llama sale no evaluable con ese motivo (D-43).
+    funcion: lib_config.doc_on_disk
+    patron: 'doc_on_disk\('
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`_check_pdf_leido` y `propose_pdf_leido` llaman a `cfg.doc_on_disk`; el `None` ya era su rama «no evaluable» / «sin testigo»."
