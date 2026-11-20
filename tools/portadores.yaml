@@ -4096,3 +4096,16 @@ portadores:
         estado: fuera-de-alcance
         motivo: "`print_report` IMPRIME el comando `--restamp-salvedades --paper` por cada slug con extracción del bibcode; no re-estampa (avisa y no reescribe, como #449)."
 
+  - issue: 643
+    regla: >-
+      El punto de una abreviatura no cierra una cláusula: `_CLAUSULA_SEP` parte en `;` siempre, y en
+      el punto sólo si no sigue a un token capitalizado de ≤4 letras ni precede a minúscula, dígito
+      o `(`. El clasificador y `deciding_clause` comparten la partición (#462), así que la
+      `evidencia` propuesta y la clase salen de la misma cláusula.
+    funcion: lib_config.deciding_clause
+    patron: '_CLAUSULA_SEP'
+    consumidores:
+      - modulo: scripts/harvest_views.py
+        estado: usa
+        motivo: "`propose_pdf_leido` muestra como evidencia la cláusula de `cfg.deciding_clause`; la partición le llega sin código propio."
+

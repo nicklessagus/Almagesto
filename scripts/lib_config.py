@@ -22,7 +22,7 @@ import yaml
 # (provenance: con qué versión se armó la ficha) y los User-Agent de los fetchers (no hardcodear
 # "Almagesto/x" en ningún otro lado — lo vigila un test). Semver: 1.0.0 = contrato estable
 # (schema de frontmatter/config/cadena); un cambio que rompa ese contrato exige major bump.
-ALMAGESTO_VERSION = "1.415.40"
+ALMAGESTO_VERSION = "1.415.41"
 
 # PLACEHOLDER de `name` que trae el template en vault/config/objective.yaml. Es un placeholder
 # explícito (no un nombre de ejemplo plausible: un objetivo real que coincida con el del ejemplo
@@ -4796,7 +4796,12 @@ _WEB_RE = re.compile(
 #: El bloque sigue siendo la unidad de la **negación vecina** (#224) —por eso se une antes de
 #: partir: un hard-wrap no es un límite de oración—, pero no del vocabulario: la clase de una
 #: salvedad la decidía una mención lejana, sobre una cláusula que dice literalmente lo contrario.
-_CLAUSULA_SEP = re.compile(r"(?<=[.;])\s+")
+#: #643 — the dot of an abbreviation is not a sentence end: «SIAM J. Math. Data Sci. 2023» was cut
+#: at «J.» and the tail of the proposed `evidencia` became a loose caveat. A `;` always closes; a
+#: dot does not after a capitalised token of ≤4 letters, nor when what follows is a lowercase
+#: letter, a digit or `(` («pp. 4», «Statist. 2020», an author list before its year).
+_CLAUSULA_SEP = re.compile(r"(?<=;)\s+|(?<=\.)(?<!\b[A-Z]\.)(?<!\b[A-Z][a-z]\.)"
+                           r"(?<!\b[A-Z][a-z]{2}\.)(?<!\b[A-Z][a-z]{3}\.)\s+(?![a-z0-9(])")
 
 
 def _clause_class(clausula: str) -> str | None:

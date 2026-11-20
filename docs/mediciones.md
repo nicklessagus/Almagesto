@@ -4994,3 +4994,15 @@ prosa que difieren del JSON; ahora saca la línea vieja (1 línea menos en cada 
 notas tocadas 61 → 98, rehusadas 151 → 114; en 38 se refrescó sólo el bloque `⚙`. El diff entre
 los dos barridos (32 archivos, +41/−28) es sólo de líneas `- ⚙ verificada`, un rótulo de bloque y
 dos líneas en blanco: ninguna línea de prosa.
+
+## #643 — el punto de una abreviatura no cierra la cláusula (v1.415.41)
+
+Copia de la Tesis (árbol del 2026-11-20), `--propose-pdf-leido` y `doc_claims_on_disk` sobre las
+652 notas de paper. Propuestas 79 → 81: las 2 nuevas (`2009A&A...493..639M`, `2023A&A...675A.168M`)
+proponen `publisher` y coinciden con el `pdf_source` de la nota. Extractos cortados en una
+abreviatura («Figs.», «pp.», «p.», «Ann.», «Annu.»): 8 → 0. Afirmaciones sobre el disco 155 → 153:
++1 correcta y −3, las tres en líneas `⚙ verificada` de `pdf_leido` cuya `evidencia` dice «…PREPRINT
+(…, p. 1) mientras que el bibcode es el publicado»: salían `preprint` porque el corte en «p.»
+separaba las dos mitades; enteras nombran las dos clases y salen ambiguas. Coinciden con el disco y
+las re-deriva el cosechador (#642). Probado y descartado: anclar también «en disco está el …» las
+recupera pero sube las afirmaciones a 737 (todas las líneas `⚙` de `pdf_leido`).

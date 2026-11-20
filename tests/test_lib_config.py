@@ -4483,3 +4483,18 @@ def test_639_catalog_abstract_explica_solo_si_la_nota_declara_sin_abstract():
     """#639 — la línea va DESPUÉS del abstract (#216 deduplica por el arranque) y sólo con el campo."""
     assert cfg.catalog_abstract("x", {}) == "x"
     assert cfg.catalog_abstract("x", {"sin_abstract": True}) == f"x\n\n{cfg.CATALOGO_SIN_ABSTRACT}"
+
+
+def test_643_el_punto_de_una_abreviatura_no_cierra_la_clausula():
+    """#643 — `_CLAUSULA_SEP` partía «SIAM J. Math. Data Sci. 2023» en «J.»: `deciding_clause`
+    devolvía la `evidencia` de la propuesta trunca y la cola quedaba como bullet suelto. El `;` y el
+    punto de fin de oración siguen partiendo."""
+    t = ("El PDF en disco es el preprint de arXiv; la nota lo cataloga como SIAM J. Math. Data "
+         "Sci. 2023. Ver Fig. 3, pp. 4-5 y Hong et al. (2023). Toda discrepancia es de versión.")
+    assert cfg._CLAUSULA_SEP.split(t) == [
+        "El PDF en disco es el preprint de arXiv;",
+        "la nota lo cataloga como SIAM J. Math. Data Sci. 2023.",
+        "Ver Fig. 3, pp. 4-5 y Hong et al. (2023).", "Toda discrepancia es de versión."]
+    assert cfg.deciding_clause("El PDF en disco es la copia del editor (Ann. Statist. 2020). Fin.",
+                               "publicado") == "El PDF en disco es la copia del editor (Ann. Statist. 2020)."
+
